@@ -5,21 +5,22 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use music_domain::{
-    PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
+    AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
+    ResolvedMediaSource, TrackId, TrackSummary,
 };
 use provider_api::{
-    AuthenticationError, MusicProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
-    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
-    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
-    UserPlaylistsProvider,
+    AuthenticationError, MediaResolutionError, MediaResolutionProvider, MusicProvider,
+    OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability, ProviderDescriptor,
+    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
+    QrAuthenticationSession, QrImageFormat, UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
     HttpTransport, QqMusicClient, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
-    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError,
-    QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
-    WechatQrLoginSession,
+    QqMusicMediaError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
+    QqMusicPlaylistDetailError, QqMusicTrackSummary, QrImageMediaType,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -100,6 +101,37 @@ impl<T> QqMusicProvider<T> {
         if rejected {
             *state = QqMusicCredentialState::SignedOut;
             return Err(UserLibraryError::CredentialRejected);
+        }
+        Ok(())
+    }
+
+    fn authenticated_media_credential(&self) -> Result<Credential, MediaResolutionError> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => {
+                Err(MediaResolutionError::AuthenticationRequired)
+            }
+        }
+    }
+
+    fn finish_media_await(
+        &self,
+        candidate: &Credential,
+        rejected: bool,
+    ) -> Result<(), MediaResolutionError> {
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == candidate
+        );
+        if !still_current {
+            return Err(MediaResolutionError::Replaced);
+        }
+        if rejected {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(MediaResolutionError::CredentialRejected);
         }
         Ok(())
     }
@@ -282,6 +314,7 @@ impl<T> MusicProvider for QqMusicProvider<T> {
             capabilities: vec![
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
+                ProviderCapability::MediaResolution,
             ],
         }
     }
@@ -429,6 +462,46 @@ where
             page.has_more(),
             tracks,
         ))
+    }
+}
+
+impl<T> MediaResolutionProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = MediaResolutionError;
+
+    async fn resolve_standard_media(
+        &self,
+        track_id: TrackId,
+    ) -> Result<ResolvedMediaSource, Self::Error> {
+        let candidate = self.authenticated_media_credential()?;
+        let route = parse_media_track(&track_id)?;
+
+        let dispatch_response = self.client().cdn_dispatch().await;
+        self.finish_media_await(
+            &candidate,
+            matches!(dispatch_response, Err(QqMusicMediaError::Rejected { .. })),
+        )?;
+        let dispatch = dispatch_response.as_ref().map_err(map_media_error)?;
+
+        let source_response = self
+            .client()
+            .standard_mp3_source(&candidate, route.song_mid, route.song_type, dispatch)
+            .await;
+        self.finish_media_await(
+            &candidate,
+            matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
+        )?;
+        let source = source_response.as_ref().map_err(map_media_error)?;
+        ResolvedMediaSource::new(
+            track_id,
+            source.uri().to_owned(),
+            AudioFormat::Mp3,
+            AudioQuality::Standard,
+            source.valid_for_seconds(),
+        )
+        .map_err(|_| MediaResolutionError::InvalidResponse)
     }
 }
 
@@ -610,6 +683,55 @@ enum QqMusicPlaylistRoute {
     LikedSongs,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct QqMusicMediaTrack<'a> {
+    song_mid: &'a str,
+    song_type: u32,
+}
+
+fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaResolutionError> {
+    if track_id.provider() != &qq_music_provider_id() {
+        return Err(MediaResolutionError::InvalidResponse);
+    }
+    let mut parts = track_id.opaque().split(':');
+    let (prefix, raw_id, raw_primary_type, raw_vkey_type, song_mid, extra) = (
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+    );
+    if prefix != Some("track") || extra.is_some() {
+        return Err(MediaResolutionError::InvalidResponse);
+    }
+    raw_id
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value != 0)
+        .ok_or(MediaResolutionError::InvalidResponse)?;
+    raw_primary_type
+        .and_then(|value| value.parse::<u32>().ok())
+        .ok_or(MediaResolutionError::InvalidResponse)?;
+    let song_type = match raw_vkey_type {
+        Some("-") => 0,
+        Some(value) => value
+            .parse::<u32>()
+            .map_err(|_| MediaResolutionError::InvalidResponse)?,
+        None => return Err(MediaResolutionError::InvalidResponse),
+    };
+    let song_mid = song_mid
+        .filter(|value| {
+            !value.is_empty()
+                && value.len() <= 64
+                && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        })
+        .ok_or(MediaResolutionError::InvalidResponse)?;
+    Ok(QqMusicMediaTrack {
+        song_mid,
+        song_type,
+    })
+}
+
 fn parse_playlist_route(
     playlist_id: &PlaylistId,
 ) -> Result<QqMusicPlaylistRoute, UserLibraryError> {
@@ -755,6 +877,23 @@ fn map_playlist_detail_error<E>(error: &QqMusicPlaylistDetailError<E>) -> UserLi
     }
 }
 
+fn map_media_error<E>(error: &QqMusicMediaError<E>) -> MediaResolutionError {
+    match error {
+        QqMusicMediaError::Transport { .. } => MediaResolutionError::Network,
+        QqMusicMediaError::HttpStatus { .. } | QqMusicMediaError::Upstream { .. } => {
+            MediaResolutionError::ServiceUnavailable
+        }
+        QqMusicMediaError::Rejected { .. } => MediaResolutionError::CredentialRejected,
+        QqMusicMediaError::Unavailable { .. } => MediaResolutionError::Unavailable,
+        QqMusicMediaError::RandomnessUnavailable | QqMusicMediaError::Serialize(_) => {
+            MediaResolutionError::CoreUnavailable
+        }
+        QqMusicMediaError::InvalidSongMid
+        | QqMusicMediaError::InvalidJson(_)
+        | QqMusicMediaError::InvalidResponse { .. } => MediaResolutionError::InvalidResponse,
+    }
+}
+
 fn map_login_error<E>(error: WechatQrLoginError<E>) -> AuthenticationError {
     match error {
         WechatQrLoginError::Protocol(error) => map_qr_error(&error),
@@ -828,14 +967,16 @@ fn map_verification_error<E>(error: &CredentialVerificationError<E>) -> Authenti
 mod tests {
     use std::collections::VecDeque;
     use std::convert::Infallible;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
-    use music_domain::{PlaylistId, ProviderId};
+    use music_domain::{AudioFormat, AudioQuality, PlaylistId, ProviderId, TrackId};
     use provider_api::{
-        MusicProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability,
-        QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-        UserLibraryError, UserPlaylistsProvider,
+        MediaResolutionError, MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider,
+        PlaylistDetailsProvider, ProviderCapability, QrAuthenticationProgress,
+        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
+        UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
@@ -860,6 +1001,11 @@ mod tests {
     }
 
     struct PlaylistDetailTransport {
+        responses: Mutex<VecDeque<HttpResponse>>,
+        requests: Mutex<Vec<HttpRequest>>,
+    }
+
+    struct MediaTransport {
         responses: Mutex<VecDeque<HttpResponse>>,
         requests: Mutex<Vec<HttpRequest>>,
     }
@@ -953,6 +1099,29 @@ mod tests {
         }
     }
 
+    impl MediaTransport {
+        fn new<const N: usize>(responses: [Value; N]) -> Self {
+            Self {
+                responses: Mutex::new(
+                    responses
+                        .into_iter()
+                        .map(|response| {
+                            HttpResponse::new(
+                                200,
+                                serde_json::to_vec(&response).expect("fixture JSON"),
+                            )
+                        })
+                        .collect(),
+                ),
+                requests: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn requests(&self) -> Vec<HttpRequest> {
+            self.requests.lock().expect("request lock").clone()
+        }
+    }
+
     impl HttpTransport for OwnedPlaylistsTransport {
         type Error = Infallible;
 
@@ -976,6 +1145,20 @@ mod tests {
     }
 
     impl HttpTransport for PlaylistDetailTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.requests.lock().expect("request lock").push(request);
+            Ok(self
+                .responses
+                .lock()
+                .expect("response lock")
+                .pop_front()
+                .expect("fixture response"))
+        }
+    }
+
+    impl HttpTransport for MediaTransport {
         type Error = Infallible;
 
         async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
@@ -1039,6 +1222,14 @@ mod tests {
         release_request: Arc<Notify>,
     }
 
+    #[derive(Clone)]
+    struct GatedMediaTransport {
+        gate_call: usize,
+        calls: Arc<AtomicUsize>,
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
     impl HttpTransport for GatedOwnedPlaylistsTransport {
         type Error = Infallible;
 
@@ -1083,6 +1274,27 @@ mod tests {
                     false,
                 ))
                 .expect("fixture JSON"),
+            ))
+        }
+    }
+
+    impl HttpTransport for GatedMediaTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
+            if call == self.gate_call {
+                self.request_started.notify_one();
+                self.release_request.notified().await;
+            }
+            let response = if call == 1 {
+                media_dispatch_json()
+            } else {
+                media_vkey_json(0, "fixture.mp3?vkey=private")
+            };
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&response).expect("fixture JSON"),
             ))
         }
     }
@@ -1165,6 +1377,7 @@ mod tests {
             [
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
+                ProviderCapability::MediaResolution,
             ]
         );
     }
@@ -1256,6 +1469,45 @@ mod tests {
 
     fn qq_playlist_id(value: &str) -> PlaylistId {
         PlaylistId::new(ProviderId::new("qq-music").expect("provider"), value).expect("playlist ID")
+    }
+
+    fn qq_track_id(value: &str) -> TrackId {
+        TrackId::new(ProviderId::new("qq-music").expect("provider"), value).expect("track ID")
+    }
+
+    fn media_dispatch_json() -> Value {
+        json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {
+                    "retcode": 0,
+                    "sip": ["http://audio.example.test/"],
+                    "expiration": 86400,
+                    "refreshTime": 1800,
+                    "cacheTime": 86400
+                }
+            }
+        })
+    }
+
+    fn media_vkey_json(result: i64, path: &str) -> Value {
+        json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {
+                    "retcode": 0,
+                    "expiration": 7200,
+                    "midurlinfo": [{
+                        "songmid": "fixtureTrackMid1",
+                        "filename": "M500fixtureTrackMid1fixtureTrackMid1.mp3",
+                        "purl": path,
+                        "result": result
+                    }]
+                }
+            }
+        })
     }
 
     #[tokio::test]
@@ -1626,6 +1878,147 @@ mod tests {
 
         assert_eq!(result, Err(UserLibraryError::Replaced));
         assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn resolves_opaque_track_to_provider_independent_standard_media() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            media_vkey_json(
+                0,
+                "M500fixtureTrackMid1fixtureTrackMid1.mp3?vkey=private-source",
+            ),
+        ])));
+        set_authenticated(&provider, "123456");
+        let track_id = qq_track_id("track:41001:0:1:fixtureTrackMid1");
+
+        let source = provider
+            .resolve_standard_media(track_id.clone())
+            .await
+            .expect("standard media");
+        assert_eq!(source.track_id(), &track_id);
+        assert_eq!(source.format(), AudioFormat::Mp3);
+        assert_eq!(source.quality(), AudioQuality::Standard);
+        assert_eq!(source.valid_for_seconds(), 7_200);
+        assert_eq!(
+            source.uri(),
+            "http://audio.example.test/M500fixtureTrackMid1fixtureTrackMid1.mp3?vkey=private-source"
+        );
+        assert!(!format!("{source:?}").contains("private-source"));
+
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 2);
+        let vkey: Value =
+            serde_json::from_slice(requests[1].body_bytes().expect("vkey request body"))
+                .expect("vkey request JSON");
+        assert_eq!(vkey["req_0"]["param"]["songtype"], json!([1]));
+        assert_eq!(
+            vkey["req_0"]["param"]["songmid"],
+            json!(["fixtureTrackMid1"])
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_foreign_and_malformed_media_identity_before_transport() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([])));
+        set_authenticated(&provider, "123456");
+        let foreign = TrackId::new(
+            ProviderId::new("local").expect("provider"),
+            "track:41001:0:1:fixtureTrackMid1",
+        )
+        .expect("track ID");
+        let invalid = [
+            foreign,
+            qq_track_id("track:0:0:1:fixtureTrackMid1"),
+            qq_track_id("track:41001:not-a-type:1:fixtureTrackMid1"),
+            qq_track_id("track:41001:0:not-a-type:fixtureTrackMid1"),
+            qq_track_id("track:41001:0:1:unsafe-mid"),
+            qq_track_id("track:41001:0:1:fixtureTrackMid1:extra"),
+            qq_track_id("wrong:41001:0:1:fixtureTrackMid1"),
+        ];
+        for track_id in invalid {
+            assert_eq!(
+                provider.resolve_standard_media(track_id).await,
+                Err(MediaResolutionError::InvalidResponse)
+            );
+        }
+        assert!(provider.client().transport().requests().is_empty());
+
+        let fallback_track = qq_track_id("track:41001:0:-:fixtureTrackMid1");
+        let fallback = super::parse_media_track(&fallback_track)
+            .expect("missing vkey type falls back to zero");
+        assert_eq!(fallback.song_type, 0);
+    }
+
+    #[tokio::test]
+    async fn media_failure_clears_only_explicit_rejection() {
+        let unavailable = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            media_vkey_json(101_404, ""),
+        ])));
+        set_authenticated(&unavailable, "123456");
+        assert_eq!(
+            unavailable
+                .resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"))
+                .await,
+            Err(MediaResolutionError::Unavailable)
+        );
+        assert!(unavailable.has_authenticated_credential());
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            json!({"code": 0, "req_0": {"code": 1000}}),
+        ])));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected
+                .resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"))
+                .await,
+            Err(MediaResolutionError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            json!({"code": 0, "req_0": {"code": 50_006}}),
+        ])));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream
+                .resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"))
+                .await,
+            Err(MediaResolutionError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn media_resolution_rechecks_account_after_both_network_awaits() {
+        for gate_call in [1, 2] {
+            let request_started = Arc::new(Notify::new());
+            let release_request = Arc::new(Notify::new());
+            let calls = Arc::new(AtomicUsize::new(0));
+            let provider = QqMusicProvider::new(QqMusicClient::new(GatedMediaTransport {
+                gate_call,
+                calls: Arc::clone(&calls),
+                request_started: Arc::clone(&request_started),
+                release_request: Arc::clone(&release_request),
+            }));
+            set_authenticated(&provider, "123456");
+
+            let request =
+                provider.resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"));
+            let replacement = async {
+                request_started.notified().await;
+                set_authenticated(&provider, "654321");
+                release_request.notify_one();
+            };
+            let (result, ()) = tokio::join!(request, replacement);
+
+            assert_eq!(result, Err(MediaResolutionError::Replaced));
+            assert_eq!(calls.load(Ordering::SeqCst), gate_call);
+            assert!(provider.has_authenticated_credential());
+        }
     }
 
     fn restore_candidate<T>(provider: &QqMusicProvider<T>) {

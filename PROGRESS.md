@@ -40,16 +40,19 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Cross-validated current ordinary media resolution, documented the unresolved separate-file-MID and restriction semantics, and selected only the shared standard MP3 path. Bounded no-account probes confirmed current vkey/dispatch fields and TTLs without retaining a source URL, vkey, host, or response body.
 - Added separate bounded `QQMusicClient` CDN-dispatch and authenticated standard `UrlGetVkey` operations. They use OS randomness for request GUIDs, validate every CDN base plus exact song/file identity, reject absolute/authority-changing paths, prefer the measured CDN only when dispatch returned it, cap source validity by both TTLs, and redact all source-bearing diagnostics.
 - Added 5 offline media regressions plus an opt-in no-account live integration. The live Rust path accepted current dispatch and non-account vkey response shapes without proving authenticated playback; full workspace tests pass at 6 + 2 + 20 + 68 + 13 with strict Clippy.
+- Added the minimum provider-neutral `ResolvedMediaSource`, standard MP3/quality labels, typed media-resolution failures, and `MediaResolutionProvider`. Source URIs remain available for immediate playback but redacted from diagnostics; QQ filenames, vkeys, CDN lists, and raw result codes remain outside Domain.
+- Implemented QQ opaque-track routing exclusively inside `QQMusicProvider`. Resolution requires the exact authenticated candidate, runs dispatch then vkey, rechecks account identity after both awaits, signs out only on explicit rejection, and truthfully advertises `MediaResolution`.
+- Added Provider regressions for successful Domain mapping, foreign/malformed identity rejection before transport, optional song-type fallback, unavailable/rejected/service failure semantics, and account replacement during either network request. Rust workspace tests pass at 8 + 2 + 24 + 68 + 13 with strict Clippy after synchronizing the Bridge capability baseline.
 
 # In Progress
 
-- Define the minimum provider-neutral media source/error model and implement opaque QQ track routing inside `QQMusicProvider`, including exact account-replacement and credential-rejection behavior across the two network awaits.
+- Expose one single-use cancellable Bridge media-resolution handle with presentation-safe source metadata and coarse typed failures. The handle must drop a losing Provider/network future on cancel and must never include a source URI in diagnostics.
 
 # Next Candidates
 
-1. Add a redacted provider-neutral standard MP3 source plus typed resolution failures to Domain/Provider API without exposing QQ filenames, vkeys, CDN lists, or raw result codes.
-2. Parse `track:<id>:<type>:<vkey-type-or->:<song-mid>` only inside `QQMusicProvider`, run dispatch then vkey, and recheck the exact credential after each await.
-3. Expose one cancellable single-use Bridge resolution handle before selecting the Flutter playback engine and queue boundary.
+1. Add the Bridge media-source DTO, exact cancellation lifecycle, and complete error mapping, then regenerate the pinned FRB bindings and audit stale generated symbols.
+2. Select and validate the minimum cross-platform Flutter playback engine against an injected local/test source before sending short-lived QQ URLs through it.
+3. Add the smallest playback controller and UI affordance required to play one selected playlist track; define queue ownership only from that real flow.
 
 # Blockers
 

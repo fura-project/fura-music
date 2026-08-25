@@ -3,7 +3,9 @@
 use std::fmt;
 use std::future::Future;
 
-use music_domain::{PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId};
+use music_domain::{
+    PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource, TrackId,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ProviderCapability {
@@ -201,6 +203,48 @@ pub trait PlaylistDetailsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<PlaylistTracksPage, Self::Error>> + Send;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaResolutionError {
+    AuthenticationRequired,
+    CredentialRejected,
+    Unavailable,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    CoreUnavailable,
+    Replaced,
+}
+
+impl fmt::Display for MediaResolutionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "media resolution requires authentication",
+            Self::CredentialRejected => "media-resolution credential was rejected",
+            Self::Unavailable => "the requested media source is unavailable",
+            Self::Network => "media-resolution network request failed",
+            Self::ServiceUnavailable => "media-resolution service is unavailable",
+            Self::InvalidResponse => "media-resolution service returned an invalid response",
+            Self::CoreUnavailable => "media-resolution core support is unavailable",
+            Self::Replaced => "media-resolution request was replaced by newer account state",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for MediaResolutionError {}
+
+/// First provider-neutral media capability. It deliberately resolves only the
+/// standard source selected for M1; quality negotiation is added only with
+/// evidence and a real product setting.
+pub trait MediaResolutionProvider: MusicProvider + Sync {
+    type Error;
+
+    fn resolve_standard_media(
+        &self,
+        track_id: TrackId,
+    ) -> impl Future<Output = Result<ResolvedMediaSource, Self::Error>> + Send;
 }
 
 #[cfg(test)]

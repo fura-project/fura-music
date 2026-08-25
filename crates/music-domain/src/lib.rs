@@ -247,6 +247,131 @@ impl fmt::Display for InvalidTrackId {
 impl std::error::Error for InvalidTrackId {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioFormat {
+    Mp3,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioQuality {
+    Standard,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResolvedMediaSourceField {
+    Uri,
+    Validity,
+}
+
+/// Provider-neutral short-lived source for immediate playback. Provider
+/// authorization material may be embedded in the URI and is always redacted
+/// from diagnostics.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ResolvedMediaSource {
+    track_id: TrackId,
+    uri: String,
+    format: AudioFormat,
+    quality: AudioQuality,
+    valid_for_seconds: u32,
+}
+
+impl ResolvedMediaSource {
+    /// # Errors
+    ///
+    /// Rejects an empty/whitespace-padded URI or zero validity. URI scheme and
+    /// authority rules remain provider-specific and must be checked before
+    /// constructing this generic value.
+    pub fn new(
+        track_id: TrackId,
+        uri: impl Into<String>,
+        format: AudioFormat,
+        quality: AudioQuality,
+        valid_for_seconds: u32,
+    ) -> Result<Self, InvalidResolvedMediaSource> {
+        let uri = uri.into();
+        if uri.is_empty() || uri.trim() != uri {
+            return Err(InvalidResolvedMediaSource {
+                field: ResolvedMediaSourceField::Uri,
+            });
+        }
+        if valid_for_seconds == 0 {
+            return Err(InvalidResolvedMediaSource {
+                field: ResolvedMediaSourceField::Validity,
+            });
+        }
+        Ok(Self {
+            track_id,
+            uri,
+            format,
+            quality,
+            valid_for_seconds,
+        })
+    }
+
+    #[must_use]
+    pub const fn track_id(&self) -> &TrackId {
+        &self.track_id
+    }
+
+    /// Returns secret-bearing source data for immediate playback only.
+    #[must_use]
+    pub fn uri(&self) -> &str {
+        &self.uri
+    }
+
+    #[must_use]
+    pub const fn format(&self) -> AudioFormat {
+        self.format
+    }
+
+    #[must_use]
+    pub const fn quality(&self) -> AudioQuality {
+        self.quality
+    }
+
+    #[must_use]
+    pub const fn valid_for_seconds(&self) -> u32 {
+        self.valid_for_seconds
+    }
+}
+
+impl fmt::Debug for ResolvedMediaSource {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ResolvedMediaSource")
+            .field("track_id", &self.track_id)
+            .field("uri", &"[REDACTED]")
+            .field("format", &self.format)
+            .field("quality", &self.quality)
+            .field("valid_for_seconds", &self.valid_for_seconds)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidResolvedMediaSource {
+    field: ResolvedMediaSourceField,
+}
+
+impl InvalidResolvedMediaSource {
+    #[must_use]
+    pub const fn field(self) -> ResolvedMediaSourceField {
+        self.field
+    }
+}
+
+impl fmt::Display for InvalidResolvedMediaSource {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "resolved media source has an invalid {:?}",
+            self.field
+        )
+    }
+}
+
+impl std::error::Error for InvalidResolvedMediaSource {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrackSummaryField {
     Title,
     ArtistName,
@@ -454,8 +579,8 @@ fn nonblank(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
-        TrackSummaryField,
+        AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
+        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSummary, TrackSummaryField,
     };
 
     #[test]
@@ -554,5 +679,57 @@ mod tests {
         assert_eq!(page.total(), 100);
         assert!(!page.has_more());
         assert!(page.tracks().is_empty());
+    }
+
+    #[test]
+    fn resolved_media_source_redacts_short_lived_authorization() {
+        let track_id = TrackId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "track:41001:0:1:fixture-mid",
+        )
+        .expect("track ID");
+        let source = ResolvedMediaSource::new(
+            track_id,
+            "http://audio.example.test/fixture.mp3?vkey=private",
+            AudioFormat::Mp3,
+            AudioQuality::Standard,
+            7_200,
+        )
+        .expect("media source");
+
+        assert_eq!(source.track_id().provider().as_str(), "qq-music");
+        assert_eq!(source.format(), AudioFormat::Mp3);
+        assert_eq!(source.quality(), AudioQuality::Standard);
+        assert_eq!(source.valid_for_seconds(), 7_200);
+        assert!(source.uri().contains("vkey=private"));
+        let debug = format!("{source:?}");
+        assert!(!debug.contains("vkey"));
+        assert!(!debug.contains("41001"));
+    }
+
+    #[test]
+    fn resolved_media_source_rejects_invalid_uri_and_validity() {
+        let track_id = || {
+            TrackId::new(ProviderId::new("local").expect("provider"), "track:fixture")
+                .expect("track ID")
+        };
+        let invalid_uri = ResolvedMediaSource::new(
+            track_id(),
+            " source ",
+            AudioFormat::Mp3,
+            AudioQuality::Standard,
+            1,
+        )
+        .expect_err("whitespace-padded URI");
+        assert_eq!(invalid_uri.field(), ResolvedMediaSourceField::Uri);
+        let invalid_validity = ResolvedMediaSource::new(
+            track_id(),
+            "file:///fixture.mp3",
+            AudioFormat::Mp3,
+            AudioQuality::Standard,
+            0,
+        )
+        .expect_err("zero validity");
+        assert_eq!(invalid_validity.field(), ResolvedMediaSourceField::Validity);
     }
 }
