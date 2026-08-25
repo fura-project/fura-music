@@ -73,15 +73,17 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added the QQ-compatible cloud-QRC DES D-E-D decoder with retained MIT attribution, 1 MiB ciphertext and 2 MiB decompressed limits, zlib/UTF-8 validation, `quick-xml` entity-safe attribute extraction, bounded QRC line/segment parsing, and auxiliary LRC timestamp parsing. Seven new non-lyrical regressions bring `qqmusic-client` to 75 tests; strict Clippy passes.
 - Ran the opt-in anonymous `live_lyrics` test through the actual Rust request/decrypt/XML/QRC path. It confirmed nonempty original lines plus word timing without printing or retaining lyric text; authenticated and nonempty translation/romanization evidence remain open.
 - Implemented `QQMusicProvider` lyric routing and Domain mapping. The shared opaque-track parser preserves the distinct primary song type used by lyrics and optional vkey type used by media; translation and romanization attach only at a unique exact millisecond start, ambiguous/unmatched rows remain absent, every await rechecks the exact account, and only explicit rejection signs out. Five Provider regressions cover the mapping fixture and failure/lifecycle boundaries, bringing that crate to 29 tests.
+- Added a single-use cancellable lyric Bridge handle that forwards only provider/opaque Track identity and returns provider-neutral synchronized lines, word-timed segments, optional auxiliary text, or coarse failures. Three Bridge regressions cover redacted mapping, all Provider failures, and cancellation dropping an in-flight future; pinned FRB 2.13.0 generation added only the lyrics API and retained every existing entrypoint.
+- Revalidated the 149-test Rust workspace (19 + 2 + 29 + 75 + 24), strict Clippy, full Rust formatting, `dart analyze`, all 82 Flutter tests, a Linux release build, and the packaged Linux FFI smoke. The smoke creates, cancels, and runs the lyric handle without QQ Music traffic; it proves this host's generated/native lifecycle, not authenticated lyric loading or other platforms.
 
 # In Progress
 
-- Add one cancellable lyric Bridge load handle that exposes only provider-neutral synchronized lines, segments, auxiliary text, and coarse failures.
+- Compose lyric loading with the queue-selected track and playback position in Dart while keeping active-line/word selection out of Rust.
 
 # Next Candidates
 
-1. Add one cancellable lyric Bridge load handle with exact run/cancel/isActive lifecycle and redacted diagnostics.
-2. Compose lyric loading with queue-selected track and playback position in Dart.
+1. Add the Dart lyric gateway/controller with exact restart, track replacement, stop/sign-out, and dispose cancellation.
+2. Compose loaded synchronized lyrics with queue-selected track and the foreground player's position stream.
 3. Add the smallest adaptive lyric surface with basic active-line and word-level progress presentation.
 
 # Blockers

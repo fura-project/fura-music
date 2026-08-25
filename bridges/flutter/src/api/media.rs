@@ -6,7 +6,7 @@ use music_domain::{AudioFormat, AudioQuality, ResolvedMediaSource};
 use provider_api::{MediaResolutionError, MediaResolutionProvider};
 use tokio::sync::Notify;
 
-use super::authentication::native_qq_music_provider;
+use super::{authentication::native_qq_music_provider, domain_track_id};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicMediaFormat {
@@ -162,11 +162,6 @@ pub fn begin_qq_music_media_resolution(
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
     }
-}
-
-fn domain_track_id(provider_id: &str, opaque_track_id: &str) -> Result<music_domain::TrackId, ()> {
-    let provider = music_domain::ProviderId::new(provider_id).map_err(|_| ())?;
-    music_domain::TrackId::new(provider, opaque_track_id).map_err(|_| ())
 }
 
 fn map_resolution(

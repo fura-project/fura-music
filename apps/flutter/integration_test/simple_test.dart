@@ -3,6 +3,7 @@ import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart';
+import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
@@ -18,6 +19,7 @@ void main() {
     expect(status.provider.implementedCapabilities, [
       'Authentication',
       'UserLibrary',
+      'Lyrics',
       'MediaResolution',
     ]);
     final restore = restoreQqMusicCredentialFromSecureStorage();
@@ -58,6 +60,14 @@ void main() {
       cancelledMediaResolution.failure,
       QqMusicMediaResolutionFailure.cancelled,
     );
+    final unusedLyricLoad = beginQqMusicLyricLoad(
+      providerId: 'qq-music',
+      opaqueTrackId: 'track:41001:0:1:fixtureTrackMid1',
+    );
+    expect(unusedLyricLoad.isActive, isTrue);
+    expect(unusedLyricLoad.cancel(), isTrue);
+    final cancelledLyricLoad = await unusedLyricLoad.run();
+    expect(cancelledLyricLoad.failure, QqMusicLyricLoadFailure.cancelled);
     final queue = createPlaybackQueue();
     final queueTrack = LibraryTrackSummary(
       providerId: 'qq-music',
