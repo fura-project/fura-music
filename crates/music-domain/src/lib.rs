@@ -191,9 +191,272 @@ impl fmt::Display for InvalidPlaylistSummary {
 
 impl std::error::Error for InvalidPlaylistSummary {}
 
+/// Provider-scoped track identity. Presentation and generic domain code must
+/// not infer media-resolution fields from the opaque value.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct TrackId {
+    provider: ProviderId,
+    opaque: String,
+}
+
+impl TrackId {
+    /// # Errors
+    ///
+    /// Returns [`InvalidTrackId`] when the provider-owned value is empty or
+    /// whitespace-only.
+    pub fn new(provider: ProviderId, opaque: impl Into<String>) -> Result<Self, InvalidTrackId> {
+        let opaque = opaque.into();
+        if opaque.trim().is_empty() {
+            return Err(InvalidTrackId);
+        }
+        Ok(Self { provider, opaque })
+    }
+
+    #[must_use]
+    pub const fn provider(&self) -> &ProviderId {
+        &self.provider
+    }
+
+    /// Returns the provider-owned identity for routing back to that provider.
+    /// Other layers must treat it as opaque.
+    #[must_use]
+    pub fn opaque(&self) -> &str {
+        &self.opaque
+    }
+}
+
+impl fmt::Debug for TrackId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TrackId")
+            .field("provider", &self.provider)
+            .field("opaque", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidTrackId;
+
+impl fmt::Display for InvalidTrackId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("track identity must have a non-empty provider value")
+    }
+}
+
+impl std::error::Error for InvalidTrackId {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TrackSummaryField {
+    Title,
+    ArtistName,
+}
+
+/// Minimum provider-independent track data required by a playlist-detail row.
+/// Playback rights and provider protocol fields are deliberately absent.
+#[derive(Clone, Eq, PartialEq)]
+pub struct TrackSummary {
+    id: TrackId,
+    title: String,
+    subtitle: Option<String>,
+    artist_names: Vec<String>,
+    album_title: Option<String>,
+    artwork_uri: Option<String>,
+    duration_seconds: Option<u32>,
+}
+
+impl TrackSummary {
+    /// # Errors
+    ///
+    /// Rejects a blank title or any blank artist credit. An empty artist list
+    /// remains valid so unavailable-track behavior can be modeled later from
+    /// evidence instead of being guessed here.
+    pub fn new(
+        id: TrackId,
+        title: impl Into<String>,
+        artist_names: Vec<String>,
+    ) -> Result<Self, InvalidTrackSummary> {
+        let title = title.into();
+        if title.trim().is_empty() {
+            return Err(InvalidTrackSummary {
+                field: TrackSummaryField::Title,
+            });
+        }
+        if artist_names.iter().any(|name| name.trim().is_empty()) {
+            return Err(InvalidTrackSummary {
+                field: TrackSummaryField::ArtistName,
+            });
+        }
+        Ok(Self {
+            id,
+            title,
+            subtitle: None,
+            artist_names,
+            album_title: None,
+            artwork_uri: None,
+            duration_seconds: None,
+        })
+    }
+
+    #[must_use]
+    pub fn with_subtitle(mut self, subtitle: Option<String>) -> Self {
+        self.subtitle = nonblank(subtitle);
+        self
+    }
+
+    #[must_use]
+    pub fn with_album_title(mut self, album_title: Option<String>) -> Self {
+        self.album_title = nonblank(album_title);
+        self
+    }
+
+    #[must_use]
+    pub fn with_artwork_uri(mut self, artwork_uri: Option<String>) -> Self {
+        self.artwork_uri = nonblank(artwork_uri);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_duration_seconds(mut self, duration_seconds: Option<u32>) -> Self {
+        self.duration_seconds = duration_seconds;
+        self
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> &TrackId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    #[must_use]
+    pub fn subtitle(&self) -> Option<&str> {
+        self.subtitle.as_deref()
+    }
+
+    #[must_use]
+    pub fn artist_names(&self) -> &[String] {
+        &self.artist_names
+    }
+
+    #[must_use]
+    pub fn album_title(&self) -> Option<&str> {
+        self.album_title.as_deref()
+    }
+
+    #[must_use]
+    pub fn artwork_uri(&self) -> Option<&str> {
+        self.artwork_uri.as_deref()
+    }
+
+    #[must_use]
+    pub const fn duration_seconds(&self) -> Option<u32> {
+        self.duration_seconds
+    }
+}
+
+impl fmt::Debug for TrackSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TrackSummary")
+            .field("id", &self.id)
+            .field("title", &"[REDACTED]")
+            .field("has_subtitle", &self.subtitle.is_some())
+            .field("artist_count", &self.artist_names.len())
+            .field("has_album_title", &self.album_title.is_some())
+            .field("has_artwork", &self.artwork_uri.is_some())
+            .field("duration_seconds", &self.duration_seconds)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidTrackSummary {
+    field: TrackSummaryField,
+}
+
+impl InvalidTrackSummary {
+    #[must_use]
+    pub const fn field(self) -> TrackSummaryField {
+        self.field
+    }
+}
+
+impl fmt::Display for InvalidTrackSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "track summary has an invalid {:?}", self.field)
+    }
+}
+
+impl std::error::Error for InvalidTrackSummary {}
+
+/// One bounded page of playlist tracks. Source-specific route and pagination
+/// rules remain in the provider implementation.
+#[derive(Clone, Eq, PartialEq)]
+pub struct PlaylistTracksPage {
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    tracks: Vec<TrackSummary>,
+}
+
+impl PlaylistTracksPage {
+    #[must_use]
+    pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+        Self {
+            offset,
+            total,
+            has_more,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+}
+
+impl fmt::Debug for PlaylistTracksPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PlaylistTracksPage")
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("track_count", &self.tracks.len())
+            .finish()
+    }
+}
+
+fn nonblank(value: Option<String>) -> Option<String> {
+    value.filter(|value| !value.trim().is_empty())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{PlaylistId, PlaylistSummary, ProviderId};
+    use super::{
+        PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
+        TrackSummaryField,
+    };
 
     #[test]
     fn provider_id_accepts_stable_keys() {
@@ -241,5 +504,55 @@ mod tests {
             Some("https://example.invalid/cover.jpg")
         );
         assert!(!format!("{summary:?}").contains("Synthetic favorites"));
+    }
+
+    #[test]
+    fn track_summary_is_provider_scoped_minimum_display_data() {
+        let id = TrackId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "track:41001:0:1:fixture-mid",
+        )
+        .expect("track ID");
+        let summary = TrackSummary::new(id, "Synthetic track", vec!["Artist one".into()])
+            .expect("track summary")
+            .with_subtitle(Some("Synthetic subtitle".into()))
+            .with_album_title(Some("Synthetic album".into()))
+            .with_artwork_uri(Some("https://example.invalid/album.jpg".into()))
+            .with_duration_seconds(Some(245));
+
+        assert_eq!(summary.id().provider().as_str(), "qq-music");
+        assert_eq!(summary.id().opaque(), "track:41001:0:1:fixture-mid");
+        assert_eq!(summary.title(), "Synthetic track");
+        assert_eq!(summary.artist_names(), ["Artist one"]);
+        assert_eq!(summary.album_title(), Some("Synthetic album"));
+        assert_eq!(summary.duration_seconds(), Some(245));
+        let debug = format!("{summary:?}");
+        assert!(!debug.contains("Synthetic track"));
+        assert!(!debug.contains("41001"));
+    }
+
+    #[test]
+    fn track_summary_rejects_blank_display_fields_and_page_hides_content() {
+        let provider = ProviderId::new("qq-music").expect("provider");
+        let blank_title = TrackSummary::new(
+            TrackId::new(provider.clone(), "track:1").expect("track ID"),
+            " ",
+            Vec::new(),
+        )
+        .expect_err("blank title");
+        assert_eq!(blank_title.field(), TrackSummaryField::Title);
+        let blank_artist = TrackSummary::new(
+            TrackId::new(provider, "track:2").expect("track ID"),
+            "Synthetic title",
+            vec![String::new()],
+        )
+        .expect_err("blank artist");
+        assert_eq!(blank_artist.field(), TrackSummaryField::ArtistName);
+
+        let page = PlaylistTracksPage::new(100, 100, false, Vec::new());
+        assert_eq!(page.offset(), 100);
+        assert_eq!(page.total(), 100);
+        assert!(!page.has_more());
+        assert!(page.tracks().is_empty());
     }
 }

@@ -25,16 +25,19 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Cross-validated ordinary playlist detail and built-in `dirId: 201` liked songs across current implementations, then confirmed the ordinary `CgiGetDiss` shape with a bounded no-account public probe on 2026-08-26.
 - Added bounded `QQMusicClient` pages for ordinary and liked-songs routes, minimum QQ-specific track/artist/album summaries, three-level response-code handling, typed pagination/row failures, redacted diagnostics, and 5 synthetic fixture tests. The liked fixture locks the independently observed optional nested data code.
 - Revalidated the Rust workspace after the detail protocol slice: strict Clippy and tests pass at 4 + 2 + 16 + 63 + 10; live account-dependent tests remain ignored by default.
+- Added provider-scoped opaque `TrackId`, minimum provider-independent `TrackSummary`, and `PlaylistTracksPage` Domain models plus a paged `PlaylistDetailsProvider` contract. Playback rights and QQ raw fields remain outside Domain.
+- Implemented QQ Provider detail routing for favorite playlists, ordinary owned playlists, and the special owned `dirId: 201` liked-songs path. Mapping preserves display metadata and future media identity behind a redacted provider opaque value, rejects foreign/malformed identities and non-advancing pages, rechecks account state after every await, and clears credentials only on explicit rejection.
+- Added Provider regressions for all three routes, multi-artist/album/artwork mapping, unsafe artwork components, malformed identity, invalid page size, non-advancing pages, rejection versus transient failure, and late completion after account replacement. Strict Rust checks now pass at 6 + 2 + 20 + 63 + 10.
 
 # In Progress
 
-- Define the minimum provider-independent track and playlist-detail Domain models, then map both provider-owned playlist identity routes without exposing QQ protocol fields.
+- Expose one cancellable, single-page playlist-detail Bridge operation and presentation-safe DTOs without moving pagination policy or QQ identity parsing into Dart.
 
 # Next Candidates
 
-1. Add provider-independent track identity, artist/album display summaries, and a bounded playlist-detail result shaped by current UI and future playback needs.
-2. Map `owned:<tid>:<dirId>` and `favorite:<id>` only inside `QQMusicProvider`, aggregate detail pages with account-replacement and non-advancing-page checks, and keep explicit rejection distinct from transient failure.
-3. Add a cancellable Bridge detail operation, regenerate bindings, and make playlist rows interactive with truthful loading, empty, retry, cancellation, and replacement states.
+1. Add a cancellable Bridge detail operation, regenerate bindings, and prove provider/track opaque IDs are forwarded without parsing.
+2. Make playlist rows interactive and add a detail controller/page with truthful first-page loading, empty, transient retry, credential rejection, cancellation, and account-replacement states.
+3. Add explicit next-page loading and deduplication in the Dart controller only after the first-page navigation path is complete.
 
 # Blockers
 

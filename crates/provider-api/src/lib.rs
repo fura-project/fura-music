@@ -3,7 +3,7 @@
 use std::fmt;
 use std::future::Future;
 
-use music_domain::{PlaylistSummary, ProviderId};
+use music_domain::{PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ProviderCapability {
@@ -188,6 +188,19 @@ pub trait UserPlaylistsProvider: MusicProvider + Sync {
     fn user_playlists(
         &self,
     ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
+}
+
+/// Provider-neutral paged playlist-detail capability. The owning provider
+/// interprets opaque playlist identity and source-specific continuation rules.
+pub trait PlaylistDetailsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn playlist_tracks_page(
+        &self,
+        playlist_id: PlaylistId,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<PlaylistTracksPage, Self::Error>> + Send;
 }
 
 #[cfg(test)]

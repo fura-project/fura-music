@@ -33,7 +33,7 @@ The minimum raw track boundary preserves:
 - artist numeric ID, media MID, and name;
 - optional album numeric ID, media MID or picture MID, and name.
 
-These are QQ-specific protocol summaries. They do not become project Domain objects until `QQMusicProvider` explicitly maps them. File-quality, payment, action-bit, tracing, MV, and other raw response structures are intentionally excluded from this detail slice; media resolution will own the fields it can evidence and use.
+These are QQ-specific protocol summaries. `QQMusicProvider` now maps them into provider-neutral track summaries and keeps QQ song ID, MID, and type behind a provider-owned opaque track identity for the future media slice. Album artwork uses the independently documented `photo_new/T002R300x300M000{mid}.jpg` form only when the MID is a safe URL component. File-quality, payment, action-bit, tracing, MV, and other raw response structures are intentionally excluded from this detail slice; media resolution will own the fields it can evidence and use.
 
 ## Ordinary playlist route
 

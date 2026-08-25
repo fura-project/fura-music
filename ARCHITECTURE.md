@@ -35,10 +35,10 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 ## Current modules
 
 - `apps/flutter` contains adaptive Material 3 authentication and complete user-playlist surfaces, short-lived Dart controllers/gateway adapters, one shared serialized platform-vault boundary, and Dart integration/widget tests.
-- `crates/music-domain` contains provider-independent `ProviderId`, opaque `PlaylistId`, and minimum `PlaylistSummary` types.
-- `crates/provider-api` contains the UI-free provider descriptor/capabilities plus provider-neutral QR authentication, owned-playlist, and complete user-playlist contracts.
+- `crates/music-domain` contains provider-independent provider/playlist/track identities, playlist and track summaries, and bounded playlist-track pages. Provider-owned identity values remain opaque outside their implementation.
+- `crates/provider-api` contains the UI-free provider descriptor/capabilities plus provider-neutral QR authentication, owned/complete user-playlist, and paged playlist-detail contracts.
 - `crates/qqmusic-client` owns the raw QQ Music client boundary. It contains redacted credential/restore models, versioned secure-storage serialization, a Rustls-backed bounded HTTP implementation, cross-validated WeChat QR flows, credential verification, owned/favorite playlist fetching, ordinary/liked-songs detail-page fetching, and cancellable lifecycle coordinators.
-- `crates/provider-qqmusic` retains credential state, maps raw authentication and playlist protocol values into provider/domain contracts, aggregates bounded owned/favorite pages, and truthfully advertises `Authentication` plus `UserLibrary`.
+- `crates/provider-qqmusic` retains credential state, maps raw authentication/playlist/track protocol values into provider/domain contracts, aggregates bounded owned/favorite pages, routes ordinary versus built-in liked detail pages, and truthfully advertises `Authentication` plus `UserLibrary`.
 - `bridges/flutter` adapts core/provider status, authentication, credential persistence, and complete user-playlist loading into presentation-safe generated types. Its secret-bearing operation remains a dedicated short-lived persistence handoff, not a presentation model.
 
 The current concrete bootstrap flow is:
@@ -140,7 +140,9 @@ The Bridge exposes the complete Provider operation through a single-use `QqMusic
 
 Flutter routes both newly authenticated and server-verified restored sessions into an adaptive “Your playlists” page containing the combined Provider result. Its controller owns loading/retry/empty/error presentation, cancels replaced operations, and suppresses late results after restart or disposal. Desktop uses a bounded artwork grid; narrow layouts use a touch-sized list. Structural or safety-limit failures show no partial list. Rows are deliberately non-interactive until playlist-detail behavior exists, and Flutter never parses source-specific opaque IDs.
 
-The protocol client now has separate bounded operations for ordinary playlist pages (`disstid`) and the built-in liked-songs directory (`dirid: 201` plus encrypted UIN). Both return QQ-specific track, artist, and album summaries with typed pagination and failures. Those raw summaries do not cross into Domain, Provider contracts, the Bridge, or Flutter yet. QQ-specific file/payment/action payloads are deliberately excluded; future media resolution must introduce only fields supported by its own evidence.
+The protocol client has separate bounded operations for ordinary playlist pages (`disstid`) and the built-in liked-songs directory (`dirid: 201` plus encrypted UIN). Both return QQ-specific track, artist, and album summaries with typed pagination and failures. `QQMusicProvider` alone parses playlist opaque identities, selects the request route, and maps the result into a provider-neutral `PlaylistTracksPage`. Track IDs remain provider-scoped opaque values containing the QQ fields needed by a future media operation; generic Domain and presentation code cannot interpret them. QQ-specific file/payment/action payloads are deliberately excluded; future media resolution must introduce only fields supported by its own evidence.
+
+The page boundary is intentional: playlist detail does not hide an unbounded full-list loop. The Provider rejects a continuing empty page and rechecks the exact authenticated credential after the network await. The Bridge and Flutter detail surfaces do not exist yet, so the current library rows remain non-interactive.
 
 ## Playback and storage
 
