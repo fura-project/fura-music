@@ -3,6 +3,13 @@
 //! Endpoint-specific requests and response models are added only with protocol
 //! evidence. This initial seam owns transport without choosing an HTTP package.
 
+mod credential;
+
+pub use credential::{
+    Credential, CredentialExpiry, CredentialRestorePlan, InvalidCredential,
+    InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity, LoginType,
+};
+
 /// A QQ Music protocol client parameterized by its transport implementation.
 #[derive(Debug)]
 pub struct QqMusicClient<T> {

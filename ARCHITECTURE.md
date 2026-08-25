@@ -37,7 +37,7 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 - `apps/flutter` contains the Material 3 application shell, presentation-safe bootstrap page, and Dart integration/widget tests.
 - `crates/music-domain` contains provider-independent identity types. It currently defines only `ProviderId`.
 - `crates/provider-api` contains the UI-free provider descriptor, capabilities, and baseline provider trait.
-- `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently owns only transport lifecycle; endpoint behavior is intentionally absent until supported by evidence.
+- `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently owns transport lifecycle plus the redacted credential/restore model; endpoint behavior is intentionally absent until supported by evidence.
 - `crates/provider-qqmusic` composes `QqMusicClient` and maps provider metadata. It truthfully declares no implemented capabilities yet.
 - `bridges/flutter` adapts core/provider status into presentation-safe generated types.
 

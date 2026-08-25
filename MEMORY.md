@@ -8,3 +8,4 @@
 - Never commit cookies, credentials, tokens, QIMEI identifiers, or user-derived fixtures.
 - On the 2026-08-25 local Flutter 3.47.1 user-branch SDK, `flutter analyze` truncates its LSP initialization JSON when this checkout is under a path containing Chinese characters and exits 255. `dart analyze` completes normally and is the local static-analysis command until the SDK issue changes; this does not waive Flutter tests or builds.
 - `flutter_rust_bridge_codegen generate` 2.13.0 does not delete generated Dart files when a Rust API module is renamed; search `apps/flutter/lib/src/rust/api` for orphaned files after generation.
+- QQ Music restore must validate upstream: local `musickeyCreateTime + keyExpiresIn` can prove expiry but cannot prove validity. Current independent implementations agree on credential-rejection codes `1000`, `104400`, and `104401`; do not turn unrelated network/protocol failures into logout.
