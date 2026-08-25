@@ -57,16 +57,17 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Wired authentication, library, detail, and media application defaults through one shared serialized vault, and made the authenticated library page own one playback coordinator across local list/detail navigation. Leaving the authenticated page disposes its resolution and foreground playback authority.
 - Made playlist-detail rows keyboard/touch actionable and added a compact adaptive now-playing surface for resolving/loading/playing/paused/stopped/completed, retryable resolution or engine errors, explicit sign-in reset, play/pause/resume/retry, and stop. It intentionally exposes no queue behavior.
 - Added four end-to-end widget regressions for row playback, pause/resume/stop, track switching, pending resolution across local navigation, credential rejection back to sign-in, URI-free failure copy, and 390px layout. `dart analyze`, all 72 Flutter tests, a Linux release build, and packaged local plus loopback MP3 integration pass.
+- Added a provider-neutral positional `PlaybackQueue` to Rust Domain. Non-empty queues always have an explicit current index; replacement is atomic, navigation/completion is bounded, current removal chooses successor then predecessor, and duplicate track identities remain valid positional user intent. Seven tests cover invariants, duplicate preservation, selection, terminal navigation, every removal relationship, first push, and clear; full Rust checks pass at 15 + 2 + 24 + 68 + 16 with strict Clippy.
 
 # In Progress
 
-- Define the smallest provider-neutral queue behavior in reusable Rust Core before adding queue presentation. The bounded task must cover current item, next/previous, explicit replacement, removal, and terminal advancement without importing plugin or Flutter state.
+- Expose the existing provider-neutral queue through the thinnest typed in-process Bridge boundary. The Bridge may adapt commands and snapshots but must not duplicate queue rules or introduce a remote-state-machine lifecycle.
 
 # Next Candidates
 
-1. Specify and implement a minimal provider-independent queue model in Rust with exact identity deduplication rules, deterministic current/next/previous/removal behavior, and unit tests. Do not add shuffle, repeat, persistence, or Provider fetching without evidence.
-2. Expose only the coarse queue operations/state needed by Flutter through the typed Bridge, with exact lifecycle and mapping tests.
-3. Compose queue advancement with the existing single-track playback coordinator and add the smallest adaptive queue surface; preserve explicit single-track error and account-reset states.
+1. Expose only coarse replace/push/select/advance/rewind/remove/clear operations plus a provider-neutral queue snapshot through one Bridge-owned handle, with mapping and lifecycle tests. Duplicate track positions must survive the boundary unchanged.
+2. Compose queue advancement with the existing single-track playback coordinator and add the smallest adaptive queue surface; preserve explicit single-track error and account-reset states.
+3. Add completion-to-next, manual next/previous, current removal, duplicate-entry, local navigation, cancellation, and narrow-layout regressions before calling queue behavior user-visible complete.
 
 # Blockers
 

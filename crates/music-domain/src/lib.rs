@@ -2,6 +2,10 @@
 
 use std::fmt;
 
+mod playback_queue;
+
+pub use playback_queue::{InvalidPlaybackQueue, PlaybackQueue, PlaybackQueueRemoval};
+
 /// Stable provider identity used by core domain objects.
 ///
 /// This is intentionally not an enum: domain identity must not require a
