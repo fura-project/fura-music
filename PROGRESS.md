@@ -45,16 +45,18 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Added Provider regressions for successful Domain mapping, foreign/malformed identity rejection before transport, optional song-type fallback, unavailable/rejected/service failure semantics, and account replacement during either network request. Rust workspace tests pass at 8 + 2 + 24 + 68 + 13 with strict Clippy after synchronizing the Bridge capability baseline.
 - Added a single-use cancellable media-resolution Bridge handle. It forwards opaque provider/track identity into the Provider, returns only source URI, MP3/standard labels, validity, or one coarse typed failure, and redacts both identity and URI from Rust diagnostics. An in-flight cancellation regression proves the losing Provider future is dropped.
 - Regenerated pinned FRB 2.13.0 bindings and audited the generated API set: `media.dart` and its FFI/codec symbols were added without removing authentication/library entrypoints. Rust now passes 8 + 2 + 24 + 68 + 16, while `dart analyze`, all 52 Flutter tests, a Linux release build, and the packaged FFI smoke pass. The smoke creates and cancels the media handle without QQ traffic.
+- Compared current playback candidates against M1's actual boundary and selected pinned `audioplayers` 6.8.1. Its endorsed packages cover every generated platform, its required lifecycle and source/event operations are documented across targets, it is MIT-licensed and current, and it avoids importing a plugin-owned queue. The wider `media_kit` native stack and `just_audio` desktop adapters remain evidence-based alternatives rather than installed abstractions.
+- Added a packaged Linux integration that writes a tiny test-only silent MP3 into a disposable system directory and proves source load, play, pause, resume, stop, dispose, and cleanup through the endorsed GStreamer plugin. Both debug integration and release application builds pass; no test fixture ships in the application bundle. Other target runtimes and authenticated QQ playback remain unverified.
 
 # In Progress
 
-- Select and validate the smallest maintained cross-platform Flutter playback engine against an injected local/test source before handing it short-lived QQ URLs. Record dependency/platform/lifecycle evidence and avoid introducing queue abstractions until one-track playback works.
+- Put the selected engine behind a minimum project-owned Dart adapter and controller lifecycle. Prove restart/source replacement/dispose suppress late state, completion, and error events before connecting media resolution or adding UI.
 
 # Next Candidates
 
-1. Cross-check current candidate playback packages for Linux/Android/iOS/macOS/Windows support, lifecycle semantics, maintenance, and license; document the narrow selection.
-2. Prove load/play/pause/stop/dispose and late-callback handling against a deterministic bundled or generated local audio fixture on Linux.
-3. Add the smallest playback controller and UI affordance required to resolve and play one selected playlist track; define queue ownership only from that real flow.
+1. Define a plugin-independent foreground player port with only load/play, pause, stop, dispose, and typed state/error events; implement the `audioplayers` adapter.
+2. Add controller regressions for late events after source replacement, stop, restart, and dispose, plus engine failures that never include a source URI in diagnostics.
+3. Connect one playlist-track selection through Bridge resolution into that controller and add the smallest truthful play/pause affordance; define queue ownership only from this real flow.
 
 # Blockers
 
@@ -75,6 +77,7 @@ None.
 - Ordinary detail passed a current public no-account probe, but authenticated ordinary and liked-songs success remain cross-validated/fixture-tested rather than proven with this checkout's real account.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
+- `audioplayers` is package/build validated and actual MP3 lifecycle is proven only on Linux. Android, Apple, and Windows runtime behavior, audio focus, interruption handling, and transport security still need target-specific evidence before release claims.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).

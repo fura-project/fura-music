@@ -33,6 +33,7 @@ dependencies:
 
   rust_lib_flutterustmusic:
     path: rust_builder
+  audioplayers: 6.8.1
   flutter_rust_bridge: 2.13.0
   flutter_secure_storage: 11.0.0
 

@@ -40,6 +40,8 @@ flutter test integration_test/secure_storage_linux_test.dart -d linux
 ```
 
 The Linux build also needs the native `libsecret-1` development package for platform secure storage. Package names vary by distribution (`libsecret` on Arch-based systems and `libsecret-1-dev` on Debian-based systems).
+
+Playback uses the endorsed Linux `audioplayers` implementation and therefore also needs GStreamer 1.0 core, app, and audio development modules plus runtime plugins for the formats being played. The local M1 integration currently proves MP3 decode on the recorded development environment; installing headers alone does not prove runtime codec availability on another distribution.
 The secure-storage integration uses a randomized, non-account test key, never calls `deleteAll`, and verifies cleanup in `finally`; it intentionally performs a live write/read/delete cycle in the current user's platform keyring.
 
 `dart analyze` is deliberate for the current local non-ASCII checkout-path issue recorded in `MEMORY.md`.
