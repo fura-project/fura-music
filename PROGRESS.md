@@ -84,22 +84,23 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Validated the real now-playing lyric entry at 390px and 1200px. The narrow path opens a bottom sheet without overflow; the wide path opens a bounded dialog and, while it remains visible, replaces first-track title/content with the exact second-track lyric request after playback completion advances the queue. The complete Flutter suite now passes 103 tests and strict Dart analysis remains clean.
 - Reassessed the M1 mobile trigger. Android SDK 36.1, NDK, licenses, and several JDKs are installed, but no Android device or emulator is active. Three ARM64 release builds stopped before app or Rust compilation because Flutter 3.47.1's Gradle loader corrupts the non-ASCII SDK path when rereading `local.properties`; a settings-only UTF-8 workaround advanced one layer but could not affect the plugin's second read and was reverted. No APK or mobile runtime evidence exists; TD-001 is now Triggered.
 - Completed the unblocked M1 readiness review in `docs/development/m1-readiness-review.md`. Rust formatting, 149 offline tests, strict Clippy, 103 Flutter tests, strict Dart analysis, Linux release, packaged FFI, real GStreamer local/loopback playback, and disposable Linux secure storage pass. Architecture/scope scans found no layer leak, sidecar, Provider expansion, secret/artifact, or untracked TODO; the module summary was updated for the implemented lyric path. M1 is not checkpoint-ready because mobile build/runtime and authorized real-account end-to-end evidence remain absent.
+- Resolved the Android build portion of triggered TD-001 without moving or patching the external Flutter SDK. An ASCII SDK alias plus direct tool snapshot reached Gradle; `flutter_secure_storage` 11.0.0 then reproduced upstream compile-SDK 37 incompatibility, so the top-level package is pinned to compatible 10.3.1 while current federated Linux/Windows packages remain selected. A Linux-only, no-rustup Gradle path now builds explicit Android ARM64 with matching `rust-src`, NDK API 24, and the locked Cargo workspace; other environments retain Cargokit.
+- Produced and inspected a 23.2 MB Android ARM64 release APK. It contains Flutter/Dart plus a stripped Android-24 AArch64 `librust_lib_flutterustmusic.so`; every Rust LOAD segment is 16 KB aligned, APK v2 verification and `zipalign -P 16` pass, and no APK is tracked. The certificate is still Android Debug under TD-002. The build used a signature-verified matching `rust-src` package in an ephemeral user mount because this session could not install it system-wide; this proves the build path and artifact, not Android runtime behavior.
 
 # In Progress
 
-- Resolve scheduled TD-001 through a genuinely different ASCII Flutter SDK-root strategy, then continue the Android build from the first new failure or success evidence.
+- Obtain an available Android runtime and execute the bounded non-account secure-storage and audio/FFI smoke; TD-004 and the M1 mobile runtime criterion remain open.
 
 # Next Candidates
 
-1. Resolve scheduled TD-001 with a genuinely different ASCII Flutter SDK-root strategy, then inspect the resulting Cargokit/system-Rust evidence instead of repeating the blocked command.
-2. Obtain an available Android runtime for the disposable secure-storage/audio smoke required by TD-004; do not infer runtime support from an APK.
-3. Run an authorized, secret-safe real-account vertical-slice smoke from QR sign-in through restore, library, playback/queue, and synchronized lyrics.
-4. Complete the M1 checkpoint only after the Roadmap criteria and triggered debt are actually satisfied.
+1. Obtain an available Android runtime for the disposable secure-storage/audio/FFI smoke required by TD-004; do not infer runtime support from the APK.
+2. Run an authorized, secret-safe real-account vertical-slice smoke from QR sign-in through restore, library, playback/queue, and synchronized lyrics.
+3. Complete the M1 checkpoint only after the Roadmap criteria and remaining evidence are actually satisfied.
 
 # Blockers
 
-- The M1 checkpoint requires one mobile build, but this host's first Android path is blocked before compilation by Flutter 3.47.1 rereading its non-ASCII SDK location as Latin-1 (TD-001). Three equivalent ARM64 attempts failed; the settings-only workaround was insufficient and reverted.
-- No mobile device or running emulator is available for secure-storage/audio runtime evidence. This does not block offline review or a future APK build, but TD-004 cannot be resolved from generated registrants or desktop tests.
+- The installed system Rust lacks its matching `rust-src` package, and this session has no passwordless privilege to install it. The signed package was sufficient for an ephemeral proof build; an ordinary repeat requires `sudo pacman -S rust-src` or an equivalent matching distribution installation.
+- No mobile device or running emulator is available for secure-storage/audio/FFI runtime evidence. TD-004 cannot be resolved from the APK, generated registrants, or desktop tests.
 - The code and fixture/widget evidence cover the complete user journey, but this checkout has not completed an authorized real QQ Music account flow from QR exchange through restored library, media playback, and synchronized lyrics. The Roadmap's user-facing criteria therefore remain unverified end to end.
 
 # Pending Human Decisions
@@ -111,7 +112,7 @@ None.
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
 - Credential handling can create account and privacy risk; real-account probes and user-derived fixtures require deliberate, secret-safe execution.
 - Startup server verification is cross-validated and fixture-tested but has not accepted a real account credential in this checkout; the live-success evidence gap remains separate from TD-003's completed implementation.
-- Linux runtime write/read/delete is verified with cleanup; Android, Apple, and Windows paths are still unbuilt and runtime-unverified here (TD-004).
+- Linux runtime write/read/delete is verified with cleanup; Android is build-only, while Apple and Windows paths remain unbuilt and all three remain runtime-unverified here (TD-004).
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - The complete playlist collection requires `encryptUin`; credentials missing it fail before library transport instead of showing only created playlists. Real successful-login coverage has not yet proven this field on every login shape.
 - Ordinary detail passed a current public no-account probe, but authenticated ordinary and liked-songs success remain cross-validated/fixture-tested rather than proven with this checkout's real account.
@@ -121,4 +122,4 @@ None.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).
-- Cargokit 2.13.0 assumes rustup; Linux currently uses a direct system-Cargo build tracked as TD-001, and non-Linux bridge builds remain unverified.
+- Cargokit 2.13.0 assumes rustup; Linux x64 and Linux-host Android ARM64 use narrow direct system-Cargo paths tracked as TD-001, while other bridge targets remain unverified.

@@ -49,8 +49,23 @@ android {
     }
 }
 
-apply from: "../cargokit/gradle/plugin.gradle"
-cargokit {
-    manifestDir = "../../../../bridges/flutter"
-    libname = "rust_lib_flutterustmusic"
+def rustupExecutable = System.getenv('PATH')
+        ?.split(File.pathSeparator)
+        ?.collect { new File(it, 'rustup') }
+        ?.find { it.isFile() && it.canExecute() }
+def useLinuxSystemCargo = org.apache.tools.ant.taskdefs.condition.Os.isFamily(
+        org.apache.tools.ant.taskdefs.condition.Os.FAMILY_UNIX
+    ) && !org.apache.tools.ant.taskdefs.condition.Os.isFamily(
+        org.apache.tools.ant.taskdefs.condition.Os.FAMILY_MAC
+    ) && rustupExecutable == null
+
+if (useLinuxSystemCargo) {
+    // TD-001: keep the Arch/system-Rust exception local to the Android build.
+    apply from: "system_cargo.gradle"
+} else {
+    apply from: "../cargokit/gradle/plugin.gradle"
+    cargokit {
+        manifestDir = "../../../../bridges/flutter"
+        libname = "rust_lib_flutterustmusic"
+    }
 }

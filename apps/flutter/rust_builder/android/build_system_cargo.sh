@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ $# -ne 8 ]]; then
+  echo "usage: build_system_cargo.sh MODE MANIFEST NDK_VERSION OUTPUT SDK MIN_SDK TARGETS TARGET_DIR" >&2
+  exit 64
+fi
+
+build_mode=$1
+manifest_dir=$2
+ndk_version=$3
+output_dir=$4
+sdk_directory=$5
+min_sdk=$6
+target_platforms=$7
+target_dir=$8
+
+if [[ $target_platforms != android-arm64 ]]; then
+  echo "The Linux system-Cargo path currently supports only an explicit android-arm64 build." >&2
+  echo "Invoke Flutter with --target-platform android-arm64, or use rustup/Cargokit for other ABIs." >&2
+  exit 65
+fi
+
+case $build_mode in
+  debug)
+    cargo_profile_args=()
+    cargo_profile_dir=debug
+    ;;
+  profile|release)
+    cargo_profile_args=(--release)
+    cargo_profile_dir=release
+    ;;
+  *)
+    echo "Unsupported Android build mode: $build_mode" >&2
+    exit 65
+    ;;
+esac
+
+cargo_executable=$(command -v cargo || true)
+rustc_executable=$(command -v rustc || true)
+if [[ -z $cargo_executable || -z $rustc_executable ]]; then
+  echo "The Android system-Cargo path requires cargo and rustc in PATH." >&2
+  exit 69
+fi
+
+rust_sysroot=$($rustc_executable --print sysroot)
+rust_library="$rust_sysroot/lib/rustlib/src/rust/library"
+if [[ ! -f $rust_library/Cargo.lock ]]; then
+  echo "Missing Rust standard-library sources for $($rustc_executable --version)." >&2
+  echo "Install the matching rust-src package (on Arch/Manjaro: sudo pacman -S rust-src)." >&2
+  exit 69
+fi
+
+host_arch=$(uname -m)
+if [[ $host_arch != x86_64 ]]; then
+  echo "The Linux system-Cargo Android path is validated only on an x86_64 host, not $host_arch." >&2
+  exit 65
+fi
+
+ndk_bin="$sdk_directory/ndk/$ndk_version/toolchains/llvm/prebuilt/linux-x86_64/bin"
+for tool in clang clang++ llvm-ar llvm-ranlib aarch64-linux-android${min_sdk}-clang; do
+  if [[ ! -x $ndk_bin/$tool ]]; then
+    echo "Missing Android NDK tool: $ndk_bin/$tool" >&2
+    exit 69
+  fi
+done
+
+ndk_major=${ndk_version%%.*}
+if (( ndk_major < 23 )); then
+  echo "The Android system-Cargo path requires NDK 23 or newer, not $ndk_version." >&2
+  exit 65
+fi
+libgcc_workaround="$target_dir/cargokit/libgcc_workaround/$ndk_major"
+rm -rf -- "$output_dir"
+mkdir -p "$output_dir/arm64-v8a" "$libgcc_workaround"
+printf 'INPUT(-lunwind)\n' > "$libgcc_workaround/libgcc.a"
+
+unit_separator=$'\x1f'
+rust_flags="-L${unit_separator}$libgcc_workaround"
+rust_flags+="${unit_separator}-C${unit_separator}link-arg=-Wl,--hash-style=both"
+rust_flags+="${unit_separator}-C${unit_separator}link-arg=-Wl,-z,max-page-size=16384"
+if [[ -n ${CARGO_ENCODED_RUSTFLAGS:-} ]]; then
+  rust_flags="${CARGO_ENCODED_RUSTFLAGS}${unit_separator}${rust_flags}"
+fi
+
+env \
+  RUSTC_BOOTSTRAP=1 \
+  "AR_aarch64-linux-android=$ndk_bin/llvm-ar" \
+  "CC_aarch64-linux-android=$ndk_bin/clang" \
+  "CFLAGS_aarch64-linux-android=--target=aarch64-linux-android${min_sdk}" \
+  "CXX_aarch64-linux-android=$ndk_bin/clang++" \
+  "CXXFLAGS_aarch64-linux-android=--target=aarch64-linux-android${min_sdk}" \
+  "RANLIB_aarch64-linux-android=$ndk_bin/llvm-ranlib" \
+  "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ndk_bin/aarch64-linux-android${min_sdk}-clang" \
+  "CARGO_ENCODED_RUSTFLAGS=$rust_flags" \
+  "$cargo_executable" build \
+    --manifest-path "$manifest_dir/Cargo.toml" \
+    --package rust_lib_flutterustmusic \
+    --locked \
+    "${cargo_profile_args[@]}" \
+    --target aarch64-linux-android \
+    --target-dir "$target_dir" \
+    -Z build-std=std,panic_abort
+
+rust_library_path="$target_dir/aarch64-linux-android/$cargo_profile_dir/librust_lib_flutterustmusic.so"
+if [[ ! -f $rust_library_path ]]; then
+  echo "Cargo completed without the expected Rust bridge library: $rust_library_path" >&2
+  exit 70
+fi
+cp -- "$rust_library_path" "$output_dir/arm64-v8a/librust_lib_flutterustmusic.so"

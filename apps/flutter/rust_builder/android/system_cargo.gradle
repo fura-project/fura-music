@@ -1,0 +1,144 @@
+import java.nio.file.Paths
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
+
+abstract class FlutterustmusicSystemCargoTask extends DefaultTask {
+    @Inject
+    abstract ExecOperations getExecOperations()
+
+    @Input
+    String buildMode
+
+    @Input
+    String manifestDir
+
+    @Input
+    String ndkVersion
+
+    @Input
+    String outputDir
+
+    @Input
+    String sdkDirectory
+
+    @Input
+    int minSdkVersion
+
+    @Input
+    List<String> targetPlatforms
+
+    @Input
+    String targetTempDir
+
+    @Input
+    String buildScript
+
+    @TaskAction
+    void build() {
+        execOperations.exec {
+            executable 'bash'
+            args buildScript,
+                buildMode,
+                manifestDir,
+                ndkVersion,
+                outputDir,
+                sdkDirectory,
+                minSdkVersion.toString(),
+                targetPlatforms.join(','),
+                targetTempDir
+        }
+    }
+}
+
+def findFlutterPlugin
+findFlutterPlugin = { Map<String, Project> projects ->
+    for (entry in projects) {
+        for (plugin in entry.value.plugins) {
+            if (plugin.class.name == 'com.flutter.gradle.FlutterPlugin' ||
+                    plugin.class.name == 'FlutterPlugin') {
+                return plugin
+            }
+        }
+        def plugin = findFlutterPlugin(entry.value.childProjects)
+        if (plugin != null) {
+            return plugin
+        }
+    }
+    return null
+}
+
+def flutterPlugin = findFlutterPlugin(rootProject.childProjects)
+if (flutterPlugin == null) {
+    throw new GradleException(
+        'Flutter plugin not found; the Android Rust bridge cannot be configured.'
+    )
+}
+
+def isApplication = flutterPlugin.project.plugins.hasPlugin('com.android.application')
+def variants = isApplication
+    ? flutterPlugin.project.android.applicationVariants
+    : flutterPlugin.project.android.libraryVariants
+
+variants.all { variant ->
+    def buildType = variant.buildType.name
+    def cargoOutputDir = "${project.buildDir}/jniLibs/${buildType}"
+    project.android.sourceSets.maybeCreate(buildType).jniLibs.srcDir(
+        new File(cargoOutputDir)
+    )
+
+    def List<String> platforms
+    try {
+        platforms = com.flutter.gradle.FlutterPluginUtils
+            .getTargetPlatforms(project)
+            .collect()
+    } catch (Exception ignored) {
+        platforms = flutterPlugin.getTargetPlatforms().collect()
+    }
+
+    gradle.afterProject {
+        def taskName = "systemCargoBuildRustLibFlutterustmusic${buildType.capitalize()}"
+        if (project.tasks.findByName(taskName)) {
+            return
+        }
+        if (flutterPlugin.project.android.ndkVersion == null) {
+            throw new GradleException(
+                "Set android.ndkVersion in the Flutter application's build.gradle."
+            )
+        }
+
+        def task = project.tasks.create(
+            taskName,
+            FlutterustmusicSystemCargoTask.class
+        ) {
+            buildMode = buildType
+            manifestDir = Paths.get(
+                project.buildscript.sourceFile.parent,
+                '../../../../bridges/flutter'
+            ).normalize().toString()
+            ndkVersion = flutterPlugin.project.android.ndkVersion
+            outputDir = cargoOutputDir
+            sdkDirectory = flutterPlugin.project.android.sdkDirectory.toString()
+            minSdkVersion = flutterPlugin.project.android.defaultConfig
+                .minSdkVersion.apiLevel as int
+            targetPlatforms = platforms
+            targetTempDir = "${project.buildDir}/systemCargo/${buildType}"
+            buildScript = new File(
+                project.buildscript.sourceFile.parent,
+                'build_system_cargo.sh'
+            ).absolutePath
+        }
+
+        def attachToNativeMerge = { nativeTask ->
+            def mergeTasks = [
+                "merge${buildType.capitalize()}JniLibFolders",
+                "merge${buildType.capitalize()}NativeLibs",
+            ]
+            if (mergeTasks.contains(nativeTask.name)) {
+                nativeTask.dependsOn task
+                nativeTask.outputs.upToDateWhen { false }
+            }
+        }
+        project.tasks.each attachToNativeMerge
+        project.tasks.whenTaskAdded attachToNativeMerge
+    }
+}

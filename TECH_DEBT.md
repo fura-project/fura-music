@@ -2,21 +2,21 @@
 
 Technical debt is reviewed after each finite task. States are `Open`, `Triggered`, `Scheduled`, `In Progress`, `Resolved`, and `Accepted Permanently`.
 
-## TD-001 — Linux bridge build bypasses Cargokit
+## TD-001 — System-Rust bridge builds bypass Cargokit
 
-**Status:** Scheduled
+**Status:** Open
 
-**Problem:** `flutter_rust_bridge` 2.13.0 generates a Cargokit backend that invokes `rustup` unconditionally. The Arch development environment intentionally uses supported system `rustc` and `cargo` packages, where installing rustup would conflict with the system toolchain. Linux therefore has a small direct-Cargo CMake integration while other platforms retain generated Cargokit integration. The first Android build additionally cannot reach Cargokit because Flutter 3.47.1's Gradle plugin loader rereads a non-ASCII `flutter.sdk` path through Java's Latin-1 `Properties.load(InputStream)` behavior.
+**Problem:** `flutter_rust_bridge` 2.13.0 generates a Cargokit backend that invokes `rustup` unconditionally. The Arch development environment intentionally uses supported system `rustc` and `cargo` packages, where installing rustup would conflict with the system toolchain. Linux x64 therefore has a small direct-Cargo CMake integration. Android uses a project-owned Gradle task only on Linux hosts without `rustup`; it accepts an explicit ARM64 target, builds the matching standard library from the distribution `rust-src` package, and otherwise leaves generated Cargokit in place.
 
 **Why accepted:** Linux is first-class and the direct build uses the same Cargo workspace, lockfile, crate type, and Rust compiler already validated by the core suite. Replacing the whole bridge or installing a conflicting toolchain would be larger and riskier during the executable-foundation task.
 
-**Impact:** Linux's `rust_builder/CMakeLists.txt` is no longer fully generator-owned, and no Android APK has been produced in this checkout. Changing only the project settings reader is insufficient because the applied Flutter plugin reads the same file again.
+**Impact:** The Linux CMake and Linux-host Android Gradle integration are no longer fully generator-owned. Android system-Cargo support is deliberately limited to an explicit ARM64 build. A 2026-08-26 release APK contained the AArch64 Rust bridge and passed 16 KB alignment checks, but the installed host still needs its matching `rust-src` package for an ordinary repeat build.
 
-**Risk:** Re-running bridge integration could overwrite the customization; other targets still need their own verified toolchain path.
+**Risk:** Re-running bridge integration could overwrite the customization; additional Android ABIs and non-Linux target builds still need their own verified toolchain paths. An APK build does not prove Android runtime FFI, storage, or audio behavior.
 
-**Suggested solution:** First give the Flutter tool an ASCII SDK root without moving or patching the external SDK, then observe the actual Android Cargokit failure. Adopt upstream Cargokit/native-assets system-Rust support when available, or add the smallest project-owned Android system-Cargo path only after that evidence identifies the required targets and NDK variables.
+**Suggested solution:** Adopt upstream Cargokit/native-assets system-Rust support when it can replace the two localized paths without losing the current Cargo lockfile, NDK API 24 toolchain, or 16 KB page alignment. Add another ABI only when a Roadmap or runtime target requires it.
 
-**Trigger condition:** Triggered and scheduled on 2026-08-26 when M1 reached its first mobile build task. Three ARM64 release attempts stopped at the Flutter Gradle loader's corrupted SDK path; do not repeat the same invocation until the SDK root strategy changes.
+**Trigger condition:** The Android ARM64 trigger was handled on 2026-08-26 after an ASCII SDK alias exposed the real `rustup` assumption. Reassess when FRB/Cargokit gains supported system-Rust builds, regeneration overwrites either customization, or another target/ABI becomes required.
 
 ## TD-002 — Release identity and signing use generated defaults
 
@@ -54,7 +54,7 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Status:** In Progress
 
-**Problem:** Linux now has a passing disposable write/read/delete integration against the current user's Secret Service. Android, iOS, macOS, and Windows implementations have not been built or run in this checkout.
+**Problem:** Linux now has a passing disposable write/read/delete integration against the current user's Secret Service. Android has built into an ARM64 APK but has not run; iOS, macOS, and Windows implementations have not been built or run in this checkout.
 
 **Why accepted:** The Linux test uses an isolated randomized non-account key, never calls `deleteAll`, and confirms absence in `finally`. Not every other target runtime is available on this host, and claiming runtime verification from generated registrants would be false.
 
