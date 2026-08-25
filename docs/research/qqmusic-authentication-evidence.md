@@ -2,7 +2,7 @@
 
 - **Status:** Active research for M1 authentication
 - **Last checked:** 2026-08-25
-- **Scope:** Credential lifecycle and restore semantics only; no endpoint implementation is authorized by this note.
+- **Scope:** Credential lifecycle, restore semantics, and the first WeChat QR protocol slices.
 
 This note records behavioral evidence, not source code. Reference implementations have different licenses, so implementation in this repository must be independent.
 
@@ -11,8 +11,9 @@ This note records behavioral evidence, not source code. Reference implementation
 1. [L-1124/QQMusicApi at `108617f`](https://github.com/L-1124/QQMusicApi/tree/108617ffe80abefec6358717b9f4d3677550db10) (2026-08-05, GPL-3.0-or-later), especially `qqmusic_api/models/request.py`, `modules/login.py`, `modules/login_utils.py`, and authentication tests.
 2. [yakult-green-tea/qq-music-api at `2c27d6b`](https://github.com/yakult-green-tea/qq-music-api/tree/2c27d6b90dd56bcf0796883e27216f69189d8f68) (2026-08-25, MIT), especially `src/services/auth/qrLogin.ts` and its QR/session tests. Its repository records a real QQ Music App QR acceptance run on 2026-08-04.
 3. [feeluown/feeluown-qqmusic at `241a967`](https://github.com/feeluown/feeluown-qqmusic/tree/241a9678bcd26e88d19e08e5da8048018f06e330) (2026-03-26; no license file found in the inspected checkout), especially `fuo_qqmusic/login.py`, `provider.py`, and `provider_ui.py`. It is supporting evidence for cookie restore behavior, not a source to copy.
+4. [ylw1997/qqmusic-api at `5f87b07`](https://github.com/ylw1997/qqmusic-api/tree/5f87b07b85923f8862d7b57f9d558ce0314ba1a7) (2026-04-27), especially its executable `wx_login_qr` flow and QR documentation. This independently matches the L-1124 WeChat bootstrap parameters.
 
-No real account, cookie, QR code, or live QQ Music response was captured in this task.
+No real account, cookie, or authorization code was used. Live QR response bytes were processed transiently by the opt-in test but were not printed or persisted.
 
 ## Cross-validated behavior
 
@@ -53,13 +54,26 @@ The first credential model contains only the cross-validated core fields plus op
 - `VerifyWithServer` when a structurally valid credential is present and is not locally expired;
 - `LocallyExpired` when advertised lifetime has ended, retaining the credential for a future refresh/reauthentication decision.
 
-Credential debug output redacts account identity and `musickey`. No persistence, refresh fields, QR channel, HTTP transport, or server-valid state is implemented by this task.
+Credential debug output redacts account identity and `musickey`. Persistence, refresh fields, and server-valid state remain unimplemented.
+
+### First network slice: WeChat QR bootstrap
+
+The first concrete request is the unconfirmed WeChat web QR bootstrap. L-1124 and ylw1997 independently agree on:
+
+- `GET https://open.weixin.qq.com/connect/qrconnect`;
+- app ID `wx48db31d50e334801`, the QQ Music redirect URI, `snsapi_login`, `STATE`, and the QQ Music style URL;
+- parsing the short-lived UUID from the returned page;
+- fetching the image from `https://open.weixin.qq.com/connect/qrcode/{uuid}`.
+
+This path was selected over QQ Music App QR because it does not require QIMEI/device bootstrap or MQTT, and over QQ Web QR because its remaining credential exchange is shorter and the inspected QQ implementations disagree on part of the polling redirect parameters. The implementation validates HTTP status, bounds response sizes, URL-encodes the UUID path segment, checks PNG/JPEG magic, and redacts the transient identifier/image in diagnostics.
+
+The default suite uses synthetic sanitized responses. On 2026-08-25 an ignored, environment-gated integration test successfully fetched a new unconfirmed QR. It did not scan the code, access an account, print the UUID, or retain the response. This proves current bootstrap compatibility only.
 
 ## Evidence still required
 
-Before implementing a concrete login channel:
+Before continuing beyond the unconfirmed QR bootstrap:
 
-1. Pin and compare the exact request parameters and state mapping in two independent implementations.
-2. Add sanitized real-response fixtures or a repeatable opt-in integration test.
+1. Pin and compare the exact polling request, callback parsing, and state mapping in two independent implementations.
+2. Add sanitized real-response fixtures or extend the repeatable opt-in integration test for each implemented transition.
 3. Confirm cancellation, timeout, retry, and late-event behavior; a QR session is a lifecycle, not a single request.
 4. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.

@@ -8,19 +8,22 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Established the minimum product, architecture, roadmap, decision, debt, and session-memory governance documents.
 - Created Flutter targets for Android, iOS, Linux, macOS, and Windows, plus a Rust workspace with domain, provider API, QQ Music client, QQ Music provider, and bridge crates.
 - Proved `Flutter -> typed bridge -> Rust -> QQMusicProvider -> typed Flutter state` with a passing Linux integration test and release build.
-- Added 6 Rust unit tests, a Flutter widget test, strict Clippy, and offline static-analysis coverage.
+- Added Rust unit coverage, a Flutter widget test, strict Clippy, and offline static-analysis coverage.
 - Cross-validated credential restore behavior across three active QQ Music implementations and pinned the evidence in `docs/research/qqmusic-authentication-evidence.md`.
 - Added a redacted QQ Music credential model that distinguishes signed-out, server-verification-required, and locally expired restore paths with 10 focused tests.
+- Cross-validated and implemented the unconfirmed WeChat QR bootstrap behind a small asynchronous HTTP contract.
+- Verified the QR bootstrap against the live endpoint without scanning a code or accessing an account; the default suite remains fully offline and redacts transient session material.
+- Rebuilt the Linux release bundle and reran the real Flutter/Rust integration test with the new Rustls transport dependency.
 
 # In Progress
 
-- Select and model the first verified QQ Music authentication request without using a real account.
+- Cross-validate the WeChat QR polling lifecycle and callback transition before implementing it.
 
 # Next Candidates
 
-1. Compare the WeChat and QQ QR bootstrap requests and select the smallest channel with reproducible evidence.
-2. Introduce the smallest asynchronous transport contract required by that one verified request.
-3. Add sanitized response fixtures for QR creation and precise error mapping.
+1. Model pending, confirmed, expired, and rejected WeChat QR poll results with precise offline tests.
+2. Define cancellation/timeout behavior so a superseded QR session cannot deliver a late success.
+3. Exchange the confirmed callback for a credential only after the request and error mapping have independent evidence.
 4. Expose an initial login session state through the provider and bridge without adding secret persistence.
 
 # Blockers

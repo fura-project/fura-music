@@ -1,14 +1,21 @@
 //! Raw QQ Music protocol boundary.
 //!
 //! Endpoint-specific requests and response models are added only with protocol
-//! evidence. This initial seam owns transport without choosing an HTTP package.
+//! evidence. The client owns native HTTPS transport without exposing it to
+//! providers or Flutter.
 
 mod credential;
+mod transport;
+mod wechat_qr;
 
 pub use credential::{
     Credential, CredentialExpiry, CredentialRestorePlan, InvalidCredential,
     InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity, LoginType,
 };
+pub use transport::{
+    HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
+};
+pub use wechat_qr::{QrImage, QrImageMediaType, WechatQrError, WechatQrSession};
 
 /// A QQ Music protocol client parameterized by its transport implementation.
 #[derive(Debug)]
