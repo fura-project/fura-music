@@ -37,7 +37,7 @@ void main() {
     }
   });
 
-  testWidgets('project adapter plays a loopback remote MP3', (_) async {
+  testWidgets('project adapter plays a loopback remote MP3', (tester) async {
     final fixture = base64Decode(_silentMp3Base64);
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final requests = server.listen((request) {
@@ -56,10 +56,21 @@ void main() {
           '?vkey=must-not-leak',
         ),
       );
+      final progressed = session.positionMs.firstWhere(
+        (positionMs) => positionMs > 0,
+      );
       await _expectStateAfter(
         session,
         ForegroundAudioState.playing,
         session.play,
+      );
+      // audioplayers uses a frame-driven position updater by default. Pump a
+      // frame after native playback has started so this integration test
+      // observes the same callback path as the running Flutter surface.
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        await progressed.timeout(const Duration(seconds: 5)),
+        greaterThan(0),
       );
       await _expectStateAfter(
         session,

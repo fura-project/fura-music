@@ -311,6 +311,9 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Stream<ForegroundAudioFailure> get failures => _failures.stream;
 
   @override
+  Stream<int> get positionMs => const Stream.empty();
+
+  @override
   Future<void> play() async => emit(ForegroundAudioState.playing);
 
   @override

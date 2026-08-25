@@ -22,6 +22,7 @@ abstract interface class ForegroundAudioEngine {
 abstract interface class ForegroundAudioSession {
   Stream<ForegroundAudioState> get states;
   Stream<ForegroundAudioFailure> get failures;
+  Stream<int> get positionMs;
 
   Future<void> play();
   Future<void> pause();
@@ -71,6 +72,10 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
       (_) {},
       onError: (Object _) => _emitFailure(ForegroundAudioFailure.playback),
     );
+    _positionSubscription = _player.onPositionChanged.listen((position) {
+      if (_disposed || position.isNegative) return;
+      _positions.add(position.inMilliseconds);
+    }, onError: (Object _) => _emitFailure(ForegroundAudioFailure.playback));
   }
 
   final audio.AudioPlayer _player;
@@ -78,8 +83,10 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
       StreamController.broadcast();
   final StreamController<ForegroundAudioFailure> _failures =
       StreamController.broadcast();
+  final StreamController<int> _positions = StreamController.broadcast();
   late final StreamSubscription<audio.PlayerState> _stateSubscription;
   late final StreamSubscription<audio.AudioEvent> _eventSubscription;
+  late final StreamSubscription<Duration> _positionSubscription;
   bool _disposed = false;
 
   @override
@@ -87,6 +94,9 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
 
   @override
   Stream<ForegroundAudioFailure> get failures => _failures.stream;
+
+  @override
+  Stream<int> get positionMs => _positions.stream;
 
   Future<void> prepare(Uri source) => _invoke(() async {
     await _player.setReleaseMode(audio.ReleaseMode.stop);
@@ -130,6 +140,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     _disposed = true;
     await _stateSubscription.cancel();
     await _eventSubscription.cancel();
+    await _positionSubscription.cancel();
     try {
       await _player.dispose();
     } on Object {
@@ -138,6 +149,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     } finally {
       await _states.close();
       await _failures.close();
+      await _positions.close();
     }
   }
 }

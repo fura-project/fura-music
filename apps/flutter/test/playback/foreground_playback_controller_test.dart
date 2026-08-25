@@ -45,14 +45,19 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
     expect(controller.stage, ForegroundPlaybackStage.loading);
+    expect(controller.positionMs, 0);
     first.emitState(ForegroundAudioState.completed);
     first.emitFailure(ForegroundAudioFailure.playback);
+    first.emitPosition(900);
     await Future<void>.delayed(Duration.zero);
     expect(controller.stage, ForegroundPlaybackStage.loading);
 
     secondLoad.complete(second);
     await replacement;
     expect(controller.stage, ForegroundPlaybackStage.playing);
+    second.emitPosition(150);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.positionMs, 150);
     expect(first.stopCalls, 1);
     expect(first.disposeCalls, 1);
     controller.dispose();
@@ -83,9 +88,14 @@ void main() {
         _FakeEngine.immediate(stoppedSession),
       );
       await stopped.playRemote(Uri.parse('https://audio.example.test/stop'));
+      stoppedSession.emitPosition(450);
+      await Future<void>.delayed(Duration.zero);
+      expect(stopped.positionMs, 450);
       await stopped.stop();
+      expect(stopped.positionMs, 0);
       stoppedSession.emitState(ForegroundAudioState.completed);
       stoppedSession.emitFailure(ForegroundAudioFailure.playback);
+      stoppedSession.emitPosition(900);
       await Future<void>.delayed(Duration.zero);
       expect(stopped.stage, ForegroundPlaybackStage.stopped);
       expect(stopped.failure, isNull);
@@ -98,10 +108,15 @@ void main() {
       await disposed.playRemote(
         Uri.parse('https://audio.example.test/dispose'),
       );
+      disposedSession.emitPosition(200);
+      await Future<void>.delayed(Duration.zero);
+      expect(disposed.positionMs, 200);
       disposed.dispose();
       disposedSession.emitState(ForegroundAudioState.completed);
       disposedSession.emitFailure(ForegroundAudioFailure.playback);
+      disposedSession.emitPosition(900);
       await Future<void>.delayed(Duration.zero);
+      expect(disposed.positionMs, 200);
       expect(disposedSession.stopCalls, 1);
       expect(disposedSession.disposeCalls, 1);
     },
@@ -163,6 +178,7 @@ class _FakeSession implements ForegroundAudioSession {
 
   final _states = StreamController<ForegroundAudioState>.broadcast();
   final _failures = StreamController<ForegroundAudioFailure>.broadcast();
+  final _positions = StreamController<int>.broadcast();
   final bool throwOnStop;
   final bool throwOnDispose;
   int playCalls = 0;
@@ -175,6 +191,9 @@ class _FakeSession implements ForegroundAudioSession {
 
   @override
   Stream<ForegroundAudioFailure> get failures => _failures.stream;
+
+  @override
+  Stream<int> get positionMs => _positions.stream;
 
   @override
   Future<void> play() async {
@@ -204,4 +223,6 @@ class _FakeSession implements ForegroundAudioSession {
   void emitState(ForegroundAudioState state) => _states.add(state);
 
   void emitFailure(ForegroundAudioFailure failure) => _failures.add(failure);
+
+  void emitPosition(int positionMs) => _positions.add(positionMs);
 }

@@ -34,11 +34,13 @@ class TrackPlaybackController extends ChangeNotifier {
   int _generation = 0;
   bool _resolving = false;
   bool _disposed = false;
+  int _lastPlaybackPositionMs = 0;
 
   TrackPlaybackStage get stage => _stage;
   PlaylistTrackSummary? get track => _track;
   MediaResolutionFailure? get resolutionFailure => _resolutionFailure;
   ForegroundAudioFailure? get engineFailure => _engineFailure;
+  int get positionMs => _playback.positionMs;
   bool get canPause => _stage == TrackPlaybackStage.playing;
   bool get canResume => _stage == TrackPlaybackStage.paused;
 
@@ -102,15 +104,19 @@ class TrackPlaybackController extends ChangeNotifier {
 
   void _onPlaybackChanged() {
     if (_disposed || _resolving) return;
+    final positionChanged = _lastPlaybackPositionMs != _playback.positionMs;
+    _lastPlaybackPositionMs = _playback.positionMs;
     final playbackFailure = _playback.failure;
     if (_playback.stage == ForegroundPlaybackStage.error) {
       _engineFailure =
           playbackFailure ?? ForegroundAudioFailure.coreUnavailable;
-      _setStage(TrackPlaybackStage.engineError);
+      if (!_setStage(TrackPlaybackStage.engineError) && positionChanged) {
+        notifyListeners();
+      }
       return;
     }
     _engineFailure = null;
-    _setStage(switch (_playback.stage) {
+    final stageChanged = _setStage(switch (_playback.stage) {
       ForegroundPlaybackStage.idle => TrackPlaybackStage.idle,
       ForegroundPlaybackStage.loading => TrackPlaybackStage.loading,
       ForegroundPlaybackStage.playing => TrackPlaybackStage.playing,
@@ -119,14 +125,16 @@ class TrackPlaybackController extends ChangeNotifier {
       ForegroundPlaybackStage.completed => TrackPlaybackStage.completed,
       ForegroundPlaybackStage.error => TrackPlaybackStage.engineError,
     });
+    if (!stageChanged && positionChanged) notifyListeners();
   }
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
-  void _setStage(TrackPlaybackStage stage) {
-    if (_disposed || _stage == stage) return;
+  bool _setStage(TrackPlaybackStage stage) {
+    if (_disposed || _stage == stage) return false;
     _stage = stage;
     notifyListeners();
+    return true;
   }
 
   @override

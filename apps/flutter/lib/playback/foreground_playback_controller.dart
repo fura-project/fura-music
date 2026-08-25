@@ -23,11 +23,14 @@ class ForegroundPlaybackController extends ChangeNotifier {
   ForegroundAudioSession? _session;
   StreamSubscription<ForegroundAudioState>? _stateSubscription;
   StreamSubscription<ForegroundAudioFailure>? _failureSubscription;
+  StreamSubscription<int>? _positionSubscription;
+  int _positionMs = 0;
   int _generation = 0;
   bool _disposed = false;
 
   ForegroundPlaybackStage get stage => _stage;
   ForegroundAudioFailure? get failure => _failure;
+  int get positionMs => _positionMs;
   bool get canPause => _stage == ForegroundPlaybackStage.playing;
   bool get canResume => _stage == ForegroundPlaybackStage.paused;
 
@@ -35,6 +38,7 @@ class ForegroundPlaybackController extends ChangeNotifier {
     final generation = ++_generation;
     final previous = _detachSession();
     _failure = null;
+    _setPosition(0);
     _setStage(ForegroundPlaybackStage.loading);
     await _stopAndDispose(previous);
     if (!_isCurrent(generation)) return;
@@ -62,6 +66,11 @@ class ForegroundPlaybackController extends ChangeNotifier {
     );
     _failureSubscription = session.failures.listen(
       (failure) => _onFailure(generation, session, failure),
+      onError: (Object _) =>
+          _onFailure(generation, session, ForegroundAudioFailure.playback),
+    );
+    _positionSubscription = session.positionMs.listen(
+      (positionMs) => _onPosition(generation, session, positionMs),
       onError: (Object _) =>
           _onFailure(generation, session, ForegroundAudioFailure.playback),
     );
@@ -114,6 +123,7 @@ class ForegroundPlaybackController extends ChangeNotifier {
     ++_generation;
     final session = _detachSession();
     _failure = null;
+    _setPosition(0);
     _setStage(ForegroundPlaybackStage.stopped);
     await _stopAndDispose(session);
   }
@@ -142,6 +152,16 @@ class ForegroundPlaybackController extends ChangeNotifier {
     }
   }
 
+  void _onPosition(
+    int generation,
+    ForegroundAudioSession session,
+    int positionMs,
+  ) {
+    if (_isSessionCurrent(generation, session) && positionMs >= 0) {
+      _setPosition(positionMs);
+    }
+  }
+
   void _fail(int generation, ForegroundAudioFailure failure) {
     if (!_isCurrent(generation)) return;
     _failure = failure;
@@ -166,8 +186,10 @@ class ForegroundPlaybackController extends ChangeNotifier {
     _session = null;
     unawaited(_stateSubscription?.cancel());
     unawaited(_failureSubscription?.cancel());
+    unawaited(_positionSubscription?.cancel());
     _stateSubscription = null;
     _failureSubscription = null;
+    _positionSubscription = null;
     return session;
   }
 
@@ -195,6 +217,12 @@ class ForegroundPlaybackController extends ChangeNotifier {
   void _setStage(ForegroundPlaybackStage stage) {
     if (_disposed || _stage == stage) return;
     _stage = stage;
+    notifyListeners();
+  }
+
+  void _setPosition(int positionMs) {
+    if (_disposed || _positionMs == positionMs) return;
+    _positionMs = positionMs;
     notifyListeners();
   }
 

@@ -76,15 +76,17 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added a single-use cancellable lyric Bridge handle that forwards only provider/opaque Track identity and returns provider-neutral synchronized lines, word-timed segments, optional auxiliary text, or coarse failures. Three Bridge regressions cover redacted mapping, all Provider failures, and cancellation dropping an in-flight future; pinned FRB 2.13.0 generation added only the lyrics API and retained every existing entrypoint.
 - Revalidated the 149-test Rust workspace (19 + 2 + 29 + 75 + 24), strict Clippy, full Rust formatting, `dart analyze`, all 82 Flutter tests, a Linux release build, and the packaged Linux FFI smoke. The smoke creates, cancels, and runs the lyric handle without QQ Music traffic; it proves this host's generated/native lifecycle, not authenticated lyric loading or other platforms.
 - Added a Dart lyric gateway with immutable/redacted models, exhaustive generated-failure mapping, defensive document/timing/result-shape validation, exact identity/cancel forwarding, and shared-vault cleanup only on explicit credential rejection. Added a lifecycle controller for content, unavailable, account, rejection, and retryable error states; track replacement, clear/sign-out, and dispose cancel the exact operation and suppress late results. Nine regressions bring the Flutter suite to 91 passing tests; `dart analyze` and formatting are clean.
+- Added a project-owned nonnegative millisecond position stream to each foreground audio session using the locked `audioplayers` frame-driven updater. Foreground and Track controllers reset on source/stop, accept only the exact current session, cancel position subscriptions with state/failure subscriptions, and propagate position-only notifications without estimating playback time. Replacement/stop/dispose regressions reject late old positions.
+- Extended the packaged Linux loopback MP3 integration to observe a positive adapter position after native playback starts and a Flutter frame is pumped. The first attempt timed out because the test stopped producing frames for the dependency's `FramePositionUpdater`; pumping the real UI callback path passed without product polling or a fake clock.
 
 # In Progress
 
-- Add a project-owned playback-position stream to the foreground audio boundary, with exact session replacement and late-event suppression, then compose it with loaded lyrics.
+- Compose queue-selected track, lyric loading, and playback milliseconds into deterministic active-line/segment state.
 
 # Next Candidates
 
-1. Add a project-owned millisecond playback-position stream backed by the current `audioplayers` session and covered by replacement/stop/dispose regressions.
-2. Compose queue-selected track, lyric loading, and playback position into deterministic active-line/segment state.
+1. Compose queue-selected track, lyric loading, and playback position into deterministic active-line/segment state with gap/overlap boundary tests.
+2. Wire the composition into the authenticated page lifecycle without duplicating queue or playback ownership.
 3. Add the smallest adaptive lyric surface with basic active-line and word-level progress presentation.
 
 # Blockers
