@@ -51,4 +51,4 @@ That second RPC is not implemented in the first protocol task. Calling the owned
 
 1. A sanitized real response fixture or controlled account integration before claiming live owned-playlist compatibility.
 2. Independent implementation and fixture coverage for favorite playlists before the UI presents a complete combined library.
-3. A typed Bridge and presentation slice that preserve provider errors and never parse the QQ opaque playlist ID.
+3. A presentation slice that preserves the now-typed Bridge errors and never parses the QQ opaque playlist ID.

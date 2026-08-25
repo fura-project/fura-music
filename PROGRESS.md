@@ -54,15 +54,17 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Added provider-scoped opaque `PlaylistId` and minimum `PlaylistSummary` domain models with redacted diagnostics and honest optional artwork/track-count fields.
 - Added a narrow `OwnedPlaylistsProvider` capability and mapped QQ-owned rows without leaking QQ response models; the provider now truthfully advertises `UserLibrary` alongside `Authentication`.
 - Rechecked the exact authenticated credential after the library await so a late old-account response becomes `Replaced`; explicit rejection clears only the matching credential while transient/upstream failures retain it.
+- Added a Rust-opaque, single-use owned-library load handle with exact cancellation, concurrent-run rejection, and no credential/protocol fields exposed to generated Dart.
+- Mapped provider-independent summaries into a coarse Bridge DTO and preserved authentication-required, credential-rejected, network, service, invalid-response, replaced, cancelled, and already-running failures separately.
 
 # In Progress
 
-- Expose one coarse authenticated owned-library load through the typed Bridge without moving protocol or presentation rules into the Bridge.
+- Build the first adaptive owned-playlist screen with loading, empty, retry, rejection, cancellation, and account-replacement states.
 
 # Next Candidates
 
-1. Expose a coarse authenticated library load through the Bridge before building the first real library screen.
-2. Build the first adaptive owned-playlist screen with loading, retry, rejection, and empty states.
+1. Build the first adaptive owned-playlist screen with loading, retry, rejection, and empty states.
+2. Route both fresh QR authentication and verified startup restore into that library screen without weakening login failure reporting.
 3. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
 
 # Blockers

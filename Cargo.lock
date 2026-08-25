@@ -1221,6 +1221,7 @@ name = "rust_lib_flutterustmusic"
 version = "0.1.0"
 dependencies = [
  "flutter_rust_bridge",
+ "music-domain",
  "provider-api",
  "provider-qqmusic",
  "qqmusic-client",

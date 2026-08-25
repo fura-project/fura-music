@@ -10,6 +10,7 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.13.0"
+music-domain = { path = "../../crates/music-domain" }
 provider-api = { path = "../../crates/provider-api" }
 provider-qqmusic = { path = "../../crates/provider-qqmusic" }
 qqmusic-client = { path = "../../crates/qqmusic-client" }

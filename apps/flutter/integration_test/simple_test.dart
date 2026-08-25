@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
+import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -22,6 +23,14 @@ void main() {
     expect(qqMusicHasAuthenticatedCredential(), isFalse);
     final unusedStart = reserveQqMusicWechatQrLoginStart();
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
+    final unusedLibraryLoad = beginQqMusicOwnedPlaylistLoad();
+    expect(unusedLibraryLoad.isActive, isTrue);
+    expect(unusedLibraryLoad.cancel(), isTrue);
+    final cancelledLibraryLoad = await unusedLibraryLoad.run();
+    expect(
+      cancelledLibraryLoad.failure,
+      QqMusicOwnedPlaylistLoadFailure.cancelled,
+    );
 
     await tester.pumpWidget(MusicApp(bootstrap: status));
     expect(find.text('QQ Music connected'), findsOneWidget);

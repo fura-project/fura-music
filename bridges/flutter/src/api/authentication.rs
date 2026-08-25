@@ -14,7 +14,7 @@ use provider_qqmusic::{
 use qqmusic_client::{CredentialPersistenceError, QqMusicClient, ReqwestTransport};
 use tokio::sync::Mutex as AsyncMutex;
 
-type NativeProvider = QqMusicProvider<ReqwestTransport>;
+pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
 
 static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|| {
@@ -25,6 +25,10 @@ static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|
 });
 static NEXT_START_ATTEMPT: AtomicU32 = AtomicU32::new(1);
 static ACTIVE_START_ATTEMPT: StdMutex<Option<u32>> = StdMutex::new(None);
+
+pub(crate) fn native_qq_music_provider() -> Result<&'static NativeProvider, ()> {
+    QQ_MUSIC_PROVIDER.as_ref().map_err(|_| ())
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicQrImageFormat {
