@@ -81,16 +81,17 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Composed the optional lyric controller into the existing queue/playback owner. Exact current Track identity drives lyric replacement, current-session milliseconds drive active selection, queue clear/dispose clears lyric authority, and duplicate Track identities do not trigger redundant loads. Active intervals are left-closed/right-open; gaps select none, overlaps prefer the latest start, equal starts prefer later source order, and word progress exists only inside the active segment. Two new regressions bring the Flutter suite to 93 tests.
 - Wired one `RustLyricGateway` and `LyricController` into the authenticated page's existing queue owner. Application startup passes the same underlying serialized vault to authentication, library, detail, media, and lyrics; leaving the authenticated surface disposes playback, queue, and lyric authority together. Explicit lyric rejection and rejection-cleanup failure reuse the existing sign-in reset, while unavailable/network failures preserve the authenticated shell. Four end-to-end widget regressions bring the Flutter suite to 97 passing tests; direct `dart analyze --fatal-infos` is clean.
 - Added the first adaptive synchronized-lyric surface from the existing now-playing owner. It opens as a tall bottom sheet below 600px or bounded dialog on wider windows, renders honest idle/loading/unavailable/retry/account/content states, preserves canonical lines, shows optional translation/romanization, highlights the active line, and paints each timed segment from real playback milliseconds. Four focused widget regressions bring the Flutter suite to 101 passing tests; strict Dart analysis and the existing 390px now-playing regression pass without a new dependency or state machine.
+- Validated the real now-playing lyric entry at 390px and 1200px. The narrow path opens a bottom sheet without overflow; the wide path opens a bounded dialog and, while it remains visible, replaces first-track title/content with the exact second-track lyric request after playback completion advances the queue. The complete Flutter suite now passes 103 tests and strict Dart analysis remains clean.
 
 # In Progress
 
-- Validate the real now-playing lyric entry at narrow and wide sizes, including current-track replacement while the panel is open.
+- Reassess TD-004's M1 mobile trigger and run every safe Android build/runtime check available on this host without claiming unavailable device evidence.
 
 # Next Candidates
 
-1. Validate narrow/wide lyric layout and current-track replacement through end-to-end widget tests.
-2. Reassess TD-004's M1 mobile trigger and run every safe build/runtime check available on this host without claiming unavailable device evidence.
-3. Run the M1 acceptance, architecture, scope, and technical-debt reviews; write the checkpoint, then continue into the next Roadmap milestone if it remains legal and unblocked.
+1. Reassess TD-004's M1 mobile trigger and run every safe Android build/runtime check available on this host without claiming unavailable device evidence.
+2. Run the M1 acceptance, architecture, scope, and technical-debt reviews; write the checkpoint.
+3. Read the next Roadmap milestone and continue if it remains legal and unblocked.
 
 # Blockers
 

@@ -269,6 +269,88 @@ void main() {
     expect(media.requests, hasLength(2));
   });
 
+  testWidgets('opens synchronized lyrics as a narrow bottom sheet', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final session = _FakeAudioSession();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([_ImmediateMediaOperation(_success('narrow'))]),
+      audio: _FakeAudioEngine([session]),
+      lyrics: _FakeLyricGateway(_lyricSuccess('Narrow synchronized line')),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    session.emitPosition(1250);
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.text('Narrow synchronized line'), findsOneWidget);
+    expect(find.text('First track'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide lyric dialog follows completion to the next track', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final firstSession = _FakeAudioSession();
+    final secondSession = _FakeAudioSession();
+    final lyrics = _FakeLyricGateway.scripted([
+      _lyricSuccess('First synchronized line'),
+      _lyricSuccess('Second synchronized line'),
+    ]);
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('first')),
+        _ImmediateMediaOperation(_success('second')),
+      ]),
+      audio: _FakeAudioEngine([firstSession, secondSession]),
+      lyrics: lyrics,
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('First synchronized line'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('lyrics-track-title')))
+          .data,
+      'First track',
+    );
+
+    firstSession.emitState(ForegroundAudioState.completed);
+    await tester.pumpAndSettle();
+
+    expect(find.text('First synchronized line'), findsNothing);
+    expect(find.text('Second synchronized line'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('lyrics-track-title')))
+          .data,
+      'Second track',
+    );
+    expect(lyrics.requests, [('qq-music', 'first'), ('qq-music', 'second')]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('now-playing surface does not overflow on a narrow screen', (
     tester,
   ) async {
@@ -554,6 +636,17 @@ MediaResolutionResult _success(String vkey) => MediaResolutionResult(
   ),
 );
 
+LyricLoadResult _lyricSuccess(String text) => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    SynchronizedLyricLine(
+      text: text,
+      startMs: 1000,
+      durationMs: 1500,
+      segments: const [],
+    ),
+  ]),
+);
+
 class _FakeMediaGateway implements MediaResolutionGateway {
   _FakeMediaGateway(this.operations);
 
@@ -584,10 +677,13 @@ class _ImmediateMediaOperation implements MediaResolutionOperation {
 }
 
 class _FakeLyricGateway implements LyricGateway {
-  _FakeLyricGateway(this.result);
+  _FakeLyricGateway(LyricLoadResult result) : results = [result];
 
-  final LyricLoadResult result;
+  _FakeLyricGateway.scripted(this.results);
+
+  final List<LyricLoadResult> results;
   final List<(String, String)> requests = [];
+  int _next = 0;
 
   @override
   LyricLoadOperation beginLoad({
@@ -595,6 +691,7 @@ class _FakeLyricGateway implements LyricGateway {
     required String opaqueTrackId,
   }) {
     requests.add((providerId, opaqueTrackId));
+    final result = results.length == 1 ? results.single : results[_next++];
     return _ImmediateLyricOperation(result);
   }
 }
@@ -646,6 +743,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
       StreamController<ForegroundAudioState>.broadcast();
   final StreamController<ForegroundAudioFailure> _failures =
       StreamController<ForegroundAudioFailure>.broadcast();
+  final StreamController<int> _positions = StreamController<int>.broadcast();
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -654,7 +752,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Stream<ForegroundAudioFailure> get failures => _failures.stream;
 
   @override
-  Stream<int> get positionMs => const Stream.empty();
+  Stream<int> get positionMs => _positions.stream;
 
   @override
   Future<void> play() async => _states.add(ForegroundAudioState.playing);
@@ -669,7 +767,10 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> dispose() async {
     await _states.close();
     await _failures.close();
+    await _positions.close();
   }
 
   void emitState(ForegroundAudioState state) => _states.add(state);
+
+  void emitPosition(int positionMs) => _positions.add(positionMs);
 }
