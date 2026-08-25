@@ -132,6 +132,8 @@ Providers expose data plus explicit capabilities such as authentication, catalog
 
 Provider code never returns Flutter widgets or presentation-specific models.
 
+The first user-library protocol operation currently exists only in `QQMusicClient`: authenticated account-owned playlists via `PlaylistBaseRead/GetPlaylistByUin`. It returns QQ-specific, diagnostics-redacted protocol summaries and preserves both playlist and directory identifiers. No raw type has entered `music-domain`, Provider API, Bridge, or Flutter yet, and `UserLibrary` is not advertised until the next mapping task creates a real provider-level contract. Favorited playlists are a separate encrypted-UIN paginated operation and are not silently synthesized into this result.
+
 ## Playback and storage
 
 The detailed playback and general storage architectures do not exist yet and are intentionally not specified. They will be documented when the first vertical slice introduces real implementations.

@@ -264,6 +264,20 @@ impl Credential {
         &self.session_secrets
     }
 
+    pub(crate) fn musicu_cookie_header(&self) -> String {
+        let music_id = self.music_id();
+        let music_key = self.music_key();
+        let login_type = self.login_type().value();
+        let wechat = if self.login_type() == LoginType::WECHAT {
+            format!(" wxuin={music_id};")
+        } else {
+            String::new()
+        };
+        format!(
+            "uin={music_id}; qqmusic_key={music_key}; qm_keyst={music_key}; tmeLoginType={login_type};{wechat}"
+        )
+    }
+
     /// Serializes the credential for a platform secure-storage adapter.
     ///
     /// The returned bytes contain secrets. They must never be logged, cached,
@@ -362,6 +376,10 @@ const fn is_cookie_octet(byte: u8) -> bool {
         byte,
         0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E
     )
+}
+
+pub(crate) const fn is_credential_rejection_code(code: i64) -> bool {
+    matches!(code, 1_000 | 104_400 | 104_401)
 }
 
 #[derive(Deserialize)]

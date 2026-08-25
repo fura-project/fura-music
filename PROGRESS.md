@@ -48,15 +48,18 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Added credential input hardening before stored bytes can enter an HTTP Cookie header, plus Provider, Bridge, gateway, controller, and widget regressions for success, rejection, retry, storage-cleanup failure, and late-result suppression.
 - Serialized vault reads, rejection deletes, and new credential writes inside one Gateway instance so a slow old cleanup cannot delete a newly authenticated session.
 - Added and ran a Linux Secret Service integration using a randomized non-account key; write/read/delete succeeded and `finally` cleanup confirmed the marker was absent without touching the production credential key or calling `deleteAll`.
+- Cross-validated the authenticated `PlaylistBaseRead/GetPlaylistByUin` owned-playlist request across three active implementations pinned by commit.
+- Added a bounded QQMusicClient operation with typed failure mapping, credential-safe diagnostics, and three offline fixture tests for exact request shape, optional summary fields, malformed rows, rejection, unrelated upstream failure, and missing arrays.
+- Preserved `tid` and `dirId` separately because QQ Music's built-in `dirId: 201` liked-songs directory is not a generic playlist detail ID; favorited playlists remain a separate encrypted-UIN paginated RPC.
 
 # In Progress
 
-- Cross-validate the smallest current-user playlist request and response mapping for M1 phase 3.
+- Define the minimum provider-independent playlist summary and map the implemented owned collection through `QQMusicProvider` without exposing raw protocol types.
 
 # Next Candidates
 
-1. Begin the smallest M1 user-library slice with evidence-backed current-user playlist protocol research and offline fixtures.
-2. Define the minimum stable Playlist summary/detail domain only from fields required by that slice.
+1. Define the minimum stable Playlist summary identity and map the owned collection through a small provider capability interface.
+2. Expose a coarse authenticated library load through the Bridge before building the first real library screen.
 3. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
 
 # Blockers
@@ -76,4 +79,5 @@ None.
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
+- `GetPlaylistByUin` covers owned playlists only; presenting it as the complete library would omit favorited playlists and is explicitly out of the first protocol task.
 - Cargokit 2.13.0 assumes rustup; Linux currently uses a direct system-Cargo build tracked as TD-001, and non-Linux bridge builds remain unverified.

@@ -3,12 +3,12 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Credential, HttpRequest, HttpTransport, LoginType, QqMusicClient};
+use crate::credential::is_credential_rejection_code;
+use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_VERIFICATION_RESPONSE_BYTES: usize = 512 * 1024;
 const VERIFICATION_TIMEOUT: Duration = Duration::from_secs(30);
-const CREDENTIAL_REJECTION_CODES: [i64; 3] = [1000, 104_400, 104_401];
 
 pub enum CredentialVerificationError<E> {
     Transport(E),
@@ -126,7 +126,7 @@ where
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
                     .header("Referer", "https://y.qq.com/")
-                    .header("Cookie", credential_cookie(credential))
+                    .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_VERIFICATION_RESPONSE_BYTES)
                     .timeout(VERIFICATION_TIMEOUT),
@@ -224,20 +224,6 @@ struct VerificationResult {
     code: Option<i64>,
 }
 
-fn credential_cookie(credential: &Credential) -> String {
-    let music_id = credential.music_id();
-    let music_key = credential.music_key();
-    let login_type = credential.login_type().value();
-    let wechat = if credential.login_type() == LoginType::WECHAT {
-        format!(" wxuin={music_id};")
-    } else {
-        String::new()
-    };
-    format!(
-        "uin={music_id}; qqmusic_key={music_key}; qm_keyst={music_key}; tmeLoginType={login_type};{wechat}"
-    )
-}
-
 fn verify_response<E>(
     envelope: VerificationResponse,
 ) -> Result<(), CredentialVerificationError<E>> {
@@ -252,7 +238,7 @@ fn verify_response<E>(
     if let Some(code) = [Some(global_code), verification_code]
         .into_iter()
         .flatten()
-        .find(|code| CREDENTIAL_REJECTION_CODES.contains(code))
+        .find(|code| is_credential_rejection_code(*code))
     {
         return Err(CredentialVerificationError::Rejected { code });
     }

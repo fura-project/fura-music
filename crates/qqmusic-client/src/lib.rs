@@ -6,6 +6,7 @@
 
 mod credential;
 mod credential_verification;
+mod owned_playlists;
 mod transport;
 mod wechat_exchange;
 mod wechat_login;
@@ -17,6 +18,9 @@ pub use credential::{
     LocalCredentialValidity, LoginType,
 };
 pub use credential_verification::CredentialVerificationError;
+pub use owned_playlists::{
+    OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,
+};
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
 };
