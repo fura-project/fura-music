@@ -34,20 +34,36 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Before any artifact is distributed outside development, or when M1 starts packaging work.
 
-## TD-003 — Authenticated credential is process-local only
+## TD-003 — Persisted credential is not restored at startup
 
-**Status:** Triggered
+**Status:** In Progress
 
-**Problem:** `QQMusicProvider` retains a successful credential only in a Rust in-memory slot. Closing the application loses the session, so startup restore and server verification are not connected to real storage.
+**Problem:** `QQMusicProvider` now serializes a successful credential into a versioned opaque document and the Flutter edge writes it to platform secure storage. Startup still does not import, validate, and verify that document, so closing the application cannot yet restore the session.
 
-**Why accepted:** The current slice proves QR protocol, lifecycle cancellation, Provider mapping, a secret-free typed bridge, and the real login presentation flow before selecting platform storage. Writing credentials to an ordinary file or Dart preferences would create a worse long-term security boundary.
+**Why accepted:** Persistence was split from restore so the secret boundary, versioned format, platform setup, and failure presentation could be reviewed and tested as one finite unit. The UI explicitly says startup verification is still pending.
 
-**Impact:** A user would need to sign in again after every process restart; the current authenticated boolean is valid only for this process.
+**Impact:** A user still needs to sign in again after every process restart even when the secure write succeeded; the current authenticated state is valid only for this process.
 
-**Risk:** UI or documentation could accidentally imply durable login, or a later shortcut could persist `musickey` and refresh material without platform protection.
+**Risk:** UI or documentation could accidentally treat a successful secure write as a restored or server-valid session.
 
-**Suggested solution:** Select the smallest maintained cross-platform secure-storage boundary, keep serialization/encryption orchestration in Rust where practical, and test absent, valid, expired, corrupted, rejected, and transient-verification-failure restore paths.
+**Suggested solution:** Import the opaque document into Rust during startup, use the existing restore plan, verify eligible credentials against QQ Music, and test absent, valid, expired, corrupted, rejected, and transient-verification-failure paths without translating transport failure into logout.
 
-**Trigger condition:** Must be resolved before claiming credential restore, completing M1 authentication phase, or distributing an authenticated build. The first QR login surface now exists, so this debt is the active next task.
+**Trigger condition:** Must be resolved before claiming credential restore, completing M1 authentication phase, or distributing an authenticated build. Secure write now exists, so startup import and verification are the active next task.
+
+## TD-004 — Secure-storage runtime behavior is not verified on every target
+
+**Status:** Open
+
+**Problem:** The Linux release build and integration smoke prove that the `flutter_secure_storage` federated plugin links and loads beside the Rust bridge. They do not perform a write/read/delete cycle. Android, iOS, macOS, and Windows implementations have not been built or run in this checkout.
+
+**Why accepted:** The current finite task establishes the credential boundary without writing even fake data into the user's live keyring. Not every target runtime is available on this host, and claiming runtime verification from generated registrants would be false.
+
+**Impact:** A platform entitlement, keyring availability, or plugin integration issue may leave the user authenticated only for the current process. The UI reports that failure without discarding the active Rust credential.
+
+**Risk:** A build could appear to support restart restore while its platform vault is inaccessible, or test artifacts could remain in a developer keyring if future integration cleanup is incomplete.
+
+**Suggested solution:** Add a disposable platform integration that writes unique non-account bytes, reads them back, deletes them in teardown, and verifies absence. Run it on each target before that target is accepted for authenticated distribution.
+
+**Trigger condition:** Linux verification is required before M1 authentication acceptance. Each other target must resolve its own instance before distribution, and at least one mobile target must be verified before the M1 checkpoint.
 
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

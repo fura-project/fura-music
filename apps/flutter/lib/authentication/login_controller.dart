@@ -16,6 +16,8 @@ enum LoginStage {
   error,
 }
 
+enum CredentialSaveState { none, saving, saved, failed }
+
 class LoginController extends ChangeNotifier {
   LoginController(
     this._gateway, [
@@ -35,12 +37,14 @@ class LoginController extends ChangeNotifier {
   LoginStartOperation? _startOperation;
   Uint8List? _qrImageBytes;
   LoginFailure? _failure;
+  CredentialSaveState _credentialSaveState = CredentialSaveState.none;
   int _generation = 0;
   bool _disposed = false;
 
   LoginStage get stage => _stage;
   Uint8List? get qrImageBytes => _qrImageBytes;
   LoginFailure? get failure => _failure;
+  CredentialSaveState get credentialSaveState => _credentialSaveState;
 
   bool get canCancel =>
       _stage == LoginStage.starting || (_session?.isActive ?? false);
@@ -56,6 +60,7 @@ class LoginController extends ChangeNotifier {
     _session = null;
     _qrImageBytes = null;
     _failure = null;
+    _credentialSaveState = CredentialSaveState.none;
     _stage = LoginStage.starting;
     _notify();
 
@@ -102,6 +107,7 @@ class LoginController extends ChangeNotifier {
     _session = null;
     _qrImageBytes = null;
     _failure = null;
+    _credentialSaveState = CredentialSaveState.none;
     _stage = LoginStage.idle;
     _notify();
   }
@@ -118,7 +124,7 @@ class LoginController extends ChangeNotifier {
 
         final progress = update.progress;
         if (progress != null) {
-          if (_applyProgress(progress)) return;
+          if (await _applyProgress(progress, generation)) return;
           _notify();
           continue;
         }
@@ -148,7 +154,7 @@ class LoginController extends ChangeNotifier {
     }
   }
 
-  bool _applyProgress(LoginProgress progress) {
+  Future<bool> _applyProgress(LoginProgress progress, int generation) async {
     switch (progress) {
       case LoginProgress.waitingForScan:
         _failure = null;
@@ -163,21 +169,32 @@ class LoginController extends ChangeNotifier {
         _qrImageBytes = null;
         _failure = null;
         _stage = LoginStage.authenticated;
+        _credentialSaveState = CredentialSaveState.saving;
+        _notify();
+        final result = await _gateway.persistAuthenticatedCredential();
+        if (!_isCurrent(generation)) return true;
+        _credentialSaveState = result == CredentialPersistenceResult.stored
+            ? CredentialSaveState.saved
+            : CredentialSaveState.failed;
+        _notify();
         return true;
       case LoginProgress.expired:
         _stage = LoginStage.expired;
         _session = null;
         _failure = null;
+        _notify();
         return true;
       case LoginProgress.refused:
         _stage = LoginStage.refused;
         _session = null;
         _failure = null;
+        _notify();
         return true;
       case LoginProgress.timedOut:
         _stage = LoginStage.timedOut;
         _session = null;
         _failure = null;
+        _notify();
         return true;
     }
   }

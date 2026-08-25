@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
 
 enum LoginImageFormat { png, jpeg }
@@ -26,6 +27,12 @@ enum LoginFailure {
   timedOut,
   tooManyNetworkFailures,
   advanceAlreadyInProgress,
+}
+
+enum CredentialPersistenceResult {
+  stored,
+  noAuthenticatedCredential,
+  storageUnavailable,
 }
 
 class LoginChallenge {
@@ -60,6 +67,7 @@ class LoginStart {
 abstract interface class QqMusicAuthenticationGateway {
   LoginStartOperation beginStart();
   bool get hasAuthenticatedCredential;
+  Future<CredentialPersistenceResult> persistAuthenticatedCredential();
 }
 
 abstract interface class LoginStartOperation {
@@ -68,7 +76,10 @@ abstract interface class LoginStartOperation {
 }
 
 class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
-  const RustQqMusicAuthenticationGateway();
+  RustQqMusicAuthenticationGateway({CredentialVault? credentialVault})
+    : _credentialVault = credentialVault ?? PlatformCredentialVault();
+
+  final CredentialVault _credentialVault;
 
   @override
   bool get hasAuthenticatedCredential =>
@@ -77,6 +88,24 @@ class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
   @override
   LoginStartOperation beginStart() =>
       _RustLoginStartOperation(bridge.reserveQqMusicWechatQrLoginStart());
+
+  @override
+  Future<CredentialPersistenceResult> persistAuthenticatedCredential() async {
+    final export = bridge.exportQqMusicCredentialForSecureStorage();
+    final secretBytes = export.secretBytes;
+    if (secretBytes == null) {
+      return CredentialPersistenceResult.noAuthenticatedCredential;
+    }
+
+    try {
+      await _credentialVault.write(secretBytes);
+      return CredentialPersistenceResult.stored;
+    } catch (_) {
+      return CredentialPersistenceResult.storageUnavailable;
+    } finally {
+      secretBytes.fillRange(0, secretBytes.length, 0);
+    }
+  }
 }
 
 class _RustLoginStartOperation implements LoginStartOperation {

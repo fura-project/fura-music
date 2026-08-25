@@ -102,6 +102,10 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
       ),
     ),
   );
+
+  @override
+  Future<CredentialPersistenceResult> persistAuthenticatedCredential() async =>
+      CredentialPersistenceResult.stored;
 }
 
 class _WidgetStartOperation implements LoginStartOperation {

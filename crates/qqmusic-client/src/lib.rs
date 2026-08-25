@@ -11,9 +11,9 @@ mod wechat_login;
 mod wechat_qr;
 
 pub use credential::{
-    Credential, CredentialExpiry, CredentialRestorePlan, CredentialSessionSecrets,
-    InvalidCredential, InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity,
-    LoginType,
+    Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
+    CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,
+    LocalCredentialValidity, LoginType,
 };
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,

@@ -1,5 +1,9 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
+const CREDENTIAL_PERSISTENCE_VERSION: u64 = 1;
+
 /// Numeric QQ Music login type carried by musicu requests.
 ///
 /// Unknown non-zero values are preserved because this is a protocol identity,
@@ -254,6 +258,80 @@ impl Credential {
         &self.session_secrets
     }
 
+    /// Serializes the credential for a platform secure-storage adapter.
+    ///
+    /// The returned bytes contain secrets. They must never be logged, cached,
+    /// committed, or written outside an OS-backed secret store.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CredentialPersistenceError::Serialize`] if the versioned
+    /// document cannot be encoded.
+    pub fn encode_for_secure_storage(&self) -> Result<Vec<u8>, CredentialPersistenceError> {
+        let expiry = self.expiry.map(|expiry| StoredCredentialExpiry {
+            created_at_unix_seconds: expiry.created_at_unix_seconds,
+            lifetime_seconds: expiry.lifetime_seconds,
+        });
+        let secrets = &self.session_secrets;
+        let document = StoredCredentialV1 {
+            version: CREDENTIAL_PERSISTENCE_VERSION,
+            music_id: self.music_id.clone(),
+            music_key: self.music_key.clone(),
+            login_type: self.login_type.value(),
+            expiry,
+            open_id: secrets.open_id.clone(),
+            access_token: secrets.access_token.clone(),
+            refresh_token: secrets.refresh_token.clone(),
+            refresh_key: secrets.refresh_key.clone(),
+            union_id: secrets.union_id.clone(),
+            encrypted_uin: secrets.encrypted_uin.clone(),
+        };
+
+        serde_json::to_vec(&document).map_err(|_| CredentialPersistenceError::Serialize)
+    }
+
+    /// Parses a versioned credential document loaded from platform secure
+    /// storage and revalidates every domain invariant.
+    ///
+    /// # Errors
+    ///
+    /// Returns a precise, diagnostics-safe error for malformed, unsupported,
+    /// or invalid credential data. The input bytes are never retained.
+    pub fn decode_from_secure_storage(bytes: &[u8]) -> Result<Self, CredentialPersistenceError> {
+        let header: StoredCredentialHeader = serde_json::from_slice(bytes)
+            .map_err(|_| CredentialPersistenceError::InvalidDocument)?;
+        if header.version != CREDENTIAL_PERSISTENCE_VERSION {
+            return Err(CredentialPersistenceError::UnsupportedVersion(
+                header.version,
+            ));
+        }
+
+        let document: StoredCredentialV1 = serde_json::from_slice(bytes)
+            .map_err(|_| CredentialPersistenceError::InvalidDocument)?;
+
+        let login_type = LoginType::new(document.login_type)
+            .map_err(CredentialPersistenceError::InvalidLoginType)?;
+        let mut credential = Self::new(document.music_id, document.music_key, login_type)
+            .map_err(CredentialPersistenceError::InvalidCredential)?;
+        if let Some(expiry) = document.expiry {
+            credential = credential.with_expiry(
+                CredentialExpiry::new(expiry.created_at_unix_seconds, expiry.lifetime_seconds)
+                    .map_err(CredentialPersistenceError::InvalidExpiry)?,
+            );
+        }
+
+        Ok(
+            credential.with_session_secrets(CredentialSessionSecrets::new(
+                document.open_id,
+                document.access_token,
+                document.refresh_token,
+                document.refresh_key,
+                document.union_id,
+                document.encrypted_uin,
+            )),
+        )
+    }
+
     #[must_use]
     pub const fn local_validity_at(&self, now_unix_seconds: u64) -> LocalCredentialValidity {
         let Some(expiry) = self.expiry else {
@@ -269,6 +347,73 @@ impl Credential {
             LocalCredentialValidity::NotExpired {
                 expires_at_unix_seconds,
             }
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct StoredCredentialHeader {
+    version: u64,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct StoredCredentialV1 {
+    version: u64,
+    music_id: String,
+    music_key: String,
+    login_type: u32,
+    expiry: Option<StoredCredentialExpiry>,
+    open_id: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    refresh_key: Option<String>,
+    union_id: Option<String>,
+    encrypted_uin: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct StoredCredentialExpiry {
+    created_at_unix_seconds: u64,
+    lifetime_seconds: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialPersistenceError {
+    Serialize,
+    InvalidDocument,
+    UnsupportedVersion(u64),
+    InvalidLoginType(InvalidLoginType),
+    InvalidCredential(InvalidCredential),
+    InvalidExpiry(InvalidCredentialExpiry),
+}
+
+impl fmt::Display for CredentialPersistenceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Serialize => formatter.write_str("could not serialize credential document"),
+            Self::InvalidDocument => formatter.write_str("credential document is malformed"),
+            Self::UnsupportedVersion(version) => {
+                write!(
+                    formatter,
+                    "credential document version {version} is unsupported"
+                )
+            }
+            Self::InvalidLoginType(error) => error.fmt(formatter),
+            Self::InvalidCredential(error) => error.fmt(formatter),
+            Self::InvalidExpiry(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for CredentialPersistenceError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidLoginType(error) => Some(error),
+            Self::InvalidCredential(error) => Some(error),
+            Self::InvalidExpiry(error) => Some(error),
+            Self::Serialize | Self::InvalidDocument | Self::UnsupportedVersion(_) => None,
         }
     }
 }
@@ -352,8 +497,8 @@ impl CredentialRestorePlan {
 #[cfg(test)]
 mod tests {
     use super::{
-        Credential, CredentialExpiry, CredentialRestorePlan, CredentialSessionSecrets,
-        InvalidCredential, LocalCredentialValidity, LoginType,
+        Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
+        CredentialSessionSecrets, InvalidCredential, LocalCredentialValidity, LoginType,
     };
 
     fn credential() -> Credential {
@@ -483,5 +628,47 @@ mod tests {
 
         assert!(!debug.contains("123456789"));
         assert!(!debug.contains("Q_H_L_super-secret"));
+    }
+
+    #[test]
+    fn secure_storage_document_round_trips_all_credential_fields() {
+        let original = credential()
+            .with_expiry(CredentialExpiry::new(1_000, 300).expect("valid expiry"))
+            .with_session_secrets(CredentialSessionSecrets::new(
+                Some("secret-open-id".into()),
+                Some("secret-access-token".into()),
+                Some("secret-refresh-token".into()),
+                Some("secret-refresh-key".into()),
+                Some("secret-union-id".into()),
+                Some("secret-encrypted-uin".into()),
+            ));
+
+        let encoded = original
+            .encode_for_secure_storage()
+            .expect("serialize credential");
+        let decoded =
+            Credential::decode_from_secure_storage(&encoded).expect("decode versioned credential");
+
+        assert_eq!(decoded, original);
+        assert!(!format!("{decoded:?}").contains("secret-"));
+    }
+
+    #[test]
+    fn secure_storage_document_rejects_malformed_and_future_versions() {
+        assert_eq!(
+            Credential::decode_from_secure_storage(b"not-json"),
+            Err(CredentialPersistenceError::InvalidDocument),
+        );
+
+        let encoded = credential()
+            .encode_for_secure_storage()
+            .expect("serialize credential");
+        let future = String::from_utf8(encoded)
+            .expect("credential JSON is UTF-8")
+            .replace("\"version\":1", "\"version\":2,\"future_field\":true");
+        assert_eq!(
+            Credential::decode_from_secure_storage(future.as_bytes()),
+            Err(CredentialPersistenceError::UnsupportedVersion(2)),
+        );
     }
 }

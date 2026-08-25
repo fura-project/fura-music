@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_start`, `map_error`, `map_progress`, `start_attempt_guard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveQqMusicWechatQrLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
@@ -27,6 +27,13 @@ bool cancelQqMusicWechatQrLoginStart({required int attemptId}) =>
 bool qqMusicHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiAuthenticationQqMusicHasAuthenticatedCredential();
 
+/// Produces a short-lived secret payload for immediate handoff to the platform
+/// secure-storage plugin. Do not log, cache, or retain the returned bytes.
+QqMusicCredentialExport exportQqMusicCredentialForSecureStorage() => RustLib
+    .instance
+    .api
+    .crateApiAuthenticationExportQqMusicCredentialForSecureStorage();
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicQrLoginSessionHandle>>
 abstract class QqMusicQrLoginSessionHandle implements RustOpaqueInterface {
   Future<QqMusicQrLoginUpdate> advance();
@@ -34,6 +41,29 @@ abstract class QqMusicQrLoginSessionHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
+}
+
+class QqMusicCredentialExport {
+  final Uint8List? secretBytes;
+  final QqMusicCredentialExportFailure? failure;
+
+  const QqMusicCredentialExport({this.secretBytes, this.failure});
+
+  @override
+  int get hashCode => secretBytes.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicCredentialExport &&
+          runtimeType == other.runtimeType &&
+          secretBytes == other.secretBytes &&
+          failure == other.failure;
+}
+
+enum QqMusicCredentialExportFailure {
+  noAuthenticatedCredential,
+  serializationFailed,
 }
 
 class QqMusicQrChallenge {

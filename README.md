@@ -6,7 +6,7 @@ The repository is at the beginning of its first vertical slice: sign in, restore
 
 ## Status
 
-The project is in active bootstrap. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
+The project is in M1 authentication development. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
 
 No release is available yet.
 
@@ -37,6 +37,8 @@ flutter test
 flutter build linux
 flutter test integration_test/simple_test.dart -d linux
 ```
+
+The Linux build also needs the native `libsecret-1` development package for platform secure storage. Package names vary by distribution (`libsecret` on Arch-based systems and `libsecret-1-dev` on Debian-based systems).
 
 `dart analyze` is deliberate for the current local non-ASCII checkout-path issue recorded in `MEMORY.md`.
 

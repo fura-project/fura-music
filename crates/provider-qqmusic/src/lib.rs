@@ -9,9 +9,9 @@ use provider_api::{
     QrAuthenticationSession, QrImageFormat,
 };
 use qqmusic_client::{
-    Credential, HttpTransport, QqMusicClient, QrImageMediaType, WechatCredentialExchangeError,
-    WechatQrError, WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError,
-    WechatQrLoginProgress, WechatQrLoginSession,
+    Credential, CredentialPersistenceError, HttpTransport, QqMusicClient, QrImageMediaType,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
 
 #[derive(Debug)]
@@ -46,6 +46,21 @@ impl<T> QqMusicProvider<T> {
     #[must_use]
     pub fn cancel_active_authentication(&self) -> bool {
         self.login.cancel_active()
+    }
+
+    /// Exports the current credential as a short-lived, versioned secret
+    /// document for the platform secure-storage adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns a serialization error without exposing credential content.
+    pub fn encode_authenticated_credential(
+        &self,
+    ) -> Result<Option<Vec<u8>>, CredentialPersistenceError> {
+        credential_guard(&self.credential)
+            .as_ref()
+            .map(Credential::encode_for_secure_storage)
+            .transpose()
     }
 }
 
@@ -231,7 +246,9 @@ mod tests {
         MusicProvider, ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
         QrAuthenticationSession, QrImageFormat,
     };
-    use qqmusic_client::{HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient};
+    use qqmusic_client::{
+        Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient,
+    };
 
     struct SuccessfulAuthenticationTransport;
 
@@ -312,5 +329,12 @@ mod tests {
         assert!(provider.has_authenticated_credential());
         assert!(!session.is_active());
         assert!(!format!("{session:?}").contains("private"));
+        let encoded = provider
+            .encode_authenticated_credential()
+            .expect("encode credential")
+            .expect("authenticated credential");
+        let decoded = Credential::decode_from_secure_storage(&encoded)
+            .expect("provider emits a valid credential document");
+        assert_eq!(decoded.music_id(), "123456");
     }
 }

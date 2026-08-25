@@ -99,6 +99,30 @@ pub struct QqMusicQrLoginUpdate {
     pub session_active: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialExportFailure {
+    NoAuthenticatedCredential,
+    SerializationFailed,
+}
+
+pub struct QqMusicCredentialExport {
+    pub secret_bytes: Option<Vec<u8>>,
+    pub failure: Option<QqMusicCredentialExportFailure>,
+}
+
+impl fmt::Debug for QqMusicCredentialExport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicCredentialExport")
+            .field(
+                "secret_bytes_length",
+                &self.secret_bytes.as_ref().map(Vec::len),
+            )
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
 /// Rust-owned login attempt. Flutter can advance or cancel it but cannot read
 /// its UUID, OAuth code, credential, refresh material, or protocol client.
 #[flutter_rust_bridge::frb(opaque)]
@@ -202,6 +226,32 @@ pub fn qq_music_has_authenticated_credential() -> bool {
         .is_ok_and(QrAuthenticationProvider::has_authenticated_credential)
 }
 
+/// Produces a short-lived secret payload for immediate handoff to the platform
+/// secure-storage plugin. Do not log, cache, or retain the returned bytes.
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_qq_music_credential_for_secure_storage() -> QqMusicCredentialExport {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return QqMusicCredentialExport {
+            secret_bytes: None,
+            failure: Some(QqMusicCredentialExportFailure::NoAuthenticatedCredential),
+        };
+    };
+    match provider.encode_authenticated_credential() {
+        Ok(Some(secret_bytes)) => QqMusicCredentialExport {
+            secret_bytes: Some(secret_bytes),
+            failure: None,
+        },
+        Ok(None) => QqMusicCredentialExport {
+            secret_bytes: None,
+            failure: Some(QqMusicCredentialExportFailure::NoAuthenticatedCredential),
+        },
+        Err(_) => QqMusicCredentialExport {
+            secret_bytes: None,
+            failure: Some(QqMusicCredentialExportFailure::SerializationFailed),
+        },
+    }
+}
+
 fn failed_start(failure: QqMusicQrLoginFailure) -> QqMusicQrLoginStart {
     QqMusicQrLoginStart {
         session: None,
@@ -256,8 +306,9 @@ const fn map_error(error: AuthenticationError) -> QqMusicQrLoginFailure {
 #[cfg(test)]
 mod tests {
     use super::{
-        QqMusicQrChallenge, QqMusicQrImageFormat, QqMusicQrLoginFailure, clear_start_attempt,
-        failed_start, map_error, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
+        QqMusicCredentialExport, QqMusicQrChallenge, QqMusicQrImageFormat, QqMusicQrLoginFailure,
+        clear_start_attempt, failed_start, map_error, reserve_qq_music_wechat_qr_login_start,
+        start_attempt_guard,
     };
     use provider_api::AuthenticationError;
 
@@ -289,6 +340,18 @@ mod tests {
 
         let debug = format!("{challenge:?}");
         assert!(debug.contains("16 bytes"));
+        assert!(!debug.contains("private"));
+    }
+
+    #[test]
+    fn credential_export_debug_output_redacts_secret_bytes() {
+        let export = QqMusicCredentialExport {
+            secret_bytes: Some(b"private-music-key".to_vec()),
+            failure: None,
+        };
+
+        let debug = format!("{export:?}");
+        assert!(debug.contains("17"));
         assert!(!debug.contains("private"));
     }
 

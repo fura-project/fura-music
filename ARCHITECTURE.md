@@ -34,12 +34,12 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 
 ## Current modules
 
-- `apps/flutter` contains the Material 3 adaptive login surface, its short-lived Dart controller/gateway adapter, and Dart integration/widget tests.
+- `apps/flutter` contains the Material 3 adaptive login surface, its short-lived Dart controller/gateway adapter, a narrow platform secure-storage adapter, and Dart integration/widget tests.
 - `crates/music-domain` contains provider-independent identity types. It currently defines only `ProviderId`.
 - `crates/provider-api` contains the UI-free provider descriptor, capabilities, baseline provider trait, and provider-neutral QR authentication challenge/progress/error contracts.
-- `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently contains the redacted credential/restore model, a small asynchronous HTTP contract with a Rustls-backed native implementation, cross-validated WeChat QR bootstrap/poll/exchange requests, and a cancellable generation-based login coordinator.
-- `crates/provider-qqmusic` owns the QQ Music login coordinator, maps raw QR protocol states into provider contracts, and retains a successful credential inside Rust. It currently declares only the implemented authentication capability.
-- `bridges/flutter` adapts core/provider status and authentication into presentation-safe generated types.
+- `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently contains the redacted credential/restore model, versioned secure-storage serialization, a small asynchronous HTTP contract with a Rustls-backed native implementation, cross-validated WeChat QR bootstrap/poll/exchange requests, and a cancellable generation-based login coordinator.
+- `crates/provider-qqmusic` owns the QQ Music login coordinator, maps raw QR protocol states into provider contracts, retains a successful credential inside Rust, and exports only its versioned opaque persistence document. It currently declares only the implemented authentication capability.
+- `bridges/flutter` adapts core/provider status and authentication into presentation-safe generated types. Its one secret-bearing operation is a dedicated short-lived persistence handoff, not a presentation model.
 
 The current concrete bootstrap flow is:
 
@@ -52,7 +52,7 @@ Flutter main
   -> Flutter bootstrap page
 ```
 
-The raw authentication flow now reaches a validated credential inside the core, but is not yet a Provider/bridge capability:
+The raw authentication flow reaches a validated credential inside the core:
 
 ```text
 QQMusicClient
@@ -76,7 +76,7 @@ Flutter
   -> Rust-opaque session handle + image bytes/media type
   -> explicit advance/cancel calls
   -> Provider-neutral progress or failure enum
-  -> authenticated boolean only
+  -> coarse authentication and persistence state
 
 Rust opaque session
   -> QQMusicProvider QR session
@@ -84,7 +84,20 @@ Rust opaque session
   -> Credential retained inside QQMusicProvider
 ```
 
-The opaque handle exposes no fields and carries generation-specific cancellation authority, so cancelling an old Dart object cannot cancel its replacement. Concurrent `advance` calls fail explicitly instead of creating a hidden polling queue. Credential persistence does not exist yet; the current in-memory state is tracked as TD-003.
+The opaque handle exposes no fields and carries generation-specific cancellation authority, so cancelling an old Dart object cannot cancel its replacement. Concurrent `advance` calls fail explicitly instead of creating a hidden polling queue.
+
+After successful authentication, credential persistence follows a separate narrow path:
+
+```text
+QQMusicProvider credential
+  -> Rust versioned serialization and invariant checks
+  -> dedicated Bridge export of short-lived opaque bytes
+  -> Dart platform-vault adapter (Base64 transport envelope only)
+  -> flutter_secure_storage
+  -> native platform secure storage
+```
+
+The controller sees only stored/unavailable status. It cannot inspect credential fields. The mutable bridge buffer is zeroed after the asynchronous write. Startup import and QQ Music server verification do not exist yet, so secure write alone does not satisfy credential restore; TD-003 remains in progress.
 
 QR creation has a separate opaque start-attempt number reserved by the Bridge adapter before network work begins. Cancel/restart/dispose can cancel that exact pending creation; comparison against the current start attempt prevents a late old controller from cancelling its replacement. After a challenge returns, the Dart controller discards that start operation and uses the Rust-owned session handle. Dart owns presentation stages, one-second network-reconnect delay, adaptive layout, animation, and late-result visibility guards. Rust remains the authority for protocol deadlines, failure counts, session generations, and credential state.
 
@@ -104,7 +117,9 @@ Provider code never returns Flutter widgets or presentation-specific models.
 
 ## Playback and storage
 
-The detailed playback and storage architectures do not exist yet and are intentionally not specified. They will be documented when the first vertical slice introduces real implementations. Credential material must not be logged or committed, and release-bound storage must use a platform-appropriate secure mechanism.
+The detailed playback and general storage architectures do not exist yet and are intentionally not specified. They will be documented when the first vertical slice introduces real implementations.
+
+Credential semantics and serialization remain in Rust. `flutter_secure_storage` is a platform integration edge only; it stores one opaque versioned document and cannot declare a user authenticated. Android backup is disabled, Apple synchronization is disabled, and corrupt or unavailable storage must remain distinguishable from an upstream credential rejection. See ADR 0003 and TD-004 for the current verification boundary.
 
 ## Forbidden dependencies
 

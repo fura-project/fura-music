@@ -8,12 +8,12 @@ const _qqGreen = Color(0xFF24B86A);
 class MusicApp extends StatelessWidget {
   const MusicApp({
     required this.bootstrap,
-    this.authenticationGateway = const RustQqMusicAuthenticationGateway(),
+    this.authenticationGateway,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
-  final QqMusicAuthenticationGateway authenticationGateway;
+  final QqMusicAuthenticationGateway? authenticationGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +25,8 @@ class MusicApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       home: LoginPage(
         bootstrap: bootstrap,
-        authenticationGateway: authenticationGateway,
+        authenticationGateway:
+            authenticationGateway ?? RustQqMusicAuthenticationGateway(),
       ),
     );
   }
@@ -358,24 +359,47 @@ class _AuthenticationContent extends StatelessWidget {
     );
   }
 
-  Widget _authenticated(BuildContext context) => Column(
-    key: const ValueKey('login-authenticated'),
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const _PanelIcon(icon: Icons.check_rounded),
-      const SizedBox(height: 24),
-      Text(
-        'You’re signed in',
-        style: Theme.of(context).textTheme.headlineSmall,
+  Widget _authenticated(BuildContext context) {
+    final saveState = controller.credentialSaveState;
+    final (icon, detail) = switch (saveState) {
+      CredentialSaveState.saving => (
+        Icons.lock_clock_outlined,
+        'QQ Music accepted this session. Saving it to platform secure storage…',
       ),
-      const SizedBox(height: 10),
-      Text(
-        'QQ Music accepted this session. Secure restart restore is not enabled yet.',
-        textAlign: TextAlign.center,
-        style: _supportingStyle(context),
+      CredentialSaveState.saved => (
+        Icons.lock_rounded,
+        'This session is stored securely. Startup verification is the next step.',
       ),
-    ],
-  );
+      CredentialSaveState.failed => (
+        Icons.warning_amber_rounded,
+        'You’re signed in for this session, but secure storage was unavailable. '
+            'You’ll need to sign in again after restart.',
+      ),
+      CredentialSaveState.none => (
+        Icons.check_rounded,
+        'QQ Music accepted this session. Secure storage has not been confirmed.',
+      ),
+    };
+
+    return Column(
+      key: const ValueKey('login-authenticated'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _PanelIcon(icon: icon),
+        const SizedBox(height: 24),
+        Text(
+          'You’re signed in',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          detail,
+          textAlign: TextAlign.center,
+          style: _supportingStyle(context),
+        ),
+      ],
+    );
+  }
 
   Widget _terminal(BuildContext context) {
     final (title, detail) = _terminalCopy(controller.stage, controller.failure);

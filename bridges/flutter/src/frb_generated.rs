@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 458470640;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1688503808;
 
 // Section: executor
 
@@ -271,6 +271,37 @@ fn wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(
                     crate::api::authentication::cancel_qq_music_wechat_qr_login_start(
                         api_attempt_id,
                     ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "export_qq_music_credential_for_secure_storage",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(
+                    crate::api::authentication::export_qq_music_credential_for_secure_storage(),
                 )?;
                 std::result::Result::Ok(output_ok)
             })())
@@ -514,6 +545,21 @@ impl SseDecode for Option<QqMusicQrLoginSessionHandle> {
     }
 }
 
+impl SseDecode for Option<crate::api::authentication::QqMusicCredentialExportFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::authentication::QqMusicCredentialExportFailure>::sse_decode(
+                    deserializer,
+                ),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::authentication::QqMusicQrChallenge> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -553,6 +599,17 @@ impl SseDecode for Option<crate::api::authentication::QqMusicQrLoginState> {
     }
 }
 
+impl SseDecode for Option<Vec<u8>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<u8>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for crate::api::bootstrap::ProviderStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -563,6 +620,33 @@ impl SseDecode for crate::api::bootstrap::ProviderStatus {
             id: var_id,
             display_name: var_displayName,
             implemented_capabilities: var_implementedCapabilities,
+        };
+    }
+}
+
+impl SseDecode for crate::api::authentication::QqMusicCredentialExport {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_secretBytes = <Option<Vec<u8>>>::sse_decode(deserializer);
+        let mut var_failure =
+            <Option<crate::api::authentication::QqMusicCredentialExportFailure>>::sse_decode(
+                deserializer,
+            );
+        return crate::api::authentication::QqMusicCredentialExport {
+            secret_bytes: var_secretBytes,
+            failure: var_failure,
+        };
+    }
+}
+
+impl SseDecode for crate::api::authentication::QqMusicCredentialExportFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::authentication::QqMusicCredentialExportFailure::NoAuthenticatedCredential,
+1 => crate::api::authentication::QqMusicCredentialExportFailure::SerializationFailed,
+            _ => unreachable!("Invalid variant for QqMusicCredentialExportFailure: {}", inner),
         };
     }
 }
@@ -703,8 +787,8 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        6 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
+        7 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
             port,
             ptr,
             rust_vec_len,
@@ -738,12 +822,17 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(
+        6 => wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(
+        8 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        9 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(
             ptr,
             rust_vec_len,
             data_len,
@@ -814,6 +903,48 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::bootstrap::ProviderStatus>
     for crate::api::bootstrap::ProviderStatus
 {
     fn into_into_dart(self) -> crate::api::bootstrap::ProviderStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::authentication::QqMusicCredentialExport {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.secret_bytes.into_into_dart().into_dart(),
+            self.failure.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::authentication::QqMusicCredentialExport
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::authentication::QqMusicCredentialExport>
+    for crate::api::authentication::QqMusicCredentialExport
+{
+    fn into_into_dart(self) -> crate::api::authentication::QqMusicCredentialExport {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::authentication::QqMusicCredentialExportFailure {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::NoAuthenticatedCredential => 0.into_dart(),
+            Self::SerializationFailed => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::authentication::QqMusicCredentialExportFailure
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::authentication::QqMusicCredentialExportFailure>
+    for crate::api::authentication::QqMusicCredentialExportFailure
+{
+    fn into_into_dart(self) -> crate::api::authentication::QqMusicCredentialExportFailure {
         self
     }
 }
@@ -1044,6 +1175,18 @@ impl SseEncode for Option<QqMusicQrLoginSessionHandle> {
     }
 }
 
+impl SseEncode for Option<crate::api::authentication::QqMusicCredentialExportFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::authentication::QqMusicCredentialExportFailure>::sse_encode(
+                value, serializer,
+            );
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::authentication::QqMusicQrChallenge> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1074,12 +1217,42 @@ impl SseEncode for Option<crate::api::authentication::QqMusicQrLoginState> {
     }
 }
 
+impl SseEncode for Option<Vec<u8>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<u8>>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::api::bootstrap::ProviderStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.display_name, serializer);
         <Vec<String>>::sse_encode(self.implemented_capabilities, serializer);
+    }
+}
+
+impl SseEncode for crate::api::authentication::QqMusicCredentialExport {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<Vec<u8>>>::sse_encode(self.secret_bytes, serializer);
+        <Option<crate::api::authentication::QqMusicCredentialExportFailure>>::sse_encode(
+            self.failure,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::authentication::QqMusicCredentialExportFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::authentication::QqMusicCredentialExportFailure::NoAuthenticatedCredential => { 0 }
+crate::api::authentication::QqMusicCredentialExportFailure::SerializationFailed => { 1 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 

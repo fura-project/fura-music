@@ -44,6 +44,8 @@ void main() {
     await pumpEventQueue();
     expect(controller.stage, LoginStage.authenticated);
     expect(controller.qrImageBytes, isNull);
+    expect(controller.credentialSaveState, CredentialSaveState.saved);
+    expect(gateway.persistCalls, 1);
 
     controller.dispose();
   });
@@ -71,6 +73,50 @@ void main() {
       expect(controller.stage, LoginStage.waitingForScan);
     },
   );
+
+  test('keeps the session authenticated when secure storage fails', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(
+      _successfulStart(session),
+      persistenceResult: CredentialPersistenceResult.storageUnavailable,
+    );
+    final controller = LoginController(gateway, Duration.zero);
+
+    await controller.start();
+    session.completeNext(
+      const LoginUpdate(
+        progress: LoginProgress.authenticated,
+        sessionActive: false,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(controller.stage, LoginStage.authenticated);
+    expect(controller.credentialSaveState, CredentialSaveState.failed);
+    expect(gateway.persistCalls, 1);
+
+    controller.dispose();
+  });
+
+  test('notifies listeners when a session reaches a terminal state', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(gateway, Duration.zero);
+    var notifications = 0;
+    controller.addListener(() => notifications += 1);
+
+    await controller.start();
+    final beforeTerminalUpdate = notifications;
+    session.completeNext(
+      const LoginUpdate(progress: LoginProgress.expired, sessionActive: false),
+    );
+    await pumpEventQueue();
+
+    expect(controller.stage, LoginStage.expired);
+    expect(notifications, greaterThan(beforeTerminalUpdate));
+
+    controller.dispose();
+  });
 
   test(
     'restart cancels a late session returned by the superseded start',
@@ -124,17 +170,22 @@ LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
 );
 
 class _FakeGateway implements QqMusicAuthenticationGateway {
-  _FakeGateway.immediate(LoginStart result)
-    : _immediateResult = result,
-      _pendingStarts = null;
+  _FakeGateway.immediate(
+    LoginStart result, {
+    this.persistenceResult = CredentialPersistenceResult.stored,
+  }) : _immediateResult = result,
+       _pendingStarts = null;
 
   _FakeGateway.pending()
-    : _immediateResult = null,
+    : persistenceResult = CredentialPersistenceResult.stored,
+      _immediateResult = null,
       _pendingStarts = <Completer<LoginStart>>[];
 
   final LoginStart? _immediateResult;
   final List<Completer<LoginStart>>? _pendingStarts;
+  final CredentialPersistenceResult persistenceResult;
   final List<_FakeStartOperation> operations = <_FakeStartOperation>[];
+  int persistCalls = 0;
 
   @override
   bool get hasAuthenticatedCredential => false;
@@ -154,6 +205,12 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
     final operation = _FakeStartOperation(completer.future);
     operations.add(operation);
     return operation;
+  }
+
+  @override
+  Future<CredentialPersistenceResult> persistAuthenticatedCredential() async {
+    persistCalls += 1;
+    return persistenceResult;
   }
 
   void completeStart(int index, LoginStart result) {
