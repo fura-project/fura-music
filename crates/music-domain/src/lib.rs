@@ -2,8 +2,13 @@
 
 use std::fmt;
 
+mod lyrics;
 mod playback_queue;
 
+pub use lyrics::{
+    InvalidLyricTiming, InvalidSynchronizedLyrics, LyricTimingField, SynchronizedLyricLine,
+    SynchronizedLyrics, TimedLyricSegment,
+};
 pub use playback_queue::{InvalidPlaybackQueue, PlaybackQueue, PlaybackQueueRemoval};
 
 /// Stable provider identity used by core domain objects.

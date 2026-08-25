@@ -1,6 +1,6 @@
 # QQ Music lyric and QRC evidence
 
-- **Status:** Evidence and first implementation boundary selected; Domain and protocol code pending
+- **Status:** Evidence, Domain model, and Provider contract implemented; protocol code pending
 - **Last checked:** 2026-08-26
 - **Scope:** One QQ Music track's synchronized original lyrics, optional translation/romanization, and basic word-level timing for M1.
 
@@ -118,7 +118,7 @@ The probe printed only codes, field names, types, lengths, flags, and nonempty b
 
 ## Selected first implementation slice
 
-1. Add provider-neutral timed lyric lines/segments and optional aligned translation/romanization to `music-domain`, with constructor invariants and synthetic tests.
+1. Add provider-neutral timed lyric lines/segments and optional aligned translation/romanization to `music-domain`, with constructor invariants and synthetic tests. **Completed.**
 2. Add a narrow `LyricsProvider` contract keyed by opaque `TrackId`; do not expose encrypted fields, QQ revision metadata, or raw QRC.
 3. Add one bounded `QQMusicClient::lyrics` musicu operation, QQ-compatible cloud decryption, XML/QRC parsing, and wholly synthetic non-lyrical fixtures.
 4. Map exact-start auxiliary lines in `QQMusicProvider`, rechecking the exact credential after the await and clearing it only on explicit rejection.

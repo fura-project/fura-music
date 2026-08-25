@@ -67,16 +67,18 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Extended the adaptive now-playing surface with bounded previous/next and a queue affordance while retaining single-track play/pause/retry/stop and account-reset behavior. Narrow layouts use two control rows and a modal bottom sheet; wider layouts use one transport row and a constrained queue dialog.
 - Added positional queue presentation with current indication, tap-to-select, per-position remove, and explicit clear. Duplicate TrackIds remain distinct, non-current removal does not restart media, current/last removal follows Rust selection/stop, and no shuffle/repeat/reorder/persistence/hidden fetch was added.
 - Added widget regressions for manual previous/next, completion-to-next, duplicate position selection, non-current/current removal, empty queue, and narrow queue layout. The Flutter suite now passes 82 tests; `dart analyze`, Linux release, and packaged local plus loopback MP3 lifecycle pass. Phase-4 architecture/scope/debt review found no Provider/UI leakage, Dart queue-rule duplication, source-URI exposure, new dependency, triggered debt, or scope expansion. Real authenticated QQ playback and non-Linux runtime evidence remain explicit Risks rather than implementation claims.
+- Cross-validated the current `GetPlayLyricInfo` request, cloud-QRC decrypt pipeline, XML/timing grammar, and line-timed translation/romanization across current musicu code plus independent MIT, Apache-headered, and GPL evidence implementations. A bounded anonymous probe confirmed zero global/module codes, `crypt: 1`, `qrc: 1`, nonempty hex `lyric`, and optional empty auxiliary fields without printing or retaining lyric content.
+- Added provider-neutral `SynchronizedLyrics`, timed line/segment models, checked millisecond arithmetic, redacted diagnostics, and a narrow `LyricsProvider` contract with coarse typed failures. The Domain preserves source order, spacing/empty timing, gaps, overlaps, and out-of-line segments rather than inventing normalization; 4 new regressions bring `music-domain` to 19 tests and the full Rust workspace plus strict Clippy pass.
 
 # In Progress
 
-- Add the minimum provider-neutral synchronized lyric Domain model and `LyricsProvider` contract fixed by the current QQ Music/QRC evidence. Keep protocol encryption, raw QRC, alignment policy, playback position, and presentation state outside this task.
+- Implement one bounded `QQMusicClient` lyric request, cloud-QRC decoder, and XML/QRC parser from the recorded evidence. Use only project-authored non-lyrical fixtures and keep all ciphertext/plaintext out of diagnostics.
 
 # Next Candidates
 
-1. Add constructor and boundary regressions for timed original lines/segments plus optional exact-start translation and romanization, without inventing fuzzy alignment.
-2. Implement bounded QQMusicClient request, cloud-QRC decryption, XML/QRC parsing, and wholly synthetic non-lyrical fixtures.
-3. Map the protocol result through `QQMusicProvider`, including account rechecks and explicit-rejection-only credential clearing, before adding Bridge or Flutter presentation.
+1. Implement bounded QQMusicClient request, cloud-QRC decryption, XML/QRC parsing, and wholly synthetic non-lyrical fixtures.
+2. Map the protocol result through `QQMusicProvider`, including exact-start auxiliary alignment, account rechecks, and explicit-rejection-only credential clearing.
+3. Add one cancellable lyric Bridge load handle only after the protocol and Provider paths pass offline regression.
 
 # Blockers
 

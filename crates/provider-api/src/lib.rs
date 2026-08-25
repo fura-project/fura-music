@@ -4,7 +4,8 @@ use std::fmt;
 use std::future::Future;
 
 use music_domain::{
-    PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource, TrackId,
+    PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource,
+    SynchronizedLyrics, TrackId,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -203,6 +204,46 @@ pub trait PlaylistDetailsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<PlaylistTracksPage, Self::Error>> + Send;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LyricsError {
+    AuthenticationRequired,
+    CredentialRejected,
+    Unavailable,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+}
+
+impl fmt::Display for LyricsError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "lyrics require authentication",
+            Self::CredentialRejected => "lyric credential was rejected",
+            Self::Unavailable => "lyrics are unavailable for the requested track",
+            Self::Network => "lyric network request failed",
+            Self::ServiceUnavailable => "lyric service is unavailable",
+            Self::InvalidResponse => "lyric service returned an invalid response",
+            Self::Replaced => "lyric request was replaced by newer account state",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for LyricsError {}
+
+/// Provider-neutral synchronized lyric capability. The owning provider keeps
+/// track identity parsing, protocol decryption, QRC parsing, and auxiliary
+/// line alignment behind this boundary.
+pub trait LyricsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn lyrics(
+        &self,
+        track_id: TrackId,
+    ) -> impl Future<Output = Result<SynchronizedLyrics, Self::Error>> + Send;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
