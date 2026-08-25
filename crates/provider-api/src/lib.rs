@@ -180,6 +180,16 @@ pub trait OwnedPlaylistsProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
 }
 
+/// Complete provider-owned playlist collection for the current user. The
+/// implementation owns source-specific pagination and deduplication.
+pub trait UserPlaylistsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn user_playlists(
+        &self,
+    ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

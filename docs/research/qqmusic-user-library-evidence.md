@@ -50,9 +50,11 @@ Favorite rows use a generic playlist ID (`id`, with current model aliases for `t
 
 The project now implements one bounded favorite page in `QQMusicClient`: page size is restricted to `1..=100`, response bodies remain capped at 1 MiB/30 seconds, missing encrypted UIN fails before transport, `hasmore` accepts only boolean or numeric `0`/`1`, and raw response models do not escape the protocol crate. Default tests use synthetic pages and cover exact request shape, pagination, aliases, missing identity, credential rejection, unrelated upstream failure, and redacted diagnostics.
 
-Provider aggregation is deliberately separate. It must bound the number of pages, reject a non-advancing continuation, deduplicate against owned playlists by QQ playlist ID, and recheck the exact credential after every await. Until that exists, Flutter continues to expose only `owned_playlists` under the truthful heading “Playlists you created” and never parses its opaque QQ identity.
+Provider aggregation now loads owned rows first and follows favorite pages in order. It advances by raw page length before deduplication, rejects an empty page that still claims `hasmore`, caps the current operation at ten 100-item pages, deduplicates against owned and earlier favorite rows by QQ playlist ID, and rechecks the exact credential after every await. Explicit rejection clears only the still-current credential; transient and structural failures retain it. Owned and favorite routes use distinct provider-owned opaque IDs.
+
+The existing Bridge and Flutter surface still call the narrower `owned_playlists` contract. They continue to use the truthful heading “Playlists you created” until the cancellable handle is switched to the combined Provider operation; Flutter never parses QQ's opaque identity.
 
 ## Evidence still required
 
 1. A sanitized real response fixture or controlled account integration before claiming live owned/favorite playlist compatibility.
-2. Provider pagination, merge, and deduplication regressions before the UI presents a complete combined library.
+2. A Bridge/Flutter integration regression over the combined Provider contract before the UI presents a complete library.

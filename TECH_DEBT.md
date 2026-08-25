@@ -66,4 +66,20 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** The Linux instance was resolved on 2026-08-25. Each other target must resolve its own instance before distribution, and at least one mobile target must be verified before the M1 checkpoint.
 
+## TD-005 — Favorite-playlist aggregation has a 1,000-row safety ceiling
+
+**Status:** Open
+
+**Problem:** The complete QQ Music playlist operation follows at most ten favorite pages of 100 rows. If QQ Music still reports `hasmore`, the Provider returns `InvalidResponse` instead of continuing indefinitely or silently returning a partial library.
+
+**Why accepted:** QQ Music is an unstable external service, yakult's current implementation independently uses the same 1,000-row ceiling, and this checkout has no sanitized evidence for accounts exceeding it. A finite bound is required before the loop can sit behind one cancellable Bridge operation.
+
+**Impact:** An account with more than 1,000 favorited playlists cannot load the combined library, although its created-only operation remains available internally.
+
+**Risk:** The UI may show a structural-response error for a legitimate unusually large account.
+
+**Suggested solution:** Replace the fixed aggregate call with an evidence-backed higher bound or incremental user-library pagination that keeps cancellation and account-replacement checks exact. Never silently truncate.
+
+**Trigger condition:** Reassess when a sanitized fixture or controlled integration returns `hasmore` after page ten, or before public alpha if large-library support becomes an acceptance requirement.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

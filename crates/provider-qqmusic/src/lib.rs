@@ -1,5 +1,6 @@
 //! QQ Music provider mapping layer.
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -8,13 +9,18 @@ use provider_api::{
     AuthenticationError, MusicProvider, OwnedPlaylistsProvider, ProviderCapability,
     ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
     QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
+    UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
-    HttpTransport, QqMusicClient, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QrImageMediaType, WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    HttpTransport, QqMusicClient, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
+    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QrImageMediaType,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
+
+const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
+const MAX_FAVORITE_PLAYLIST_PAGES: usize = 10;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicCredentialRestoreState {
@@ -62,6 +68,37 @@ impl<T> QqMusicProvider<T> {
             *credential_guard(&self.credential),
             QqMusicCredentialState::Authenticated(_)
         )
+    }
+
+    fn authenticated_credential(&self) -> Result<Credential, UserLibraryError> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => {
+                Err(UserLibraryError::AuthenticationRequired)
+            }
+        }
+    }
+
+    fn finish_library_await(
+        &self,
+        candidate: &Credential,
+        rejected: bool,
+    ) -> Result<(), UserLibraryError> {
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == candidate
+        );
+        if !still_current {
+            return Err(UserLibraryError::Replaced);
+        }
+        if rejected {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(UserLibraryError::CredentialRejected);
+        }
+        Ok(())
     }
 
     /// Returns a cloned startup candidate for server verification or a future
@@ -254,17 +291,14 @@ where
     type Error = UserLibraryError;
 
     async fn owned_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
-        let candidate = match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => credential.clone(),
-            QqMusicCredentialState::SignedOut
-            | QqMusicCredentialState::PendingVerification(_)
-            | QqMusicCredentialState::LocallyExpired(_) => {
-                return Err(UserLibraryError::AuthenticationRequired);
-            }
-        };
+        let candidate = self.authenticated_credential()?;
 
         let response = self.client().owned_playlists(&candidate).await;
-        let mapped = response
+        self.finish_library_await(
+            &candidate,
+            matches!(response, Err(QqMusicOwnedPlaylistsError::Rejected { .. })),
+        )?;
+        response
             .as_ref()
             .map_err(map_owned_playlists_error)
             .and_then(|playlists| {
@@ -273,20 +307,77 @@ where
                     .iter()
                     .map(map_owned_playlist)
                     .collect::<Result<Vec<_>, _>>()
-            });
+            })
+    }
+}
 
-        let mut state = credential_guard(&self.credential);
-        let still_current = matches!(
-            &*state,
-            QqMusicCredentialState::Authenticated(current) if current == &candidate
-        );
-        if !still_current {
-            return Err(UserLibraryError::Replaced);
+impl<T> UserPlaylistsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = UserLibraryError;
+
+    async fn user_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
+        let candidate = self.authenticated_credential()?;
+        if candidate
+            .session_secrets()
+            .encrypted_uin()
+            .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err(UserLibraryError::InvalidResponse);
         }
-        if matches!(response, Err(QqMusicOwnedPlaylistsError::Rejected { .. })) {
-            *state = QqMusicCredentialState::SignedOut;
+
+        let owned_response = self.client().owned_playlists(&candidate).await;
+        self.finish_library_await(
+            &candidate,
+            matches!(
+                owned_response,
+                Err(QqMusicOwnedPlaylistsError::Rejected { .. })
+            ),
+        )?;
+        let owned = owned_response.as_ref().map_err(map_owned_playlists_error)?;
+        let mut seen = HashSet::with_capacity(owned.playlists().len());
+        let mut playlists = Vec::with_capacity(owned.playlists().len());
+        for playlist in owned.playlists() {
+            seen.insert(playlist.playlist_id());
+            playlists.push(map_owned_playlist(playlist)?);
         }
-        mapped
+
+        let mut offset = 0_u32;
+        for _ in 0..MAX_FAVORITE_PLAYLIST_PAGES {
+            let favorite_response = self
+                .client()
+                .favorite_playlists_page(&candidate, offset, FAVORITE_PLAYLIST_PAGE_SIZE)
+                .await;
+            self.finish_library_await(
+                &candidate,
+                matches!(
+                    favorite_response,
+                    Err(QqMusicFavoritePlaylistsError::Rejected { .. })
+                ),
+            )?;
+            let page = favorite_response
+                .as_ref()
+                .map_err(map_favorite_playlists_error)?;
+            let page_length = u32::try_from(page.playlists().len())
+                .map_err(|_| UserLibraryError::InvalidResponse)?;
+            for playlist in page.playlists() {
+                if seen.insert(playlist.playlist_id()) {
+                    playlists.push(map_favorite_playlist(playlist)?);
+                }
+            }
+            if !page.has_more() {
+                return Ok(playlists);
+            }
+            if page_length == 0 {
+                return Err(UserLibraryError::InvalidResponse);
+            }
+            offset = offset
+                .checked_add(page_length)
+                .ok_or(UserLibraryError::InvalidResponse)?;
+        }
+
+        Err(UserLibraryError::InvalidResponse)
     }
 }
 
@@ -445,6 +536,23 @@ fn map_owned_playlist(
         .map_err(|_| UserLibraryError::InvalidResponse)
 }
 
+fn map_favorite_playlist(
+    playlist: &QqMusicFavoritePlaylist,
+) -> Result<PlaylistSummary, UserLibraryError> {
+    let id = PlaylistId::new(
+        qq_music_provider_id(),
+        format!("favorite:{}", playlist.playlist_id()),
+    )
+    .map_err(|_| UserLibraryError::InvalidResponse)?;
+    PlaylistSummary::new(id, playlist.name())
+        .map(|summary| {
+            summary
+                .with_artwork_uri(playlist.cover_url().map(str::to_owned))
+                .with_track_count(playlist.track_count())
+        })
+        .map_err(|_| UserLibraryError::InvalidResponse)
+}
+
 fn map_owned_playlists_error<E>(error: &QqMusicOwnedPlaylistsError<E>) -> UserLibraryError {
     match error {
         QqMusicOwnedPlaylistsError::Transport(_) => UserLibraryError::Network,
@@ -460,6 +568,30 @@ fn map_owned_playlists_error<E>(error: &QqMusicOwnedPlaylistsError<E>) -> UserLi
         | QqMusicOwnedPlaylistsError::MissingData
         | QqMusicOwnedPlaylistsError::MissingPlaylists
         | QqMusicOwnedPlaylistsError::InvalidPlaylist { .. } => UserLibraryError::InvalidResponse,
+    }
+}
+
+fn map_favorite_playlists_error<E>(error: &QqMusicFavoritePlaylistsError<E>) -> UserLibraryError {
+    match error {
+        QqMusicFavoritePlaylistsError::Transport(_) => UserLibraryError::Network,
+        QqMusicFavoritePlaylistsError::HttpStatus(_)
+        | QqMusicFavoritePlaylistsError::Upstream { .. } => UserLibraryError::ServiceUnavailable,
+        QqMusicFavoritePlaylistsError::Rejected { .. } => UserLibraryError::CredentialRejected,
+        QqMusicFavoritePlaylistsError::MissingEncryptedUin
+        | QqMusicFavoritePlaylistsError::InvalidPageSize { .. }
+        | QqMusicFavoritePlaylistsError::Serialize
+        | QqMusicFavoritePlaylistsError::InvalidJson
+        | QqMusicFavoritePlaylistsError::MissingGlobalCode
+        | QqMusicFavoritePlaylistsError::MissingResult
+        | QqMusicFavoritePlaylistsError::MissingResultCode
+        | QqMusicFavoritePlaylistsError::MissingData
+        | QqMusicFavoritePlaylistsError::MissingPlaylists
+        | QqMusicFavoritePlaylistsError::MissingTotal
+        | QqMusicFavoritePlaylistsError::MissingHasMore
+        | QqMusicFavoritePlaylistsError::InvalidHasMore
+        | QqMusicFavoritePlaylistsError::InvalidPlaylist { .. } => {
+            UserLibraryError::InvalidResponse
+        }
     }
 }
 
@@ -534,19 +666,21 @@ fn map_verification_error<E>(error: &CredentialVerificationError<E>) -> Authenti
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
     use std::convert::Infallible;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use provider_api::{
         MusicProvider, OwnedPlaylistsProvider, ProviderCapability, QrAuthenticationProgress,
         QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
+        UserPlaylistsProvider,
     };
     use qqmusic_client::{
-        Credential, CredentialExpiry, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
-        LoginType, QqMusicClient,
+        Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
+        HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
-    use serde_json::json;
+    use serde_json::{Value, json};
     use tokio::sync::Notify;
 
     struct SuccessfulAuthenticationTransport;
@@ -557,6 +691,11 @@ mod tests {
 
     struct OwnedPlaylistsTransport {
         response: HttpResponse,
+    }
+
+    struct UserPlaylistsTransport {
+        responses: Mutex<VecDeque<HttpResponse>>,
+        requests: Mutex<Vec<HttpRequest>>,
     }
 
     impl OwnedPlaylistsTransport {
@@ -585,11 +724,65 @@ mod tests {
         }
     }
 
+    impl UserPlaylistsTransport {
+        fn new(favorite_responses: impl IntoIterator<Item = Value>) -> Self {
+            let owned = json!({
+                "code": 0,
+                "music.musicasset.PlaylistBaseRead": {
+                    "code": 0,
+                    "data": {
+                        "v_playlist": [
+                            {
+                                "tid": 7001,
+                                "dirId": 201,
+                                "dirName": "Synthetic liked songs",
+                                "songNum": 42
+                            },
+                            {
+                                "tid": 7002,
+                                "dirId": 202,
+                                "dirName": "Synthetic owned list"
+                            }
+                        ]
+                    }
+                }
+            });
+            let responses = std::iter::once(owned)
+                .chain(favorite_responses)
+                .map(|response| {
+                    HttpResponse::new(200, serde_json::to_vec(&response).expect("fixture JSON"))
+                })
+                .collect();
+            Self {
+                responses: Mutex::new(responses),
+                requests: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn requests(&self) -> Vec<HttpRequest> {
+            self.requests.lock().expect("request lock").clone()
+        }
+    }
+
     impl HttpTransport for OwnedPlaylistsTransport {
         type Error = Infallible;
 
         async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
             Ok(self.response.clone())
+        }
+    }
+
+    impl HttpTransport for UserPlaylistsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.requests.lock().expect("request lock").push(request);
+            Ok(self
+                .responses
+                .lock()
+                .expect("response lock")
+                .pop_front()
+                .expect("fixture response"))
         }
     }
 
@@ -631,12 +824,38 @@ mod tests {
         release_request: Arc<Notify>,
     }
 
+    #[derive(Clone)]
+    struct GatedFavoritePlaylistsTransport {
+        favorite_started: Arc<Notify>,
+        release_favorite: Arc<Notify>,
+    }
+
     impl HttpTransport for GatedOwnedPlaylistsTransport {
         type Error = Infallible;
 
         async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
             self.request_started.notify_one();
             self.release_request.notified().await;
+            Ok(OwnedPlaylistsTransport::new(0).response)
+        }
+    }
+
+    impl HttpTransport for GatedFavoritePlaylistsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            let body: Value =
+                serde_json::from_slice(request.body_bytes().expect("library request body"))
+                    .expect("request JSON");
+            if body.get("music.musicasset.PlaylistFavRead").is_some() {
+                self.favorite_started.notify_one();
+                self.release_favorite.notified().await;
+                return Ok(favorite_page_response(
+                    &json!([{"id": 8001, "title": "Late favorite"}]),
+                    1,
+                    false,
+                ));
+            }
             Ok(OwnedPlaylistsTransport::new(0).response)
         }
     }
@@ -725,9 +944,49 @@ mod tests {
 
     fn set_authenticated<T>(provider: &QqMusicProvider<T>, music_id: &str) {
         let credential = Credential::new(music_id, "W_X_private-key", LoginType::WECHAT)
-            .expect("fixture credential");
+            .expect("fixture credential")
+            .with_session_secrets(CredentialSessionSecrets::new(
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(format!("encrypted-{music_id}")),
+            ));
         *super::credential_guard(&provider.credential) =
             super::QqMusicCredentialState::Authenticated(credential);
+    }
+
+    fn favorite_page_response(playlists: &Value, total: u32, has_more: bool) -> HttpResponse {
+        HttpResponse::new(
+            200,
+            serde_json::to_vec(&json!({
+                "code": 0,
+                "music.musicasset.PlaylistFavRead": {
+                    "code": 0,
+                    "data": {
+                        "v_list": playlists,
+                        "total": total,
+                        "hasmore": has_more
+                    }
+                }
+            }))
+            .expect("fixture JSON"),
+        )
+    }
+
+    fn favorite_page_json(playlists: &Value, total: u32, has_more: bool) -> Value {
+        json!({
+            "code": 0,
+            "music.musicasset.PlaylistFavRead": {
+                "code": 0,
+                "data": {
+                    "v_list": playlists,
+                    "total": total,
+                    "hasmore": has_more
+                }
+            }
+        })
     }
 
     #[tokio::test]
@@ -786,6 +1045,160 @@ mod tests {
             request_started.notified().await;
             set_authenticated(&provider, "654321");
             release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(UserLibraryError::Replaced));
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn aggregates_pages_and_deduplicates_by_qq_playlist_identity() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new([
+            favorite_page_json(
+                &json!([
+                    {"id": 7002, "title": "Duplicate owned list"},
+                    {"id": 8001, "title": "Synthetic favorite one", "songnum": 9}
+                ]),
+                3,
+                true,
+            ),
+            favorite_page_json(
+                &json!([{"id": 8002, "title": "Synthetic favorite two"}]),
+                3,
+                false,
+            ),
+        ])));
+        set_authenticated(&provider, "123456");
+
+        let playlists = provider.user_playlists().await.expect("user playlists");
+
+        assert_eq!(playlists.len(), 4);
+        assert_eq!(playlists[0].id().opaque(), "owned:7001:201");
+        assert_eq!(playlists[1].id().opaque(), "owned:7002:202");
+        assert_eq!(playlists[2].id().opaque(), "favorite:8001");
+        assert_eq!(playlists[2].track_count(), Some(9));
+        assert_eq!(playlists[3].id().opaque(), "favorite:8002");
+
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 3);
+        let first_favorite: Value =
+            serde_json::from_slice(requests[1].body_bytes().expect("first favorite request"))
+                .expect("request JSON");
+        let second_favorite: Value =
+            serde_json::from_slice(requests[2].body_bytes().expect("second favorite request"))
+                .expect("request JSON");
+        assert_eq!(
+            first_favorite["music.musicasset.PlaylistFavRead"]["param"]["offset"],
+            0
+        );
+        assert_eq!(
+            second_favorite["music.musicasset.PlaylistFavRead"]["param"]["offset"],
+            2
+        );
+        assert_eq!(
+            second_favorite["music.musicasset.PlaylistFavRead"]["param"]["size"],
+            100
+        );
+    }
+
+    #[tokio::test]
+    async fn complete_library_requires_encrypted_identity_before_transport() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new([
+            favorite_page_json(&json!([]), 0, false),
+        ])));
+        assert_eq!(
+            provider.user_playlists().await,
+            Err(UserLibraryError::AuthenticationRequired)
+        );
+
+        let credential = Credential::new("123456", "W_X_private-key", LoginType::WECHAT)
+            .expect("fixture credential without encrypted UIN");
+        *super::credential_guard(&provider.credential) =
+            super::QqMusicCredentialState::Authenticated(credential);
+        assert_eq!(
+            provider.user_playlists().await,
+            Err(UserLibraryError::InvalidResponse)
+        );
+        assert!(provider.client().transport().requests().is_empty());
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn rejects_non_advancing_and_overlong_favorite_pagination() {
+        let non_advancing =
+            QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new([
+                favorite_page_json(&json!([]), 1, true),
+            ])));
+        set_authenticated(&non_advancing, "123456");
+        assert_eq!(
+            non_advancing.user_playlists().await,
+            Err(UserLibraryError::InvalidResponse)
+        );
+        assert!(non_advancing.has_authenticated_credential());
+
+        let pages = (0..super::MAX_FAVORITE_PLAYLIST_PAGES).map(|index| {
+            favorite_page_json(
+                &json!([{"id": 8100 + index, "title": format!("Page {index}")}]),
+                20,
+                true,
+            )
+        });
+        let overlong = QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new(pages)));
+        set_authenticated(&overlong, "123456");
+        assert_eq!(
+            overlong.user_playlists().await,
+            Err(UserLibraryError::InvalidResponse)
+        );
+        assert_eq!(
+            overlong.client().transport().requests().len(),
+            1 + super::MAX_FAVORITE_PLAYLIST_PAGES
+        );
+        assert!(overlong.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn favorite_failure_clears_only_explicit_rejection() {
+        let rejected =
+            QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new([json!({
+                "code": 0,
+                "music.musicasset.PlaylistFavRead": {"code": 1000, "data": {}}
+            })])));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.user_playlists().await,
+            Err(UserLibraryError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream =
+            QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new([json!({
+                "code": 0,
+                "music.musicasset.PlaylistFavRead": {"code": 50006, "data": {}}
+            })])));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream.user_playlists().await,
+            Err(UserLibraryError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn late_favorite_page_cannot_cross_account_replacement() {
+        let favorite_started = Arc::new(Notify::new());
+        let release_favorite = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedFavoritePlaylistsTransport {
+            favorite_started: Arc::clone(&favorite_started),
+            release_favorite: Arc::clone(&release_favorite),
+        }));
+        set_authenticated(&provider, "123456");
+
+        let request = provider.user_playlists();
+        let replacement = async {
+            favorite_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_favorite.notify_one();
         };
         let (result, ()) = tokio::join!(request, replacement);
 

@@ -18,15 +18,17 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Revalidated the logical slice with 44 Flutter tests, Rust workspace tests (4 + 2 + 11 + 54 + 10), strict Clippy, a Linux release build, the packaged in-process Bridge smoke, and the Linux Secret Service round-trip.
 - Cross-validated `PlaylistFavRead/CgiGetPlaylistFavInfo` across two current musicu implementations, with a third legacy implementation corroborating favorite-playlist identity semantics.
 - Added a bounded one-page favorite-playlist client operation with encrypted-UIN precondition, `1..=100` size validation, typed pagination, flexible evidence-backed field aliases, redacted diagnostics, and 4 synthetic fixture tests.
+- Added a complete `UserPlaylistsProvider` contract and QQ implementation that loads owned rows plus at most ten favorite pages, advances by raw page length, rejects non-advancing continuation, deduplicates by QQ playlist ID, preserves source-specific opaque IDs, and checks account replacement after every await.
+- Added Provider regressions for two-page aggregation, cross-source deduplication, missing encrypted UIN before transport, empty/overlong pagination, favorite-stage rejection versus transient failure, and account replacement during a favorite request.
 
 # In Progress
 
-- Add Provider-owned bounded pagination, owned/favorite merge, and deduplication without weakening per-await credential replacement checks.
+- Switch the existing cancellable Bridge library handle from the created-only contract to the complete user-playlist contract, then update presentation copy and regressions.
 
 # Next Candidates
 
-1. Merge and deduplicate owned/favorited summaries in Rust while preserving source-specific opaque identity and preventing non-advancing pagination.
-2. Expose the combined collection through the existing cancellable Bridge lifecycle; only then rename the Flutter collection as the complete playlist library.
+1. Expose the combined collection through the existing cancellable Bridge lifecycle and preserve exact cancellation/error mapping.
+2. Rename the Flutter collection from created-only copy to the complete playlist library without making rows interactive prematurely.
 3. Implement the first playlist-detail protocol slice, including the special built-in liked-songs directory path, before making playlist rows interactive.
 
 # Blockers
@@ -46,5 +48,6 @@ None.
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
-- The current UI intentionally shows created playlists only; favorite pagination and merge semantics remain necessary before it can claim the complete library.
+- The current UI intentionally shows created playlists only; its Bridge handle and presentation copy must switch to the now-complete Provider contract before it can claim the complete library.
+- The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).
 - Cargokit 2.13.0 assumes rustup; Linux currently uses a direct system-Cargo build tracked as TD-001, and non-Linux bridge builds remain unverified.
