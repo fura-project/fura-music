@@ -15,7 +15,10 @@ pub use credential::{
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
 };
-pub use wechat_qr::{QrImage, QrImageMediaType, WechatQrError, WechatQrSession};
+pub use wechat_qr::{
+    QrImage, QrImageMediaType, WechatAuthorizationCode, WechatQrError, WechatQrPollResult,
+    WechatQrSession,
+};
 
 /// A QQ Music protocol client parameterized by its transport implementation.
 #[derive(Debug)]

@@ -20,6 +20,7 @@ pub struct HttpRequest {
     query: Vec<(String, String)>,
     headers: Vec<(String, String)>,
     response_body_limit: usize,
+    timeout: Option<Duration>,
 }
 
 impl HttpRequest {
@@ -31,6 +32,7 @@ impl HttpRequest {
             query: Vec::new(),
             headers: Vec::new(),
             response_body_limit: DEFAULT_RESPONSE_BODY_LIMIT,
+            timeout: None,
         }
     }
 
@@ -49,6 +51,12 @@ impl HttpRequest {
     #[must_use]
     pub const fn response_body_limit(mut self, bytes: usize) -> Self {
         self.response_body_limit = bytes;
+        self
+    }
+
+    #[must_use]
+    pub const fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -76,6 +84,11 @@ impl HttpRequest {
     pub const fn max_response_body_bytes(&self) -> usize {
         self.response_body_limit
     }
+
+    #[must_use]
+    pub const fn request_timeout(&self) -> Option<Duration> {
+        self.timeout
+    }
 }
 
 impl fmt::Debug for HttpRequest {
@@ -98,6 +111,7 @@ impl fmt::Debug for HttpRequest {
                     .collect::<Vec<_>>(),
             )
             .field("response_body_limit", &self.response_body_limit)
+            .field("timeout", &self.timeout)
             .finish()
     }
 }
@@ -208,6 +222,9 @@ impl HttpTransport for ReqwestTransport {
             HttpMethod::Get => self.client.get(&request.url),
         };
         builder = builder.query(&request.query);
+        if let Some(timeout) = request.timeout {
+            builder = builder.timeout(timeout);
+        }
         for (name, value) in request.headers {
             builder = builder.header(name, value);
         }

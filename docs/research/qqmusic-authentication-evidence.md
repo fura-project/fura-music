@@ -69,11 +69,25 @@ This path was selected over QQ Music App QR because it does not require QIMEI/de
 
 The default suite uses synthetic sanitized responses. On 2026-08-25 an ignored, environment-gated integration test successfully fetched a new unconfirmed QR. It did not scan the code, access an account, print the UUID, or retain the response. This proves current bootstrap compatibility only.
 
+### Second network slice: one-shot WeChat QR polling
+
+L-1124, ylw1997, and the current yakult implementation agree on `GET https://lp.open.weixin.qq.com/connect/l/qrconnect` with the transient UUID, a millisecond cache-buster, and `https://open.weixin.qq.com/` as Referer. L-1124 and yakult explicitly map the complete observed state set, while ylw1997 independently agrees on the active authorization loop:
+
+- `408` — waiting for scan;
+- `404` — scanned and waiting for user confirmation;
+- `405` — authorized, carrying `window.wx_code` for the next credential-exchange slice;
+- `402` — QR expired;
+- `403` — user refused.
+
+The client performs one poll with a 35-second request budget, a 64 KiB streaming body limit, strict status parsing, an explicit error for unknown values, and a redacted authorization-code type. Repeated polling and stale-result suppression deliberately remain outside the raw protocol client.
+
+On 2026-08-25 the opt-in live test created a fresh unconfirmed QR and received `408` from one poll. It did not expose the QR, scan it, obtain an authorization code, exchange credentials, or access an account.
+
 ## Evidence still required
 
-Before continuing beyond the unconfirmed QR bootstrap:
+Before continuing beyond one-shot QR polling:
 
-1. Pin and compare the exact polling request, callback parsing, and state mapping in two independent implementations.
-2. Add sanitized real-response fixtures or extend the repeatable opt-in integration test for each implemented transition.
-3. Confirm cancellation, timeout, retry, and late-event behavior; a QR session is a lifecycle, not a single request.
+1. Confirm cancellation, overall timeout, retry, replacement, and late-event behavior; a QR session is a lifecycle, not a single request.
+2. Cross-validate the exact `window.wx_code` credential-exchange request and error mapping before implementing it.
+3. Add sanitized real-response fixtures or extend the repeatable opt-in integration test for each implemented transition.
 4. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.

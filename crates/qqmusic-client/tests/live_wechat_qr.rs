@@ -1,10 +1,10 @@
-use qqmusic_client::{QqMusicClient, ReqwestTransport};
+use qqmusic_client::{QqMusicClient, ReqwestTransport, WechatQrPollResult};
 
 /// Opt-in live test. It creates only an unconfirmed, short-lived QR session and
 /// never scans it or accesses an account.
 #[tokio::test]
 #[ignore = "live QQ/WeChat service; run explicitly with QQMUSIC_LIVE_TESTS=1"]
-async fn creates_unconfirmed_wechat_qr() {
+async fn creates_and_polls_unconfirmed_wechat_qr() {
     if std::env::var("QQMUSIC_LIVE_TESTS").as_deref() != Ok("1") {
         eprintln!("skipped: set QQMUSIC_LIVE_TESTS=1 for the live request");
         return;
@@ -19,4 +19,10 @@ async fn creates_unconfirmed_wechat_qr() {
 
     assert!(!session.identifier().is_empty());
     assert!(session.image().bytes().len() > 100);
+
+    let poll = client
+        .poll_wechat_qr(&session)
+        .await
+        .expect("unconfirmed WeChat QR polling remains compatible");
+    assert_eq!(poll, WechatQrPollResult::WaitingForScan);
 }

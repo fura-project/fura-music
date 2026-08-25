@@ -14,17 +14,19 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Cross-validated and implemented the unconfirmed WeChat QR bootstrap behind a small asynchronous HTTP contract.
 - Verified the QR bootstrap against the live endpoint without scanning a code or accessing an account; the default suite remains fully offline and redacts transient session material.
 - Rebuilt the Linux release bundle and reran the real Flutter/Rust integration test with the new Rustls transport dependency.
+- Implemented one bounded WeChat QR long-poll with evidence-backed waiting, scanned, authorized, expired, and refused states; unknown values remain explicit protocol errors.
+- Verified a fresh unscanned session returns the expected waiting state through the live endpoint without exchanging credentials.
 
 # In Progress
 
-- Cross-validate the WeChat QR polling lifecycle and callback transition before implementing it.
+- Define cancellable QR login-session orchestration so replacement or disposal cannot surface late results.
 
 # Next Candidates
 
-1. Model pending, confirmed, expired, and rejected WeChat QR poll results with precise offline tests.
-2. Define cancellation/timeout behavior so a superseded QR session cannot deliver a late success.
-3. Exchange the confirmed callback for a credential only after the request and error mapping have independent evidence.
-4. Expose an initial login session state through the provider and bridge without adding secret persistence.
+1. Define cancellation/timeout behavior so a superseded QR session cannot deliver a late success.
+2. Exchange the confirmed callback for a credential only after the request and error mapping have independent evidence.
+3. Expose an initial login session state through the provider and bridge without adding secret persistence.
+4. Select and validate the minimum secure credential-storage boundary before implementing restore persistence.
 
 # Blockers
 

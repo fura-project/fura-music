@@ -37,7 +37,7 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 - `apps/flutter` contains the Material 3 application shell, presentation-safe bootstrap page, and Dart integration/widget tests.
 - `crates/music-domain` contains provider-independent identity types. It currently defines only `ProviderId`.
 - `crates/provider-api` contains the UI-free provider descriptor, capabilities, and baseline provider trait.
-- `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently contains the redacted credential/restore model, a small asynchronous HTTP contract with a Rustls-backed native implementation, and the cross-validated unconfirmed WeChat QR bootstrap. QR polling and credential exchange do not exist yet.
+- `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently contains the redacted credential/restore model, a small asynchronous HTTP contract with a Rustls-backed native implementation, and cross-validated WeChat QR bootstrap plus one-shot polling. Credential exchange and session orchestration do not exist yet.
 - `crates/provider-qqmusic` composes `QqMusicClient` and maps provider metadata. It truthfully declares no implemented capabilities yet.
 - `bridges/flutter` adapts core/provider status into presentation-safe generated types.
 
@@ -60,9 +60,11 @@ QQMusicClient
   -> bounded UUID parsing
   -> QR image fetch and signature validation
   -> transient unconfirmed QR session
+  -> one bounded long-poll
+  -> protocol state or redacted authorization code
 ```
 
-Request/response diagnostics omit query values, headers, bodies, QR identifiers, and image bytes. Default protocol tests use synthetic sanitized responses; live tests are separate, ignored, and explicitly environment-gated.
+Request/response diagnostics omit query values, headers, bodies, QR identifiers, image bytes, and authorization codes. The client reports one poll result; a future higher layer must own repeated polling, cancellation, and stale-result suppression. Default protocol tests use synthetic sanitized responses; live tests are separate, ignored, and explicitly environment-gated.
 
 ## Flutter / Rust boundary
 
