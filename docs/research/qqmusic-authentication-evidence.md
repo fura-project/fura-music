@@ -121,10 +121,11 @@ Successful mapping is offline and cross-validated, not live-account verified. It
 
 The coordinator exchanges a 405 code inside the same attempt generation. Replacement/cancellation drops the exchange future before a credential can surface. An exchange failure retains the pending code for an explicit retry and does not silently re-poll or auto-retry.
 
+The Provider layer now maps raw protocol image/state/error types into provider-neutral QR contracts and retains the resulting credential internally. The Flutter bridge returns an opaque Rust-owned session with explicit advance/cancel operations, image bytes/media type, coarse progress/failure enums, and an authenticated boolean. Generated Dart contains no protocol UUID, OAuth code, credential, account identity, key, or refresh material. This establishes the boundary only; it does not prove a live successful login or credential persistence.
+
 ## Evidence still required
 
 Before presenting QR login as a user-visible capability:
 
 1. Capture a sanitized successful response fixture or run a controlled real-account integration before claiming live login compatibility; the current evidence proves request acceptance and failure mapping only.
-2. Map the lifecycle through the Provider/bridge without exposing the UUID, OAuth code, credential, or refresh material to logs or ordinary UI state.
-3. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.
+2. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.

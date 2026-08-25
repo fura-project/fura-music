@@ -68,9 +68,9 @@ class BootstrapPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'The in-process Rust core is connected. Authentication is '
-                    'the next product slice; no account capability is exposed '
-                    'until its behavior is implemented and tested.',
+                    'The in-process Rust core is connected. QR authentication '
+                    'is available through the typed bridge, while sensitive '
+                    'session and credential data stays inside Rust.',
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       height: 1.5,

@@ -208,6 +208,11 @@ impl<T> WechatQrLoginCoordinator<T> {
     }
 
     #[must_use]
+    pub fn client(&self) -> &QqMusicClient<T> {
+        &self.client
+    }
+
+    #[must_use]
     pub fn has_active_session(&self) -> bool {
         matches!(*self.state.borrow(), AttemptState::Active(_))
     }
@@ -306,6 +311,40 @@ pub struct WechatQrLoginSession<T> {
     finished: bool,
 }
 
+/// Cloneable, generation-specific cancellation authority for one QR session.
+///
+/// This contains no protocol identifier or credential and can safely be kept
+/// beside an opaque bridge handle while the session itself is mutably awaited.
+#[derive(Clone)]
+pub struct WechatQrLoginCancellation {
+    sender: watch::Sender<AttemptState>,
+    generation: u64,
+}
+
+impl fmt::Debug for WechatQrLoginCancellation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WechatQrLoginCancellation")
+            .field("active", &self.is_active())
+            .finish_non_exhaustive()
+    }
+}
+
+impl WechatQrLoginCancellation {
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        matches!(
+            *self.sender.borrow(),
+            AttemptState::Active(current) if current == self.generation
+        )
+    }
+
+    #[must_use]
+    pub fn cancel(&self) -> bool {
+        clear_if_current(&self.sender, self.generation)
+    }
+}
+
 impl<T> fmt::Debug for WechatQrLoginSession<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -333,16 +372,21 @@ impl<T> WechatQrLoginSession<T> {
 
     #[must_use]
     pub fn is_active(&self) -> bool {
-        matches!(
-            *self.state.borrow(),
-            AttemptState::Active(current) if current == self.generation
-        )
+        self.cancellation_handle().is_active()
+    }
+
+    #[must_use]
+    pub fn cancellation_handle(&self) -> WechatQrLoginCancellation {
+        WechatQrLoginCancellation {
+            sender: self.sender.clone(),
+            generation: self.generation,
+        }
     }
 
     /// Cancels this generation if it is still current.
     #[must_use]
     pub fn cancel(&self) -> bool {
-        clear_if_current(&self.sender, self.generation)
+        self.cancellation_handle().cancel()
     }
 }
 
@@ -1085,6 +1129,18 @@ mod tests {
         assert!(second.is_active());
         drop(second);
         assert!(!coordinator.has_active_session());
+    }
+
+    #[tokio::test]
+    async fn stale_cancellation_handle_cannot_cancel_a_replacement() {
+        let transport = LifecycleTransport::blocked(408);
+        let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport));
+        let first = coordinator.begin().await.expect("first session");
+        let cancellation = first.cancellation_handle();
+        let second = coordinator.begin().await.expect("second session");
+
+        assert!(!cancellation.cancel());
+        assert!(second.is_active());
     }
 
     #[tokio::test]

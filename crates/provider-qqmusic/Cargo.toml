@@ -10,5 +10,8 @@ music-domain = { path = "../music-domain" }
 provider-api = { path = "../provider-api" }
 qqmusic-client = { path = "../qqmusic-client" }
 
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["macros", "rt"] }
+
 [lints]
 workspace = true

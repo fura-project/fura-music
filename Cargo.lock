@@ -1015,6 +1015,7 @@ dependencies = [
  "music-domain",
  "provider-api",
  "qqmusic-client",
+ "tokio",
 ]
 
 [[package]]
@@ -1222,6 +1223,7 @@ dependencies = [
  "provider-api",
  "provider-qqmusic",
  "qqmusic-client",
+ "tokio",
 ]
 
 [[package]]

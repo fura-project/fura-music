@@ -34,4 +34,20 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Before any artifact is distributed outside development, or when M1 starts packaging work.
 
+## TD-003 — Authenticated credential is process-local only
+
+**Status:** Scheduled
+
+**Problem:** `QQMusicProvider` retains a successful credential only in a Rust in-memory slot. Closing the application loses the session, so startup restore and server verification are not connected to real storage.
+
+**Why accepted:** The current slice proves QR protocol, lifecycle cancellation, Provider mapping, and a secret-free typed bridge before selecting platform storage. Writing credentials to an ordinary file or Dart preferences would create a worse long-term security boundary.
+
+**Impact:** A user would need to sign in again after every process restart; the current authenticated boolean is valid only for this process.
+
+**Risk:** UI or documentation could accidentally imply durable login, or a later shortcut could persist `musickey` and refresh material without platform protection.
+
+**Suggested solution:** Select the smallest maintained cross-platform secure-storage boundary, keep serialization/encryption orchestration in Rust where practical, and test absent, valid, expired, corrupted, rejected, and transient-verification-failure restore paths.
+
+**Trigger condition:** Must be resolved before claiming credential restore, completing M1 authentication phase, or distributing an authenticated build. It is scheduled immediately after the first QR login surface so storage requirements are driven by the real flow.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

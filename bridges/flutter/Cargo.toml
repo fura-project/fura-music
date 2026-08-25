@@ -13,6 +13,7 @@ flutter_rust_bridge = "=2.13.0"
 provider-api = { path = "../../crates/provider-api" }
 provider-qqmusic = { path = "../../crates/provider-qqmusic" }
 qqmusic-client = { path = "../../crates/qqmusic-client" }
+tokio = { version = "1.53.1", features = ["sync"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

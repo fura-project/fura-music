@@ -9,7 +9,7 @@ void main() {
       provider: ProviderStatus(
         id: 'qq-music',
         displayName: 'QQ Music',
-        implementedCapabilities: [],
+        implementedCapabilities: ['Authentication'],
       ),
     );
 
@@ -19,7 +19,9 @@ void main() {
     expect(find.text('qq-music'), findsOneWidget);
     expect(find.text('0.1.0-test'), findsOneWidget);
     expect(
-      find.textContaining('no account capability is exposed'),
+      find.textContaining(
+        'sensitive session and credential data stays inside Rust',
+      ),
       findsOneWidget,
     );
   });

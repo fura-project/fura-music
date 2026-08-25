@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
@@ -11,7 +12,8 @@ void main() {
     final status = bootstrapStatus();
 
     expect(status.provider.id, 'qq-music');
-    expect(status.provider.implementedCapabilities, isEmpty);
+    expect(status.provider.implementedCapabilities, ['Authentication']);
+    expect(qqMusicHasAuthenticatedCredential(), isFalse);
 
     await tester.pumpWidget(MusicApp(bootstrap: status));
     expect(find.text('QQ Music core connected'), findsOneWidget);

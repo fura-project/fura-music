@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/authentication.dart';
 import 'api/bootstrap.dart';
 
 import 'dart:async';
@@ -69,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -757055684;
+  int get rustContentHash => 1273011695;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -81,9 +82,35 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<QqMusicQrLoginUpdate>
+  crateApiAuthenticationQqMusicQrLoginSessionHandleAdvance({
+    required QqMusicQrLoginSessionHandle that,
+  });
+
+  bool crateApiAuthenticationQqMusicQrLoginSessionHandleCancel({
+    required QqMusicQrLoginSessionHandle that,
+  });
+
+  bool crateApiAuthenticationQqMusicQrLoginSessionHandleIsActive({
+    required QqMusicQrLoginSessionHandle that,
+  });
+
   BootstrapStatus crateApiBootstrapBootstrapStatus();
 
   Future<void> crateApiBootstrapInitApp();
+
+  bool crateApiAuthenticationQqMusicHasAuthenticatedCredential();
+
+  Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin();
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_QqMusicQrLoginSessionHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_QqMusicQrLoginSessionHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_QqMusicQrLoginSessionHandlePtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -95,12 +122,117 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<QqMusicQrLoginUpdate>
+  crateApiAuthenticationQqMusicQrLoginSessionHandleAdvance({
+    required QqMusicQrLoginSessionHandle that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qq_music_qr_login_update,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiAuthenticationQqMusicQrLoginSessionHandleAdvanceConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiAuthenticationQqMusicQrLoginSessionHandleAdvanceConstMeta =>
+      const TaskConstMeta(
+        debugName: "QqMusicQrLoginSessionHandle_advance",
+        argNames: ["that"],
+      );
+
+  @override
+  bool crateApiAuthenticationQqMusicQrLoginSessionHandleCancel({
+    required QqMusicQrLoginSessionHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiAuthenticationQqMusicQrLoginSessionHandleCancelConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiAuthenticationQqMusicQrLoginSessionHandleCancelConstMeta =>
+      const TaskConstMeta(
+        debugName: "QqMusicQrLoginSessionHandle_cancel",
+        argNames: ["that"],
+      );
+
+  @override
+  bool crateApiAuthenticationQqMusicQrLoginSessionHandleIsActive({
+    required QqMusicQrLoginSessionHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiAuthenticationQqMusicQrLoginSessionHandleIsActiveConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiAuthenticationQqMusicQrLoginSessionHandleIsActiveConstMeta =>
+      const TaskConstMeta(
+        debugName: "QqMusicQrLoginSessionHandle_is_active",
+        argNames: ["that"],
+      );
+
+  @override
   BootstrapStatus crateApiBootstrapBootstrapStatus() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bootstrap_status,
@@ -125,7 +257,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 5,
             port: port_,
           );
         },
@@ -143,10 +275,115 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiBootstrapInitAppConstMeta =>
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
+  @override
+  bool crateApiAuthenticationQqMusicHasAuthenticatedCredential() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiAuthenticationQqMusicHasAuthenticatedCredentialConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiAuthenticationQqMusicHasAuthenticatedCredentialConstMeta =>
+      const TaskConstMeta(
+        debugName: "qq_music_has_authenticated_credential",
+        argNames: [],
+      );
+
+  @override
+  Future<QqMusicQrLoginStart>
+  crateApiAuthenticationStartQqMusicWechatQrLogin() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qq_music_qr_login_start,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAuthenticationStartQqMusicWechatQrLoginConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAuthenticationStartQqMusicWechatQrLoginConstMeta =>
+      const TaskConstMeta(
+        debugName: "start_qq_music_wechat_qr_login",
+        argNames: [],
+      );
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_QqMusicQrLoginSessionHandle => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_QqMusicQrLoginSessionHandle => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle;
+
+  @protected
+  QqMusicQrLoginSessionHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicQrLoginSessionHandleImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
+  @protected
+  QqMusicQrLoginSessionHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicQrLoginSessionHandleImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
+  @protected
+  QqMusicQrLoginSessionHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicQrLoginSessionHandleImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as String;
+  }
+
+  @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
   }
 
   @protected
@@ -162,6 +399,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QqMusicQrLoginSessionHandle
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+      raw,
+    );
+  }
+
+  @protected
+  QqMusicQrChallenge dco_decode_box_autoadd_qq_music_qr_challenge(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_qq_music_qr_challenge(raw);
+  }
+
+  @protected
+  QqMusicQrLoginFailure dco_decode_box_autoadd_qq_music_qr_login_failure(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_qq_music_qr_login_failure(raw);
+  }
+
+  @protected
+  QqMusicQrLoginState dco_decode_box_autoadd_qq_music_qr_login_state(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_qq_music_qr_login_state(raw);
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
@@ -171,6 +447,49 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  QqMusicQrLoginSessionHandle?
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+            raw,
+          );
+  }
+
+  @protected
+  QqMusicQrChallenge? dco_decode_opt_box_autoadd_qq_music_qr_challenge(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_qq_music_qr_challenge(raw);
+  }
+
+  @protected
+  QqMusicQrLoginFailure? dco_decode_opt_box_autoadd_qq_music_qr_login_failure(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_qq_music_qr_login_failure(raw);
+  }
+
+  @protected
+  QqMusicQrLoginState? dco_decode_opt_box_autoadd_qq_music_qr_login_state(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_qq_music_qr_login_state(raw);
   }
 
   @protected
@@ -187,6 +506,65 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QqMusicQrChallenge dco_decode_qq_music_qr_challenge(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return QqMusicQrChallenge(
+      imageFormat: dco_decode_qq_music_qr_image_format(arr[0]),
+      imageBytes: dco_decode_list_prim_u_8_strict(arr[1]),
+    );
+  }
+
+  @protected
+  QqMusicQrImageFormat dco_decode_qq_music_qr_image_format(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicQrImageFormat.values[raw as int];
+  }
+
+  @protected
+  QqMusicQrLoginFailure dco_decode_qq_music_qr_login_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicQrLoginFailure.values[raw as int];
+  }
+
+  @protected
+  QqMusicQrLoginStart dco_decode_qq_music_qr_login_start(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return QqMusicQrLoginStart(
+      session:
+          dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+            arr[0],
+          ),
+      challenge: dco_decode_opt_box_autoadd_qq_music_qr_challenge(arr[1]),
+      failure: dco_decode_opt_box_autoadd_qq_music_qr_login_failure(arr[2]),
+    );
+  }
+
+  @protected
+  QqMusicQrLoginState dco_decode_qq_music_qr_login_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicQrLoginState.values[raw as int];
+  }
+
+  @protected
+  QqMusicQrLoginUpdate dco_decode_qq_music_qr_login_update(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return QqMusicQrLoginUpdate(
+      state: dco_decode_opt_box_autoadd_qq_music_qr_login_state(arr[0]),
+      failure: dco_decode_opt_box_autoadd_qq_music_qr_login_failure(arr[1]),
+      sessionActive: dco_decode_bool(arr[2]),
+    );
+  }
+
+  @protected
   int dco_decode_u_8(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -199,10 +577,58 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  QqMusicQrLoginSessionHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return QqMusicQrLoginSessionHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  QqMusicQrLoginSessionHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return QqMusicQrLoginSessionHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  QqMusicQrLoginSessionHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return QqMusicQrLoginSessionHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
     return utf8.decoder.convert(inner);
+  }
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
   }
 
   @protected
@@ -214,6 +640,47 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       coreVersion: var_coreVersion,
       provider: var_provider,
     );
+  }
+
+  @protected
+  QqMusicQrLoginSessionHandle
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+      deserializer,
+    ));
+  }
+
+  @protected
+  QqMusicQrChallenge sse_decode_box_autoadd_qq_music_qr_challenge(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_qq_music_qr_challenge(deserializer));
+  }
+
+  @protected
+  QqMusicQrLoginFailure sse_decode_box_autoadd_qq_music_qr_login_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_qq_music_qr_login_failure(deserializer));
+  }
+
+  @protected
+  QqMusicQrLoginState sse_decode_box_autoadd_qq_music_qr_login_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_qq_music_qr_login_state(deserializer));
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -236,6 +703,61 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QqMusicQrLoginSessionHandle?
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  QqMusicQrChallenge? sse_decode_opt_box_autoadd_qq_music_qr_challenge(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_qq_music_qr_challenge(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  QqMusicQrLoginFailure? sse_decode_opt_box_autoadd_qq_music_qr_login_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_qq_music_qr_login_failure(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  QqMusicQrLoginState? sse_decode_opt_box_autoadd_qq_music_qr_login_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_qq_music_qr_login_state(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   ProviderStatus sse_decode_provider_status(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
@@ -245,6 +767,87 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       id: var_id,
       displayName: var_displayName,
       implementedCapabilities: var_implementedCapabilities,
+    );
+  }
+
+  @protected
+  QqMusicQrChallenge sse_decode_qq_music_qr_challenge(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_imageFormat = sse_decode_qq_music_qr_image_format(deserializer);
+    var var_imageBytes = sse_decode_list_prim_u_8_strict(deserializer);
+    return QqMusicQrChallenge(
+      imageFormat: var_imageFormat,
+      imageBytes: var_imageBytes,
+    );
+  }
+
+  @protected
+  QqMusicQrImageFormat sse_decode_qq_music_qr_image_format(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return QqMusicQrImageFormat.values[inner];
+  }
+
+  @protected
+  QqMusicQrLoginFailure sse_decode_qq_music_qr_login_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return QqMusicQrLoginFailure.values[inner];
+  }
+
+  @protected
+  QqMusicQrLoginStart sse_decode_qq_music_qr_login_start(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_session =
+        sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+          deserializer,
+        );
+    var var_challenge = sse_decode_opt_box_autoadd_qq_music_qr_challenge(
+      deserializer,
+    );
+    var var_failure = sse_decode_opt_box_autoadd_qq_music_qr_login_failure(
+      deserializer,
+    );
+    return QqMusicQrLoginStart(
+      session: var_session,
+      challenge: var_challenge,
+      failure: var_failure,
+    );
+  }
+
+  @protected
+  QqMusicQrLoginState sse_decode_qq_music_qr_login_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return QqMusicQrLoginState.values[inner];
+  }
+
+  @protected
+  QqMusicQrLoginUpdate sse_decode_qq_music_qr_login_update(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_state = sse_decode_opt_box_autoadd_qq_music_qr_login_state(
+      deserializer,
+    );
+    var var_failure = sse_decode_opt_box_autoadd_qq_music_qr_login_failure(
+      deserializer,
+    );
+    var var_sessionActive = sse_decode_bool(deserializer);
+    return QqMusicQrLoginUpdate(
+      state: var_state,
+      failure: var_failure,
+      sessionActive: var_sessionActive,
     );
   }
 
@@ -260,21 +863,66 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    QqMusicQrLoginSessionHandle self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
+    sse_encode_usize(
+      (self as QqMusicQrLoginSessionHandleImpl).frbInternalSseEncode(
+        move: true,
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    QqMusicQrLoginSessionHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as QqMusicQrLoginSessionHandleImpl).frbInternalSseEncode(
+        move: false,
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    QqMusicQrLoginSessionHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as QqMusicQrLoginSessionHandleImpl).frbInternalSseEncode(
+        move: null,
+      ),
+      serializer,
+    );
   }
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
   }
 
   @protected
@@ -285,6 +933,52 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.coreVersion, serializer);
     sse_encode_provider_status(self.provider, serializer);
+  }
+
+  @protected
+  void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    QqMusicQrLoginSessionHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+      self,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_qr_challenge(
+    QqMusicQrChallenge self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qq_music_qr_challenge(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_qr_login_failure(
+    QqMusicQrLoginFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qq_music_qr_login_failure(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_qr_login_state(
+    QqMusicQrLoginState self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qq_music_qr_login_state(self, serializer);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
   }
 
   @protected
@@ -307,6 +1001,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    QqMusicQrLoginSessionHandle? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_qr_challenge(
+    QqMusicQrChallenge? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_qq_music_qr_challenge(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_qr_login_failure(
+    QqMusicQrLoginFailure? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_qq_music_qr_login_failure(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_qr_login_state(
+    QqMusicQrLoginState? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_qq_music_qr_login_state(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_provider_status(
     ProviderStatus self,
     SseSerializer serializer,
@@ -315,6 +1065,77 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.id, serializer);
     sse_encode_String(self.displayName, serializer);
     sse_encode_list_String(self.implementedCapabilities, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_qr_challenge(
+    QqMusicQrChallenge self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qq_music_qr_image_format(self.imageFormat, serializer);
+    sse_encode_list_prim_u_8_strict(self.imageBytes, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_qr_image_format(
+    QqMusicQrImageFormat self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_qr_login_failure(
+    QqMusicQrLoginFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_qr_login_start(
+    QqMusicQrLoginStart self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+      self.session,
+      serializer,
+    );
+    sse_encode_opt_box_autoadd_qq_music_qr_challenge(
+      self.challenge,
+      serializer,
+    );
+    sse_encode_opt_box_autoadd_qq_music_qr_login_failure(
+      self.failure,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_qq_music_qr_login_state(
+    QqMusicQrLoginState self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_qr_login_update(
+    QqMusicQrLoginUpdate self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_qq_music_qr_login_state(self.state, serializer);
+    sse_encode_opt_box_autoadd_qq_music_qr_login_failure(
+      self.failure,
+      serializer,
+    );
+    sse_encode_bool(self.sessionActive, serializer);
   }
 
   @protected
@@ -329,14 +1150,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
+    serializer.buffer.putBigUint64(self);
   }
+}
 
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
-  }
+@sealed
+class QqMusicQrLoginSessionHandleImpl extends RustOpaque
+    implements QqMusicQrLoginSessionHandle {
+  // Not to be used by end users
+  QqMusicQrLoginSessionHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  QqMusicQrLoginSessionHandleImpl.frbInternalSseDecode(
+    BigInt ptr,
+    int externalSizeOnNative,
+  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount: RustLib
+        .instance
+        .api
+        .rust_arc_increment_strong_count_QqMusicQrLoginSessionHandle,
+    rustArcDecrementStrongCount: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_QqMusicQrLoginSessionHandle,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_QqMusicQrLoginSessionHandlePtr,
+  );
+
+  Future<QqMusicQrLoginUpdate> advance() => RustLib.instance.api
+      .crateApiAuthenticationQqMusicQrLoginSessionHandleAdvance(that: this);
+
+  bool cancel() => RustLib.instance.api
+      .crateApiAuthenticationQqMusicQrLoginSessionHandleCancel(that: this);
+
+  bool get isActive => RustLib.instance.api
+      .crateApiAuthenticationQqMusicQrLoginSessionHandleIsActive(that: this);
 }

@@ -24,16 +24,18 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Verified the live endpoint rejects a non-account fake code as global `0` / login `1000`; no real login or successful credential response was exercised.
 - Added one monotonic 180-second deadline across QR creation, polling, and credential exchange; deterministic virtual-time tests prove blocked requests are dropped at expiry.
 - Bounded session transport instability to three caller-visible consecutive failures, finishing on the fourth and resetting the count after any reached protocol response.
+- Added provider-neutral QR authentication contracts and mapped the QQ Music flow into the Provider layer; successful credentials remain Rust-owned and the provider now truthfully advertises only `Authentication`.
+- Generated an opaque typed Bridge session exposing only challenge image data, coarse progress/failure states, `advance`, `cancel`, and active/authenticated booleans; stale cancellation authority cannot affect a replacement.
 
 # In Progress
 
-- Map QR authentication through the Provider and typed bridge without exposing protocol identifiers, authorization codes, credentials, or refresh material.
+- Build the adaptive Flutter QR login surface with explicit cancel/restart behavior and lifecycle-safe polling.
 
 # Next Candidates
 
-1. Map QR authentication through the provider and bridge with opaque session handles and no credential leakage.
-2. Build the adaptive Flutter login surface with explicit cancel/restart behavior.
-3. Select and validate the minimum secure credential-storage boundary before implementing restore persistence.
+1. Build the adaptive Flutter login surface with explicit cancel/restart behavior.
+2. Select and validate the minimum secure credential-storage boundary before implementing restore persistence (TD-003).
+3. Implement credential restore verification without mapping transport failures to signed-out state.
 
 # Blockers
 
@@ -47,6 +49,7 @@ None.
 
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
 - Credential handling can create account and privacy risk; temporary storage must be explicit debt and must not be mistaken for release readiness.
+- A successful credential currently survives only for the process lifetime (TD-003); restart restore is not implemented.
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
