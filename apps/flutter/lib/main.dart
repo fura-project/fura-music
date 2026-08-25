@@ -3,6 +3,8 @@ import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 
@@ -17,6 +19,12 @@ Future<void> main() async {
   final libraryGateway = RustUserLibraryGateway(
     credentialVault: credentialVault,
   );
+  final playlistDetailGateway = RustPlaylistDetailGateway(
+    credentialVault: credentialVault,
+  );
+  final mediaResolutionGateway = RustMediaResolutionGateway(
+    credentialVault: credentialVault,
+  );
   final credentialRestore = await authenticationGateway.restoreCredential();
 
   runApp(
@@ -24,6 +32,8 @@ Future<void> main() async {
       bootstrap: bootstrapStatus(),
       authenticationGateway: authenticationGateway,
       libraryGateway: libraryGateway,
+      playlistDetailGateway: playlistDetailGateway,
+      mediaResolutionGateway: mediaResolutionGateway,
       initialCredentialRestore: credentialRestore,
     ),
   );

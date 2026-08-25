@@ -1,0 +1,348 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
+
+void main() {
+  testWidgets('plays a row and exposes pause, resume, and stop controls', (
+    tester,
+  ) async {
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('first')),
+    ]);
+    final audio = _FakeAudioEngine([_FakeAudioSession()]);
+    await _openDetail(tester, media: media, audio: audio);
+
+    await tester.tap(find.byKey(const ValueKey('play-track-first')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
+    expect(find.textContaining('Playing'), findsOneWidget);
+    expect(media.requests, [('qq-music', 'first')]);
+    expect(audio.requestedUris.single.queryParameters['vkey'], 'first');
+
+    await tester.tap(find.byTooltip('Pause'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paused'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Resume'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Playing'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Stop'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Stopped'), findsOneWidget);
+  });
+
+  testWidgets('switches tracks and keeps the coordinator across local back', (
+    tester,
+  ) async {
+    final firstResult = Completer<MediaResolutionResult>();
+    final first = _PendingMediaOperation(firstResult.future);
+    final media = _FakeMediaGateway([
+      first,
+      _ImmediateMediaOperation(_success('second')),
+    ]);
+    final audio = _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]);
+    await _openDetail(tester, media: media, audio: audio);
+
+    await tester.tap(find.byKey(const ValueKey('play-track-first')));
+    await first.started.future;
+    await tester.pump();
+    expect(find.textContaining('Finding a playable source'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.textContaining('Finding a playable source'), findsOneWidget);
+
+    firstResult.complete(_success('first'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Playing'), findsOneWidget);
+
+    await tester.tap(find.text('Fixture playlist').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('play-track-second')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Second track'), findsNWidgets(2));
+    expect(media.requests.last, ('qq-music', 'second'));
+    expect(audio.requestedUris.last.queryParameters['vkey'], 'second');
+  });
+
+  testWidgets(
+    'returns a rejected playback session to sign-in without URI copy',
+    (tester) async {
+      final privateUri =
+          'https://audio.example.test/private.mp3?vkey=must-not-appear';
+      final media = _FakeMediaGateway([
+        const _ImmediateMediaOperation(
+          MediaResolutionResult(
+            failure: MediaResolutionFailure.credentialRejected,
+          ),
+        ),
+      ]);
+      await _openDetail(
+        tester,
+        media: media,
+        audio: _FakeAudioEngine(const []),
+        firstOpaqueId: privateUri,
+      );
+
+      await tester.tap(find.byKey(ValueKey('play-track-$privateUri')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Your QQ Music session was rejected and removed.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('must-not-appear'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('now-playing-sign-in-again')));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with WeChat'), findsOneWidget);
+    },
+  );
+
+  testWidgets('now-playing surface does not overflow on a narrow screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([_ImmediateMediaOperation(_success('narrow'))]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+    );
+    await tester.tap(find.byKey(const ValueKey('play-track-first')));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Pause'), findsOneWidget);
+    expect(find.byTooltip('Stop'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<void> _openDetail(
+  WidgetTester tester, {
+  required _FakeMediaGateway media,
+  required _FakeAudioEngine audio,
+  String firstOpaqueId = 'first',
+}) async {
+  await tester.pumpWidget(
+    MusicApp(
+      bootstrap: _bootstrap,
+      authenticationGateway: const _AuthenticatedGateway(),
+      libraryGateway: const _LibraryGateway(),
+      playlistDetailGateway: _DetailGateway(firstOpaqueId),
+      mediaResolutionGateway: media,
+      audioEngine: audio,
+    ),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Fixture playlist').last);
+  await tester.pumpAndSettle();
+}
+
+const _bootstrap = BootstrapStatus(
+  coreVersion: '0.1.0-test',
+  provider: ProviderStatus(
+    id: 'qq-music',
+    displayName: 'QQ Music',
+    implementedCapabilities: ['Authentication', 'MediaResolution'],
+  ),
+);
+
+class _AuthenticatedGateway implements QqMusicAuthenticationGateway {
+  const _AuthenticatedGateway();
+
+  @override
+  bool get hasAuthenticatedCredential => true;
+
+  @override
+  LoginStartOperation beginStart() => throw StateError('not used');
+
+  @override
+  CredentialVerificationOperation beginCredentialVerification() =>
+      throw StateError('not used');
+
+  @override
+  Future<CredentialPersistenceResult> persistAuthenticatedCredential() async =>
+      CredentialPersistenceResult.stored;
+
+  @override
+  Future<CredentialRestoreResult> restoreCredential() async =>
+      CredentialRestoreResult.signedOut;
+}
+
+class _LibraryGateway implements UserLibraryGateway {
+  const _LibraryGateway();
+
+  @override
+  UserLibraryLoadOperation beginLoad() => const _LibraryOperation();
+}
+
+class _LibraryOperation implements UserLibraryLoadOperation {
+  const _LibraryOperation();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<UserLibraryResult> run() async => const UserLibraryResult(
+    playlists: [
+      UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'favorite:fixture',
+        title: 'Fixture playlist',
+        trackCount: 2,
+      ),
+    ],
+  );
+}
+
+class _DetailGateway implements PlaylistDetailGateway {
+  const _DetailGateway(this.firstOpaqueId);
+
+  final String firstOpaqueId;
+
+  @override
+  PlaylistTrackPageLoadOperation beginLoad({
+    required UserPlaylistSummary playlist,
+    required int offset,
+    required int size,
+  }) => _DetailOperation(firstOpaqueId);
+}
+
+class _DetailOperation implements PlaylistTrackPageLoadOperation {
+  const _DetailOperation(this.firstOpaqueId);
+
+  final String firstOpaqueId;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PlaylistTrackPageResult> run() async => PlaylistTrackPageResult(
+    total: 2,
+    tracks: [
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: firstOpaqueId,
+        title: 'First track',
+        artistNames: const ['Fixture artist'],
+      ),
+      const PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'second',
+        title: 'Second track',
+        artistNames: ['Fixture artist'],
+      ),
+    ],
+  );
+}
+
+MediaResolutionResult _success(String vkey) => MediaResolutionResult(
+  source: ResolvedPlaybackSource(
+    uri: Uri.parse('https://audio.example.test/source.mp3?vkey=$vkey'),
+    format: PlaybackAudioFormat.mp3,
+    quality: PlaybackAudioQuality.standard,
+    validForSeconds: 7200,
+  ),
+);
+
+class _FakeMediaGateway implements MediaResolutionGateway {
+  _FakeMediaGateway(this.operations);
+
+  final List<MediaResolutionOperation> operations;
+  final List<(String, String)> requests = [];
+  int _next = 0;
+
+  @override
+  MediaResolutionOperation beginResolution({
+    required String providerId,
+    required String opaqueTrackId,
+  }) {
+    requests.add((providerId, opaqueTrackId));
+    return operations[_next++];
+  }
+}
+
+class _ImmediateMediaOperation implements MediaResolutionOperation {
+  const _ImmediateMediaOperation(this.result);
+
+  final MediaResolutionResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<MediaResolutionResult> run() async => result;
+}
+
+class _PendingMediaOperation implements MediaResolutionOperation {
+  _PendingMediaOperation(this.result);
+
+  final Future<MediaResolutionResult> result;
+  final Completer<void> started = Completer<void>();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<MediaResolutionResult> run() {
+    started.complete();
+    return result;
+  }
+}
+
+class _FakeAudioEngine implements ForegroundAudioEngine {
+  _FakeAudioEngine(this.sessions);
+
+  final List<ForegroundAudioSession> sessions;
+  final List<Uri> requestedUris = [];
+  int _next = 0;
+
+  @override
+  Future<ForegroundAudioSession> loadRemote(Uri source) async {
+    requestedUris.add(source);
+    return sessions[_next++];
+  }
+}
+
+class _FakeAudioSession implements ForegroundAudioSession {
+  final StreamController<ForegroundAudioState> _states =
+      StreamController<ForegroundAudioState>.broadcast();
+  final StreamController<ForegroundAudioFailure> _failures =
+      StreamController<ForegroundAudioFailure>.broadcast();
+
+  @override
+  Stream<ForegroundAudioState> get states => _states.stream;
+
+  @override
+  Stream<ForegroundAudioFailure> get failures => _failures.stream;
+
+  @override
+  Future<void> play() async => _states.add(ForegroundAudioState.playing);
+
+  @override
+  Future<void> pause() async => _states.add(ForegroundAudioState.paused);
+
+  @override
+  Future<void> stop() async => _states.add(ForegroundAudioState.stopped);
+
+  @override
+  Future<void> dispose() async {
+    await _states.close();
+    await _failures.close();
+  }
+}

@@ -5,17 +5,26 @@ import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
+import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
+import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/now_playing_bar.dart';
+import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 class UserLibraryPage extends StatefulWidget {
   const UserLibraryPage({
     required this.gateway,
     required this.detailGateway,
+    required this.mediaResolutionGateway,
+    required this.audioEngine,
     required this.onSignInAgain,
     super.key,
   });
 
   final UserLibraryGateway gateway;
   final PlaylistDetailGateway detailGateway;
+  final MediaResolutionGateway mediaResolutionGateway;
+  final ForegroundAudioEngine audioEngine;
   final VoidCallback onSignInAgain;
 
   @override
@@ -24,18 +33,24 @@ class UserLibraryPage extends StatefulWidget {
 
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
+  late final TrackPlaybackController _playbackController;
   UserPlaylistSummary? _selectedPlaylist;
 
   @override
   void initState() {
     super.initState();
     _controller = UserLibraryController(widget.gateway);
+    _playbackController = TrackPlaybackController(
+      widget.mediaResolutionGateway,
+      ForegroundPlaybackController(widget.audioEngine),
+    );
     unawaited(_controller.load());
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _playbackController.dispose();
     super.dispose();
   }
 
@@ -47,6 +62,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
         playlist: selectedPlaylist,
         gateway: widget.detailGateway,
+        playbackController: _playbackController,
         onBack: () => setState(() => _selectedPlaylist = null),
         onSignInAgain: widget.onSignInAgain,
       );
@@ -78,6 +94,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             child: _body(context),
           ),
         ),
+      ),
+      bottomNavigationBar: NowPlayingBar(
+        controller: _playbackController,
+        onSignInAgain: widget.onSignInAgain,
       ),
     );
   }

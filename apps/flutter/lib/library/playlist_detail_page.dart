@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/now_playing_bar.dart';
+import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 class PlaylistDetailPage extends StatefulWidget {
   const PlaylistDetailPage({
     required this.playlist,
     required this.gateway,
+    required this.playbackController,
     required this.onBack,
     required this.onSignInAgain,
     super.key,
@@ -16,6 +19,7 @@ class PlaylistDetailPage extends StatefulWidget {
 
   final UserPlaylistSummary playlist;
   final PlaylistDetailGateway gateway;
+  final TrackPlaybackController playbackController;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
 
@@ -93,6 +97,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
         ),
       ),
+      bottomNavigationBar: NowPlayingBar(
+        controller: widget.playbackController,
+        onSignInAgain: widget.onSignInAgain,
+      ),
     );
   }
 
@@ -110,6 +118,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       appendFailure: _controller.appendFailure,
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
+      onTrackSelected: (track) =>
+          unawaited(widget.playbackController.playTrack(track)),
       desktop: desktop,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
@@ -215,6 +225,7 @@ class _TrackCollection extends StatelessWidget {
     required this.appendFailure,
     required this.onLoadMore,
     required this.onRetryMore,
+    required this.onTrackSelected,
     required this.desktop,
     super.key,
   });
@@ -226,6 +237,7 @@ class _TrackCollection extends StatelessWidget {
   final UserLibraryFailure? appendFailure;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
+  final ValueChanged<PlaylistTrackSummary> onTrackSelected;
   final bool desktop;
 
   @override
@@ -278,6 +290,7 @@ class _TrackCollection extends StatelessWidget {
           index: index + 1,
           track: tracks[index],
           desktop: desktop,
+          onTap: () => onTrackSelected(tracks[index]),
         );
       },
     );
@@ -289,11 +302,13 @@ class _TrackRow extends StatelessWidget {
     required this.index,
     required this.track,
     required this.desktop,
+    required this.onTap,
   });
 
   final int index;
   final PlaylistTrackSummary track;
   final bool desktop;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -307,79 +322,88 @@ class _TrackRow extends StatelessWidget {
     return Semantics(
       label: '$title, $artists',
       container: true,
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: desktop ? 8 : 4, vertical: 8),
-        child: Row(
-          children: [
-            SizedBox(
-              width: desktop ? 40 : 28,
-              child: Text(
-                '$index',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox.square(
-              dimension: desktop ? 52 : 56,
-              child: _Artwork(uri: track.artworkUri),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    desktop || track.albumTitle == null
-                        ? artists
-                        : '$artists · ${track.albumTitle}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (desktop) ...[
-              const SizedBox(width: 24),
-              Expanded(
-                flex: 2,
+      button: true,
+      child: InkWell(
+        key: ValueKey('play-track-${track.opaqueId}'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: desktop ? 8 : 4,
+            vertical: 8,
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: desktop ? 40 : 28,
                 child: Text(
-                  track.albumTitle ?? '—',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  '$index',
+                  textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
-            ],
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 48,
-              child: Text(
-                _duration(track.durationSeconds),
-                textAlign: TextAlign.end,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(width: 8),
+              SizedBox.square(
+                dimension: desktop ? 52 : 56,
+                child: _Artwork(uri: track.artworkUri),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      desktop || track.albumTitle == null
+                          ? artists
+                          : '$artists · ${track.albumTitle}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              if (desktop) ...[
+                const SizedBox(width: 24),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    track.albumTitle ?? '—',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  _duration(track.durationSeconds),
+                  textAlign: TextAlign.end,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

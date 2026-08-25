@@ -54,16 +54,19 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Routed explicit media credential rejection through the same shared serialized vault boundary used by authentication and library; transient/availability failures retain it, and cleanup failure remains distinct. Five regressions cover success/diagnostics, all failure variants, invalid result shapes, exact identity/cancel forwarding, and all three vault paths.
 - Added `TrackPlaybackController` to compose one opaque-track resolution with the existing foreground controller. It holds only track display metadata and typed stage/failure state; a current success URI is handed directly to the engine path and is neither logged nor retained by the coordinator.
 - Added four coordinator regressions covering successful lifecycle mapping, distinct authentication/rejection/unavailable/network versus engine failures, exact cancellation and late suppression on track replacement, and the same guarantees across stop/dispose. Playback-focused tests now total 16.
+- Wired authentication, library, detail, and media application defaults through one shared serialized vault, and made the authenticated library page own one playback coordinator across local list/detail navigation. Leaving the authenticated page disposes its resolution and foreground playback authority.
+- Made playlist-detail rows keyboard/touch actionable and added a compact adaptive now-playing surface for resolving/loading/playing/paused/stopped/completed, retryable resolution or engine errors, explicit sign-in reset, play/pause/resume/retry, and stop. It intentionally exposes no queue behavior.
+- Added four end-to-end widget regressions for row playback, pause/resume/stop, track switching, pending resolution across local navigation, credential rejection back to sign-in, URI-free failure copy, and 390px layout. `dart analyze`, all 72 Flutter tests, a Linux release build, and packaged local plus loopback MP3 integration pass.
 
 # In Progress
 
-- Wire one shared `TrackPlaybackController` into the authenticated library/detail route and add the smallest adaptive user-visible play/pause/stop surface. Track rows start playback without changing playlist pagination ownership; authentication/rejection failures must return to sign-in consistently.
+- Define the smallest provider-neutral queue behavior in reusable Rust Core before adding queue presentation. The bounded task must cover current item, next/previous, explicit replacement, removal, and terminal advancement without importing plugin or Flutter state.
 
 # Next Candidates
 
-1. Extend app wiring so authentication, library, detail, and media gateways share the same serialized vault, while one playback controller survives local library/detail navigation and is disposed with the authenticated page.
-2. Make desktop and mobile track rows actionable, show resolving/loading/playing/paused/completed and retryable/unavailable/auth states, and expose play/pause/stop without a queue.
-3. Add controller/widget regressions for track switching, page back/navigation, sign-in reset after resolution rejection, narrow layout, and no URI in failure text.
+1. Specify and implement a minimal provider-independent queue model in Rust with exact identity deduplication rules, deterministic current/next/previous/removal behavior, and unit tests. Do not add shuffle, repeat, persistence, or Provider fetching without evidence.
+2. Expose only the coarse queue operations/state needed by Flutter through the typed Bridge, with exact lifecycle and mapping tests.
+3. Compose queue advancement with the existing single-track playback coordinator and add the smallest adaptive queue surface; preserve explicit single-track error and account-reset states.
 
 # Blockers
 

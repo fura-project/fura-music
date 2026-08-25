@@ -7,6 +7,8 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
+import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 const _qqGreen = Color(0xFF24B86A);
@@ -17,31 +19,39 @@ class MusicApp extends StatelessWidget {
     QqMusicAuthenticationGateway? authenticationGateway,
     UserLibraryGateway? libraryGateway,
     PlaylistDetailGateway? playlistDetailGateway,
+    MediaResolutionGateway? mediaResolutionGateway,
+    ForegroundAudioEngine? audioEngine,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
     Key? key,
   }) {
-    if (authenticationGateway == null &&
-        libraryGateway == null &&
-        playlistDetailGateway == null) {
-      final credentialVault = SerializedCredentialVault(
+    if (authenticationGateway == null ||
+        libraryGateway == null ||
+        playlistDetailGateway == null ||
+        mediaResolutionGateway == null) {
+      final fallbackCredentialVault = SerializedCredentialVault(
         PlatformCredentialVault(),
       );
-      authenticationGateway = RustQqMusicAuthenticationGateway(
-        credentialVault: credentialVault,
+      authenticationGateway ??= RustQqMusicAuthenticationGateway(
+        credentialVault: fallbackCredentialVault,
       );
-      libraryGateway = RustUserLibraryGateway(credentialVault: credentialVault);
-      playlistDetailGateway = RustPlaylistDetailGateway(
-        credentialVault: credentialVault,
+      libraryGateway ??= RustUserLibraryGateway(
+        credentialVault: fallbackCredentialVault,
+      );
+      playlistDetailGateway ??= RustPlaylistDetailGateway(
+        credentialVault: fallbackCredentialVault,
+      );
+      mediaResolutionGateway ??= RustMediaResolutionGateway(
+        credentialVault: fallbackCredentialVault,
       );
     }
     return MusicApp._(
       bootstrap: bootstrap,
-      authenticationGateway:
-          authenticationGateway ?? RustQqMusicAuthenticationGateway(),
-      libraryGateway: libraryGateway ?? RustUserLibraryGateway(),
-      playlistDetailGateway:
-          playlistDetailGateway ?? RustPlaylistDetailGateway(),
+      authenticationGateway: authenticationGateway,
+      libraryGateway: libraryGateway,
+      playlistDetailGateway: playlistDetailGateway,
+      mediaResolutionGateway: mediaResolutionGateway,
+      audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
@@ -52,6 +62,8 @@ class MusicApp extends StatelessWidget {
     required this.authenticationGateway,
     required this.libraryGateway,
     required this.playlistDetailGateway,
+    required this.mediaResolutionGateway,
+    required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
   });
@@ -60,6 +72,8 @@ class MusicApp extends StatelessWidget {
   final QqMusicAuthenticationGateway authenticationGateway;
   final UserLibraryGateway libraryGateway;
   final PlaylistDetailGateway playlistDetailGateway;
+  final MediaResolutionGateway mediaResolutionGateway;
+  final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -75,6 +89,8 @@ class MusicApp extends StatelessWidget {
         authenticationGateway: authenticationGateway,
         libraryGateway: libraryGateway,
         playlistDetailGateway: playlistDetailGateway,
+        mediaResolutionGateway: mediaResolutionGateway,
+        audioEngine: audioEngine,
         initialCredentialRestore: initialCredentialRestore,
       ),
     );
@@ -101,6 +117,8 @@ class LoginPage extends StatefulWidget {
     required this.authenticationGateway,
     required this.libraryGateway,
     required this.playlistDetailGateway,
+    required this.mediaResolutionGateway,
+    required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
   });
@@ -109,6 +127,8 @@ class LoginPage extends StatefulWidget {
   final QqMusicAuthenticationGateway authenticationGateway;
   final UserLibraryGateway libraryGateway;
   final PlaylistDetailGateway playlistDetailGateway;
+  final MediaResolutionGateway mediaResolutionGateway;
+  final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -147,6 +167,8 @@ class _LoginPageState extends State<LoginPage> {
             key: const ValueKey('user-library-page'),
             gateway: widget.libraryGateway,
             detailGateway: widget.playlistDetailGateway,
+            mediaResolutionGateway: widget.mediaResolutionGateway,
+            audioEngine: widget.audioEngine,
             onSignInAgain: _controller.cancel,
           );
         }
