@@ -20,7 +20,7 @@ void main() {
     gateway.complete(
       0,
       const PlaylistTrackPageResult(
-        total: 101,
+        total: 2,
         hasMore: true,
         tracks: [
           PlaylistTrackSummary(
@@ -34,14 +34,44 @@ void main() {
     );
     await content;
     expect(controller.stage, PlaylistDetailStage.content);
-    expect(controller.total, 101);
+    expect(controller.total, 2);
     expect(controller.hasMore, isTrue);
     expect(controller.tracks.single.title, 'Synthetic track');
     expect(gateway.requests.single.offset, 0);
     expect(gateway.requests.single.size, PlaylistDetailController.pageSize);
 
+    final more = controller.loadMore();
+    gateway.complete(
+      1,
+      const PlaylistTrackPageResult(
+        offset: 1,
+        total: 2,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:opaque',
+            title: 'Duplicate track',
+            artistNames: ['Artist'],
+          ),
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:second',
+            title: 'Second track',
+            artistNames: ['Artist'],
+          ),
+        ],
+      ),
+    );
+    await more;
+    expect(controller.tracks.map((track) => track.title), [
+      'Synthetic track',
+      'Second track',
+    ]);
+    expect(controller.hasMore, isFalse);
+    expect(gateway.requests[1].offset, 1);
+
     final empty = controller.load();
-    gateway.complete(1, const PlaylistTrackPageResult());
+    gateway.complete(2, const PlaylistTrackPageResult());
     await empty;
     expect(controller.stage, PlaylistDetailStage.empty);
     controller.dispose();
@@ -67,9 +97,75 @@ void main() {
       await second;
       expect(controller.stage, PlaylistDetailStage.error);
       expect(controller.failure, UserLibraryFailure.invalidResponse);
+
+      final nonAdvancing = controller.load();
+      gateway.complete(
+        2,
+        const PlaylistTrackPageResult(total: 1, hasMore: true),
+      );
+      await nonAdvancing;
+      expect(controller.stage, PlaylistDetailStage.error);
+      expect(controller.failure, UserLibraryFailure.invalidResponse);
       controller.dispose();
     },
   );
+
+  test('retains loaded rows after a retryable append failure', () async {
+    final gateway = _FakeDetailGateway();
+    final controller = PlaylistDetailController(playlist, gateway);
+    final first = controller.load();
+    gateway.complete(
+      0,
+      const PlaylistTrackPageResult(
+        total: 2,
+        hasMore: true,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:first',
+            title: 'First track',
+            artistNames: [],
+          ),
+        ],
+      ),
+    );
+    await first;
+
+    final more = controller.loadMore();
+    gateway.complete(
+      1,
+      const PlaylistTrackPageResult(
+        offset: 1,
+        failure: UserLibraryFailure.network,
+      ),
+    );
+    await more;
+    expect(controller.stage, PlaylistDetailStage.content);
+    expect(controller.tracks.single.title, 'First track');
+    expect(controller.appendFailure, UserLibraryFailure.network);
+    expect(controller.canRetryMore, isTrue);
+
+    final invalidPage = controller.loadMore();
+    gateway.complete(
+      2,
+      const PlaylistTrackPageResult(
+        offset: 99,
+        total: 2,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:second',
+            title: 'Second track',
+            artistNames: [],
+          ),
+        ],
+      ),
+    );
+    await invalidPage;
+    expect(controller.tracks.single.title, 'First track');
+    expect(controller.appendFailure, UserLibraryFailure.invalidResponse);
+    controller.dispose();
+  });
 
   test('restart and dispose cancel and suppress late results', () async {
     final gateway = _FakeDetailGateway();

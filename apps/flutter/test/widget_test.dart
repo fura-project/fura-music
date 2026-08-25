@@ -285,7 +285,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final detailGateway = _WidgetDetailGateway([
       const PlaylistTrackPageResult(
-        total: 101,
+        total: 2,
         hasMore: true,
         tracks: [
           PlaylistTrackSummary(
@@ -296,6 +296,19 @@ void main() {
             artistNames: ['Artist one', 'Artist two'],
             albumTitle: 'Synthetic album',
             durationSeconds: 245,
+          ),
+        ],
+      ),
+      const PlaylistTrackPageResult(
+        offset: 1,
+        total: 2,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:41002:0:1:second-mid',
+            title: 'Second synthetic track',
+            artistNames: ['Artist three'],
+            durationSeconds: 120,
           ),
         ],
       ),
@@ -315,7 +328,7 @@ void main() {
                 providerId: 'qq-music',
                 opaqueId: 'favorite:8001',
                 title: 'Open me',
-                trackCount: 101,
+                trackCount: 2,
               ),
             ],
           ),
@@ -330,10 +343,18 @@ void main() {
     expect(find.textContaining('Synthetic track'), findsOneWidget);
     expect(find.textContaining('Artist one'), findsOneWidget);
     expect(find.text('4:05'), findsOneWidget);
-    expect(find.text('Showing the first 1 of 101 tracks'), findsOneWidget);
+    expect(find.text('Showing 1 of 2 tracks'), findsOneWidget);
+    expect(find.text('Load more'), findsOneWidget);
     expect(detailGateway.requests.single.playlist.opaqueId, 'favorite:8001');
     expect(detailGateway.requests.single.offset, 0);
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Second synthetic track'), findsOneWidget);
+    expect(find.text('Showing 2 of 2 tracks'), findsOneWidget);
+    expect(find.text('End of playlist'), findsOneWidget);
+    expect(detailGateway.requests[1].offset, 1);
 
     await tester.tap(find.byTooltip('Back to playlists'));
     await tester.pumpAndSettle();

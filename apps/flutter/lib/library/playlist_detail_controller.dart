@@ -26,6 +26,9 @@ class PlaylistDetailController extends ChangeNotifier {
   UserLibraryFailure? _failure;
   int _total = 0;
   bool _hasMore = false;
+  int _nextOffset = 0;
+  bool _isLoadingMore = false;
+  UserLibraryFailure? _appendFailure;
   PlaylistTrackPageLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
@@ -35,6 +38,15 @@ class PlaylistDetailController extends ChangeNotifier {
   UserLibraryFailure? get failure => _failure;
   int get total => _total;
   bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  UserLibraryFailure? get appendFailure => _appendFailure;
+  bool get canLoadMore =>
+      _stage == PlaylistDetailStage.content && _hasMore && !_isLoadingMore;
+  bool get canRetryMore =>
+      _appendFailure == UserLibraryFailure.network ||
+      _appendFailure == UserLibraryFailure.serviceUnavailable ||
+      _appendFailure == UserLibraryFailure.invalidResponse ||
+      _appendFailure == UserLibraryFailure.coreUnavailable;
 
   bool get canRetry =>
       _stage == PlaylistDetailStage.error &&
@@ -56,6 +68,9 @@ class PlaylistDetailController extends ChangeNotifier {
     _failure = null;
     _total = 0;
     _hasMore = false;
+    _nextOffset = 0;
+    _isLoadingMore = false;
+    _appendFailure = null;
     _stage = PlaylistDetailStage.loading;
     _notify();
 
@@ -64,10 +79,13 @@ class PlaylistDetailController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
 
     _failure = result.failure;
-    if (result.failure == null && result.offset == 0) {
+    if (result.failure == null &&
+        result.offset == 0 &&
+        (!result.hasMore || result.tracks.isNotEmpty)) {
       _tracks = List.unmodifiable(result.tracks);
       _total = result.total;
       _hasMore = result.hasMore;
+      _nextOffset = result.tracks.length;
       _stage = _tracks.isEmpty
           ? PlaylistDetailStage.empty
           : PlaylistDetailStage.content;
@@ -94,8 +112,70 @@ class PlaylistDetailController extends ChangeNotifier {
     _notify();
   }
 
+  Future<void> loadMore() async {
+    if (!canLoadMore && !canRetryMore) return;
+    final generation = _generation;
+    final expectedOffset = _nextOffset;
+    final operation = _gateway.beginLoad(
+      playlist: playlist,
+      offset: expectedOffset,
+      size: pageSize,
+    );
+    _operation = operation;
+    _isLoadingMore = true;
+    _appendFailure = null;
+    _notify();
+
+    final result = await operation.run();
+    if (identical(_operation, operation)) _operation = null;
+    if (!_isCurrent(generation)) return;
+    _isLoadingMore = false;
+
+    if (result.failure == null &&
+        result.offset == expectedOffset &&
+        (!result.hasMore || result.tracks.isNotEmpty)) {
+      final seen = _tracks
+          .map((track) => '${track.providerId}\u0000${track.opaqueId}')
+          .toSet();
+      final additions = result.tracks.where(
+        (track) => seen.add('${track.providerId}\u0000${track.opaqueId}'),
+      );
+      _tracks = List.unmodifiable([..._tracks, ...additions]);
+      _nextOffset = expectedOffset + result.tracks.length;
+      _total = result.total;
+      _hasMore = result.hasMore;
+      _appendFailure = null;
+    } else {
+      final failure = result.failure ?? UserLibraryFailure.invalidResponse;
+      if (failure == UserLibraryFailure.authenticationRequired ||
+          failure == UserLibraryFailure.replaced ||
+          failure == UserLibraryFailure.cancelled ||
+          failure == UserLibraryFailure.credentialRejected ||
+          failure ==
+              UserLibraryFailure.credentialRejectedStorageCleanupFailed) {
+        _tracks = const [];
+        _total = 0;
+        _hasMore = false;
+        _failure = failure;
+        _stage =
+            failure == UserLibraryFailure.credentialRejected ||
+                failure ==
+                    UserLibraryFailure.credentialRejectedStorageCleanupFailed
+            ? PlaylistDetailStage.credentialRejected
+            : PlaylistDetailStage.authenticationRequired;
+      } else {
+        _appendFailure = failure;
+      }
+    }
+    _notify();
+  }
+
   void retry() {
     if (canRetry) unawaited(load());
+  }
+
+  void retryMore() {
+    if (canRetryMore) unawaited(loadMore());
   }
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;

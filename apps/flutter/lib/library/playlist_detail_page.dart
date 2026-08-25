@@ -106,6 +106,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       tracks: _controller.tracks,
       total: _controller.total,
       hasMore: _controller.hasMore,
+      isLoadingMore: _controller.isLoadingMore,
+      appendFailure: _controller.appendFailure,
+      onLoadMore: _controller.loadMore,
+      onRetryMore: _controller.retryMore,
       desktop: desktop,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
@@ -207,6 +211,10 @@ class _TrackCollection extends StatelessWidget {
     required this.tracks,
     required this.total,
     required this.hasMore,
+    required this.isLoadingMore,
+    required this.appendFailure,
+    required this.onLoadMore,
+    required this.onRetryMore,
     required this.desktop,
     super.key,
   });
@@ -214,24 +222,55 @@ class _TrackCollection extends StatelessWidget {
   final List<PlaylistTrackSummary> tracks;
   final int total;
   final bool hasMore;
+  final bool isLoadingMore;
+  final UserLibraryFailure? appendFailure;
+  final VoidCallback onLoadMore;
+  final VoidCallback onRetryMore;
   final bool desktop;
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(desktop ? 40 : 12, 0, desktop ? 40 : 12, 28),
-      itemCount: tracks.length + (hasMore ? 1 : 0),
+      itemCount: tracks.length + 1,
       separatorBuilder: (_, _) => const SizedBox(height: 2),
       itemBuilder: (context, index) {
         if (index == tracks.length) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text(
-              'Showing the first ${tracks.length} of $total tracks',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            child: Column(
+              children: [
+                Text(
+                  'Showing ${tracks.length} of $total tracks',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (isLoadingMore)
+                  const SizedBox.square(
+                    dimension: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                else if (appendFailure != null)
+                  FilledButton.tonal(
+                    onPressed: onRetryMore,
+                    child: const Text('Try loading more again'),
+                  )
+                else if (hasMore)
+                  FilledButton.tonal(
+                    onPressed: onLoadMore,
+                    child: const Text('Load more'),
+                  ),
+                if (!hasMore && !isLoadingMore && appendFailure == null)
+                  Text(
+                    'End of playlist',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
             ),
           );
         }

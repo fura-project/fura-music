@@ -1,6 +1,6 @@
 # Current Milestone
 
-M1 — First QQ Music Vertical Slice, phase 3: user library.
+M1 — First QQ Music Vertical Slice, phase 4: playback.
 
 # Completed Recently
 
@@ -34,16 +34,19 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Added a Dart playlist-detail gateway with shared serialized-vault rejection cleanup and a first-page controller that cancels restart/dispose, suppresses late results, validates offset zero, and keeps only transient failures retryable.
 - Made desktop grid and mobile list playlist rows keyboard/touch actionable, added local back navigation, and built an adaptive detail surface for track title/subtitle, multiple artists, album, artwork fallback, duration, empty/loading/error/auth states, and an explicit first-page truncation message.
 - Added 6 gateway/controller regressions plus a narrow-screen navigation/widget regression. `dart analyze`, all 51 Flutter tests, and the Linux release build pass.
+- Completed explicit playlist-detail pagination in Dart without hiding a full-list loop in Rust. The controller advances by raw page length, validates exact offsets and non-advancing pages, deduplicates only exact provider/opaque track identities, preserves loaded rows across retryable append failures, and keeps restart/back/dispose cancellation exact.
+- Added visible load-more, retry-more, progress, and end-of-playlist states. A narrow-screen widget regression opens a playlist, requests offset 1, renders the appended track, and reaches the terminal state; controller regressions cover duplicate boundaries, invalid offsets, and retryable failures.
+- Revalidated `dart analyze`, all 52 Flutter tests, Rust workspace tests (6 + 2 + 20 + 63 + 13), strict Clippy, `git diff --check`, the Linux release build, and the packaged in-process Bridge smoke. The phase-3 architecture and scope review found no Provider/UI leakage, sidecar, new dependency, untracked debt, or scope expansion; user-library implementation is complete with real-account evidence gaps retained under Risks.
 
 # In Progress
 
-- Add explicit next-page loading to the Dart detail controller and UI, preserving current rows on transient page failure and deduplicating only exact opaque track identities.
+- Establish the smallest evidence-backed QQ Music media-resolution contract needed to turn an opaque playlist track into one playable source. Do not add playback UI or a Flutter audio dependency until the protocol and lifecycle boundary are defined.
 
 # Next Candidates
 
-1. Add cancellable next-page loading, exact offset validation, opaque-ID deduplication, and separate append failure state while retaining already loaded rows.
-2. Add a visible load-more affordance and end-of-list state with controller/widget regressions on desktop and narrow layouts.
-3. Re-run the full Rust/Flutter/Linux validation, then review whether playlist detail phase acceptance is met before starting media resolution.
+1. Cross-validate current QQ Music media-resolution behavior across independent maintained implementations and identify the minimum request identity, quality, expiry, and rejection semantics.
+2. Record sanitized protocol evidence and define a provider-neutral media-source model that does not leak QQ file or payment payloads into Flutter.
+3. Implement one bounded, cancellable Rust media-resolution path with offline fixture tests before selecting the Flutter playback engine and queue boundary.
 
 # Blockers
 
@@ -63,7 +66,6 @@ None.
 - The complete playlist collection requires `encryptUin`; credentials missing it fail before library transport instead of showing only created playlists. Real successful-login coverage has not yet proven this field on every login shape.
 - Ordinary detail passed a current public no-account probe, but authenticated ordinary and liked-songs success remain cross-validated/fixture-tested rather than proven with this checkout's real account.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
-- Playlist detail currently loads and labels only the first 100 rows. It does not silently claim a complete large playlist; explicit next-page UI is the active task.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).
