@@ -47,16 +47,19 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Regenerated pinned FRB 2.13.0 bindings and audited the generated API set: `media.dart` and its FFI/codec symbols were added without removing authentication/library entrypoints. Rust now passes 8 + 2 + 24 + 68 + 16, while `dart analyze`, all 52 Flutter tests, a Linux release build, and the packaged FFI smoke pass. The smoke creates and cancels the media handle without QQ traffic.
 - Compared current playback candidates against M1's actual boundary and selected pinned `audioplayers` 6.8.1. Its endorsed packages cover every generated platform, its required lifecycle and source/event operations are documented across targets, it is MIT-licensed and current, and it avoids importing a plugin-owned queue. The wider `media_kit` native stack and `just_audio` desktop adapters remain evidence-based alternatives rather than installed abstractions.
 - Added a packaged Linux integration that writes a tiny test-only silent MP3 into a disposable system directory and proves source load, play, pause, resume, stop, dispose, and cleanup through the endorsed GStreamer plugin. Both debug integration and release application builds pass; no test fixture ships in the application bundle. Other target runtimes and authenticated QQ playback remain unverified.
+- Added a plugin-independent `ForegroundAudioEngine`/per-source session port, the concrete `audioplayers` adapter, and a single-track `ForegroundPlaybackController`. Each load owns a fresh player; source replacement, stop, failure, and dispose detach the exact session before cleanup so late old state/error callbacks cannot cross generations.
+- Disabled plugin-owned diagnostics before any player is created because upstream error strings include `player.source`; project errors retain only load/playback/core categories. Seven new regressions cover the logger gate, invalid source precondition, play/pause/resume/stop, replacement, terminal cleanup errors, late completion/failure after stop/dispose, and URI-free failures.
+- Extended the packaged Linux integration with a loopback HTTP MP3 carrying a synthetic vkey query. The project adapter completes play/pause/resume/stop/dispose without logging or retaining that URI; the in-memory fixture server is force-closed and never contacts QQ Music.
 
 # In Progress
 
-- Put the selected engine behind a minimum project-owned Dart adapter and controller lifecycle. Prove restart/source replacement/dispose suppress late state, completion, and error events before connecting media resolution or adding UI.
+- Connect opaque playlist-track selection to the Bridge resolution handle through a Dart gateway with shared credential-vault rejection cleanup, then hand the short-lived success URI directly into the existing single-track controller. Keep resolution errors distinct from engine errors and do not add a queue yet.
 
 # Next Candidates
 
-1. Define a plugin-independent foreground player port with only load/play, pause, stop, dispose, and typed state/error events; implement the `audioplayers` adapter.
-2. Add controller regressions for late events after source replacement, stop, restart, and dispose, plus engine failures that never include a source URI in diagnostics.
-3. Connect one playlist-track selection through Bridge resolution into that controller and add the smallest truthful play/pause affordance; define queue ownership only from this real flow.
+1. Add a media-resolution gateway/operation that maps every Bridge failure, deletes the shared vault only on explicit credential rejection, and never stores or stringifies a success URI.
+2. Add a track-playback coordinator that cancels replaced resolution, suppresses late results, and forwards a current success directly to `ForegroundPlaybackController`.
+3. Make a playlist track row start that flow and add the smallest truthful play/pause/stop surface; define queue ownership only after this one-track path is complete.
 
 # Blockers
 

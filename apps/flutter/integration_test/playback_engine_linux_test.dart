@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
@@ -34,6 +36,62 @@ void main() {
       await fixtureDirectory.delete(recursive: true);
     }
   });
+
+  testWidgets('project adapter plays a loopback remote MP3', (_) async {
+    final fixture = base64Decode(_silentMp3Base64);
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final requests = server.listen((request) {
+      request.response.headers.contentType = ContentType('audio', 'mpeg');
+      request.response.contentLength = fixture.length;
+      request.response.add(fixture);
+      unawaited(request.response.close());
+    });
+    final engine = AudioplayersForegroundAudioEngine();
+    ForegroundAudioSession? session;
+
+    try {
+      session = await engine.loadRemote(
+        Uri.parse(
+          'http://${server.address.address}:${server.port}/probe.mp3'
+          '?vkey=must-not-leak',
+        ),
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.playing,
+        session.play,
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.paused,
+        session.pause,
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.playing,
+        session.play,
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.stopped,
+        session.stop,
+      );
+    } finally {
+      await session?.dispose();
+      await requests.cancel();
+      await server.close(force: true);
+    }
+  });
+}
+
+Future<void> _expectStateAfter(
+  ForegroundAudioSession session,
+  ForegroundAudioState expected,
+  Future<void> Function() operation,
+) async {
+  final reached = session.states.firstWhere((state) => state == expected);
+  await operation();
+  await reached.timeout(const Duration(seconds: 5));
 }
 
 // 0.5 seconds of silent 8 kHz mono MP3 generated with FFmpeg 9.0. It lives in

@@ -1,0 +1,207 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
+
+void main() {
+  test(
+    'maps one session through play pause resume and terminal stop',
+    () async {
+      final session = _FakeSession();
+      final controller = ForegroundPlaybackController(
+        _FakeEngine.immediate(session),
+      );
+
+      await controller.playRemote(
+        Uri.parse('https://audio.example.test/source.mp3?vkey=private'),
+      );
+      expect(controller.stage, ForegroundPlaybackStage.playing);
+      expect(controller.canPause, isTrue);
+      await controller.pause();
+      expect(controller.stage, ForegroundPlaybackStage.paused);
+      expect(controller.canResume, isTrue);
+      await controller.resume();
+      expect(controller.stage, ForegroundPlaybackStage.playing);
+      await controller.stop();
+      expect(controller.stage, ForegroundPlaybackStage.stopped);
+      expect(session.stopCalls, 1);
+      expect(session.disposeCalls, 1);
+
+      controller.dispose();
+    },
+  );
+
+  test('source replacement suppresses every late old-session event', () async {
+    final first = _FakeSession();
+    final second = _FakeSession();
+    final secondLoad = Completer<ForegroundAudioSession>();
+    final engine = _FakeEngine.queued([Future.value(first), secondLoad.future]);
+    final controller = ForegroundPlaybackController(engine);
+    await controller.playRemote(Uri.parse('https://audio.example.test/one'));
+
+    final replacement = controller.playRemote(
+      Uri.parse('https://audio.example.test/two'),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.stage, ForegroundPlaybackStage.loading);
+    first.emitState(ForegroundAudioState.completed);
+    first.emitFailure(ForegroundAudioFailure.playback);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.stage, ForegroundPlaybackStage.loading);
+
+    secondLoad.complete(second);
+    await replacement;
+    expect(controller.stage, ForegroundPlaybackStage.playing);
+    expect(first.stopCalls, 1);
+    expect(first.disposeCalls, 1);
+    controller.dispose();
+  });
+
+  test('terminal cleanup failures cannot block a replacement source', () async {
+    final first = _FakeSession(throwOnStop: true, throwOnDispose: true);
+    final second = _FakeSession();
+    final controller = ForegroundPlaybackController(
+      _FakeEngine.queued([Future.value(first), Future.value(second)]),
+    );
+    await controller.playRemote(Uri.parse('https://audio.example.test/one'));
+
+    await controller.playRemote(Uri.parse('https://audio.example.test/two'));
+
+    expect(controller.stage, ForegroundPlaybackStage.playing);
+    expect(first.stopCalls, 1);
+    expect(first.disposeCalls, 1);
+    expect(second.playCalls, 1);
+    controller.dispose();
+  });
+
+  test(
+    'stop and dispose suppress late completion and failure events',
+    () async {
+      final stoppedSession = _FakeSession();
+      final stopped = ForegroundPlaybackController(
+        _FakeEngine.immediate(stoppedSession),
+      );
+      await stopped.playRemote(Uri.parse('https://audio.example.test/stop'));
+      await stopped.stop();
+      stoppedSession.emitState(ForegroundAudioState.completed);
+      stoppedSession.emitFailure(ForegroundAudioFailure.playback);
+      await Future<void>.delayed(Duration.zero);
+      expect(stopped.stage, ForegroundPlaybackStage.stopped);
+      expect(stopped.failure, isNull);
+      stopped.dispose();
+
+      final disposedSession = _FakeSession();
+      final disposed = ForegroundPlaybackController(
+        _FakeEngine.immediate(disposedSession),
+      );
+      await disposed.playRemote(
+        Uri.parse('https://audio.example.test/dispose'),
+      );
+      disposed.dispose();
+      disposedSession.emitState(ForegroundAudioState.completed);
+      disposedSession.emitFailure(ForegroundAudioFailure.playback);
+      await Future<void>.delayed(Duration.zero);
+      expect(disposedSession.stopCalls, 1);
+      expect(disposedSession.disposeCalls, 1);
+    },
+  );
+
+  test('load and event failures are coarse and never retain the URI', () async {
+    const privateUri =
+        'https://audio.example.test/source.mp3?vkey=must-not-leak';
+    final loadFailure = ForegroundPlaybackController(
+      _FakeEngine.failure(
+        const ForegroundAudioException(ForegroundAudioFailure.load),
+      ),
+    );
+    await loadFailure.playRemote(Uri.parse(privateUri));
+    expect(loadFailure.stage, ForegroundPlaybackStage.error);
+    expect(loadFailure.failure, ForegroundAudioFailure.load);
+    expect(loadFailure.toString(), isNot(contains('must-not-leak')));
+    expect(
+      const ForegroundAudioException(ForegroundAudioFailure.load).toString(),
+      isNot(contains('must-not-leak')),
+    );
+    loadFailure.dispose();
+
+    final session = _FakeSession();
+    final eventFailure = ForegroundPlaybackController(
+      _FakeEngine.immediate(session),
+    );
+    await eventFailure.playRemote(Uri.parse(privateUri));
+    session.emitFailure(ForegroundAudioFailure.playback);
+    await Future<void>.delayed(Duration.zero);
+    expect(eventFailure.stage, ForegroundPlaybackStage.error);
+    expect(eventFailure.failure, ForegroundAudioFailure.playback);
+    eventFailure.dispose();
+  });
+}
+
+class _FakeEngine implements ForegroundAudioEngine {
+  _FakeEngine.queued(this._loads) : _failure = null;
+
+  _FakeEngine.immediate(ForegroundAudioSession session)
+    : this.queued([Future.value(session)]);
+
+  _FakeEngine.failure(this._failure) : _loads = const [];
+
+  final List<Future<ForegroundAudioSession>> _loads;
+  final Object? _failure;
+  int _next = 0;
+
+  @override
+  Future<ForegroundAudioSession> loadRemote(Uri source) {
+    final failure = _failure;
+    if (failure != null) return Future.error(failure);
+    return _loads[_next++];
+  }
+}
+
+class _FakeSession implements ForegroundAudioSession {
+  _FakeSession({this.throwOnStop = false, this.throwOnDispose = false});
+
+  final _states = StreamController<ForegroundAudioState>.broadcast();
+  final _failures = StreamController<ForegroundAudioFailure>.broadcast();
+  final bool throwOnStop;
+  final bool throwOnDispose;
+  int playCalls = 0;
+  int pauseCalls = 0;
+  int stopCalls = 0;
+  int disposeCalls = 0;
+
+  @override
+  Stream<ForegroundAudioState> get states => _states.stream;
+
+  @override
+  Stream<ForegroundAudioFailure> get failures => _failures.stream;
+
+  @override
+  Future<void> play() async {
+    playCalls += 1;
+    emitState(ForegroundAudioState.playing);
+  }
+
+  @override
+  Future<void> pause() async {
+    pauseCalls += 1;
+    emitState(ForegroundAudioState.paused);
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCalls += 1;
+    if (throwOnStop) throw StateError('synthetic stop failure');
+    emitState(ForegroundAudioState.stopped);
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls += 1;
+    if (throwOnDispose) throw StateError('synthetic dispose failure');
+  }
+
+  void emitState(ForegroundAudioState state) => _states.add(state);
+
+  void emitFailure(ForegroundAudioFailure failure) => _failures.add(failure);
+}

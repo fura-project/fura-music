@@ -48,5 +48,5 @@ Do not expose plugin classes through controllers or Rust. Do not add `audio_serv
 
 1. Build the Linux release bundle with the endorsed plugin.
 2. In a packaged Linux integration, generate a disposable local audio file, then exercise load/play, pause, resume, stop, and dispose with cleanup. **Completed:** a test-only silent MP3 passed this path on 2026-08-26 and was deleted in `finally`.
-3. Put those operations behind a minimal adapter and cover late state/completion/error events after stop, source replacement, and dispose with fakes before connecting QQ media resolution.
-4. Keep authenticated QQ URLs out of logs, fixtures, and test failure descriptions.
+3. Put those operations behind a minimal adapter and cover late state/completion/error events after stop, source replacement, and dispose with fakes before connecting QQ media resolution. **Completed:** the per-source adapter/controller and seven lifecycle/security regressions passed on 2026-08-26.
+4. Keep authenticated QQ URLs out of logs, fixtures, and test failure descriptions. **Implemented boundary:** plugin logging is disabled before player construction because its upstream exception text includes the source; project failures contain no cause or URI. A loopback integration with a synthetic vkey passed, but a real authenticated source remains deliberately untested.
