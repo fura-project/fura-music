@@ -1,24 +1,26 @@
 //! QQ Music provider mapping layer.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use music_domain::{
     AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
-    ResolvedMediaSource, TrackId, TrackSummary,
+    ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId,
+    TrackSummary,
 };
 use provider_api::{
-    AuthenticationError, MediaResolutionError, MediaResolutionProvider, MusicProvider,
-    OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability, ProviderDescriptor,
-    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
-    QrAuthenticationSession, QrImageFormat, UserLibraryError, UserPlaylistsProvider,
+    AuthenticationError, LyricsError, LyricsProvider, MediaResolutionError,
+    MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
+    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
+    UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
     HttpTransport, QqMusicClient, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
-    QqMusicMediaError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QqMusicPlaylistDetailError, QqMusicTrackSummary, QrImageMediaType,
+    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicOwnedPlaylist,
+    QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError, QqMusicTrackSummary, QrImageMediaType,
     WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
@@ -132,6 +134,35 @@ impl<T> QqMusicProvider<T> {
         if rejected {
             *state = QqMusicCredentialState::SignedOut;
             return Err(MediaResolutionError::CredentialRejected);
+        }
+        Ok(())
+    }
+
+    fn authenticated_lyrics_credential(&self) -> Result<Credential, LyricsError> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => Err(LyricsError::AuthenticationRequired),
+        }
+    }
+
+    fn finish_lyrics_await(
+        &self,
+        candidate: &Credential,
+        rejected: bool,
+    ) -> Result<(), LyricsError> {
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == candidate
+        );
+        if !still_current {
+            return Err(LyricsError::Replaced);
+        }
+        if rejected {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(LyricsError::CredentialRejected);
         }
         Ok(())
     }
@@ -314,6 +345,7 @@ impl<T> MusicProvider for QqMusicProvider<T> {
             capabilities: vec![
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
+                ProviderCapability::Lyrics,
                 ProviderCapability::MediaResolution,
             ],
         }
@@ -505,6 +537,30 @@ where
     }
 }
 
+impl<T> LyricsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = LyricsError;
+
+    async fn lyrics(&self, track_id: TrackId) -> Result<SynchronizedLyrics, Self::Error> {
+        let candidate = self.authenticated_lyrics_credential()?;
+        let route = parse_lyrics_track(&track_id)?;
+        let response = self
+            .client()
+            .lyrics(&candidate, route.song_mid, route.song_type)
+            .await;
+        self.finish_lyrics_await(
+            &candidate,
+            matches!(response, Err(QqMusicLyricsError::Rejected { .. })),
+        )?;
+        response
+            .as_ref()
+            .map_err(map_lyrics_error)
+            .and_then(|lyrics| map_lyrics(track_id, lyrics))
+    }
+}
+
 impl<T> QrAuthenticationProvider for QqMusicProvider<T>
 where
     T: HttpTransport + 'static,
@@ -689,9 +745,22 @@ struct QqMusicMediaTrack<'a> {
     song_type: u32,
 }
 
-fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaResolutionError> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct QqMusicLyricTrack<'a> {
+    song_mid: &'a str,
+    song_type: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct QqMusicTrackIdentity<'a> {
+    song_mid: &'a str,
+    primary_song_type: u32,
+    vkey_song_type: Option<u32>,
+}
+
+fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, ()> {
     if track_id.provider() != &qq_music_provider_id() {
-        return Err(MediaResolutionError::InvalidResponse);
+        return Err(());
     }
     let mut parts = track_id.opaque().split(':');
     let (prefix, raw_id, raw_primary_type, raw_vkey_type, song_mid, extra) = (
@@ -703,21 +772,19 @@ fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaR
         parts.next(),
     );
     if prefix != Some("track") || extra.is_some() {
-        return Err(MediaResolutionError::InvalidResponse);
+        return Err(());
     }
     raw_id
         .and_then(|value| value.parse::<u64>().ok())
         .filter(|value| *value != 0)
-        .ok_or(MediaResolutionError::InvalidResponse)?;
-    raw_primary_type
+        .ok_or(())?;
+    let primary_song_type = raw_primary_type
         .and_then(|value| value.parse::<u32>().ok())
-        .ok_or(MediaResolutionError::InvalidResponse)?;
-    let song_type = match raw_vkey_type {
-        Some("-") => 0,
-        Some(value) => value
-            .parse::<u32>()
-            .map_err(|_| MediaResolutionError::InvalidResponse)?,
-        None => return Err(MediaResolutionError::InvalidResponse),
+        .ok_or(())?;
+    let vkey_song_type = match raw_vkey_type {
+        Some("-") => None,
+        Some(value) => Some(value.parse::<u32>().map_err(|_| ())?),
+        None => return Err(()),
     };
     let song_mid = song_mid
         .filter(|value| {
@@ -725,10 +792,28 @@ fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaR
                 && value.len() <= 64
                 && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
         })
-        .ok_or(MediaResolutionError::InvalidResponse)?;
-    Ok(QqMusicMediaTrack {
+        .ok_or(())?;
+    Ok(QqMusicTrackIdentity {
         song_mid,
-        song_type,
+        primary_song_type,
+        vkey_song_type,
+    })
+}
+
+fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaResolutionError> {
+    let identity =
+        parse_track_identity(track_id).map_err(|()| MediaResolutionError::InvalidResponse)?;
+    Ok(QqMusicMediaTrack {
+        song_mid: identity.song_mid,
+        song_type: identity.vkey_song_type.unwrap_or(0),
+    })
+}
+
+fn parse_lyrics_track(track_id: &TrackId) -> Result<QqMusicLyricTrack<'_>, LyricsError> {
+    let identity = parse_track_identity(track_id).map_err(|()| LyricsError::InvalidResponse)?;
+    Ok(QqMusicLyricTrack {
+        song_mid: identity.song_mid,
+        song_type: identity.primary_song_type,
     })
 }
 
@@ -808,6 +893,71 @@ fn album_artwork_uri(media_mid: &str) -> Option<String> {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
     safe.then(|| format!("https://y.gtimg.cn/music/photo_new/T002R300x300M000{media_mid}.jpg"))
+}
+
+fn map_lyrics(
+    track_id: TrackId,
+    lyrics: &QqMusicLyrics,
+) -> Result<SynchronizedLyrics, LyricsError> {
+    let translations = unique_auxiliary_by_start(
+        lyrics
+            .translation()
+            .iter()
+            .map(|line| (line.start_ms(), line.text())),
+    );
+    let romanizations = unique_auxiliary_by_start(
+        lyrics
+            .romanization()
+            .iter()
+            .map(|line| (line.start_ms(), line.text())),
+    );
+    let lines = lyrics
+        .original()
+        .iter()
+        .map(|line| {
+            let segments = line
+                .segments()
+                .iter()
+                .map(|segment| {
+                    TimedLyricSegment::new(
+                        segment.text(),
+                        segment.start_ms(),
+                        segment.duration_ms(),
+                    )
+                    .map_err(|_| LyricsError::InvalidResponse)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            SynchronizedLyricLine::new(line.text(), line.start_ms(), line.duration_ms(), segments)
+                .map(|mapped| {
+                    mapped
+                        .with_translation(auxiliary_at(&translations, line.start_ms()))
+                        .with_romanization(auxiliary_at(&romanizations, line.start_ms()))
+                })
+                .map_err(|_| LyricsError::InvalidResponse)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    SynchronizedLyrics::new(track_id, lines).map_err(|_| LyricsError::InvalidResponse)
+}
+
+fn unique_auxiliary_by_start<'a>(
+    lines: impl IntoIterator<Item = (u32, &'a str)>,
+) -> HashMap<u32, Option<&'a str>> {
+    let mut by_start = HashMap::new();
+    for (start_ms, text) in lines {
+        by_start
+            .entry(start_ms)
+            .and_modify(|current| *current = None)
+            .or_insert(Some(text));
+    }
+    by_start
+}
+
+fn auxiliary_at(by_start: &HashMap<u32, Option<&str>>, start_ms: u32) -> Option<String> {
+    by_start
+        .get(&start_ms)
+        .copied()
+        .flatten()
+        .map(str::to_owned)
 }
 
 fn map_owned_playlists_error<E>(error: &QqMusicOwnedPlaylistsError<E>) -> UserLibraryError {
@@ -894,6 +1044,26 @@ fn map_media_error<E>(error: &QqMusicMediaError<E>) -> MediaResolutionError {
     }
 }
 
+fn map_lyrics_error<E>(error: &QqMusicLyricsError<E>) -> LyricsError {
+    match error {
+        QqMusicLyricsError::Transport(_) => LyricsError::Network,
+        QqMusicLyricsError::HttpStatus(_) | QqMusicLyricsError::Upstream { .. } => {
+            LyricsError::ServiceUnavailable
+        }
+        QqMusicLyricsError::Rejected { .. } => LyricsError::CredentialRejected,
+        QqMusicLyricsError::Unavailable => LyricsError::Unavailable,
+        QqMusicLyricsError::InvalidSongMid
+        | QqMusicLyricsError::Serialize
+        | QqMusicLyricsError::InvalidJson
+        | QqMusicLyricsError::MissingGlobalCode
+        | QqMusicLyricsError::MissingResult
+        | QqMusicLyricsError::MissingResultCode
+        | QqMusicLyricsError::MissingData
+        | QqMusicLyricsError::MissingLyrics
+        | QqMusicLyricsError::InvalidDocument { .. } => LyricsError::InvalidResponse,
+    }
+}
+
 fn map_login_error<E>(error: WechatQrLoginError<E>) -> AuthenticationError {
     match error {
         WechatQrLoginError::Protocol(error) => map_qr_error(&error),
@@ -973,10 +1143,10 @@ mod tests {
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use music_domain::{AudioFormat, AudioQuality, PlaylistId, ProviderId, TrackId};
     use provider_api::{
-        MediaResolutionError, MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider,
-        PlaylistDetailsProvider, ProviderCapability, QrAuthenticationProgress,
-        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
-        UserPlaylistsProvider,
+        LyricsError, LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
+        OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability,
+        QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+        UserLibraryError, UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
@@ -1009,6 +1179,16 @@ mod tests {
         responses: Mutex<VecDeque<HttpResponse>>,
         requests: Mutex<Vec<HttpRequest>>,
     }
+
+    struct LyricsTransport {
+        response: Mutex<Option<HttpResponse>>,
+        requests: Mutex<Vec<HttpRequest>>,
+    }
+
+    const SYNTHETIC_ORIGINAL_LYRIC: &str = "6447440FA5912BEC47EBDC0F7AB9DBF847898BC76ABCB709C0C54D9D6978ECB97215F4B28B51CCAE8B4EB4770A40E946F617E688A35972D20678A27250A2CC7A27B47B4F03BC55A3A2C612D6BB5D5E1F84A193DD1300931765FDCE14968B9672AC39037736BFCF7477FFB1FC1A30262A2642D946938797373D17F93807532D4521F920DE15943C1C159ECE086BD712BBD41B53DB6F9B3611440AD23536818A61FCDEA679DAB19A08";
+    const SYNTHETIC_TRANSLATION_LYRIC: &str = "32DABB4C5E9846FA45D76834744321F1D6DEBD05CD29B5D704D95053C04BB7107871D3901D3239B44E462C5D14EF95C3";
+    const SYNTHETIC_ROMANIZATION_LYRIC: &str =
+        "32DABB4C5E9846FAF51AD82250F0023B114969FFF15F2E8D0463E1D98F0635733405C33283708F7F";
 
     impl OwnedPlaylistsTransport {
         fn new(code: i64) -> Self {
@@ -1122,6 +1302,22 @@ mod tests {
         }
     }
 
+    impl LyricsTransport {
+        fn new(response: &Value) -> Self {
+            Self {
+                response: Mutex::new(Some(HttpResponse::new(
+                    200,
+                    serde_json::to_vec(response).expect("fixture JSON"),
+                ))),
+                requests: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn requests(&self) -> Vec<HttpRequest> {
+            self.requests.lock().expect("request lock").clone()
+        }
+    }
+
     impl HttpTransport for OwnedPlaylistsTransport {
         type Error = Infallible;
 
@@ -1168,6 +1364,20 @@ mod tests {
                 .lock()
                 .expect("response lock")
                 .pop_front()
+                .expect("fixture response"))
+        }
+    }
+
+    impl HttpTransport for LyricsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.requests.lock().expect("request lock").push(request);
+            Ok(self
+                .response
+                .lock()
+                .expect("response lock")
+                .take()
                 .expect("fixture response"))
         }
     }
@@ -1226,6 +1436,12 @@ mod tests {
     struct GatedMediaTransport {
         gate_call: usize,
         calls: Arc<AtomicUsize>,
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
+    #[derive(Clone)]
+    struct GatedLyricsTransport {
         request_started: Arc<Notify>,
         release_request: Arc<Notify>,
     }
@@ -1295,6 +1511,19 @@ mod tests {
             Ok(HttpResponse::new(
                 200,
                 serde_json::to_vec(&response).expect("fixture JSON"),
+            ))
+        }
+    }
+
+    impl HttpTransport for GatedLyricsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.request_started.notify_one();
+            self.release_request.notified().await;
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&lyrics_success_json()).expect("fixture JSON"),
             ))
         }
     }
@@ -1377,6 +1606,7 @@ mod tests {
             [
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
+                ProviderCapability::Lyrics,
                 ProviderCapability::MediaResolution,
             ]
         );
@@ -1505,6 +1735,22 @@ mod tests {
                         "purl": path,
                         "result": result
                     }]
+                }
+            }
+        })
+    }
+
+    fn lyrics_success_json() -> Value {
+        json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {
+                    "crypt": 1,
+                    "qrc": 1,
+                    "lyric": SYNTHETIC_ORIGINAL_LYRIC,
+                    "trans": SYNTHETIC_TRANSLATION_LYRIC,
+                    "roma": SYNTHETIC_ROMANIZATION_LYRIC
                 }
             }
         })
@@ -2019,6 +2265,160 @@ mod tests {
             assert_eq!(calls.load(Ordering::SeqCst), gate_call);
             assert!(provider.has_authenticated_credential());
         }
+    }
+
+    #[tokio::test]
+    async fn maps_cloud_qrc_to_provider_neutral_synchronized_lyrics() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(
+            &lyrics_success_json(),
+        )));
+        set_authenticated(&provider, "123456");
+        let track_id = qq_track_id("track:41001:7:1:fixtureMID01");
+
+        let lyrics = provider
+            .lyrics(track_id.clone())
+            .await
+            .expect("synchronized lyrics");
+
+        assert_eq!(lyrics.track_id(), &track_id);
+        assert!(lyrics.has_word_timing());
+        assert_eq!(lyrics.lines().len(), 2);
+        let first = &lyrics.lines()[0];
+        assert_eq!(first.text(), "Synthetic");
+        assert_eq!(first.start_ms(), 1_000);
+        assert_eq!(first.duration_ms(), 800);
+        assert_eq!(first.translation(), Some("Translated fixture"));
+        assert_eq!(first.romanization(), Some("Romanized fixture"));
+        assert_eq!(first.segments().len(), 2);
+        assert_eq!(first.segments()[0].text(), "Syn");
+        assert_eq!(first.segments()[0].start_ms(), 1_000);
+        assert_eq!(first.segments()[1].start_ms(), 1_400);
+        assert_eq!(lyrics.lines()[1].translation(), None);
+        assert_eq!(lyrics.lines()[1].romanization(), None);
+        assert!(!format!("{lyrics:?}").contains("Synthetic"));
+
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 1);
+        let body: Value =
+            serde_json::from_slice(requests[0].body_bytes().expect("lyric request body"))
+                .expect("lyric request JSON");
+        assert_eq!(body["req_0"]["param"]["songMid"], "fixtureMID01");
+        assert_eq!(body["req_0"]["param"]["type"], 7);
+    }
+
+    #[test]
+    fn ambiguous_auxiliary_timestamps_are_not_attached() {
+        let by_start = super::unique_auxiliary_by_start([
+            (1_000, "first"),
+            (1_000, "duplicate"),
+            (2_000, "unique"),
+        ]);
+
+        assert_eq!(super::auxiliary_at(&by_start, 1_000), None);
+        assert_eq!(
+            super::auxiliary_at(&by_start, 2_000),
+            Some("unique".to_owned())
+        );
+        assert_eq!(super::auxiliary_at(&by_start, 3_000), None);
+    }
+
+    #[tokio::test]
+    async fn lyrics_require_authentication_and_reject_malformed_identity_before_transport() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(
+            &lyrics_success_json(),
+        )));
+        assert_eq!(
+            provider
+                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .await,
+            Err(LyricsError::AuthenticationRequired)
+        );
+        set_authenticated(&provider, "123456");
+        let foreign = TrackId::new(
+            ProviderId::new("local").expect("provider"),
+            "track:41001:0:1:fixtureMID01",
+        )
+        .expect("track ID");
+        let invalid = [
+            foreign,
+            qq_track_id("track:0:0:1:fixtureMID01"),
+            qq_track_id("track:41001:not-a-type:1:fixtureMID01"),
+            qq_track_id("track:41001:0:not-a-type:fixtureMID01"),
+            qq_track_id("track:41001:0:1:unsafe-mid"),
+            qq_track_id("track:41001:0:1:fixtureMID01:extra"),
+            qq_track_id("wrong:41001:0:1:fixtureMID01"),
+        ];
+        for track_id in invalid {
+            assert_eq!(
+                provider.lyrics(track_id).await,
+                Err(LyricsError::InvalidResponse)
+            );
+        }
+        assert!(provider.client().transport().requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn lyric_failure_clears_only_explicit_rejection() {
+        let unavailable = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(&json!({
+            "code": 0,
+            "req_0": {"code": 0, "data": {"crypt": 1, "qrc": 1, "lyric": ""}}
+        }))));
+        set_authenticated(&unavailable, "123456");
+        assert_eq!(
+            unavailable
+                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .await,
+            Err(LyricsError::Unavailable)
+        );
+        assert!(unavailable.has_authenticated_credential());
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(&json!({
+            "code": 0,
+            "req_0": {"code": 1000}
+        }))));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected
+                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .await,
+            Err(LyricsError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(&json!({
+            "code": 0,
+            "req_0": {"code": 50_006}
+        }))));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream
+                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .await,
+            Err(LyricsError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn late_lyric_result_cannot_cross_account_replacement() {
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedLyricsTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&provider, "123456");
+
+        let request = provider.lyrics(qq_track_id("track:41001:0:1:fixtureMID01"));
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(LyricsError::Replaced));
+        assert!(provider.has_authenticated_credential());
     }
 
     fn restore_candidate<T>(provider: &QqMusicProvider<T>) {
