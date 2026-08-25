@@ -103,7 +103,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         ),
       ),
       bottomNavigationBar: NowPlayingBar(
-        controller: _queuePlaybackController.playback,
+        controller: _queuePlaybackController,
         onSignInAgain: widget.onSignInAgain,
       ),
     );

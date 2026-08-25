@@ -114,6 +114,95 @@ void main() {
     },
   );
 
+  testWidgets('navigates previous and next then advances on completion', (
+    tester,
+  ) async {
+    final firstSession = _FakeAudioSession();
+    final secondSession = _FakeAudioSession();
+    final returnedSession = _FakeAudioSession();
+    final completedSession = _FakeAudioSession();
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('first')),
+      _ImmediateMediaOperation(_success('second')),
+      _ImmediateMediaOperation(_success('returned')),
+      _ImmediateMediaOperation(_success('completed-next')),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([
+        firstSession,
+        secondSession,
+        returnedSession,
+        completedSession,
+      ]),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    expect(_nowPlayingTitle(tester), 'First track');
+
+    await tester.tap(find.byTooltip('Next'));
+    await tester.pumpAndSettle();
+    expect(_nowPlayingTitle(tester), 'Second track');
+
+    await tester.tap(find.byTooltip('Previous'));
+    await tester.pumpAndSettle();
+    expect(_nowPlayingTitle(tester), 'First track');
+
+    returnedSession.emitState(ForegroundAudioState.completed);
+    await tester.pumpAndSettle();
+    expect(_nowPlayingTitle(tester), 'Second track');
+    expect(media.requests, [
+      ('qq-music', 'first'),
+      ('qq-music', 'second'),
+      ('qq-music', 'first'),
+      ('qq-music', 'second'),
+    ]);
+  });
+
+  testWidgets('queue panel preserves and removes duplicate positions', (
+    tester,
+  ) async {
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('duplicate')),
+      _ImmediateMediaOperation(_success('selected-duplicate')),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+      firstOpaqueId: 'duplicate',
+      secondOpaqueId: 'duplicate',
+      secondTitle: 'First track',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('queue-entry-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('queue-entry-1')), findsOneWidget);
+    expect(find.text('2 tracks'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('queue-entry-1')));
+    await tester.pumpAndSettle();
+    expect(media.requests, hasLength(2));
+
+    await tester.tap(find.byKey(const ValueKey('queue-remove-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('1 track'), findsOneWidget);
+    expect(find.byKey(const ValueKey('queue-entry-1')), findsNothing);
+    expect(media.requests, hasLength(2));
+
+    await tester.tap(find.byKey(const ValueKey('queue-remove-0')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('The queue is empty'), findsOneWidget);
+    expect(find.byKey(const ValueKey('now-playing-title')), findsNothing);
+    expect(media.requests, hasLength(2));
+  });
+
   testWidgets('now-playing surface does not overflow on a narrow screen', (
     tester,
   ) async {
@@ -132,9 +221,16 @@ void main() {
 
     expect(find.byTooltip('Pause'), findsOneWidget);
     expect(find.byTooltip('Stop'), findsOneWidget);
+    expect(find.byTooltip('Show queue'), findsOneWidget);
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Queue'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
+
+String? _nowPlayingTitle(WidgetTester tester) =>
+    tester.widget<Text>(find.byKey(const ValueKey('now-playing-title'))).data;
 
 Future<void> _openDetail(
   WidgetTester tester, {
@@ -142,13 +238,19 @@ Future<void> _openDetail(
   required _FakeAudioEngine audio,
   _WidgetQueueGateway? queue,
   String firstOpaqueId = 'first',
+  String secondOpaqueId = 'second',
+  String secondTitle = 'Second track',
 }) async {
   await tester.pumpWidget(
     MusicApp(
       bootstrap: _bootstrap,
       authenticationGateway: const _AuthenticatedGateway(),
       libraryGateway: const _LibraryGateway(),
-      playlistDetailGateway: _DetailGateway(firstOpaqueId),
+      playlistDetailGateway: _DetailGateway(
+        firstOpaqueId,
+        secondOpaqueId,
+        secondTitle,
+      ),
       mediaResolutionGateway: media,
       playbackQueueGateway: queue ?? _WidgetQueueGateway(),
       audioEngine: audio,
@@ -225,8 +327,30 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
       throw StateError('not used by this widget slice');
 
   @override
-  PlaybackQueueResult remove(int index) =>
-      throw StateError('not used by this widget slice');
+  PlaybackQueueResult remove(int index) {
+    if (index < 0 || index >= _snapshot.tracks.length) {
+      return const PlaybackQueueResult(
+        failure: PlaybackQueueFailure.invalidPosition,
+      );
+    }
+    final tracks = List.of(_snapshot.tracks)..removeAt(index);
+    final oldCurrent = _snapshot.currentIndex!;
+    final removedCurrent = index == oldCurrent;
+    final currentIndex = tracks.isEmpty
+        ? null
+        : index < oldCurrent
+        ? oldCurrent - 1
+        : index > oldCurrent
+        ? oldCurrent
+        : index < tracks.length
+        ? index
+        : tracks.length - 1;
+    _snapshot = _makeSnapshot(tracks, currentIndex);
+    return PlaybackQueueResult(
+      snapshot: _snapshot,
+      currentChanged: removedCurrent,
+    );
+  }
 }
 
 PlaybackQueueSnapshot _makeSnapshot(
@@ -297,22 +421,34 @@ class _LibraryOperation implements UserLibraryLoadOperation {
 }
 
 class _DetailGateway implements PlaylistDetailGateway {
-  const _DetailGateway(this.firstOpaqueId);
+  const _DetailGateway(
+    this.firstOpaqueId,
+    this.secondOpaqueId,
+    this.secondTitle,
+  );
 
   final String firstOpaqueId;
+  final String secondOpaqueId;
+  final String secondTitle;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
     required UserPlaylistSummary playlist,
     required int offset,
     required int size,
-  }) => _DetailOperation(firstOpaqueId);
+  }) => _DetailOperation(firstOpaqueId, secondOpaqueId, secondTitle);
 }
 
 class _DetailOperation implements PlaylistTrackPageLoadOperation {
-  const _DetailOperation(this.firstOpaqueId);
+  const _DetailOperation(
+    this.firstOpaqueId,
+    this.secondOpaqueId,
+    this.secondTitle,
+  );
 
   final String firstOpaqueId;
+  final String secondOpaqueId;
+  final String secondTitle;
 
   @override
   bool cancel() => true;
@@ -327,11 +463,11 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         title: 'First track',
         artistNames: const ['Fixture artist'],
       ),
-      const PlaylistTrackSummary(
+      PlaylistTrackSummary(
         providerId: 'qq-music',
-        opaqueId: 'second',
-        title: 'Second track',
-        artistNames: ['Fixture artist'],
+        opaqueId: secondOpaqueId,
+        title: secondTitle,
+        artistNames: const ['Fixture artist'],
       ),
     ],
   );
@@ -431,4 +567,6 @@ class _FakeAudioSession implements ForegroundAudioSession {
     await _states.close();
     await _failures.close();
   }
+
+  void emitState(ForegroundAudioState state) => _states.add(state);
 }

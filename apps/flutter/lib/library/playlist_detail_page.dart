@@ -98,7 +98,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ),
       ),
       bottomNavigationBar: NowPlayingBar(
-        controller: widget.queuePlaybackController.playback,
+        controller: widget.queuePlaybackController,
         onSignInAgain: widget.onSignInAgain,
       ),
     );

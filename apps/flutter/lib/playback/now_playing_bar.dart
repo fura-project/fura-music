@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/playback_queue_panel.dart';
+import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 class NowPlayingBar extends StatelessWidget {
@@ -12,7 +15,7 @@ class NowPlayingBar extends StatelessWidget {
     super.key,
   });
 
-  final TrackPlaybackController controller;
+  final QueuePlaybackController controller;
   final VoidCallback onSignInAgain;
 
   @override
@@ -20,94 +23,198 @@ class NowPlayingBar extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final track = controller.track;
+        final track = controller.current;
         if (track == null) return const SizedBox.shrink();
 
-        final theme = Theme.of(context);
-        final colors = theme.colorScheme;
-        final artist = track.artistNames.isEmpty
-            ? 'Unknown artist'
-            : track.artistNames.join(' · ');
-        final status = _statusCopy(controller);
+        final playback = controller.playback;
         final authenticationFailure = _isAuthenticationFailure(
-          controller.resolutionFailure,
+          playback.resolutionFailure,
         );
+        final error =
+            controller.failure != null ||
+            playback.stage == TrackPlaybackStage.resolutionError ||
+            playback.stage == TrackPlaybackStage.engineError;
 
         return SafeArea(
           top: false,
           child: Material(
-            color: colors.surfaceContainer,
+            color: Theme.of(context).colorScheme.surfaceContainer,
             elevation: 3,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-              child: Row(
-                children: [
-                  _StatusIcon(stage: controller.stage),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          track.title,
-                          key: const ValueKey('now-playing-title'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$artist · $status',
-                          key: const ValueKey('now-playing-status'),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color:
-                                controller.stage ==
-                                        TrackPlaybackStage.resolutionError ||
-                                    controller.stage ==
-                                        TrackPlaybackStage.engineError
-                                ? colors.error
-                                : colors.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = constraints.maxWidth < 520;
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    narrow ? 8 : 10,
+                    12,
+                    narrow ? 6 : 10,
                   ),
-                  const SizedBox(width: 8),
-                  if (authenticationFailure)
-                    TextButton(
-                      key: const ValueKey('now-playing-sign-in-again'),
-                      onPressed: onSignInAgain,
-                      child: const Text('Sign in again'),
-                    )
-                  else
-                    IconButton(
-                      key: const ValueKey('now-playing-primary-action'),
-                      tooltip: _primaryTooltip(controller.stage),
-                      onPressed: _canActivate(controller.stage)
-                          ? () => _activate(controller, track)
-                          : null,
-                      icon: Icon(_primaryIcon(controller.stage)),
-                    ),
-                  if (_canStop(controller.stage))
-                    IconButton(
-                      key: const ValueKey('now-playing-stop'),
-                      tooltip: 'Stop',
-                      onPressed: () => unawaited(controller.stop()),
-                      icon: const Icon(Icons.stop_rounded),
-                    ),
-                ],
-              ),
+                  child: narrow
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                _StatusIcon(stage: playback.stage),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _TrackInfo(
+                                    track: track,
+                                    status: _statusCopy(controller),
+                                    error: error,
+                                  ),
+                                ),
+                                _QueueButton(controller: controller),
+                              ],
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: _transportControls(
+                                controller,
+                                track,
+                                authenticationFailure,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            _StatusIcon(stage: playback.stage),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _TrackInfo(
+                                track: track,
+                                status: _statusCopy(controller),
+                                error: error,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ..._transportControls(
+                              controller,
+                              track,
+                              authenticationFailure,
+                            ),
+                            _QueueButton(controller: controller),
+                          ],
+                        ),
+                );
+              },
             ),
           ),
         );
       },
     );
   }
+
+  List<Widget> _transportControls(
+    QueuePlaybackController controller,
+    PlaylistTrackSummary track,
+    bool authenticationFailure,
+  ) {
+    final playback = controller.playback;
+    return [
+      IconButton(
+        key: const ValueKey('now-playing-previous'),
+        tooltip: 'Previous',
+        onPressed: !authenticationFailure && controller.hasPrevious
+            ? () => unawaited(controller.rewind())
+            : null,
+        icon: const Icon(Icons.skip_previous_rounded),
+      ),
+      if (authenticationFailure)
+        TextButton(
+          key: const ValueKey('now-playing-sign-in-again'),
+          onPressed: onSignInAgain,
+          child: const Text('Sign in again'),
+        )
+      else
+        IconButton(
+          key: const ValueKey('now-playing-primary-action'),
+          tooltip: _primaryTooltip(playback.stage),
+          onPressed: _canActivate(playback.stage)
+              ? () => _activate(playback, track)
+              : null,
+          icon: Icon(_primaryIcon(playback.stage)),
+        ),
+      IconButton(
+        key: const ValueKey('now-playing-next'),
+        tooltip: 'Next',
+        onPressed: !authenticationFailure && controller.hasNext
+            ? () => unawaited(controller.advance())
+            : null,
+        icon: const Icon(Icons.skip_next_rounded),
+      ),
+      if (_canStop(playback.stage))
+        IconButton(
+          key: const ValueKey('now-playing-stop'),
+          tooltip: 'Stop',
+          onPressed: () => unawaited(playback.stop()),
+          icon: const Icon(Icons.stop_rounded),
+        ),
+    ];
+  }
+}
+
+class _TrackInfo extends StatelessWidget {
+  const _TrackInfo({
+    required this.track,
+    required this.status,
+    required this.error,
+  });
+
+  final PlaylistTrackSummary track;
+  final String status;
+  final bool error;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final artist = track.artistNames.isEmpty
+        ? 'Unknown artist'
+        : track.artistNames.join(' · ');
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          track.title,
+          key: const ValueKey('now-playing-title'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '$artist · $status',
+          key: const ValueKey('now-playing-status'),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: error
+                ? theme.colorScheme.error
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QueueButton extends StatelessWidget {
+  const _QueueButton({required this.controller});
+
+  final QueuePlaybackController controller;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('now-playing-show-queue'),
+    tooltip: 'Show queue',
+    onPressed: () => unawaited(showPlaybackQueue(context, controller)),
+    icon: const Icon(Icons.queue_music_rounded),
+  );
 }
 
 class _StatusIcon extends StatelessWidget {
@@ -188,21 +295,34 @@ IconData _primaryIcon(TrackPlaybackStage stage) => switch (stage) {
   _ => Icons.play_arrow_rounded,
 };
 
-String _statusCopy(TrackPlaybackController controller) =>
-    switch (controller.stage) {
-      TrackPlaybackStage.idle => 'Ready to play',
-      TrackPlaybackStage.resolving => 'Finding a playable source…',
-      TrackPlaybackStage.loading => 'Loading audio…',
-      TrackPlaybackStage.playing => 'Playing',
-      TrackPlaybackStage.paused => 'Paused',
-      TrackPlaybackStage.stopped => 'Stopped',
-      TrackPlaybackStage.completed => 'Finished',
-      TrackPlaybackStage.resolutionError => _resolutionFailureCopy(
-        controller.resolutionFailure,
-      ),
-      TrackPlaybackStage.engineError =>
-        'Playback failed. Try this track again.',
-    };
+String _statusCopy(QueuePlaybackController controller) {
+  final queueFailure = controller.failure;
+  if (queueFailure != null) return _queueFailureCopy(queueFailure);
+  final playback = controller.playback;
+  return switch (playback.stage) {
+    TrackPlaybackStage.idle => 'Ready to play',
+    TrackPlaybackStage.resolving => 'Finding a playable source…',
+    TrackPlaybackStage.loading => 'Loading audio…',
+    TrackPlaybackStage.playing => 'Playing',
+    TrackPlaybackStage.paused => 'Paused',
+    TrackPlaybackStage.stopped => 'Stopped',
+    TrackPlaybackStage.completed => 'Finished',
+    TrackPlaybackStage.resolutionError => _resolutionFailureCopy(
+      playback.resolutionFailure,
+    ),
+    TrackPlaybackStage.engineError => 'Playback failed. Try this track again.',
+  };
+}
+
+String _queueFailureCopy(PlaybackQueueFailure failure) => switch (failure) {
+  PlaybackQueueFailure.invalidTrack => 'A queue track was invalid.',
+  PlaybackQueueFailure.invalidPosition =>
+    'That queue position is no longer available.',
+  PlaybackQueueFailure.coreUnavailable =>
+    'The music core could not update the queue.',
+  PlaybackQueueFailure.invalidResponse =>
+    'The music core returned an invalid queue state.',
+};
 
 String _resolutionFailureCopy(MediaResolutionFailure? failure) =>
     switch (failure) {

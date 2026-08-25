@@ -1,6 +1,6 @@
 # Current Milestone
 
-M1 — First QQ Music Vertical Slice, phase 4: playback.
+M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Completed Recently
 
@@ -64,16 +64,19 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Added `QueuePlaybackController` to compose Rust-selected current positions with the existing single-track coordinator. Manual navigation/current removal starts only the returned current track, clear stops playback, failures retain active state, completion advances exactly once, and terminal completion does not loop. Eight new gateway/controller tests bring the Flutter suite to 80 passing tests; `dart analyze` remains clean.
 - Replaced the authenticated page's direct single-track ownership with one queue/playback controller that survives local library/detail navigation and disposes at sign-out. Row activation sends the currently loaded detail rows plus exact position through Rust queue replacement before media resolution; later pagination does not silently rewrite an active queue.
 - Made default native queue-handle creation lazy, preserving signed-out and FFI-free widget-test startup, and switched track-row keys from opaque identity to row position so legitimate duplicate TrackIds do not collide. Existing end-to-end playback widgets now assert the loaded two-row queue and selected index; `dart analyze`, all 80 Flutter tests, Linux release, and packaged local/loopback playback pass.
+- Extended the adaptive now-playing surface with bounded previous/next and a queue affordance while retaining single-track play/pause/retry/stop and account-reset behavior. Narrow layouts use two control rows and a modal bottom sheet; wider layouts use one transport row and a constrained queue dialog.
+- Added positional queue presentation with current indication, tap-to-select, per-position remove, and explicit clear. Duplicate TrackIds remain distinct, non-current removal does not restart media, current/last removal follows Rust selection/stop, and no shuffle/repeat/reorder/persistence/hidden fetch was added.
+- Added widget regressions for manual previous/next, completion-to-next, duplicate position selection, non-current/current removal, empty queue, and narrow queue layout. The Flutter suite now passes 82 tests; `dart analyze`, Linux release, and packaged local plus loopback MP3 lifecycle pass. Phase-4 architecture/scope/debt review found no Provider/UI leakage, Dart queue-rule duplication, source-URI exposure, new dependency, triggered debt, or scope expansion. Real authenticated QQ playback and non-Linux runtime evidence remain explicit Risks rather than implementation claims.
 
 # In Progress
 
-- Extend the compact now-playing surface with manual previous/next and a bounded queue affordance, then add an adaptive positional queue sheet/panel with select/remove. Keep all mutations delegated to Rust and preserve current single-track error/account-reset behavior.
+- Establish the first lyrics evidence slice: cross-validate the current QQ Music lyric/QRC request and response behavior, document unresolved authentication/decryption/timing semantics, and select only the minimum path needed for synchronized plus basic word-level lyrics.
 
 # Next Candidates
 
-1. Make `NowPlayingBar` consume the queue controller, expose bounded previous/next plus a queue button, and keep play/pause/stop/auth error actions adaptive at 390px.
-2. Add a modal bottom sheet on narrow screens and constrained dialog/panel on wider screens showing positional queue entries, current indication, tap-to-select, and remove. Do not add shuffle, repeat, drag reorder, persistence, or hidden Provider fetches.
-3. Add widget regressions for duplicate entries, completion-to-next, manual previous/next, current/non-current removal, local navigation, sign-in reset, and narrow layout before calling queue behavior user-visible complete.
+1. Research current QQ Music lyrics/QRC behavior using primary live behavior where safe and at least two independent implementations; record exact request fields, response layers, encoding/encryption, translation/romanization availability, and word timing without storing account or copyrighted lyric content.
+2. Add the minimum provider-neutral synchronized/word-timed lyric Domain model and Provider capability only after evidence fixes the invariants.
+3. Implement bounded QQMusicClient parsing with synthetic non-lyrical fixtures and offline regression tests before adding Bridge or Flutter presentation.
 
 # Blockers
 

@@ -6,7 +6,7 @@ The repository is at the beginning of its first vertical slice: sign in, restore
 
 ## Status
 
-The project is in M1 playback development. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
+The project is in M1 lyrics development after completing the first playback/queue implementation slice. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
 
 No release is available yet.
 
