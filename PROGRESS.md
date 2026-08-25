@@ -40,13 +40,13 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 
 # In Progress
 
-- Establish the smallest evidence-backed QQ Music media-resolution contract needed to turn an opaque playlist track into one playable source. Do not add playback UI or a Flutter audio dependency until the protocol and lifecycle boundary are defined.
+- Implement the bounded `QQMusicClient` CDN-dispatch and standard MP3 `UrlGetVkey` operations selected by the media-resolution evidence note. Keep URLs/vkeys redacted and preserve raw item outcomes without inventing restriction reasons.
 
 # Next Candidates
 
-1. Cross-validate current QQ Music media-resolution behavior across independent maintained implementations and identify the minimum request identity, quality, expiry, and rejection semantics.
-2. Record sanitized protocol evidence and define a provider-neutral media-source model that does not leak QQ file or payment payloads into Flutter.
-3. Implement one bounded, cancellable Rust media-resolution path with offline fixture tests before selecting the Flutter playback engine and queue boundary.
+1. Add bounded client requests and synthetic fixtures for CDN dispatch plus standard MP3 vkey success, unauthenticated/unavailable item results, malformed paths, response limits, and redacted diagnostics.
+2. Define the minimum provider-neutral media source/error model and route opaque QQ track identity only inside `QQMusicProvider`, with account-replacement and rejection regressions.
+3. Expose one cancellable single-use Bridge resolution handle before selecting the Flutter playback engine and queue boundary.
 
 # Blockers
 
@@ -66,6 +66,7 @@ None.
 - The complete playlist collection requires `encryptUin`; credentials missing it fail before library transport instead of showing only created playlists. Real successful-login coverage has not yet proven this field on every login shape.
 - Ordinary detail passed a current public no-account probe, but authenticated ordinary and liked-songs success remain cross-validated/fixture-tested rather than proven with this checkout's real account.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
+- Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).
