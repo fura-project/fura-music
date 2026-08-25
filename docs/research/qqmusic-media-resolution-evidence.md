@@ -1,6 +1,6 @@
 # QQ Music media-resolution evidence
 
-- **Status:** Protocol client and Provider mapping implemented; Bridge/playback pending
+- **Status:** Protocol client, Provider mapping, and Bridge implemented; playback pending
 - **Last checked:** 2026-08-26
 - **Scope:** One authenticated, standard-quality MP3 source for the M1 playback path.
 

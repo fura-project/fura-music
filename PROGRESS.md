@@ -43,16 +43,18 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Added the minimum provider-neutral `ResolvedMediaSource`, standard MP3/quality labels, typed media-resolution failures, and `MediaResolutionProvider`. Source URIs remain available for immediate playback but redacted from diagnostics; QQ filenames, vkeys, CDN lists, and raw result codes remain outside Domain.
 - Implemented QQ opaque-track routing exclusively inside `QQMusicProvider`. Resolution requires the exact authenticated candidate, runs dispatch then vkey, rechecks account identity after both awaits, signs out only on explicit rejection, and truthfully advertises `MediaResolution`.
 - Added Provider regressions for successful Domain mapping, foreign/malformed identity rejection before transport, optional song-type fallback, unavailable/rejected/service failure semantics, and account replacement during either network request. Rust workspace tests pass at 8 + 2 + 24 + 68 + 13 with strict Clippy after synchronizing the Bridge capability baseline.
+- Added a single-use cancellable media-resolution Bridge handle. It forwards opaque provider/track identity into the Provider, returns only source URI, MP3/standard labels, validity, or one coarse typed failure, and redacts both identity and URI from Rust diagnostics. An in-flight cancellation regression proves the losing Provider future is dropped.
+- Regenerated pinned FRB 2.13.0 bindings and audited the generated API set: `media.dart` and its FFI/codec symbols were added without removing authentication/library entrypoints. Rust now passes 8 + 2 + 24 + 68 + 16, while `dart analyze`, all 52 Flutter tests, a Linux release build, and the packaged FFI smoke pass. The smoke creates and cancels the media handle without QQ traffic.
 
 # In Progress
 
-- Expose one single-use cancellable Bridge media-resolution handle with presentation-safe source metadata and coarse typed failures. The handle must drop a losing Provider/network future on cancel and must never include a source URI in diagnostics.
+- Select and validate the smallest maintained cross-platform Flutter playback engine against an injected local/test source before handing it short-lived QQ URLs. Record dependency/platform/lifecycle evidence and avoid introducing queue abstractions until one-track playback works.
 
 # Next Candidates
 
-1. Add the Bridge media-source DTO, exact cancellation lifecycle, and complete error mapping, then regenerate the pinned FRB bindings and audit stale generated symbols.
-2. Select and validate the minimum cross-platform Flutter playback engine against an injected local/test source before sending short-lived QQ URLs through it.
-3. Add the smallest playback controller and UI affordance required to play one selected playlist track; define queue ownership only from that real flow.
+1. Cross-check current candidate playback packages for Linux/Android/iOS/macOS/Windows support, lifecycle semantics, maintenance, and license; document the narrow selection.
+2. Prove load/play/pause/stop/dispose and late-callback handling against a deterministic bundled or generated local audio fixture on Linux.
+3. Add the smallest playback controller and UI affordance required to resolve and play one selected playlist track; define queue ownership only from that real flow.
 
 # Blockers
 

@@ -3,6 +3,7 @@ import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart';
+import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -16,6 +17,7 @@ void main() {
     expect(status.provider.implementedCapabilities, [
       'Authentication',
       'UserLibrary',
+      'MediaResolution',
     ]);
     final restore = restoreQqMusicCredentialFromSecureStorage();
     expect(restore.state, QqMusicCredentialRestoreState.signedOut);
@@ -43,6 +45,17 @@ void main() {
     expect(
       cancelledTrackPageLoad.failure,
       QqMusicPlaylistTrackPageLoadFailure.cancelled,
+    );
+    final unusedMediaResolution = beginQqMusicMediaResolution(
+      providerId: 'qq-music',
+      opaqueTrackId: 'track:41001:0:1:fixtureTrackMid1',
+    );
+    expect(unusedMediaResolution.isActive, isTrue);
+    expect(unusedMediaResolution.cancel(), isTrue);
+    final cancelledMediaResolution = await unusedMediaResolution.run();
+    expect(
+      cancelledMediaResolution.failure,
+      QqMusicMediaResolutionFailure.cancelled,
     );
 
     await tester.pumpWidget(MusicApp(bootstrap: status));
