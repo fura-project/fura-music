@@ -1,21 +1,24 @@
 # Credential storage evidence
 
 - **Status:** Active research for M1 authentication
-- **Last checked:** 2026-08-25
+- **Last checked:** 2026-08-26
 - **Scope:** Selecting the minimum cross-platform persistence boundary for QQ Music credentials.
 
 ## Sources inspected
 
-1. [`flutter_secure_storage` 11 package documentation](https://pub.dev/packages/flutter_secure_storage), including Android backup, Apple entitlement, Linux dependency, and platform encryption notes.
+1. [`flutter_secure_storage` package documentation](https://pub.dev/packages/flutter_secure_storage), including Android backup, Apple entitlement, Linux dependency, and platform encryption notes.
 2. [Official `flutter_secure_storage` repository](https://github.com/juliansteenbakker/flutter_secure_storage), including the federated platform implementations and BSD-3-Clause license.
-3. [`keyring` 4 feature documentation](https://docs.rs/crate/keyring/latest/features) and [official repository](https://github.com/open-source-cooperative/keyring-rs), including native desktop stores and the Android feature.
-4. [Official Android native keyring store](https://github.com/open-source-cooperative/android-native-keyring-store), including its JNI and `ndk-context` initialization requirements.
+3. [Upstream issue #1224](https://github.com/juliansteenbakker/flutter_secure_storage/issues/1224), documenting that 11.0.0's compile-SDK 37 requirement does not build with the current default Flutter/AGP line.
+4. [`keyring` 4 feature documentation](https://docs.rs/crate/keyring/latest/features) and [official repository](https://github.com/open-source-cooperative/keyring-rs), including native desktop stores and the Android feature.
+5. [Official Android native keyring store](https://github.com/open-source-cooperative/android-native-keyring-store), including its JNI and `ndk-context` initialization requirements.
 
 Only public documentation, dependency metadata, build behavior, and local system capabilities were inspected. No test credential or marker was written to the user's keyring.
 
 ## Selected package and boundary
 
-`flutter_secure_storage` 11.0.0 is BSD-3-Clause licensed and declares Android, iOS, Linux, macOS, web, and Windows implementations. This application does not target web. Version 11's Android implementation documents RSA OAEP key wrapping plus AES-GCM storage and compiles with minimum SDK 24; the current Flutter 3.47.1 project default is also 24.
+`flutter_secure_storage` 10.3.1 is BSD-3-Clause licensed and declares Android, iOS, Linux, macOS, web, and Windows implementations. This application does not target web. Version 10's Android implementation uses its rewritten custom RSA-OAEP/AES-GCM storage path and compiles with SDK 36. The project uses no deprecated v9 cipher option and has never distributed a credential, so it does not skip a required migration state.
+
+Version 11.0.0 was initially selected, but its Android module hard-codes compile SDK 37 while this Flutter 3.47.1 line defaults to 36 and the installed current platform is named `android-37.0`, not the `android-37` target requested by the integer Gradle DSL. The first ASCII-root Android build reproduced the same incompatibility currently recorded upstream. The project therefore pins the latest compatible v10 release instead of overriding the dependency's declared compile SDK or maintaining a fork. Pub can still resolve the independently versioned Linux 3.0.2 and Windows 4.2.2 implementations through v10's compatible constraints, retaining their current platform fixes. Reassess v11 after upstream and the supported Flutter/AGP toolchain agree on SDK 37.
 
 The official package guidance requires Android backups to exclude its encrypted preferences because the restored encryption key is not available on another device. The application therefore disables Android backup instead of maintaining an incomplete exclusion list. Apple targets declare the documented Keychain entitlement. Linux requires `libsecret` development support.
 
