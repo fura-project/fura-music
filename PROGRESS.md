@@ -50,15 +50,17 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Added a plugin-independent `ForegroundAudioEngine`/per-source session port, the concrete `audioplayers` adapter, and a single-track `ForegroundPlaybackController`. Each load owns a fresh player; source replacement, stop, failure, and dispose detach the exact session before cleanup so late old state/error callbacks cannot cross generations.
 - Disabled plugin-owned diagnostics before any player is created because upstream error strings include `player.source`; project errors retain only load/playback/core categories. Seven new regressions cover the logger gate, invalid source precondition, play/pause/resume/stop, replacement, terminal cleanup errors, late completion/failure after stop/dispose, and URI-free failures.
 - Extended the packaged Linux integration with a loopback HTTP MP3 carrying a synthetic vkey query. The project adapter completes play/pause/resume/stop/dispose without logging or retaining that URI; the in-memory fixture server is force-closed and never contacts QQ Music.
+- Added a Dart media-resolution gateway with one cancellable operation per opaque track. It maps all ten generated Bridge failures, preserves unavailable separately, requires an unambiguous HTTP(S) source with authority and positive TTL, and gives the source/result explicitly redacted string forms.
+- Routed explicit media credential rejection through the same shared serialized vault boundary used by authentication and library; transient/availability failures retain it, and cleanup failure remains distinct. Five regressions cover success/diagnostics, all failure variants, invalid result shapes, exact identity/cancel forwarding, and all three vault paths.
 
 # In Progress
 
-- Connect opaque playlist-track selection to the Bridge resolution handle through a Dart gateway with shared credential-vault rejection cleanup, then hand the short-lived success URI directly into the existing single-track controller. Keep resolution errors distinct from engine errors and do not add a queue yet.
+- Add a track-playback coordinator that owns one media-resolution operation plus the foreground controller. Replaced track requests, stop, and dispose must cancel resolution and suppress its late success/failure; a current success is handed directly to playback without logging or persisting its URI.
 
 # Next Candidates
 
-1. Add a media-resolution gateway/operation that maps every Bridge failure, deletes the shared vault only on explicit credential rejection, and never stores or stringifies a success URI.
-2. Add a track-playback coordinator that cancels replaced resolution, suppresses late results, and forwards a current success directly to `ForegroundPlaybackController`.
+1. Implement the coordinator's resolving/playing/paused/completed/resolution-error/engine-error states with exact operation cancellation and generation gates.
+2. Cover late resolution after track replacement, stop, and dispose; keep authentication/rejection/unavailable failures distinct for the future UI.
 3. Make a playlist track row start that flow and add the smallest truthful play/pause/stop surface; define queue ownership only after this one-track path is complete.
 
 # Blockers
