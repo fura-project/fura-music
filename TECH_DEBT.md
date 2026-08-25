@@ -4,7 +4,7 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 ## TD-001 — Linux bridge build bypasses Cargokit
 
-**Status:** Triggered
+**Status:** Scheduled
 
 **Problem:** `flutter_rust_bridge` 2.13.0 generates a Cargokit backend that invokes `rustup` unconditionally. The Arch development environment intentionally uses supported system `rustc` and `cargo` packages, where installing rustup would conflict with the system toolchain. Linux therefore has a small direct-Cargo CMake integration while other platforms retain generated Cargokit integration. The first Android build additionally cannot reach Cargokit because Flutter 3.47.1's Gradle plugin loader rereads a non-ASCII `flutter.sdk` path through Java's Latin-1 `Properties.load(InputStream)` behavior.
 
@@ -16,7 +16,7 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Suggested solution:** First give the Flutter tool an ASCII SDK root without moving or patching the external SDK, then observe the actual Android Cargokit failure. Adopt upstream Cargokit/native-assets system-Rust support when available, or add the smallest project-owned Android system-Cargo path only after that evidence identifies the required targets and NDK variables.
 
-**Trigger condition:** Triggered on 2026-08-26 when M1 reached its first mobile build task. Three ARM64 release attempts stopped at the Flutter Gradle loader's corrupted SDK path; do not repeat the same invocation until the SDK root strategy changes.
+**Trigger condition:** Triggered and scheduled on 2026-08-26 when M1 reached its first mobile build task. Three ARM64 release attempts stopped at the Flutter Gradle loader's corrupted SDK path; do not repeat the same invocation until the SDK root strategy changes.
 
 ## TD-002 — Release identity and signing use generated defaults
 

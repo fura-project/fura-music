@@ -83,21 +83,24 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added the first adaptive synchronized-lyric surface from the existing now-playing owner. It opens as a tall bottom sheet below 600px or bounded dialog on wider windows, renders honest idle/loading/unavailable/retry/account/content states, preserves canonical lines, shows optional translation/romanization, highlights the active line, and paints each timed segment from real playback milliseconds. Four focused widget regressions bring the Flutter suite to 101 passing tests; strict Dart analysis and the existing 390px now-playing regression pass without a new dependency or state machine.
 - Validated the real now-playing lyric entry at 390px and 1200px. The narrow path opens a bottom sheet without overflow; the wide path opens a bounded dialog and, while it remains visible, replaces first-track title/content with the exact second-track lyric request after playback completion advances the queue. The complete Flutter suite now passes 103 tests and strict Dart analysis remains clean.
 - Reassessed the M1 mobile trigger. Android SDK 36.1, NDK, licenses, and several JDKs are installed, but no Android device or emulator is active. Three ARM64 release builds stopped before app or Rust compilation because Flutter 3.47.1's Gradle loader corrupts the non-ASCII SDK path when rereading `local.properties`; a settings-only UTF-8 workaround advanced one layer but could not affect the plugin's second read and was reverted. No APK or mobile runtime evidence exists; TD-001 is now Triggered.
+- Completed the unblocked M1 readiness review in `docs/development/m1-readiness-review.md`. Rust formatting, 149 offline tests, strict Clippy, 103 Flutter tests, strict Dart analysis, Linux release, packaged FFI, real GStreamer local/loopback playback, and disposable Linux secure storage pass. Architecture/scope scans found no layer leak, sidecar, Provider expansion, secret/artifact, or untracked TODO; the module summary was updated for the implemented lyric path. M1 is not checkpoint-ready because mobile build/runtime and authorized real-account end-to-end evidence remain absent.
 
 # In Progress
 
-- Run the M1 acceptance, architecture, scope, and technical-debt reviews for every unblocked criterion, then isolate the exact remaining checkpoint work.
+- Resolve scheduled TD-001 through a genuinely different ASCII Flutter SDK-root strategy, then continue the Android build from the first new failure or success evidence.
 
 # Next Candidates
 
-1. Run the M1 acceptance, architecture, scope, and technical-debt reviews for all unblocked criteria.
-2. Resolve the Android build path with a genuinely different ASCII SDK-root strategy, then inspect the resulting Cargokit/system-Rust evidence instead of repeating the blocked command.
-3. Complete the M1 checkpoint only after one mobile target actually builds; runtime claims remain separately limited by available devices and TD-004.
+1. Resolve scheduled TD-001 with a genuinely different ASCII Flutter SDK-root strategy, then inspect the resulting Cargokit/system-Rust evidence instead of repeating the blocked command.
+2. Obtain an available Android runtime for the disposable secure-storage/audio smoke required by TD-004; do not infer runtime support from an APK.
+3. Run an authorized, secret-safe real-account vertical-slice smoke from QR sign-in through restore, library, playback/queue, and synchronized lyrics.
+4. Complete the M1 checkpoint only after the Roadmap criteria and triggered debt are actually satisfied.
 
 # Blockers
 
 - The M1 checkpoint requires one mobile build, but this host's first Android path is blocked before compilation by Flutter 3.47.1 rereading its non-ASCII SDK location as Latin-1 (TD-001). Three equivalent ARM64 attempts failed; the settings-only workaround was insufficient and reverted.
 - No mobile device or running emulator is available for secure-storage/audio runtime evidence. This does not block offline review or a future APK build, but TD-004 cannot be resolved from generated registrants or desktop tests.
+- The code and fixture/widget evidence cover the complete user journey, but this checkout has not completed an authorized real QQ Music account flow from QR exchange through restored library, media playback, and synchronized lyrics. The Roadmap's user-facing criteria therefore remain unverified end to end.
 
 # Pending Human Decisions
 
