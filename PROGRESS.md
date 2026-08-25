@@ -80,15 +80,16 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Extended the packaged Linux loopback MP3 integration to observe a positive adapter position after native playback starts and a Flutter frame is pumped. The first attempt timed out because the test stopped producing frames for the dependency's `FramePositionUpdater`; pumping the real UI callback path passed without product polling or a fake clock.
 - Composed the optional lyric controller into the existing queue/playback owner. Exact current Track identity drives lyric replacement, current-session milliseconds drive active selection, queue clear/dispose clears lyric authority, and duplicate Track identities do not trigger redundant loads. Active intervals are left-closed/right-open; gaps select none, overlaps prefer the latest start, equal starts prefer later source order, and word progress exists only inside the active segment. Two new regressions bring the Flutter suite to 93 tests.
 - Wired one `RustLyricGateway` and `LyricController` into the authenticated page's existing queue owner. Application startup passes the same underlying serialized vault to authentication, library, detail, media, and lyrics; leaving the authenticated surface disposes playback, queue, and lyric authority together. Explicit lyric rejection and rejection-cleanup failure reuse the existing sign-in reset, while unavailable/network failures preserve the authenticated shell. Four end-to-end widget regressions bring the Flutter suite to 97 passing tests; direct `dart analyze --fatal-infos` is clean.
+- Added the first adaptive synchronized-lyric surface from the existing now-playing owner. It opens as a tall bottom sheet below 600px or bounded dialog on wider windows, renders honest idle/loading/unavailable/retry/account/content states, preserves canonical lines, shows optional translation/romanization, highlights the active line, and paints each timed segment from real playback milliseconds. Four focused widget regressions bring the Flutter suite to 101 passing tests; strict Dart analysis and the existing 390px now-playing regression pass without a new dependency or state machine.
 
 # In Progress
 
-- Add the smallest adaptive lyric surface over the authenticated page's existing lyric controller, including honest loading, unavailable, retryable, and account states plus active-line/word progress.
+- Validate the real now-playing lyric entry at narrow and wide sizes, including current-track replacement while the panel is open.
 
 # Next Candidates
 
-1. Add the smallest adaptive lyric surface with loading/unavailable/retry/account states plus active-line and word-level progress.
-2. Validate narrow/wide lyric layout and current-track replacement through widget tests.
+1. Validate narrow/wide lyric layout and current-track replacement through end-to-end widget tests.
+2. Reassess TD-004's M1 mobile trigger and run every safe build/runtime check available on this host without claiming unavailable device evidence.
 3. Run the M1 acceptance, architecture, scope, and technical-debt reviews; write the checkpoint, then continue into the next Roadmap milestone if it remains legal and unblocked.
 
 # Blockers

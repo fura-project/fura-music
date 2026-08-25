@@ -1,0 +1,184 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_controller.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_panel.dart';
+
+void main() {
+  testWidgets('renders canonical content and real word progress', (
+    tester,
+  ) async {
+    final controller = LyricController(
+      _ScriptedGateway([_ImmediateOperation(_success())]),
+    );
+    await controller.load(_track);
+    controller.updatePositionMs(1250);
+
+    await _pumpPanel(tester, controller);
+
+    expect(find.byKey(const ValueKey('lyrics-content')), findsOneWidget);
+    expect(find.text('timed '), findsOneWidget);
+    expect(find.text('line'), findsOneWidget);
+    expect(find.text('定时行'), findsOneWidget);
+    expect(find.text('ding shi hang'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('lyrics-word-0-0'))).value,
+      '50% complete',
+    );
+    controller.dispose();
+  });
+
+  testWidgets('shows loading then an honest unavailable state', (tester) async {
+    final pending = _PendingOperation();
+    final controller = LyricController(_ScriptedGateway([pending]));
+    final load = controller.load(_track);
+
+    await _pumpPanel(tester, controller);
+    expect(find.byKey(const ValueKey('lyrics-loading')), findsOneWidget);
+
+    pending.complete(const LyricLoadResult(failure: LyricFailure.unavailable));
+    await load;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('lyrics-unavailable')), findsOneWidget);
+    expect(find.text('No synchronized lyrics'), findsOneWidget);
+
+    controller.dispose();
+  });
+
+  testWidgets('retries a transient failure through the same controller', (
+    tester,
+  ) async {
+    final gateway = _ScriptedGateway([
+      const _ImmediateOperation(LyricLoadResult(failure: LyricFailure.network)),
+      _ImmediateOperation(_success()),
+    ]);
+    final controller = LyricController(gateway);
+    await controller.load(_track);
+
+    await _pumpPanel(tester, controller);
+    expect(find.byKey(const ValueKey('lyrics-error')), findsOneWidget);
+    expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('lyrics-retry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('lyrics-content')), findsOneWidget);
+    expect(gateway.requests, [
+      ('qq-music', 'track:fixture'),
+      ('qq-music', 'track:fixture'),
+    ]);
+
+    controller.dispose();
+  });
+
+  testWidgets('offers the existing sign-in action for an account state', (
+    tester,
+  ) async {
+    var signInAgainCalls = 0;
+    final controller = LyricController(
+      _ScriptedGateway([
+        const _ImmediateOperation(
+          LyricLoadResult(failure: LyricFailure.authenticationRequired),
+        ),
+      ]),
+    );
+    await controller.load(_track);
+
+    await _pumpPanel(
+      tester,
+      controller,
+      onSignInAgain: () => signInAgainCalls += 1,
+    );
+    expect(
+      find.byKey(const ValueKey('lyrics-authentication-required')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('lyrics-sign-in-again')));
+    expect(signInAgainCalls, 1);
+
+    controller.dispose();
+  });
+}
+
+Future<void> _pumpPanel(
+  WidgetTester tester,
+  LyricController controller, {
+  VoidCallback? onSignInAgain,
+}) => tester.pumpWidget(
+  MaterialApp(
+    home: Scaffold(
+      body: LyricPanel(
+        controller: controller,
+        onClose: () {},
+        onSignInAgain: onSignInAgain ?? () {},
+      ),
+    ),
+  ),
+);
+
+const _track = PlaylistTrackSummary(
+  providerId: 'qq-music',
+  opaqueId: 'track:fixture',
+  title: 'Fixture track',
+  artistNames: ['Fixture artist'],
+);
+
+LyricLoadResult _success() => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    SynchronizedLyricLine(
+      text: 'timed line',
+      startMs: 1000,
+      durationMs: 1500,
+      translation: '定时行',
+      romanization: 'ding shi hang',
+      segments: const [
+        TimedLyricSegment(text: 'timed ', startMs: 1000, durationMs: 500),
+        TimedLyricSegment(text: 'line', startMs: 1500, durationMs: 500),
+      ],
+    ),
+  ]),
+);
+
+class _ScriptedGateway implements LyricGateway {
+  _ScriptedGateway(this.operations);
+
+  final List<LyricLoadOperation> operations;
+  final List<(String, String)> requests = [];
+  int _next = 0;
+
+  @override
+  LyricLoadOperation beginLoad({
+    required String providerId,
+    required String opaqueTrackId,
+  }) {
+    requests.add((providerId, opaqueTrackId));
+    return operations[_next++];
+  }
+}
+
+class _ImmediateOperation implements LyricLoadOperation {
+  const _ImmediateOperation(this.result);
+
+  final LyricLoadResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<LyricLoadResult> run() async => result;
+}
+
+class _PendingOperation implements LyricLoadOperation {
+  final Completer<LyricLoadResult> _result = Completer();
+
+  void complete(LyricLoadResult result) => _result.complete(result);
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<LyricLoadResult> run() => _result.future;
+}

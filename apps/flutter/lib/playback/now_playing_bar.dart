@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_panel.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_panel.dart';
@@ -65,6 +66,11 @@ class NowPlayingBar extends StatelessWidget {
                                     error: error,
                                   ),
                                 ),
+                                if (controller.lyrics != null)
+                                  _LyricsButton(
+                                    controller: controller,
+                                    onSignInAgain: onSignInAgain,
+                                  ),
                                 _QueueButton(controller: controller),
                               ],
                             ),
@@ -95,6 +101,11 @@ class NowPlayingBar extends StatelessWidget {
                               track,
                               authenticationFailure,
                             ),
+                            if (controller.lyrics != null)
+                              _LyricsButton(
+                                controller: controller,
+                                onSignInAgain: onSignInAgain,
+                              ),
                             _QueueButton(controller: controller),
                           ],
                         ),
@@ -214,6 +225,21 @@ class _QueueButton extends StatelessWidget {
     tooltip: 'Show queue',
     onPressed: () => unawaited(showPlaybackQueue(context, controller)),
     icon: const Icon(Icons.queue_music_rounded),
+  );
+}
+
+class _LyricsButton extends StatelessWidget {
+  const _LyricsButton({required this.controller, required this.onSignInAgain});
+
+  final QueuePlaybackController controller;
+  final VoidCallback onSignInAgain;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('now-playing-show-lyrics'),
+    tooltip: 'Show lyrics',
+    onPressed: () => showLyrics(context, controller.lyrics!, onSignInAgain),
+    icon: const Icon(Icons.lyrics_outlined),
   );
 }
 
