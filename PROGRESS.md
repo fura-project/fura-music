@@ -62,15 +62,17 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Regenerated pinned FRB 2.13.0 bindings and confirmed the API set only gained `queue.dart` plus its FFI/codec symbols. Full checks pass at 15 + 2 + 24 + 68 + 21, strict Clippy, `dart analyze`, 72 Flutter tests, Linux release, and a packaged FFI smoke that mutates duplicate entries and proves invalid selection leaves current unchanged.
 - Added the Dart `RustPlaybackQueueGateway` with immutable/redacted snapshots, full generated failure mapping, input forwarding, and defensive validation of result shape, track fields, current position, and navigation flags. Invalid or thrown Bridge results stay coarse and cannot replace the last valid controller snapshot.
 - Added `QueuePlaybackController` to compose Rust-selected current positions with the existing single-track coordinator. Manual navigation/current removal starts only the returned current track, clear stops playback, failures retain active state, completion advances exactly once, and terminal completion does not loop. Eight new gateway/controller tests bring the Flutter suite to 80 passing tests; `dart analyze` remains clean.
+- Replaced the authenticated page's direct single-track ownership with one queue/playback controller that survives local library/detail navigation and disposes at sign-out. Row activation sends the currently loaded detail rows plus exact position through Rust queue replacement before media resolution; later pagination does not silently rewrite an active queue.
+- Made default native queue-handle creation lazy, preserving signed-out and FFI-free widget-test startup, and switched track-row keys from opaque identity to row position so legitimate duplicate TrackIds do not collide. Existing end-to-end playback widgets now assert the loaded two-row queue and selected index; `dart analyze`, all 80 Flutter tests, Linux release, and packaged local/loopback playback pass.
 
 # In Progress
 
-- Connect `QueuePlaybackController` to the authenticated library/detail route. Activating a row must replace the queue with the currently loaded page and select that exact row position; pagination remains owned by the detail controller and must not silently mutate an already-started queue.
+- Extend the compact now-playing surface with manual previous/next and a bounded queue affordance, then add an adaptive positional queue sheet/panel with select/remove. Keep all mutations delegated to Rust and preserve current single-track error/account-reset behavior.
 
 # Next Candidates
 
-1. Make the authenticated page own one queue controller and pass it through local playlist navigation. Populate a fresh positional queue from the currently loaded detail rows on activation; later pagination does not alter it until another explicit row activation.
-2. Extend the compact now-playing surface with manual previous/next and a bounded queue affordance; add an adaptive queue sheet/panel with positional selection and removal, without shuffle/repeat/persistence.
+1. Make `NowPlayingBar` consume the queue controller, expose bounded previous/next plus a queue button, and keep play/pause/stop/auth error actions adaptive at 390px.
+2. Add a modal bottom sheet on narrow screens and constrained dialog/panel on wider screens showing positional queue entries, current indication, tap-to-select, and remove. Do not add shuffle, repeat, drag reorder, persistence, or hidden Provider fetches.
 3. Add widget regressions for duplicate entries, completion-to-next, manual previous/next, current/non-current removal, local navigation, sign-in reset, and narrow layout before calling queue behavior user-visible complete.
 
 # Blockers

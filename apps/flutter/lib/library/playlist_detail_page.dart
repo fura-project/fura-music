@@ -5,13 +5,13 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
-import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 
 class PlaylistDetailPage extends StatefulWidget {
   const PlaylistDetailPage({
     required this.playlist,
     required this.gateway,
-    required this.playbackController,
+    required this.queuePlaybackController,
     required this.onBack,
     required this.onSignInAgain,
     super.key,
@@ -19,7 +19,7 @@ class PlaylistDetailPage extends StatefulWidget {
 
   final UserPlaylistSummary playlist;
   final PlaylistDetailGateway gateway;
-  final TrackPlaybackController playbackController;
+  final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
 
@@ -98,7 +98,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ),
       ),
       bottomNavigationBar: NowPlayingBar(
-        controller: widget.playbackController,
+        controller: widget.queuePlaybackController.playback,
         onSignInAgain: widget.onSignInAgain,
       ),
     );
@@ -118,8 +118,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       appendFailure: _controller.appendFailure,
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
-      onTrackSelected: (track) =>
-          unawaited(widget.playbackController.playTrack(track)),
+      onTrackSelected: (index) => unawaited(
+        widget.queuePlaybackController.replaceAndPlay(
+          _controller.tracks,
+          index,
+        ),
+      ),
       desktop: desktop,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
@@ -237,7 +241,7 @@ class _TrackCollection extends StatelessWidget {
   final UserLibraryFailure? appendFailure;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
-  final ValueChanged<PlaylistTrackSummary> onTrackSelected;
+  final ValueChanged<int> onTrackSelected;
   final bool desktop;
 
   @override
@@ -290,7 +294,7 @@ class _TrackCollection extends StatelessWidget {
           index: index + 1,
           track: tracks[index],
           desktop: desktop,
-          onTap: () => onTrackSelected(tracks[index]),
+          onTap: () => onTrackSelected(index),
         );
       },
     );
@@ -324,7 +328,7 @@ class _TrackRow extends StatelessWidget {
       container: true,
       button: true,
       child: InkWell(
-        key: ValueKey('play-track-${track.opaqueId}'),
+        key: ValueKey('playlist-track-row-$index'),
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(

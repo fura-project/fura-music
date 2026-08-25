@@ -96,20 +96,25 @@ abstract interface class PlaybackQueueBridge {
 }
 
 class RustPlaybackQueueGateway implements PlaybackQueueGateway {
-  RustPlaybackQueueGateway({PlaybackQueueBridge? bridge})
-    : _bridge = bridge ?? _RustPlaybackQueueBridge();
+  factory RustPlaybackQueueGateway({PlaybackQueueBridge? bridge}) =>
+      RustPlaybackQueueGateway._(bridge);
 
-  final PlaybackQueueBridge _bridge;
+  RustPlaybackQueueGateway._(this._bridge);
+
+  PlaybackQueueBridge? _bridge;
+
+  PlaybackQueueBridge get _resolvedBridge =>
+      _bridge ??= _RustPlaybackQueueBridge();
 
   @override
-  PlaybackQueueResult snapshot() => _invoke(_bridge.snapshot);
+  PlaybackQueueResult snapshot() => _invoke(() => _resolvedBridge.snapshot());
 
   @override
   PlaybackQueueResult replace({
     required List<PlaylistTrackSummary> tracks,
     required int? currentIndex,
   }) => _invoke(
-    () => _bridge.replace(
+    () => _resolvedBridge.replace(
       tracks: tracks.map(_bridgeTrack).toList(growable: false),
       currentIndex: currentIndex,
     ),
@@ -117,25 +122,28 @@ class RustPlaybackQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult push(PlaylistTrackSummary track) =>
-      _invoke(() => _bridge.push(_bridgeTrack(track)));
+      _invoke(() => _resolvedBridge.push(_bridgeTrack(track)));
 
   @override
-  PlaybackQueueResult select(int index) => _invoke(() => _bridge.select(index));
+  PlaybackQueueResult select(int index) =>
+      _invoke(() => _resolvedBridge.select(index));
 
   @override
-  PlaybackQueueResult advance() => _invoke(_bridge.advance);
+  PlaybackQueueResult advance() => _invoke(() => _resolvedBridge.advance());
 
   @override
-  PlaybackQueueResult rewind() => _invoke(_bridge.rewind);
+  PlaybackQueueResult rewind() => _invoke(() => _resolvedBridge.rewind());
 
   @override
-  PlaybackQueueResult completeCurrent() => _invoke(_bridge.completeCurrent);
+  PlaybackQueueResult completeCurrent() =>
+      _invoke(() => _resolvedBridge.completeCurrent());
 
   @override
-  PlaybackQueueResult remove(int index) => _invoke(() => _bridge.remove(index));
+  PlaybackQueueResult remove(int index) =>
+      _invoke(() => _resolvedBridge.remove(index));
 
   @override
-  PlaybackQueueResult clear() => _invoke(_bridge.clear);
+  PlaybackQueueResult clear() => _invoke(() => _resolvedBridge.clear());
 
   PlaybackQueueResult _invoke(
     bridge_queue.PlaybackQueueUpdate Function() operation,

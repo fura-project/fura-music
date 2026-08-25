@@ -8,6 +8,7 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 void main() {
@@ -18,14 +19,17 @@ void main() {
       _ImmediateMediaOperation(_success('first')),
     ]);
     final audio = _FakeAudioEngine([_FakeAudioSession()]);
-    await _openDetail(tester, media: media, audio: audio);
+    final queue = _WidgetQueueGateway();
+    await _openDetail(tester, media: media, audio: audio, queue: queue);
 
-    await tester.tap(find.byKey(const ValueKey('play-track-first')));
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
     expect(find.textContaining('Playing'), findsOneWidget);
     expect(media.requests, [('qq-music', 'first')]);
+    expect(queue.replacedTracks, hasLength(2));
+    expect(queue.replacedIndex, 0);
     expect(audio.requestedUris.single.queryParameters['vkey'], 'first');
 
     await tester.tap(find.byTooltip('Pause'));
@@ -53,7 +57,7 @@ void main() {
     final audio = _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]);
     await _openDetail(tester, media: media, audio: audio);
 
-    await tester.tap(find.byKey(const ValueKey('play-track-first')));
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await first.started.future;
     await tester.pump();
     expect(find.textContaining('Finding a playable source'), findsOneWidget);
@@ -69,7 +73,7 @@ void main() {
 
     await tester.tap(find.text('Fixture playlist').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('play-track-second')));
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-2')));
     await tester.pumpAndSettle();
 
     expect(find.text('Second track'), findsNWidgets(2));
@@ -96,7 +100,7 @@ void main() {
         firstOpaqueId: privateUri,
       );
 
-      await tester.tap(find.byKey(ValueKey('play-track-$privateUri')));
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
       await tester.pumpAndSettle();
 
       expect(
@@ -123,7 +127,7 @@ void main() {
       media: _FakeMediaGateway([_ImmediateMediaOperation(_success('narrow'))]),
       audio: _FakeAudioEngine([_FakeAudioSession()]),
     );
-    await tester.tap(find.byKey(const ValueKey('play-track-first')));
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Pause'), findsOneWidget);
@@ -136,6 +140,7 @@ Future<void> _openDetail(
   WidgetTester tester, {
   required _FakeMediaGateway media,
   required _FakeAudioEngine audio,
+  _WidgetQueueGateway? queue,
   String firstOpaqueId = 'first',
 }) async {
   await tester.pumpWidget(
@@ -145,6 +150,7 @@ Future<void> _openDetail(
       libraryGateway: const _LibraryGateway(),
       playlistDetailGateway: _DetailGateway(firstOpaqueId),
       mediaResolutionGateway: media,
+      playbackQueueGateway: queue ?? _WidgetQueueGateway(),
       audioEngine: audio,
     ),
   );
@@ -152,6 +158,86 @@ Future<void> _openDetail(
   await tester.tap(find.text('Fixture playlist').last);
   await tester.pumpAndSettle();
 }
+
+class _WidgetQueueGateway implements PlaybackQueueGateway {
+  PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
+  List<PlaylistTrackSummary> replacedTracks = const [];
+  int? replacedIndex;
+
+  @override
+  PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult replace({
+    required List<PlaylistTrackSummary> tracks,
+    required int? currentIndex,
+  }) {
+    replacedTracks = List.of(tracks);
+    replacedIndex = currentIndex;
+    _snapshot = _makeSnapshot(tracks, currentIndex);
+    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+  }
+
+  @override
+  PlaybackQueueResult completeCurrent() {
+    final current = _snapshot.currentIndex;
+    if (current == null || current + 1 >= _snapshot.tracks.length) {
+      return PlaybackQueueResult(snapshot: _snapshot);
+    }
+    _snapshot = _makeSnapshot(_snapshot.tracks, current + 1);
+    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+  }
+
+  @override
+  PlaybackQueueResult advance() => completeCurrent();
+
+  @override
+  PlaybackQueueResult rewind() {
+    final current = _snapshot.currentIndex;
+    if (current == null || current == 0) {
+      return PlaybackQueueResult(snapshot: _snapshot);
+    }
+    _snapshot = _makeSnapshot(_snapshot.tracks, current - 1);
+    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+  }
+
+  @override
+  PlaybackQueueResult select(int index) {
+    if (index < 0 || index >= _snapshot.tracks.length) {
+      return const PlaybackQueueResult(
+        failure: PlaybackQueueFailure.invalidPosition,
+      );
+    }
+    final changed = index != _snapshot.currentIndex;
+    _snapshot = _makeSnapshot(_snapshot.tracks, index);
+    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: changed);
+  }
+
+  @override
+  PlaybackQueueResult clear() {
+    final changed = _snapshot.current != null;
+    _snapshot = PlaybackQueueSnapshot.empty();
+    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: changed);
+  }
+
+  @override
+  PlaybackQueueResult push(PlaylistTrackSummary track) =>
+      throw StateError('not used by this widget slice');
+
+  @override
+  PlaybackQueueResult remove(int index) =>
+      throw StateError('not used by this widget slice');
+}
+
+PlaybackQueueSnapshot _makeSnapshot(
+  List<PlaylistTrackSummary> tracks,
+  int? currentIndex,
+) => PlaybackQueueSnapshot(
+  tracks: tracks,
+  currentIndex: currentIndex,
+  hasPrevious: currentIndex != null && currentIndex > 0,
+  hasNext: currentIndex != null && currentIndex + 1 < tracks.length,
+);
 
 const _bootstrap = BootstrapStatus(
   coreVersion: '0.1.0-test',

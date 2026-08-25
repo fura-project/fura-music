@@ -9,6 +9,7 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 const _qqGreen = Color(0xFF24B86A);
@@ -20,6 +21,7 @@ class MusicApp extends StatelessWidget {
     UserLibraryGateway? libraryGateway,
     PlaylistDetailGateway? playlistDetailGateway,
     MediaResolutionGateway? mediaResolutionGateway,
+    PlaybackQueueGateway? playbackQueueGateway,
     ForegroundAudioEngine? audioEngine,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
@@ -51,6 +53,7 @@ class MusicApp extends StatelessWidget {
       libraryGateway: libraryGateway,
       playlistDetailGateway: playlistDetailGateway,
       mediaResolutionGateway: mediaResolutionGateway,
+      playbackQueueGateway: playbackQueueGateway ?? RustPlaybackQueueGateway(),
       audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
@@ -63,6 +66,7 @@ class MusicApp extends StatelessWidget {
     required this.libraryGateway,
     required this.playlistDetailGateway,
     required this.mediaResolutionGateway,
+    required this.playbackQueueGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -73,6 +77,7 @@ class MusicApp extends StatelessWidget {
   final UserLibraryGateway libraryGateway;
   final PlaylistDetailGateway playlistDetailGateway;
   final MediaResolutionGateway mediaResolutionGateway;
+  final PlaybackQueueGateway playbackQueueGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -90,6 +95,7 @@ class MusicApp extends StatelessWidget {
         libraryGateway: libraryGateway,
         playlistDetailGateway: playlistDetailGateway,
         mediaResolutionGateway: mediaResolutionGateway,
+        playbackQueueGateway: playbackQueueGateway,
         audioEngine: audioEngine,
         initialCredentialRestore: initialCredentialRestore,
       ),
@@ -118,6 +124,7 @@ class LoginPage extends StatefulWidget {
     required this.libraryGateway,
     required this.playlistDetailGateway,
     required this.mediaResolutionGateway,
+    required this.playbackQueueGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -128,6 +135,7 @@ class LoginPage extends StatefulWidget {
   final UserLibraryGateway libraryGateway;
   final PlaylistDetailGateway playlistDetailGateway;
   final MediaResolutionGateway mediaResolutionGateway;
+  final PlaybackQueueGateway playbackQueueGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -168,6 +176,7 @@ class _LoginPageState extends State<LoginPage> {
             gateway: widget.libraryGateway,
             detailGateway: widget.playlistDetailGateway,
             mediaResolutionGateway: widget.mediaResolutionGateway,
+            playbackQueueGateway: widget.playbackQueueGateway,
             audioEngine: widget.audioEngine,
             onSignInAgain: _controller.cancel,
           );
