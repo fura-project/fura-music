@@ -26,16 +26,20 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Bounded session transport instability to three caller-visible consecutive failures, finishing on the fourth and resetting the count after any reached protocol response.
 - Added provider-neutral QR authentication contracts and mapped the QQ Music flow into the Provider layer; successful credentials remain Rust-owned and the provider now truthfully advertises only `Authentication`.
 - Generated an opaque typed Bridge session exposing only challenge image data, coarse progress/failure states, `advance`, `cancel`, and active/authenticated booleans; stale cancellation authority cannot affect a replacement.
+- Replaced the bootstrap placeholder with an adaptive Material 3 WeChat QR login surface: desktop uses a focused split layout, narrow screens use a scrollable single column, and authenticated copy explicitly disclaims restart restore.
+- Added a Dart login controller that continuously advances waiting/scanned states, briefly backs off transport failures, pauses on protocol/upstream errors, and suppresses late start/poll results after restart or disposal.
+- Added exact cancellation for QR creation before the opaque session exists; a reserved start-attempt ID prevents stale controllers from cancelling a replacement.
+- Added controller and widget regressions for waiting/scanned/authenticated transitions, cancel, restart, disposal, late completion, and 390px narrow layout.
 
 # In Progress
 
-- Build the adaptive Flutter QR login surface with explicit cancel/restart behavior and lifecycle-safe polling.
+- Select and validate the minimum secure credential-storage boundary needed to resolve TD-003 without exposing secrets to ordinary Dart preferences.
 
 # Next Candidates
 
-1. Build the adaptive Flutter login surface with explicit cancel/restart behavior.
-2. Select and validate the minimum secure credential-storage boundary before implementing restore persistence (TD-003).
-3. Implement credential restore verification without mapping transport failures to signed-out state.
+1. Select and validate the minimum secure credential-storage boundary before implementing restore persistence (TD-003).
+2. Implement credential serialization, persistence, and restore verification without mapping transport failures to signed-out state.
+3. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
 
 # Blockers
 

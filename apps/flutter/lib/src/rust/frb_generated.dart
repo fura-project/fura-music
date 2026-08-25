@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1273011695;
+  int get rustContentHash => 458470640;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -97,11 +97,19 @@ abstract class RustLibApi extends BaseApi {
 
   BootstrapStatus crateApiBootstrapBootstrapStatus();
 
+  bool crateApiAuthenticationCancelQqMusicWechatQrLoginStart({
+    required int attemptId,
+  });
+
   Future<void> crateApiBootstrapInitApp();
 
   bool crateApiAuthenticationQqMusicHasAuthenticatedCredential();
 
-  Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin();
+  int crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
+
+  Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin({
+    required int attemptId,
+  });
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_QqMusicQrLoginSessionHandle;
@@ -249,6 +257,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "bootstrap_status", argNames: []);
 
   @override
+  bool crateApiAuthenticationCancelQqMusicWechatQrLoginStart({
+    required int attemptId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(attemptId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiAuthenticationCancelQqMusicWechatQrLoginStartConstMeta,
+        argValues: [attemptId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiAuthenticationCancelQqMusicWechatQrLoginStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "cancel_qq_music_wechat_qr_login_start",
+        argNames: ["attemptId"],
+      );
+
+  @override
   Future<void> crateApiBootstrapInitApp() {
     return handler.executeNormal(
       NormalTask(
@@ -257,7 +295,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -281,7 +319,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -303,16 +341,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<QqMusicQrLoginStart>
-  crateApiAuthenticationStartQqMusicWechatQrLogin() {
+  int crateApiAuthenticationReserveQqMusicWechatQrLoginStart() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiAuthenticationReserveQqMusicWechatQrLoginStartConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiAuthenticationReserveQqMusicWechatQrLoginStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "reserve_qq_music_wechat_qr_login_start",
+        argNames: [],
+      );
+
+  @override
+  Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin({
+    required int attemptId,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(attemptId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 9,
             port: port_,
           );
         },
@@ -321,7 +388,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiAuthenticationStartQqMusicWechatQrLoginConstMeta,
-        argValues: [],
+        argValues: [attemptId],
         apiImpl: this,
       ),
     );
@@ -330,7 +397,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAuthenticationStartQqMusicWechatQrLoginConstMeta =>
       const TaskConstMeta(
         debugName: "start_qq_music_wechat_qr_login",
-        argNames: [],
+        argNames: ["attemptId"],
       );
 
   RustArcIncrementStrongCountFnType
@@ -562,6 +629,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       failure: dco_decode_opt_box_autoadd_qq_music_qr_login_failure(arr[1]),
       sessionActive: dco_decode_bool(arr[2]),
     );
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -852,6 +925,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
+  }
+
+  @protected
   int sse_decode_u_8(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8();
@@ -1136,6 +1215,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_bool(self.sessionActive, serializer);
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
   }
 
   @protected

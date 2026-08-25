@@ -34,7 +34,7 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 
 ## Current modules
 
-- `apps/flutter` contains the Material 3 application shell, presentation-safe bootstrap page, and Dart integration/widget tests.
+- `apps/flutter` contains the Material 3 adaptive login surface, its short-lived Dart controller/gateway adapter, and Dart integration/widget tests.
 - `crates/music-domain` contains provider-independent identity types. It currently defines only `ProviderId`.
 - `crates/provider-api` contains the UI-free provider descriptor, capabilities, baseline provider trait, and provider-neutral QR authentication challenge/progress/error contracts.
 - `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently contains the redacted credential/restore model, a small asynchronous HTTP contract with a Rustls-backed native implementation, cross-validated WeChat QR bootstrap/poll/exchange requests, and a cancellable generation-based login coordinator.
@@ -85,6 +85,8 @@ Rust opaque session
 ```
 
 The opaque handle exposes no fields and carries generation-specific cancellation authority, so cancelling an old Dart object cannot cancel its replacement. Concurrent `advance` calls fail explicitly instead of creating a hidden polling queue. Credential persistence does not exist yet; the current in-memory state is tracked as TD-003.
+
+QR creation has a separate opaque start-attempt number reserved by the Bridge adapter before network work begins. Cancel/restart/dispose can cancel that exact pending creation; comparison against the current start attempt prevents a late old controller from cancelling its replacement. After a challenge returns, the Dart controller discards that start operation and uses the Rust-owned session handle. Dart owns presentation stages, one-second network-reconnect delay, adaptive layout, animation, and late-result visibility guards. Rust remains the authority for protocol deadlines, failure counts, session generations, and credential state.
 
 ## Flutter / Rust boundary
 

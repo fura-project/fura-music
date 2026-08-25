@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/authentication/login_controller.dart';
+import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 const _qqGreen = Color(0xFF24B86A);
 
 class MusicApp extends StatelessWidget {
-  const MusicApp({required this.bootstrap, super.key});
+  const MusicApp({
+    required this.bootstrap,
+    this.authenticationGateway = const RustQqMusicAuthenticationGateway(),
+    super.key,
+  });
 
   final BootstrapStatus bootstrap;
+  final QqMusicAuthenticationGateway authenticationGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +23,10 @@ class MusicApp extends StatelessWidget {
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
       themeMode: ThemeMode.system,
-      home: BootstrapPage(bootstrap: bootstrap),
+      home: LoginPage(
+        bootstrap: bootstrap,
+        authenticationGateway: authenticationGateway,
+      ),
     );
   }
 
@@ -35,72 +45,435 @@ class MusicApp extends StatelessWidget {
   }
 }
 
-class BootstrapPage extends StatelessWidget {
-  const BootstrapPage({required this.bootstrap, super.key});
+class LoginPage extends StatefulWidget {
+  const LoginPage({
+    required this.bootstrap,
+    required this.authenticationGateway,
+    super.key,
+  });
 
   final BootstrapStatus bootstrap;
+  final QqMusicAuthenticationGateway authenticationGateway;
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  late final LoginController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = LoginController(widget.authenticationGateway);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 860;
+            final content = wide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: _ProductIntro(bootstrap: widget.bootstrap),
+                      ),
+                      const SizedBox(width: 64),
+                      SizedBox(
+                        width: 400,
+                        child: _AuthenticationPanel(controller: _controller),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ProductIntro(bootstrap: widget.bootstrap, compact: true),
+                      const SizedBox(height: 36),
+                      _AuthenticationPanel(controller: _controller),
+                    ],
+                  );
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: wide ? 56 : 24,
+                vertical: wide ? 48 : 28,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1120),
+                  child: content,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductIntro extends StatelessWidget {
+  const _ProductIntro({required this.bootstrap, this.compact = false});
+
+  final BootstrapStatus bootstrap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = bootstrap.provider;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Align(
-          alignment: const Alignment(0, -0.12),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _StatusLabel(providerName: provider.displayName),
-                  const SizedBox(height: 32),
-                  Text(
-                    'Your QQ Music library,\nwithout the browser frame.',
-                    style: theme.textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      height: 1.06,
-                      letterSpacing: -1.2,
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _StatusLabel(providerName: provider.displayName),
+        SizedBox(height: compact ? 24 : 36),
+        Text(
+          'Your QQ Music library,\nwithout the browser frame.',
+          style:
+              (compact
+                      ? theme.textTheme.headlineLarge
+                      : theme.textTheme.displayMedium)
+                  ?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.04,
+                    letterSpacing: -1.4,
                   ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'The in-process Rust core is connected. QR authentication '
-                    'is available through the typed bridge, while sensitive '
-                    'session and credential data stays inside Rust.',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 36),
-                  Divider(color: theme.colorScheme.outlineVariant),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 24,
-                    runSpacing: 12,
-                    children: [
-                      _BuildFact(
-                        icon: Icons.hub_outlined,
-                        label: 'Provider',
-                        value: provider.id,
-                      ),
-                      _BuildFact(
-                        icon: Icons.memory_outlined,
-                        label: 'Rust core',
-                        value: bootstrap.coreVersion,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'A focused, open client with a native Rust core and a modern '
+          'adaptive Flutter experience.',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 32),
+        Wrap(
+          spacing: 24,
+          runSpacing: 12,
+          children: [
+            _BuildFact(
+              icon: Icons.hub_outlined,
+              label: 'Provider',
+              value: provider.id,
+            ),
+            _BuildFact(
+              icon: Icons.memory_outlined,
+              label: 'Rust core',
+              value: bootstrap.coreVersion,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthenticationPanel extends StatelessWidget {
+  const _AuthenticationPanel({required this.controller});
+
+  final LoginController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) => AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: _AuthenticationContent(
+              key: ValueKey(controller.stage),
+              controller: controller,
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AuthenticationContent extends StatelessWidget {
+  const _AuthenticationContent({required this.controller, super.key});
+
+  final LoginController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final stage = controller.stage;
+    if (stage == LoginStage.idle) return _idle(context);
+    if (stage == LoginStage.starting) return _starting(context);
+    if (stage == LoginStage.authenticated) return _authenticated(context);
+    if (stage == LoginStage.waitingForScan ||
+        stage == LoginStage.scannedAwaitingConfirmation ||
+        stage == LoginStage.reconnecting) {
+      return _active(context);
+    }
+    return _terminal(context);
+  }
+
+  Widget _idle(BuildContext context) => Column(
+    key: const ValueKey('login-idle'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const _PanelIcon(icon: Icons.qr_code_2_rounded),
+      const SizedBox(height: 24),
+      Text(
+        'Sign in to QQ Music',
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 12),
+      Text(
+        'Use WeChat to scan a short-lived code. Account keys stay inside the Rust core.',
+        style: _supportingStyle(context),
+      ),
+      const SizedBox(height: 28),
+      FilledButton.icon(
+        key: const ValueKey('start-login-button'),
+        onPressed: controller.start,
+        icon: const Icon(Icons.login_rounded),
+        label: const Text('Continue with WeChat'),
+      ),
+    ],
+  );
+
+  Widget _starting(BuildContext context) => Column(
+    key: const ValueKey('login-starting'),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const SizedBox.square(
+        dimension: 42,
+        child: CircularProgressIndicator(strokeWidth: 3),
+      ),
+      const SizedBox(height: 24),
+      Text(
+        'Creating a secure code…',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 10),
+      Text(
+        'Connecting directly to WeChat and QQ Music.',
+        style: _supportingStyle(context),
+      ),
+      const SizedBox(height: 20),
+      OutlinedButton(onPressed: controller.cancel, child: const Text('Cancel')),
+    ],
+  );
+
+  Widget _active(BuildContext context) {
+    final image = controller.qrImageBytes;
+    final scanned = controller.stage == LoginStage.scannedAwaitingConfirmation;
+    final reconnecting = controller.stage == LoginStage.reconnecting;
+
+    return Column(
+      key: const ValueKey('login-active'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (image != null)
+          Semantics(
+            label: 'WeChat sign-in QR code',
+            image: true,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: ColoredBox(
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Image.memory(
+                    image,
+                    width: 220,
+                    height: 220,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, _, _) => const SizedBox.square(
+                      dimension: 220,
+                      child: Icon(Icons.broken_image_outlined, size: 48),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 24),
+        Text(
+          scanned
+              ? 'Confirm on your phone'
+              : reconnecting
+              ? 'Reconnecting…'
+              : 'Scan with WeChat',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          scanned
+              ? 'The code was scanned. Approve the sign-in in WeChat.'
+              : reconnecting
+              ? 'Your code is still active. We’ll retry the connection.'
+              : 'Open WeChat, choose Scan, then point your camera here.',
+          textAlign: TextAlign.center,
+          style: _supportingStyle(context),
+        ),
+        const SizedBox(height: 24),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          children: [
+            OutlinedButton(
+              onPressed: controller.cancel,
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: controller.start,
+              child: const Text('New code'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _authenticated(BuildContext context) => Column(
+    key: const ValueKey('login-authenticated'),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const _PanelIcon(icon: Icons.check_rounded),
+      const SizedBox(height: 24),
+      Text(
+        'You’re signed in',
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 10),
+      Text(
+        'QQ Music accepted this session. Secure restart restore is not enabled yet.',
+        textAlign: TextAlign.center,
+        style: _supportingStyle(context),
+      ),
+    ],
+  );
+
+  Widget _terminal(BuildContext context) {
+    final (title, detail) = _terminalCopy(controller.stage, controller.failure);
+
+    return Column(
+      key: const ValueKey('login-terminal'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _PanelIcon(icon: Icons.error_outline_rounded),
+        const SizedBox(height: 24),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          detail,
+          textAlign: TextAlign.center,
+          style: _supportingStyle(context),
+        ),
+        const SizedBox(height: 24),
+        if (controller.canRetry)
+          FilledButton.tonal(
+            onPressed: controller.retry,
+            child: const Text('Try again'),
+          ),
+        TextButton(
+          onPressed: controller.start,
+          child: const Text('Get a new code'),
+        ),
+      ],
+    );
+  }
+
+  TextStyle? _supportingStyle(BuildContext context) => Theme.of(context)
+      .textTheme
+      .bodyMedium
+      ?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        height: 1.45,
+      );
+
+  (String, String) _terminalCopy(LoginStage stage, LoginFailure? failure) {
+    if (stage == LoginStage.expired || stage == LoginStage.timedOut) {
+      return (
+        'This code expired',
+        'Create a fresh code to continue signing in.',
+      );
+    }
+    if (stage == LoginStage.refused) {
+      return (
+        'Sign-in wasn’t approved',
+        'Nothing changed on your account. You can try again.',
+      );
+    }
+
+    return switch (failure) {
+      LoginFailure.serviceUnavailable => (
+        'QQ Music is unavailable',
+        'The service did not accept this request. Try again in a moment.',
+      ),
+      LoginFailure.rejected => (
+        'Sign-in was rejected',
+        'Create a new code and approve it again in WeChat.',
+      ),
+      LoginFailure.tooManyNetworkFailures => (
+        'Connection keeps dropping',
+        'Check your network, then create a fresh code.',
+      ),
+      LoginFailure.invalidResponse => (
+        'QQ Music changed its response',
+        'This client stopped safely instead of guessing. Try a new code later.',
+      ),
+      _ => (
+        'Couldn’t continue sign-in',
+        'Try this session again or create a new code.',
+      ),
+    };
+  }
+}
+
+class _PanelIcon extends StatelessWidget {
+  const _PanelIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Icon(icon, color: colors.onPrimaryContainer, size: 30),
     );
   }
 }
@@ -127,7 +500,7 @@ class _StatusLabel extends StatelessWidget {
             Icon(Icons.check_circle, size: 18, color: colors.primary),
             const SizedBox(width: 8),
             Text(
-              '$providerName core connected',
+              '$providerName connected',
               style: Theme.of(context).textTheme.labelLarge
                   ?.copyWith(color: colors.onPrimaryContainer),
             ),

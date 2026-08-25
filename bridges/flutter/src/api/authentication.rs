@@ -1,5 +1,6 @@
 use std::fmt;
-use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{LazyLock, Mutex as StdMutex};
 
 use provider_api::{
     AuthenticationError, QrAuthenticationProgress, QrAuthenticationProvider,
@@ -9,7 +10,7 @@ use provider_qqmusic::{
     QqMusicProvider, QqMusicQrAuthenticationCancellation, QqMusicQrAuthenticationSession,
 };
 use qqmusic_client::{QqMusicClient, ReqwestTransport};
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 
 type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
@@ -20,6 +21,8 @@ static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|
         .map(QqMusicProvider::new)
         .map_err(|_| ())
 });
+static NEXT_START_ATTEMPT: AtomicU32 = AtomicU32::new(1);
+static ACTIVE_START_ATTEMPT: StdMutex<Option<u32>> = StdMutex::new(None);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicQrImageFormat {
@@ -100,7 +103,7 @@ pub struct QqMusicQrLoginUpdate {
 /// its UUID, OAuth code, credential, refresh material, or protocol client.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicQrLoginSessionHandle {
-    session: Mutex<NativeSession>,
+    session: AsyncMutex<NativeSession>,
     cancellation: QqMusicQrAuthenticationCancellation,
 }
 
@@ -139,20 +142,34 @@ impl QqMusicQrLoginSessionHandle {
     }
 }
 
-pub async fn start_qq_music_wechat_qr_login() -> QqMusicQrLoginStart {
+#[flutter_rust_bridge::frb(sync)]
+pub fn reserve_qq_music_wechat_qr_login_start() -> u32 {
+    NEXT_START_ATTEMPT
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            Some(if current == u32::MAX { 1 } else { current + 1 })
+        })
+        .expect("start-attempt update closure always returns Some")
+}
+
+pub async fn start_qq_music_wechat_qr_login(attempt_id: u32) -> QqMusicQrLoginStart {
     let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
         return failed_start(QqMusicQrLoginFailure::CoreUnavailable);
     };
+    *start_attempt_guard() = Some(attempt_id);
     let session = match provider.begin_qr_authentication().await {
         Ok(session) => session,
-        Err(error) => return failed_start(map_error(error)),
+        Err(error) => {
+            clear_start_attempt(attempt_id);
+            return failed_start(map_error(error));
+        }
     };
+    clear_start_attempt(attempt_id);
     let challenge = session.challenge();
     let cancellation = session.cancellation_handle();
 
     QqMusicQrLoginStart {
         session: Some(QqMusicQrLoginSessionHandle {
-            session: Mutex::new(session),
+            session: AsyncMutex::new(session),
             cancellation,
         }),
         challenge: Some(QqMusicQrChallenge {
@@ -167,6 +184,18 @@ pub async fn start_qq_music_wechat_qr_login() -> QqMusicQrLoginStart {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn cancel_qq_music_wechat_qr_login_start(attempt_id: u32) -> bool {
+    let mut active = start_attempt_guard();
+    if *active != Some(attempt_id) {
+        return false;
+    }
+    *active = None;
+    QQ_MUSIC_PROVIDER
+        .as_ref()
+        .is_ok_and(QqMusicProvider::cancel_active_authentication)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn qq_music_has_authenticated_credential() -> bool {
     QQ_MUSIC_PROVIDER
         .as_ref()
@@ -178,6 +207,19 @@ fn failed_start(failure: QqMusicQrLoginFailure) -> QqMusicQrLoginStart {
         session: None,
         challenge: None,
         failure: Some(failure),
+    }
+}
+
+fn start_attempt_guard() -> std::sync::MutexGuard<'static, Option<u32>> {
+    ACTIVE_START_ATTEMPT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn clear_start_attempt(attempt_id: u32) {
+    let mut active = start_attempt_guard();
+    if *active == Some(attempt_id) {
+        *active = None;
     }
 }
 
@@ -214,7 +256,8 @@ const fn map_error(error: AuthenticationError) -> QqMusicQrLoginFailure {
 #[cfg(test)]
 mod tests {
     use super::{
-        QqMusicQrChallenge, QqMusicQrImageFormat, QqMusicQrLoginFailure, failed_start, map_error,
+        QqMusicQrChallenge, QqMusicQrImageFormat, QqMusicQrLoginFailure, clear_start_attempt,
+        failed_start, map_error, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
     };
     use provider_api::AuthenticationError;
 
@@ -247,5 +290,19 @@ mod tests {
         let debug = format!("{challenge:?}");
         assert!(debug.contains("16 bytes"));
         assert!(!debug.contains("private"));
+    }
+
+    #[test]
+    fn stale_start_attempt_cannot_clear_its_replacement() {
+        let first = reserve_qq_music_wechat_qr_login_start();
+        let second = reserve_qq_music_wechat_qr_login_start();
+        assert_ne!(first, second);
+        *start_attempt_guard() = Some(second);
+
+        clear_start_attempt(first);
+        assert_eq!(*start_attempt_guard(), Some(second));
+
+        clear_start_attempt(second);
+        assert_eq!(*start_attempt_guard(), None);
     }
 }

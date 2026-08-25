@@ -7,11 +7,22 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_start`, `map_error`, `map_progress`
+// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_start`, `map_error`, `map_progress`, `start_attempt_guard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
-Future<QqMusicQrLoginStart> startQqMusicWechatQrLogin() =>
-    RustLib.instance.api.crateApiAuthenticationStartQqMusicWechatQrLogin();
+int reserveQqMusicWechatQrLoginStart() => RustLib.instance.api
+    .crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
+
+Future<QqMusicQrLoginStart> startQqMusicWechatQrLogin({
+  required int attemptId,
+}) => RustLib.instance.api.crateApiAuthenticationStartQqMusicWechatQrLogin(
+  attemptId: attemptId,
+);
+
+bool cancelQqMusicWechatQrLoginStart({required int attemptId}) =>
+    RustLib.instance.api.crateApiAuthenticationCancelQqMusicWechatQrLoginStart(
+      attemptId: attemptId,
+    );
 
 bool qqMusicHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiAuthenticationQqMusicHasAuthenticatedCredential();

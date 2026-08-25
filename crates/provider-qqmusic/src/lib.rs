@@ -38,6 +38,15 @@ impl<T> QqMusicProvider<T> {
     pub fn has_authenticated_credential(&self) -> bool {
         credential_guard(&self.credential).is_some()
     }
+
+    /// Cancels the currently creating or active QR generation.
+    ///
+    /// Higher layers should prefer a generation-specific session cancellation
+    /// handle after QR creation completes.
+    #[must_use]
+    pub fn cancel_active_authentication(&self) -> bool {
+        self.login.cancel_active()
+    }
 }
 
 impl<T> MusicProvider for QqMusicProvider<T> {

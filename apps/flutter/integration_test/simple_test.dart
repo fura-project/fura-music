@@ -14,8 +14,10 @@ void main() {
     expect(status.provider.id, 'qq-music');
     expect(status.provider.implementedCapabilities, ['Authentication']);
     expect(qqMusicHasAuthenticatedCredential(), isFalse);
+    final unusedStart = reserveQqMusicWechatQrLoginStart();
+    expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
 
     await tester.pumpWidget(MusicApp(bootstrap: status));
-    expect(find.text('QQ Music core connected'), findsOneWidget);
+    expect(find.text('QQ Music connected'), findsOneWidget);
   });
 }
