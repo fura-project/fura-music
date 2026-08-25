@@ -52,9 +52,8 @@ The project now implements one bounded favorite page in `QQMusicClient`: page si
 
 Provider aggregation now loads owned rows first and follows favorite pages in order. It advances by raw page length before deduplication, rejects an empty page that still claims `hasmore`, caps the current operation at ten 100-item pages, deduplicates against owned and earlier favorite rows by QQ playlist ID, and rechecks the exact credential after every await. Explicit rejection clears only the still-current credential; transient and structural failures retain it. Owned and favorite routes use distinct provider-owned opaque IDs.
 
-The existing Bridge and Flutter surface still call the narrower `owned_playlists` contract. They continue to use the truthful heading “Playlists you created” until the cancellable handle is switched to the combined Provider operation; Flutter never parses QQ's opaque identity.
+The single-use cancellable Bridge handle now calls the complete Provider contract, and Flutter presents the result as “Your playlists”. The generated boundary still carries only provider/opaque ID, title, optional artwork/count, and coarse failures. A favorite opaque ID regression proves it is forwarded without parsing; structural or safety-limit errors return no partial list.
 
 ## Evidence still required
 
 1. A sanitized real response fixture or controlled account integration before claiming live owned/favorite playlist compatibility.
-2. A Bridge/Flutter integration regression over the combined Provider contract before the UI presents a complete library.

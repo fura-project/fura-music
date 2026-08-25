@@ -14,7 +14,7 @@ Future<void> main() async {
   final authenticationGateway = RustQqMusicAuthenticationGateway(
     credentialVault: credentialVault,
   );
-  final libraryGateway = RustOwnedLibraryGateway(
+  final libraryGateway = RustUserLibraryGateway(
     credentialVault: credentialVault,
   );
   final credentialRestore = await authenticationGateway.restoreCredential();

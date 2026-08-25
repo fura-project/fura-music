@@ -71,7 +71,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1403149634;
+  int get rustContentHash => 102727715;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -83,19 +83,6 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  bool crateApiLibraryQqMusicOwnedPlaylistLoadHandleCancel({
-    required QqMusicOwnedPlaylistLoadHandle that,
-  });
-
-  bool crateApiLibraryQqMusicOwnedPlaylistLoadHandleIsActive({
-    required QqMusicOwnedPlaylistLoadHandle that,
-  });
-
-  Future<QqMusicOwnedPlaylistLoad>
-  crateApiLibraryQqMusicOwnedPlaylistLoadHandleRun({
-    required QqMusicOwnedPlaylistLoadHandle that,
-  });
-
   Future<QqMusicQrLoginUpdate>
   crateApiAuthenticationQqMusicQrLoginSessionHandleAdvance({
     required QqMusicQrLoginSessionHandle that,
@@ -109,7 +96,20 @@ abstract class RustLibApi extends BaseApi {
     required QqMusicQrLoginSessionHandle that,
   });
 
-  QqMusicOwnedPlaylistLoadHandle crateApiLibraryBeginQqMusicOwnedPlaylistLoad();
+  bool crateApiLibraryQqMusicUserPlaylistLoadHandleCancel({
+    required QqMusicUserPlaylistLoadHandle that,
+  });
+
+  bool crateApiLibraryQqMusicUserPlaylistLoadHandleIsActive({
+    required QqMusicUserPlaylistLoadHandle that,
+  });
+
+  Future<QqMusicUserPlaylistLoad>
+  crateApiLibraryQqMusicUserPlaylistLoadHandleRun({
+    required QqMusicUserPlaylistLoadHandle that,
+  });
+
+  QqMusicUserPlaylistLoadHandle crateApiLibraryBeginQqMusicUserPlaylistLoad();
 
   BootstrapStatus crateApiBootstrapBootstrapStatus();
 
@@ -147,15 +147,6 @@ abstract class RustLibApi extends BaseApi {
   });
 
   RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_QqMusicOwnedPlaylistLoadHandle;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_QqMusicOwnedPlaylistLoadHandle;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_QqMusicOwnedPlaylistLoadHandlePtr;
-
-  RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_QqMusicQrLoginSessionHandle;
 
   RustArcDecrementStrongCountFnType
@@ -163,6 +154,15 @@ abstract class RustLibApi extends BaseApi {
 
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicQrLoginSessionHandlePtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_QqMusicUserPlaylistLoadHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_QqMusicUserPlaylistLoadHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_QqMusicUserPlaylistLoadHandlePtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -172,110 +172,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required super.generalizedFrbRustBinding,
     required super.portManager,
   });
-
-  @override
-  bool crateApiLibraryQqMusicOwnedPlaylistLoadHandleCancel({
-    required QqMusicOwnedPlaylistLoadHandle that,
-  }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-            that,
-            serializer,
-          );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_bool,
-          decodeErrorData: null,
-        ),
-        constMeta:
-            kCrateApiLibraryQqMusicOwnedPlaylistLoadHandleCancelConstMeta,
-        argValues: [that],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateApiLibraryQqMusicOwnedPlaylistLoadHandleCancelConstMeta =>
-      const TaskConstMeta(
-        debugName: "QqMusicOwnedPlaylistLoadHandle_cancel",
-        argNames: ["that"],
-      );
-
-  @override
-  bool crateApiLibraryQqMusicOwnedPlaylistLoadHandleIsActive({
-    required QqMusicOwnedPlaylistLoadHandle that,
-  }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-            that,
-            serializer,
-          );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_bool,
-          decodeErrorData: null,
-        ),
-        constMeta:
-            kCrateApiLibraryQqMusicOwnedPlaylistLoadHandleIsActiveConstMeta,
-        argValues: [that],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateApiLibraryQqMusicOwnedPlaylistLoadHandleIsActiveConstMeta =>
-      const TaskConstMeta(
-        debugName: "QqMusicOwnedPlaylistLoadHandle_is_active",
-        argNames: ["that"],
-      );
-
-  @override
-  Future<QqMusicOwnedPlaylistLoad>
-  crateApiLibraryQqMusicOwnedPlaylistLoadHandleRun({
-    required QqMusicOwnedPlaylistLoadHandle that,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-            that,
-            serializer,
-          );
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 3,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_qq_music_owned_playlist_load,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiLibraryQqMusicOwnedPlaylistLoadHandleRunConstMeta,
-        argValues: [that],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateApiLibraryQqMusicOwnedPlaylistLoadHandleRunConstMeta =>
-      const TaskConstMeta(
-        debugName: "QqMusicOwnedPlaylistLoadHandle_run",
-        argNames: ["that"],
-      );
 
   @override
   Future<QqMusicQrLoginUpdate>
@@ -293,7 +189,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 1,
             port: port_,
           );
         },
@@ -328,7 +224,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -361,7 +257,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -383,8 +279,109 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  QqMusicOwnedPlaylistLoadHandle
-  crateApiLibraryBeginQqMusicOwnedPlaylistLoad() {
+  bool crateApiLibraryQqMusicUserPlaylistLoadHandleCancel({
+    required QqMusicUserPlaylistLoadHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLibraryQqMusicUserPlaylistLoadHandleCancelConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiLibraryQqMusicUserPlaylistLoadHandleCancelConstMeta =>
+      const TaskConstMeta(
+        debugName: "QqMusicUserPlaylistLoadHandle_cancel",
+        argNames: ["that"],
+      );
+
+  @override
+  bool crateApiLibraryQqMusicUserPlaylistLoadHandleIsActive({
+    required QqMusicUserPlaylistLoadHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiLibraryQqMusicUserPlaylistLoadHandleIsActiveConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiLibraryQqMusicUserPlaylistLoadHandleIsActiveConstMeta =>
+      const TaskConstMeta(
+        debugName: "QqMusicUserPlaylistLoadHandle_is_active",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<QqMusicUserPlaylistLoad>
+  crateApiLibraryQqMusicUserPlaylistLoadHandleRun({
+    required QqMusicUserPlaylistLoadHandle that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qq_music_user_playlist_load,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLibraryQqMusicUserPlaylistLoadHandleRunConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryQqMusicUserPlaylistLoadHandleRunConstMeta =>
+      const TaskConstMeta(
+        debugName: "QqMusicUserPlaylistLoadHandle_run",
+        argNames: ["that"],
+      );
+
+  @override
+  QqMusicUserPlaylistLoadHandle crateApiLibraryBeginQqMusicUserPlaylistLoad() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -393,19 +390,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle,
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiLibraryBeginQqMusicOwnedPlaylistLoadConstMeta,
+        constMeta: kCrateApiLibraryBeginQqMusicUserPlaylistLoadConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLibraryBeginQqMusicOwnedPlaylistLoadConstMeta =>
+  TaskConstMeta get kCrateApiLibraryBeginQqMusicUserPlaylistLoadConstMeta =>
       const TaskConstMeta(
-        debugName: "begin_qq_music_owned_playlist_load",
+        debugName: "begin_qq_music_user_playlist_load",
         argNames: [],
       );
 
@@ -728,14 +725,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_QqMusicOwnedPlaylistLoadHandle => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_QqMusicOwnedPlaylistLoadHandle => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle;
-
-  RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_QqMusicQrLoginSessionHandle => wire
       .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle;
 
@@ -743,16 +732,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   get rust_arc_decrement_strong_count_QqMusicQrLoginSessionHandle => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle;
 
-  @protected
-  QqMusicOwnedPlaylistLoadHandle
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return QqMusicOwnedPlaylistLoadHandleImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_QqMusicUserPlaylistLoadHandle => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_QqMusicUserPlaylistLoadHandle => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle;
 
   @protected
   QqMusicQrLoginSessionHandle
@@ -766,12 +752,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadHandle
-  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
+  QqMusicUserPlaylistLoadHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return QqMusicOwnedPlaylistLoadHandleImpl.frbInternalDcoDecode(
+    return QqMusicUserPlaylistLoadHandleImpl.frbInternalDcoDecode(
       raw as List<dynamic>,
     );
   }
@@ -788,12 +774,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadHandle
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
+  QqMusicUserPlaylistLoadHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return QqMusicOwnedPlaylistLoadHandleImpl.frbInternalDcoDecode(
+    return QqMusicUserPlaylistLoadHandleImpl.frbInternalDcoDecode(
       raw as List<dynamic>,
     );
   }
@@ -805,6 +791,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return QqMusicQrLoginSessionHandleImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicUserPlaylistLoadHandleImpl.frbInternalDcoDecode(
       raw as List<dynamic>,
     );
   }
@@ -880,13 +877,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadFailure
-  dco_decode_box_autoadd_qq_music_owned_playlist_load_failure(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_qq_music_owned_playlist_load_failure(raw);
-  }
-
-  @protected
   QqMusicQrChallenge dco_decode_box_autoadd_qq_music_qr_challenge(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_qq_music_qr_challenge(raw);
@@ -906,6 +896,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_qq_music_qr_login_state(raw);
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadFailure
+  dco_decode_box_autoadd_qq_music_user_playlist_load_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_qq_music_user_playlist_load_failure(raw);
   }
 
   @protected
@@ -1026,15 +1023,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadFailure?
-  dco_decode_opt_box_autoadd_qq_music_owned_playlist_load_failure(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null
-        ? null
-        : dco_decode_box_autoadd_qq_music_owned_playlist_load_failure(raw);
-  }
-
-  @protected
   QqMusicQrChallenge? dco_decode_opt_box_autoadd_qq_music_qr_challenge(
     dynamic raw,
   ) {
@@ -1062,6 +1050,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_qq_music_qr_login_state(raw);
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadFailure?
+  dco_decode_opt_box_autoadd_qq_music_user_playlist_load_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_qq_music_user_playlist_load_failure(raw);
   }
 
   @protected
@@ -1176,29 +1173,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoad dco_decode_qq_music_owned_playlist_load(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return QqMusicOwnedPlaylistLoad(
-      playlists: dco_decode_list_library_playlist_summary(arr[0]),
-      failure: dco_decode_opt_box_autoadd_qq_music_owned_playlist_load_failure(
-        arr[1],
-      ),
-    );
-  }
-
-  @protected
-  QqMusicOwnedPlaylistLoadFailure
-  dco_decode_qq_music_owned_playlist_load_failure(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return QqMusicOwnedPlaylistLoadFailure.values[raw as int];
-  }
-
-  @protected
   QqMusicQrChallenge dco_decode_qq_music_qr_challenge(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1258,6 +1232,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QqMusicUserPlaylistLoad dco_decode_qq_music_user_playlist_load(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return QqMusicUserPlaylistLoad(
+      playlists: dco_decode_list_library_playlist_summary(arr[0]),
+      failure: dco_decode_opt_box_autoadd_qq_music_user_playlist_load_failure(
+        arr[1],
+      ),
+    );
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadFailure dco_decode_qq_music_user_playlist_load_failure(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicUserPlaylistLoadFailure.values[raw as int];
+  }
+
+  @protected
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1282,18 +1278,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadHandle
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return QqMusicOwnedPlaylistLoadHandleImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
   QqMusicQrLoginSessionHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     SseDeserializer deserializer,
@@ -1306,12 +1290,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadHandle
-  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
+  QqMusicUserPlaylistLoadHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return QqMusicOwnedPlaylistLoadHandleImpl.frbInternalSseDecode(
+    return QqMusicUserPlaylistLoadHandleImpl.frbInternalSseDecode(
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
@@ -1330,12 +1314,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadHandle
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
+  QqMusicUserPlaylistLoadHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return QqMusicOwnedPlaylistLoadHandleImpl.frbInternalSseDecode(
+    return QqMusicUserPlaylistLoadHandleImpl.frbInternalSseDecode(
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
@@ -1348,6 +1332,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return QqMusicQrLoginSessionHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return QqMusicUserPlaylistLoadHandleImpl.frbInternalSseDecode(
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
@@ -1434,15 +1430,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadFailure
-  sse_decode_box_autoadd_qq_music_owned_playlist_load_failure(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_qq_music_owned_playlist_load_failure(deserializer));
-  }
-
-  @protected
   QqMusicQrChallenge sse_decode_box_autoadd_qq_music_qr_challenge(
     SseDeserializer deserializer,
   ) {
@@ -1464,6 +1451,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_qq_music_qr_login_state(deserializer));
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadFailure
+  sse_decode_box_autoadd_qq_music_user_playlist_load_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_qq_music_user_playlist_load_failure(deserializer));
   }
 
   @protected
@@ -1638,22 +1634,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoadFailure?
-  sse_decode_opt_box_autoadd_qq_music_owned_playlist_load_failure(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_qq_music_owned_playlist_load_failure(
-        deserializer,
-      ));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
   QqMusicQrChallenge? sse_decode_opt_box_autoadd_qq_music_qr_challenge(
     SseDeserializer deserializer,
   ) {
@@ -1687,6 +1667,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_qq_music_qr_login_state(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadFailure?
+  sse_decode_opt_box_autoadd_qq_music_user_playlist_load_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_qq_music_user_playlist_load_failure(
+        deserializer,
+      ));
     } else {
       return null;
     }
@@ -1825,32 +1821,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  QqMusicOwnedPlaylistLoad sse_decode_qq_music_owned_playlist_load(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_playlists = sse_decode_list_library_playlist_summary(deserializer);
-    var var_failure =
-        sse_decode_opt_box_autoadd_qq_music_owned_playlist_load_failure(
-          deserializer,
-        );
-    return QqMusicOwnedPlaylistLoad(
-      playlists: var_playlists,
-      failure: var_failure,
-    );
-  }
-
-  @protected
-  QqMusicOwnedPlaylistLoadFailure
-  sse_decode_qq_music_owned_playlist_load_failure(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_i_32(deserializer);
-    return QqMusicOwnedPlaylistLoadFailure.values[inner];
-  }
-
-  @protected
   QqMusicQrChallenge sse_decode_qq_music_qr_challenge(
     SseDeserializer deserializer,
   ) {
@@ -1932,6 +1902,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QqMusicUserPlaylistLoad sse_decode_qq_music_user_playlist_load(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_playlists = sse_decode_list_library_playlist_summary(deserializer);
+    var var_failure =
+        sse_decode_opt_box_autoadd_qq_music_user_playlist_load_failure(
+          deserializer,
+        );
+    return QqMusicUserPlaylistLoad(
+      playlists: var_playlists,
+      failure: var_failure,
+    );
+  }
+
+  @protected
+  QqMusicUserPlaylistLoadFailure sse_decode_qq_music_user_playlist_load_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return QqMusicUserPlaylistLoadFailure.values[inner];
+  }
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
@@ -1956,21 +1951,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-    QqMusicOwnedPlaylistLoadHandle self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as QqMusicOwnedPlaylistLoadHandleImpl).frbInternalSseEncode(
-        move: true,
-      ),
-      serializer,
-    );
-  }
-
-  @protected
-  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     QqMusicQrLoginSessionHandle self,
     SseSerializer serializer,
@@ -1986,14 +1966,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
-  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-    QqMusicOwnedPlaylistLoadHandle self,
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+    QqMusicUserPlaylistLoadHandle self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(
-      (self as QqMusicOwnedPlaylistLoadHandleImpl).frbInternalSseEncode(
-        move: false,
+      (self as QqMusicUserPlaylistLoadHandleImpl).frbInternalSseEncode(
+        move: true,
       ),
       serializer,
     );
@@ -2016,14 +1996,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicOwnedPlaylistLoadHandle(
-    QqMusicOwnedPlaylistLoadHandle self,
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+    QqMusicUserPlaylistLoadHandle self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(
-      (self as QqMusicOwnedPlaylistLoadHandleImpl).frbInternalSseEncode(
-        move: null,
+      (self as QqMusicUserPlaylistLoadHandleImpl).frbInternalSseEncode(
+        move: false,
       ),
       serializer,
     );
@@ -2038,6 +2018,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(
       (self as QqMusicQrLoginSessionHandleImpl).frbInternalSseEncode(
+        move: null,
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+    QqMusicUserPlaylistLoadHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as QqMusicUserPlaylistLoadHandleImpl).frbInternalSseEncode(
         move: null,
       ),
       serializer,
@@ -2125,15 +2120,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_qq_music_owned_playlist_load_failure(
-    QqMusicOwnedPlaylistLoadFailure self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_qq_music_owned_playlist_load_failure(self, serializer);
-  }
-
-  @protected
   void sse_encode_box_autoadd_qq_music_qr_challenge(
     QqMusicQrChallenge self,
     SseSerializer serializer,
@@ -2158,6 +2144,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_qq_music_qr_login_state(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_user_playlist_load_failure(
+    QqMusicUserPlaylistLoadFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qq_music_user_playlist_load_failure(self, serializer);
   }
 
   @protected
@@ -2324,22 +2319,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_qq_music_owned_playlist_load_failure(
-    QqMusicOwnedPlaylistLoadFailure? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_qq_music_owned_playlist_load_failure(
-        self,
-        serializer,
-      );
-    }
-  }
-
-  @protected
   void sse_encode_opt_box_autoadd_qq_music_qr_challenge(
     QqMusicQrChallenge? self,
     SseSerializer serializer,
@@ -2375,6 +2354,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_qq_music_qr_login_state(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_user_playlist_load_failure(
+    QqMusicUserPlaylistLoadFailure? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_qq_music_user_playlist_load_failure(
+        self,
+        serializer,
+      );
     }
   }
 
@@ -2503,28 +2498,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_qq_music_owned_playlist_load(
-    QqMusicOwnedPlaylistLoad self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_library_playlist_summary(self.playlists, serializer);
-    sse_encode_opt_box_autoadd_qq_music_owned_playlist_load_failure(
-      self.failure,
-      serializer,
-    );
-  }
-
-  @protected
-  void sse_encode_qq_music_owned_playlist_load_failure(
-    QqMusicOwnedPlaylistLoadFailure self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.index, serializer);
-  }
-
-  @protected
   void sse_encode_qq_music_qr_challenge(
     QqMusicQrChallenge self,
     SseSerializer serializer,
@@ -2596,6 +2569,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_qq_music_user_playlist_load(
+    QqMusicUserPlaylistLoad self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_library_playlist_summary(self.playlists, serializer);
+    sse_encode_opt_box_autoadd_qq_music_user_playlist_load_failure(
+      self.failure,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_qq_music_user_playlist_load_failure(
+    QqMusicUserPlaylistLoadFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
@@ -2617,44 +2612,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
   }
-}
-
-@sealed
-class QqMusicOwnedPlaylistLoadHandleImpl extends RustOpaque
-    implements QqMusicOwnedPlaylistLoadHandle {
-  // Not to be used by end users
-  QqMusicOwnedPlaylistLoadHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  QqMusicOwnedPlaylistLoadHandleImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_QqMusicOwnedPlaylistLoadHandle,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_QqMusicOwnedPlaylistLoadHandle,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_QqMusicOwnedPlaylistLoadHandlePtr,
-  );
-
-  bool cancel() => RustLib.instance.api
-      .crateApiLibraryQqMusicOwnedPlaylistLoadHandleCancel(that: this);
-
-  bool get isActive => RustLib.instance.api
-      .crateApiLibraryQqMusicOwnedPlaylistLoadHandleIsActive(that: this);
-
-  Future<QqMusicOwnedPlaylistLoad> run() => RustLib.instance.api
-      .crateApiLibraryQqMusicOwnedPlaylistLoadHandleRun(that: this);
 }
 
 @sealed
@@ -2693,4 +2650,42 @@ class QqMusicQrLoginSessionHandleImpl extends RustOpaque
 
   bool get isActive => RustLib.instance.api
       .crateApiAuthenticationQqMusicQrLoginSessionHandleIsActive(that: this);
+}
+
+@sealed
+class QqMusicUserPlaylistLoadHandleImpl extends RustOpaque
+    implements QqMusicUserPlaylistLoadHandle {
+  // Not to be used by end users
+  QqMusicUserPlaylistLoadHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  QqMusicUserPlaylistLoadHandleImpl.frbInternalSseDecode(
+    BigInt ptr,
+    int externalSizeOnNative,
+  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount: RustLib
+        .instance
+        .api
+        .rust_arc_increment_strong_count_QqMusicUserPlaylistLoadHandle,
+    rustArcDecrementStrongCount: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_QqMusicUserPlaylistLoadHandle,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_QqMusicUserPlaylistLoadHandlePtr,
+  );
+
+  bool cancel() => RustLib.instance.api
+      .crateApiLibraryQqMusicUserPlaylistLoadHandleCancel(that: this);
+
+  bool get isActive => RustLib.instance.api
+      .crateApiLibraryQqMusicUserPlaylistLoadHandleIsActive(that: this);
+
+  Future<QqMusicUserPlaylistLoad> run() => RustLib.instance.api
+      .crateApiLibraryQqMusicUserPlaylistLoadHandleRun(that: this);
 }

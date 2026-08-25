@@ -4,27 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 
-class OwnedLibraryPage extends StatefulWidget {
-  const OwnedLibraryPage({
+class UserLibraryPage extends StatefulWidget {
+  const UserLibraryPage({
     required this.gateway,
     required this.onSignInAgain,
     super.key,
   });
 
-  final OwnedLibraryGateway gateway;
+  final UserLibraryGateway gateway;
   final VoidCallback onSignInAgain;
 
   @override
-  State<OwnedLibraryPage> createState() => _OwnedLibraryPageState();
+  State<UserLibraryPage> createState() => _UserLibraryPageState();
 }
 
-class _OwnedLibraryPageState extends State<OwnedLibraryPage> {
-  late final OwnedLibraryController _controller;
+class _UserLibraryPageState extends State<UserLibraryPage> {
+  late final UserLibraryController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = OwnedLibraryController(widget.gateway);
+    _controller = UserLibraryController(widget.gateway);
     unawaited(_controller.load());
   }
 
@@ -43,8 +43,8 @@ class _OwnedLibraryPageState extends State<OwnedLibraryPage> {
           AnimatedBuilder(
             animation: _controller,
             builder: (context, _) => IconButton(
-              tooltip: 'Refresh created playlists',
-              onPressed: _controller.stage == OwnedLibraryStage.loading
+              tooltip: 'Refresh playlists',
+              onPressed: _controller.stage == UserLibraryStage.loading
                   ? null
                   : _controller.load,
               icon: const Icon(Icons.refresh_rounded),
@@ -68,26 +68,26 @@ class _OwnedLibraryPageState extends State<OwnedLibraryPage> {
   }
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
-    OwnedLibraryStage.loading => const _LibraryLoading(
-      key: ValueKey('owned-library-loading'),
+    UserLibraryStage.loading => const _LibraryLoading(
+      key: ValueKey('user-library-loading'),
     ),
-    OwnedLibraryStage.content => _PlaylistCollection(
-      key: const ValueKey('owned-library-content'),
+    UserLibraryStage.content => _PlaylistCollection(
+      key: const ValueKey('user-library-content'),
       playlists: _controller.playlists,
     ),
-    OwnedLibraryStage.empty => const _LibraryEmpty(
-      key: ValueKey('owned-library-empty'),
+    UserLibraryStage.empty => const _LibraryEmpty(
+      key: ValueKey('user-library-empty'),
     ),
-    OwnedLibraryStage.error => _LibraryFailure(
-      key: const ValueKey('owned-library-error'),
+    UserLibraryStage.error => _LibraryFailure(
+      key: const ValueKey('user-library-error'),
       failure: _controller.failure,
       canRetry: _controller.canRetry,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
     ),
-    OwnedLibraryStage.authenticationRequired ||
-    OwnedLibraryStage.credentialRejected => _LibraryFailure(
-      key: const ValueKey('owned-library-authentication-error'),
+    UserLibraryStage.authenticationRequired ||
+    UserLibraryStage.credentialRejected => _LibraryFailure(
+      key: const ValueKey('user-library-authentication-error'),
       failure: _controller.failure,
       canRetry: false,
       onRetry: _controller.retry,
@@ -99,7 +99,7 @@ class _OwnedLibraryPageState extends State<OwnedLibraryPage> {
 class _PlaylistCollection extends StatelessWidget {
   const _PlaylistCollection({required this.playlists, super.key});
 
-  final List<OwnedPlaylistSummary> playlists;
+  final List<UserPlaylistSummary> playlists;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +118,7 @@ class _PlaylistCollection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Playlists you created',
+                'Your playlists',
                 style:
                     (desktop
                             ? theme.textTheme.headlineMedium
@@ -165,7 +165,7 @@ class _PlaylistCollection extends StatelessWidget {
 class _PlaylistGridItem extends StatelessWidget {
   const _PlaylistGridItem({required this.playlist});
 
-  final OwnedPlaylistSummary playlist;
+  final UserPlaylistSummary playlist;
 
   @override
   Widget build(BuildContext context) {
@@ -205,7 +205,7 @@ class _PlaylistGridItem extends StatelessWidget {
 class _PlaylistListItem extends StatelessWidget {
   const _PlaylistListItem({required this.playlist});
 
-  final OwnedPlaylistSummary playlist;
+  final UserPlaylistSummary playlist;
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +256,7 @@ class _PlaylistListItem extends StatelessWidget {
 class _PlaylistArtwork extends StatelessWidget {
   const _PlaylistArtwork({required this.playlist});
 
-  final OwnedPlaylistSummary playlist;
+  final UserPlaylistSummary playlist;
 
   @override
   Widget build(BuildContext context) {
@@ -329,8 +329,8 @@ class _LibraryEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _CenteredLibraryMessage(
     icon: Icons.library_music_outlined,
-    title: 'No created playlists yet',
-    detail: 'Playlists you create in QQ Music will appear here.',
+    title: 'No playlists yet',
+    detail: 'Playlists you create or save in QQ Music will appear here.',
     actions: const [],
   );
 }
@@ -344,7 +344,7 @@ class _LibraryFailure extends StatelessWidget {
     super.key,
   });
 
-  final OwnedLibraryFailure? failure;
+  final UserLibraryFailure? failure;
   final bool canRetry;
   final VoidCallback onRetry;
   final VoidCallback onSignInAgain;
@@ -354,9 +354,9 @@ class _LibraryFailure extends StatelessWidget {
     final (title, detail) = _failureCopy(failure);
     return _CenteredLibraryMessage(
       icon:
-          failure == OwnedLibraryFailure.credentialRejected ||
+          failure == UserLibraryFailure.credentialRejected ||
               failure ==
-                  OwnedLibraryFailure.credentialRejectedStorageCleanupFailed
+                  UserLibraryFailure.credentialRejectedStorageCleanupFailed
           ? Icons.lock_reset_rounded
           : Icons.cloud_off_rounded,
       title: title,
@@ -444,40 +444,39 @@ class _CenteredLibraryMessage extends StatelessWidget {
   }
 }
 
-(String, String) _failureCopy(
-  OwnedLibraryFailure? failure,
-) => switch (failure) {
-  OwnedLibraryFailure.network => (
+(String, String) _failureCopy(UserLibraryFailure? failure) => switch (failure) {
+  UserLibraryFailure.network => (
     'Couldn’t reach QQ Music',
     'Your session is still active. Check your connection and try again.',
   ),
-  OwnedLibraryFailure.serviceUnavailable => (
+  UserLibraryFailure.serviceUnavailable => (
     'QQ Music is unavailable',
     'Your session was kept unchanged. Try loading your playlists again later.',
   ),
-  OwnedLibraryFailure.invalidResponse => (
-    'QQ Music changed its response',
-    'This client stopped safely instead of showing an incomplete library.',
+  UserLibraryFailure.invalidResponse => (
+    'Couldn’t read the complete library',
+    'QQ Music returned a collection this build could not safely finish. '
+        'No partial list is shown.',
   ),
-  OwnedLibraryFailure.credentialRejected => (
+  UserLibraryFailure.credentialRejected => (
     'Your saved session was rejected',
     'QQ Music no longer accepts it, so the stored session was removed.',
   ),
-  OwnedLibraryFailure.credentialRejectedStorageCleanupFailed => (
+  UserLibraryFailure.credentialRejectedStorageCleanupFailed => (
     'Your saved session was rejected',
     'QQ Music no longer accepts it, but secure storage could not remove it.',
   ),
-  OwnedLibraryFailure.authenticationRequired ||
-  OwnedLibraryFailure.replaced ||
-  OwnedLibraryFailure.cancelled => (
+  UserLibraryFailure.authenticationRequired ||
+  UserLibraryFailure.replaced ||
+  UserLibraryFailure.cancelled => (
     'Sign in to load your playlists',
     'The account state changed before this library request finished.',
   ),
-  OwnedLibraryFailure.coreUnavailable => (
+  UserLibraryFailure.coreUnavailable => (
     'The music core is unavailable',
     'Your library could not be loaded safely. Try again after restarting.',
   ),
-  OwnedLibraryFailure.alreadyRunning => (
+  UserLibraryFailure.alreadyRunning => (
     'A library request is already running',
     'Wait for it to finish, then try again.',
   ),
@@ -487,7 +486,7 @@ class _CenteredLibraryMessage extends StatelessWidget {
   ),
 };
 
-String _semanticLabel(OwnedPlaylistSummary playlist) {
+String _semanticLabel(UserPlaylistSummary playlist) {
   final count = playlist.trackCount;
   return count == null ? playlist.title : '${playlist.title}, $count tracks';
 }

@@ -5,7 +5,7 @@ import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
-import 'package:flutterustmusic/library/owned_library_page.dart';
+import 'package:flutterustmusic/library/user_library_page.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 const _qqGreen = Color(0xFF24B86A);
@@ -14,7 +14,7 @@ class MusicApp extends StatelessWidget {
   factory MusicApp({
     required BootstrapStatus bootstrap,
     QqMusicAuthenticationGateway? authenticationGateway,
-    OwnedLibraryGateway? libraryGateway,
+    UserLibraryGateway? libraryGateway,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
     Key? key,
@@ -26,15 +26,13 @@ class MusicApp extends StatelessWidget {
       authenticationGateway = RustQqMusicAuthenticationGateway(
         credentialVault: credentialVault,
       );
-      libraryGateway = RustOwnedLibraryGateway(
-        credentialVault: credentialVault,
-      );
+      libraryGateway = RustUserLibraryGateway(credentialVault: credentialVault);
     }
     return MusicApp._(
       bootstrap: bootstrap,
       authenticationGateway:
           authenticationGateway ?? RustQqMusicAuthenticationGateway(),
-      libraryGateway: libraryGateway ?? RustOwnedLibraryGateway(),
+      libraryGateway: libraryGateway ?? RustUserLibraryGateway(),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
@@ -50,7 +48,7 @@ class MusicApp extends StatelessWidget {
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
-  final OwnedLibraryGateway libraryGateway;
+  final UserLibraryGateway libraryGateway;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -96,7 +94,7 @@ class LoginPage extends StatefulWidget {
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
-  final OwnedLibraryGateway libraryGateway;
+  final UserLibraryGateway libraryGateway;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -131,8 +129,8 @@ class _LoginPageState extends State<LoginPage> {
       animation: _controller,
       builder: (context, _) {
         if (_controller.stage == LoginStage.authenticated) {
-          return OwnedLibraryPage(
-            key: const ValueKey('owned-library-page'),
+          return UserLibraryPage(
+            key: const ValueKey('user-library-page'),
             gateway: widget.libraryGateway,
             onSignInAgain: _controller.cancel,
           );

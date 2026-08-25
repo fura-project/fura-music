@@ -23,13 +23,13 @@ void main() {
     expect(qqMusicHasAuthenticatedCredential(), isFalse);
     final unusedStart = reserveQqMusicWechatQrLoginStart();
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
-    final unusedLibraryLoad = beginQqMusicOwnedPlaylistLoad();
+    final unusedLibraryLoad = beginQqMusicUserPlaylistLoad();
     expect(unusedLibraryLoad.isActive, isTrue);
     expect(unusedLibraryLoad.cancel(), isTrue);
     final cancelledLibraryLoad = await unusedLibraryLoad.run();
     expect(
       cancelledLibraryLoad.failure,
-      QqMusicOwnedPlaylistLoadFailure.cancelled,
+      QqMusicUserPlaylistLoadFailure.cancelled,
     );
 
     await tester.pumpWidget(MusicApp(bootstrap: status));

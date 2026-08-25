@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 
-enum OwnedLibraryStage {
+enum UserLibraryStage {
   loading,
   content,
   empty,
@@ -12,28 +12,28 @@ enum OwnedLibraryStage {
   credentialRejected,
 }
 
-class OwnedLibraryController extends ChangeNotifier {
-  OwnedLibraryController(this._gateway);
+class UserLibraryController extends ChangeNotifier {
+  UserLibraryController(this._gateway);
 
-  final OwnedLibraryGateway _gateway;
+  final UserLibraryGateway _gateway;
 
-  OwnedLibraryStage _stage = OwnedLibraryStage.loading;
-  List<OwnedPlaylistSummary> _playlists = const [];
-  OwnedLibraryFailure? _failure;
-  OwnedLibraryLoadOperation? _operation;
+  UserLibraryStage _stage = UserLibraryStage.loading;
+  List<UserPlaylistSummary> _playlists = const [];
+  UserLibraryFailure? _failure;
+  UserLibraryLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
 
-  OwnedLibraryStage get stage => _stage;
-  List<OwnedPlaylistSummary> get playlists => _playlists;
-  OwnedLibraryFailure? get failure => _failure;
+  UserLibraryStage get stage => _stage;
+  List<UserPlaylistSummary> get playlists => _playlists;
+  UserLibraryFailure? get failure => _failure;
 
   bool get canRetry =>
-      _stage == OwnedLibraryStage.error &&
-      (_failure == OwnedLibraryFailure.network ||
-          _failure == OwnedLibraryFailure.serviceUnavailable ||
-          _failure == OwnedLibraryFailure.invalidResponse ||
-          _failure == OwnedLibraryFailure.coreUnavailable);
+      _stage == UserLibraryStage.error &&
+      (_failure == UserLibraryFailure.network ||
+          _failure == UserLibraryFailure.serviceUnavailable ||
+          _failure == UserLibraryFailure.invalidResponse ||
+          _failure == UserLibraryFailure.coreUnavailable);
 
   Future<void> load() async {
     final generation = ++_generation;
@@ -42,7 +42,7 @@ class OwnedLibraryController extends ChangeNotifier {
     _operation = operation;
     _playlists = const [];
     _failure = null;
-    _stage = OwnedLibraryStage.loading;
+    _stage = UserLibraryStage.loading;
     _notify();
 
     final result = await operation.run();
@@ -53,25 +53,24 @@ class OwnedLibraryController extends ChangeNotifier {
 
     _failure = result.failure;
     if (result.failure == null) {
-      _playlists = List<OwnedPlaylistSummary>.unmodifiable(result.playlists);
+      _playlists = List<UserPlaylistSummary>.unmodifiable(result.playlists);
       _stage = _playlists.isEmpty
-          ? OwnedLibraryStage.empty
-          : OwnedLibraryStage.content;
+          ? UserLibraryStage.empty
+          : UserLibraryStage.content;
     } else {
       _playlists = const [];
       _stage = switch (result.failure!) {
-        OwnedLibraryFailure.authenticationRequired ||
-        OwnedLibraryFailure.replaced ||
-        OwnedLibraryFailure.cancelled =>
-          OwnedLibraryStage.authenticationRequired,
-        OwnedLibraryFailure.credentialRejected ||
-        OwnedLibraryFailure.credentialRejectedStorageCleanupFailed =>
-          OwnedLibraryStage.credentialRejected,
-        OwnedLibraryFailure.coreUnavailable ||
-        OwnedLibraryFailure.network ||
-        OwnedLibraryFailure.serviceUnavailable ||
-        OwnedLibraryFailure.invalidResponse ||
-        OwnedLibraryFailure.alreadyRunning => OwnedLibraryStage.error,
+        UserLibraryFailure.authenticationRequired ||
+        UserLibraryFailure.replaced ||
+        UserLibraryFailure.cancelled => UserLibraryStage.authenticationRequired,
+        UserLibraryFailure.credentialRejected ||
+        UserLibraryFailure.credentialRejectedStorageCleanupFailed =>
+          UserLibraryStage.credentialRejected,
+        UserLibraryFailure.coreUnavailable ||
+        UserLibraryFailure.network ||
+        UserLibraryFailure.serviceUnavailable ||
+        UserLibraryFailure.invalidResponse ||
+        UserLibraryFailure.alreadyRunning => UserLibraryStage.error,
       };
     }
     _notify();

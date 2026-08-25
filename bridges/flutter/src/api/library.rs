@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use provider_api::{OwnedPlaylistsProvider, UserLibraryError};
+use provider_api::{UserLibraryError, UserPlaylistsProvider};
 use tokio::sync::Notify;
 
 use super::authentication::native_qq_music_provider;
@@ -29,7 +29,7 @@ impl fmt::Debug for LibraryPlaylistSummary {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicOwnedPlaylistLoadFailure {
+pub enum QqMusicUserPlaylistLoadFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -42,15 +42,15 @@ pub enum QqMusicOwnedPlaylistLoadFailure {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct QqMusicOwnedPlaylistLoad {
+pub struct QqMusicUserPlaylistLoad {
     pub playlists: Vec<LibraryPlaylistSummary>,
-    pub failure: Option<QqMusicOwnedPlaylistLoadFailure>,
+    pub failure: Option<QqMusicUserPlaylistLoadFailure>,
 }
 
-impl fmt::Debug for QqMusicOwnedPlaylistLoad {
+impl fmt::Debug for QqMusicUserPlaylistLoad {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicOwnedPlaylistLoad")
+            .debug_struct("QqMusicUserPlaylistLoad")
             .field("playlist_count", &self.playlists.len())
             .field("failure", &self.failure)
             .finish()
@@ -60,47 +60,47 @@ impl fmt::Debug for QqMusicOwnedPlaylistLoad {
 /// One cancellable, single-use user-library load. The handle contains no
 /// credential or QQ Music protocol identifier.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicOwnedPlaylistLoadHandle {
+pub struct QqMusicUserPlaylistLoadHandle {
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
 }
 
-impl fmt::Debug for QqMusicOwnedPlaylistLoadHandle {
+impl fmt::Debug for QqMusicUserPlaylistLoadHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicOwnedPlaylistLoadHandle")
+            .debug_struct("QqMusicUserPlaylistLoadHandle")
             .field("active", &self.is_active())
             .field("running", &self.running.load(Ordering::SeqCst))
             .finish()
     }
 }
 
-impl QqMusicOwnedPlaylistLoadHandle {
-    pub async fn run(&self) -> QqMusicOwnedPlaylistLoad {
+impl QqMusicUserPlaylistLoadHandle {
+    pub async fn run(&self) -> QqMusicUserPlaylistLoad {
         if !self.active.load(Ordering::SeqCst) {
-            return failed_load(QqMusicOwnedPlaylistLoadFailure::Cancelled);
+            return failed_load(QqMusicUserPlaylistLoadFailure::Cancelled);
         }
         if self.running.swap(true, Ordering::SeqCst) {
-            return failed_load(QqMusicOwnedPlaylistLoadFailure::AlreadyRunning);
+            return failed_load(QqMusicUserPlaylistLoadFailure::AlreadyRunning);
         }
 
         let outcome = match native_qq_music_provider() {
             Ok(provider) => {
                 tokio::select! {
                     () = self.cancelled.notified() => {
-                        failed_load(QqMusicOwnedPlaylistLoadFailure::Cancelled)
+                        failed_load(QqMusicUserPlaylistLoadFailure::Cancelled)
                     }
-                    result = provider.owned_playlists() => {
+                    result = provider.user_playlists() => {
                         if self.active.load(Ordering::SeqCst) {
                             map_load(result)
                         } else {
-                            failed_load(QqMusicOwnedPlaylistLoadFailure::Cancelled)
+                            failed_load(QqMusicUserPlaylistLoadFailure::Cancelled)
                         }
                     }
                 }
             }
-            Err(()) => failed_load(QqMusicOwnedPlaylistLoadFailure::CoreUnavailable),
+            Err(()) => failed_load(QqMusicUserPlaylistLoadFailure::CoreUnavailable),
         };
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
@@ -123,8 +123,8 @@ impl QqMusicOwnedPlaylistLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_owned_playlist_load() -> QqMusicOwnedPlaylistLoadHandle {
-    QqMusicOwnedPlaylistLoadHandle {
+pub fn begin_qq_music_user_playlist_load() -> QqMusicUserPlaylistLoadHandle {
+    QqMusicUserPlaylistLoadHandle {
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -133,9 +133,9 @@ pub fn begin_qq_music_owned_playlist_load() -> QqMusicOwnedPlaylistLoadHandle {
 
 fn map_load(
     result: Result<Vec<music_domain::PlaylistSummary>, UserLibraryError>,
-) -> QqMusicOwnedPlaylistLoad {
+) -> QqMusicUserPlaylistLoad {
     match result {
-        Ok(playlists) => QqMusicOwnedPlaylistLoad {
+        Ok(playlists) => QqMusicUserPlaylistLoad {
             playlists: playlists
                 .into_iter()
                 .map(|playlist| LibraryPlaylistSummary {
@@ -152,23 +152,23 @@ fn map_load(
     }
 }
 
-const fn failed_load(failure: QqMusicOwnedPlaylistLoadFailure) -> QqMusicOwnedPlaylistLoad {
-    QqMusicOwnedPlaylistLoad {
+const fn failed_load(failure: QqMusicUserPlaylistLoadFailure) -> QqMusicUserPlaylistLoad {
+    QqMusicUserPlaylistLoad {
         playlists: Vec::new(),
         failure: Some(failure),
     }
 }
 
-const fn map_error(error: UserLibraryError) -> QqMusicOwnedPlaylistLoadFailure {
+const fn map_error(error: UserLibraryError) -> QqMusicUserPlaylistLoadFailure {
     match error {
         UserLibraryError::AuthenticationRequired => {
-            QqMusicOwnedPlaylistLoadFailure::AuthenticationRequired
+            QqMusicUserPlaylistLoadFailure::AuthenticationRequired
         }
-        UserLibraryError::CredentialRejected => QqMusicOwnedPlaylistLoadFailure::CredentialRejected,
-        UserLibraryError::Network => QqMusicOwnedPlaylistLoadFailure::Network,
-        UserLibraryError::ServiceUnavailable => QqMusicOwnedPlaylistLoadFailure::ServiceUnavailable,
-        UserLibraryError::InvalidResponse => QqMusicOwnedPlaylistLoadFailure::InvalidResponse,
-        UserLibraryError::Replaced => QqMusicOwnedPlaylistLoadFailure::Replaced,
+        UserLibraryError::CredentialRejected => QqMusicUserPlaylistLoadFailure::CredentialRejected,
+        UserLibraryError::Network => QqMusicUserPlaylistLoadFailure::Network,
+        UserLibraryError::ServiceUnavailable => QqMusicUserPlaylistLoadFailure::ServiceUnavailable,
+        UserLibraryError::InvalidResponse => QqMusicUserPlaylistLoadFailure::InvalidResponse,
+        UserLibraryError::Replaced => QqMusicUserPlaylistLoadFailure::Replaced,
     }
 }
 
@@ -178,7 +178,7 @@ mod tests {
     use provider_api::UserLibraryError;
 
     use super::{
-        QqMusicOwnedPlaylistLoadFailure, begin_qq_music_owned_playlist_load, map_error, map_load,
+        QqMusicUserPlaylistLoadFailure, begin_qq_music_user_playlist_load, map_error, map_load,
     };
 
     #[test]
@@ -191,36 +191,46 @@ mod tests {
         let summary = PlaylistSummary::new(id, "must-not-leak")
             .expect("summary")
             .with_track_count(Some(42));
+        let favorite_id = PlaylistId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "favorite:8001",
+        )
+        .expect("favorite playlist ID");
+        let favorite =
+            PlaylistSummary::new(favorite_id, "favorite-must-not-leak").expect("favorite summary");
 
-        let mapped = map_load(Ok(vec![summary]));
+        let mapped = map_load(Ok(vec![summary, favorite]));
 
-        assert_eq!(mapped.playlists.len(), 1);
+        assert_eq!(mapped.playlists.len(), 2);
         assert_eq!(mapped.playlists[0].provider_id, "qq-music");
         assert_eq!(mapped.playlists[0].opaque_id, "owned:7001:201");
         assert_eq!(mapped.playlists[0].title, "must-not-leak");
+        assert_eq!(mapped.playlists[1].opaque_id, "favorite:8001");
+        assert_eq!(mapped.playlists[1].title, "favorite-must-not-leak");
         assert!(!format!("{mapped:?}").contains("must-not-leak"));
         assert!(!format!("{:?}", mapped.playlists[0]).contains("7001"));
+        assert!(!format!("{:?}", mapped.playlists[1]).contains("8001"));
     }
 
     #[test]
     fn maps_each_provider_failure_precisely() {
         assert_eq!(
             map_error(UserLibraryError::CredentialRejected),
-            QqMusicOwnedPlaylistLoadFailure::CredentialRejected
+            QqMusicUserPlaylistLoadFailure::CredentialRejected
         );
         assert_eq!(
             map_error(UserLibraryError::ServiceUnavailable),
-            QqMusicOwnedPlaylistLoadFailure::ServiceUnavailable
+            QqMusicUserPlaylistLoadFailure::ServiceUnavailable
         );
         assert_eq!(
             map_error(UserLibraryError::Replaced),
-            QqMusicOwnedPlaylistLoadFailure::Replaced
+            QqMusicUserPlaylistLoadFailure::Replaced
         );
     }
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_owned_playlist_load();
+        let handle = begin_qq_music_user_playlist_load();
 
         assert!(handle.is_active());
         assert!(handle.cancel());
@@ -228,7 +238,7 @@ mod tests {
         let outcome = handle.run().await;
         assert_eq!(
             outcome.failure,
-            Some(QqMusicOwnedPlaylistLoadFailure::Cancelled)
+            Some(QqMusicUserPlaylistLoadFailure::Cancelled)
         );
     }
 }

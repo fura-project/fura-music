@@ -10,16 +10,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `failed_load`, `map_error`, `map_load`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
-QqMusicOwnedPlaylistLoadHandle beginQqMusicOwnedPlaylistLoad() =>
-    RustLib.instance.api.crateApiLibraryBeginQqMusicOwnedPlaylistLoad();
+QqMusicUserPlaylistLoadHandle beginQqMusicUserPlaylistLoad() =>
+    RustLib.instance.api.crateApiLibraryBeginQqMusicUserPlaylistLoad();
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicOwnedPlaylistLoadHandle>>
-abstract class QqMusicOwnedPlaylistLoadHandle implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>>
+abstract class QqMusicUserPlaylistLoadHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicOwnedPlaylistLoad> run();
+  Future<QqMusicUserPlaylistLoad> run();
 }
 
 class LibraryPlaylistSummary {
@@ -57,11 +57,11 @@ class LibraryPlaylistSummary {
           trackCount == other.trackCount;
 }
 
-class QqMusicOwnedPlaylistLoad {
+class QqMusicUserPlaylistLoad {
   final List<LibraryPlaylistSummary> playlists;
-  final QqMusicOwnedPlaylistLoadFailure? failure;
+  final QqMusicUserPlaylistLoadFailure? failure;
 
-  const QqMusicOwnedPlaylistLoad({required this.playlists, this.failure});
+  const QqMusicUserPlaylistLoad({required this.playlists, this.failure});
 
   @override
   int get hashCode => playlists.hashCode ^ failure.hashCode;
@@ -69,13 +69,13 @@ class QqMusicOwnedPlaylistLoad {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicOwnedPlaylistLoad &&
+      other is QqMusicUserPlaylistLoad &&
           runtimeType == other.runtimeType &&
           playlists == other.playlists &&
           failure == other.failure;
 }
 
-enum QqMusicOwnedPlaylistLoadFailure {
+enum QqMusicUserPlaylistLoadFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,

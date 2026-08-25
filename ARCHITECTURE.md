@@ -34,12 +34,12 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 
 ## Current modules
 
-- `apps/flutter` contains adaptive Material 3 authentication and created-playlist surfaces, short-lived Dart controllers/gateway adapters, one shared serialized platform-vault boundary, and Dart integration/widget tests.
+- `apps/flutter` contains adaptive Material 3 authentication and complete user-playlist surfaces, short-lived Dart controllers/gateway adapters, one shared serialized platform-vault boundary, and Dart integration/widget tests.
 - `crates/music-domain` contains provider-independent `ProviderId`, opaque `PlaylistId`, and minimum `PlaylistSummary` types.
 - `crates/provider-api` contains the UI-free provider descriptor/capabilities plus provider-neutral QR authentication, owned-playlist, and complete user-playlist contracts.
 - `crates/qqmusic-client` owns the raw QQ Music client boundary. It contains redacted credential/restore models, versioned secure-storage serialization, a Rustls-backed bounded HTTP implementation, cross-validated WeChat QR flows, credential verification, owned-playlist fetching, one-page favorite-playlist fetching, and cancellable lifecycle coordinators.
 - `crates/provider-qqmusic` retains credential state, maps raw authentication and playlist protocol values into provider/domain contracts, aggregates bounded owned/favorite pages, and truthfully advertises `Authentication` plus `UserLibrary`.
-- `bridges/flutter` adapts core/provider status, authentication, credential persistence, and owned-playlist loading into presentation-safe generated types. Its secret-bearing operation remains a dedicated short-lived persistence handoff, not a presentation model.
+- `bridges/flutter` adapts core/provider status, authentication, credential persistence, and complete user-playlist loading into presentation-safe generated types. Its secret-bearing operation remains a dedicated short-lived persistence handoff, not a presentation model.
 
 The current concrete bootstrap flow is:
 
@@ -136,9 +136,9 @@ The first user-library operation loads authenticated account-owned playlists via
 
 `QQMusicClient` also implements one bounded page of `PlaylistFavRead/CgiGetPlaylistFavInfo`. It requires the credential's encrypted UIN, constrains page size to 100, and returns typed pagination plus protocol summaries without performing hidden loops. `QQMusicProvider` implements the complete `UserPlaylistsProvider` contract by loading owned rows first, following at most ten favorite pages, advancing offsets by raw page length, rejecting empty continuing pages, and deduplicating by QQ playlist ID. Owned identities remain `owned:<tid>:<dirId>` and favorite identities become `favorite:<id>` inside provider-owned opaque values. Every network await rechecks the exact credential; only explicit rejection for the current credential signs out. The hard safety limit is TD-005.
 
-The Bridge currently exposes the created-only operation through a single-use Rust-opaque load handle. `run`, exact `cancel`, and `isActive` are the only operations; cancellation drops the losing provider/network future, and concurrent runs fail explicitly. Generated Dart receives provider ID, opaque playlist ID, title, optional artwork/count, and a coarse failure enum. Credential, QQ dual IDs, request fields, and merging rules remain outside Flutter. Switching this handle to the complete Provider contract is the next integration task.
+The Bridge exposes the complete Provider operation through a single-use `QqMusicUserPlaylistLoadHandle`. `run`, exact `cancel`, and `isActive` are the only operations; cancellation drops the losing Provider/network future, including an in-progress favorite page, and concurrent runs fail explicitly. Generated Dart receives provider ID, opaque playlist ID, title, optional artwork/count, and a coarse failure enum. Credential, QQ dual IDs, pagination, and merging rules remain outside Flutter.
 
-Flutter routes both newly authenticated and server-verified restored sessions into an adaptive created-playlist page. Its controller owns loading/retry/empty/error presentation, cancels replaced operations, and suppresses late results after restart or disposal. Desktop uses a bounded artwork grid; narrow layouts use a touch-sized list. Rows are deliberately non-interactive until playlist-detail behavior exists, and the section is labeled “Playlists you created” because favorite pagination has not been implemented.
+Flutter routes both newly authenticated and server-verified restored sessions into an adaptive “Your playlists” page containing the combined Provider result. Its controller owns loading/retry/empty/error presentation, cancels replaced operations, and suppresses late results after restart or disposal. Desktop uses a bounded artwork grid; narrow layouts use a touch-sized list. Structural or safety-limit failures show no partial list. Rows are deliberately non-interactive until playlist-detail behavior exists, and Flutter never parses source-specific opaque IDs.
 
 ## Playback and storage
 

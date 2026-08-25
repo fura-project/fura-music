@@ -7,14 +7,14 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 void main() {
   test('maps content and empty success separately', () async {
     final gateway = _FakeGateway();
-    final controller = OwnedLibraryController(gateway);
+    final controller = UserLibraryController(gateway);
 
     final content = controller.load();
     gateway.complete(
       0,
-      const OwnedLibraryResult(
+      const UserLibraryResult(
         playlists: [
-          OwnedPlaylistSummary(
+          UserPlaylistSummary(
             providerId: 'qq-music',
             opaqueId: 'owned:7001:201',
             title: 'Synthetic favorites',
@@ -24,55 +24,55 @@ void main() {
       ),
     );
     await content;
-    expect(controller.stage, OwnedLibraryStage.content);
+    expect(controller.stage, UserLibraryStage.content);
     expect(controller.playlists.single.title, 'Synthetic favorites');
 
     final empty = controller.load();
-    gateway.complete(1, const OwnedLibraryResult());
+    gateway.complete(1, const UserLibraryResult());
     await empty;
-    expect(controller.stage, OwnedLibraryStage.empty);
+    expect(controller.stage, UserLibraryStage.empty);
 
     controller.dispose();
   });
 
   test('keeps transient failure retryable', () async {
     final gateway = _FakeGateway();
-    final controller = OwnedLibraryController(gateway);
+    final controller = UserLibraryController(gateway);
 
     final first = controller.load();
     gateway.complete(
       0,
-      const OwnedLibraryResult(failure: OwnedLibraryFailure.network),
+      const UserLibraryResult(failure: UserLibraryFailure.network),
     );
     await first;
-    expect(controller.stage, OwnedLibraryStage.error);
+    expect(controller.stage, UserLibraryStage.error);
     expect(controller.canRetry, isTrue);
 
     final retry = controller.load();
-    gateway.complete(1, const OwnedLibraryResult());
+    gateway.complete(1, const UserLibraryResult());
     await retry;
-    expect(controller.stage, OwnedLibraryStage.empty);
+    expect(controller.stage, UserLibraryStage.empty);
 
     controller.dispose();
   });
 
   test('restart cancels and suppresses a late result', () async {
     final gateway = _FakeGateway();
-    final controller = OwnedLibraryController(gateway);
+    final controller = UserLibraryController(gateway);
 
     final first = controller.load();
     final second = controller.load();
     expect(gateway.operations.first.cancelCalls, 1);
 
-    gateway.complete(1, const OwnedLibraryResult());
+    gateway.complete(1, const UserLibraryResult());
     await second;
-    expect(controller.stage, OwnedLibraryStage.empty);
+    expect(controller.stage, UserLibraryStage.empty);
 
     gateway.complete(
       0,
-      const OwnedLibraryResult(
+      const UserLibraryResult(
         playlists: [
-          OwnedPlaylistSummary(
+          UserPlaylistSummary(
             providerId: 'qq-music',
             opaqueId: 'owned:late:late',
             title: 'Late result',
@@ -81,65 +81,65 @@ void main() {
       ),
     );
     await first;
-    expect(controller.stage, OwnedLibraryStage.empty);
+    expect(controller.stage, UserLibraryStage.empty);
 
     controller.dispose();
   });
 
   test('dispose cancels and suppresses a late result', () async {
     final gateway = _FakeGateway();
-    final controller = OwnedLibraryController(gateway);
+    final controller = UserLibraryController(gateway);
 
     final load = controller.load();
     controller.dispose();
     expect(gateway.operations.single.cancelCalls, 1);
 
-    gateway.complete(0, const OwnedLibraryResult());
+    gateway.complete(0, const UserLibraryResult());
     await load;
-    expect(controller.stage, OwnedLibraryStage.loading);
+    expect(controller.stage, UserLibraryStage.loading);
   });
 
   test('maps credential rejection to a sign-in state', () async {
     final gateway = _FakeGateway();
-    final controller = OwnedLibraryController(gateway);
+    final controller = UserLibraryController(gateway);
 
     final load = controller.load();
     gateway.complete(
       0,
-      const OwnedLibraryResult(failure: OwnedLibraryFailure.credentialRejected),
+      const UserLibraryResult(failure: UserLibraryFailure.credentialRejected),
     );
     await load;
 
-    expect(controller.stage, OwnedLibraryStage.credentialRejected);
+    expect(controller.stage, UserLibraryStage.credentialRejected);
     expect(controller.canRetry, isFalse);
 
     controller.dispose();
   });
 }
 
-class _FakeGateway implements OwnedLibraryGateway {
-  final List<Completer<OwnedLibraryResult>> _results =
-      <Completer<OwnedLibraryResult>>[];
+class _FakeGateway implements UserLibraryGateway {
+  final List<Completer<UserLibraryResult>> _results =
+      <Completer<UserLibraryResult>>[];
   final List<_FakeOperation> operations = <_FakeOperation>[];
 
   @override
-  OwnedLibraryLoadOperation beginLoad() {
-    final result = Completer<OwnedLibraryResult>();
+  UserLibraryLoadOperation beginLoad() {
+    final result = Completer<UserLibraryResult>();
     _results.add(result);
     final operation = _FakeOperation(result.future);
     operations.add(operation);
     return operation;
   }
 
-  void complete(int index, OwnedLibraryResult result) {
+  void complete(int index, UserLibraryResult result) {
     _results[index].complete(result);
   }
 }
 
-class _FakeOperation implements OwnedLibraryLoadOperation {
+class _FakeOperation implements UserLibraryLoadOperation {
   _FakeOperation(this._result);
 
-  final Future<OwnedLibraryResult> _result;
+  final Future<UserLibraryResult> _result;
   int cancelCalls = 0;
 
   @override
@@ -149,5 +149,5 @@ class _FakeOperation implements OwnedLibraryLoadOperation {
   }
 
   @override
-  Future<OwnedLibraryResult> run() => _result;
+  Future<UserLibraryResult> run() => _result;
 }

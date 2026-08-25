@@ -7,40 +7,40 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 void main() {
   test('deletes the vault only after explicit library rejection', () async {
     final vault = _FakeVault();
-    final gateway = RustOwnedLibraryGateway(
+    final gateway = RustUserLibraryGateway(
       credentialVault: vault,
       operationFactory: () => const _ImmediateLoad(
-        OwnedLibraryResult(failure: OwnedLibraryFailure.credentialRejected),
+        UserLibraryResult(failure: UserLibraryFailure.credentialRejected),
       ),
     );
 
     final result = await gateway.beginLoad().run();
 
-    expect(result.failure, OwnedLibraryFailure.credentialRejected);
+    expect(result.failure, UserLibraryFailure.credentialRejected);
     expect(vault.deleteCalls, 1);
   });
 
   test('retains the vault after a transient library failure', () async {
     final vault = _FakeVault();
-    final gateway = RustOwnedLibraryGateway(
+    final gateway = RustUserLibraryGateway(
       credentialVault: vault,
       operationFactory: () => const _ImmediateLoad(
-        OwnedLibraryResult(failure: OwnedLibraryFailure.network),
+        UserLibraryResult(failure: UserLibraryFailure.network),
       ),
     );
 
     final result = await gateway.beginLoad().run();
 
-    expect(result.failure, OwnedLibraryFailure.network);
+    expect(result.failure, UserLibraryFailure.network);
     expect(vault.deleteCalls, 0);
   });
 
   test('reports rejected credentials whose cleanup fails', () async {
     final vault = _FakeVault(deleteError: StateError('vault unavailable'));
-    final gateway = RustOwnedLibraryGateway(
+    final gateway = RustUserLibraryGateway(
       credentialVault: vault,
       operationFactory: () => const _ImmediateLoad(
-        OwnedLibraryResult(failure: OwnedLibraryFailure.credentialRejected),
+        UserLibraryResult(failure: UserLibraryFailure.credentialRejected),
       ),
     );
 
@@ -48,22 +48,22 @@ void main() {
 
     expect(
       result.failure,
-      OwnedLibraryFailure.credentialRejectedStorageCleanupFailed,
+      UserLibraryFailure.credentialRejectedStorageCleanupFailed,
     );
     expect(vault.deleteCalls, 1);
   });
 }
 
-class _ImmediateLoad implements OwnedLibraryLoadOperation {
+class _ImmediateLoad implements UserLibraryLoadOperation {
   const _ImmediateLoad(this.result);
 
-  final OwnedLibraryResult result;
+  final UserLibraryResult result;
 
   @override
   bool cancel() => true;
 
   @override
-  Future<OwnedLibraryResult> run() async => result;
+  Future<UserLibraryResult> run() async => result;
 }
 
 class _FakeVault implements CredentialVault {

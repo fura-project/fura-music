@@ -1,7 +1,7 @@
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge;
 
-enum OwnedLibraryFailure {
+enum UserLibraryFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -14,8 +14,8 @@ enum OwnedLibraryFailure {
   alreadyRunning,
 }
 
-class OwnedPlaylistSummary {
-  const OwnedPlaylistSummary({
+class UserPlaylistSummary {
+  const UserPlaylistSummary({
     required this.providerId,
     required this.opaqueId,
     required this.title,
@@ -30,62 +30,62 @@ class OwnedPlaylistSummary {
   final int? trackCount;
 }
 
-class OwnedLibraryResult {
-  const OwnedLibraryResult({this.playlists = const [], this.failure});
+class UserLibraryResult {
+  const UserLibraryResult({this.playlists = const [], this.failure});
 
-  final List<OwnedPlaylistSummary> playlists;
-  final OwnedLibraryFailure? failure;
+  final List<UserPlaylistSummary> playlists;
+  final UserLibraryFailure? failure;
 }
 
-abstract interface class OwnedLibraryGateway {
-  OwnedLibraryLoadOperation beginLoad();
+abstract interface class UserLibraryGateway {
+  UserLibraryLoadOperation beginLoad();
 }
 
-abstract interface class OwnedLibraryLoadOperation {
-  Future<OwnedLibraryResult> run();
+abstract interface class UserLibraryLoadOperation {
+  Future<UserLibraryResult> run();
   bool cancel();
 }
 
-typedef OwnedLibraryLoadOperationFactory = OwnedLibraryLoadOperation Function();
+typedef UserLibraryLoadOperationFactory = UserLibraryLoadOperation Function();
 
-class RustOwnedLibraryGateway implements OwnedLibraryGateway {
-  RustOwnedLibraryGateway({
+class RustUserLibraryGateway implements UserLibraryGateway {
+  RustUserLibraryGateway({
     CredentialVault? credentialVault,
-    OwnedLibraryLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustOwnedLibraryLoad,
+    UserLibraryLoadOperationFactory? operationFactory,
+  }) : _operationFactory = operationFactory ?? _beginRustUserLibraryLoad,
        _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
 
   final CredentialVault _credentialVault;
-  final OwnedLibraryLoadOperationFactory _operationFactory;
+  final UserLibraryLoadOperationFactory _operationFactory;
 
   @override
-  OwnedLibraryLoadOperation beginLoad() =>
+  UserLibraryLoadOperation beginLoad() =>
       _VaultCleaningLibraryLoadOperation(_operationFactory(), _credentialVault);
 }
 
-OwnedLibraryLoadOperation _beginRustOwnedLibraryLoad() =>
-    _RustOwnedLibraryLoadOperation(bridge.beginQqMusicOwnedPlaylistLoad());
+UserLibraryLoadOperation _beginRustUserLibraryLoad() =>
+    _RustUserLibraryLoadOperation(bridge.beginQqMusicUserPlaylistLoad());
 
-class _RustOwnedLibraryLoadOperation implements OwnedLibraryLoadOperation {
-  const _RustOwnedLibraryLoadOperation(this._handle);
+class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
+  const _RustUserLibraryLoadOperation(this._handle);
 
-  final bridge.QqMusicOwnedPlaylistLoadHandle _handle;
+  final bridge.QqMusicUserPlaylistLoadHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
 
   @override
-  Future<OwnedLibraryResult> run() async {
+  Future<UserLibraryResult> run() async {
     try {
       final result = await _handle.run();
       final failure = result.failure;
-      return OwnedLibraryResult(
+      return UserLibraryResult(
         playlists: failure == null
             ? result.playlists
                   .map(
-                    (playlist) => OwnedPlaylistSummary(
+                    (playlist) => UserPlaylistSummary(
                       providerId: playlist.providerId,
                       opaqueId: playlist.opaqueId,
                       title: playlist.title,
@@ -98,55 +98,54 @@ class _RustOwnedLibraryLoadOperation implements OwnedLibraryLoadOperation {
         failure: failure == null ? null : _mapFailure(failure),
       );
     } catch (_) {
-      return const OwnedLibraryResult(
-        failure: OwnedLibraryFailure.coreUnavailable,
+      return const UserLibraryResult(
+        failure: UserLibraryFailure.coreUnavailable,
       );
     }
   }
 }
 
-class _VaultCleaningLibraryLoadOperation implements OwnedLibraryLoadOperation {
+class _VaultCleaningLibraryLoadOperation implements UserLibraryLoadOperation {
   const _VaultCleaningLibraryLoadOperation(this._inner, this._credentialVault);
 
-  final OwnedLibraryLoadOperation _inner;
+  final UserLibraryLoadOperation _inner;
   final CredentialVault _credentialVault;
 
   @override
   bool cancel() => _inner.cancel();
 
   @override
-  Future<OwnedLibraryResult> run() async {
+  Future<UserLibraryResult> run() async {
     final result = await _inner.run();
-    if (result.failure != OwnedLibraryFailure.credentialRejected) return result;
+    if (result.failure != UserLibraryFailure.credentialRejected) return result;
     try {
       await _credentialVault.delete();
       return result;
     } catch (_) {
-      return const OwnedLibraryResult(
-        failure: OwnedLibraryFailure.credentialRejectedStorageCleanupFailed,
+      return const UserLibraryResult(
+        failure: UserLibraryFailure.credentialRejectedStorageCleanupFailed,
       );
     }
   }
 }
 
-OwnedLibraryFailure _mapFailure(
-  bridge.QqMusicOwnedPlaylistLoadFailure failure,
+UserLibraryFailure _mapFailure(
+  bridge.QqMusicUserPlaylistLoadFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicOwnedPlaylistLoadFailure.coreUnavailable =>
-    OwnedLibraryFailure.coreUnavailable,
-  bridge.QqMusicOwnedPlaylistLoadFailure.authenticationRequired =>
-    OwnedLibraryFailure.authenticationRequired,
-  bridge.QqMusicOwnedPlaylistLoadFailure.credentialRejected =>
-    OwnedLibraryFailure.credentialRejected,
-  bridge.QqMusicOwnedPlaylistLoadFailure.network => OwnedLibraryFailure.network,
-  bridge.QqMusicOwnedPlaylistLoadFailure.serviceUnavailable =>
-    OwnedLibraryFailure.serviceUnavailable,
-  bridge.QqMusicOwnedPlaylistLoadFailure.invalidResponse =>
-    OwnedLibraryFailure.invalidResponse,
-  bridge.QqMusicOwnedPlaylistLoadFailure.replaced =>
-    OwnedLibraryFailure.replaced,
-  bridge.QqMusicOwnedPlaylistLoadFailure.cancelled =>
-    OwnedLibraryFailure.cancelled,
-  bridge.QqMusicOwnedPlaylistLoadFailure.alreadyRunning =>
-    OwnedLibraryFailure.alreadyRunning,
+  bridge.QqMusicUserPlaylistLoadFailure.coreUnavailable =>
+    UserLibraryFailure.coreUnavailable,
+  bridge.QqMusicUserPlaylistLoadFailure.authenticationRequired =>
+    UserLibraryFailure.authenticationRequired,
+  bridge.QqMusicUserPlaylistLoadFailure.credentialRejected =>
+    UserLibraryFailure.credentialRejected,
+  bridge.QqMusicUserPlaylistLoadFailure.network => UserLibraryFailure.network,
+  bridge.QqMusicUserPlaylistLoadFailure.serviceUnavailable =>
+    UserLibraryFailure.serviceUnavailable,
+  bridge.QqMusicUserPlaylistLoadFailure.invalidResponse =>
+    UserLibraryFailure.invalidResponse,
+  bridge.QqMusicUserPlaylistLoadFailure.replaced => UserLibraryFailure.replaced,
+  bridge.QqMusicUserPlaylistLoadFailure.cancelled =>
+    UserLibraryFailure.cancelled,
+  bridge.QqMusicUserPlaylistLoadFailure.alreadyRunning =>
+    UserLibraryFailure.alreadyRunning,
 };

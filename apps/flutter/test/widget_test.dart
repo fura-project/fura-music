@@ -146,7 +146,7 @@ void main() {
     expect(find.text('This code expired'), findsNothing);
   });
 
-  testWidgets('routes an authenticated account into its owned playlists', (
+  testWidgets('routes an authenticated account into its user playlists', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 900);
@@ -162,13 +162,18 @@ void main() {
           authenticated: true,
         ),
         libraryGateway: _WidgetLibraryGateway([
-          const OwnedLibraryResult(
+          const UserLibraryResult(
             playlists: [
-              OwnedPlaylistSummary(
+              UserPlaylistSummary(
                 providerId: 'qq-music',
                 opaqueId: 'owned:7001:201',
                 title: 'Synthetic favorites',
                 trackCount: 42,
+              ),
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'favorite:8001',
+                title: 'Synthetic saved mix',
               ),
             ],
           ),
@@ -178,8 +183,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('Playlists you created'), findsOneWidget);
+    expect(find.text('Your playlists'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
+    expect(find.text('Synthetic saved mix'), findsOneWidget);
     expect(find.text('42 tracks'), findsOneWidget);
     expect(find.text('You’re signed in'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -193,7 +199,7 @@ void main() {
       MusicApp(
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(session),
-        libraryGateway: _WidgetLibraryGateway([const OwnedLibraryResult()]),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
       ),
     );
 
@@ -210,7 +216,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('No created playlists yet'), findsOneWidget);
+    expect(find.text('No playlists yet'), findsOneWidget);
   });
 
   testWidgets('routes verified startup restore into the library', (
@@ -225,17 +231,17 @@ void main() {
             CredentialVerificationResult.authenticated,
           ),
         ),
-        libraryGateway: _WidgetLibraryGateway([const OwnedLibraryResult()]),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
         initialCredentialRestore: CredentialRestoreResult.verificationRequired,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('No created playlists yet'), findsOneWidget);
+    expect(find.text('No playlists yet'), findsOneWidget);
   });
 
-  testWidgets('renders owned playlists without overflow on a narrow screen', (
+  testWidgets('renders user playlists without overflow on a narrow screen', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -251,9 +257,9 @@ void main() {
           authenticated: true,
         ),
         libraryGateway: _WidgetLibraryGateway([
-          const OwnedLibraryResult(
+          const UserLibraryResult(
             playlists: [
-              OwnedPlaylistSummary(
+              UserPlaylistSummary(
                 providerId: 'qq-music',
                 opaqueId: 'owned:7002:202',
                 title: 'Narrow playlist',
@@ -278,8 +284,8 @@ void main() {
           authenticated: true,
         ),
         libraryGateway: _WidgetLibraryGateway([
-          const OwnedLibraryResult(failure: OwnedLibraryFailure.network),
-          const OwnedLibraryResult(),
+          const UserLibraryResult(failure: UserLibraryFailure.network),
+          const UserLibraryResult(),
         ]),
       ),
     );
@@ -288,7 +294,7 @@ void main() {
     expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
-    expect(find.text('No created playlists yet'), findsOneWidget);
+    expect(find.text('No playlists yet'), findsOneWidget);
   });
 
   testWidgets('returns rejected library credentials to sign-in', (
@@ -302,8 +308,8 @@ void main() {
           authenticated: true,
         ),
         libraryGateway: _WidgetLibraryGateway([
-          const OwnedLibraryResult(
-            failure: OwnedLibraryFailure.credentialRejected,
+          const UserLibraryResult(
+            failure: UserLibraryFailure.credentialRejected,
           ),
         ]),
       ),
@@ -373,27 +379,27 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
       CredentialRestoreResult.signedOut;
 }
 
-class _WidgetLibraryGateway implements OwnedLibraryGateway {
+class _WidgetLibraryGateway implements UserLibraryGateway {
   _WidgetLibraryGateway(this.results);
 
-  final List<OwnedLibraryResult> results;
+  final List<UserLibraryResult> results;
   int _next = 0;
 
   @override
-  OwnedLibraryLoadOperation beginLoad() =>
+  UserLibraryLoadOperation beginLoad() =>
       _WidgetLibraryOperation(results[_next++]);
 }
 
-class _WidgetLibraryOperation implements OwnedLibraryLoadOperation {
+class _WidgetLibraryOperation implements UserLibraryLoadOperation {
   const _WidgetLibraryOperation(this.result);
 
-  final OwnedLibraryResult result;
+  final UserLibraryResult result;
 
   @override
   bool cancel() => true;
 
   @override
-  Future<OwnedLibraryResult> run() async => result;
+  Future<UserLibraryResult> run() async => result;
 }
 
 class _WidgetStartOperation implements LoginStartOperation {
