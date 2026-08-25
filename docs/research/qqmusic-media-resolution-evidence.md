@@ -1,6 +1,6 @@
 # QQ Music media-resolution evidence
 
-- **Status:** Contract selected; implementation pending
+- **Status:** Protocol client implemented; Provider mapping pending
 - **Last checked:** 2026-08-26
 - **Scope:** One authenticated, standard-quality MP3 source for the M1 playback path.
 
@@ -62,7 +62,7 @@ module music.audioCdnDispatch.cdnDispatch
 method GetCdnDispatch
 ```
 
-and uses `sip`, `expiration`, `refreshTime`, and `cacheTime`. Yakult independently falls back to the measured `dl.stream.qqmusic.qq.com` host when vkey `sip` is empty. The first project implementation will use the explicit dispatch operation and validated relative paths instead of hard-coding a host or silently treating a bare filename as a URL. Dispatch caching can follow its response fields after the single-resolution path is correct; it is not required to prove the first operation.
+and uses `sip`, `expiration`, `refreshTime`, and `cacheTime`. Yakult independently falls back to the measured `dl.stream.qqmusic.qq.com` host when vkey `sip` is empty. The project client now uses the explicit dispatch operation and validated relative paths instead of inventing a host or silently treating a bare filename as a URL. When that measured host is among the returned candidates it is preferred over `ws`/`isure`; it is never added when absent. Dispatch caching can follow its response fields after the single-resolution path is correct; it is not required to prove the first operation.
 
 The resolved provider-neutral source needs only:
 
@@ -77,6 +77,8 @@ It does not expose QQ filename, vkey, result code, CDN list, payment payload, or
 On 2026-08-26 a lightweight no-account `UrlGetVkey` request for one public song MID returned HTTP success, global code `0`, named-request code `0`, `expiration: 7200`, an empty `sip`, and one `midurlinfo` row. That row had `result: 101404`, a filename, and no `purl` or `vkey`. Only codes, field names, counts, and booleans were printed. This proves the current request/schema and unauthenticated refusal only; it does not prove an authenticated source or the meaning of `101404`.
 
 A separate no-account CDN-dispatch probe returned zero global, request, and dispatch codes; four `sip` entries; `expiration: 86400`; `refreshTime: 1800`; and `cacheTime: 86400`. The returned bases used cleartext HTTP. No host or path was retained. This proves current dispatch structure, not that every returned node will serve an authenticated source or that HTTPS substitution is valid.
+
+After implementation, the opt-in `live_media_resolution` test ran the actual bounded Rust client path against the same non-account boundary. CDN dispatch parsed successfully and the vkey call produced an accepted non-account outcome without printing or retaining its body, URL, or vkey. This confirms the implemented comm/request schema on 2026-08-26; it still does not prove authenticated playback.
 
 ## Evidence still required
 

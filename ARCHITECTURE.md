@@ -148,7 +148,9 @@ Flutter opens a selected playlist locally from the library surface and creates a
 
 ## Playback and storage
 
-The detailed playback and general storage architectures do not exist yet and are intentionally not specified. They will be documented when the first vertical slice introduces real implementations.
+The first playback protocol foundation now exists in `QQMusicClient`. One bounded unauthenticated CDN-dispatch operation validates HTTP(S) bases and cache/refresh TTLs; a second bounded authenticated `UrlGetVkey` operation requests only the cross-validated standard MP3 filename. It requires one matching item, a matching returned filename, a zero item result, and a relative path that cannot replace the dispatched authority. Source URI diagnostics are redacted and validity is the smaller CDN/vkey TTL. The client preserves unknown item codes only as protocol-level unavailable outcomes and does not infer payment, region, or copyright reasons.
+
+Provider-neutral media models, opaque track routing, Bridge lifecycle, playback engine, queue, and controller do not exist yet. `QQMusicProvider` therefore still does not advertise `MediaResolution`, and Flutter has no playback affordance. These boundaries will be documented only as their real vertical slices land.
 
 Credential semantics and serialization remain in Rust. `flutter_secure_storage` is a platform integration edge only; it stores one opaque versioned document and cannot declare a user authenticated. Android backup is disabled, Apple synchronization is disabled, and corrupt or unavailable storage must remain distinguishable from an upstream credential rejection. Linux passed a disposable runtime write/read/delete integration on 2026-08-25; other target runtimes remain tracked by TD-004.
 

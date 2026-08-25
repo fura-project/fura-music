@@ -7,6 +7,7 @@
 mod credential;
 mod credential_verification;
 mod favorite_playlists;
+mod media_resolution;
 mod owned_playlists;
 mod playlist_detail;
 mod transport;
@@ -23,6 +24,10 @@ pub use credential_verification::CredentialVerificationError;
 pub use favorite_playlists::{
     FavoritePlaylistField, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
     QqMusicFavoritePlaylistsPage,
+};
+pub use media_resolution::{
+    MediaProtocolPhase, MediaResponseField, QqMusicCdnDispatch, QqMusicMediaError,
+    QqMusicStandardMediaSource,
 };
 pub use owned_playlists::{
     OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,

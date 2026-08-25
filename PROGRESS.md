@@ -37,15 +37,18 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Completed explicit playlist-detail pagination in Dart without hiding a full-list loop in Rust. The controller advances by raw page length, validates exact offsets and non-advancing pages, deduplicates only exact provider/opaque track identities, preserves loaded rows across retryable append failures, and keeps restart/back/dispose cancellation exact.
 - Added visible load-more, retry-more, progress, and end-of-playlist states. A narrow-screen widget regression opens a playlist, requests offset 1, renders the appended track, and reaches the terminal state; controller regressions cover duplicate boundaries, invalid offsets, and retryable failures.
 - Revalidated `dart analyze`, all 52 Flutter tests, Rust workspace tests (6 + 2 + 20 + 63 + 13), strict Clippy, `git diff --check`, the Linux release build, and the packaged in-process Bridge smoke. The phase-3 architecture and scope review found no Provider/UI leakage, sidecar, new dependency, untracked debt, or scope expansion; user-library implementation is complete with real-account evidence gaps retained under Risks.
+- Cross-validated current ordinary media resolution, documented the unresolved separate-file-MID and restriction semantics, and selected only the shared standard MP3 path. Bounded no-account probes confirmed current vkey/dispatch fields and TTLs without retaining a source URL, vkey, host, or response body.
+- Added separate bounded `QQMusicClient` CDN-dispatch and authenticated standard `UrlGetVkey` operations. They use OS randomness for request GUIDs, validate every CDN base plus exact song/file identity, reject absolute/authority-changing paths, prefer the measured CDN only when dispatch returned it, cap source validity by both TTLs, and redact all source-bearing diagnostics.
+- Added 5 offline media regressions plus an opt-in no-account live integration. The live Rust path accepted current dispatch and non-account vkey response shapes without proving authenticated playback; full workspace tests pass at 6 + 2 + 20 + 68 + 13 with strict Clippy.
 
 # In Progress
 
-- Implement the bounded `QQMusicClient` CDN-dispatch and standard MP3 `UrlGetVkey` operations selected by the media-resolution evidence note. Keep URLs/vkeys redacted and preserve raw item outcomes without inventing restriction reasons.
+- Define the minimum provider-neutral media source/error model and implement opaque QQ track routing inside `QQMusicProvider`, including exact account-replacement and credential-rejection behavior across the two network awaits.
 
 # Next Candidates
 
-1. Add bounded client requests and synthetic fixtures for CDN dispatch plus standard MP3 vkey success, unauthenticated/unavailable item results, malformed paths, response limits, and redacted diagnostics.
-2. Define the minimum provider-neutral media source/error model and route opaque QQ track identity only inside `QQMusicProvider`, with account-replacement and rejection regressions.
+1. Add a redacted provider-neutral standard MP3 source plus typed resolution failures to Domain/Provider API without exposing QQ filenames, vkeys, CDN lists, or raw result codes.
+2. Parse `track:<id>:<type>:<vkey-type-or->:<song-mid>` only inside `QQMusicProvider`, run dispatch then vkey, and recheck the exact credential after each await.
 3. Expose one cancellable single-use Bridge resolution handle before selecting the Flutter playback engine and queue boundary.
 
 # Blockers
