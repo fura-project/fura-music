@@ -52,18 +52,18 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 ## TD-004 — Secure-storage runtime behavior is not verified on every target
 
-**Status:** Open
+**Status:** In Progress
 
-**Problem:** The Linux release build and integration smoke prove that the `flutter_secure_storage` federated plugin links and loads beside the Rust bridge. They do not perform a write/read/delete cycle. Android, iOS, macOS, and Windows implementations have not been built or run in this checkout.
+**Problem:** Linux now has a passing disposable write/read/delete integration against the current user's Secret Service. Android, iOS, macOS, and Windows implementations have not been built or run in this checkout.
 
-**Why accepted:** The current finite task establishes the credential boundary without writing even fake data into the user's live keyring. Not every target runtime is available on this host, and claiming runtime verification from generated registrants would be false.
+**Why accepted:** The Linux test uses an isolated randomized non-account key, never calls `deleteAll`, and confirms absence in `finally`. Not every other target runtime is available on this host, and claiming runtime verification from generated registrants would be false.
 
-**Impact:** A platform entitlement, keyring availability, or plugin integration issue may leave the user authenticated only for the current process. The UI reports that failure without discarding the active Rust credential.
+**Impact:** Linux's configured adapter is runtime-verified on this host. An unverified target may still have an entitlement, keyring, or plugin issue that leaves the user authenticated only for the current process; the UI reports that failure without discarding the active Rust credential.
 
-**Risk:** A build could appear to support restart restore while its platform vault is inaccessible, or test artifacts could remain in a developer keyring if future integration cleanup is incomplete.
+**Risk:** A non-Linux build could appear to support restart restore while its platform vault is inaccessible, or future changes could weaken the disposable test's cleanup boundary.
 
-**Suggested solution:** Add a disposable platform integration that writes unique non-account bytes, reads them back, deletes them in teardown, and verifies absence. Run it on each target before that target is accepted for authenticated distribution.
+**Suggested solution:** Reuse the disposable non-account round-trip pattern on each target before that target is accepted for authenticated distribution; keep unique keys and guaranteed cleanup instead of broad vault deletion.
 
-**Trigger condition:** Linux verification is required before M1 authentication acceptance. Each other target must resolve its own instance before distribution, and at least one mobile target must be verified before the M1 checkpoint.
+**Trigger condition:** The Linux instance was resolved on 2026-08-25. Each other target must resolve its own instance before distribution, and at least one mobile target must be verified before the M1 checkpoint.
 
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

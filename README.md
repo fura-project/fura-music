@@ -36,9 +36,11 @@ dart analyze
 flutter test
 flutter build linux
 flutter test integration_test/simple_test.dart -d linux
+flutter test integration_test/secure_storage_linux_test.dart -d linux
 ```
 
 The Linux build also needs the native `libsecret-1` development package for platform secure storage. Package names vary by distribution (`libsecret` on Arch-based systems and `libsecret-1-dev` on Debian-based systems).
+The secure-storage integration uses a randomized, non-account test key, never calls `deleteAll`, and verifies cleanup in `finally`; it intentionally performs a live write/read/delete cycle in the current user's platform keyring.
 
 `dart analyze` is deliberate for the current local non-ASCII checkout-path issue recorded in `MEMORY.md`.
 

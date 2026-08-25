@@ -1,6 +1,6 @@
 # Current Milestone
 
-M1 — First QQ Music Vertical Slice, phase 2: authentication.
+M1 — First QQ Music Vertical Slice, phase 3: user library.
 
 # Completed Recently
 
@@ -47,15 +47,16 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Started eligible startup verification automatically in Flutter, added retryable/non-retryable presentation states, and restricted platform-vault deletion to explicit server rejection.
 - Added credential input hardening before stored bytes can enter an HTTP Cookie header, plus Provider, Bridge, gateway, controller, and widget regressions for success, rejection, retry, storage-cleanup failure, and late-result suppression.
 - Serialized vault reads, rejection deletes, and new credential writes inside one Gateway instance so a slow old cleanup cannot delete a newly authenticated session.
+- Added and ran a Linux Secret Service integration using a randomized non-account key; write/read/delete succeeded and `finally` cleanup confirmed the marker was absent without touching the production credential key or calling `deleteAll`.
 
 # In Progress
 
-- Verify the Linux platform-vault adapter with a disposable non-account marker and guaranteed cleanup (TD-004).
+- Cross-validate the smallest current-user playlist request and response mapping for M1 phase 3.
 
 # Next Candidates
 
-1. Add and run a disposable Linux secure-vault read/write/delete integration that leaves no marker behind (TD-004).
-2. Begin the smallest M1 user-library slice with evidence-backed current-user playlist protocol research and offline fixtures.
+1. Begin the smallest M1 user-library slice with evidence-backed current-user playlist protocol research and offline fixtures.
+2. Define the minimum stable Playlist summary/detail domain only from fields required by that slice.
 3. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
 
 # Blockers
@@ -71,7 +72,7 @@ None.
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
 - Credential handling can create account and privacy risk; temporary storage must be explicit debt and must not be mistaken for release readiness.
 - Startup server verification is cross-validated and fixture-tested but has not accepted a real account credential in this checkout; the live-success evidence gap remains separate from TD-003's completed implementation.
-- The plugin is linked and loaded on Linux, not runtime read/write/delete verified; Android, Apple, and Windows paths are still unbuilt here (TD-004).
+- Linux runtime write/read/delete is verified with cleanup; Android, Apple, and Windows paths are still unbuilt and runtime-unverified here (TD-004).
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.

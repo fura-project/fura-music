@@ -30,7 +30,7 @@ On the 2026-08-25 Manjaro development host:
 - `flutter build linux --release` links the federated plugin successfully;
 - the Linux Flutter integration smoke starts the packaged app and reaches the typed Rust provider status.
 
-The smoke does not perform a storage write/read/delete cycle. Android, iOS, macOS, and Windows runtime behavior is also unverified in this checkout.
+On 2026-08-25 `integration_test/secure_storage_linux_test.dart` performed a live write/read/delete cycle through the configured Flutter adapter using a randomized non-account key. It never called `deleteAll`, and `finally` repeated deletion and confirmed the test key read back as absent. This verifies Linux runtime access on the current host without proving Android, iOS, macOS, or Windows behavior.
 
 ## Deferred Rust-only alternative
 

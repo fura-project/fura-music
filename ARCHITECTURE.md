@@ -136,7 +136,7 @@ Provider code never returns Flutter widgets or presentation-specific models.
 
 The detailed playback and general storage architectures do not exist yet and are intentionally not specified. They will be documented when the first vertical slice introduces real implementations.
 
-Credential semantics and serialization remain in Rust. `flutter_secure_storage` is a platform integration edge only; it stores one opaque versioned document and cannot declare a user authenticated. Android backup is disabled, Apple synchronization is disabled, and corrupt or unavailable storage must remain distinguishable from an upstream credential rejection. See ADR 0003 and TD-004 for the current verification boundary.
+Credential semantics and serialization remain in Rust. `flutter_secure_storage` is a platform integration edge only; it stores one opaque versioned document and cannot declare a user authenticated. Android backup is disabled, Apple synchronization is disabled, and corrupt or unavailable storage must remain distinguishable from an upstream credential rejection. Linux passed a disposable runtime write/read/delete integration on 2026-08-25; other target runtimes remain tracked by TD-004.
 
 ## Forbidden dependencies
 

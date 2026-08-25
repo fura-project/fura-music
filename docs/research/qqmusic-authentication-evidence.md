@@ -136,4 +136,4 @@ The Provider layer now maps raw protocol image/state/error types into provider-n
 Before claiming M1 authentication acceptance:
 
 1. Capture a sanitized successful response fixture or run a controlled real-account integration before claiming live login compatibility; the current evidence proves request acceptance and failure mapping only.
-2. Run the disposable secure-vault read/write/delete integration on Linux and each distribution target; plugin linkage alone does not prove runtime storage behavior.
+2. Run the existing disposable secure-vault pattern on each distribution target; Linux passed on 2026-08-25, but plugin linkage alone does not prove the remaining platform implementations.
