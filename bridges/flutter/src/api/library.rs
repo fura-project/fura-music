@@ -345,24 +345,40 @@ fn map_track_page_load(
             offset: page.offset(),
             total: page.total(),
             has_more: page.has_more(),
-            tracks: page
-                .tracks()
-                .iter()
-                .map(|track| LibraryTrackSummary {
-                    provider_id: track.id().provider().to_string(),
-                    opaque_id: track.id().opaque().to_owned(),
-                    title: track.title().to_owned(),
-                    subtitle: track.subtitle().map(str::to_owned),
-                    artist_names: track.artist_names().to_vec(),
-                    album_title: track.album_title().map(str::to_owned),
-                    artwork_uri: track.artwork_uri().map(str::to_owned),
-                    duration_seconds: track.duration_seconds(),
-                })
-                .collect(),
+            tracks: page.tracks().iter().map(bridge_track_summary).collect(),
             failure: None,
         },
         Err(error) => failed_track_page(map_track_page_error(error)),
     }
+}
+
+pub(super) fn bridge_track_summary(track: &music_domain::TrackSummary) -> LibraryTrackSummary {
+    LibraryTrackSummary {
+        provider_id: track.id().provider().to_string(),
+        opaque_id: track.id().opaque().to_owned(),
+        title: track.title().to_owned(),
+        subtitle: track.subtitle().map(str::to_owned),
+        artist_names: track.artist_names().to_vec(),
+        album_title: track.album_title().map(str::to_owned),
+        artwork_uri: track.artwork_uri().map(str::to_owned),
+        duration_seconds: track.duration_seconds(),
+    }
+}
+
+pub(super) fn domain_track_summary(
+    track: LibraryTrackSummary,
+) -> Result<music_domain::TrackSummary, ()> {
+    let provider = music_domain::ProviderId::new(track.provider_id).map_err(|_| ())?;
+    let id = music_domain::TrackId::new(provider, track.opaque_id).map_err(|_| ())?;
+    music_domain::TrackSummary::new(id, track.title, track.artist_names)
+        .map(|summary| {
+            summary
+                .with_subtitle(track.subtitle)
+                .with_album_title(track.album_title)
+                .with_artwork_uri(track.artwork_uri)
+                .with_duration_seconds(track.duration_seconds)
+        })
+        .map_err(|_| ())
 }
 
 const fn failed_track_page(

@@ -58,16 +58,18 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Made playlist-detail rows keyboard/touch actionable and added a compact adaptive now-playing surface for resolving/loading/playing/paused/stopped/completed, retryable resolution or engine errors, explicit sign-in reset, play/pause/resume/retry, and stop. It intentionally exposes no queue behavior.
 - Added four end-to-end widget regressions for row playback, pause/resume/stop, track switching, pending resolution across local navigation, credential rejection back to sign-in, URI-free failure copy, and 390px layout. `dart analyze`, all 72 Flutter tests, a Linux release build, and packaged local plus loopback MP3 integration pass.
 - Added a provider-neutral positional `PlaybackQueue` to Rust Domain. Non-empty queues always have an explicit current index; replacement is atomic, navigation/completion is bounded, current removal chooses successor then predecessor, and duplicate track identities remain valid positional user intent. Seven tests cover invariants, duplicate preservation, selection, terminal navigation, every removal relationship, first push, and clear; full Rust checks pass at 15 + 2 + 24 + 68 + 16 with strict Clippy.
+- Added a Dart-owned Rust-opaque playback-queue Bridge handle with synchronous snapshot, replace, push, select, advance, rewind, completion, remove, and clear operations. The Bridge validates Track DTOs before Domain mutation, preserves duplicate positions, reports whether current changed, returns typed invalid-track/position/core failures, and redacts snapshot/handle diagnostics.
+- Regenerated pinned FRB 2.13.0 bindings and confirmed the API set only gained `queue.dart` plus its FFI/codec symbols. Full checks pass at 15 + 2 + 24 + 68 + 21, strict Clippy, `dart analyze`, 72 Flutter tests, Linux release, and a packaged FFI smoke that mutates duplicate entries and proves invalid selection leaves current unchanged.
 
 # In Progress
 
-- Expose the existing provider-neutral queue through the thinnest typed in-process Bridge boundary. The Bridge may adapt commands and snapshots but must not duplicate queue rules or introduce a remote-state-machine lifecycle.
+- Add a Dart queue gateway/controller that maps the generated handle into immutable presentation-safe snapshots and composes queue current changes with `TrackPlaybackController`. Dart must delegate ordering/removal/completion rules to Rust rather than maintaining a second list authority.
 
 # Next Candidates
 
-1. Expose only coarse replace/push/select/advance/rewind/remove/clear operations plus a provider-neutral queue snapshot through one Bridge-owned handle, with mapping and lifecycle tests. Duplicate track positions must survive the boundary unchanged.
-2. Compose queue advancement with the existing single-track playback coordinator and add the smallest adaptive queue surface; preserve explicit single-track error and account-reset states.
-3. Add completion-to-next, manual next/previous, current removal, duplicate-entry, local navigation, cancellation, and narrow-layout regressions before calling queue behavior user-visible complete.
+1. Add the thin Dart queue adapter/controller and unit-test generated result validation, duplicate preservation, invalid/core failures, manual current changes, and completion-to-next composition with the existing single-track coordinator.
+2. Populate the queue from the currently loaded playlist page when a row is activated, starting at that exact row position without parsing or deduplicating identities.
+3. Add the smallest adaptive queue surface plus manual next/previous/removal, then cover duplicate-entry, local navigation, cancellation, sign-in reset, and narrow layout before calling queue behavior user-visible complete.
 
 # Blockers
 

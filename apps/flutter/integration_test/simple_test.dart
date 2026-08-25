@@ -4,6 +4,7 @@ import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
+import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -57,6 +58,30 @@ void main() {
       cancelledMediaResolution.failure,
       QqMusicMediaResolutionFailure.cancelled,
     );
+    final queue = createPlaybackQueue();
+    final queueTrack = LibraryTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41001:0:1:fixtureTrackMid1',
+      title: 'Synthetic queue track',
+      artistNames: const ['Fixture artist'],
+    );
+    final replacedQueue = queue.replace(
+      tracks: [queueTrack, queueTrack],
+      currentIndex: 0,
+    );
+    expect(replacedQueue.failure, isNull);
+    expect(replacedQueue.snapshot?.tracks, hasLength(2));
+    expect(replacedQueue.snapshot?.currentIndex, 0);
+    final advancedQueue = queue.advance();
+    expect(advancedQueue.currentChanged, isTrue);
+    expect(advancedQueue.snapshot?.currentIndex, 1);
+    expect(advancedQueue.snapshot?.hasNext, isFalse);
+    expect(
+      queue.select(index: 9).failure,
+      PlaybackQueueFailure.invalidPosition,
+    );
+    expect(queue.snapshot().snapshot?.currentIndex, 1);
+    expect(queue.clear().snapshot?.tracks, isEmpty);
 
     await tester.pumpWidget(MusicApp(bootstrap: status));
     expect(find.text('QQ Music connected'), findsOneWidget);

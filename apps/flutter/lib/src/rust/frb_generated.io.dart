@@ -7,6 +7,7 @@ import 'api/authentication.dart';
 import 'api/bootstrap.dart';
 import 'api/library.dart';
 import 'api/media.dart';
+import 'api/queue.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -25,6 +26,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_PlaybackQueueHandlePtr => wire
+      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandlePtr;
+
+  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicMediaResolutionHandlePtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandlePtr;
 
@@ -39,6 +44,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicUserPlaylistLoadHandlePtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandlePtr;
+
+  @protected
+  PlaybackQueueHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    dynamic raw,
+  );
 
   @protected
   QqMusicMediaResolutionHandle
@@ -65,6 +76,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackQueueHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicMediaResolutionHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
     dynamic raw,
@@ -85,6 +102,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicUserPlaylistLoadHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
+  PlaybackQueueHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
     dynamic raw,
   );
 
@@ -124,6 +147,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicQrLoginSessionHandle
   dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  );
+
+  @protected
+  LibraryTrackSummary dco_decode_box_autoadd_library_track_summary(dynamic raw);
+
+  @protected
+  PlaybackQueueFailure dco_decode_box_autoadd_playback_queue_failure(
+    dynamic raw,
+  );
+
+  @protected
+  PlaybackQueueSnapshot dco_decode_box_autoadd_playback_queue_snapshot(
     dynamic raw,
   );
 
@@ -212,6 +248,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackQueueFailure? dco_decode_opt_box_autoadd_playback_queue_failure(
+    dynamic raw,
+  );
+
+  @protected
+  PlaybackQueueSnapshot? dco_decode_opt_box_autoadd_playback_queue_snapshot(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicCredentialExportFailure?
   dco_decode_opt_box_autoadd_qq_music_credential_export_failure(dynamic raw);
 
@@ -273,6 +319,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PlaybackQueueFailure dco_decode_playback_queue_failure(dynamic raw);
+
+  @protected
+  PlaybackQueueSnapshot dco_decode_playback_queue_snapshot(dynamic raw);
+
+  @protected
+  PlaybackQueueUpdate dco_decode_playback_queue_update(dynamic raw);
 
   @protected
   ProviderStatus dco_decode_provider_status(dynamic raw);
@@ -377,6 +432,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_usize(dynamic raw);
 
   @protected
+  PlaybackQueueHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicMediaResolutionHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
     SseDeserializer deserializer,
@@ -401,6 +462,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackQueueHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicMediaResolutionHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
     SseDeserializer deserializer,
@@ -421,6 +488,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicUserPlaylistLoadHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PlaybackQueueHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
     SseDeserializer deserializer,
   );
 
@@ -460,6 +533,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicQrLoginSessionHandle
   sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  LibraryTrackSummary sse_decode_box_autoadd_library_track_summary(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PlaybackQueueFailure sse_decode_box_autoadd_playback_queue_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PlaybackQueueSnapshot sse_decode_box_autoadd_playback_queue_snapshot(
     SseDeserializer deserializer,
   );
 
@@ -574,6 +662,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackQueueFailure? sse_decode_opt_box_autoadd_playback_queue_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PlaybackQueueSnapshot? sse_decode_opt_box_autoadd_playback_queue_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicCredentialExportFailure?
   sse_decode_opt_box_autoadd_qq_music_credential_export_failure(
     SseDeserializer deserializer,
@@ -647,6 +745,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PlaybackQueueFailure sse_decode_playback_queue_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PlaybackQueueSnapshot sse_decode_playback_queue_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PlaybackQueueUpdate sse_decode_playback_queue_update(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ProviderStatus sse_decode_provider_status(SseDeserializer deserializer);
@@ -782,6 +895,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    PlaybackQueueHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
     QqMusicMediaResolutionHandle self,
     SseSerializer serializer,
@@ -810,6 +930,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    PlaybackQueueHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
     QqMusicMediaResolutionHandle self,
     SseSerializer serializer,
@@ -833,6 +960,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicUserPlaylistLoadHandle(
     QqMusicUserPlaylistLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    PlaybackQueueHandle self,
     SseSerializer serializer,
   );
 
@@ -880,6 +1014,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     QqMusicQrLoginSessionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_library_track_summary(
+    LibraryTrackSummary self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_playback_queue_failure(
+    PlaybackQueueFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_playback_queue_snapshot(
+    PlaybackQueueSnapshot self,
     SseSerializer serializer,
   );
 
@@ -1005,6 +1157,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_playback_queue_failure(
+    PlaybackQueueFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_playback_queue_snapshot(
+    PlaybackQueueSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_qq_music_credential_export_failure(
     QqMusicCredentialExportFailure? self,
     SseSerializer serializer,
@@ -1082,6 +1246,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
     Uint8List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playback_queue_failure(
+    PlaybackQueueFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playback_queue_snapshot(
+    PlaybackQueueSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playback_queue_update(
+    PlaybackQueueUpdate self,
     SseSerializer serializer,
   );
 
@@ -1255,6 +1437,40 @@ class RustLibWire implements BaseWire {
   /// The symbols are looked up in [dynamicLibrary].
   RustLibWire(ffi.DynamicLibrary dynamicLibrary)
     : _lookup = dynamicLibrary.lookup;
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle',
+      );
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle',
+      );
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
