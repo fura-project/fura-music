@@ -31,6 +31,19 @@ void main() {
       cancelledLibraryLoad.failure,
       QqMusicUserPlaylistLoadFailure.cancelled,
     );
+    final unusedTrackPageLoad = beginQqMusicPlaylistTrackPageLoad(
+      providerId: 'qq-music',
+      opaquePlaylistId: 'favorite:8001',
+      offset: 0,
+      size: 100,
+    );
+    expect(unusedTrackPageLoad.isActive, isTrue);
+    expect(unusedTrackPageLoad.cancel(), isTrue);
+    final cancelledTrackPageLoad = await unusedTrackPageLoad.run();
+    expect(
+      cancelledTrackPageLoad.failure,
+      QqMusicPlaylistTrackPageLoadFailure.cancelled,
+    );
 
     await tester.pumpWidget(MusicApp(bootstrap: status));
     expect(find.text('QQ Music connected'), findsOneWidget);

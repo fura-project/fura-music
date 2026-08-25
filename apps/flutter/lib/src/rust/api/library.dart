@@ -7,11 +7,33 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `domain_playlist_id`, `failed_load`, `failed_track_page`, `map_error`, `map_load`, `map_track_page_error`, `map_track_page_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicUserPlaylistLoadHandle beginQqMusicUserPlaylistLoad() =>
     RustLib.instance.api.crateApiLibraryBeginQqMusicUserPlaylistLoad();
+
+QqMusicPlaylistTrackPageLoadHandle beginQqMusicPlaylistTrackPageLoad({
+  required String providerId,
+  required String opaquePlaylistId,
+  required int offset,
+  required int size,
+}) => RustLib.instance.api.crateApiLibraryBeginQqMusicPlaylistTrackPageLoad(
+  providerId: providerId,
+  opaquePlaylistId: opaquePlaylistId,
+  offset: offset,
+  size: size,
+);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPlaylistTrackPageLoadHandle>>
+abstract class QqMusicPlaylistTrackPageLoadHandle
+    implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicPlaylistTrackPageLoad> run();
+}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>>
 abstract class QqMusicUserPlaylistLoadHandle implements RustOpaqueInterface {
@@ -55,6 +77,100 @@ class LibraryPlaylistSummary {
           title == other.title &&
           artworkUri == other.artworkUri &&
           trackCount == other.trackCount;
+}
+
+class LibraryTrackSummary {
+  final String providerId;
+  final String opaqueId;
+  final String title;
+  final String? subtitle;
+  final List<String> artistNames;
+  final String? albumTitle;
+  final String? artworkUri;
+  final int? durationSeconds;
+
+  const LibraryTrackSummary({
+    required this.providerId,
+    required this.opaqueId,
+    required this.title,
+    this.subtitle,
+    required this.artistNames,
+    this.albumTitle,
+    this.artworkUri,
+    this.durationSeconds,
+  });
+
+  @override
+  int get hashCode =>
+      providerId.hashCode ^
+      opaqueId.hashCode ^
+      title.hashCode ^
+      subtitle.hashCode ^
+      artistNames.hashCode ^
+      albumTitle.hashCode ^
+      artworkUri.hashCode ^
+      durationSeconds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LibraryTrackSummary &&
+          runtimeType == other.runtimeType &&
+          providerId == other.providerId &&
+          opaqueId == other.opaqueId &&
+          title == other.title &&
+          subtitle == other.subtitle &&
+          artistNames == other.artistNames &&
+          albumTitle == other.albumTitle &&
+          artworkUri == other.artworkUri &&
+          durationSeconds == other.durationSeconds;
+}
+
+class QqMusicPlaylistTrackPageLoad {
+  final int offset;
+  final int total;
+  final bool hasMore;
+  final List<LibraryTrackSummary> tracks;
+  final QqMusicPlaylistTrackPageLoadFailure? failure;
+
+  const QqMusicPlaylistTrackPageLoad({
+    required this.offset,
+    required this.total,
+    required this.hasMore,
+    required this.tracks,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      offset.hashCode ^
+      total.hashCode ^
+      hasMore.hashCode ^
+      tracks.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicPlaylistTrackPageLoad &&
+          runtimeType == other.runtimeType &&
+          offset == other.offset &&
+          total == other.total &&
+          hasMore == other.hasMore &&
+          tracks == other.tracks &&
+          failure == other.failure;
+}
+
+enum QqMusicPlaylistTrackPageLoadFailure {
+  coreUnavailable,
+  authenticationRequired,
+  credentialRejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  cancelled,
+  alreadyRunning,
 }
 
 class QqMusicUserPlaylistLoad {

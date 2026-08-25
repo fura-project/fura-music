@@ -28,16 +28,19 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Added provider-scoped opaque `TrackId`, minimum provider-independent `TrackSummary`, and `PlaylistTracksPage` Domain models plus a paged `PlaylistDetailsProvider` contract. Playback rights and QQ raw fields remain outside Domain.
 - Implemented QQ Provider detail routing for favorite playlists, ordinary owned playlists, and the special owned `dirId: 201` liked-songs path. Mapping preserves display metadata and future media identity behind a redacted provider opaque value, rejects foreign/malformed identities and non-advancing pages, rechecks account state after every await, and clears credentials only on explicit rejection.
 - Added Provider regressions for all three routes, multi-artist/album/artwork mapping, unsafe artwork components, malformed identity, invalid page size, non-advancing pages, rejection versus transient failure, and late completion after account replacement. Strict Rust checks now pass at 6 + 2 + 20 + 63 + 10.
+- Added a single-use cancellable playlist-track page Bridge handle. Inputs are provider/opaque playlist identity plus offset/size; outputs contain only provider-neutral track display fields, opaque track identity, page metadata, and coarse typed failures.
+- Regenerated the FRB 2.13.0 Rust/Dart bindings, confirmed the generated API directory has no orphaned modules or old owned-load symbols, and added Bridge mapping/error/cancellation regressions. Rust now passes 6 + 2 + 20 + 63 + 13.
+- Revalidated `dart analyze`, all 44 Flutter tests, a Linux release build, and the packaged Linux integration. The integration creates and cancels the new detail handle across FFI without touching QQ Music or account data.
 
 # In Progress
 
-- Expose one cancellable, single-page playlist-detail Bridge operation and presentation-safe DTOs without moving pagination policy or QQ identity parsing into Dart.
+- Implement the first-page Dart gateway/controller and adaptive playlist-detail page, then make library rows navigable without adding next-page complexity yet.
 
 # Next Candidates
 
-1. Add a cancellable Bridge detail operation, regenerate bindings, and prove provider/track opaque IDs are forwarded without parsing.
-2. Make playlist rows interactive and add a detail controller/page with truthful first-page loading, empty, transient retry, credential rejection, cancellation, and account-replacement states.
-3. Add explicit next-page loading and deduplication in the Dart controller only after the first-page navigation path is complete.
+1. Add a Dart detail gateway/controller for the first 100 rows with truthful loading, empty, transient retry, credential rejection, cancellation, and account-replacement states.
+2. Make playlist rows navigable and build an adaptive desktop/mobile detail page with track title, artists, album, duration, and safe artwork fallbacks.
+3. Add explicit next-page loading and deduplication only after the first-page navigation path is complete and covered by widget/controller regressions.
 
 # Blockers
 
