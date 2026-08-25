@@ -70,13 +70,13 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # In Progress
 
-- Establish the first lyrics evidence slice: cross-validate the current QQ Music lyric/QRC request and response behavior, document unresolved authentication/decryption/timing semantics, and select only the minimum path needed for synchronized plus basic word-level lyrics.
+- Add the minimum provider-neutral synchronized lyric Domain model and `LyricsProvider` contract fixed by the current QQ Music/QRC evidence. Keep protocol encryption, raw QRC, alignment policy, playback position, and presentation state outside this task.
 
 # Next Candidates
 
-1. Research current QQ Music lyrics/QRC behavior using primary live behavior where safe and at least two independent implementations; record exact request fields, response layers, encoding/encryption, translation/romanization availability, and word timing without storing account or copyrighted lyric content.
-2. Add the minimum provider-neutral synchronized/word-timed lyric Domain model and Provider capability only after evidence fixes the invariants.
-3. Implement bounded QQMusicClient parsing with synthetic non-lyrical fixtures and offline regression tests before adding Bridge or Flutter presentation.
+1. Add constructor and boundary regressions for timed original lines/segments plus optional exact-start translation and romanization, without inventing fuzzy alignment.
+2. Implement bounded QQMusicClient request, cloud-QRC decryption, XML/QRC parsing, and wholly synthetic non-lyrical fixtures.
+3. Map the protocol result through `QQMusicProvider`, including account rechecks and explicit-rejection-only credential clearing, before adding Bridge or Flutter presentation.
 
 # Blockers
 
