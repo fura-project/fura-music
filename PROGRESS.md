@@ -60,16 +60,18 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Added a provider-neutral positional `PlaybackQueue` to Rust Domain. Non-empty queues always have an explicit current index; replacement is atomic, navigation/completion is bounded, current removal chooses successor then predecessor, and duplicate track identities remain valid positional user intent. Seven tests cover invariants, duplicate preservation, selection, terminal navigation, every removal relationship, first push, and clear; full Rust checks pass at 15 + 2 + 24 + 68 + 16 with strict Clippy.
 - Added a Dart-owned Rust-opaque playback-queue Bridge handle with synchronous snapshot, replace, push, select, advance, rewind, completion, remove, and clear operations. The Bridge validates Track DTOs before Domain mutation, preserves duplicate positions, reports whether current changed, returns typed invalid-track/position/core failures, and redacts snapshot/handle diagnostics.
 - Regenerated pinned FRB 2.13.0 bindings and confirmed the API set only gained `queue.dart` plus its FFI/codec symbols. Full checks pass at 15 + 2 + 24 + 68 + 21, strict Clippy, `dart analyze`, 72 Flutter tests, Linux release, and a packaged FFI smoke that mutates duplicate entries and proves invalid selection leaves current unchanged.
+- Added the Dart `RustPlaybackQueueGateway` with immutable/redacted snapshots, full generated failure mapping, input forwarding, and defensive validation of result shape, track fields, current position, and navigation flags. Invalid or thrown Bridge results stay coarse and cannot replace the last valid controller snapshot.
+- Added `QueuePlaybackController` to compose Rust-selected current positions with the existing single-track coordinator. Manual navigation/current removal starts only the returned current track, clear stops playback, failures retain active state, completion advances exactly once, and terminal completion does not loop. Eight new gateway/controller tests bring the Flutter suite to 80 passing tests; `dart analyze` remains clean.
 
 # In Progress
 
-- Add a Dart queue gateway/controller that maps the generated handle into immutable presentation-safe snapshots and composes queue current changes with `TrackPlaybackController`. Dart must delegate ordering/removal/completion rules to Rust rather than maintaining a second list authority.
+- Connect `QueuePlaybackController` to the authenticated library/detail route. Activating a row must replace the queue with the currently loaded page and select that exact row position; pagination remains owned by the detail controller and must not silently mutate an already-started queue.
 
 # Next Candidates
 
-1. Add the thin Dart queue adapter/controller and unit-test generated result validation, duplicate preservation, invalid/core failures, manual current changes, and completion-to-next composition with the existing single-track coordinator.
-2. Populate the queue from the currently loaded playlist page when a row is activated, starting at that exact row position without parsing or deduplicating identities.
-3. Add the smallest adaptive queue surface plus manual next/previous/removal, then cover duplicate-entry, local navigation, cancellation, sign-in reset, and narrow layout before calling queue behavior user-visible complete.
+1. Make the authenticated page own one queue controller and pass it through local playlist navigation. Populate a fresh positional queue from the currently loaded detail rows on activation; later pagination does not alter it until another explicit row activation.
+2. Extend the compact now-playing surface with manual previous/next and a bounded queue affordance; add an adaptive queue sheet/panel with positional selection and removal, without shuffle/repeat/persistence.
+3. Add widget regressions for duplicate entries, completion-to-next, manual previous/next, current/non-current removal, local navigation, sign-in reset, and narrow layout before calling queue behavior user-visible complete.
 
 # Blockers
 
