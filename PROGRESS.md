@@ -18,16 +18,20 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Verified a fresh unscanned session returns the expected waiting state through the live endpoint without exchanging credentials.
 - Added a generation-based QR login coordinator: replacement, explicit cancellation, session drop, and coordinator disposal abort in-flight create/poll futures and suppress stale results.
 - Added deterministic concurrency regressions for late authorization, replacement during QR creation, disposal, terminal reuse, and failed-creation cleanup.
+- Cross-validated and implemented the WeChat OAuth-code exchange using the lightweight named musicu RPC envelope, including typed global/subrequest errors and bounded POST transport.
+- Retained and redacted refresh/session material, preferred `str_musicid` over placeholder numeric IDs, and kept the WeChat login type when upstream omits it.
+- Integrated credential exchange into the same generation gate; a replacement aborts an in-flight exchange, while an explicit retry reuses the pending code without polling again.
+- Verified the live endpoint rejects a non-account fake code as global `0` / login `1000`; no real login or successful credential response was exercised.
 
 # In Progress
 
-- Cross-validate the WeChat authorization-code credential exchange and its upstream error mapping.
+- Define the overall QR session deadline and bounded retry policy before exposing a continuous UI flow.
 
 # Next Candidates
 
-1. Exchange the confirmed callback for a credential only after the request and error mapping have independent evidence.
-2. Define overall session deadline and retry policy without weakening explicit cancellation or protocol errors.
-3. Expose an initial login session state through the provider and bridge without adding secret persistence.
+1. Define overall session deadline and retry policy without weakening explicit cancellation or protocol errors.
+2. Map QR authentication through the provider and bridge with opaque session handles and no credential leakage.
+3. Build the adaptive Flutter login surface with explicit cancel/restart behavior.
 4. Select and validate the minimum secure credential-storage boundary before implementing restore persistence.
 
 # Blockers
@@ -42,6 +46,7 @@ None.
 
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
 - Credential handling can create account and privacy risk; temporary storage must be explicit debt and must not be mistaken for release readiness.
+- A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - Cargokit 2.13.0 assumes rustup; Linux currently uses a direct system-Cargo build tracked as TD-001, and non-Linux bridge builds remain unverified.

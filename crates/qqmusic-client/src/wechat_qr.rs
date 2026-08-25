@@ -99,6 +99,10 @@ impl fmt::Debug for WechatQrSession {
 pub struct WechatAuthorizationCode(String);
 
 impl WechatAuthorizationCode {
+    pub(crate) fn from_protocol(value: String) -> Self {
+        Self(value)
+    }
+
     /// Returns the short-lived authorization material for credential exchange.
     /// Do not persist or log it.
     #[must_use]
@@ -419,9 +423,9 @@ fn parse_poll_result<E>(body: &str) -> Result<WechatQrPollResult, WechatQrError<
             if code.is_empty() {
                 return Err(WechatQrError::MissingAuthorizationCode);
             }
-            Ok(WechatQrPollResult::Authorized(WechatAuthorizationCode(
-                code.to_owned(),
-            )))
+            Ok(WechatQrPollResult::Authorized(
+                WechatAuthorizationCode::from_protocol(code.to_owned()),
+            ))
         }
         402 => Ok(WechatQrPollResult::Expired),
         403 => Ok(WechatQrPollResult::Refused),

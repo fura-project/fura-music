@@ -93,6 +93,90 @@ impl fmt::Display for InvalidCredentialExpiry {
 
 impl std::error::Error for InvalidCredentialExpiry {}
 
+/// Optional secret material returned with a QQ Music credential.
+///
+/// These fields are retained for future refresh and authenticated protocol
+/// work, but are never printed by `Debug`. Empty upstream strings normalize to
+/// absence.
+#[derive(Clone, Default, Eq, PartialEq)]
+pub struct CredentialSessionSecrets {
+    open_id: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    refresh_key: Option<String>,
+    union_id: Option<String>,
+    encrypted_uin: Option<String>,
+}
+
+impl CredentialSessionSecrets {
+    #[must_use]
+    pub fn new(
+        open_id: Option<String>,
+        access_token: Option<String>,
+        refresh_token: Option<String>,
+        refresh_key: Option<String>,
+        union_id: Option<String>,
+        encrypted_uin: Option<String>,
+    ) -> Self {
+        Self {
+            open_id: non_empty(open_id),
+            access_token: non_empty(access_token),
+            refresh_token: non_empty(refresh_token),
+            refresh_key: non_empty(refresh_key),
+            union_id: non_empty(union_id),
+            encrypted_uin: non_empty(encrypted_uin),
+        }
+    }
+
+    #[must_use]
+    pub fn open_id(&self) -> Option<&str> {
+        self.open_id.as_deref()
+    }
+
+    #[must_use]
+    pub fn access_token(&self) -> Option<&str> {
+        self.access_token.as_deref()
+    }
+
+    #[must_use]
+    pub fn refresh_token(&self) -> Option<&str> {
+        self.refresh_token.as_deref()
+    }
+
+    #[must_use]
+    pub fn refresh_key(&self) -> Option<&str> {
+        self.refresh_key.as_deref()
+    }
+
+    #[must_use]
+    pub fn union_id(&self) -> Option<&str> {
+        self.union_id.as_deref()
+    }
+
+    #[must_use]
+    pub fn encrypted_uin(&self) -> Option<&str> {
+        self.encrypted_uin.as_deref()
+    }
+}
+
+impl fmt::Debug for CredentialSessionSecrets {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CredentialSessionSecrets")
+            .field("open_id_present", &self.open_id.is_some())
+            .field("access_token_present", &self.access_token.is_some())
+            .field("refresh_token_present", &self.refresh_token.is_some())
+            .field("refresh_key_present", &self.refresh_key.is_some())
+            .field("union_id_present", &self.union_id.is_some())
+            .field("encrypted_uin_present", &self.encrypted_uin.is_some())
+            .finish()
+    }
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value.filter(|item| !item.is_empty())
+}
+
 /// The minimum credential required to authenticate QQ Music protocol calls.
 ///
 /// Accessors intentionally make secret use explicit. Do not log or expose this
@@ -103,6 +187,7 @@ pub struct Credential {
     music_key: String,
     login_type: LoginType,
     expiry: Option<CredentialExpiry>,
+    session_secrets: CredentialSessionSecrets,
 }
 
 impl Credential {
@@ -131,12 +216,19 @@ impl Credential {
             music_key,
             login_type,
             expiry: None,
+            session_secrets: CredentialSessionSecrets::default(),
         })
     }
 
     #[must_use]
     pub fn with_expiry(mut self, expiry: CredentialExpiry) -> Self {
         self.expiry = Some(expiry);
+        self
+    }
+
+    #[must_use]
+    pub fn with_session_secrets(mut self, session_secrets: CredentialSessionSecrets) -> Self {
+        self.session_secrets = session_secrets;
         self
     }
 
@@ -155,6 +247,11 @@ impl Credential {
     #[must_use]
     pub const fn login_type(&self) -> LoginType {
         self.login_type
+    }
+
+    #[must_use]
+    pub const fn session_secrets(&self) -> &CredentialSessionSecrets {
+        &self.session_secrets
     }
 
     #[must_use]
@@ -184,6 +281,7 @@ impl fmt::Debug for Credential {
             .field("music_key", &Redacted)
             .field("login_type", &self.login_type)
             .field("expiry", &self.expiry)
+            .field("session_secrets", &self.session_secrets)
             .finish()
     }
 }
@@ -254,8 +352,8 @@ impl CredentialRestorePlan {
 #[cfg(test)]
 mod tests {
     use super::{
-        Credential, CredentialExpiry, CredentialRestorePlan, InvalidCredential,
-        LocalCredentialValidity, LoginType,
+        Credential, CredentialExpiry, CredentialRestorePlan, CredentialSessionSecrets,
+        InvalidCredential, LocalCredentialValidity, LoginType,
     };
 
     fn credential() -> Credential {
@@ -283,11 +381,36 @@ mod tests {
 
     #[test]
     fn credential_debug_output_redacts_account_and_key() {
-        let debug = format!("{:?}", credential());
+        let credential = credential().with_session_secrets(CredentialSessionSecrets::new(
+            Some("secret-open-id".into()),
+            Some("secret-access-token".into()),
+            Some("secret-refresh-token".into()),
+            Some("secret-refresh-key".into()),
+            Some("secret-union-id".into()),
+            Some("secret-encrypted-uin".into()),
+        ));
+        let debug = format!("{credential:?}");
 
         assert!(!debug.contains("123456789"));
         assert!(!debug.contains("Q_H_L_super-secret"));
+        assert!(!debug.contains("secret-"));
         assert_eq!(debug.matches("[REDACTED]").count(), 2);
+        assert!(debug.contains("refresh_token_present: true"));
+    }
+
+    #[test]
+    fn session_secrets_normalize_empty_protocol_fields() {
+        let secrets = CredentialSessionSecrets::new(
+            Some(String::new()),
+            None,
+            Some("refresh-token".into()),
+            None,
+            None,
+            None,
+        );
+
+        assert_eq!(secrets.open_id(), None);
+        assert_eq!(secrets.refresh_token(), Some("refresh-token"));
     }
 
     #[test]

@@ -7,6 +7,7 @@ const DEFAULT_RESPONSE_BODY_LIMIT: usize = 4 * 1024 * 1024;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HttpMethod {
     Get,
+    Post,
 }
 
 /// Provider-protocol request with deliberately buffered, inspectable parts.
@@ -19,6 +20,7 @@ pub struct HttpRequest {
     url: String,
     query: Vec<(String, String)>,
     headers: Vec<(String, String)>,
+    body: Option<Vec<u8>>,
     response_body_limit: usize,
     timeout: Option<Duration>,
 }
@@ -31,6 +33,20 @@ impl HttpRequest {
             url: url.into(),
             query: Vec::new(),
             headers: Vec::new(),
+            body: None,
+            response_body_limit: DEFAULT_RESPONSE_BODY_LIMIT,
+            timeout: None,
+        }
+    }
+
+    #[must_use]
+    pub fn post(url: impl Into<String>) -> Self {
+        Self {
+            method: HttpMethod::Post,
+            url: url.into(),
+            query: Vec::new(),
+            headers: Vec::new(),
+            body: None,
             response_body_limit: DEFAULT_RESPONSE_BODY_LIMIT,
             timeout: None,
         }
@@ -45,6 +61,12 @@ impl HttpRequest {
     #[must_use]
     pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.push((name.into(), value.into()));
+        self
+    }
+
+    #[must_use]
+    pub fn body(mut self, body: impl Into<Vec<u8>>) -> Self {
+        self.body = Some(body.into());
         self
     }
 
@@ -80,6 +102,13 @@ impl HttpRequest {
         &self.headers
     }
 
+    /// Returns sensitive protocol bytes for transport implementations and
+    /// focused request-shape tests. Never log this value.
+    #[must_use]
+    pub fn body_bytes(&self) -> Option<&[u8]> {
+        self.body.as_deref()
+    }
+
     #[must_use]
     pub const fn max_response_body_bytes(&self) -> usize {
         self.response_body_limit
@@ -110,6 +139,7 @@ impl fmt::Debug for HttpRequest {
                     .map(|(name, _)| name)
                     .collect::<Vec<_>>(),
             )
+            .field("body_bytes", &self.body.as_ref().map(Vec::len))
             .field("response_body_limit", &self.response_body_limit)
             .field("timeout", &self.timeout)
             .finish()
@@ -220,6 +250,7 @@ impl HttpTransport for ReqwestTransport {
     async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
         let mut builder = match request.method {
             HttpMethod::Get => self.client.get(&request.url),
+            HttpMethod::Post => self.client.post(&request.url),
         };
         builder = builder.query(&request.query);
         if let Some(timeout) = request.timeout {
@@ -227,6 +258,9 @@ impl HttpTransport for ReqwestTransport {
         }
         for (name, value) in request.headers {
             builder = builder.header(name, value);
+        }
+        if let Some(body) = request.body {
+            builder = builder.body(body);
         }
 
         let mut response = builder
@@ -278,9 +312,10 @@ mod tests {
 
     #[test]
     fn request_debug_output_omits_values() {
-        let request = HttpRequest::get("https://example.test/path?embedded=secret-url-query")
+        let request = HttpRequest::post("https://example.test/path?embedded=secret-url-query")
             .query("token", "secret-query")
-            .header("Authorization", "secret-header");
+            .header("Authorization", "secret-header")
+            .body("secret-body");
         let debug = format!("{request:?}");
 
         assert!(debug.contains("https://example.test/path"));
@@ -289,6 +324,8 @@ mod tests {
         assert!(!debug.contains("secret-url-query"));
         assert!(!debug.contains("secret-query"));
         assert!(!debug.contains("secret-header"));
+        assert!(!debug.contains("secret-body"));
+        assert!(debug.contains("body_bytes: Some(11)"));
     }
 
     #[test]

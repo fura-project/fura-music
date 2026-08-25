@@ -96,11 +96,28 @@ The raw client intentionally exposes create and one-shot poll operations. `Wecha
 
 Deterministic tests hold a synthetic request in flight and prove replacement, cancellation, and disposal suppress the late result. Overall session deadline and retry policy remain pending and are not implied by the per-request 35-second poll budget.
 
+### Third network slice: WeChat code exchange
+
+L-1124, ylw1997, and yakult agree on the semantic RPC:
+
+- `POST https://u.y.qq.com/cgi-bin/musicu.fcg`;
+- module `music.login.LoginServer`, method `Login`;
+- parameter `{code, strAppid: "wx48db31d50e334801"}`;
+- common `tmeLoginType: 1`.
+
+The implementations differ in envelope naming and device context. L-1124/yakult normally use `req_0` with an Android comm, while ylw1997 uses the named `music.login.LoginServer.Login` key and a lightweight `ct=11` comm. On 2026-08-25 a single no-account request with an explicitly invalid OAuth code confirmed the lightweight named form is still accepted: HTTP succeeded, the global code was `0`, and the login subrequest returned opaque code `1000`. The probe retained only status codes and response field names; it did not authenticate or access an account.
+
+The project therefore implements the smaller envelope that has direct current evidence and does not introduce QIMEI merely for this channel. Both global and subrequest codes must be zero. Nonzero values remain structured opaque errors; upstream messages and bodies are not retained in errors.
+
+Successful mapping is offline and cross-validated, not live-account verified. It prefers a nonzero `str_musicid` because current measured fixtures can carry placeholder numeric `musicid=0`, validates `musickey`, preserves WeChat login type when omitted, validates expiry pairs, and retains `openid`, access/refresh tokens, refresh key, union ID, and encrypted UIN in a diagnostics-redacted container.
+
+The coordinator exchanges a 405 code inside the same attempt generation. Replacement/cancellation drops the exchange future before a credential can surface. An exchange failure retains the pending code for an explicit retry and does not silently re-poll or auto-retry.
+
 ## Evidence still required
 
-Before continuing beyond one-shot QR polling:
+Before presenting QR login as a user-visible capability:
 
 1. Define the overall session deadline and retry policy; the per-request long-poll budget is not a session timeout.
-2. Cross-validate the exact `window.wx_code` credential-exchange request and error mapping before implementing it.
-3. Add sanitized real-response fixtures or extend the repeatable opt-in integration test for each implemented transition.
+2. Capture a sanitized successful response fixture or run a controlled real-account integration before claiming live login compatibility; the current evidence proves request acceptance and failure mapping only.
+3. Map the lifecycle through the Provider/bridge without exposing the UUID, OAuth code, credential, or refresh material to logs or ordinary UI state.
 4. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.

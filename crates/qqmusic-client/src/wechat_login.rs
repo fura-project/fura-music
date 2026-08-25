@@ -4,7 +4,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::watch;
 
-use crate::{HttpTransport, QqMusicClient, WechatQrError, WechatQrPollResult, WechatQrSession};
+use crate::{
+    Credential, HttpTransport, QqMusicClient, WechatAuthorizationCode,
+    WechatCredentialExchangeError, WechatQrError, WechatQrPollResult, WechatQrSession,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AttemptState {
@@ -22,6 +25,7 @@ enum Interruption {
 
 pub enum WechatQrLoginError<E> {
     Protocol(WechatQrError<E>),
+    CredentialExchange(WechatCredentialExchangeError<E>),
     Cancelled,
     Superseded,
     CoordinatorClosed,
@@ -32,6 +36,10 @@ impl<E> fmt::Debug for WechatQrLoginError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Protocol(error) => formatter.debug_tuple("Protocol").field(error).finish(),
+            Self::CredentialExchange(error) => formatter
+                .debug_tuple("CredentialExchange")
+                .field(error)
+                .finish(),
             Self::Cancelled => formatter.write_str("Cancelled"),
             Self::Superseded => formatter.write_str("Superseded"),
             Self::CoordinatorClosed => formatter.write_str("CoordinatorClosed"),
@@ -44,6 +52,7 @@ impl<E> fmt::Display for WechatQrLoginError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Protocol(error) => error.fmt(formatter),
+            Self::CredentialExchange(error) => error.fmt(formatter),
             Self::Cancelled => formatter.write_str("WeChat QR login was cancelled"),
             Self::Superseded => {
                 formatter.write_str("WeChat QR login was replaced by a newer session")
@@ -63,9 +72,19 @@ where
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Protocol(error) => Some(error),
+            Self::CredentialExchange(error) => Some(error),
             _ => None,
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WechatQrLoginProgress {
+    WaitingForScan,
+    ScannedAwaitingConfirmation,
+    Authenticated(Box<Credential>),
+    Expired,
+    Refused,
 }
 
 impl<E> From<Interruption> for WechatQrLoginError<E> {
@@ -173,6 +192,7 @@ where
             generation,
             state,
             sender: self.state.clone(),
+            pending_authorization: None,
             finished: false,
         })
     }
@@ -191,6 +211,7 @@ pub struct WechatQrLoginSession<T> {
     generation: u64,
     state: watch::Receiver<AttemptState>,
     sender: watch::Sender<AttemptState>,
+    pending_authorization: Option<WechatAuthorizationCode>,
     finished: bool,
 }
 
@@ -200,6 +221,10 @@ impl<T> fmt::Debug for WechatQrLoginSession<T> {
             .debug_struct("WechatQrLoginSession")
             .field("qr", &self.qr)
             .field("active", &self.is_active())
+            .field(
+                "authorization_pending",
+                &self.pending_authorization.is_some(),
+            )
             .field("finished", &self.finished)
             .finish_non_exhaustive()
     }
@@ -230,21 +255,28 @@ impl<T> WechatQrLoginSession<T>
 where
     T: HttpTransport + 'static,
 {
-    /// Performs one poll while racing it against cancellation or replacement.
+    /// Advances one protocol step while racing network work against lifecycle
+    /// cancellation or replacement.
     ///
-    /// Dropping the losing protocol future aborts the in-flight HTTP request.
-    /// Terminal protocol states finish this generation; waiting states remain
-    /// active for an explicit subsequent poll.
+    /// A 405 authorization code stays inside this session and is exchanged
+    /// under the same generation gate. Dropping the losing future aborts the
+    /// in-flight HTTP request. Terminal states finish this generation; waiting
+    /// states remain active for an explicit subsequent call.
     ///
     /// # Errors
     ///
-    /// Returns protocol failures separately from cancellation, replacement,
-    /// coordinator disposal, and calls made after a terminal result.
-    pub async fn poll_once(&mut self) -> Result<WechatQrPollResult, WechatQrLoginError<T::Error>> {
+    /// Returns poll/exchange failures separately from cancellation,
+    /// replacement, coordinator disposal, and calls made after a terminal
+    /// result.
+    pub async fn advance(&mut self) -> Result<WechatQrLoginProgress, WechatQrLoginError<T::Error>> {
         if self.finished {
             return Err(WechatQrLoginError::SessionFinished);
         }
         ensure_current(&self.state, self.generation)?;
+
+        if self.pending_authorization.is_some() {
+            return self.exchange_pending_authorization().await;
+        }
 
         let result = tokio::select! {
             biased;
@@ -257,16 +289,51 @@ where
         };
         ensure_current(&self.state, self.generation)?;
 
-        if matches!(
-            result,
-            WechatQrPollResult::Authorized(_)
-                | WechatQrPollResult::Expired
-                | WechatQrPollResult::Refused
-        ) {
-            self.finished = true;
-            clear_if_current(&self.sender, self.generation);
+        match result {
+            WechatQrPollResult::WaitingForScan => Ok(WechatQrLoginProgress::WaitingForScan),
+            WechatQrPollResult::ScannedAwaitingConfirmation => {
+                Ok(WechatQrLoginProgress::ScannedAwaitingConfirmation)
+            }
+            WechatQrPollResult::Authorized(code) => {
+                self.pending_authorization = Some(code);
+                self.exchange_pending_authorization().await
+            }
+            WechatQrPollResult::Expired => {
+                self.finish();
+                Ok(WechatQrLoginProgress::Expired)
+            }
+            WechatQrPollResult::Refused => {
+                self.finish();
+                Ok(WechatQrLoginProgress::Refused)
+            }
         }
-        Ok(result)
+    }
+
+    async fn exchange_pending_authorization(
+        &mut self,
+    ) -> Result<WechatQrLoginProgress, WechatQrLoginError<T::Error>> {
+        let code = self
+            .pending_authorization
+            .as_ref()
+            .expect("called only while authorization is pending");
+        let credential = tokio::select! {
+            biased;
+            interruption = wait_for_interruption(&mut self.state, self.generation) => {
+                return Err(interruption.into());
+            }
+            result = self.client.exchange_wechat_code(code) => {
+                result.map_err(WechatQrLoginError::CredentialExchange)?
+            }
+        };
+        ensure_current(&self.state, self.generation)?;
+        self.pending_authorization = None;
+        self.finish();
+        Ok(WechatQrLoginProgress::Authenticated(Box::new(credential)))
+    }
+
+    fn finish(&mut self) {
+        self.finished = true;
+        clear_if_current(&self.sender, self.generation);
     }
 }
 
@@ -324,12 +391,15 @@ fn interruption_for(state: AttemptState, generation: u64) -> Option<Interruption
 mod tests {
     use std::convert::Infallible;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use tokio::sync::Semaphore;
 
     use super::{WechatQrLoginCoordinator, WechatQrLoginError};
-    use crate::{HttpRequest, HttpResponse, HttpTransport, QqMusicClient, WechatQrPollResult};
+    use crate::{
+        HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient,
+        WechatCredentialExchangeError, WechatQrLoginProgress,
+    };
 
     #[derive(Clone)]
     struct LifecycleTransport {
@@ -495,12 +565,122 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
+    struct ExchangeLifecycleTransport {
+        block_exchange: bool,
+        fail_first: bool,
+        started: Arc<Semaphore>,
+        release: Arc<Semaphore>,
+        cancelled: Arc<AtomicBool>,
+        exchange_calls: Arc<AtomicUsize>,
+        poll_calls: Arc<AtomicUsize>,
+    }
+
+    impl ExchangeLifecycleTransport {
+        fn ready(fail_first: bool) -> Self {
+            Self {
+                block_exchange: false,
+                fail_first,
+                started: Arc::new(Semaphore::new(0)),
+                release: Arc::new(Semaphore::new(0)),
+                cancelled: Arc::new(AtomicBool::new(false)),
+                exchange_calls: Arc::new(AtomicUsize::new(0)),
+                poll_calls: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+
+        fn blocked() -> Self {
+            Self {
+                block_exchange: true,
+                ..Self::ready(false)
+            }
+        }
+
+        async fn wait_until_exchange_started(&self) {
+            self.started
+                .acquire()
+                .await
+                .expect("exchange-start semaphore remains open")
+                .forget();
+        }
+
+        fn success_response() -> HttpResponse {
+            HttpResponse::new(
+                200,
+                serde_json::to_vec(&serde_json::json!({
+                    "code": 0,
+                    "music.login.LoginServer.Login": {
+                        "code": 0,
+                        "data": {
+                            "str_musicid": "456",
+                            "musickey": "late-secret-music-key",
+                            "refresh_token": "late-secret-refresh-token"
+                        }
+                    }
+                }))
+                .expect("exchange fixture JSON"),
+            )
+        }
+    }
+
+    impl HttpTransport for ExchangeLifecycleTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            if request.url() == "https://open.weixin.qq.com/connect/qrconnect" {
+                return Ok(HttpResponse::new(
+                    200,
+                    br#"<a href="?uuid=lifecycle-fixture">login</a>"#.to_vec(),
+                ));
+            }
+            if request
+                .url()
+                .starts_with("https://open.weixin.qq.com/connect/qrcode/")
+            {
+                return Ok(HttpResponse::new(200, b"\xff\xd8\xfffixture-jpeg".to_vec()));
+            }
+            if request.method() == HttpMethod::Get {
+                self.poll_calls.fetch_add(1, Ordering::SeqCst);
+                return Ok(HttpResponse::new(
+                    200,
+                    b"window.wx_errcode=405;window.wx_code='late-secret-code';".to_vec(),
+                ));
+            }
+
+            let call = self.exchange_calls.fetch_add(1, Ordering::SeqCst);
+            if self.block_exchange {
+                self.started.add_permits(1);
+                let mut marker = CancellationMarker {
+                    cancelled: Arc::clone(&self.cancelled),
+                    completed: false,
+                };
+                self.release
+                    .acquire()
+                    .await
+                    .expect("exchange-release semaphore remains open")
+                    .forget();
+                marker.completed = true;
+            }
+            if self.fail_first && call == 0 {
+                return Ok(HttpResponse::new(
+                    200,
+                    serde_json::to_vec(&serde_json::json!({
+                        "code": 0,
+                        "music.login.LoginServer.Login": { "code": 1000, "data": {} }
+                    }))
+                    .expect("failure fixture JSON"),
+                ));
+            }
+            Ok(Self::success_response())
+        }
+    }
+
     #[tokio::test]
     async fn replacement_aborts_poll_and_suppresses_the_old_result() {
         let transport = LifecycleTransport::blocked(405);
         let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport.clone()));
         let mut first = coordinator.begin().await.expect("first QR session");
-        let poll = tokio::spawn(async move { first.poll_once().await });
+        let poll = tokio::spawn(async move { first.advance().await });
         transport.wait_until_poll_started().await;
 
         let second = coordinator.begin().await.expect("replacement QR session");
@@ -521,7 +701,7 @@ mod tests {
         let transport = LifecycleTransport::blocked(405);
         let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport.clone()));
         let mut session = coordinator.begin().await.expect("QR session");
-        let poll = tokio::spawn(async move { session.poll_once().await });
+        let poll = tokio::spawn(async move { session.advance().await });
         transport.wait_until_poll_started().await;
 
         assert!(coordinator.cancel_active());
@@ -540,7 +720,7 @@ mod tests {
         let transport = LifecycleTransport::blocked(405);
         let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport.clone()));
         let mut session = coordinator.begin().await.expect("QR session");
-        let poll = tokio::spawn(async move { session.poll_once().await });
+        let poll = tokio::spawn(async move { session.advance().await });
         transport.wait_until_poll_started().await;
 
         drop(coordinator);
@@ -559,13 +739,13 @@ mod tests {
         let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport));
         let mut session = coordinator.begin().await.expect("QR session");
 
-        let result = session.poll_once().await.expect("expired protocol result");
+        let result = session.advance().await.expect("expired protocol result");
 
-        assert_eq!(result, WechatQrPollResult::Expired);
+        assert_eq!(result, WechatQrLoginProgress::Expired);
         assert!(!session.is_active());
         assert!(!coordinator.has_active_session());
         assert!(matches!(
-            session.poll_once().await,
+            session.advance().await,
             Err(WechatQrLoginError::SessionFinished)
         ));
     }
@@ -616,5 +796,68 @@ mod tests {
         assert!(matches!(error, WechatQrLoginError::Superseded));
         assert!(transport.cancelled.load(Ordering::SeqCst));
         assert!(second.is_active());
+    }
+
+    #[tokio::test]
+    async fn authorization_is_exchanged_inside_the_same_generation() {
+        let transport = ExchangeLifecycleTransport::ready(false);
+        let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport.clone()));
+        let mut session = coordinator.begin().await.expect("QR session");
+
+        let progress = session.advance().await.expect("credential exchange");
+
+        let WechatQrLoginProgress::Authenticated(credential) = &progress else {
+            panic!("expected authenticated progress");
+        };
+        assert_eq!(credential.music_id(), "456");
+        assert_eq!(transport.poll_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(transport.exchange_calls.load(Ordering::SeqCst), 1);
+        assert!(!session.is_active());
+        assert!(!coordinator.has_active_session());
+        assert!(!format!("{progress:?}").contains("late-secret"));
+    }
+
+    #[tokio::test]
+    async fn replacement_aborts_exchange_and_suppresses_late_credential() {
+        let transport = ExchangeLifecycleTransport::blocked();
+        let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport.clone()));
+        let mut first = coordinator.begin().await.expect("first QR session");
+        let advance = tokio::spawn(async move { first.advance().await });
+        transport.wait_until_exchange_started().await;
+
+        let second = coordinator.begin().await.expect("replacement QR session");
+        let error = advance
+            .await
+            .expect("advance task")
+            .expect_err("old exchange is superseded");
+
+        assert!(matches!(error, WechatQrLoginError::Superseded));
+        assert!(transport.cancelled.load(Ordering::SeqCst));
+        assert!(second.is_active());
+    }
+
+    #[tokio::test]
+    async fn exchange_failure_keeps_code_for_explicit_retry_without_repolling() {
+        let transport = ExchangeLifecycleTransport::ready(true);
+        let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport.clone()));
+        let mut session = coordinator.begin().await.expect("QR session");
+
+        let first_error = session
+            .advance()
+            .await
+            .expect_err("first exchange is rejected");
+
+        assert!(matches!(
+            first_error,
+            WechatQrLoginError::CredentialExchange(WechatCredentialExchangeError::Upstream {
+                global_code: 0,
+                login_code: Some(1000)
+            })
+        ));
+        assert!(session.is_active());
+        let retry = session.advance().await.expect("explicit exchange retry");
+        assert!(matches!(retry, WechatQrLoginProgress::Authenticated(_)));
+        assert_eq!(transport.poll_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(transport.exchange_calls.load(Ordering::SeqCst), 2);
     }
 }

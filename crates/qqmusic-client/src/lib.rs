@@ -6,17 +6,22 @@
 
 mod credential;
 mod transport;
+mod wechat_exchange;
 mod wechat_login;
 mod wechat_qr;
 
 pub use credential::{
-    Credential, CredentialExpiry, CredentialRestorePlan, InvalidCredential,
-    InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity, LoginType,
+    Credential, CredentialExpiry, CredentialRestorePlan, CredentialSessionSecrets,
+    InvalidCredential, InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity,
+    LoginType,
 };
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
 };
-pub use wechat_login::{WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginSession};
+pub use wechat_exchange::WechatCredentialExchangeError;
+pub use wechat_login::{
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+};
 pub use wechat_qr::{
     QrImage, QrImageMediaType, WechatAuthorizationCode, WechatQrError, WechatQrPollResult,
     WechatQrSession,
