@@ -35,5 +35,5 @@ Rust `keyring` 4 now has broad desktop and Android support, but its Android stor
 - Secret bytes cross FFI for one dedicated storage operation, remain in process memory briefly, and must never be logged, cached, or exposed to ordinary presentation types. Dart can zero the mutable byte buffer, but the plugin's required immutable Base64 `String` remains eligible for garbage collection rather than deterministic zeroization.
 - Rust remains the only authority that can serialize or accept a persisted credential.
 - Corrupt plugin values and platform failures are surfaced rather than silently treated as signed-out state.
-- The current Linux build and smoke test prove linking and plugin registration, not a real keyring write/read/delete cycle.
+- Linux and Android 16 x64 now pass a real disposable write/read/delete/absence cycle; this proves only those current runtime paths.
 - Each target still needs disposable runtime storage verification before its authenticated build can be called release-ready; this is tracked as TD-004.

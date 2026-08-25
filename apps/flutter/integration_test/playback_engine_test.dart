@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -92,7 +92,7 @@ void main() {
       await requests.cancel();
       await server.close(force: true);
     }
-  });
+  }, skip: !Platform.isLinux);
 }
 
 Future<void> _expectStateAfter(

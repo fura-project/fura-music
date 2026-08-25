@@ -36,14 +36,25 @@ dart analyze
 flutter test
 flutter build linux
 flutter test integration_test/simple_test.dart -d linux
-flutter test integration_test/secure_storage_linux_test.dart -d linux
-flutter test integration_test/playback_engine_linux_test.dart -d linux
+flutter test integration_test/secure_storage_test.dart -d linux
+flutter test integration_test/playback_engine_test.dart -d linux
 ```
 
 The Linux build also needs the native `libsecret-1` development package for platform secure storage. Package names vary by distribution (`libsecret` on Arch-based systems and `libsecret-1-dev` on Debian-based systems).
 
 Playback uses the endorsed Linux `audioplayers` implementation and therefore also needs GStreamer 1.0 core, app, and audio development modules plus runtime plugins for the formats being played. The local M1 integration currently proves MP3 decode on the recorded development environment; installing headers alone does not prove runtime codec availability on another distribution.
 The secure-storage integration uses a randomized, non-account test key, never calls `deleteAll`, and verifies cleanup in `finally`; it intentionally performs a live write/read/delete cycle in the current user's platform keyring.
+
+On a Linux host that uses distribution `rustc`/`cargo` instead of rustup, Android builds require the matching `rust-src` package and an explicit target. The validated targets are `android-arm64` for a release APK and `android-x64` for the current emulator:
+
+```bash
+flutter build apk --release --target-platform android-arm64
+flutter test integration_test/simple_test.dart -d <android-device>
+flutter test integration_test/secure_storage_test.dart -d <android-device>
+flutter test integration_test/playback_engine_test.dart -d <android-device>
+```
+
+The playback integration runs the local-file lifecycle on Android; its loopback-HTTP case remains Linux-only so tests do not weaken Android cleartext policy. The recorded non-ASCII Flutter SDK path needs the local logical-root invocation documented in `MEMORY.md`; that environment issue is not patched into the repository or SDK.
 
 `dart analyze` is deliberate for the current local non-ASCII checkout-path issue recorded in `MEMORY.md`.
 

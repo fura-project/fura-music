@@ -9,7 +9,7 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('round-trips and removes a disposable non-account marker', (
+  testWidgets('native vault round-trips a disposable non-account marker', (
     _,
   ) async {
     final nonce = Random.secure().nextInt(1 << 32).toRadixString(16);
@@ -32,5 +32,5 @@ void main() {
         reason: 'disposable secure-storage marker must not remain',
       );
     }
-  }, skip: kIsWeb || !Platform.isLinux);
+  }, skip: kIsWeb || !(Platform.isLinux || Platform.isAndroid));
 }

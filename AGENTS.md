@@ -51,6 +51,8 @@ dart analyze
 flutter test
 flutter build linux
 flutter test integration_test/simple_test.dart -d linux
+flutter test integration_test/secure_storage_test.dart -d linux
+flutter test integration_test/playback_engine_test.dart -d linux
 ```
 
 On the current local SDK, use `dart analyze` because the `flutter analyze` LSP process fails under this checkout's non-ASCII path; see `MEMORY.md`. Report exactly what each test proves: local unit tests do not prove live QQ Music behavior or every platform build, while the Linux integration test does prove the packaged in-process bridge call on this host.

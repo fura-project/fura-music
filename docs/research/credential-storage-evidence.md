@@ -33,7 +33,7 @@ On the 2026-08-25 Manjaro development host:
 - `flutter build linux --release` links the federated plugin successfully;
 - the Linux Flutter integration smoke starts the packaged app and reaches the typed Rust provider status.
 
-On 2026-08-25 `integration_test/secure_storage_linux_test.dart` performed a live write/read/delete cycle through the configured Flutter adapter using a randomized non-account key. It never called `deleteAll`, and `finally` repeated deletion and confirmed the test key read back as absent. This verifies Linux runtime access on the current host without proving Android, iOS, macOS, or Windows behavior.
+On 2026-08-25 `integration_test/secure_storage_test.dart` performed a live Linux write/read/delete cycle through the configured Flutter adapter using a randomized non-account key. On 2026-08-26 the same bounded contract passed on an Android 16 x64 emulator with `flutter_secure_storage` 10.3.1. It never calls `deleteAll`, and `finally` repeats deletion and confirms the test key reads back as absent. This verifies the current Linux and Android emulator paths without proving physical-device, iOS, macOS, or Windows behavior.
 
 ## Deferred Rust-only alternative
 
@@ -42,5 +42,5 @@ On 2026-08-25 `integration_test/secure_storage_linux_test.dart` performed a live
 ## Remaining evidence
 
 1. Verify the eligible credential retained by Rust with QQ Music; local import now distinguishes absent, corrupt, unsupported, invalid, and expired values without authenticating them.
-2. Add a disposable per-platform integration that writes, reads, and deletes non-account test bytes without leaving a keyring item behind.
-3. Build and run Android plus the available Apple/Windows targets before claiming their secure persistence path.
+2. Run the disposable integration on each additional target without leaving a keyring item behind.
+3. Build and run the available Apple/Windows targets before claiming their secure persistence paths; Android physical-device evidence remains a release-quality follow-up.

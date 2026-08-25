@@ -6,17 +6,17 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Status:** Open
 
-**Problem:** `flutter_rust_bridge` 2.13.0 generates a Cargokit backend that invokes `rustup` unconditionally. The Arch development environment intentionally uses supported system `rustc` and `cargo` packages, where installing rustup would conflict with the system toolchain. Linux x64 therefore has a small direct-Cargo CMake integration. Android uses a project-owned Gradle task only on Linux hosts without `rustup`; it accepts an explicit ARM64 target, builds the matching standard library from the distribution `rust-src` package, and otherwise leaves generated Cargokit in place.
+**Problem:** `flutter_rust_bridge` 2.13.0 generates a Cargokit backend that invokes `rustup` unconditionally. The Arch development environment intentionally uses supported system `rustc` and `cargo` packages, where installing rustup would conflict with the system toolchain. Linux x64 therefore has a small direct-Cargo CMake integration. Android uses a project-owned Gradle task only on Linux hosts without `rustup`; it accepts one explicit ARM64 or x64 target, builds the matching standard library from the distribution `rust-src` package, and otherwise leaves generated Cargokit in place.
 
 **Why accepted:** Linux is first-class and the direct build uses the same Cargo workspace, lockfile, crate type, and Rust compiler already validated by the core suite. Replacing the whole bridge or installing a conflicting toolchain would be larger and riskier during the executable-foundation task.
 
-**Impact:** The Linux CMake and Linux-host Android Gradle integration are no longer fully generator-owned. Android system-Cargo support is deliberately limited to an explicit ARM64 build. A 2026-08-26 release APK contained the AArch64 Rust bridge and passed 16 KB alignment checks, but the installed host still needs its matching `rust-src` package for an ordinary repeat build.
+**Impact:** The Linux CMake and Linux-host Android Gradle integration are no longer fully generator-owned. Android system-Cargo support is deliberately limited to one explicit ARM64 or x64 build. A release ARM64 APK contained the bridge and passed 16 KB alignment checks; x64 packaged FFI passed on Android 16. The installed host still needs its matching `rust-src` package for an ordinary repeat build.
 
-**Risk:** Re-running bridge integration could overwrite the customization; additional Android ABIs and non-Linux target builds still need their own verified toolchain paths. An APK build does not prove Android runtime FFI, storage, or audio behavior.
+**Risk:** Re-running bridge integration could overwrite the customization; other Android ABI sets and non-Linux target builds still need verified toolchain paths. Emulator success does not prove physical-device or additional-ABI behavior.
 
 **Suggested solution:** Adopt upstream Cargokit/native-assets system-Rust support when it can replace the two localized paths without losing the current Cargo lockfile, NDK API 24 toolchain, or 16 KB page alignment. Add another ABI only when a Roadmap or runtime target requires it.
 
-**Trigger condition:** The Android ARM64 trigger was handled on 2026-08-26 after an ASCII SDK alias exposed the real `rustup` assumption. Reassess when FRB/Cargokit gains supported system-Rust builds, regeneration overwrites either customization, or another target/ABI becomes required.
+**Trigger condition:** The Android ARM64 build and x64 emulator triggers were handled on 2026-08-26. Reassess when FRB/Cargokit gains supported system-Rust builds, regeneration overwrites either customization, or another target/ABI becomes required.
 
 ## TD-002 — Release identity and signing use generated defaults
 
@@ -54,17 +54,17 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Status:** In Progress
 
-**Problem:** Linux now has a passing disposable write/read/delete integration against the current user's Secret Service. Android has built into an ARM64 APK but has not run; iOS, macOS, and Windows implementations have not been built or run in this checkout.
+**Problem:** Linux and Android 16 x64 now have passing disposable write/read/delete integrations. iOS, macOS, and Windows implementations have not been built or run in this checkout.
 
 **Why accepted:** The Linux test uses an isolated randomized non-account key, never calls `deleteAll`, and confirms absence in `finally`. Not every other target runtime is available on this host, and claiming runtime verification from generated registrants would be false.
 
-**Impact:** Linux's configured adapter is runtime-verified on this host. An unverified target may still have an entitlement, keyring, or plugin issue that leaves the user authenticated only for the current process; the UI reports that failure without discarding the active Rust credential.
+**Impact:** Linux's configured adapter and Android's x64 emulator path are runtime-verified on this host. An unverified target may still have an entitlement, keyring, or plugin issue that leaves the user authenticated only for the current process; the UI reports that failure without discarding the active Rust credential.
 
 **Risk:** A non-Linux build could appear to support restart restore while its platform vault is inaccessible, or future changes could weaken the disposable test's cleanup boundary.
 
 **Suggested solution:** Reuse the disposable non-account round-trip pattern on each target before that target is accepted for authenticated distribution; keep unique keys and guaranteed cleanup instead of broad vault deletion.
 
-**Trigger condition:** The Linux instance was resolved on 2026-08-25. Each other target must resolve its own instance before distribution, and at least one mobile target must be verified before the M1 checkpoint.
+**Trigger condition:** Linux was resolved on 2026-08-25 and the Android M1 instance on 2026-08-26. Apple and Windows targets must resolve their own instances before their distribution.
 
 ## TD-005 — Favorite-playlist aggregation has a 1,000-row safety ceiling
 
