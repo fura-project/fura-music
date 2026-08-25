@@ -75,15 +75,16 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Implemented `QQMusicProvider` lyric routing and Domain mapping. The shared opaque-track parser preserves the distinct primary song type used by lyrics and optional vkey type used by media; translation and romanization attach only at a unique exact millisecond start, ambiguous/unmatched rows remain absent, every await rechecks the exact account, and only explicit rejection signs out. Five Provider regressions cover the mapping fixture and failure/lifecycle boundaries, bringing that crate to 29 tests.
 - Added a single-use cancellable lyric Bridge handle that forwards only provider/opaque Track identity and returns provider-neutral synchronized lines, word-timed segments, optional auxiliary text, or coarse failures. Three Bridge regressions cover redacted mapping, all Provider failures, and cancellation dropping an in-flight future; pinned FRB 2.13.0 generation added only the lyrics API and retained every existing entrypoint.
 - Revalidated the 149-test Rust workspace (19 + 2 + 29 + 75 + 24), strict Clippy, full Rust formatting, `dart analyze`, all 82 Flutter tests, a Linux release build, and the packaged Linux FFI smoke. The smoke creates, cancels, and runs the lyric handle without QQ Music traffic; it proves this host's generated/native lifecycle, not authenticated lyric loading or other platforms.
+- Added a Dart lyric gateway with immutable/redacted models, exhaustive generated-failure mapping, defensive document/timing/result-shape validation, exact identity/cancel forwarding, and shared-vault cleanup only on explicit credential rejection. Added a lifecycle controller for content, unavailable, account, rejection, and retryable error states; track replacement, clear/sign-out, and dispose cancel the exact operation and suppress late results. Nine regressions bring the Flutter suite to 91 passing tests; `dart analyze` and formatting are clean.
 
 # In Progress
 
-- Compose lyric loading with the queue-selected track and playback position in Dart while keeping active-line/word selection out of Rust.
+- Add a project-owned playback-position stream to the foreground audio boundary, with exact session replacement and late-event suppression, then compose it with loaded lyrics.
 
 # Next Candidates
 
-1. Add the Dart lyric gateway/controller with exact restart, track replacement, stop/sign-out, and dispose cancellation.
-2. Compose loaded synchronized lyrics with queue-selected track and the foreground player's position stream.
+1. Add a project-owned millisecond playback-position stream backed by the current `audioplayers` session and covered by replacement/stop/dispose regressions.
+2. Compose queue-selected track, lyric loading, and playback position into deterministic active-line/segment state.
 3. Add the smallest adaptive lyric surface with basic active-line and word-level progress presentation.
 
 # Blockers
