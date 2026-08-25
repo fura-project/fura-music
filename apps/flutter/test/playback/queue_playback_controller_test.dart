@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_controller.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -145,6 +147,56 @@ void main() {
     expect(controller.playback.stage, TrackPlaybackStage.stopped);
     controller.dispose();
   });
+
+  test(
+    'selected queue track owns lyric load and current-session position',
+    () async {
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first, second], 0, changed: true),
+        ],
+        advanceResults: [
+          _result([first, second], 1, changed: true),
+        ],
+        clearResults: [_result(const [], null, changed: true)],
+      );
+      final firstSession = _FakeAudioSession();
+      final secondSession = _FakeAudioSession();
+      final lyricGateway = _FakeLyricGateway();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'second']),
+        _FakeAudioEngine([firstSession, secondSession]),
+        lyrics: LyricController(lyricGateway),
+      );
+
+      await controller.replaceAndPlay([first, second], 0);
+      await _flush();
+      expect(lyricGateway.requests, [first.opaqueId]);
+      expect(controller.lyrics?.stage, LyricStage.content);
+      firstSession.emitPosition(250);
+      await _flush();
+      expect(controller.lyrics?.positionMs, 250);
+      expect(controller.lyrics?.activeSelection?.lineIndex, 0);
+      expect(controller.lyrics?.activeSelection?.segmentIndex, 0);
+      expect(controller.lyrics?.activeSelection?.segmentProgress, 0.5);
+
+      await controller.advance();
+      await _flush();
+      expect(lyricGateway.requests, [first.opaqueId, second.opaqueId]);
+      expect(controller.lyrics?.track, same(second));
+      expect(controller.lyrics?.positionMs, 0);
+      secondSession.emitPosition(750);
+      await _flush();
+      expect(controller.lyrics?.activeSelection?.lineIndex, 0);
+      expect(controller.lyrics?.activeSelection?.segmentIndex, isNull);
+
+      await controller.clear();
+      expect(controller.lyrics?.stage, LyricStage.idle);
+      expect(controller.lyrics?.track, isNull);
+      controller.dispose();
+    },
+  );
 }
 
 const first = PlaylistTrackSummary(
@@ -183,10 +235,12 @@ PlaybackQueueResult _result(
 QueuePlaybackController _controller(
   PlaybackQueueGateway gateway,
   MediaResolutionGateway media,
-  ForegroundAudioEngine audio,
-) => QueuePlaybackController(
+  ForegroundAudioEngine audio, {
+  LyricController? lyrics,
+}) => QueuePlaybackController(
   gateway,
   TrackPlaybackController(media, ForegroundPlaybackController(audio)),
+  lyrics: lyrics,
 );
 
 Future<void> _flush() async {
@@ -303,6 +357,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
       StreamController.broadcast();
   final StreamController<ForegroundAudioFailure> _failures =
       StreamController.broadcast();
+  final StreamController<int> _positions = StreamController.broadcast();
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -311,7 +366,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Stream<ForegroundAudioFailure> get failures => _failures.stream;
 
   @override
-  Stream<int> get positionMs => const Stream.empty();
+  Stream<int> get positionMs => _positions.stream;
 
   @override
   Future<void> play() async => emit(ForegroundAudioState.playing);
@@ -326,7 +381,48 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> dispose() async {
     await _states.close();
     await _failures.close();
+    await _positions.close();
   }
 
   void emit(ForegroundAudioState state) => _states.add(state);
+
+  void emitPosition(int positionMs) => _positions.add(positionMs);
+}
+
+class _FakeLyricGateway implements LyricGateway {
+  final List<String> requests = [];
+
+  @override
+  LyricLoadOperation beginLoad({
+    required String providerId,
+    required String opaqueTrackId,
+  }) {
+    requests.add(opaqueTrackId);
+    return _ImmediateLyricOperation(
+      LyricLoadResult(
+        lyrics: SynchronizedLyrics([
+          SynchronizedLyricLine(
+            text: 'Synthetic lyric',
+            startMs: 0,
+            durationMs: 1000,
+            segments: const [
+              TimedLyricSegment(text: 'Synthetic', startMs: 0, durationMs: 500),
+            ],
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _ImmediateLyricOperation implements LyricLoadOperation {
+  const _ImmediateLyricOperation(this.result);
+
+  final LyricLoadResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<LyricLoadResult> run() async => result;
 }

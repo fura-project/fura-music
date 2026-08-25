@@ -78,16 +78,17 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added a Dart lyric gateway with immutable/redacted models, exhaustive generated-failure mapping, defensive document/timing/result-shape validation, exact identity/cancel forwarding, and shared-vault cleanup only on explicit credential rejection. Added a lifecycle controller for content, unavailable, account, rejection, and retryable error states; track replacement, clear/sign-out, and dispose cancel the exact operation and suppress late results. Nine regressions bring the Flutter suite to 91 passing tests; `dart analyze` and formatting are clean.
 - Added a project-owned nonnegative millisecond position stream to each foreground audio session using the locked `audioplayers` frame-driven updater. Foreground and Track controllers reset on source/stop, accept only the exact current session, cancel position subscriptions with state/failure subscriptions, and propagate position-only notifications without estimating playback time. Replacement/stop/dispose regressions reject late old positions.
 - Extended the packaged Linux loopback MP3 integration to observe a positive adapter position after native playback starts and a Flutter frame is pumped. The first attempt timed out because the test stopped producing frames for the dependency's `FramePositionUpdater`; pumping the real UI callback path passed without product polling or a fake clock.
+- Composed the optional lyric controller into the existing queue/playback owner. Exact current Track identity drives lyric replacement, current-session milliseconds drive active selection, queue clear/dispose clears lyric authority, and duplicate Track identities do not trigger redundant loads. Active intervals are left-closed/right-open; gaps select none, overlaps prefer the latest start, equal starts prefer later source order, and word progress exists only inside the active segment. Two new regressions bring the Flutter suite to 93 tests.
 
 # In Progress
 
-- Compose queue-selected track, lyric loading, and playback milliseconds into deterministic active-line/segment state.
+- Wire the composed lyric controller into the authenticated application lifecycle and handle lyric credential rejection through the existing sign-in reset path.
 
 # Next Candidates
 
-1. Compose queue-selected track, lyric loading, and playback position into deterministic active-line/segment state with gap/overlap boundary tests.
-2. Wire the composition into the authenticated page lifecycle without duplicating queue or playback ownership.
-3. Add the smallest adaptive lyric surface with basic active-line and word-level progress presentation.
+1. Wire one `RustLyricGateway`/`LyricController` into the authenticated page's existing queue owner and route explicit lyric rejection to sign-in.
+2. Add the smallest adaptive lyric surface with loading/unavailable/retry/account states plus active-line and word-level progress.
+3. Validate narrow/wide lyric layout and current-track replacement through widget tests before the M1 checkpoint.
 
 # Blockers
 

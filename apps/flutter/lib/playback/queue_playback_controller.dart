@@ -2,22 +2,27 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 class QueuePlaybackController extends ChangeNotifier {
-  QueuePlaybackController(this._gateway, this._playback) {
+  QueuePlaybackController(this._gateway, this._playback, {this.lyrics}) {
     _playback.addListener(_onPlaybackChanged);
+    lyrics?.addListener(_onLyricsChanged);
     _accept(_gateway.snapshot());
+    _syncLyricTrack();
   }
 
   final PlaybackQueueGateway _gateway;
   final TrackPlaybackController _playback;
+  final LyricController? lyrics;
 
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
   PlaybackQueueFailure? _failure;
   bool _completionHandled = false;
   bool _disposed = false;
+  String? _lyricTrackKey;
 
   PlaybackQueueSnapshot get snapshot => _snapshot;
   PlaybackQueueFailure? get failure => _failure;
@@ -81,12 +86,14 @@ class QueuePlaybackController extends ChangeNotifier {
     }
     _failure = null;
     _snapshot = snapshot;
+    _syncLyricTrack();
     if (!_disposed) notifyListeners();
     return true;
   }
 
   void _onPlaybackChanged() {
     if (_disposed) return;
+    lyrics?.updatePositionMs(_playback.positionMs);
     notifyListeners();
     if (_playback.stage == TrackPlaybackStage.completed) {
       if (!_completionHandled) {
@@ -98,11 +105,33 @@ class QueuePlaybackController extends ChangeNotifier {
     }
   }
 
+  void _onLyricsChanged() {
+    if (!_disposed) notifyListeners();
+  }
+
+  void _syncLyricTrack() {
+    final lyricController = lyrics;
+    if (lyricController == null || _disposed) return;
+    final current = _snapshot.current;
+    final key = current == null
+        ? null
+        : '${current.providerId}\u0000${current.opaqueId}';
+    if (key == _lyricTrackKey) return;
+    _lyricTrackKey = key;
+    if (current == null) {
+      lyricController.clear();
+    } else {
+      unawaited(lyricController.load(current));
+    }
+  }
+
   @override
   void dispose() {
     if (!_disposed) {
       _disposed = true;
       _playback.removeListener(_onPlaybackChanged);
+      lyrics?.removeListener(_onLyricsChanged);
+      lyrics?.dispose();
       _playback.dispose();
     }
     super.dispose();
