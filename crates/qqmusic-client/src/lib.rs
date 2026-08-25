@@ -7,9 +7,11 @@
 mod credential;
 mod credential_verification;
 mod favorite_playlists;
+mod lyrics;
 mod media_resolution;
 mod owned_playlists;
 mod playlist_detail;
+mod qrc_cipher;
 mod transport;
 mod wechat_exchange;
 mod wechat_login;
@@ -24,6 +26,10 @@ pub use credential_verification::CredentialVerificationError;
 pub use favorite_playlists::{
     FavoritePlaylistField, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
     QqMusicFavoritePlaylistsPage,
+};
+pub use lyrics::{
+    QqMusicAuxiliaryLyricLine, QqMusicLyricDocumentField, QqMusicLyricTrack, QqMusicLyrics,
+    QqMusicLyricsError, QqMusicTimedLyricLine, QqMusicTimedLyricSegment,
 };
 pub use media_resolution::{
     MediaProtocolPhase, MediaResponseField, QqMusicCdnDispatch, QqMusicMediaError,

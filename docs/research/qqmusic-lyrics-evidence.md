@@ -1,6 +1,6 @@
 # QQ Music lyric and QRC evidence
 
-- **Status:** Evidence, Domain model, and Provider contract implemented; protocol code pending
+- **Status:** Evidence, Domain/Provider contract, and protocol client implemented; Provider mapping pending
 - **Last checked:** 2026-08-26
 - **Scope:** One QQ Music track's synchronized original lyrics, optional translation/romanization, and basic word-level timing for M1.
 
@@ -116,17 +116,19 @@ On 2026-08-26 an anonymous request for the public song MID already used by the r
 
 The probe printed only codes, field names, types, lengths, flags, and nonempty booleans. It did not print or retain the encrypted body or decoded lyrics. This proves the anonymous request and response shape on that date. It does not prove authenticated behavior, lyric availability across the catalog, translation/romanization coverage, decryption correctness in this project, or exact timing behavior for a real track.
 
+After implementation, the opt-in Rust `live_lyrics` test ran the same public MID through the actual bounded client request, QQ-compatible decryptor, XML reader, and QRC parser. It confirmed a nonempty original line set with at least one timed segment without printing or retaining ciphertext or lyric text. This proves the implemented anonymous request/decode/parse path on 2026-08-26; it still does not prove authenticated-only outcomes or auxiliary-track coverage.
+
 ## Selected first implementation slice
 
 1. Add provider-neutral timed lyric lines/segments and optional aligned translation/romanization to `music-domain`, with constructor invariants and synthetic tests. **Completed.**
 2. Add a narrow `LyricsProvider` contract keyed by opaque `TrackId`; do not expose encrypted fields, QQ revision metadata, or raw QRC.
-3. Add one bounded `QQMusicClient::lyrics` musicu operation, QQ-compatible cloud decryption, XML/QRC parsing, and wholly synthetic non-lyrical fixtures.
+3. Add one bounded `QQMusicClient::lyrics` musicu operation, QQ-compatible cloud decryption, XML/QRC parsing, and wholly synthetic non-lyrical fixtures. **Completed.**
 4. Map exact-start auxiliary lines in `QQMusicProvider`, rechecking the exact credential after the await and clearing it only on explicit rejection.
 5. Add a cancellable Bridge load handle, then compose loading and playback-position presentation in Flutter without moving protocol or parsing logic into Dart.
 
 ## Evidence still required
 
-1. A sanitized or controlled real-account integration proving the implemented client decrypts a current QRC response without retaining its body.
+1. A sanitized real-account integration proving authenticated lyric outcomes; the anonymous implemented request/decrypt/parse path is now live-proven without retaining its body.
 2. A non-copyrighted or privately inspected sample with nonempty translation and romanization to confirm their decoded document forms.
 3. Sanitized malformed/empty/no-lyric and credential-rejection outcomes before assigning more specific product messages.
 4. Real playback-position smoke proving active line/segment transitions and seek behavior; widget clocks alone will not establish plugin event correctness.

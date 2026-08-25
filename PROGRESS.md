@@ -69,16 +69,19 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added widget regressions for manual previous/next, completion-to-next, duplicate position selection, non-current/current removal, empty queue, and narrow queue layout. The Flutter suite now passes 82 tests; `dart analyze`, Linux release, and packaged local plus loopback MP3 lifecycle pass. Phase-4 architecture/scope/debt review found no Provider/UI leakage, Dart queue-rule duplication, source-URI exposure, new dependency, triggered debt, or scope expansion. Real authenticated QQ playback and non-Linux runtime evidence remain explicit Risks rather than implementation claims.
 - Cross-validated the current `GetPlayLyricInfo` request, cloud-QRC decrypt pipeline, XML/timing grammar, and line-timed translation/romanization across current musicu code plus independent MIT, Apache-headered, and GPL evidence implementations. A bounded anonymous probe confirmed zero global/module codes, `crypt: 1`, `qrc: 1`, nonempty hex `lyric`, and optional empty auxiliary fields without printing or retaining lyric content.
 - Added provider-neutral `SynchronizedLyrics`, timed line/segment models, checked millisecond arithmetic, redacted diagnostics, and a narrow `LyricsProvider` contract with coarse typed failures. The Domain preserves source order, spacing/empty timing, gaps, overlaps, and out-of-line segments rather than inventing normalization; 4 new regressions bring `music-domain` to 19 tests and the full Rust workspace plus strict Clippy pass.
+- Added a bounded authenticated `QQMusicClient::lyrics` operation with the evidenced `songMid`/song-type request, three-level response classification, explicit QRC representation validation, optional auxiliary tracks, and fully redacted protocol models. The request is capped at a 2 MiB response and 30 seconds.
+- Added the QQ-compatible cloud-QRC DES D-E-D decoder with retained MIT attribution, 1 MiB ciphertext and 2 MiB decompressed limits, zlib/UTF-8 validation, `quick-xml` entity-safe attribute extraction, bounded QRC line/segment parsing, and auxiliary LRC timestamp parsing. Seven new non-lyrical regressions bring `qqmusic-client` to 75 tests; strict Clippy passes.
+- Ran the opt-in anonymous `live_lyrics` test through the actual Rust request/decrypt/XML/QRC path. It confirmed nonempty original lines plus word timing without printing or retaining lyric text; authenticated and nonempty translation/romanization evidence remain open.
 
 # In Progress
 
-- Implement one bounded `QQMusicClient` lyric request, cloud-QRC decoder, and XML/QRC parser from the recorded evidence. Use only project-authored non-lyrical fixtures and keep all ciphertext/plaintext out of diagnostics.
+- Map the parsed protocol result through `QQMusicProvider` using only opaque track routing and exact-start auxiliary alignment. Recheck the exact account after the await and clear it only on explicit rejection.
 
 # Next Candidates
 
-1. Implement bounded QQMusicClient request, cloud-QRC decryption, XML/QRC parsing, and wholly synthetic non-lyrical fixtures.
-2. Map the protocol result through `QQMusicProvider`, including exact-start auxiliary alignment, account rechecks, and explicit-rejection-only credential clearing.
-3. Add one cancellable lyric Bridge load handle only after the protocol and Provider paths pass offline regression.
+1. Map the protocol result through `QQMusicProvider`, including exact-start auxiliary alignment, account rechecks, and explicit-rejection-only credential clearing.
+2. Add one cancellable lyric Bridge load handle only after the protocol and Provider paths pass offline regression.
+3. Compose lyric loading with queue-selected track and playback position in Dart before adding the adaptive lyric surface.
 
 # Blockers
 
