@@ -52,16 +52,18 @@ M1 — First QQ Music Vertical Slice, phase 4: playback.
 - Extended the packaged Linux integration with a loopback HTTP MP3 carrying a synthetic vkey query. The project adapter completes play/pause/resume/stop/dispose without logging or retaining that URI; the in-memory fixture server is force-closed and never contacts QQ Music.
 - Added a Dart media-resolution gateway with one cancellable operation per opaque track. It maps all ten generated Bridge failures, preserves unavailable separately, requires an unambiguous HTTP(S) source with authority and positive TTL, and gives the source/result explicitly redacted string forms.
 - Routed explicit media credential rejection through the same shared serialized vault boundary used by authentication and library; transient/availability failures retain it, and cleanup failure remains distinct. Five regressions cover success/diagnostics, all failure variants, invalid result shapes, exact identity/cancel forwarding, and all three vault paths.
+- Added `TrackPlaybackController` to compose one opaque-track resolution with the existing foreground controller. It holds only track display metadata and typed stage/failure state; a current success URI is handed directly to the engine path and is neither logged nor retained by the coordinator.
+- Added four coordinator regressions covering successful lifecycle mapping, distinct authentication/rejection/unavailable/network versus engine failures, exact cancellation and late suppression on track replacement, and the same guarantees across stop/dispose. Playback-focused tests now total 16.
 
 # In Progress
 
-- Add a track-playback coordinator that owns one media-resolution operation plus the foreground controller. Replaced track requests, stop, and dispose must cancel resolution and suppress its late success/failure; a current success is handed directly to playback without logging or persisting its URI.
+- Wire one shared `TrackPlaybackController` into the authenticated library/detail route and add the smallest adaptive user-visible play/pause/stop surface. Track rows start playback without changing playlist pagination ownership; authentication/rejection failures must return to sign-in consistently.
 
 # Next Candidates
 
-1. Implement the coordinator's resolving/playing/paused/completed/resolution-error/engine-error states with exact operation cancellation and generation gates.
-2. Cover late resolution after track replacement, stop, and dispose; keep authentication/rejection/unavailable failures distinct for the future UI.
-3. Make a playlist track row start that flow and add the smallest truthful play/pause/stop surface; define queue ownership only after this one-track path is complete.
+1. Extend app wiring so authentication, library, detail, and media gateways share the same serialized vault, while one playback controller survives local library/detail navigation and is disposed with the authenticated page.
+2. Make desktop and mobile track rows actionable, show resolving/loading/playing/paused/completed and retryable/unavailable/auth states, and expose play/pause/stop without a queue.
+3. Add controller/widget regressions for track switching, page back/navigation, sign-in reset after resolution rejection, narrow layout, and no URI in failure text.
 
 # Blockers
 
