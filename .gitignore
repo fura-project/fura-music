@@ -1,0 +1,14 @@
+# Rust
+/target/
+
+# Local tools and editor state
+.idea/
+.vscode/
+*.log
+
+# Secrets and local QQ Music material
+.env
+.env.*
+!.env.example
+credentials/
+fixtures/private/

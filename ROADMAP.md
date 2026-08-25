@@ -1,0 +1,38 @@
+# Roadmap
+
+## Current Milestone — M1 First QQ Music Vertical Slice
+
+### Goal
+
+Deliver the smallest coherent user journey from QQ Music sign-in through word-level lyrics while proving the in-process Flutter/Rust architecture.
+
+### Progressive phases
+
+1. **Executable foundation** — governance, Flutter/Rust workspaces, thin typed bridge, minimum domain/provider boundaries, QQ Music client seam, and offline tests.
+2. **Authentication** — login flow, credential state, safe persistence boundary, and restore behavior.
+3. **User library** — user playlists and playlist details backed by real QQ Music behavior and sanitized fixtures or repeatable integration evidence.
+4. **Playback** — media resolution, playback, and queue behavior.
+5. **Lyrics** — lyric loading, QRC parsing, and basic word-level presentation.
+
+### Acceptance criteria
+
+- A user can complete sign-in, restart the app, and regain the appropriate credential state.
+- The user can browse their playlists, open one, start a playable track, and manage the queue.
+- Synchronized lyrics and a basic word-level lyric experience work for supported tracks.
+- Flutter and Rust remain in one process with a thin typed boundary.
+- QQ Music protocol and mapping behavior has offline regression coverage; live integration tests are separate.
+- Linux desktop and at least one mobile target build successfully before the milestone checkpoint.
+- No runtime third-party QQ Music API server or unapproved provider expansion exists.
+
+### Dependencies
+
+- Verified QQ Music protocol behavior from real responses, repeatable integration tests, or cross-validation across independent active implementations.
+- A platform-safe credential storage approach before any public alpha.
+
+## Next Milestone — M2 Reliability and Daily-Use Quality
+
+Scope will be elaborated after M1 evidence exists. Expected themes are failure recovery, adaptive desktop/mobile polish, playback resilience, cache policy, accessibility, and packaging. This is not authorization for new providers or unrelated product features.
+
+## Later direction
+
+Only after the QQ Music experience is coherent should the project evaluate narrowly scoped local-library or media-fallback capabilities. Each expansion requires demonstrated user value and must preserve the QQ Music-first product identity.

@@ -1,0 +1,14 @@
+[package]
+name = "provider-qqmusic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+music-domain = { path = "../music-domain" }
+provider-api = { path = "../provider-api" }
+qqmusic-client = { path = "../qqmusic-client" }
+
+[lints]
+workspace = true

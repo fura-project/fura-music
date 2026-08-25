@@ -1,0 +1,19 @@
+[package]
+name = "rust_lib_flutterustmusic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+flutter_rust_bridge = "=2.13.0"
+provider-api = { path = "../../crates/provider-api" }
+provider-qqmusic = { path = "../../crates/provider-qqmusic" }
+qqmusic-client = { path = "../../crates/qqmusic-client" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+unsafe_code = "allow"
