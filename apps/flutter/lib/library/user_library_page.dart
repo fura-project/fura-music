@@ -3,15 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_page.dart';
 
 class UserLibraryPage extends StatefulWidget {
   const UserLibraryPage({
     required this.gateway,
+    required this.detailGateway,
     required this.onSignInAgain,
     super.key,
   });
 
   final UserLibraryGateway gateway;
+  final PlaylistDetailGateway detailGateway;
   final VoidCallback onSignInAgain;
 
   @override
@@ -20,6 +24,7 @@ class UserLibraryPage extends StatefulWidget {
 
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
+  UserPlaylistSummary? _selectedPlaylist;
 
   @override
   void initState() {
@@ -36,6 +41,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedPlaylist = _selectedPlaylist;
+    if (selectedPlaylist != null) {
+      return PlaylistDetailPage(
+        key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
+        playlist: selectedPlaylist,
+        gateway: widget.detailGateway,
+        onBack: () => setState(() => _selectedPlaylist = null),
+        onSignInAgain: widget.onSignInAgain,
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your music'),
@@ -74,6 +89,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     UserLibraryStage.content => _PlaylistCollection(
       key: const ValueKey('user-library-content'),
       playlists: _controller.playlists,
+      onSelected: (playlist) => setState(() => _selectedPlaylist = playlist),
     ),
     UserLibraryStage.empty => const _LibraryEmpty(
       key: ValueKey('user-library-empty'),
@@ -97,9 +113,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 }
 
 class _PlaylistCollection extends StatelessWidget {
-  const _PlaylistCollection({required this.playlists, super.key});
+  const _PlaylistCollection({
+    required this.playlists,
+    required this.onSelected,
+    super.key,
+  });
 
   final List<UserPlaylistSummary> playlists;
+  final ValueChanged<UserPlaylistSummary> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -144,14 +165,18 @@ class _PlaylistCollection extends StatelessWidget {
                               mainAxisSpacing: 28,
                             ),
                         itemCount: playlists.length,
-                        itemBuilder: (context, index) =>
-                            _PlaylistGridItem(playlist: playlists[index]),
+                        itemBuilder: (context, index) => _PlaylistGridItem(
+                          playlist: playlists[index],
+                          onTap: () => onSelected(playlists[index]),
+                        ),
                       )
                     : ListView.separated(
                         itemCount: playlists.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) =>
-                            _PlaylistListItem(playlist: playlists[index]),
+                        itemBuilder: (context, index) => _PlaylistListItem(
+                          playlist: playlists[index],
+                          onTap: () => onSelected(playlists[index]),
+                        ),
                       ),
               ),
             ],
@@ -163,90 +188,100 @@ class _PlaylistCollection extends StatelessWidget {
 }
 
 class _PlaylistGridItem extends StatelessWidget {
-  const _PlaylistGridItem({required this.playlist});
+  const _PlaylistGridItem({required this.playlist, required this.onTap});
 
   final UserPlaylistSummary playlist;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Semantics(
       label: _semanticLabel(playlist),
-      container: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _PlaylistArtwork(playlist: playlist)),
-          const SizedBox(height: 12),
-          Text(
-            playlist.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              height: 1.2,
-            ),
-          ),
-          if (playlist.trackCount case final count?) ...[
-            const SizedBox(height: 4),
+      button: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _PlaylistArtwork(playlist: playlist)),
+            const SizedBox(height: 12),
             Text(
-              '$count tracks',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              playlist.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                height: 1.2,
               ),
             ),
+            if (playlist.trackCount case final count?) ...[
+              const SizedBox(height: 4),
+              Text(
+                '$count tracks',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
 class _PlaylistListItem extends StatelessWidget {
-  const _PlaylistListItem({required this.playlist});
+  const _PlaylistListItem({required this.playlist, required this.onTap});
 
   final UserPlaylistSummary playlist;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Semantics(
       label: _semanticLabel(playlist),
-      container: true,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            SizedBox.square(
-              dimension: 72,
-              child: _PlaylistArtwork(playlist: playlist),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    playlist.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (playlist.trackCount case final count?) ...[
-                    const SizedBox(height: 4),
+      button: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 72,
+                child: _PlaylistArtwork(playlist: playlist),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      '$count tracks',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                      playlist.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (playlist.trackCount case final count?) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '$count tracks',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

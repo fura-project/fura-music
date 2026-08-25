@@ -31,16 +31,19 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Added a single-use cancellable playlist-track page Bridge handle. Inputs are provider/opaque playlist identity plus offset/size; outputs contain only provider-neutral track display fields, opaque track identity, page metadata, and coarse typed failures.
 - Regenerated the FRB 2.13.0 Rust/Dart bindings, confirmed the generated API directory has no orphaned modules or old owned-load symbols, and added Bridge mapping/error/cancellation regressions. Rust now passes 6 + 2 + 20 + 63 + 13.
 - Revalidated `dart analyze`, all 44 Flutter tests, a Linux release build, and the packaged Linux integration. The integration creates and cancels the new detail handle across FFI without touching QQ Music or account data.
+- Added a Dart playlist-detail gateway with shared serialized-vault rejection cleanup and a first-page controller that cancels restart/dispose, suppresses late results, validates offset zero, and keeps only transient failures retryable.
+- Made desktop grid and mobile list playlist rows keyboard/touch actionable, added local back navigation, and built an adaptive detail surface for track title/subtitle, multiple artists, album, artwork fallback, duration, empty/loading/error/auth states, and an explicit first-page truncation message.
+- Added 6 gateway/controller regressions plus a narrow-screen navigation/widget regression. `dart analyze`, all 51 Flutter tests, and the Linux release build pass.
 
 # In Progress
 
-- Implement the first-page Dart gateway/controller and adaptive playlist-detail page, then make library rows navigable without adding next-page complexity yet.
+- Add explicit next-page loading to the Dart detail controller and UI, preserving current rows on transient page failure and deduplicating only exact opaque track identities.
 
 # Next Candidates
 
-1. Add a Dart detail gateway/controller for the first 100 rows with truthful loading, empty, transient retry, credential rejection, cancellation, and account-replacement states.
-2. Make playlist rows navigable and build an adaptive desktop/mobile detail page with track title, artists, album, duration, and safe artwork fallbacks.
-3. Add explicit next-page loading and deduplication only after the first-page navigation path is complete and covered by widget/controller regressions.
+1. Add cancellable next-page loading, exact offset validation, opaque-ID deduplication, and separate append failure state while retaining already loaded rows.
+2. Add a visible load-more affordance and end-of-list state with controller/widget regressions on desktop and narrow layouts.
+3. Re-run the full Rust/Flutter/Linux validation, then review whether playlist detail phase acceptance is met before starting media resolution.
 
 # Blockers
 
@@ -60,6 +63,7 @@ None.
 - The complete playlist collection requires `encryptUin`; credentials missing it fail before library transport instead of showing only created playlists. Real successful-login coverage has not yet proven this field on every login shape.
 - Ordinary detail passed a current public no-account probe, but authenticated ordinary and liked-songs success remain cross-validated/fixture-tested rather than proven with this checkout's real account.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
+- Playlist detail currently loads and labels only the first 100 rows. It does not silently claim a complete large playlist; explicit next-page UI is the active task.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).

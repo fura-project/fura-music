@@ -5,6 +5,7 @@ import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
@@ -15,11 +16,14 @@ class MusicApp extends StatelessWidget {
     required BootstrapStatus bootstrap,
     QqMusicAuthenticationGateway? authenticationGateway,
     UserLibraryGateway? libraryGateway,
+    PlaylistDetailGateway? playlistDetailGateway,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
     Key? key,
   }) {
-    if (authenticationGateway == null && libraryGateway == null) {
+    if (authenticationGateway == null &&
+        libraryGateway == null &&
+        playlistDetailGateway == null) {
       final credentialVault = SerializedCredentialVault(
         PlatformCredentialVault(),
       );
@@ -27,12 +31,17 @@ class MusicApp extends StatelessWidget {
         credentialVault: credentialVault,
       );
       libraryGateway = RustUserLibraryGateway(credentialVault: credentialVault);
+      playlistDetailGateway = RustPlaylistDetailGateway(
+        credentialVault: credentialVault,
+      );
     }
     return MusicApp._(
       bootstrap: bootstrap,
       authenticationGateway:
           authenticationGateway ?? RustQqMusicAuthenticationGateway(),
       libraryGateway: libraryGateway ?? RustUserLibraryGateway(),
+      playlistDetailGateway:
+          playlistDetailGateway ?? RustPlaylistDetailGateway(),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
@@ -42,6 +51,7 @@ class MusicApp extends StatelessWidget {
     required this.bootstrap,
     required this.authenticationGateway,
     required this.libraryGateway,
+    required this.playlistDetailGateway,
     required this.initialCredentialRestore,
     super.key,
   });
@@ -49,6 +59,7 @@ class MusicApp extends StatelessWidget {
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
   final UserLibraryGateway libraryGateway;
+  final PlaylistDetailGateway playlistDetailGateway;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -63,6 +74,7 @@ class MusicApp extends StatelessWidget {
         bootstrap: bootstrap,
         authenticationGateway: authenticationGateway,
         libraryGateway: libraryGateway,
+        playlistDetailGateway: playlistDetailGateway,
         initialCredentialRestore: initialCredentialRestore,
       ),
     );
@@ -88,6 +100,7 @@ class LoginPage extends StatefulWidget {
     required this.bootstrap,
     required this.authenticationGateway,
     required this.libraryGateway,
+    required this.playlistDetailGateway,
     required this.initialCredentialRestore,
     super.key,
   });
@@ -95,6 +108,7 @@ class LoginPage extends StatefulWidget {
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
   final UserLibraryGateway libraryGateway;
+  final PlaylistDetailGateway playlistDetailGateway;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -132,6 +146,7 @@ class _LoginPageState extends State<LoginPage> {
           return UserLibraryPage(
             key: const ValueKey('user-library-page'),
             gateway: widget.libraryGateway,
+            detailGateway: widget.playlistDetailGateway,
             onSignInAgain: _controller.cancel,
           );
         }

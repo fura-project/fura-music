@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 void main() {
@@ -275,6 +276,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('opens an adaptive playlist detail and returns to the library', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final detailGateway = _WidgetDetailGateway([
+      const PlaylistTrackPageResult(
+        total: 101,
+        hasMore: true,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:41001:0:1:opaque-mid',
+            title: 'Synthetic track',
+            subtitle: 'Fixture version',
+            artistNames: ['Artist one', 'Artist two'],
+            albumTitle: 'Synthetic album',
+            durationSeconds: 245,
+          ),
+        ],
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(
+            playlists: [
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'favorite:8001',
+                title: 'Open me',
+                trackCount: 101,
+              ),
+            ],
+          ),
+        ]),
+        playlistDetailGateway: detailGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open me').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Synthetic track'), findsOneWidget);
+    expect(find.textContaining('Artist one'), findsOneWidget);
+    expect(find.text('4:05'), findsOneWidget);
+    expect(find.text('Showing the first 1 of 101 tracks'), findsOneWidget);
+    expect(detailGateway.requests.single.playlist.opaqueId, 'favorite:8001');
+    expect(detailGateway.requests.single.offset, 0);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your playlists'), findsOneWidget);
+  });
+
   testWidgets('retries a transient library failure', (tester) async {
     await tester.pumpWidget(
       MusicApp(
@@ -400,6 +465,42 @@ class _WidgetLibraryOperation implements UserLibraryLoadOperation {
 
   @override
   Future<UserLibraryResult> run() async => result;
+}
+
+class _DetailRequest {
+  const _DetailRequest(this.playlist, this.offset, this.size);
+  final UserPlaylistSummary playlist;
+  final int offset;
+  final int size;
+}
+
+class _WidgetDetailGateway implements PlaylistDetailGateway {
+  _WidgetDetailGateway(this.results);
+
+  final List<PlaylistTrackPageResult> results;
+  final List<_DetailRequest> requests = [];
+  int _next = 0;
+
+  @override
+  PlaylistTrackPageLoadOperation beginLoad({
+    required UserPlaylistSummary playlist,
+    required int offset,
+    required int size,
+  }) {
+    requests.add(_DetailRequest(playlist, offset, size));
+    return _WidgetDetailOperation(results[_next++]);
+  }
+}
+
+class _WidgetDetailOperation implements PlaylistTrackPageLoadOperation {
+  const _WidgetDetailOperation(this.result);
+  final PlaylistTrackPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PlaylistTrackPageResult> run() async => result;
 }
 
 class _WidgetStartOperation implements LoginStartOperation {
