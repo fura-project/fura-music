@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_restore`, `failed_start`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `start_attempt_guard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_restore`, `failed_start`, `failed_verification`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `start_attempt_guard`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveQqMusicWechatQrLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
@@ -42,6 +42,23 @@ QqMusicCredentialRestore restoreQqMusicCredentialFromSecureStorage({
 }) => RustLib.instance.api
     .crateApiAuthenticationRestoreQqMusicCredentialFromSecureStorage(
       secretBytes: secretBytes,
+    );
+
+int? reserveQqMusicCredentialVerification() => RustLib.instance.api
+    .crateApiAuthenticationReserveQqMusicCredentialVerification();
+
+Future<QqMusicCredentialVerification> verifyRestoredQqMusicCredential({
+  required int attemptId,
+}) =>
+    RustLib.instance.api.crateApiAuthenticationVerifyRestoredQqMusicCredential(
+      attemptId: attemptId,
+    );
+
+bool cancelQqMusicCredentialVerification({required int attemptId}) => RustLib
+    .instance
+    .api
+    .crateApiAuthenticationCancelQqMusicCredentialVerification(
+      attemptId: attemptId,
     );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicQrLoginSessionHandle>>
@@ -106,6 +123,35 @@ enum QqMusicCredentialRestoreState {
   verificationRequired,
   locallyExpired,
 }
+
+class QqMusicCredentialVerification {
+  final QqMusicCredentialVerificationState? state;
+  final QqMusicCredentialVerificationFailure? failure;
+
+  const QqMusicCredentialVerification({this.state, this.failure});
+
+  @override
+  int get hashCode => state.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicCredentialVerification &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          failure == other.failure;
+}
+
+enum QqMusicCredentialVerificationFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  noRestoredCredential,
+  replaced,
+}
+
+enum QqMusicCredentialVerificationState { authenticated, rejected }
 
 class QqMusicQrChallenge {
   final QqMusicQrImageFormat imageFormat;

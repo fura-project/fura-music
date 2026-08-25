@@ -1,5 +1,6 @@
 //! QQ Music provider mapping layer.
 
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use music_domain::ProviderId;
@@ -9,9 +10,10 @@ use provider_api::{
     QrAuthenticationSession, QrImageFormat,
 };
 use qqmusic_client::{
-    Credential, CredentialPersistenceError, CredentialRestorePlan, HttpTransport, QqMusicClient,
-    QrImageMediaType, WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
+    HttpTransport, QqMusicClient, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +36,8 @@ enum QqMusicCredentialState {
 pub struct QqMusicProvider<T> {
     login: WechatQrLoginCoordinator<T>,
     credential: Arc<Mutex<QqMusicCredentialState>>,
+    next_restore_verification: AtomicU32,
+    active_restore_verification: Mutex<Option<u32>>,
 }
 
 impl<T> QqMusicProvider<T> {
@@ -42,6 +46,8 @@ impl<T> QqMusicProvider<T> {
         Self {
             login: WechatQrLoginCoordinator::new(client),
             credential: Arc::new(Mutex::new(QqMusicCredentialState::SignedOut)),
+            next_restore_verification: AtomicU32::new(1),
+            active_restore_verification: Mutex::new(None),
         }
     }
 
@@ -74,6 +80,38 @@ impl<T> QqMusicProvider<T> {
             )),
             QqMusicCredentialState::SignedOut | QqMusicCredentialState::Authenticated(_) => None,
         }
+    }
+
+    /// Reserves exact cancellation authority for one server-verification
+    /// attempt. A newer reservation supersedes the older ID.
+    #[must_use]
+    pub fn reserve_restored_credential_verification(&self) -> Option<u32> {
+        if !matches!(
+            *credential_guard(&self.credential),
+            QqMusicCredentialState::PendingVerification(_)
+        ) {
+            return None;
+        }
+        let attempt_id = self
+            .next_restore_verification
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+                Some(if current == u32::MAX { 1 } else { current + 1 })
+            })
+            .unwrap_or_else(std::convert::identity);
+        *restore_verification_guard(&self.active_restore_verification) = Some(attempt_id);
+        Some(attempt_id)
+    }
+
+    /// Cancels only the matching verification attempt while retaining the
+    /// candidate for an explicit retry.
+    #[must_use]
+    pub fn cancel_restored_credential_verification(&self, attempt_id: u32) -> bool {
+        let mut active = restore_verification_guard(&self.active_restore_verification);
+        if *active != Some(attempt_id) {
+            return false;
+        }
+        *active = None;
+        true
     }
 
     /// Cancels the currently creating or active QR generation.
@@ -136,7 +174,63 @@ impl<T> QqMusicProvider<T> {
             ),
         };
         *credential_guard(&self.credential) = state;
+        *restore_verification_guard(&self.active_restore_verification) = None;
         Ok(result)
+    }
+}
+
+impl<T> QqMusicProvider<T>
+where
+    T: HttpTransport,
+{
+    /// Verifies the retained startup candidate and promotes it only if no
+    /// newer authentication action has superseded that exact credential.
+    ///
+    /// # Errors
+    ///
+    /// Keeps credential rejection distinct from transient transport, service,
+    /// and response-shape failures. Transient failures retain the candidate for
+    /// an explicit retry; a verified rejection clears it.
+    pub async fn verify_restored_credential(
+        &self,
+        attempt_id: u32,
+    ) -> Result<(), AuthenticationError> {
+        let candidate = {
+            let state = credential_guard(&self.credential);
+            let active = restore_verification_guard(&self.active_restore_verification);
+            let QqMusicCredentialState::PendingVerification(candidate) = &*state else {
+                return Err(AuthenticationError::Replaced);
+            };
+            if *active != Some(attempt_id) {
+                return Err(AuthenticationError::Replaced);
+            }
+            candidate.clone()
+        };
+
+        let verification = self.client().verify_credential(&candidate).await;
+        let mut state = credential_guard(&self.credential);
+        let mut active = restore_verification_guard(&self.active_restore_verification);
+        let still_current = *active == Some(attempt_id)
+            && matches!(
+                &*state,
+                QqMusicCredentialState::PendingVerification(current) if current == &candidate
+            );
+        if !still_current {
+            return Err(AuthenticationError::Replaced);
+        }
+        *active = None;
+
+        match verification {
+            Ok(()) => {
+                *state = QqMusicCredentialState::Authenticated(candidate);
+                Ok(())
+            }
+            Err(CredentialVerificationError::Rejected { .. }) => {
+                *state = QqMusicCredentialState::SignedOut;
+                Err(AuthenticationError::Rejected)
+            }
+            Err(error) => Err(map_verification_error(&error)),
+        }
     }
 }
 
@@ -158,6 +252,17 @@ where
     type Session = QqMusicQrAuthenticationSession<T>;
 
     async fn begin_qr_authentication(&self) -> Result<Self::Session, Self::Error> {
+        {
+            let mut credential = credential_guard(&self.credential);
+            if matches!(
+                *credential,
+                QqMusicCredentialState::PendingVerification(_)
+                    | QqMusicCredentialState::LocallyExpired(_)
+            ) {
+                *credential = QqMusicCredentialState::SignedOut;
+            }
+        }
+        *restore_verification_guard(&self.active_restore_verification) = None;
         let session = self.login.begin().await.map_err(map_login_error)?;
         Ok(QqMusicQrAuthenticationSession {
             cancellation: QqMusicQrAuthenticationCancellation {
@@ -261,6 +366,14 @@ fn credential_guard(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+fn restore_verification_guard(
+    attempt: &Mutex<Option<u32>>,
+) -> std::sync::MutexGuard<'_, Option<u32>> {
+    attempt
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn map_login_error<E>(error: WechatQrLoginError<E>) -> AuthenticationError {
     match error {
         WechatQrLoginError::Protocol(error) => map_qr_error(&error),
@@ -314,9 +427,26 @@ fn map_exchange_error<E>(error: &WechatCredentialExchangeError<E>) -> Authentica
     }
 }
 
+fn map_verification_error<E>(error: &CredentialVerificationError<E>) -> AuthenticationError {
+    match error {
+        CredentialVerificationError::Transport(_) => AuthenticationError::Network,
+        CredentialVerificationError::HttpStatus(_)
+        | CredentialVerificationError::Upstream { .. } => AuthenticationError::ServiceUnavailable,
+        CredentialVerificationError::Rejected { .. } => AuthenticationError::Rejected,
+        CredentialVerificationError::Serialize
+        | CredentialVerificationError::InvalidJson
+        | CredentialVerificationError::MissingGlobalCode
+        | CredentialVerificationError::MissingVerificationResult
+        | CredentialVerificationError::MissingVerificationCode => {
+            AuthenticationError::InvalidResponse
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::convert::Infallible;
+    use std::sync::Arc;
 
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use provider_api::{
@@ -327,8 +457,68 @@ mod tests {
         Credential, CredentialExpiry, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
         LoginType, QqMusicClient,
     };
+    use serde_json::json;
+    use tokio::sync::Notify;
 
     struct SuccessfulAuthenticationTransport;
+
+    struct VerificationTransport {
+        response: HttpResponse,
+    }
+
+    impl VerificationTransport {
+        fn new(code: i64) -> Self {
+            Self {
+                response: HttpResponse::new(
+                    200,
+                    serde_json::to_vec(&json!({
+                        "code": 0,
+                        "music.UserInfo.userInfoServer": {
+                            "code": code,
+                            "data": {"info": {}}
+                        }
+                    }))
+                    .expect("fixture JSON"),
+                ),
+            }
+        }
+    }
+
+    impl HttpTransport for VerificationTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            Ok(self.response.clone())
+        }
+    }
+
+    #[derive(Clone)]
+    struct GatedVerificationTransport {
+        verification_started: Arc<Notify>,
+        release_verification: Arc<Notify>,
+    }
+
+    impl HttpTransport for GatedVerificationTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            if request.method() == HttpMethod::Post {
+                self.verification_started.notify_one();
+                self.release_verification.notified().await;
+                return Ok(VerificationTransport::new(0).response);
+            }
+            if request.url() == "https://open.weixin.qq.com/connect/qrconnect" {
+                return Ok(HttpResponse::new(
+                    200,
+                    br#"<a href="?uuid=replacement-fixture">login</a>"#.to_vec(),
+                ));
+            }
+            Ok(HttpResponse::new(
+                200,
+                b"\xff\xd8\xffreplacement-qr".to_vec(),
+            ))
+        }
+    }
 
     impl HttpTransport for SuccessfulAuthenticationTransport {
         type Error = Infallible;
@@ -385,6 +575,109 @@ mod tests {
             descriptor.capabilities,
             [ProviderCapability::Authentication]
         );
+    }
+
+    fn restore_candidate<T>(provider: &QqMusicProvider<T>) {
+        let encoded = Credential::new("123456", "W_X_private-key", LoginType::WECHAT)
+            .expect("fixture credential")
+            .encode_for_secure_storage()
+            .expect("encode fixture");
+        assert_eq!(
+            provider
+                .restore_credential_from_secure_storage(Some(&encoded), 2_000)
+                .expect("restore candidate"),
+            QqMusicCredentialRestoreState::VerificationRequired,
+        );
+    }
+
+    #[tokio::test]
+    async fn server_verification_promotes_only_success_and_clears_rejection() {
+        let accepted = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(0)));
+        restore_candidate(&accepted);
+        let accepted_attempt = accepted
+            .reserve_restored_credential_verification()
+            .expect("verification attempt");
+        accepted
+            .verify_restored_credential(accepted_attempt)
+            .await
+            .expect("accepted credential");
+        assert!(accepted.has_authenticated_credential());
+        assert!(accepted.restored_credential().is_none());
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(1000)));
+        restore_candidate(&rejected);
+        let rejected_attempt = rejected
+            .reserve_restored_credential_verification()
+            .expect("verification attempt");
+        assert_eq!(
+            rejected.verify_restored_credential(rejected_attempt).await,
+            Err(provider_api::AuthenticationError::Rejected),
+        );
+        assert!(!rejected.has_authenticated_credential());
+        assert!(rejected.restored_credential().is_none());
+    }
+
+    #[tokio::test]
+    async fn non_rejection_upstream_failure_retains_candidate_for_retry() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(50_006)));
+        restore_candidate(&provider);
+        let attempt_id = provider
+            .reserve_restored_credential_verification()
+            .expect("verification attempt");
+
+        assert_eq!(
+            provider.verify_restored_credential(attempt_id).await,
+            Err(provider_api::AuthenticationError::ServiceUnavailable),
+        );
+        assert!(!provider.has_authenticated_credential());
+        assert!(provider.restored_credential().is_some());
+    }
+
+    #[tokio::test]
+    async fn new_qr_login_supersedes_late_server_verification() {
+        let verification_started = Arc::new(Notify::new());
+        let release_verification = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedVerificationTransport {
+            verification_started: Arc::clone(&verification_started),
+            release_verification: Arc::clone(&release_verification),
+        }));
+        restore_candidate(&provider);
+        let attempt_id = provider
+            .reserve_restored_credential_verification()
+            .expect("verification attempt");
+
+        let verification = provider.verify_restored_credential(attempt_id);
+        let replacement = async {
+            verification_started.notified().await;
+            let session = provider
+                .begin_qr_authentication()
+                .await
+                .expect("replacement QR session");
+            release_verification.notify_one();
+            drop(session);
+        };
+        let (result, ()) = tokio::join!(verification, replacement);
+
+        assert_eq!(result, Err(provider_api::AuthenticationError::Replaced));
+        assert!(!provider.has_authenticated_credential());
+        assert!(provider.restored_credential().is_none());
+    }
+
+    #[test]
+    fn stale_verification_attempt_cannot_cancel_its_replacement() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(()));
+        restore_candidate(&provider);
+        let first = provider
+            .reserve_restored_credential_verification()
+            .expect("first attempt");
+        let second = provider
+            .reserve_restored_credential_verification()
+            .expect("replacement attempt");
+
+        assert_ne!(first, second);
+        assert!(!provider.cancel_restored_credential_verification(first));
+        assert!(provider.cancel_restored_credential_verification(second));
+        assert!(provider.restored_credential().is_some());
     }
 
     #[test]

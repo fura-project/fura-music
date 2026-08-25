@@ -207,6 +207,115 @@ void main() {
       controller.dispose();
     }
   });
+
+  test('promotes a server-verified restored credential', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+      initialCredentialRestore: CredentialRestoreResult.verificationRequired,
+    );
+
+    final verification = controller.verifyRestoredCredential();
+    expect(controller.stage, LoginStage.verifyingStoredCredential);
+    gateway.completeVerification(0, CredentialVerificationResult.authenticated);
+    await verification;
+
+    expect(controller.stage, LoginStage.authenticated);
+    expect(controller.credentialSaveState, CredentialSaveState.saved);
+    expect(
+      controller.credentialVerificationResult,
+      CredentialVerificationResult.authenticated,
+    );
+
+    controller.dispose();
+  });
+
+  test('keeps a transient verification failure retryable', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+      initialCredentialRestore: CredentialRestoreResult.verificationRequired,
+    );
+
+    final first = controller.verifyRestoredCredential();
+    gateway.completeVerification(0, CredentialVerificationResult.network);
+    await first;
+    expect(controller.stage, LoginStage.verificationError);
+    expect(controller.canRetryCredentialVerification, isTrue);
+    expect(
+      controller.credentialRestoreResult,
+      CredentialRestoreResult.verificationRequired,
+    );
+
+    final retry = controller.verifyRestoredCredential();
+    gateway.completeVerification(1, CredentialVerificationResult.authenticated);
+    await retry;
+    expect(controller.stage, LoginStage.authenticated);
+
+    controller.dispose();
+  });
+
+  test('maps an explicitly rejected restored credential separately', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+      initialCredentialRestore: CredentialRestoreResult.verificationRequired,
+    );
+
+    final verification = controller.verifyRestoredCredential();
+    gateway.completeVerification(0, CredentialVerificationResult.rejected);
+    await verification;
+
+    expect(controller.stage, LoginStage.credentialRejected);
+    expect(controller.canRetryCredentialVerification, isFalse);
+
+    controller.dispose();
+  });
+
+  test('starting QR login cancels and suppresses late verification', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+      initialCredentialRestore: CredentialRestoreResult.verificationRequired,
+    );
+
+    final verification = controller.verifyRestoredCredential();
+    await controller.start();
+    expect(gateway.verificationOperations.single.cancelCalls, 1);
+    expect(controller.stage, LoginStage.waitingForScan);
+
+    gateway.completeVerification(0, CredentialVerificationResult.authenticated);
+    await verification;
+    expect(controller.stage, LoginStage.waitingForScan);
+
+    controller.dispose();
+  });
+
+  test('dispose cancels and suppresses late credential verification', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+      initialCredentialRestore: CredentialRestoreResult.verificationRequired,
+    );
+
+    final verification = controller.verifyRestoredCredential();
+    controller.dispose();
+    expect(gateway.verificationOperations.single.cancelCalls, 1);
+
+    gateway.completeVerification(0, CredentialVerificationResult.authenticated);
+    await verification;
+    expect(controller.stage, LoginStage.verifyingStoredCredential);
+  });
 }
 
 LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
@@ -233,6 +342,10 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
   final List<Completer<LoginStart>>? _pendingStarts;
   final CredentialPersistenceResult persistenceResult;
   final List<_FakeStartOperation> operations = <_FakeStartOperation>[];
+  final List<Completer<CredentialVerificationResult>> _pendingVerifications =
+      <Completer<CredentialVerificationResult>>[];
+  final List<_FakeVerificationOperation> verificationOperations =
+      <_FakeVerificationOperation>[];
   int persistCalls = 0;
 
   @override
@@ -256,6 +369,15 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
   }
 
   @override
+  CredentialVerificationOperation beginCredentialVerification() {
+    final completer = Completer<CredentialVerificationResult>();
+    _pendingVerifications.add(completer);
+    final operation = _FakeVerificationOperation(completer.future);
+    verificationOperations.add(operation);
+    return operation;
+  }
+
+  @override
   Future<CredentialPersistenceResult> persistAuthenticatedCredential() async {
     persistCalls += 1;
     return persistenceResult;
@@ -267,6 +389,10 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
 
   void completeStart(int index, LoginStart result) {
     _pendingStarts![index].complete(result);
+  }
+
+  void completeVerification(int index, CredentialVerificationResult result) {
+    _pendingVerifications[index].complete(result);
   }
 }
 
@@ -284,6 +410,22 @@ class _FakeStartOperation implements LoginStartOperation {
 
   @override
   Future<LoginStart> run() => _result;
+}
+
+class _FakeVerificationOperation implements CredentialVerificationOperation {
+  _FakeVerificationOperation(this._result);
+
+  final Future<CredentialVerificationResult> _result;
+  int cancelCalls = 0;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<CredentialVerificationResult> run() => _result;
 }
 
 class _FakeLoginSession implements LoginSession {

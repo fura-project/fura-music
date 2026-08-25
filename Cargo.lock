@@ -1015,6 +1015,7 @@ dependencies = [
  "music-domain",
  "provider-api",
  "qqmusic-client",
+ "serde_json",
  "tokio",
 ]
 

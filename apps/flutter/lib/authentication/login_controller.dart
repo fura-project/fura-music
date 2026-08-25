@@ -6,6 +6,9 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 enum LoginStage {
   idle,
   verificationRequired,
+  verifyingStoredCredential,
+  credentialRejected,
+  verificationError,
   storedCredentialExpired,
   restoreError,
   starting,
@@ -52,10 +55,12 @@ class LoginController extends ChangeNotifier {
   LoginStage _stage = LoginStage.idle;
   LoginSession? _session;
   LoginStartOperation? _startOperation;
+  CredentialVerificationOperation? _verificationOperation;
   Uint8List? _qrImageBytes;
   LoginFailure? _failure;
   CredentialSaveState _credentialSaveState = CredentialSaveState.none;
   CredentialRestoreResult _credentialRestoreResult;
+  CredentialVerificationResult? _credentialVerificationResult;
   int _generation = 0;
   bool _disposed = false;
 
@@ -65,6 +70,8 @@ class LoginController extends ChangeNotifier {
   CredentialSaveState get credentialSaveState => _credentialSaveState;
   CredentialRestoreResult get credentialRestoreResult =>
       _credentialRestoreResult;
+  CredentialVerificationResult? get credentialVerificationResult =>
+      _credentialVerificationResult;
 
   bool get canCancel =>
       _stage == LoginStage.starting || (_session?.isActive ?? false);
@@ -72,8 +79,66 @@ class LoginController extends ChangeNotifier {
   bool get canRetry =>
       _stage == LoginStage.error && (_session?.isActive ?? false);
 
+  bool get canRetryCredentialVerification =>
+      _stage == LoginStage.verificationError &&
+      (_credentialVerificationResult == CredentialVerificationResult.network ||
+          _credentialVerificationResult ==
+              CredentialVerificationResult.serviceUnavailable ||
+          _credentialVerificationResult ==
+              CredentialVerificationResult.invalidResponse);
+
+  Future<void> verifyRestoredCredential() async {
+    if (_stage != LoginStage.verificationRequired &&
+        _stage != LoginStage.verificationError) {
+      return;
+    }
+    final generation = ++_generation;
+    _verificationOperation?.cancel();
+    final operation = _gateway.beginCredentialVerification();
+    _verificationOperation = operation;
+    _credentialVerificationResult = null;
+    _stage = LoginStage.verifyingStoredCredential;
+    _notify();
+
+    final result = await operation.run();
+    if (identical(_verificationOperation, operation)) {
+      _verificationOperation = null;
+    }
+    if (!_isCurrent(generation)) return;
+
+    _credentialVerificationResult = result;
+    _stage = switch (result) {
+      CredentialVerificationResult.authenticated => LoginStage.authenticated,
+      CredentialVerificationResult.rejected ||
+      CredentialVerificationResult.rejectedStorageCleanupFailed =>
+        LoginStage.credentialRejected,
+      CredentialVerificationResult.network ||
+      CredentialVerificationResult.serviceUnavailable ||
+      CredentialVerificationResult.invalidResponse ||
+      CredentialVerificationResult.coreUnavailable =>
+        LoginStage.verificationError,
+      CredentialVerificationResult.noRestoredCredential ||
+      CredentialVerificationResult.replaced => LoginStage.idle,
+    };
+    if (result == CredentialVerificationResult.authenticated) {
+      _credentialSaveState = CredentialSaveState.saved;
+    }
+    if (result == CredentialVerificationResult.noRestoredCredential ||
+        result == CredentialVerificationResult.replaced) {
+      _credentialRestoreResult = CredentialRestoreResult.signedOut;
+    }
+    _notify();
+  }
+
+  void retryCredentialVerification() {
+    if (!canRetryCredentialVerification) return;
+    unawaited(verifyRestoredCredential());
+  }
+
   Future<void> start() async {
     final generation = ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
     _startOperation?.cancel();
     _startOperation = null;
     _session?.cancel();
@@ -82,6 +147,7 @@ class LoginController extends ChangeNotifier {
     _failure = null;
     _credentialSaveState = CredentialSaveState.none;
     _credentialRestoreResult = CredentialRestoreResult.signedOut;
+    _credentialVerificationResult = null;
     _stage = LoginStage.starting;
     _notify();
 
@@ -122,6 +188,8 @@ class LoginController extends ChangeNotifier {
 
   void cancel() {
     ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
     _startOperation?.cancel();
     _startOperation = null;
     _session?.cancel();
@@ -130,6 +198,7 @@ class LoginController extends ChangeNotifier {
     _failure = null;
     _credentialSaveState = CredentialSaveState.none;
     _credentialRestoreResult = CredentialRestoreResult.signedOut;
+    _credentialVerificationResult = null;
     _stage = LoginStage.idle;
     _notify();
   }
@@ -231,6 +300,8 @@ class LoginController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
     _startOperation?.cancel();
     _startOperation = null;
     _session?.cancel();

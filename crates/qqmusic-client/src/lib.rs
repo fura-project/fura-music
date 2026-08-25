@@ -5,6 +5,7 @@
 //! providers or Flutter.
 
 mod credential;
+mod credential_verification;
 mod transport;
 mod wechat_exchange;
 mod wechat_login;
@@ -15,6 +16,7 @@ pub use credential::{
     CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,
     LocalCredentialValidity, LoginType,
 };
+pub use credential_verification::CredentialVerificationError;
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
 };

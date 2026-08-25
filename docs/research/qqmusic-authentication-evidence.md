@@ -37,7 +37,15 @@ Observed login types include WeChat `1`, QQ `2`, and QQ Music App `6`. The proto
 
 Both current implementations consume `musickeyCreateTime + keyExpiresIn` when present. This can identify a locally expired key, but an unexpired timestamp cannot prove that QQ Music still accepts the credential. Missing lifetime metadata must remain “unknown,” not “valid.”
 
-Both current implementations recognize upstream codes `1000`, `104400`, and `104401` as credential/authentication rejection signals around validation or refresh. These codes are evidence for the future network error mapper; the local lifecycle model does not synthesize them.
+Both current implementations recognize upstream codes `1000`, `104400`, and `104401` as credential/authentication rejection signals around validation or refresh. The network error mapper uses only these observed rejection codes; the local lifecycle model does not synthesize them.
+
+### Server verification of a restored credential
+
+L-1124, yakult, and ylw1997 independently use the named `music.UserInfo.userInfoServer` request with module `music.UserInfo.userInfoServer`, method `GetLoginUserInfo`, and an empty parameter object. FeelUOwn provides a separate behavioral cross-check: it restores cookie material and considers auto-login successful only after fetching the authenticated user. The current lightweight request form carries the account ID, music key, and login type in `ct=11` musicu comm fields and in the QQ Music Cookie.
+
+The implementation requires both the global response code and the named result code to be zero. Codes `1000`, `104400`, and `104401` are the only currently cross-validated credential-rejection values. A non-rejection value such as `50006`, HTTP failure, transport error, or missing/malformed result is not logout evidence and retains the startup candidate for retry.
+
+Verification has an exact process-local attempt ID. The Provider compares both that ID and the retained candidate before and after the await; cancellation, retry, or beginning a new QR login makes a late result `Replaced`. Only explicit rejection clears Rust credential state and triggers platform-vault deletion at the Dart edge. This lifecycle is fixture-tested but has not accepted a real account credential in this checkout.
 
 ## Important differences
 
@@ -54,7 +62,7 @@ The first credential model contains only the cross-validated core fields plus op
 - `VerifyWithServer` when a structurally valid credential is present and is not locally expired;
 - `LocallyExpired` when advertised lifetime has ended, retaining the credential for a future refresh/reauthentication decision.
 
-Credential debug output redacts account identity and `musickey`. Persistence, refresh fields, and server-valid state remain unimplemented.
+Credential debug output redacts account identity and `musickey`. Persistence and server verification are implemented; credential refresh remains outside the current slice.
 
 ### First network slice: WeChat QR bootstrap
 
@@ -125,7 +133,7 @@ The Provider layer now maps raw protocol image/state/error types into provider-n
 
 ## Evidence still required
 
-Before presenting QR login as a user-visible capability:
+Before claiming M1 authentication acceptance:
 
 1. Capture a sanitized successful response fixture or run a controlled real-account integration before claiming live login compatibility; the current evidence proves request acceptance and failure mapping only.
-2. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.
+2. Run the disposable secure-vault read/write/delete integration on Linux and each distribution target; plugin linkage alone does not prove runtime storage behavior.

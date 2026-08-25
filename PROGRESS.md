@@ -40,15 +40,22 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Replaced the Provider's authenticated-or-empty slot with explicit signed-out, pending-verification, locally-expired, and authenticated states; only the last satisfies `has_authenticated_credential` or can be exported.
 - Classified absent, malformed, unsupported-version, invalid, locally expired, platform-unavailable, and core-unavailable restore outcomes without deleting stored data or guessing authentication.
 - Added Provider, Bridge, gateway, controller, widget, and Linux integration regressions proving unverified/expired candidates remain Rust-owned and unauthenticated.
+- Cross-validated the lightweight `music.UserInfo.userInfoServer/GetLoginUserInfo` credential check against four current QQ Music implementations pinned by commit.
+- Added a bounded server-verification request with credential-safe diagnostics, strict response-shape parsing, and explicit rejection codes `1000`, `104400`, and `104401`; unrelated upstream codes remain service failures.
+- Added exact restore-verification attempt IDs through Provider and Bridge so QR replacement, retry, cancellation, and disposal cannot promote a stale credential.
+- Promoted a retained startup credential only after QQ Music returns zero global and subrequest codes; explicit rejection clears in-memory state while transport, HTTP, upstream, and response-shape failures retain the candidate.
+- Started eligible startup verification automatically in Flutter, added retryable/non-retryable presentation states, and restricted platform-vault deletion to explicit server rejection.
+- Added credential input hardening before stored bytes can enter an HTTP Cookie header, plus Provider, Bridge, gateway, controller, and widget regressions for success, rejection, retry, storage-cleanup failure, and late-result suppression.
+- Serialized vault reads, rejection deletes, and new credential writes inside one Gateway instance so a slow old cleanup cannot delete a newly authenticated session.
 
 # In Progress
 
-- Verify a retained startup credential with QQ Music and promote it only on explicit success, preserving rejection and transient failure as different states.
+- Verify the Linux platform-vault adapter with a disposable non-account marker and guaranteed cleanup (TD-004).
 
 # Next Candidates
 
-1. Implement server verification for eligible restored credentials without mapping transport failures to signed-out state (TD-003).
-2. Add and run a disposable Linux secure-vault read/write/delete integration that leaves no marker behind (TD-004).
+1. Add and run a disposable Linux secure-vault read/write/delete integration that leaves no marker behind (TD-004).
+2. Begin the smallest M1 user-library slice with evidence-backed current-user playlist protocol research and offline fixtures.
 3. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
 
 # Blockers
@@ -63,7 +70,7 @@ None.
 
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
 - Credential handling can create account and privacy risk; temporary storage must be explicit debt and must not be mistaken for release readiness.
-- Startup securely imports and locally classifies a stored credential, but QQ Music server verification is not implemented (TD-003).
+- Startup server verification is cross-validated and fixture-tested but has not accepted a real account credential in this checkout; the live-success evidence gap remains separate from TD-003's completed implementation.
 - The plugin is linked and loaded on Linux, not runtime read/write/delete verified; Android, Apple, and Windows paths are still unbuilt here (TD-004).
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.

@@ -97,7 +97,7 @@ QQMusicProvider credential
   -> native platform secure storage
 ```
 
-The controller sees only stored/unavailable status. It cannot inspect credential fields. The mutable bridge buffer is zeroed after the asynchronous write. Secure write alone does not satisfy credential restore; TD-003 remains in progress until QQ Music accepts a startup candidate.
+The controller sees only stored/unavailable status. It cannot inspect credential fields. The mutable bridge buffer is zeroed after the asynchronous write. Secure write alone does not satisfy credential restore.
 
 Startup now performs the reverse narrow handoff before constructing the login controller:
 
@@ -107,9 +107,14 @@ native platform secure storage
   -> dedicated Bridge import of optional opaque bytes
   -> Rust version/invariant validation and local expiry plan
   -> signed out | verification required | locally expired | typed failure
+  -> exact verification attempt ID
+  -> QQMusicProvider -> QQMusicClient user-info verification
+  -> authenticated | rejected | retryable/typed failure
 ```
 
-The loaded Dart byte buffer is zeroed after the synchronous Rust import. Rust retains verification and locally expired candidates in distinct internal states, and neither makes `has_authenticated_credential` true. Malformed, unsupported, and platform-access failures remain distinct and are never auto-deleted. Server verification is the remaining TD-003 step.
+The loaded Dart byte buffer is zeroed after the synchronous Rust import. Rust retains verification and locally expired candidates in distinct internal states, and neither makes `has_authenticated_credential` true. The Provider promotes a candidate only when QQ Music returns zero global and named-result codes. Independently observed rejection codes clear in-memory state; transport, service, other upstream, and malformed-response failures retain the candidate for explicit retry. Malformed, unsupported, and platform-access failures remain distinct and are never auto-deleted. The Dart platform edge deletes secure storage only after an explicit rejection and reports cleanup failure separately. One Gateway serializes all vault reads, deletes, and writes so a slow rejection cleanup cannot remove a newer QR credential.
+
+Restore-verification attempt IDs are process-local cancellation authority, not QQ Music identifiers. The Provider checks both the exact attempt and candidate before and after network work. Starting a new QR login clears that authority, so a late verification cannot overwrite the replacement session. Dart additionally uses controller generations to suppress late presentation updates after retry, QR replacement, cancellation, or disposal.
 
 QR creation has a separate opaque start-attempt number reserved by the Bridge adapter before network work begins. Cancel/restart/dispose can cancel that exact pending creation; comparison against the current start attempt prevents a late old controller from cancelling its replacement. After a challenge returns, the Dart controller discards that start operation and uses the Rust-owned session handle. Dart owns presentation stages, one-second network-reconnect delay, adaptive layout, animation, and late-result visibility guards. Rust remains the authority for protocol deadlines, failure counts, session generations, and credential state.
 

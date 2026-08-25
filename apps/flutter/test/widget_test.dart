@@ -82,17 +82,48 @@ void main() {
     tester,
   ) async {
     final session = _WaitingSession();
+    final verification = _PendingWidgetVerification();
     await tester.pumpWidget(
       MusicApp(
         bootstrap: _bootstrap,
-        authenticationGateway: _WidgetGateway(session),
+        authenticationGateway: _WidgetGateway(
+          session,
+          verificationOperation: verification,
+        ),
         initialCredentialRestore: CredentialRestoreResult.verificationRequired,
       ),
     );
 
-    expect(find.text('Saved session found'), findsOneWidget);
+    expect(find.text('Checking your saved session…'), findsOneWidget);
     expect(find.text('Use a new code'), findsOneWidget);
     expect(find.text('You’re signed in'), findsNothing);
+
+    verification.complete(CredentialVerificationResult.network);
+    await tester.pumpAndSettle();
+    expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
+    expect(find.text('Try verification again'), findsOneWidget);
+    expect(find.text('You’re signed in'), findsNothing);
+  });
+
+  testWidgets('shows an explicitly rejected restored session', (tester) async {
+    final session = _WaitingSession();
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          session,
+          verificationOperation: const _ImmediateWidgetVerification(
+            CredentialVerificationResult.rejected,
+          ),
+        ),
+        initialCredentialRestore: CredentialRestoreResult.verificationRequired,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saved session was rejected'), findsOneWidget);
+    expect(find.text('Try verification again'), findsNothing);
+    expect(find.text('Sign in again'), findsOneWidget);
   });
 
   testWidgets('presents a locally expired stored session separately', (
@@ -123,9 +154,17 @@ const _bootstrap = BootstrapStatus(
 );
 
 class _WidgetGateway implements QqMusicAuthenticationGateway {
-  const _WidgetGateway(this.session);
+  _WidgetGateway(
+    this.session, {
+    CredentialVerificationOperation? verificationOperation,
+  }) : _verificationOperation =
+           verificationOperation ??
+           const _ImmediateWidgetVerification(
+             CredentialVerificationResult.noRestoredCredential,
+           );
 
   final _WaitingSession session;
+  final CredentialVerificationOperation _verificationOperation;
 
   @override
   bool get hasAuthenticatedCredential => false;
@@ -147,6 +186,10 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
   );
 
   @override
+  CredentialVerificationOperation beginCredentialVerification() =>
+      _verificationOperation;
+
+  @override
   Future<CredentialPersistenceResult> persistAuthenticatedCredential() async =>
       CredentialPersistenceResult.stored;
 
@@ -165,6 +208,32 @@ class _WidgetStartOperation implements LoginStartOperation {
 
   @override
   Future<LoginStart> run() async => result;
+}
+
+class _ImmediateWidgetVerification implements CredentialVerificationOperation {
+  const _ImmediateWidgetVerification(this.result);
+
+  final CredentialVerificationResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<CredentialVerificationResult> run() async => result;
+}
+
+class _PendingWidgetVerification implements CredentialVerificationOperation {
+  final Completer<CredentialVerificationResult> _result =
+      Completer<CredentialVerificationResult>();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<CredentialVerificationResult> run() => _result.future;
+
+  void complete(CredentialVerificationResult result) =>
+      _result.complete(result);
 }
 
 class _WaitingSession implements LoginSession {

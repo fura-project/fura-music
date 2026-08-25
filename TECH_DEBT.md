@@ -34,21 +34,21 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Before any artifact is distributed outside development, or when M1 starts packaging work.
 
-## TD-003 — Persisted credential is not restored at startup
+## TD-003 — Persisted credential restore lacked server verification
 
-**Status:** In Progress
+**Status:** Resolved
 
-**Problem:** `QQMusicProvider` serializes a successful credential into a versioned opaque document, the Flutter edge writes it to platform secure storage, and startup now imports and locally classifies that document. A structurally valid candidate still is not verified with QQ Music, so closing the application cannot yet regain an authenticated session.
+**Problem:** `QQMusicProvider` serialized a successful credential into a versioned opaque document and startup imported it, but a structurally valid candidate was not verified with QQ Music. Closing the application therefore could not regain an authenticated session safely.
 
-**Why accepted:** Persistence, local import, and network verification are separate failure domains. The completed local slice proves absence, corruption, format version, invariant validation, and expiry behavior without allowing a stored key to imply server validity. The UI explicitly says server verification is still pending.
+**Why accepted:** Persistence, local import, and network verification are separate failure domains. The staged local slice first proved absence, corruption, format version, invariant validation, and expiry behavior without allowing a stored key to imply server validity; the UI reported verification as pending until this network step was implemented.
 
-**Impact:** A user still needs to sign in again after every process restart even when the secure write succeeded; the current authenticated state is valid only for this process.
+**Impact:** Resolved for the implemented path: an eligible stored candidate now reaches authenticated state only after QQ Music accepts it. The platform vault runtime and real-account acceptance gaps remain TD-004 and a documented validation risk respectively.
 
-**Risk:** UI or documentation could accidentally treat a successful secure write as a restored or server-valid session.
+**Risk:** Future error mapping could regress by treating a transient failure as rejection, or stale verification could overwrite a replacement login.
 
-**Suggested solution:** Verify the retained eligible candidate against QQ Music, promote it to authenticated only on explicit success, and keep credential rejection distinct from transient transport, upstream, and protocol failures.
+**Suggested solution:** Implemented with the named user-info RPC, exact attempt IDs, explicit rejection-code mapping, retained transient failures, and cross-layer regression tests. Secure storage is deleted only at the Flutter platform edge after explicit rejection.
 
-**Trigger condition:** Must be resolved before claiming credential restore, completing M1 authentication phase, or distributing an authenticated build. Secure write and local startup import now exist, so server verification is the active next task.
+**Trigger condition:** Resolved on 2026-08-25. Reopen if QQ Music response evidence changes, a transient failure signs the user out, or a stale verification can promote after replacement/cancellation.
 
 ## TD-004 — Secure-storage runtime behavior is not verified on every target
 

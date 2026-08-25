@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -75,6 +77,10 @@ class _LoginPageState extends State<LoginPage> {
       widget.authenticationGateway,
       initialCredentialRestore: widget.initialCredentialRestore,
     );
+    if (widget.initialCredentialRestore ==
+        CredentialRestoreResult.verificationRequired) {
+      unawaited(_controller.verifyRestoredCredential());
+    }
   }
 
   @override
@@ -235,11 +241,14 @@ class _AuthenticationContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final stage = controller.stage;
     if (stage == LoginStage.idle) return _idle(context);
-    if (stage == LoginStage.verificationRequired) {
+    if (stage == LoginStage.verificationRequired ||
+        stage == LoginStage.verifyingStoredCredential) {
       return _verificationRequired(context);
     }
     if (stage == LoginStage.storedCredentialExpired ||
-        stage == LoginStage.restoreError) {
+        stage == LoginStage.restoreError ||
+        stage == LoginStage.credentialRejected ||
+        stage == LoginStage.verificationError) {
       return _restoreTerminal(context);
     }
     if (stage == LoginStage.starting) return _starting(context);
@@ -301,60 +310,74 @@ class _AuthenticationContent extends StatelessWidget {
     ],
   );
 
-  Widget _verificationRequired(BuildContext context) => Column(
-    key: const ValueKey('credential-verification-required'),
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const _PanelIcon(icon: Icons.verified_user_outlined),
-      const SizedBox(height: 24),
-      Text(
-        'Saved session found',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 10),
-      Text(
-        'It passed local checks but still needs QQ Music verification. '
-        'Automatic verification is not available in this build.',
-        textAlign: TextAlign.center,
-        style: _supportingStyle(context),
-      ),
-      const SizedBox(height: 24),
-      FilledButton.tonalIcon(
-        onPressed: controller.start,
-        icon: const Icon(Icons.qr_code_2_rounded),
-        label: const Text('Use a new code'),
-      ),
-    ],
-  );
+  Widget _verificationRequired(BuildContext context) {
+    final verifying = controller.stage == LoginStage.verifyingStoredCredential;
+    return Column(
+      key: const ValueKey('credential-verification-required'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (verifying)
+          const SizedBox.square(
+            dimension: 42,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          )
+        else
+          const _PanelIcon(icon: Icons.verified_user_outlined),
+        const SizedBox(height: 24),
+        Text(
+          verifying ? 'Checking your saved session…' : 'Saved session found',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          verifying
+              ? 'Confirming it directly with QQ Music before restoring access.'
+              : 'It passed local checks but still needs QQ Music verification.',
+          textAlign: TextAlign.center,
+          style: _supportingStyle(context),
+        ),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: controller.start,
+          icon: const Icon(Icons.qr_code_2_rounded),
+          label: const Text('Use a new code'),
+        ),
+      ],
+    );
+  }
 
   Widget _restoreTerminal(BuildContext context) {
     final result = controller.credentialRestoreResult;
-    final (title, detail) = switch (result) {
-      CredentialRestoreResult.locallyExpired => (
-        'Saved session expired',
-        'QQ Music’s advertised lifetime has ended. Sign in again to continue.',
-      ),
-      CredentialRestoreResult.unsupportedStoredCredential => (
-        'Saved session is from another version',
-        'This build left it unchanged instead of guessing. You can replace it '
-            'by signing in again.',
-      ),
-      CredentialRestoreResult.storageUnavailable => (
-        'Secure storage is unavailable',
-        'You can sign in for this run, but the session may not survive restart.',
-      ),
-      CredentialRestoreResult.coreUnavailable => (
-        'The music core is unavailable',
-        'The stored session could not be checked safely. Try again after restart.',
-      ),
-      CredentialRestoreResult.invalidStoredCredential ||
-      CredentialRestoreResult.signedOut ||
-      CredentialRestoreResult.verificationRequired => (
-        'Saved session could not be read',
-        'It was left unchanged instead of being treated as a valid login. '
-            'You can replace it by signing in again.',
-      ),
+    final (title, detail) = switch (controller.stage) {
+      LoginStage.credentialRejected || LoginStage.verificationError =>
+        _verificationTerminalCopy(controller.credentialVerificationResult),
+      _ => switch (result) {
+        CredentialRestoreResult.locallyExpired => (
+          'Saved session expired',
+          'QQ Music’s advertised lifetime has ended. Sign in again to continue.',
+        ),
+        CredentialRestoreResult.unsupportedStoredCredential => (
+          'Saved session is from another version',
+          'This build left it unchanged instead of guessing. You can replace it '
+              'by signing in again.',
+        ),
+        CredentialRestoreResult.storageUnavailable => (
+          'Secure storage is unavailable',
+          'You can sign in for this run, but the session may not survive restart.',
+        ),
+        CredentialRestoreResult.coreUnavailable => (
+          'The music core is unavailable',
+          'The stored session could not be checked safely. Try again after restart.',
+        ),
+        CredentialRestoreResult.invalidStoredCredential ||
+        CredentialRestoreResult.signedOut ||
+        CredentialRestoreResult.verificationRequired => (
+          'Saved session could not be read',
+          'It was left unchanged instead of being treated as a valid login. '
+              'You can replace it by signing in again.',
+        ),
+      },
     };
 
     return Column(
@@ -375,7 +398,12 @@ class _AuthenticationContent extends StatelessWidget {
           style: _supportingStyle(context),
         ),
         const SizedBox(height: 24),
-        FilledButton.tonalIcon(
+        if (controller.canRetryCredentialVerification)
+          FilledButton.tonal(
+            onPressed: controller.retryCredentialVerification,
+            child: const Text('Try verification again'),
+          ),
+        TextButton.icon(
           onPressed: controller.start,
           icon: const Icon(Icons.qr_code_2_rounded),
           label: const Text('Sign in again'),
@@ -383,6 +411,43 @@ class _AuthenticationContent extends StatelessWidget {
       ],
     );
   }
+
+  (String, String) _verificationTerminalCopy(
+    CredentialVerificationResult? result,
+  ) => switch (result) {
+    CredentialVerificationResult.rejected => (
+      'Saved session was rejected',
+      'QQ Music no longer accepts it, so the stored session was removed.',
+    ),
+    CredentialVerificationResult.rejectedStorageCleanupFailed => (
+      'Saved session was rejected',
+      'QQ Music no longer accepts it, but secure storage could not remove it. '
+          'It may appear again after restart.',
+    ),
+    CredentialVerificationResult.network => (
+      'Couldn’t reach QQ Music',
+      'The saved session is still available. Check your connection and try again.',
+    ),
+    CredentialVerificationResult.serviceUnavailable => (
+      'QQ Music is unavailable',
+      'The saved session was kept unchanged. Try verification again later.',
+    ),
+    CredentialVerificationResult.invalidResponse => (
+      'QQ Music changed its response',
+      'The saved session was kept instead of being treated as signed out.',
+    ),
+    CredentialVerificationResult.coreUnavailable => (
+      'The music core is unavailable',
+      'The saved session could not be verified safely. Try again after restart.',
+    ),
+    CredentialVerificationResult.noRestoredCredential ||
+    CredentialVerificationResult.replaced ||
+    CredentialVerificationResult.authenticated ||
+    null => (
+      'Saved session is no longer current',
+      'Sign in again to continue.',
+    ),
+  };
 
   Widget _active(BuildContext context) {
     final image = controller.qrImageBytes;
@@ -466,7 +531,7 @@ class _AuthenticationContent extends StatelessWidget {
       ),
       CredentialSaveState.saved => (
         Icons.lock_rounded,
-        'This session is stored securely. Startup verification is the next step.',
+        'This session is stored securely and ready for this run.',
       ),
       CredentialSaveState.failed => (
         Icons.warning_amber_rounded,

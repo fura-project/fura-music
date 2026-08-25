@@ -133,6 +133,28 @@ pub struct QqMusicCredentialRestore {
     pub failure: Option<QqMusicCredentialRestoreFailure>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialVerificationState {
+    Authenticated,
+    Rejected,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialVerificationFailure {
+    CoreUnavailable,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    NoRestoredCredential,
+    Replaced,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct QqMusicCredentialVerification {
+    pub state: Option<QqMusicCredentialVerificationState>,
+    pub failure: Option<QqMusicCredentialVerificationFailure>,
+}
+
 impl fmt::Debug for QqMusicCredentialExport {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -302,6 +324,47 @@ pub fn restore_qq_music_credential_from_secure_storage(
     }
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn reserve_qq_music_credential_verification() -> Option<u32> {
+    QQ_MUSIC_PROVIDER
+        .as_ref()
+        .ok()
+        .and_then(QqMusicProvider::reserve_restored_credential_verification)
+}
+
+pub async fn verify_restored_qq_music_credential(attempt_id: u32) -> QqMusicCredentialVerification {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_verification(QqMusicCredentialVerificationFailure::CoreUnavailable);
+    };
+    match provider.verify_restored_credential(attempt_id).await {
+        Ok(()) => QqMusicCredentialVerification {
+            state: Some(QqMusicCredentialVerificationState::Authenticated),
+            failure: None,
+        },
+        Err(AuthenticationError::Rejected) => QqMusicCredentialVerification {
+            state: Some(QqMusicCredentialVerificationState::Rejected),
+            failure: None,
+        },
+        Err(error) => failed_verification(map_verification_failure(error)),
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_qq_music_credential_verification(attempt_id: u32) -> bool {
+    QQ_MUSIC_PROVIDER
+        .as_ref()
+        .is_ok_and(|provider| provider.cancel_restored_credential_verification(attempt_id))
+}
+
+const fn failed_verification(
+    failure: QqMusicCredentialVerificationFailure,
+) -> QqMusicCredentialVerification {
+    QqMusicCredentialVerification {
+        state: None,
+        failure: Some(failure),
+    }
+}
+
 const fn failed_restore(failure: QqMusicCredentialRestoreFailure) -> QqMusicCredentialRestore {
     QqMusicCredentialRestore {
         state: None,
@@ -391,12 +454,39 @@ const fn map_persistence_error(
     }
 }
 
+const fn map_verification_failure(
+    error: AuthenticationError,
+) -> QqMusicCredentialVerificationFailure {
+    match error {
+        AuthenticationError::Network => QqMusicCredentialVerificationFailure::Network,
+        AuthenticationError::ServiceUnavailable => {
+            QqMusicCredentialVerificationFailure::ServiceUnavailable
+        }
+        AuthenticationError::InvalidResponse => {
+            QqMusicCredentialVerificationFailure::InvalidResponse
+        }
+        AuthenticationError::SessionFinished => {
+            QqMusicCredentialVerificationFailure::NoRestoredCredential
+        }
+        AuthenticationError::Replaced | AuthenticationError::Cancelled => {
+            QqMusicCredentialVerificationFailure::Replaced
+        }
+        AuthenticationError::Rejected
+        | AuthenticationError::SessionClosed
+        | AuthenticationError::TimedOut
+        | AuthenticationError::TooManyNetworkFailures => {
+            QqMusicCredentialVerificationFailure::CoreUnavailable
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        QqMusicCredentialExport, QqMusicCredentialRestoreFailure, QqMusicQrChallenge,
-        QqMusicQrImageFormat, QqMusicQrLoginFailure, clear_start_attempt, failed_start, map_error,
-        map_persistence_error, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
+        QqMusicCredentialExport, QqMusicCredentialRestoreFailure,
+        QqMusicCredentialVerificationFailure, QqMusicQrChallenge, QqMusicQrImageFormat,
+        QqMusicQrLoginFailure, clear_start_attempt, failed_start, map_error, map_persistence_error,
+        map_verification_failure, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
     };
     use provider_api::AuthenticationError;
     use qqmusic_client::{CredentialPersistenceError, InvalidCredential};
@@ -459,6 +549,26 @@ mod tests {
                 InvalidCredential::MissingMusicKey,
             )),
             QqMusicCredentialRestoreFailure::InvalidCredential,
+        );
+    }
+
+    #[test]
+    fn credential_verification_failure_mapping_is_precise() {
+        assert_eq!(
+            map_verification_failure(AuthenticationError::Network),
+            QqMusicCredentialVerificationFailure::Network,
+        );
+        assert_eq!(
+            map_verification_failure(AuthenticationError::ServiceUnavailable),
+            QqMusicCredentialVerificationFailure::ServiceUnavailable,
+        );
+        assert_eq!(
+            map_verification_failure(AuthenticationError::SessionFinished),
+            QqMusicCredentialVerificationFailure::NoRestoredCredential,
+        );
+        assert_eq!(
+            map_verification_failure(AuthenticationError::Replaced),
+            QqMusicCredentialVerificationFailure::Replaced,
         );
     }
 

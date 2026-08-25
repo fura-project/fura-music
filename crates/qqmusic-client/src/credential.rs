@@ -211,8 +211,14 @@ impl Credential {
         if music_id.is_empty() {
             return Err(InvalidCredential::MissingMusicId);
         }
+        if !music_id.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(InvalidCredential::InvalidMusicId);
+        }
         if music_key.trim().is_empty() {
             return Err(InvalidCredential::MissingMusicKey);
+        }
+        if !music_key.bytes().all(is_cookie_octet) {
+            return Err(InvalidCredential::UnsafeMusicKey);
         }
 
         Ok(Self {
@@ -351,6 +357,13 @@ impl Credential {
     }
 }
 
+const fn is_cookie_octet(byte: u8) -> bool {
+    matches!(
+        byte,
+        0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E
+    )
+}
+
 #[derive(Deserialize)]
 struct StoredCredentialHeader {
     version: u64,
@@ -442,14 +455,22 @@ impl fmt::Debug for Redacted {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvalidCredential {
     MissingMusicId,
+    InvalidMusicId,
     MissingMusicKey,
+    UnsafeMusicKey,
 }
 
 impl fmt::Display for InvalidCredential {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingMusicId => formatter.write_str("credential music id is required"),
+            Self::InvalidMusicId => {
+                formatter.write_str("credential music id must contain only ASCII digits")
+            }
             Self::MissingMusicKey => formatter.write_str("credential music key is required"),
+            Self::UnsafeMusicKey => {
+                formatter.write_str("credential music key is not safe for protocol transport")
+            }
         }
     }
 }
@@ -521,6 +542,14 @@ mod tests {
         assert_eq!(
             Credential::new("123", "\n", LoginType::QQ),
             Err(InvalidCredential::MissingMusicKey),
+        );
+        assert_eq!(
+            Credential::new("12;3", "key", LoginType::QQ),
+            Err(InvalidCredential::InvalidMusicId),
+        );
+        assert_eq!(
+            Credential::new("123", "key\r\nInjected: value", LoginType::QQ),
+            Err(InvalidCredential::UnsafeMusicKey),
         );
     }
 
