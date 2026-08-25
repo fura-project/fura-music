@@ -5,6 +5,8 @@ import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
+import 'package:flutterustmusic/lyrics/lyric_controller.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -18,6 +20,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.gateway,
     required this.detailGateway,
     required this.mediaResolutionGateway,
+    required this.lyricGateway,
     required this.playbackQueueGateway,
     required this.audioEngine,
     required this.onSignInAgain,
@@ -27,6 +30,7 @@ class UserLibraryPage extends StatefulWidget {
   final UserLibraryGateway gateway;
   final PlaylistDetailGateway detailGateway;
   final MediaResolutionGateway mediaResolutionGateway;
+  final LyricGateway lyricGateway;
   final PlaybackQueueGateway playbackQueueGateway;
   final ForegroundAudioEngine audioEngine;
   final VoidCallback onSignInAgain;
@@ -39,6 +43,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
   UserPlaylistSummary? _selectedPlaylist;
+  bool _handledLyricCredentialRejection = false;
 
   @override
   void initState() {
@@ -50,13 +55,28 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         widget.mediaResolutionGateway,
         ForegroundPlaybackController(widget.audioEngine),
       ),
+      lyrics: LyricController(widget.lyricGateway),
     );
+    _queuePlaybackController.addListener(_onQueuePlaybackChanged);
     unawaited(_controller.load());
+  }
+
+  void _onQueuePlaybackChanged() {
+    if (!mounted) return;
+    if (_queuePlaybackController.lyrics?.stage !=
+        LyricStage.credentialRejected) {
+      _handledLyricCredentialRejection = false;
+      return;
+    }
+    if (_handledLyricCredentialRejection) return;
+    _handledLyricCredentialRejection = true;
+    widget.onSignInAgain();
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _queuePlaybackController.dispose();
     super.dispose();
   }

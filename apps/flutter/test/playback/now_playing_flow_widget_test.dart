@@ -6,6 +6,7 @@ import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -43,6 +44,71 @@ void main() {
     await tester.tap(find.byTooltip('Stop'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Stopped'), findsOneWidget);
+  });
+
+  testWidgets('loads lyrics for the exact selected provider identity', (
+    tester,
+  ) async {
+    final lyrics = _FakeLyricGateway(
+      const LyricLoadResult(failure: LyricFailure.unavailable),
+    );
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([_ImmediateMediaOperation(_success('first'))]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      lyrics: lyrics,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(lyrics.requests, [('qq-music', 'first')]);
+    expect(find.textContaining('Playing'), findsOneWidget);
+    expect(find.text('Continue with WeChat'), findsNothing);
+  });
+
+  for (final failure in [
+    LyricFailure.credentialRejected,
+    LyricFailure.credentialRejectedStorageCleanupFailed,
+  ]) {
+    testWidgets('returns ${failure.name} lyrics to the existing sign-in flow', (
+      tester,
+    ) async {
+      await _openDetail(
+        tester,
+        media: _FakeMediaGateway([
+          _ImmediateMediaOperation(_success('must-not-start')),
+        ]),
+        audio: _FakeAudioEngine(const []),
+        lyrics: _FakeLyricGateway(LyricLoadResult(failure: failure)),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Continue with WeChat'), findsOneWidget);
+      expect(find.byKey(const ValueKey('user-library-page')), findsNothing);
+    });
+  }
+
+  testWidgets('keeps the authenticated shell on a lyric network failure', (
+    tester,
+  ) async {
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([_ImmediateMediaOperation(_success('first'))]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      lyrics: _FakeLyricGateway(
+        const LyricLoadResult(failure: LyricFailure.network),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('user-library-page')), findsOneWidget);
+    expect(find.textContaining('Playing'), findsOneWidget);
+    expect(find.text('Continue with WeChat'), findsNothing);
   });
 
   testWidgets('switches tracks and keeps the coordinator across local back', (
@@ -237,6 +303,7 @@ Future<void> _openDetail(
   required _FakeMediaGateway media,
   required _FakeAudioEngine audio,
   _WidgetQueueGateway? queue,
+  LyricGateway? lyrics,
   String firstOpaqueId = 'first',
   String secondOpaqueId = 'second',
   String secondTitle = 'Second track',
@@ -252,6 +319,11 @@ Future<void> _openDetail(
         secondTitle,
       ),
       mediaResolutionGateway: media,
+      lyricGateway:
+          lyrics ??
+          _FakeLyricGateway(
+            const LyricLoadResult(failure: LyricFailure.unavailable),
+          ),
       playbackQueueGateway: queue ?? _WidgetQueueGateway(),
       audioEngine: audio,
     ),
@@ -509,6 +581,34 @@ class _ImmediateMediaOperation implements MediaResolutionOperation {
 
   @override
   Future<MediaResolutionResult> run() async => result;
+}
+
+class _FakeLyricGateway implements LyricGateway {
+  _FakeLyricGateway(this.result);
+
+  final LyricLoadResult result;
+  final List<(String, String)> requests = [];
+
+  @override
+  LyricLoadOperation beginLoad({
+    required String providerId,
+    required String opaqueTrackId,
+  }) {
+    requests.add((providerId, opaqueTrackId));
+    return _ImmediateLyricOperation(result);
+  }
+}
+
+class _ImmediateLyricOperation implements LyricLoadOperation {
+  const _ImmediateLyricOperation(this.result);
+
+  final LyricLoadResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<LyricLoadResult> run() async => result;
 }
 
 class _PendingMediaOperation implements MediaResolutionOperation {

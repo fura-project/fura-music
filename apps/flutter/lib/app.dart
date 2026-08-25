@@ -7,6 +7,7 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -21,6 +22,7 @@ class MusicApp extends StatelessWidget {
     UserLibraryGateway? libraryGateway,
     PlaylistDetailGateway? playlistDetailGateway,
     MediaResolutionGateway? mediaResolutionGateway,
+    LyricGateway? lyricGateway,
     PlaybackQueueGateway? playbackQueueGateway,
     ForegroundAudioEngine? audioEngine,
     CredentialRestoreResult initialCredentialRestore =
@@ -30,7 +32,8 @@ class MusicApp extends StatelessWidget {
     if (authenticationGateway == null ||
         libraryGateway == null ||
         playlistDetailGateway == null ||
-        mediaResolutionGateway == null) {
+        mediaResolutionGateway == null ||
+        lyricGateway == null) {
       final fallbackCredentialVault = SerializedCredentialVault(
         PlatformCredentialVault(),
       );
@@ -46,6 +49,9 @@ class MusicApp extends StatelessWidget {
       mediaResolutionGateway ??= RustMediaResolutionGateway(
         credentialVault: fallbackCredentialVault,
       );
+      lyricGateway ??= RustLyricGateway(
+        credentialVault: fallbackCredentialVault,
+      );
     }
     return MusicApp._(
       bootstrap: bootstrap,
@@ -53,6 +59,7 @@ class MusicApp extends StatelessWidget {
       libraryGateway: libraryGateway,
       playlistDetailGateway: playlistDetailGateway,
       mediaResolutionGateway: mediaResolutionGateway,
+      lyricGateway: lyricGateway,
       playbackQueueGateway: playbackQueueGateway ?? RustPlaybackQueueGateway(),
       audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
       initialCredentialRestore: initialCredentialRestore,
@@ -66,6 +73,7 @@ class MusicApp extends StatelessWidget {
     required this.libraryGateway,
     required this.playlistDetailGateway,
     required this.mediaResolutionGateway,
+    required this.lyricGateway,
     required this.playbackQueueGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
@@ -77,6 +85,7 @@ class MusicApp extends StatelessWidget {
   final UserLibraryGateway libraryGateway;
   final PlaylistDetailGateway playlistDetailGateway;
   final MediaResolutionGateway mediaResolutionGateway;
+  final LyricGateway lyricGateway;
   final PlaybackQueueGateway playbackQueueGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
@@ -95,6 +104,7 @@ class MusicApp extends StatelessWidget {
         libraryGateway: libraryGateway,
         playlistDetailGateway: playlistDetailGateway,
         mediaResolutionGateway: mediaResolutionGateway,
+        lyricGateway: lyricGateway,
         playbackQueueGateway: playbackQueueGateway,
         audioEngine: audioEngine,
         initialCredentialRestore: initialCredentialRestore,
@@ -124,6 +134,7 @@ class LoginPage extends StatefulWidget {
     required this.libraryGateway,
     required this.playlistDetailGateway,
     required this.mediaResolutionGateway,
+    required this.lyricGateway,
     required this.playbackQueueGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
@@ -135,6 +146,7 @@ class LoginPage extends StatefulWidget {
   final UserLibraryGateway libraryGateway;
   final PlaylistDetailGateway playlistDetailGateway;
   final MediaResolutionGateway mediaResolutionGateway;
+  final LyricGateway lyricGateway;
   final PlaybackQueueGateway playbackQueueGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
@@ -176,6 +188,7 @@ class _LoginPageState extends State<LoginPage> {
             gateway: widget.libraryGateway,
             detailGateway: widget.playlistDetailGateway,
             mediaResolutionGateway: widget.mediaResolutionGateway,
+            lyricGateway: widget.lyricGateway,
             playbackQueueGateway: widget.playbackQueueGateway,
             audioEngine: widget.audioEngine,
             onSignInAgain: _controller.cancel,
