@@ -7,9 +7,10 @@ repository.workspace = true
 
 [dependencies]
 reqwest = { version = "0.13.4", default-features = false, features = ["query", "rustls"] }
+tokio = { version = "1.53.1", features = ["macros", "sync"] }
 
 [dev-dependencies]
-tokio = { version = "1.53.1", features = ["macros", "rt"] }
+tokio = { version = "1.53.1", features = ["rt"] }
 
 [lints]
 workspace = true

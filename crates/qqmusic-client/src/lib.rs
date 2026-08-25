@@ -6,6 +6,7 @@
 
 mod credential;
 mod transport;
+mod wechat_login;
 mod wechat_qr;
 
 pub use credential::{
@@ -15,6 +16,7 @@ pub use credential::{
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
 };
+pub use wechat_login::{WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginSession};
 pub use wechat_qr::{
     QrImage, QrImageMediaType, WechatAuthorizationCode, WechatQrError, WechatQrPollResult,
     WechatQrSession,

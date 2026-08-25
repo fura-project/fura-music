@@ -83,11 +83,24 @@ The client performs one poll with a 35-second request budget, a 64 KiB streaming
 
 On 2026-08-25 the opt-in live test created a fresh unconfirmed QR and received `408` from one poll. It did not expose the QR, scan it, obtain an authorization code, exchange credentials, or access an account.
 
+### QR session cancellation boundary
+
+The raw client intentionally exposes create and one-shot poll operations. `WechatQrLoginCoordinator` adds only protocol-session lifecycle, not Flutter state:
+
+- starting a new generation supersedes any create or poll still in flight;
+- explicit cancellation, dropping the active session, or dropping the coordinator invalidates the generation;
+- cancellation races the network future, so the losing HTTP work is dropped rather than merely ignored later;
+- every successful await is followed by a generation check before the result can surface;
+- authorized, expired, and refused results finish the generation, while waiting/scanned results remain eligible for another explicit poll;
+- a QR creation error clears its own generation without clearing a newer replacement.
+
+Deterministic tests hold a synthetic request in flight and prove replacement, cancellation, and disposal suppress the late result. Overall session deadline and retry policy remain pending and are not implied by the per-request 35-second poll budget.
+
 ## Evidence still required
 
 Before continuing beyond one-shot QR polling:
 
-1. Confirm cancellation, overall timeout, retry, replacement, and late-event behavior; a QR session is a lifecycle, not a single request.
+1. Define the overall session deadline and retry policy; the per-request long-poll budget is not a session timeout.
 2. Cross-validate the exact `window.wx_code` credential-exchange request and error mapping before implementing it.
 3. Add sanitized real-response fixtures or extend the repeatable opt-in integration test for each implemented transition.
 4. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.
