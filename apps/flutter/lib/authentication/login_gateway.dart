@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutterustmusic/authentication/credential_vault.dart';
@@ -117,7 +116,7 @@ class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
     CredentialVault? credentialVault,
     CredentialRestoreImporter? credentialImporter,
     CredentialVerificationOperationFactory? verificationOperationFactory,
-  }) : _credentialVault = _SerializedCredentialVault(
+  }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        ),
        _credentialImporter =
@@ -180,35 +179,6 @@ class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
     } finally {
       secretBytes?.fillRange(0, secretBytes.length, 0);
     }
-  }
-}
-
-class _SerializedCredentialVault implements CredentialVault {
-  _SerializedCredentialVault(this._inner);
-
-  final CredentialVault _inner;
-  Future<void> _tail = Future<void>.value();
-
-  @override
-  Future<void> delete() => _enqueue(_inner.delete);
-
-  @override
-  Future<Uint8List?> read() => _enqueue(_inner.read);
-
-  @override
-  Future<void> write(Uint8List secretBytes) =>
-      _enqueue(() => _inner.write(secretBytes));
-
-  Future<T> _enqueue<T>(Future<T> Function() action) {
-    final result = Completer<T>();
-    _tail = _tail.then((_) async {
-      try {
-        result.complete(await action());
-      } catch (error, stackTrace) {
-        result.completeError(error, stackTrace);
-      }
-    });
-    return result.future;
   }
 }
 

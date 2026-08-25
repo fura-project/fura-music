@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -43,6 +44,28 @@ void main() {
 
     expect(await vault.read(), isNull);
   });
+
+  test('orders operations shared by independently wrapped gateways', () async {
+    final inner = _GatedCredentialVault();
+    final shared = SerializedCredentialVault(inner);
+    final authenticationVault = SerializedCredentialVault(shared);
+    final libraryVault = SerializedCredentialVault(shared);
+
+    final staleRejectionCleanup = libraryVault.delete();
+    await inner.deleteStarted.future;
+    final freshLoginWrite = authenticationVault.write(
+      Uint8List.fromList(<int>[4, 5, 6]),
+    );
+
+    await Future<void>.delayed(Duration.zero);
+    expect(inner.events, <String>['delete-start']);
+
+    inner.allowDelete.complete();
+    await Future.wait(<Future<void>>[staleRejectionCleanup, freshLoginWrite]);
+
+    expect(inner.events, <String>['delete-start', 'delete-end', 'write']);
+    expect(inner.value, orderedEquals(<int>[4, 5, 6]));
+  });
 }
 
 class _MemorySecureStringStore implements SecureStringStore {
@@ -59,5 +82,30 @@ class _MemorySecureStringStore implements SecureStringStore {
   @override
   Future<void> delete({required String key}) async {
     values.remove(key);
+  }
+}
+
+class _GatedCredentialVault implements CredentialVault {
+  final Completer<void> deleteStarted = Completer<void>();
+  final Completer<void> allowDelete = Completer<void>();
+  final List<String> events = <String>[];
+  Uint8List? value;
+
+  @override
+  Future<void> delete() async {
+    events.add('delete-start');
+    deleteStarted.complete();
+    await allowDelete.future;
+    value = null;
+    events.add('delete-end');
+  }
+
+  @override
+  Future<Uint8List?> read() async => value;
+
+  @override
+  Future<void> write(Uint8List secretBytes) async {
+    value = Uint8List.fromList(secretBytes);
+    events.add('write');
   }
 }

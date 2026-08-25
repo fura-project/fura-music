@@ -6,6 +6,7 @@ import 'dart:ui' show Size;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 void main() {
@@ -37,6 +38,8 @@ void main() {
     expect(find.text('0.1.0-test'), findsOneWidget);
     expect(find.text('Continue with WeChat'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Continue with WeChat'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Continue with WeChat'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -142,6 +145,176 @@ void main() {
     expect(find.text('Sign in again'), findsOneWidget);
     expect(find.text('This code expired'), findsNothing);
   });
+
+  testWidgets('routes an authenticated account into its owned playlists', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const OwnedLibraryResult(
+            playlists: [
+              OwnedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'owned:7001:201',
+                title: 'Synthetic favorites',
+                trackCount: 42,
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your music'), findsOneWidget);
+    expect(find.text('Playlists you created'), findsOneWidget);
+    expect(find.text('Synthetic favorites'), findsOneWidget);
+    expect(find.text('42 tracks'), findsOneWidget);
+    expect(find.text('You’re signed in'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('routes fresh QR authentication into the library', (
+    tester,
+  ) async {
+    final session = _WaitingSession();
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(session),
+        libraryGateway: _WidgetLibraryGateway([const OwnedLibraryResult()]),
+      ),
+    );
+
+    await tester.ensureVisible(find.text('Continue with WeChat'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with WeChat'));
+    await tester.pump();
+    session.complete(
+      const LoginUpdate(
+        progress: LoginProgress.authenticated,
+        sessionActive: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your music'), findsOneWidget);
+    expect(find.text('No created playlists yet'), findsOneWidget);
+  });
+
+  testWidgets('routes verified startup restore into the library', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          verificationOperation: const _ImmediateWidgetVerification(
+            CredentialVerificationResult.authenticated,
+          ),
+        ),
+        libraryGateway: _WidgetLibraryGateway([const OwnedLibraryResult()]),
+        initialCredentialRestore: CredentialRestoreResult.verificationRequired,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your music'), findsOneWidget);
+    expect(find.text('No created playlists yet'), findsOneWidget);
+  });
+
+  testWidgets('renders owned playlists without overflow on a narrow screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const OwnedLibraryResult(
+            playlists: [
+              OwnedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'owned:7002:202',
+                title: 'Narrow playlist',
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Narrow playlist'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('retries a transient library failure', (tester) async {
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const OwnedLibraryResult(failure: OwnedLibraryFailure.network),
+          const OwnedLibraryResult(),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    expect(find.text('No created playlists yet'), findsOneWidget);
+  });
+
+  testWidgets('returns rejected library credentials to sign-in', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const OwnedLibraryResult(
+            failure: OwnedLibraryFailure.credentialRejected,
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your saved session was rejected'), findsOneWidget);
+    await tester.tap(find.text('Sign in again'));
+    await tester.pumpAndSettle();
+    expect(find.text('Continue with WeChat'), findsOneWidget);
+  });
 }
 
 const _bootstrap = BootstrapStatus(
@@ -156,6 +329,7 @@ const _bootstrap = BootstrapStatus(
 class _WidgetGateway implements QqMusicAuthenticationGateway {
   _WidgetGateway(
     this.session, {
+    this.authenticated = false,
     CredentialVerificationOperation? verificationOperation,
   }) : _verificationOperation =
            verificationOperation ??
@@ -164,10 +338,11 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
            );
 
   final _WaitingSession session;
+  final bool authenticated;
   final CredentialVerificationOperation _verificationOperation;
 
   @override
-  bool get hasAuthenticatedCredential => false;
+  bool get hasAuthenticatedCredential => authenticated;
 
   @override
   LoginStartOperation beginStart() => _WidgetStartOperation(
@@ -196,6 +371,29 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
   @override
   Future<CredentialRestoreResult> restoreCredential() async =>
       CredentialRestoreResult.signedOut;
+}
+
+class _WidgetLibraryGateway implements OwnedLibraryGateway {
+  _WidgetLibraryGateway(this.results);
+
+  final List<OwnedLibraryResult> results;
+  int _next = 0;
+
+  @override
+  OwnedLibraryLoadOperation beginLoad() =>
+      _WidgetLibraryOperation(results[_next++]);
+}
+
+class _WidgetLibraryOperation implements OwnedLibraryLoadOperation {
+  const _WidgetLibraryOperation(this.result);
+
+  final OwnedLibraryResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<OwnedLibraryResult> run() async => result;
 }
 
 class _WidgetStartOperation implements LoginStartOperation {
@@ -246,6 +444,11 @@ class _WaitingSession implements LoginSession {
 
   @override
   Future<LoginUpdate> advance() => _advance.future;
+
+  void complete(LoginUpdate update) {
+    _active = update.sessionActive;
+    _advance.complete(update);
+  }
 
   @override
   bool cancel() {

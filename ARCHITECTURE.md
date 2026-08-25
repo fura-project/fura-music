@@ -34,12 +34,12 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 
 ## Current modules
 
-- `apps/flutter` contains the Material 3 adaptive login surface, its short-lived Dart controller/gateway adapter, a narrow platform secure-storage adapter, and Dart integration/widget tests.
-- `crates/music-domain` contains provider-independent identity types. It currently defines only `ProviderId`.
-- `crates/provider-api` contains the UI-free provider descriptor, capabilities, baseline provider trait, and provider-neutral QR authentication challenge/progress/error contracts.
-- `crates/qqmusic-client` owns the raw QQ Music client boundary. It currently contains the redacted credential/restore model, versioned secure-storage serialization, a small asynchronous HTTP contract with a Rustls-backed native implementation, cross-validated WeChat QR bootstrap/poll/exchange requests, and a cancellable generation-based login coordinator.
-- `crates/provider-qqmusic` owns the QQ Music login coordinator, maps raw QR protocol states into provider contracts, retains a successful credential inside Rust, and exports only its versioned opaque persistence document. It currently declares only the implemented authentication capability.
-- `bridges/flutter` adapts core/provider status and authentication into presentation-safe generated types. Its one secret-bearing operation is a dedicated short-lived persistence handoff, not a presentation model.
+- `apps/flutter` contains adaptive Material 3 authentication and created-playlist surfaces, short-lived Dart controllers/gateway adapters, one shared serialized platform-vault boundary, and Dart integration/widget tests.
+- `crates/music-domain` contains provider-independent `ProviderId`, opaque `PlaylistId`, and minimum `PlaylistSummary` types.
+- `crates/provider-api` contains the UI-free provider descriptor/capabilities plus provider-neutral QR authentication and owned-playlist contracts.
+- `crates/qqmusic-client` owns the raw QQ Music client boundary. It contains redacted credential/restore models, versioned secure-storage serialization, a Rustls-backed bounded HTTP implementation, cross-validated WeChat QR flows, credential verification, owned-playlist fetching, and cancellable lifecycle coordinators.
+- `crates/provider-qqmusic` retains credential state, maps raw authentication and owned-playlist protocol values into provider/domain contracts, and truthfully advertises `Authentication` plus `UserLibrary`.
+- `bridges/flutter` adapts core/provider status, authentication, credential persistence, and owned-playlist loading into presentation-safe generated types. Its secret-bearing operation remains a dedicated short-lived persistence handoff, not a presentation model.
 
 The current concrete bootstrap flow is:
 
@@ -112,7 +112,7 @@ native platform secure storage
   -> authenticated | rejected | retryable/typed failure
 ```
 
-The loaded Dart byte buffer is zeroed after the synchronous Rust import. Rust retains verification and locally expired candidates in distinct internal states, and neither makes `has_authenticated_credential` true. The Provider promotes a candidate only when QQ Music returns zero global and named-result codes. Independently observed rejection codes clear in-memory state; transport, service, other upstream, and malformed-response failures retain the candidate for explicit retry. Malformed, unsupported, and platform-access failures remain distinct and are never auto-deleted. The Dart platform edge deletes secure storage only after an explicit rejection and reports cleanup failure separately. One Gateway serializes all vault reads, deletes, and writes so a slow rejection cleanup cannot remove a newer QR credential.
+The loaded Dart byte buffer is zeroed after the synchronous Rust import. Rust retains verification and locally expired candidates in distinct internal states, and neither makes `has_authenticated_credential` true. The Provider promotes a candidate only when QQ Music returns zero global and named-result codes. Independently observed rejection codes clear in-memory state; transport, service, other upstream, and malformed-response failures retain the candidate for explicit retry. Malformed, unsupported, and platform-access failures remain distinct and are never auto-deleted. The Dart platform edge deletes secure storage only after an explicit rejection and reports cleanup failure separately. Authentication and library gateways share one serialized vault queue, so an old rejection cleanup cannot remove a newer QR credential.
 
 Restore-verification attempt IDs are process-local cancellation authority, not QQ Music identifiers. The Provider checks both the exact attempt and candidate before and after network work. Starting a new QR login clears that authority, so a late verification cannot overwrite the replacement session. Dart additionally uses controller generations to suppress late presentation updates after retry, QR replacement, cancellation, or disposal.
 
@@ -134,7 +134,9 @@ Provider code never returns Flutter widgets or presentation-specific models.
 
 The first user-library operation loads authenticated account-owned playlists via `QQMusicClient` `PlaylistBaseRead/GetPlaylistByUin`. QQ-specific, diagnostics-redacted protocol summaries preserve both playlist and directory identifiers. `QQMusicProvider` maps them into provider-independent `PlaylistSummary` values whose `PlaylistId` contains a stable provider ID and an opaque provider-owned value; generic domain and Flutter code cannot parse QQ identity rules. The narrow `OwnedPlaylistsProvider` contract makes `UserLibrary` a truthful implemented capability without implying favorite pagination or mutation. A library result is returned only if the same authenticated credential remains current after the await, preventing cross-account late results.
 
-The Bridge exposes this through a single-use Rust-opaque load handle. `run`, exact `cancel`, and `isActive` are the only operations; cancellation drops the losing provider/network future, and concurrent runs fail explicitly. Generated Dart receives provider ID, opaque playlist ID, title, optional artwork/count, and a coarse failure enum. Credential, QQ dual IDs, request fields, and merging rules remain outside Flutter. Presentation state and the library screen do not exist yet.
+The Bridge exposes this through a single-use Rust-opaque load handle. `run`, exact `cancel`, and `isActive` are the only operations; cancellation drops the losing provider/network future, and concurrent runs fail explicitly. Generated Dart receives provider ID, opaque playlist ID, title, optional artwork/count, and a coarse failure enum. Credential, QQ dual IDs, request fields, and merging rules remain outside Flutter.
+
+Flutter routes both newly authenticated and server-verified restored sessions into an adaptive created-playlist page. Its controller owns loading/retry/empty/error presentation, cancels replaced operations, and suppresses late results after restart or disposal. Desktop uses a bounded artwork grid; narrow layouts use a touch-sized list. Rows are deliberately non-interactive until playlist-detail behavior exists, and the section is labeled “Playlists you created” because favorite pagination has not been implemented.
 
 ## Playback and storage
 

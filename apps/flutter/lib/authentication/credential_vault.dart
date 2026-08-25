@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -17,6 +18,37 @@ abstract interface class SecureStringStore {
   Future<String?> read({required String key});
 
   Future<void> delete({required String key});
+}
+
+/// Orders every operation for one credential key so an old rejection cleanup
+/// cannot overtake a newer credential write.
+class SerializedCredentialVault implements CredentialVault {
+  SerializedCredentialVault(this._inner);
+
+  final CredentialVault _inner;
+  Future<void> _tail = Future<void>.value();
+
+  @override
+  Future<void> delete() => _enqueue(_inner.delete);
+
+  @override
+  Future<Uint8List?> read() => _enqueue(_inner.read);
+
+  @override
+  Future<void> write(Uint8List secretBytes) =>
+      _enqueue(() => _inner.write(secretBytes));
+
+  Future<T> _enqueue<T>(Future<T> Function() action) {
+    final result = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        result.complete(await action());
+      } catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
 }
 
 class FlutterSecureStringStore implements SecureStringStore {

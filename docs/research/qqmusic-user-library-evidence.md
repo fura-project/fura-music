@@ -45,10 +45,9 @@ The `dirId: 201` built-in “liked songs” directory is not a generic `disstid`
 
 `GetPlaylistByUin` is the owned/created collection. Yakult separately retrieves favorited playlists through `music.musicasset.PlaylistFavRead/CgiGetPlaylistFavInfo`, using the credential's encrypted UIN plus explicit offset/size pagination, then merges and deduplicates both collections for its public endpoint.
 
-That second RPC is not implemented in the first protocol task. Calling the owned list “all of My Playlists” would be inaccurate until favorite pagination and merge identity have their own fixture coverage. The current Provider operation is therefore named `owned_playlists`; it implements the narrower user-library capability without exposing a combined collection through Flutter yet.
+That second RPC is not implemented in the first protocol task. Calling the owned list “all of My Playlists” would be inaccurate until favorite pagination and merge identity have their own fixture coverage. The current Provider operation is therefore named `owned_playlists`; Flutter exposes it under the truthful heading “Playlists you created” and does not parse its opaque QQ identity.
 
 ## Evidence still required
 
 1. A sanitized real response fixture or controlled account integration before claiming live owned-playlist compatibility.
 2. Independent implementation and fixture coverage for favorite playlists before the UI presents a complete combined library.
-3. A presentation slice that preserves the now-typed Bridge errors and never parses the QQ opaque playlist ID.

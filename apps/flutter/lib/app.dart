@@ -1,22 +1,56 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/owned_library_page.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 const _qqGreen = Color(0xFF24B86A);
 
 class MusicApp extends StatelessWidget {
-  const MusicApp({
+  factory MusicApp({
+    required BootstrapStatus bootstrap,
+    QqMusicAuthenticationGateway? authenticationGateway,
+    OwnedLibraryGateway? libraryGateway,
+    CredentialRestoreResult initialCredentialRestore =
+        CredentialRestoreResult.signedOut,
+    Key? key,
+  }) {
+    if (authenticationGateway == null && libraryGateway == null) {
+      final credentialVault = SerializedCredentialVault(
+        PlatformCredentialVault(),
+      );
+      authenticationGateway = RustQqMusicAuthenticationGateway(
+        credentialVault: credentialVault,
+      );
+      libraryGateway = RustOwnedLibraryGateway(
+        credentialVault: credentialVault,
+      );
+    }
+    return MusicApp._(
+      bootstrap: bootstrap,
+      authenticationGateway:
+          authenticationGateway ?? RustQqMusicAuthenticationGateway(),
+      libraryGateway: libraryGateway ?? RustOwnedLibraryGateway(),
+      initialCredentialRestore: initialCredentialRestore,
+      key: key,
+    );
+  }
+
+  const MusicApp._({
     required this.bootstrap,
-    this.authenticationGateway,
-    this.initialCredentialRestore = CredentialRestoreResult.signedOut,
+    required this.authenticationGateway,
+    required this.libraryGateway,
+    required this.initialCredentialRestore,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
-  final QqMusicAuthenticationGateway? authenticationGateway;
+  final QqMusicAuthenticationGateway authenticationGateway;
+  final OwnedLibraryGateway libraryGateway;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -29,8 +63,8 @@ class MusicApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       home: LoginPage(
         bootstrap: bootstrap,
-        authenticationGateway:
-            authenticationGateway ?? RustQqMusicAuthenticationGateway(),
+        authenticationGateway: authenticationGateway,
+        libraryGateway: libraryGateway,
         initialCredentialRestore: initialCredentialRestore,
       ),
     );
@@ -55,12 +89,14 @@ class LoginPage extends StatefulWidget {
   const LoginPage({
     required this.bootstrap,
     required this.authenticationGateway,
+    required this.libraryGateway,
     required this.initialCredentialRestore,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
+  final OwnedLibraryGateway libraryGateway;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -91,49 +127,66 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 860;
-            final content = wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: _ProductIntro(bootstrap: widget.bootstrap),
-                      ),
-                      const SizedBox(width: 64),
-                      SizedBox(
-                        width: 400,
-                        child: _AuthenticationPanel(controller: _controller),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _ProductIntro(bootstrap: widget.bootstrap, compact: true),
-                      const SizedBox(height: 36),
-                      _AuthenticationPanel(controller: _controller),
-                    ],
-                  );
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        if (_controller.stage == LoginStage.authenticated) {
+          return OwnedLibraryPage(
+            key: const ValueKey('owned-library-page'),
+            gateway: widget.libraryGateway,
+            onSignInAgain: _controller.cancel,
+          );
+        }
+        return Scaffold(
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 860;
+                final content = wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: _ProductIntro(bootstrap: widget.bootstrap),
+                          ),
+                          const SizedBox(width: 64),
+                          SizedBox(
+                            width: 400,
+                            child: _AuthenticationPanel(
+                              controller: _controller,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ProductIntro(
+                            bootstrap: widget.bootstrap,
+                            compact: true,
+                          ),
+                          const SizedBox(height: 36),
+                          _AuthenticationPanel(controller: _controller),
+                        ],
+                      );
 
-            return SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: wide ? 56 : 24,
-                vertical: wide ? 48 : 28,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1120),
-                  child: content,
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+                return SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: wide ? 56 : 24,
+                    vertical: wide ? 48 : 28,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1120),
+                      child: content,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }
