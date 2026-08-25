@@ -92,7 +92,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # In Progress
 
-- No unblocked M1 implementation task remains. The checkpoint needs an explicitly authorized, secret-safe real-account vertical-slice smoke; credentials and user actions must not be inferred from autonomous scope.
+- **Idle — no legitimate work available.** Every M1 implementation, offline/platform validation, architecture review, and scope review that can run without account authority is complete. The checkpoint needs an explicitly authorized, secret-safe real-account vertical-slice smoke; credentials and user actions must not be inferred from autonomous scope. Resume when that authorization and a user able to scan the short-lived QR code are available.
 
 # Next Candidates
 
