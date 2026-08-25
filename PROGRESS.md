@@ -51,15 +51,18 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Cross-validated the authenticated `PlaylistBaseRead/GetPlaylistByUin` owned-playlist request across three active implementations pinned by commit.
 - Added a bounded QQMusicClient operation with typed failure mapping, credential-safe diagnostics, and three offline fixture tests for exact request shape, optional summary fields, malformed rows, rejection, unrelated upstream failure, and missing arrays.
 - Preserved `tid` and `dirId` separately because QQ Music's built-in `dirId: 201` liked-songs directory is not a generic playlist detail ID; favorited playlists remain a separate encrypted-UIN paginated RPC.
+- Added provider-scoped opaque `PlaylistId` and minimum `PlaylistSummary` domain models with redacted diagnostics and honest optional artwork/track-count fields.
+- Added a narrow `OwnedPlaylistsProvider` capability and mapped QQ-owned rows without leaking QQ response models; the provider now truthfully advertises `UserLibrary` alongside `Authentication`.
+- Rechecked the exact authenticated credential after the library await so a late old-account response becomes `Replaced`; explicit rejection clears only the matching credential while transient/upstream failures retain it.
 
 # In Progress
 
-- Define the minimum provider-independent playlist summary and map the implemented owned collection through `QQMusicProvider` without exposing raw protocol types.
+- Expose one coarse authenticated owned-library load through the typed Bridge without moving protocol or presentation rules into the Bridge.
 
 # Next Candidates
 
-1. Define the minimum stable Playlist summary identity and map the owned collection through a small provider capability interface.
-2. Expose a coarse authenticated library load through the Bridge before building the first real library screen.
+1. Expose a coarse authenticated library load through the Bridge before building the first real library screen.
+2. Build the first adaptive owned-playlist screen with loading, retry, rejection, and empty states.
 3. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
 
 # Blockers

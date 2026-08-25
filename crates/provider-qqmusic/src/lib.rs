@@ -3,17 +3,17 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
-use music_domain::ProviderId;
+use music_domain::{PlaylistId, PlaylistSummary, ProviderId};
 use provider_api::{
-    AuthenticationError, MusicProvider, ProviderCapability, ProviderDescriptor,
-    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
-    QrAuthenticationSession, QrImageFormat,
+    AuthenticationError, MusicProvider, OwnedPlaylistsProvider, ProviderCapability,
+    ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
-    HttpTransport, QqMusicClient, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
-    WechatQrLoginSession,
+    HttpTransport, QqMusicClient, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
+    QrImageMediaType, WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -237,10 +237,56 @@ where
 impl<T> MusicProvider for QqMusicProvider<T> {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
-            id: ProviderId::new("qq-music").expect("static provider id is valid"),
+            id: qq_music_provider_id(),
             display_name: "QQ Music".into(),
-            capabilities: vec![ProviderCapability::Authentication],
+            capabilities: vec![
+                ProviderCapability::Authentication,
+                ProviderCapability::UserLibrary,
+            ],
         }
+    }
+}
+
+impl<T> OwnedPlaylistsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = UserLibraryError;
+
+    async fn owned_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
+        let candidate = match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => credential.clone(),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => {
+                return Err(UserLibraryError::AuthenticationRequired);
+            }
+        };
+
+        let response = self.client().owned_playlists(&candidate).await;
+        let mapped = response
+            .as_ref()
+            .map_err(map_owned_playlists_error)
+            .and_then(|playlists| {
+                playlists
+                    .playlists()
+                    .iter()
+                    .map(map_owned_playlist)
+                    .collect::<Result<Vec<_>, _>>()
+            });
+
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == &candidate
+        );
+        if !still_current {
+            return Err(UserLibraryError::Replaced);
+        }
+        if matches!(response, Err(QqMusicOwnedPlaylistsError::Rejected { .. })) {
+            *state = QqMusicCredentialState::SignedOut;
+        }
+        mapped
     }
 }
 
@@ -374,6 +420,49 @@ fn restore_verification_guard(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+fn qq_music_provider_id() -> ProviderId {
+    ProviderId::new("qq-music").expect("static provider id is valid")
+}
+
+fn map_owned_playlist(
+    playlist: &QqMusicOwnedPlaylist,
+) -> Result<PlaylistSummary, UserLibraryError> {
+    let id = PlaylistId::new(
+        qq_music_provider_id(),
+        format!(
+            "owned:{}:{}",
+            playlist.playlist_id(),
+            playlist.directory_id()
+        ),
+    )
+    .map_err(|_| UserLibraryError::InvalidResponse)?;
+    PlaylistSummary::new(id, playlist.name())
+        .map(|summary| {
+            summary
+                .with_artwork_uri(playlist.cover_url().map(str::to_owned))
+                .with_track_count(playlist.track_count())
+        })
+        .map_err(|_| UserLibraryError::InvalidResponse)
+}
+
+fn map_owned_playlists_error<E>(error: &QqMusicOwnedPlaylistsError<E>) -> UserLibraryError {
+    match error {
+        QqMusicOwnedPlaylistsError::Transport(_) => UserLibraryError::Network,
+        QqMusicOwnedPlaylistsError::HttpStatus(_) | QqMusicOwnedPlaylistsError::Upstream { .. } => {
+            UserLibraryError::ServiceUnavailable
+        }
+        QqMusicOwnedPlaylistsError::Rejected { .. } => UserLibraryError::CredentialRejected,
+        QqMusicOwnedPlaylistsError::Serialize
+        | QqMusicOwnedPlaylistsError::InvalidJson
+        | QqMusicOwnedPlaylistsError::MissingGlobalCode
+        | QqMusicOwnedPlaylistsError::MissingResult
+        | QqMusicOwnedPlaylistsError::MissingResultCode
+        | QqMusicOwnedPlaylistsError::MissingData
+        | QqMusicOwnedPlaylistsError::MissingPlaylists
+        | QqMusicOwnedPlaylistsError::InvalidPlaylist { .. } => UserLibraryError::InvalidResponse,
+    }
+}
+
 fn map_login_error<E>(error: WechatQrLoginError<E>) -> AuthenticationError {
     match error {
         WechatQrLoginError::Protocol(error) => map_qr_error(&error),
@@ -450,8 +539,8 @@ mod tests {
 
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use provider_api::{
-        MusicProvider, ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
-        QrAuthenticationSession, QrImageFormat,
+        MusicProvider, OwnedPlaylistsProvider, ProviderCapability, QrAuthenticationProgress,
+        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, UserLibraryError,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
@@ -464,6 +553,44 @@ mod tests {
 
     struct VerificationTransport {
         response: HttpResponse,
+    }
+
+    struct OwnedPlaylistsTransport {
+        response: HttpResponse,
+    }
+
+    impl OwnedPlaylistsTransport {
+        fn new(code: i64) -> Self {
+            Self {
+                response: HttpResponse::new(
+                    200,
+                    serde_json::to_vec(&json!({
+                        "code": 0,
+                        "music.musicasset.PlaylistBaseRead": {
+                            "code": code,
+                            "data": {
+                                "v_playlist": [{
+                                    "tid": 7001,
+                                    "dirId": 201,
+                                    "dirName": "Synthetic liked songs",
+                                    "picUrl": "https://example.invalid/liked.jpg",
+                                    "songNum": 42
+                                }]
+                            }
+                        }
+                    }))
+                    .expect("fixture JSON"),
+                ),
+            }
+        }
+    }
+
+    impl HttpTransport for OwnedPlaylistsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            Ok(self.response.clone())
+        }
     }
 
     impl VerificationTransport {
@@ -496,6 +623,22 @@ mod tests {
     struct GatedVerificationTransport {
         verification_started: Arc<Notify>,
         release_verification: Arc<Notify>,
+    }
+
+    #[derive(Clone)]
+    struct GatedOwnedPlaylistsTransport {
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
+    impl HttpTransport for GatedOwnedPlaylistsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.request_started.notify_one();
+            self.release_request.notified().await;
+            Ok(OwnedPlaylistsTransport::new(0).response)
+        }
     }
 
     impl HttpTransport for GatedVerificationTransport {
@@ -565,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_claims_only_the_implemented_authentication_capability() {
+    fn descriptor_claims_only_implemented_capabilities() {
         let provider = QqMusicProvider::new(QqMusicClient::new(()));
         let descriptor = provider.descriptor();
 
@@ -573,8 +716,81 @@ mod tests {
         assert_eq!(descriptor.display_name, "QQ Music");
         assert_eq!(
             descriptor.capabilities,
-            [ProviderCapability::Authentication]
+            [
+                ProviderCapability::Authentication,
+                ProviderCapability::UserLibrary,
+            ]
         );
+    }
+
+    fn set_authenticated<T>(provider: &QqMusicProvider<T>, music_id: &str) {
+        let credential = Credential::new(music_id, "W_X_private-key", LoginType::WECHAT)
+            .expect("fixture credential");
+        *super::credential_guard(&provider.credential) =
+            super::QqMusicCredentialState::Authenticated(credential);
+    }
+
+    #[tokio::test]
+    async fn maps_owned_playlists_to_provider_independent_summaries() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(OwnedPlaylistsTransport::new(0)));
+        set_authenticated(&provider, "123456");
+
+        let playlists = provider.owned_playlists().await.expect("owned playlists");
+
+        assert_eq!(playlists.len(), 1);
+        assert_eq!(playlists[0].id().provider().as_str(), "qq-music");
+        assert_eq!(playlists[0].id().opaque(), "owned:7001:201");
+        assert_eq!(playlists[0].title(), "Synthetic liked songs");
+        assert_eq!(playlists[0].track_count(), Some(42));
+        assert!(!format!("{playlists:?}").contains("Synthetic liked songs"));
+    }
+
+    #[tokio::test]
+    async fn owned_playlists_require_authentication_and_clear_only_rejection() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(OwnedPlaylistsTransport::new(0)));
+        assert_eq!(
+            provider.owned_playlists().await,
+            Err(UserLibraryError::AuthenticationRequired)
+        );
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(OwnedPlaylistsTransport::new(1000)));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.owned_playlists().await,
+            Err(UserLibraryError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream =
+            QqMusicProvider::new(QqMusicClient::new(OwnedPlaylistsTransport::new(50_006)));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream.owned_playlists().await,
+            Err(UserLibraryError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn late_owned_playlist_result_cannot_cross_account_replacement() {
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedOwnedPlaylistsTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&provider, "123456");
+
+        let request = provider.owned_playlists();
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(UserLibraryError::Replaced));
+        assert!(provider.has_authenticated_credential());
     }
 
     fn restore_candidate<T>(provider: &QqMusicProvider<T>) {

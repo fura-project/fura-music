@@ -3,7 +3,7 @@
 use std::fmt;
 use std::future::Future;
 
-use music_domain::ProviderId;
+use music_domain::{PlaylistSummary, ProviderId};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ProviderCapability {
@@ -142,6 +142,42 @@ pub trait QrAuthenticationProvider: MusicProvider + Sync {
         &self,
     ) -> impl Future<Output = Result<Self::Session, Self::Error>> + Send;
     fn has_authenticated_credential(&self) -> bool;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserLibraryError {
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+}
+
+impl fmt::Display for UserLibraryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "user library requires authentication",
+            Self::CredentialRejected => "user-library credential was rejected",
+            Self::Network => "user-library network request failed",
+            Self::ServiceUnavailable => "user-library service is unavailable",
+            Self::InvalidResponse => "user-library service returned an invalid response",
+            Self::Replaced => "user-library request was replaced by newer account state",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for UserLibraryError {}
+
+/// Narrow first user-library capability. Favorited playlists deliberately use
+/// a separate future operation instead of being implied by this owned list.
+pub trait OwnedPlaylistsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn owned_playlists(
+        &self,
+    ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
 }
 
 #[cfg(test)]

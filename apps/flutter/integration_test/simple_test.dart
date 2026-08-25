@@ -12,7 +12,10 @@ void main() {
     final status = bootstrapStatus();
 
     expect(status.provider.id, 'qq-music');
-    expect(status.provider.implementedCapabilities, ['Authentication']);
+    expect(status.provider.implementedCapabilities, [
+      'Authentication',
+      'UserLibrary',
+    ]);
     final restore = restoreQqMusicCredentialFromSecureStorage();
     expect(restore.state, QqMusicCredentialRestoreState.signedOut);
     expect(restore.failure, isNull);
