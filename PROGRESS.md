@@ -82,20 +82,22 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Wired one `RustLyricGateway` and `LyricController` into the authenticated page's existing queue owner. Application startup passes the same underlying serialized vault to authentication, library, detail, media, and lyrics; leaving the authenticated surface disposes playback, queue, and lyric authority together. Explicit lyric rejection and rejection-cleanup failure reuse the existing sign-in reset, while unavailable/network failures preserve the authenticated shell. Four end-to-end widget regressions bring the Flutter suite to 97 passing tests; direct `dart analyze --fatal-infos` is clean.
 - Added the first adaptive synchronized-lyric surface from the existing now-playing owner. It opens as a tall bottom sheet below 600px or bounded dialog on wider windows, renders honest idle/loading/unavailable/retry/account/content states, preserves canonical lines, shows optional translation/romanization, highlights the active line, and paints each timed segment from real playback milliseconds. Four focused widget regressions bring the Flutter suite to 101 passing tests; strict Dart analysis and the existing 390px now-playing regression pass without a new dependency or state machine.
 - Validated the real now-playing lyric entry at 390px and 1200px. The narrow path opens a bottom sheet without overflow; the wide path opens a bounded dialog and, while it remains visible, replaces first-track title/content with the exact second-track lyric request after playback completion advances the queue. The complete Flutter suite now passes 103 tests and strict Dart analysis remains clean.
+- Reassessed the M1 mobile trigger. Android SDK 36.1, NDK, licenses, and several JDKs are installed, but no Android device or emulator is active. Three ARM64 release builds stopped before app or Rust compilation because Flutter 3.47.1's Gradle loader corrupts the non-ASCII SDK path when rereading `local.properties`; a settings-only UTF-8 workaround advanced one layer but could not affect the plugin's second read and was reverted. No APK or mobile runtime evidence exists; TD-001 is now Triggered.
 
 # In Progress
 
-- Reassess TD-004's M1 mobile trigger and run every safe Android build/runtime check available on this host without claiming unavailable device evidence.
+- Run the M1 acceptance, architecture, scope, and technical-debt reviews for every unblocked criterion, then isolate the exact remaining checkpoint work.
 
 # Next Candidates
 
-1. Reassess TD-004's M1 mobile trigger and run every safe Android build/runtime check available on this host without claiming unavailable device evidence.
-2. Run the M1 acceptance, architecture, scope, and technical-debt reviews; write the checkpoint.
-3. Read the next Roadmap milestone and continue if it remains legal and unblocked.
+1. Run the M1 acceptance, architecture, scope, and technical-debt reviews for all unblocked criteria.
+2. Resolve the Android build path with a genuinely different ASCII SDK-root strategy, then inspect the resulting Cargokit/system-Rust evidence instead of repeating the blocked command.
+3. Complete the M1 checkpoint only after one mobile target actually builds; runtime claims remain separately limited by available devices and TD-004.
 
 # Blockers
 
-None.
+- The M1 checkpoint requires one mobile build, but this host's first Android path is blocked before compilation by Flutter 3.47.1 rereading its non-ASCII SDK location as Latin-1 (TD-001). Three equivalent ARM64 attempts failed; the settings-only workaround was insufficient and reverted.
+- No mobile device or running emulator is available for secure-storage/audio runtime evidence. This does not block offline review or a future APK build, but TD-004 cannot be resolved from generated registrants or desktop tests.
 
 # Pending Human Decisions
 

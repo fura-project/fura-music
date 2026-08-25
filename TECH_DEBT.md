@@ -4,19 +4,19 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 ## TD-001 — Linux bridge build bypasses Cargokit
 
-**Status:** Open
+**Status:** Triggered
 
-**Problem:** `flutter_rust_bridge` 2.13.0 generates a Cargokit backend that invokes `rustup` unconditionally. The Arch development environment intentionally uses supported system `rustc` and `cargo` packages, where installing rustup would conflict with the system toolchain. Linux therefore has a small direct-Cargo CMake integration while other platforms retain generated Cargokit integration.
+**Problem:** `flutter_rust_bridge` 2.13.0 generates a Cargokit backend that invokes `rustup` unconditionally. The Arch development environment intentionally uses supported system `rustc` and `cargo` packages, where installing rustup would conflict with the system toolchain. Linux therefore has a small direct-Cargo CMake integration while other platforms retain generated Cargokit integration. The first Android build additionally cannot reach Cargokit because Flutter 3.47.1's Gradle plugin loader rereads a non-ASCII `flutter.sdk` path through Java's Latin-1 `Properties.load(InputStream)` behavior.
 
 **Why accepted:** Linux is first-class and the direct build uses the same Cargo workspace, lockfile, crate type, and Rust compiler already validated by the core suite. Replacing the whole bridge or installing a conflicting toolchain would be larger and riskier during the executable-foundation task.
 
-**Impact:** Linux's `rust_builder/CMakeLists.txt` is no longer fully generator-owned.
+**Impact:** Linux's `rust_builder/CMakeLists.txt` is no longer fully generator-owned, and no Android APK has been produced in this checkout. Changing only the project settings reader is insufficient because the applied Flutter plugin reads the same file again.
 
 **Risk:** Re-running bridge integration could overwrite the customization; other targets still need their own verified toolchain path.
 
-**Suggested solution:** Adopt upstream Cargokit/native-assets system-Rust support when available, or move the minimal direct build into a shared project-owned integration once a second platform proves the required common behavior.
+**Suggested solution:** First give the Flutter tool an ASCII SDK root without moving or patching the external SDK, then observe the actual Android Cargokit failure. Adopt upstream Cargokit/native-assets system-Rust support when available, or add the smallest project-owned Android system-Cargo path only after that evidence identifies the required targets and NDK variables.
 
-**Trigger condition:** Reassess when bridge integration is regenerated, upstream adds system-Rust support, or M1 reaches its first mobile build task.
+**Trigger condition:** Triggered on 2026-08-26 when M1 reached its first mobile build task. Three ARM64 release attempts stopped at the Flutter Gradle loader's corrupted SDK path; do not repeat the same invocation until the SDK root strategy changes.
 
 ## TD-002 — Release identity and signing use generated defaults
 
