@@ -94,7 +94,15 @@ The raw client intentionally exposes create and one-shot poll operations. `Wecha
 - authorized, expired, and refused results finish the generation, while waiting/scanned results remain eligible for another explicit poll;
 - a QR creation error clears its own generation without clearing a newer replacement.
 
-Deterministic tests hold a synthetic request in flight and prove replacement, cancellation, and disposal suppress the late result. Overall session deadline and retry policy remain pending and are not implied by the per-request 35-second poll budget.
+Deterministic tests hold a synthetic request in flight and prove replacement, cancellation, and disposal suppress the late result. The separate overall deadline below is not implied by the per-request 35-second poll budget.
+
+### QR session deadline and transport-failure policy
+
+L-1124 defaults the WeChat QR session to 180 seconds and continues past transient request failures only while that deadline remains. Yakult independently uses a three-minute QR lifetime and permits three consecutive poll transport failures before terminating on the fourth. This agreement supports a bounded session policy without treating it as an upstream response field.
+
+The coordinator therefore gives QR creation, polling, and credential exchange one shared 180-second monotonic deadline. The deadline races each in-flight request and drops the losing future. After a session exists, the first three consecutive transport failures remain explicit errors eligible for an explicit caller retry; the fourth finishes the generation. Any successful network response resets the transport-failure count, including a waiting response or a structured upstream rejection. Protocol, HTTP, parsing, and upstream errors are never relabeled as transport instability. QR creation does not auto-retry before a session is returned; its caller may explicitly begin a new generation.
+
+There is deliberately no internal polling loop or hidden backoff yet: `advance` performs one observable step. Deterministic virtual-time tests prove the shared deadline aborts blocked QR creation, polling, and credential exchange, and sequence tests prove the failure limit and reset behavior.
 
 ### Third network slice: WeChat code exchange
 
@@ -117,7 +125,6 @@ The coordinator exchanges a 405 code inside the same attempt generation. Replace
 
 Before presenting QR login as a user-visible capability:
 
-1. Define the overall session deadline and retry policy; the per-request long-poll budget is not a session timeout.
-2. Capture a sanitized successful response fixture or run a controlled real-account integration before claiming live login compatibility; the current evidence proves request acceptance and failure mapping only.
-3. Map the lifecycle through the Provider/bridge without exposing the UUID, OAuth code, credential, or refresh material to logs or ordinary UI state.
-4. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.
+1. Capture a sanitized successful response fixture or run a controlled real-account integration before claiming live login compatibility; the current evidence proves request acceptance and failure mapping only.
+2. Map the lifecycle through the Provider/bridge without exposing the UUID, OAuth code, credential, or refresh material to logs or ordinary UI state.
+3. Select a platform-safe secret persistence mechanism before claiming credential restore as a user-visible feature.

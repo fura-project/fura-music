@@ -52,7 +52,7 @@ Flutter main
   -> Flutter bootstrap page
 ```
 
-The first external protocol flow currently stops before authentication:
+The raw authentication flow now reaches a validated credential inside the core, but is not yet a Provider/bridge capability:
 
 ```text
 QQMusicClient
@@ -66,7 +66,7 @@ QQMusicClient
   -> validated redacted Credential
 ```
 
-Request/response diagnostics omit query values, headers, bodies, QR identifiers, image bytes, authorization codes, credential keys, and refresh material. The one-shot client remains independent of UI state. A separate login coordinator owns attempt generations: starting again supersedes the old generation, cancellation/disposal drops in-flight create/poll/exchange futures, and a credential is accepted only while its generation is current. Authorization codes never need to leave that coordinator. Overall session deadline and retry policy remain unimplemented. Default protocol tests use synthetic sanitized responses; live tests are separate, ignored, and explicitly environment-gated.
+Request/response diagnostics omit query values, headers, bodies, QR identifiers, image bytes, authorization codes, credential keys, and refresh material. The one-shot client remains independent of UI state. A separate login coordinator owns attempt generations: starting again supersedes the old generation, cancellation/disposal drops in-flight create/poll/exchange futures, and a credential is accepted only while its generation is current. Authorization codes never need to leave that coordinator. One monotonic 180-second deadline spans QR creation, polling, and exchange; it drops blocked requests. Three consecutive transport failures are caller-retryable, the fourth finishes the session, and any reached protocol response resets the count. The coordinator does not hide polling or retry loops. Default protocol tests use synthetic sanitized responses; live tests are separate, ignored, and explicitly environment-gated.
 
 ## Flutter / Rust boundary
 

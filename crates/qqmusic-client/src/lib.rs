@@ -20,7 +20,8 @@ pub use transport::{
 };
 pub use wechat_exchange::WechatCredentialExchangeError;
 pub use wechat_login::{
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    InvalidWechatQrLoginPolicy, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginPolicy,
+    WechatQrLoginProgress, WechatQrLoginSession,
 };
 pub use wechat_qr::{
     QrImage, QrImageMediaType, WechatAuthorizationCode, WechatQrError, WechatQrPollResult,

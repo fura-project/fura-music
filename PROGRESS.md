@@ -22,17 +22,18 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Retained and redacted refresh/session material, preferred `str_musicid` over placeholder numeric IDs, and kept the WeChat login type when upstream omits it.
 - Integrated credential exchange into the same generation gate; a replacement aborts an in-flight exchange, while an explicit retry reuses the pending code without polling again.
 - Verified the live endpoint rejects a non-account fake code as global `0` / login `1000`; no real login or successful credential response was exercised.
+- Added one monotonic 180-second deadline across QR creation, polling, and credential exchange; deterministic virtual-time tests prove blocked requests are dropped at expiry.
+- Bounded session transport instability to three caller-visible consecutive failures, finishing on the fourth and resetting the count after any reached protocol response.
 
 # In Progress
 
-- Define the overall QR session deadline and bounded retry policy before exposing a continuous UI flow.
+- Map QR authentication through the Provider and typed bridge without exposing protocol identifiers, authorization codes, credentials, or refresh material.
 
 # Next Candidates
 
-1. Define overall session deadline and retry policy without weakening explicit cancellation or protocol errors.
-2. Map QR authentication through the provider and bridge with opaque session handles and no credential leakage.
-3. Build the adaptive Flutter login surface with explicit cancel/restart behavior.
-4. Select and validate the minimum secure credential-storage boundary before implementing restore persistence.
+1. Map QR authentication through the provider and bridge with opaque session handles and no credential leakage.
+2. Build the adaptive Flutter login surface with explicit cancel/restart behavior.
+3. Select and validate the minimum secure credential-storage boundary before implementing restore persistence.
 
 # Blockers
 
