@@ -6,6 +6,7 @@
 
 mod credential;
 mod credential_verification;
+mod favorite_playlists;
 mod owned_playlists;
 mod transport;
 mod wechat_exchange;
@@ -18,6 +19,10 @@ pub use credential::{
     LocalCredentialValidity, LoginType,
 };
 pub use credential_verification::CredentialVerificationError;
+pub use favorite_playlists::{
+    FavoritePlaylistField, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
+    QqMusicFavoritePlaylistsPage,
+};
 pub use owned_playlists::{
     OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,
 };

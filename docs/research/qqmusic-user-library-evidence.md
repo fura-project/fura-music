@@ -2,7 +2,7 @@
 
 - **Status:** Active research for M1 user library
 - **Last checked:** 2026-08-25
-- **Scope:** Authenticated account-owned playlist summaries only.
+- **Scope:** Authenticated account-owned and favorited playlist summaries.
 
 This note records protocol behavior and boundaries, not reusable source code. No real account credential or user-derived response was used in this checkout.
 
@@ -11,6 +11,7 @@ This note records protocol behavior and boundaries, not reusable source code. No
 1. [L-1124/QQMusicApi at `108617f`](https://github.com/L-1124/QQMusicApi/tree/108617ffe80abefec6358717b9f4d3677550db10), especially `qqmusic_api/modules/user.py`, `qqmusic_api/models/user.py`, and the shared song-list model.
 2. [ylw1997/qqmusic-api at `5f87b07`](https://github.com/ylw1997/qqmusic-api/tree/5f87b07b85923f8862d7b57f9d558ce0314ba1a7), especially `docs/apis/get-my-playlists.md` and its executable `my_playlists` request.
 3. [yakult-green-tea/qq-music-api at `2c27d6b`](https://github.com/yakult-green-tea/qq-music-api/tree/2c27d6b90dd56bcf0796883e27216f69189d8f68), especially `src/services/auth/qrLogin.ts`, the native QR probe, and authenticated service tests.
+4. [feeluown-qqmusic at `241a967`](https://github.com/feeluown/feeluown-qqmusic/tree/241a9678bcd26e88d19e08e5da8048018f06e330), especially its separate legacy favorite-playlist request and `dissid`/`title` mapping. This corroborates collection/identity semantics, not the musicu RPC envelope.
 
 ## Account-owned playlist request
 
@@ -43,11 +44,15 @@ The `dirId: 201` built-in “liked songs” directory is not a generic `disstid`
 
 ## Deliberate boundary: favorited playlists
 
-`GetPlaylistByUin` is the owned/created collection. Yakult separately retrieves favorited playlists through `music.musicasset.PlaylistFavRead/CgiGetPlaylistFavInfo`, using the credential's encrypted UIN plus explicit offset/size pagination, then merges and deduplicates both collections for its public endpoint.
+`GetPlaylistByUin` is the owned/created collection. L-1124 and yakult independently retrieve favorited playlists through `music.musicasset.PlaylistFavRead/CgiGetPlaylistFavInfo`, using the credential's encrypted UIN plus explicit `offset`/`size` pagination. Both read rows from `data.v_list`, total count from `data.total`, and continuation from `data.hasmore`; L-1124's authenticated test expects `hasmore` as `0` or `1`, while yakult defensively accepts either that representation or a boolean.
 
-That second RPC is not implemented in the first protocol task. Calling the owned list “all of My Playlists” would be inaccurate until favorite pagination and merge identity have their own fixture coverage. The current Provider operation is therefore named `owned_playlists`; Flutter exposes it under the truthful heading “Playlists you created” and does not parse its opaque QQ identity.
+Favorite rows use a generic playlist ID (`id`, with current model aliases for `tid`/`dissid`), title, optional cover, and optional song count. They do not carry the account-owned `dirId` identity needed by the built-in liked-songs path.
+
+The project now implements one bounded favorite page in `QQMusicClient`: page size is restricted to `1..=100`, response bodies remain capped at 1 MiB/30 seconds, missing encrypted UIN fails before transport, `hasmore` accepts only boolean or numeric `0`/`1`, and raw response models do not escape the protocol crate. Default tests use synthetic pages and cover exact request shape, pagination, aliases, missing identity, credential rejection, unrelated upstream failure, and redacted diagnostics.
+
+Provider aggregation is deliberately separate. It must bound the number of pages, reject a non-advancing continuation, deduplicate against owned playlists by QQ playlist ID, and recheck the exact credential after every await. Until that exists, Flutter continues to expose only `owned_playlists` under the truthful heading “Playlists you created” and never parses its opaque QQ identity.
 
 ## Evidence still required
 
-1. A sanitized real response fixture or controlled account integration before claiming live owned-playlist compatibility.
-2. Independent implementation and fixture coverage for favorite playlists before the UI presents a complete combined library.
+1. A sanitized real response fixture or controlled account integration before claiming live owned/favorite playlist compatibility.
+2. Provider pagination, merge, and deduplication regressions before the UI presents a complete combined library.

@@ -37,7 +37,7 @@ There is no runtime HTTP sidecar between Flutter and the Rust core.
 - `apps/flutter` contains adaptive Material 3 authentication and created-playlist surfaces, short-lived Dart controllers/gateway adapters, one shared serialized platform-vault boundary, and Dart integration/widget tests.
 - `crates/music-domain` contains provider-independent `ProviderId`, opaque `PlaylistId`, and minimum `PlaylistSummary` types.
 - `crates/provider-api` contains the UI-free provider descriptor/capabilities plus provider-neutral QR authentication and owned-playlist contracts.
-- `crates/qqmusic-client` owns the raw QQ Music client boundary. It contains redacted credential/restore models, versioned secure-storage serialization, a Rustls-backed bounded HTTP implementation, cross-validated WeChat QR flows, credential verification, owned-playlist fetching, and cancellable lifecycle coordinators.
+- `crates/qqmusic-client` owns the raw QQ Music client boundary. It contains redacted credential/restore models, versioned secure-storage serialization, a Rustls-backed bounded HTTP implementation, cross-validated WeChat QR flows, credential verification, owned-playlist fetching, one-page favorite-playlist fetching, and cancellable lifecycle coordinators.
 - `crates/provider-qqmusic` retains credential state, maps raw authentication and owned-playlist protocol values into provider/domain contracts, and truthfully advertises `Authentication` plus `UserLibrary`.
 - `bridges/flutter` adapts core/provider status, authentication, credential persistence, and owned-playlist loading into presentation-safe generated types. Its secret-bearing operation remains a dedicated short-lived persistence handoff, not a presentation model.
 
@@ -133,6 +133,8 @@ Providers expose data plus explicit capabilities such as authentication, catalog
 Provider code never returns Flutter widgets or presentation-specific models.
 
 The first user-library operation loads authenticated account-owned playlists via `QQMusicClient` `PlaylistBaseRead/GetPlaylistByUin`. QQ-specific, diagnostics-redacted protocol summaries preserve both playlist and directory identifiers. `QQMusicProvider` maps them into provider-independent `PlaylistSummary` values whose `PlaylistId` contains a stable provider ID and an opaque provider-owned value; generic domain and Flutter code cannot parse QQ identity rules. The narrow `OwnedPlaylistsProvider` contract makes `UserLibrary` a truthful implemented capability without implying favorite pagination or mutation. A library result is returned only if the same authenticated credential remains current after the await, preventing cross-account late results.
+
+`QQMusicClient` also implements one bounded page of `PlaylistFavRead/CgiGetPlaylistFavInfo`. It requires the credential's encrypted UIN, constrains page size to 100, and returns typed pagination plus protocol summaries without performing hidden loops. Provider-level bounded aggregation and owned/favorite deduplication do not exist yet, so this protocol operation is not exposed through the Bridge or Flutter.
 
 The Bridge exposes this through a single-use Rust-opaque load handle. `run`, exact `cancel`, and `isActive` are the only operations; cancellation drops the losing provider/network future, and concurrent runs fail explicitly. Generated Dart receives provider ID, opaque playlist ID, title, optional artwork/count, and a coarse failure enum. Credential, QQ dual IDs, request fields, and merging rules remain outside Flutter.
 

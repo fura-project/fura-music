@@ -16,15 +16,17 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Routed both fresh QR login and verified startup restore into the library, while a rejected library credential returns to sign-in and deletes only the serialized shared vault entry.
 - Shared one serialized credential-vault queue across authentication and library gateways so an old rejection delete cannot overtake a new login write; a cross-wrapper concurrency regression locks this behavior.
 - Revalidated the logical slice with 44 Flutter tests, Rust workspace tests (4 + 2 + 11 + 54 + 10), strict Clippy, a Linux release build, the packaged in-process Bridge smoke, and the Linux Secret Service round-trip.
+- Cross-validated `PlaylistFavRead/CgiGetPlaylistFavInfo` across two current musicu implementations, with a third legacy implementation corroborating favorite-playlist identity semantics.
+- Added a bounded one-page favorite-playlist client operation with encrypted-UIN precondition, `1..=100` size validation, typed pagination, flexible evidence-backed field aliases, redacted diagnostics, and 4 synthetic fixture tests.
 
 # In Progress
 
-- Cross-validate the separate favorite-playlist RPC, pagination fields, and minimum summary mapping before exposing a combined library.
+- Add Provider-owned bounded pagination, owned/favorite merge, and deduplication without weakening per-await credential replacement checks.
 
 # Next Candidates
 
-1. Add fixture-tested favorite-playlist fetching with explicit pagination and bounded responses.
-2. Merge and deduplicate owned/favorited summaries in Rust while preserving source-specific opaque identity; only then rename the Flutter collection as the complete playlist library.
+1. Merge and deduplicate owned/favorited summaries in Rust while preserving source-specific opaque identity and preventing non-advancing pagination.
+2. Expose the combined collection through the existing cancellable Bridge lifecycle; only then rename the Flutter collection as the complete playlist library.
 3. Implement the first playlist-detail protocol slice, including the special built-in liked-songs directory path, before making playlist rows interactive.
 
 # Blockers
