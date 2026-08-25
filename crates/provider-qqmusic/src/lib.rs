@@ -9,15 +9,31 @@ use provider_api::{
     QrAuthenticationSession, QrImageFormat,
 };
 use qqmusic_client::{
-    Credential, CredentialPersistenceError, HttpTransport, QqMusicClient, QrImageMediaType,
-    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    Credential, CredentialPersistenceError, CredentialRestorePlan, HttpTransport, QqMusicClient,
+    QrImageMediaType, WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialRestoreState {
+    SignedOut,
+    VerificationRequired,
+    LocallyExpired,
+}
+
+#[derive(Debug, Default)]
+enum QqMusicCredentialState {
+    #[default]
+    SignedOut,
+    PendingVerification(Credential),
+    LocallyExpired(Credential),
+    Authenticated(Credential),
+}
 
 #[derive(Debug)]
 pub struct QqMusicProvider<T> {
     login: WechatQrLoginCoordinator<T>,
-    credential: Arc<Mutex<Option<Credential>>>,
+    credential: Arc<Mutex<QqMusicCredentialState>>,
 }
 
 impl<T> QqMusicProvider<T> {
@@ -25,7 +41,7 @@ impl<T> QqMusicProvider<T> {
     pub fn new(client: QqMusicClient<T>) -> Self {
         Self {
             login: WechatQrLoginCoordinator::new(client),
-            credential: Arc::new(Mutex::new(None)),
+            credential: Arc::new(Mutex::new(QqMusicCredentialState::SignedOut)),
         }
     }
 
@@ -36,7 +52,28 @@ impl<T> QqMusicProvider<T> {
 
     #[must_use]
     pub fn has_authenticated_credential(&self) -> bool {
-        credential_guard(&self.credential).is_some()
+        matches!(
+            *credential_guard(&self.credential),
+            QqMusicCredentialState::Authenticated(_)
+        )
+    }
+
+    /// Returns a cloned startup candidate for server verification or a future
+    /// refresh decision. Authenticated QR credentials are intentionally not
+    /// exposed through this restore-only accessor.
+    #[must_use]
+    pub fn restored_credential(&self) -> Option<(QqMusicCredentialRestoreState, Credential)> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::PendingVerification(credential) => Some((
+                QqMusicCredentialRestoreState::VerificationRequired,
+                credential.clone(),
+            )),
+            QqMusicCredentialState::LocallyExpired(credential) => Some((
+                QqMusicCredentialRestoreState::LocallyExpired,
+                credential.clone(),
+            )),
+            QqMusicCredentialState::SignedOut | QqMusicCredentialState::Authenticated(_) => None,
+        }
     }
 
     /// Cancels the currently creating or active QR generation.
@@ -57,10 +94,49 @@ impl<T> QqMusicProvider<T> {
     pub fn encode_authenticated_credential(
         &self,
     ) -> Result<Option<Vec<u8>>, CredentialPersistenceError> {
-        credential_guard(&self.credential)
-            .as_ref()
-            .map(Credential::encode_for_secure_storage)
-            .transpose()
+        let credential = credential_guard(&self.credential);
+        match &*credential {
+            QqMusicCredentialState::Authenticated(credential) => {
+                credential.encode_for_secure_storage().map(Some)
+            }
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => Ok(None),
+        }
+    }
+
+    /// Loads an optional versioned credential document and classifies the next
+    /// action without treating the credential as authenticated.
+    ///
+    /// # Errors
+    ///
+    /// Returns a diagnostics-safe persistence error and leaves the previous
+    /// in-memory state unchanged when the document is malformed or invalid.
+    pub fn restore_credential_from_secure_storage(
+        &self,
+        secret_bytes: Option<&[u8]>,
+        now_unix_seconds: u64,
+    ) -> Result<QqMusicCredentialRestoreState, CredentialPersistenceError> {
+        let credential = secret_bytes
+            .map(Credential::decode_from_secure_storage)
+            .transpose()?;
+        let plan = CredentialRestorePlan::from_loaded(credential, now_unix_seconds);
+        let (state, result) = match plan {
+            CredentialRestorePlan::SignedOut => (
+                QqMusicCredentialState::SignedOut,
+                QqMusicCredentialRestoreState::SignedOut,
+            ),
+            CredentialRestorePlan::VerifyWithServer(credential) => (
+                QqMusicCredentialState::PendingVerification(credential),
+                QqMusicCredentialRestoreState::VerificationRequired,
+            ),
+            CredentialRestorePlan::LocallyExpired(credential) => (
+                QqMusicCredentialState::LocallyExpired(credential),
+                QqMusicCredentialRestoreState::LocallyExpired,
+            ),
+        };
+        *credential_guard(&self.credential) = state;
+        Ok(result)
     }
 }
 
@@ -117,7 +193,7 @@ impl QqMusicQrAuthenticationCancellation {
 pub struct QqMusicQrAuthenticationSession<T> {
     session: WechatQrLoginSession<T>,
     cancellation: QqMusicQrAuthenticationCancellation,
-    credential: Arc<Mutex<Option<Credential>>>,
+    credential: Arc<Mutex<QqMusicCredentialState>>,
 }
 
 impl<T> std::fmt::Debug for QqMusicQrAuthenticationSession<T> {
@@ -166,7 +242,8 @@ where
                 Ok(QrAuthenticationProgress::ScannedAwaitingConfirmation)
             }
             WechatQrLoginProgress::Authenticated(credential) => {
-                *credential_guard(&self.credential) = Some(*credential);
+                *credential_guard(&self.credential) =
+                    QqMusicCredentialState::Authenticated(*credential);
                 Ok(QrAuthenticationProgress::Authenticated)
             }
             WechatQrLoginProgress::Expired => Ok(QrAuthenticationProgress::Expired),
@@ -177,8 +254,8 @@ where
 }
 
 fn credential_guard(
-    credential: &Mutex<Option<Credential>>,
-) -> std::sync::MutexGuard<'_, Option<Credential>> {
+    credential: &Mutex<QqMusicCredentialState>,
+) -> std::sync::MutexGuard<'_, QqMusicCredentialState> {
     credential
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -241,13 +318,14 @@ fn map_exchange_error<E>(error: &WechatCredentialExchangeError<E>) -> Authentica
 mod tests {
     use std::convert::Infallible;
 
-    use super::QqMusicProvider;
+    use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use provider_api::{
         MusicProvider, ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
         QrAuthenticationSession, QrImageFormat,
     };
     use qqmusic_client::{
-        Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient,
+        Credential, CredentialExpiry, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
+        LoginType, QqMusicClient,
     };
 
     struct SuccessfulAuthenticationTransport;
@@ -307,6 +385,79 @@ mod tests {
             descriptor.capabilities,
             [ProviderCapability::Authentication]
         );
+    }
+
+    #[test]
+    fn restore_keeps_unverified_and_expired_credentials_unauthenticated() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(()));
+        assert_eq!(
+            provider
+                .restore_credential_from_secure_storage(None, 2_000)
+                .expect("absent storage is valid"),
+            QqMusicCredentialRestoreState::SignedOut,
+        );
+
+        let unverified = Credential::new("123456", "private-key", LoginType::WECHAT)
+            .expect("fixture credential")
+            .encode_for_secure_storage()
+            .expect("encode fixture");
+        assert_eq!(
+            provider
+                .restore_credential_from_secure_storage(Some(&unverified), 2_000)
+                .expect("valid stored credential"),
+            QqMusicCredentialRestoreState::VerificationRequired,
+        );
+        assert!(!provider.has_authenticated_credential());
+        let (state, restored) = provider
+            .restored_credential()
+            .expect("unverified credential is retained in Rust");
+        assert_eq!(state, QqMusicCredentialRestoreState::VerificationRequired);
+        assert_eq!(restored.music_id(), "123456");
+        assert!(
+            provider
+                .encode_authenticated_credential()
+                .expect("unverified credential must not export")
+                .is_none()
+        );
+
+        let expired = Credential::new("123456", "private-key", LoginType::WECHAT)
+            .expect("fixture credential")
+            .with_expiry(CredentialExpiry::new(1_000, 300).expect("fixture expiry"))
+            .encode_for_secure_storage()
+            .expect("encode fixture");
+        assert_eq!(
+            provider
+                .restore_credential_from_secure_storage(Some(&expired), 2_000)
+                .expect("valid expired credential"),
+            QqMusicCredentialRestoreState::LocallyExpired,
+        );
+        assert!(!provider.has_authenticated_credential());
+        let (state, _) = provider
+            .restored_credential()
+            .expect("expired credential is retained for a future decision");
+        assert_eq!(state, QqMusicCredentialRestoreState::LocallyExpired);
+    }
+
+    #[test]
+    fn malformed_restore_does_not_replace_an_existing_restore_state() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(()));
+        let unverified = Credential::new("123456", "private-key", LoginType::WECHAT)
+            .expect("fixture credential")
+            .encode_for_secure_storage()
+            .expect("encode fixture");
+        provider
+            .restore_credential_from_secure_storage(Some(&unverified), 2_000)
+            .expect("valid stored credential");
+
+        assert!(
+            provider
+                .restore_credential_from_secure_storage(Some(b"not-json"), 2_000)
+                .is_err()
+        );
+        assert!(matches!(
+            &*super::credential_guard(&provider.credential),
+            super::QqMusicCredentialState::PendingVerification(_)
+        ));
     }
 
     #[tokio::test]

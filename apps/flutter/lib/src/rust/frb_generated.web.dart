@@ -66,6 +66,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_qq_music_credential_export_failure(dynamic raw);
 
   @protected
+  QqMusicCredentialRestoreFailure
+  dco_decode_box_autoadd_qq_music_credential_restore_failure(dynamic raw);
+
+  @protected
+  QqMusicCredentialRestoreState
+  dco_decode_box_autoadd_qq_music_credential_restore_state(dynamic raw);
+
+  @protected
   QqMusicQrChallenge dco_decode_box_autoadd_qq_music_qr_challenge(dynamic raw);
 
   @protected
@@ -98,6 +106,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_box_autoadd_qq_music_credential_export_failure(dynamic raw);
 
   @protected
+  QqMusicCredentialRestoreFailure?
+  dco_decode_opt_box_autoadd_qq_music_credential_restore_failure(dynamic raw);
+
+  @protected
+  QqMusicCredentialRestoreState?
+  dco_decode_opt_box_autoadd_qq_music_credential_restore_state(dynamic raw);
+
+  @protected
   QqMusicQrChallenge? dco_decode_opt_box_autoadd_qq_music_qr_challenge(
     dynamic raw,
   );
@@ -123,6 +139,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   QqMusicCredentialExportFailure dco_decode_qq_music_credential_export_failure(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicCredentialRestore dco_decode_qq_music_credential_restore(dynamic raw);
+
+  @protected
+  QqMusicCredentialRestoreFailure
+  dco_decode_qq_music_credential_restore_failure(dynamic raw);
+
+  @protected
+  QqMusicCredentialRestoreState dco_decode_qq_music_credential_restore_state(
     dynamic raw,
   );
 
@@ -196,6 +224,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicCredentialRestoreFailure
+  sse_decode_box_autoadd_qq_music_credential_restore_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicCredentialRestoreState
+  sse_decode_box_autoadd_qq_music_credential_restore_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicQrChallenge sse_decode_box_autoadd_qq_music_qr_challenge(
     SseDeserializer deserializer,
   );
@@ -232,6 +272,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicCredentialRestoreFailure?
+  sse_decode_opt_box_autoadd_qq_music_credential_restore_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicCredentialRestoreState?
+  sse_decode_opt_box_autoadd_qq_music_credential_restore_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicQrChallenge? sse_decode_opt_box_autoadd_qq_music_qr_challenge(
     SseDeserializer deserializer,
   );
@@ -259,6 +311,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   QqMusicCredentialExportFailure sse_decode_qq_music_credential_export_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicCredentialRestore sse_decode_qq_music_credential_restore(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicCredentialRestoreFailure
+  sse_decode_qq_music_credential_restore_failure(SseDeserializer deserializer);
+
+  @protected
+  QqMusicCredentialRestoreState sse_decode_qq_music_credential_restore_state(
     SseDeserializer deserializer,
   );
 
@@ -351,6 +417,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_qq_music_credential_restore_failure(
+    QqMusicCredentialRestoreFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_credential_restore_state(
+    QqMusicCredentialRestoreState self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_qq_music_qr_challenge(
     QqMusicQrChallenge self,
     SseSerializer serializer,
@@ -394,6 +472,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_qq_music_credential_restore_failure(
+    QqMusicCredentialRestoreFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_credential_restore_state(
+    QqMusicCredentialRestoreState? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_qq_music_qr_challenge(
     QqMusicQrChallenge? self,
     SseSerializer serializer,
@@ -432,6 +522,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_credential_export_failure(
     QqMusicCredentialExportFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_credential_restore(
+    QqMusicCredentialRestore self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_credential_restore_failure(
+    QqMusicCredentialRestoreFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_credential_restore_state(
+    QqMusicCredentialRestoreState self,
     SseSerializer serializer,
   );
 

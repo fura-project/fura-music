@@ -9,11 +9,13 @@ class MusicApp extends StatelessWidget {
   const MusicApp({
     required this.bootstrap,
     this.authenticationGateway,
+    this.initialCredentialRestore = CredentialRestoreResult.signedOut,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway? authenticationGateway;
+  final CredentialRestoreResult initialCredentialRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +29,7 @@ class MusicApp extends StatelessWidget {
         bootstrap: bootstrap,
         authenticationGateway:
             authenticationGateway ?? RustQqMusicAuthenticationGateway(),
+        initialCredentialRestore: initialCredentialRestore,
       ),
     );
   }
@@ -50,11 +53,13 @@ class LoginPage extends StatefulWidget {
   const LoginPage({
     required this.bootstrap,
     required this.authenticationGateway,
+    required this.initialCredentialRestore,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
+  final CredentialRestoreResult initialCredentialRestore;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -66,7 +71,10 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    _controller = LoginController(widget.authenticationGateway);
+    _controller = LoginController(
+      widget.authenticationGateway,
+      initialCredentialRestore: widget.initialCredentialRestore,
+    );
   }
 
   @override
@@ -227,6 +235,13 @@ class _AuthenticationContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final stage = controller.stage;
     if (stage == LoginStage.idle) return _idle(context);
+    if (stage == LoginStage.verificationRequired) {
+      return _verificationRequired(context);
+    }
+    if (stage == LoginStage.storedCredentialExpired ||
+        stage == LoginStage.restoreError) {
+      return _restoreTerminal(context);
+    }
     if (stage == LoginStage.starting) return _starting(context);
     if (stage == LoginStage.authenticated) return _authenticated(context);
     if (stage == LoginStage.waitingForScan ||
@@ -285,6 +300,89 @@ class _AuthenticationContent extends StatelessWidget {
       OutlinedButton(onPressed: controller.cancel, child: const Text('Cancel')),
     ],
   );
+
+  Widget _verificationRequired(BuildContext context) => Column(
+    key: const ValueKey('credential-verification-required'),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const _PanelIcon(icon: Icons.verified_user_outlined),
+      const SizedBox(height: 24),
+      Text(
+        'Saved session found',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 10),
+      Text(
+        'It passed local checks but still needs QQ Music verification. '
+        'Automatic verification is not available in this build.',
+        textAlign: TextAlign.center,
+        style: _supportingStyle(context),
+      ),
+      const SizedBox(height: 24),
+      FilledButton.tonalIcon(
+        onPressed: controller.start,
+        icon: const Icon(Icons.qr_code_2_rounded),
+        label: const Text('Use a new code'),
+      ),
+    ],
+  );
+
+  Widget _restoreTerminal(BuildContext context) {
+    final result = controller.credentialRestoreResult;
+    final (title, detail) = switch (result) {
+      CredentialRestoreResult.locallyExpired => (
+        'Saved session expired',
+        'QQ Music’s advertised lifetime has ended. Sign in again to continue.',
+      ),
+      CredentialRestoreResult.unsupportedStoredCredential => (
+        'Saved session is from another version',
+        'This build left it unchanged instead of guessing. You can replace it '
+            'by signing in again.',
+      ),
+      CredentialRestoreResult.storageUnavailable => (
+        'Secure storage is unavailable',
+        'You can sign in for this run, but the session may not survive restart.',
+      ),
+      CredentialRestoreResult.coreUnavailable => (
+        'The music core is unavailable',
+        'The stored session could not be checked safely. Try again after restart.',
+      ),
+      CredentialRestoreResult.invalidStoredCredential ||
+      CredentialRestoreResult.signedOut ||
+      CredentialRestoreResult.verificationRequired => (
+        'Saved session could not be read',
+        'It was left unchanged instead of being treated as a valid login. '
+            'You can replace it by signing in again.',
+      ),
+    };
+
+    return Column(
+      key: const ValueKey('credential-restore-terminal'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _PanelIcon(icon: Icons.lock_reset_rounded),
+        const SizedBox(height: 24),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          detail,
+          textAlign: TextAlign.center,
+          style: _supportingStyle(context),
+        ),
+        const SizedBox(height: 24),
+        FilledButton.tonalIcon(
+          onPressed: controller.start,
+          icon: const Icon(Icons.qr_code_2_rounded),
+          label: const Text('Sign in again'),
+        ),
+      ],
+    );
+  }
 
   Widget _active(BuildContext context) {
     final image = controller.qrImageBytes;

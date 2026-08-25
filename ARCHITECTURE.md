@@ -97,7 +97,19 @@ QQMusicProvider credential
   -> native platform secure storage
 ```
 
-The controller sees only stored/unavailable status. It cannot inspect credential fields. The mutable bridge buffer is zeroed after the asynchronous write. Startup import and QQ Music server verification do not exist yet, so secure write alone does not satisfy credential restore; TD-003 remains in progress.
+The controller sees only stored/unavailable status. It cannot inspect credential fields. The mutable bridge buffer is zeroed after the asynchronous write. Secure write alone does not satisfy credential restore; TD-003 remains in progress until QQ Music accepts a startup candidate.
+
+Startup now performs the reverse narrow handoff before constructing the login controller:
+
+```text
+native platform secure storage
+  -> Dart vault read and Base64 decode
+  -> dedicated Bridge import of optional opaque bytes
+  -> Rust version/invariant validation and local expiry plan
+  -> signed out | verification required | locally expired | typed failure
+```
+
+The loaded Dart byte buffer is zeroed after the synchronous Rust import. Rust retains verification and locally expired candidates in distinct internal states, and neither makes `has_authenticated_credential` true. Malformed, unsupported, and platform-access failures remain distinct and are never auto-deleted. Server verification is the remaining TD-003 step.
 
 QR creation has a separate opaque start-attempt number reserved by the Bridge adapter before network work begins. Cancel/restart/dispose can cancel that exact pending creation; comparison against the current start attempt prevents a late old controller from cancelling its replacement. After a challenge returns, the Dart controller discards that start operation and uses the Rust-owned session handle. Dart owns presentation stages, one-second network-reconnect delay, adaptive layout, animation, and late-result visibility guards. Rust remains the authority for protocol deadlines, failure counts, session generations, and credential state.
 

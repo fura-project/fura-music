@@ -35,6 +35,20 @@ enum CredentialPersistenceResult {
   storageUnavailable,
 }
 
+enum CredentialRestoreResult {
+  signedOut,
+  verificationRequired,
+  locallyExpired,
+  invalidStoredCredential,
+  unsupportedStoredCredential,
+  storageUnavailable,
+  coreUnavailable,
+}
+
+typedef CredentialRestoreImporter = CredentialRestoreResult Function(
+  Uint8List? secretBytes,
+);
+
 class LoginChallenge {
   const LoginChallenge({required this.imageFormat, required this.imageBytes});
 
@@ -68,6 +82,7 @@ abstract interface class QqMusicAuthenticationGateway {
   LoginStartOperation beginStart();
   bool get hasAuthenticatedCredential;
   Future<CredentialPersistenceResult> persistAuthenticatedCredential();
+  Future<CredentialRestoreResult> restoreCredential();
 }
 
 abstract interface class LoginStartOperation {
@@ -76,10 +91,15 @@ abstract interface class LoginStartOperation {
 }
 
 class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
-  RustQqMusicAuthenticationGateway({CredentialVault? credentialVault})
-    : _credentialVault = credentialVault ?? PlatformCredentialVault();
+  RustQqMusicAuthenticationGateway({
+    CredentialVault? credentialVault,
+    CredentialRestoreImporter? credentialImporter,
+  }) : _credentialVault = credentialVault ?? PlatformCredentialVault(),
+       _credentialImporter =
+           credentialImporter ?? _restoreQqMusicCredentialInRust;
 
   final CredentialVault _credentialVault;
+  final CredentialRestoreImporter _credentialImporter;
 
   @override
   bool get hasAuthenticatedCredential =>
@@ -106,6 +126,55 @@ class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
       secretBytes.fillRange(0, secretBytes.length, 0);
     }
   }
+
+  @override
+  Future<CredentialRestoreResult> restoreCredential() async {
+    Uint8List? secretBytes;
+    try {
+      secretBytes = await _credentialVault.read();
+    } on FormatException {
+      return CredentialRestoreResult.invalidStoredCredential;
+    } catch (_) {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+
+    try {
+      return _credentialImporter(secretBytes);
+    } catch (_) {
+      return CredentialRestoreResult.coreUnavailable;
+    } finally {
+      secretBytes?.fillRange(0, secretBytes.length, 0);
+    }
+  }
+}
+
+CredentialRestoreResult _restoreQqMusicCredentialInRust(
+  Uint8List? secretBytes,
+) {
+  final outcome = bridge.restoreQqMusicCredentialFromSecureStorage(
+    secretBytes: secretBytes,
+  );
+  final state = outcome.state;
+  if (state != null) {
+    return switch (state) {
+      bridge.QqMusicCredentialRestoreState.signedOut =>
+        CredentialRestoreResult.signedOut,
+      bridge.QqMusicCredentialRestoreState.verificationRequired =>
+        CredentialRestoreResult.verificationRequired,
+      bridge.QqMusicCredentialRestoreState.locallyExpired =>
+        CredentialRestoreResult.locallyExpired,
+    };
+  }
+
+  return switch (outcome.failure) {
+    bridge.QqMusicCredentialRestoreFailure.invalidDocument ||
+    bridge.QqMusicCredentialRestoreFailure.invalidCredential =>
+      CredentialRestoreResult.invalidStoredCredential,
+    bridge.QqMusicCredentialRestoreFailure.unsupportedVersion =>
+      CredentialRestoreResult.unsupportedStoredCredential,
+    bridge.QqMusicCredentialRestoreFailure.coreUnavailable ||
+    null => CredentialRestoreResult.coreUnavailable,
+  };
 }
 
 class _RustLoginStartOperation implements LoginStartOperation {

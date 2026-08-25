@@ -13,6 +13,9 @@ void main() {
 
     expect(status.provider.id, 'qq-music');
     expect(status.provider.implementedCapabilities, ['Authentication']);
+    final restore = restoreQqMusicCredentialFromSecureStorage();
+    expect(restore.state, QqMusicCredentialRestoreState.signedOut);
+    expect(restore.failure, isNull);
     expect(qqMusicHasAuthenticatedCredential(), isFalse);
     final unusedStart = reserveQqMusicWechatQrLoginStart();
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);

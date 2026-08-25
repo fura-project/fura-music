@@ -38,6 +38,6 @@ The smoke does not perform a storage write/read/delete cycle. Android, iOS, macO
 
 ## Remaining evidence
 
-1. Import the opaque bytes into Rust at startup, distinguish absent/corrupt/expired values, and verify eligible credentials with QQ Music.
+1. Verify the eligible credential retained by Rust with QQ Music; local import now distinguishes absent, corrupt, unsupported, invalid, and expired values without authenticating them.
 2. Add a disposable per-platform integration that writes, reads, and deletes non-account test bytes without leaving a keyring item behind.
 3. Build and run Android plus the available Apple/Windows targets before claiming their secure persistence path.

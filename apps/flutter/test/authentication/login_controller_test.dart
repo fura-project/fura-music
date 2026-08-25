@@ -9,7 +9,10 @@ void main() {
   test('maps waiting, scanned, and authenticated updates in order', () async {
     final session = _FakeLoginSession();
     final gateway = _FakeGateway.immediate(_successfulStart(session));
-    final controller = LoginController(gateway, Duration.zero);
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+    );
 
     await controller.start();
     expect(controller.stage, LoginStage.waitingForScan);
@@ -55,7 +58,10 @@ void main() {
     () async {
       final session = _FakeLoginSession();
       final gateway = _FakeGateway.immediate(_successfulStart(session));
-      final controller = LoginController(gateway, Duration.zero);
+      final controller = LoginController(
+        gateway,
+        networkRetryDelay: Duration.zero,
+      );
 
       await controller.start();
       expect(session.advanceCalls, 1);
@@ -80,7 +86,10 @@ void main() {
       _successfulStart(session),
       persistenceResult: CredentialPersistenceResult.storageUnavailable,
     );
-    final controller = LoginController(gateway, Duration.zero);
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+    );
 
     await controller.start();
     session.completeNext(
@@ -101,7 +110,10 @@ void main() {
   test('notifies listeners when a session reaches a terminal state', () async {
     final session = _FakeLoginSession();
     final gateway = _FakeGateway.immediate(_successfulStart(session));
-    final controller = LoginController(gateway, Duration.zero);
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+    );
     var notifications = 0;
     controller.addListener(() => notifications += 1);
 
@@ -122,7 +134,10 @@ void main() {
     'restart cancels a late session returned by the superseded start',
     () async {
       final gateway = _FakeGateway.pending();
-      final controller = LoginController(gateway, Duration.zero);
+      final controller = LoginController(
+        gateway,
+        networkRetryDelay: Duration.zero,
+      );
       final firstSession = _FakeLoginSession();
       final secondSession = _FakeLoginSession();
 
@@ -147,7 +162,10 @@ void main() {
     'dispose cancels QR creation and cancels a late returned session',
     () async {
       final gateway = _FakeGateway.pending();
-      final controller = LoginController(gateway, Duration.zero);
+      final controller = LoginController(
+        gateway,
+        networkRetryDelay: Duration.zero,
+      );
       final lateSession = _FakeLoginSession();
 
       final start = controller.start();
@@ -159,6 +177,36 @@ void main() {
       expect(lateSession.cancelCalls, 1);
     },
   );
+
+  test('maps each non-authenticated startup restore outcome truthfully', () {
+    final cases = <CredentialRestoreResult, LoginStage>{
+      CredentialRestoreResult.signedOut: LoginStage.idle,
+      CredentialRestoreResult.verificationRequired:
+          LoginStage.verificationRequired,
+      CredentialRestoreResult.locallyExpired:
+          LoginStage.storedCredentialExpired,
+      CredentialRestoreResult.invalidStoredCredential: LoginStage.restoreError,
+      CredentialRestoreResult.unsupportedStoredCredential:
+          LoginStage.restoreError,
+      CredentialRestoreResult.storageUnavailable: LoginStage.restoreError,
+      CredentialRestoreResult.coreUnavailable: LoginStage.restoreError,
+    };
+
+    for (final MapEntry(key: result, value: expectedStage) in cases.entries) {
+      final session = _FakeLoginSession();
+      final gateway = _FakeGateway.immediate(_successfulStart(session));
+      final controller = LoginController(
+        gateway,
+        networkRetryDelay: Duration.zero,
+        initialCredentialRestore: result,
+      );
+
+      expect(controller.stage, expectedStage, reason: result.name);
+      expect(controller.credentialRestoreResult, result);
+
+      controller.dispose();
+    }
+  });
 }
 
 LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
@@ -212,6 +260,10 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
     persistCalls += 1;
     return persistenceResult;
   }
+
+  @override
+  Future<CredentialRestoreResult> restoreCredential() async =>
+      CredentialRestoreResult.signedOut;
 
   void completeStart(int index, LoginStart result) {
     _pendingStarts![index].complete(result);

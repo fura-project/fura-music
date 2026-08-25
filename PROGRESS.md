@@ -36,17 +36,20 @@ M1 — First QQ Music Vertical Slice, phase 2: authentication.
 - Configured Android backup protection plus iOS/macOS Keychain entitlements, and added 6 credential persistence/controller regressions without writing to the live user keyring.
 - Linked the secure-storage plugin in a Linux release bundle and reran the real packaged Flutter/Rust integration smoke; runtime vault read/write/delete remains explicitly unverified as TD-004.
 - Fixed terminal QR states failing to notify Flutter listeners and locked the lifecycle behavior with a regression.
+- Added startup vault reads and an opaque Bridge import that always zeroes loaded mutable bytes after Rust consumes them.
+- Replaced the Provider's authenticated-or-empty slot with explicit signed-out, pending-verification, locally-expired, and authenticated states; only the last satisfies `has_authenticated_credential` or can be exported.
+- Classified absent, malformed, unsupported-version, invalid, locally expired, platform-unavailable, and core-unavailable restore outcomes without deleting stored data or guessing authentication.
+- Added Provider, Bridge, gateway, controller, widget, and Linux integration regressions proving unverified/expired candidates remain Rust-owned and unauthenticated.
 
 # In Progress
 
-- Import persisted credential bytes at startup and perform Rust-owned restore planning without mapping corruption or transport failures to authenticated/signed-out guesses.
+- Verify a retained startup credential with QQ Music and promote it only on explicit success, preserving rejection and transient failure as different states.
 
 # Next Candidates
 
-1. Implement startup credential import and local restore planning for absent, malformed, unsupported, and locally expired documents (TD-003).
-2. Implement server verification for eligible restored credentials without mapping transport failures to signed-out state.
-3. Add and run a disposable Linux secure-vault read/write/delete integration that leaves no marker behind (TD-004).
-4. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
+1. Implement server verification for eligible restored credentials without mapping transport failures to signed-out state (TD-003).
+2. Add and run a disposable Linux secure-vault read/write/delete integration that leaves no marker behind (TD-004).
+3. Run a controlled real-account QR acceptance or capture a sanitized successful fixture before claiming live successful login compatibility.
 
 # Blockers
 
@@ -60,7 +63,7 @@ None.
 
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
 - Credential handling can create account and privacy risk; temporary storage must be explicit debt and must not be mistaken for release readiness.
-- A successful credential can be written to platform secure storage, but startup import and server verification are not implemented (TD-003).
+- Startup securely imports and locally classifies a stored credential, but QQ Music server verification is not implemented (TD-003).
 - The plugin is linked and loaded on Linux, not runtime read/write/delete verified; Android, Apple, and Windows paths are still unbuilt here (TD-004).
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.

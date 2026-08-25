@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_start`, `map_error`, `map_progress`, `start_attempt_guard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_restore`, `failed_start`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `start_attempt_guard`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveQqMusicWechatQrLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
@@ -33,6 +33,16 @@ QqMusicCredentialExport exportQqMusicCredentialForSecureStorage() => RustLib
     .instance
     .api
     .crateApiAuthenticationExportQqMusicCredentialForSecureStorage();
+
+/// Imports an optional platform-vault document into Rust and returns only the
+/// safe next action. A present document is never considered authenticated
+/// until a later QQ Music server-verification step succeeds.
+QqMusicCredentialRestore restoreQqMusicCredentialFromSecureStorage({
+  Uint8List? secretBytes,
+}) => RustLib.instance.api
+    .crateApiAuthenticationRestoreQqMusicCredentialFromSecureStorage(
+      secretBytes: secretBytes,
+    );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicQrLoginSessionHandle>>
 abstract class QqMusicQrLoginSessionHandle implements RustOpaqueInterface {
@@ -64,6 +74,37 @@ class QqMusicCredentialExport {
 enum QqMusicCredentialExportFailure {
   noAuthenticatedCredential,
   serializationFailed,
+}
+
+class QqMusicCredentialRestore {
+  final QqMusicCredentialRestoreState? state;
+  final QqMusicCredentialRestoreFailure? failure;
+
+  const QqMusicCredentialRestore({this.state, this.failure});
+
+  @override
+  int get hashCode => state.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicCredentialRestore &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          failure == other.failure;
+}
+
+enum QqMusicCredentialRestoreFailure {
+  coreUnavailable,
+  invalidDocument,
+  unsupportedVersion,
+  invalidCredential,
+}
+
+enum QqMusicCredentialRestoreState {
+  signedOut,
+  verificationRequired,
+  locallyExpired,
 }
 
 class QqMusicQrChallenge {

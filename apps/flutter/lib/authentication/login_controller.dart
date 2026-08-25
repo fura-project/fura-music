@@ -5,6 +5,9 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 
 enum LoginStage {
   idle,
+  verificationRequired,
+  storedCredentialExpired,
+  restoreError,
   starting,
   waitingForScan,
   scannedAwaitingConfirmation,
@@ -20,12 +23,26 @@ enum CredentialSaveState { none, saving, saved, failed }
 
 class LoginController extends ChangeNotifier {
   LoginController(
-    this._gateway, [
+    this._gateway, {
     this._networkRetryDelay = const Duration(seconds: 1),
-  ]) {
+    CredentialRestoreResult initialCredentialRestore =
+        CredentialRestoreResult.signedOut,
+  }) : _credentialRestoreResult = initialCredentialRestore {
     if (_gateway.hasAuthenticatedCredential) {
       _stage = LoginStage.authenticated;
+      return;
     }
+    _stage = switch (initialCredentialRestore) {
+      CredentialRestoreResult.signedOut => LoginStage.idle,
+      CredentialRestoreResult.verificationRequired =>
+        LoginStage.verificationRequired,
+      CredentialRestoreResult.locallyExpired =>
+        LoginStage.storedCredentialExpired,
+      CredentialRestoreResult.invalidStoredCredential ||
+      CredentialRestoreResult.unsupportedStoredCredential ||
+      CredentialRestoreResult.storageUnavailable ||
+      CredentialRestoreResult.coreUnavailable => LoginStage.restoreError,
+    };
   }
 
   final QqMusicAuthenticationGateway _gateway;
@@ -38,6 +55,7 @@ class LoginController extends ChangeNotifier {
   Uint8List? _qrImageBytes;
   LoginFailure? _failure;
   CredentialSaveState _credentialSaveState = CredentialSaveState.none;
+  CredentialRestoreResult _credentialRestoreResult;
   int _generation = 0;
   bool _disposed = false;
 
@@ -45,6 +63,8 @@ class LoginController extends ChangeNotifier {
   Uint8List? get qrImageBytes => _qrImageBytes;
   LoginFailure? get failure => _failure;
   CredentialSaveState get credentialSaveState => _credentialSaveState;
+  CredentialRestoreResult get credentialRestoreResult =>
+      _credentialRestoreResult;
 
   bool get canCancel =>
       _stage == LoginStage.starting || (_session?.isActive ?? false);
@@ -61,6 +81,7 @@ class LoginController extends ChangeNotifier {
     _qrImageBytes = null;
     _failure = null;
     _credentialSaveState = CredentialSaveState.none;
+    _credentialRestoreResult = CredentialRestoreResult.signedOut;
     _stage = LoginStage.starting;
     _notify();
 
@@ -108,6 +129,7 @@ class LoginController extends ChangeNotifier {
     _qrImageBytes = null;
     _failure = null;
     _credentialSaveState = CredentialSaveState.none;
+    _credentialRestoreResult = CredentialRestoreResult.signedOut;
     _stage = LoginStage.idle;
     _notify();
   }

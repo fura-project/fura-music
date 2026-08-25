@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1688503808;
+  int get rustContentHash => -515418298;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -109,6 +109,11 @@ abstract class RustLibApi extends BaseApi {
   bool crateApiAuthenticationQqMusicHasAuthenticatedCredential();
 
   int crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
+
+  QqMusicCredentialRestore
+  crateApiAuthenticationRestoreQqMusicCredentialFromSecureStorage({
+    Uint8List? secretBytes,
+  });
 
   Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin({
     required int attemptId,
@@ -399,6 +404,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  QqMusicCredentialRestore
+  crateApiAuthenticationRestoreQqMusicCredentialFromSecureStorage({
+    Uint8List? secretBytes,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_list_prim_u_8_strict(secretBytes, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qq_music_credential_restore,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiAuthenticationRestoreQqMusicCredentialFromSecureStorageConstMeta,
+        argValues: [secretBytes],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiAuthenticationRestoreQqMusicCredentialFromSecureStorageConstMeta =>
+      const TaskConstMeta(
+        debugName: "restore_qq_music_credential_from_secure_storage",
+        argNames: ["secretBytes"],
+      );
+
+  @override
   Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin({
     required int attemptId,
   }) {
@@ -410,7 +446,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -515,6 +551,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QqMusicCredentialRestoreFailure
+  dco_decode_box_autoadd_qq_music_credential_restore_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_qq_music_credential_restore_failure(raw);
+  }
+
+  @protected
+  QqMusicCredentialRestoreState
+  dco_decode_box_autoadd_qq_music_credential_restore_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_qq_music_credential_restore_state(raw);
+  }
+
+  @protected
   QqMusicQrChallenge dco_decode_box_autoadd_qq_music_qr_challenge(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_qq_music_qr_challenge(raw);
@@ -574,6 +624,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_qq_music_credential_export_failure(raw);
+  }
+
+  @protected
+  QqMusicCredentialRestoreFailure?
+  dco_decode_opt_box_autoadd_qq_music_credential_restore_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_qq_music_credential_restore_failure(raw);
+  }
+
+  @protected
+  QqMusicCredentialRestoreState?
+  dco_decode_opt_box_autoadd_qq_music_credential_restore_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_qq_music_credential_restore_state(raw);
   }
 
   @protected
@@ -645,6 +713,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return QqMusicCredentialExportFailure.values[raw as int];
+  }
+
+  @protected
+  QqMusicCredentialRestore dco_decode_qq_music_credential_restore(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return QqMusicCredentialRestore(
+      state: dco_decode_opt_box_autoadd_qq_music_credential_restore_state(
+        arr[0],
+      ),
+      failure: dco_decode_opt_box_autoadd_qq_music_credential_restore_failure(
+        arr[1],
+      ),
+    );
+  }
+
+  @protected
+  QqMusicCredentialRestoreFailure
+  dco_decode_qq_music_credential_restore_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicCredentialRestoreFailure.values[raw as int];
+  }
+
+  @protected
+  QqMusicCredentialRestoreState dco_decode_qq_music_credential_restore_state(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicCredentialRestoreState.values[raw as int];
   }
 
   @protected
@@ -811,6 +910,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QqMusicCredentialRestoreFailure
+  sse_decode_box_autoadd_qq_music_credential_restore_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_qq_music_credential_restore_failure(deserializer));
+  }
+
+  @protected
+  QqMusicCredentialRestoreState
+  sse_decode_box_autoadd_qq_music_credential_restore_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_qq_music_credential_restore_state(deserializer));
+  }
+
+  @protected
   QqMusicQrChallenge sse_decode_box_autoadd_qq_music_qr_challenge(
     SseDeserializer deserializer,
   ) {
@@ -884,6 +1001,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_qq_music_credential_export_failure(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  QqMusicCredentialRestoreFailure?
+  sse_decode_opt_box_autoadd_qq_music_credential_restore_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_qq_music_credential_restore_failure(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  QqMusicCredentialRestoreState?
+  sse_decode_opt_box_autoadd_qq_music_credential_restore_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_qq_music_credential_restore_state(
         deserializer,
       ));
     } else {
@@ -977,6 +1126,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return QqMusicCredentialExportFailure.values[inner];
+  }
+
+  @protected
+  QqMusicCredentialRestore sse_decode_qq_music_credential_restore(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_state =
+        sse_decode_opt_box_autoadd_qq_music_credential_restore_state(
+          deserializer,
+        );
+    var var_failure =
+        sse_decode_opt_box_autoadd_qq_music_credential_restore_failure(
+          deserializer,
+        );
+    return QqMusicCredentialRestore(state: var_state, failure: var_failure);
+  }
+
+  @protected
+  QqMusicCredentialRestoreFailure
+  sse_decode_qq_music_credential_restore_failure(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return QqMusicCredentialRestoreFailure.values[inner];
+  }
+
+  @protected
+  QqMusicCredentialRestoreState sse_decode_qq_music_credential_restore_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return QqMusicCredentialRestoreState.values[inner];
   }
 
   @protected
@@ -1173,6 +1355,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_qq_music_credential_restore_failure(
+    QqMusicCredentialRestoreFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qq_music_credential_restore_failure(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_credential_restore_state(
+    QqMusicCredentialRestoreState self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qq_music_credential_restore_state(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_qq_music_qr_challenge(
     QqMusicQrChallenge self,
     SseSerializer serializer,
@@ -1258,6 +1458,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_qq_music_credential_restore_failure(
+    QqMusicCredentialRestoreFailure? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_qq_music_credential_restore_failure(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_credential_restore_state(
+    QqMusicCredentialRestoreState? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_qq_music_credential_restore_state(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_qq_music_qr_challenge(
     QqMusicQrChallenge? self,
     SseSerializer serializer,
@@ -1336,6 +1568,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_qq_music_credential_export_failure(
     QqMusicCredentialExportFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_credential_restore(
+    QqMusicCredentialRestore self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_qq_music_credential_restore_state(
+      self.state,
+      serializer,
+    );
+    sse_encode_opt_box_autoadd_qq_music_credential_restore_failure(
+      self.failure,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_qq_music_credential_restore_failure(
+    QqMusicCredentialRestoreFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_credential_restore_state(
+    QqMusicCredentialRestoreState self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs

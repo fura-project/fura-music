@@ -38,17 +38,17 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Status:** In Progress
 
-**Problem:** `QQMusicProvider` now serializes a successful credential into a versioned opaque document and the Flutter edge writes it to platform secure storage. Startup still does not import, validate, and verify that document, so closing the application cannot yet restore the session.
+**Problem:** `QQMusicProvider` serializes a successful credential into a versioned opaque document, the Flutter edge writes it to platform secure storage, and startup now imports and locally classifies that document. A structurally valid candidate still is not verified with QQ Music, so closing the application cannot yet regain an authenticated session.
 
-**Why accepted:** Persistence was split from restore so the secret boundary, versioned format, platform setup, and failure presentation could be reviewed and tested as one finite unit. The UI explicitly says startup verification is still pending.
+**Why accepted:** Persistence, local import, and network verification are separate failure domains. The completed local slice proves absence, corruption, format version, invariant validation, and expiry behavior without allowing a stored key to imply server validity. The UI explicitly says server verification is still pending.
 
 **Impact:** A user still needs to sign in again after every process restart even when the secure write succeeded; the current authenticated state is valid only for this process.
 
 **Risk:** UI or documentation could accidentally treat a successful secure write as a restored or server-valid session.
 
-**Suggested solution:** Import the opaque document into Rust during startup, use the existing restore plan, verify eligible credentials against QQ Music, and test absent, valid, expired, corrupted, rejected, and transient-verification-failure paths without translating transport failure into logout.
+**Suggested solution:** Verify the retained eligible candidate against QQ Music, promote it to authenticated only on explicit success, and keep credential rejection distinct from transient transport, upstream, and protocol failures.
 
-**Trigger condition:** Must be resolved before claiming credential restore, completing M1 authentication phase, or distributing an authenticated build. Secure write now exists, so startup import and verification are the active next task.
+**Trigger condition:** Must be resolved before claiming credential restore, completing M1 authentication phase, or distributing an authenticated build. Secure write and local startup import now exist, so server verification is the active next task.
 
 ## TD-004 — Secure-storage runtime behavior is not verified on every target
 

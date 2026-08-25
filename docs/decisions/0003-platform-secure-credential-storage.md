@@ -15,7 +15,7 @@ Use `flutter_secure_storage` 11 as a narrow platform-keystore adapter. Rust seri
 
 Credential field names and semantics do not enter the controller or UI. Storage success and failure are reduced to coarse presentation state. Android automatic backup is disabled, Apple targets declare Keychain access, Apple synchronization is disabled, and Apple items use `first_unlock_this_device` accessibility.
 
-The plugin is allowed to provide platform encryption and key-store integration; it does not decide whether a credential is structurally valid, expired, accepted by QQ Music, refreshable, or authenticated. Startup import and server verification are a separate next slice.
+The plugin is allowed to provide platform encryption and key-store integration; it does not decide whether a credential is structurally valid, expired, accepted by QQ Music, refreshable, or authenticated. Startup import returns the opaque document to Rust for version, invariant, and local-expiry checks. QQ Music server verification remains a separate next slice.
 
 ## Alternatives
 

@@ -1,15 +1,17 @@
 use std::fmt;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{LazyLock, Mutex as StdMutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use provider_api::{
     AuthenticationError, QrAuthenticationProgress, QrAuthenticationProvider,
     QrAuthenticationSession, QrImageFormat,
 };
 use provider_qqmusic::{
-    QqMusicProvider, QqMusicQrAuthenticationCancellation, QqMusicQrAuthenticationSession,
+    QqMusicCredentialRestoreState as ProviderCredentialRestoreState, QqMusicProvider,
+    QqMusicQrAuthenticationCancellation, QqMusicQrAuthenticationSession,
 };
-use qqmusic_client::{QqMusicClient, ReqwestTransport};
+use qqmusic_client::{CredentialPersistenceError, QqMusicClient, ReqwestTransport};
 use tokio::sync::Mutex as AsyncMutex;
 
 type NativeProvider = QqMusicProvider<ReqwestTransport>;
@@ -108,6 +110,27 @@ pub enum QqMusicCredentialExportFailure {
 pub struct QqMusicCredentialExport {
     pub secret_bytes: Option<Vec<u8>>,
     pub failure: Option<QqMusicCredentialExportFailure>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialRestoreState {
+    SignedOut,
+    VerificationRequired,
+    LocallyExpired,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialRestoreFailure {
+    CoreUnavailable,
+    InvalidDocument,
+    UnsupportedVersion,
+    InvalidCredential,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct QqMusicCredentialRestore {
+    pub state: Option<QqMusicCredentialRestoreState>,
+    pub failure: Option<QqMusicCredentialRestoreFailure>,
 }
 
 impl fmt::Debug for QqMusicCredentialExport {
@@ -252,6 +275,40 @@ pub fn export_qq_music_credential_for_secure_storage() -> QqMusicCredentialExpor
     }
 }
 
+/// Imports an optional platform-vault document into Rust and returns only the
+/// safe next action. A present document is never considered authenticated
+/// until a later QQ Music server-verification step succeeds.
+#[flutter_rust_bridge::frb(sync)]
+pub fn restore_qq_music_credential_from_secure_storage(
+    secret_bytes: Option<Vec<u8>>,
+) -> QqMusicCredentialRestore {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_restore(QqMusicCredentialRestoreFailure::CoreUnavailable);
+    };
+    let Ok(now_unix_seconds) = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+    else {
+        return failed_restore(QqMusicCredentialRestoreFailure::CoreUnavailable);
+    };
+
+    match provider.restore_credential_from_secure_storage(secret_bytes.as_deref(), now_unix_seconds)
+    {
+        Ok(state) => QqMusicCredentialRestore {
+            state: Some(map_restore_state(state)),
+            failure: None,
+        },
+        Err(error) => failed_restore(map_persistence_error(error)),
+    }
+}
+
+const fn failed_restore(failure: QqMusicCredentialRestoreFailure) -> QqMusicCredentialRestore {
+    QqMusicCredentialRestore {
+        state: None,
+        failure: Some(failure),
+    }
+}
+
 fn failed_start(failure: QqMusicQrLoginFailure) -> QqMusicQrLoginStart {
     QqMusicQrLoginStart {
         session: None,
@@ -303,14 +360,46 @@ const fn map_error(error: AuthenticationError) -> QqMusicQrLoginFailure {
     }
 }
 
+const fn map_restore_state(state: ProviderCredentialRestoreState) -> QqMusicCredentialRestoreState {
+    match state {
+        ProviderCredentialRestoreState::SignedOut => QqMusicCredentialRestoreState::SignedOut,
+        ProviderCredentialRestoreState::VerificationRequired => {
+            QqMusicCredentialRestoreState::VerificationRequired
+        }
+        ProviderCredentialRestoreState::LocallyExpired => {
+            QqMusicCredentialRestoreState::LocallyExpired
+        }
+    }
+}
+
+const fn map_persistence_error(
+    error: CredentialPersistenceError,
+) -> QqMusicCredentialRestoreFailure {
+    match error {
+        CredentialPersistenceError::Serialize => QqMusicCredentialRestoreFailure::CoreUnavailable,
+        CredentialPersistenceError::InvalidDocument => {
+            QqMusicCredentialRestoreFailure::InvalidDocument
+        }
+        CredentialPersistenceError::UnsupportedVersion(_) => {
+            QqMusicCredentialRestoreFailure::UnsupportedVersion
+        }
+        CredentialPersistenceError::InvalidLoginType(_)
+        | CredentialPersistenceError::InvalidCredential(_)
+        | CredentialPersistenceError::InvalidExpiry(_) => {
+            QqMusicCredentialRestoreFailure::InvalidCredential
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        QqMusicCredentialExport, QqMusicQrChallenge, QqMusicQrImageFormat, QqMusicQrLoginFailure,
-        clear_start_attempt, failed_start, map_error, reserve_qq_music_wechat_qr_login_start,
-        start_attempt_guard,
+        QqMusicCredentialExport, QqMusicCredentialRestoreFailure, QqMusicQrChallenge,
+        QqMusicQrImageFormat, QqMusicQrLoginFailure, clear_start_attempt, failed_start, map_error,
+        map_persistence_error, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
     };
     use provider_api::AuthenticationError;
+    use qqmusic_client::{CredentialPersistenceError, InvalidCredential};
 
     #[test]
     fn bridge_failure_mapping_is_typed_and_complete() {
@@ -353,6 +442,24 @@ mod tests {
         let debug = format!("{export:?}");
         assert!(debug.contains("17"));
         assert!(!debug.contains("private"));
+    }
+
+    #[test]
+    fn credential_restore_failure_mapping_is_typed_and_secret_free() {
+        assert_eq!(
+            map_persistence_error(CredentialPersistenceError::InvalidDocument),
+            QqMusicCredentialRestoreFailure::InvalidDocument,
+        );
+        assert_eq!(
+            map_persistence_error(CredentialPersistenceError::UnsupportedVersion(99)),
+            QqMusicCredentialRestoreFailure::UnsupportedVersion,
+        );
+        assert_eq!(
+            map_persistence_error(CredentialPersistenceError::InvalidCredential(
+                InvalidCredential::MissingMusicKey,
+            )),
+            QqMusicCredentialRestoreFailure::InvalidCredential,
+        );
     }
 
     #[test]
