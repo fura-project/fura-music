@@ -22,16 +22,19 @@ M1 — First QQ Music Vertical Slice, phase 3: user library.
 - Added Provider regressions for two-page aggregation, cross-source deduplication, missing encrypted UIN before transport, empty/overlong pagination, favorite-stage rejection versus transient failure, and account replacement during a favorite request.
 - Renamed the public Bridge lifecycle from owned to user playlists, regenerated all FRB bindings with pinned 2.13.0, and confirmed no orphaned owned-load symbols remain.
 - Switched the cancellable handle to the complete Provider operation and updated Dart gateways/controllers/presentation to `UserLibrary*`; “Your playlists” now accepts both owned and favorite opaque IDs without parsing them and never shows partial data after invalid pagination.
+- Cross-validated ordinary playlist detail and built-in `dirId: 201` liked songs across current implementations, then confirmed the ordinary `CgiGetDiss` shape with a bounded no-account public probe on 2026-08-26.
+- Added bounded `QQMusicClient` pages for ordinary and liked-songs routes, minimum QQ-specific track/artist/album summaries, three-level response-code handling, typed pagination/row failures, redacted diagnostics, and 5 synthetic fixture tests. The liked fixture locks the independently observed optional nested data code.
+- Revalidated the Rust workspace after the detail protocol slice: strict Clippy and tests pass at 4 + 2 + 16 + 63 + 10; live account-dependent tests remain ignored by default.
 
 # In Progress
 
-- Cross-validate ordinary playlist-detail and built-in liked-songs request shapes before making library rows interactive.
+- Define the minimum provider-independent track and playlist-detail Domain models, then map both provider-owned playlist identity routes without exposing QQ protocol fields.
 
 # Next Candidates
 
-1. Cross-validate ordinary playlist-detail and built-in `dirId: 201` liked-songs requests across current implementations.
-2. Add bounded detail/track protocol models and sanitized fixture regressions without leaking raw QQ responses into Domain.
-3. Map playlist detail through Provider and a cancellable Bridge operation, then make rows interactive with truthful loading/error states.
+1. Add provider-independent track identity, artist/album display summaries, and a bounded playlist-detail result shaped by current UI and future playback needs.
+2. Map `owned:<tid>:<dirId>` and `favorite:<id>` only inside `QQMusicProvider`, aggregate detail pages with account-replacement and non-advancing-page checks, and keep explicit rejection distinct from transient failure.
+3. Add a cancellable Bridge detail operation, regenerate bindings, and make playlist rows interactive with truthful loading, empty, retry, cancellation, and replacement states.
 
 # Blockers
 
@@ -49,6 +52,8 @@ None.
 - Linux runtime write/read/delete is verified with cleanup; Android, Apple, and Windows paths are still unbuilt and runtime-unverified here (TD-004).
 - A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
 - The complete playlist collection requires `encryptUin`; credentials missing it fail before library transport instead of showing only created playlists. Real successful-login coverage has not yet proven this field on every login shape.
+- Ordinary detail passed a current public no-account probe, but authenticated ordinary and liked-songs success remain cross-validated/fixture-tested rather than proven with this checkout's real account.
+- Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).
