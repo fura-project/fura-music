@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Authenticated QQ Radar recommendations vertical slice"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -39,11 +39,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. No finite implementation task is currently selected; the next action is a global evidence-backed task-ranking pass rather than extending the just-edited Search surface by proximity.
+- M3 remains active. Authenticated QQ Radar recommendations are selected after two current independent implementations and a bounded anonymous two-page structural probe. The finite slice adds a credential-checked paged Track feed to Discover and reuses the existing queue; it does not add endless radio, a generic Home/recommendation runtime, or new playback semantics.
 
 # Next Candidates
 
-1. Re-rank the next bounded M3 slice against current Roadmap scope, real protocol/product evidence, user-path value, risks, and the presentation-polish guard before selecting implementation.
+1. Implement the selected authenticated QQ Radar slice with service-owned `Page`/`HasMore`, provider-neutral Track pages, cross-page identity deduplication, exact credential replacement/rejection semantics, a cancellable Bridge operation, independent Discover state, and existing play/queue actions.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -73,6 +73,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Album-search behavior has two current independent implementation references plus one bounded anonymous five-page exact-size/terminal probe. The real response supplied the numeric ID, MID, and title required by existing Album browsing without retaining query or result content; live application compatibility is not yet claimed.
 - Ranking-list behavior has two independent current implementation references plus bounded anonymous list and two-page detail probes. Four non-empty groups, 30 valid summaries, optional period metadata, exact five-row detail pages, stable identity/period, and non-overlapping Track identity were observed without retaining content; live application compatibility is not yet claimed.
 - Playlist-search behavior has two current source/fixture references plus a bounded anonymous three-page Desktop probe and full offline client-to-presentation regression coverage. The observed response supplied numeric-string identity, nonblank title, artwork, Track count, and service page metadata without retaining content; one nonterminal page returned fewer rows than requested, so continuation follows `nextpage`. Live application compatibility is not yet claimed.
+- Radar behavior has two current independent implementation references plus a bounded anonymous two-page structural probe. Both pages returned ten minimum-shape Tracks and `HasMore: true`, with one identity overlap; current implementation must page by `Page`/`HasMore`, deduplicate opaque Track identity, and must not preserve the older one-seed-row assumption. Anonymous structure does not prove authenticated personalization or recommendation quality.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
