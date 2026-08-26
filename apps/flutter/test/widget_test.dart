@@ -23,6 +23,7 @@ import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
@@ -441,6 +442,86 @@ void main() {
         tester.widget<IconButton>(discoverEntry).focusNode?.hasFocus,
         isTrue,
       );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'opens a current ranking and preserves independent Discover state',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const ranking = RankingSummary(
+        providerId: 'qq-music',
+        opaqueId: 'ranking:62001',
+        title: 'Synthetic ranking',
+        period: 'fixture-period',
+        trackCount: 1,
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureMid:-',
+        title: 'Ranked Track',
+        artistNames: ['Ranking artist'],
+      );
+      final rankings = _WidgetRankingGateway(
+        const RankingGroupResult(
+          groups: [
+            RankingGroup(title: 'Synthetic charts', rankings: [ranking]),
+          ],
+        ),
+        const RankingTrackPageResult(
+          ranking: ranking,
+          total: 1,
+          tracks: [track],
+        ),
+      );
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          playlistDetailGateway: _WidgetDetailGateway([]),
+          recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+            const RecommendedPlaylistPageResult(),
+          ),
+          rankingGateway: rankings,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      expect(rankings.groupLoads, 0);
+
+      await tester.tap(find.text('Rankings'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('rankings-content')), findsOneWidget);
+      expect(find.text('Synthetic charts'), findsOneWidget);
+      expect(find.text('Synthetic ranking'), findsOneWidget);
+      expect(rankings.groupLoads, 1);
+
+      await tester.tap(find.byKey(const ValueKey('ranking-ranking:62001')));
+      await tester.pumpAndSettle();
+      expect(find.text('Ranked Track'), findsOneWidget);
+      expect(rankings.trackRequests, [(ranking, 0, 30)]);
+
+      await tester.tap(find.byKey(const ValueKey('ranking-back')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('rankings-content')), findsOneWidget);
+      expect(rankings.groupLoads, 1);
+
+      await tester.tap(find.text('Playlists'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rankings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Synthetic ranking'), findsOneWidget);
+      expect(rankings.groupLoads, 1);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1880,6 +1961,49 @@ class _WidgetRecommendedPlaylistOperation
 
   @override
   Future<RecommendedPlaylistPageResult> run() async => result;
+}
+
+class _WidgetRankingGateway implements RankingGateway {
+  _WidgetRankingGateway(this.groupResult, this.trackResult);
+
+  final RankingGroupResult groupResult;
+  final RankingTrackPageResult trackResult;
+  final List<(RankingSummary, int, int)> trackRequests = [];
+  int groupLoads = 0;
+
+  @override
+  RankingGroupLoadOperation beginGroupLoad() {
+    groupLoads += 1;
+    return _WidgetRankingGroupOperation(groupResult);
+  }
+
+  @override
+  RankingTrackPageLoadOperation beginTrackLoad({
+    required RankingSummary ranking,
+    required int offset,
+    required int size,
+  }) {
+    trackRequests.add((ranking, offset, size));
+    return _WidgetRankingTrackOperation(trackResult);
+  }
+}
+
+class _WidgetRankingGroupOperation implements RankingGroupLoadOperation {
+  const _WidgetRankingGroupOperation(this.result);
+  final RankingGroupResult result;
+  @override
+  bool cancel() => true;
+  @override
+  Future<RankingGroupResult> run() async => result;
+}
+
+class _WidgetRankingTrackOperation implements RankingTrackPageLoadOperation {
+  const _WidgetRankingTrackOperation(this.result);
+  final RankingTrackPageResult result;
+  @override
+  bool cancel() => true;
+  @override
+  Future<RankingTrackPageResult> run() async => result;
 }
 
 class _DetailRequest {

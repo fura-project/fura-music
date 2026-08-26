@@ -44,3 +44,9 @@ Reference implementations remain research evidence only. The runtime will call Q
 ## Selection
 
 Current QQ ranking lists rank first because list/detail identity, current-period behavior, exact Track pagination, and a finite Discover → ranking → queue route are now evidenced. The selected slice treats period as optional display state and always loads the service's current `topId`; historical periods remain out of scope.
+
+## Implementation outcome
+
+Implemented on 2026-08-26 as the eighth finite M3 slice. `QQMusicClient` sends the exact anonymous list/detail requests and rejects invalid group/ranking/Track identity, detail-route mismatch, or incoherent page bounds before Domain mapping. `QQMusicProvider` owns the opaque `ranking:<id>` grammar; the small Rankings contract and single-use cancellable Bridge keep protocol fields out of Flutter. Discover now preserves independent Playlists/Rankings state, and a current-ranking page owns retry/pagination/cancel/stale/disposal behavior while reusing the existing Rust-backed queue.
+
+Rust formatting, 213 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 225 Flutter tests, the Linux x64 Release bundle, and packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored. This evidence proves local mapping, lifecycle, adaptive navigation, queue handoff, packaging, and Bridge behavior; it does not prove live ranking application compatibility or authenticated QQ CDN playback. Historical periods, subscriptions, third-party charts, heterogeneous Home shelves, and generic recommendation/catalog infrastructure remain out of scope.

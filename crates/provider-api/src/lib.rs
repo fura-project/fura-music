@@ -5,8 +5,9 @@ use std::future::Future;
 
 use music_domain::{
     AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistSearchPage,
-    ArtistTracksPage, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
-    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
+    ArtistTracksPage, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, RankingGroup,
+    RankingId, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
+    SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -169,6 +170,22 @@ pub trait RecommendedPlaylistsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<RecommendedPlaylistsPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral current-ranking discovery and Track browsing. Historical
+/// period selection, ranking mutation, and editorial layout remain separate.
+pub trait RankingsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn ranking_groups(&self)
+    -> impl Future<Output = Result<Vec<RankingGroup>, Self::Error>> + Send;
+
+    fn ranking_tracks(
+        &self,
+        ranking_id: RankingId,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<RankingTracksPage, Self::Error>> + Send;
 }
 
 /// Describes behavior that is implemented now, not planned future behavior.

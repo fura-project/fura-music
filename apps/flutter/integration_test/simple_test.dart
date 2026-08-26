@@ -8,6 +8,7 @@ import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
+import 'package:flutterustmusic/src/rust/api/rankings.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
@@ -141,6 +142,27 @@ void main() {
     expect(
       cancelledRecommendationLoad.failure,
       QqMusicRecommendedPlaylistPageLoadFailure.cancelled,
+    );
+    final unusedRankingGroupLoad = beginQqMusicRankingGroupLoad();
+    expect(unusedRankingGroupLoad.isActive, isTrue);
+    expect(unusedRankingGroupLoad.cancel(), isTrue);
+    final cancelledRankingGroupLoad = await unusedRankingGroupLoad.run();
+    expect(
+      cancelledRankingGroupLoad.failure,
+      QqMusicRankingLoadFailure.cancelled,
+    );
+    final unusedRankingTrackLoad = beginQqMusicRankingTrackPageLoad(
+      providerId: 'qq-music',
+      opaqueRankingId: 'ranking:62001',
+      offset: 0,
+      size: 30,
+    );
+    expect(unusedRankingTrackLoad.isActive, isTrue);
+    expect(unusedRankingTrackLoad.cancel(), isTrue);
+    final cancelledRankingTrackLoad = await unusedRankingTrackLoad.run();
+    expect(
+      cancelledRankingTrackLoad.failure,
+      QqMusicRankingLoadFailure.cancelled,
     );
     final unusedMediaResolution = beginQqMusicMediaResolution(
       providerId: 'qq-music',

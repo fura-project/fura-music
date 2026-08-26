@@ -3,23 +3,30 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/discover/ranking_controller.dart';
+import 'package:flutterustmusic/discover/ranking_gateway.dart';
+import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 
 class RecommendedPlaylistsPage extends StatefulWidget {
   const RecommendedPlaylistsPage({
     required this.gateway,
+    required this.rankingGateway,
     required this.queuePlaybackController,
     required this.onBack,
     required this.onOpenPlaylist,
+    required this.onOpenRanking,
     required this.onSignInAgain,
     super.key,
   });
 
   final RecommendedPlaylistGateway gateway;
+  final RankingGateway rankingGateway;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final ValueChanged<RecommendedPlaylistSummary> onOpenPlaylist;
+  final ValueChanged<RankingSummary> onOpenRanking;
   final VoidCallback onSignInAgain;
 
   @override
@@ -29,17 +36,22 @@ class RecommendedPlaylistsPage extends StatefulWidget {
 
 class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   late final RecommendedPlaylistController _controller;
+  late final RankingGroupController _rankingController;
+  _DiscoverType _type = _DiscoverType.playlists;
+  bool _rankingsVisited = false;
 
   @override
   void initState() {
     super.initState();
     _controller = RecommendedPlaylistController(widget.gateway);
+    _rankingController = RankingGroupController(widget.rankingGateway);
     unawaited(_controller.load());
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _rankingController.dispose();
     super.dispose();
   }
 
@@ -56,10 +68,42 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
     ),
     body: SafeArea(
       child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) => AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          child: _body(),
+        animation: Listenable.merge([_controller, _rankingController]),
+        builder: (context, _) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<_DiscoverType>(
+                  key: const ValueKey('discover-type-selector'),
+                  segments: const [
+                    ButtonSegment(
+                      value: _DiscoverType.playlists,
+                      icon: Icon(Icons.queue_music_rounded),
+                      label: Text('Playlists'),
+                    ),
+                    ButtonSegment(
+                      value: _DiscoverType.rankings,
+                      icon: Icon(Icons.leaderboard_rounded),
+                      label: Text('Rankings'),
+                    ),
+                  ],
+                  selected: {_type},
+                  onSelectionChanged: (selection) =>
+                      _selectType(selection.single),
+                ),
+              ),
+            ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: _type == _DiscoverType.playlists
+                    ? _playlistBody()
+                    : _rankingBody(),
+              ),
+            ),
+          ],
         ),
       ),
     ),
@@ -69,7 +113,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
     ),
   );
 
-  Widget _body() => switch (_controller.stage) {
+  Widget _playlistBody() => switch (_controller.stage) {
     RecommendedPlaylistStage.loading => const Center(
       key: ValueKey('recommendations-loading'),
       child: CircularProgressIndicator(),
@@ -104,6 +148,171 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       onSelected: widget.onOpenPlaylist,
     ),
   };
+
+  Widget _rankingBody() => switch (_rankingController.stage) {
+    RankingGroupStage.loading => const Center(
+      key: ValueKey('rankings-loading'),
+      child: CircularProgressIndicator(),
+    ),
+    RankingGroupStage.empty => const _RecommendationMessage(
+      key: ValueKey('rankings-empty'),
+      icon: Icons.leaderboard_outlined,
+      title: 'No rankings right now',
+      detail: 'QQ Music returned no current ranking groups.',
+    ),
+    RankingGroupStage.error => _RecommendationMessage(
+      key: const ValueKey('rankings-error'),
+      icon: Icons.cloud_off_rounded,
+      title: 'Couldn’t load rankings',
+      detail: rankingFailureCopy(_rankingController.failure),
+      liveRegion: true,
+      action: _rankingController.canRetry
+          ? FilledButton.tonal(
+              onPressed: _rankingController.retry,
+              child: const Text('Try again'),
+            )
+          : null,
+    ),
+    RankingGroupStage.content => _RankingCollection(
+      key: const ValueKey('rankings-content'),
+      groups: _rankingController.groups,
+      onSelected: widget.onOpenRanking,
+    ),
+  };
+
+  void _selectType(_DiscoverType type) {
+    if (_type == type) return;
+    setState(() => _type = type);
+    if (type == _DiscoverType.rankings && !_rankingsVisited) {
+      _rankingsVisited = true;
+      unawaited(_rankingController.load());
+    }
+  }
+}
+
+enum _DiscoverType { playlists, rankings }
+
+class _RankingCollection extends StatelessWidget {
+  const _RankingCollection({
+    required this.groups,
+    required this.onSelected,
+    super.key,
+  });
+
+  final List<RankingGroup> groups;
+  final ValueChanged<RankingSummary> onSelected;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 760;
+      return ListView(
+        key: const PageStorageKey<String>('ranking-groups'),
+        padding: EdgeInsets.fromLTRB(
+          desktop ? 48 : 16,
+          desktop ? 24 : 16,
+          desktop ? 48 : 16,
+          28,
+        ),
+        children: [
+          Text(
+            'QQ Music rankings',
+            style:
+                (desktop
+                        ? Theme.of(context).textTheme.headlineMedium
+                        : Theme.of(context).textTheme.headlineSmall)
+                    ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Current charts from QQ Music',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          SizedBox(height: desktop ? 28 : 20),
+          for (final group in groups) ...[
+            Semantics(
+              header: true,
+              child: Text(
+                group.title,
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (desktop)
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final ranking in group.rankings)
+                    SizedBox(
+                      width: 280,
+                      child: _RankingTile(
+                        ranking: ranking,
+                        onTap: () => onSelected(ranking),
+                      ),
+                    ),
+                ],
+              )
+            else
+              for (final ranking in group.rankings)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _RankingTile(
+                    ranking: ranking,
+                    onTap: () => onSelected(ranking),
+                  ),
+                ),
+            const SizedBox(height: 24),
+          ],
+        ],
+      );
+    },
+  );
+}
+
+class _RankingTile extends StatelessWidget {
+  const _RankingTile({required this.ranking, required this.onTap});
+
+  final RankingSummary ranking;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = <String>[];
+    if (ranking.period case final period?) details.add(period);
+    if (ranking.trackCount case final count?) details.add('$count Tracks');
+    final semantic = details.isEmpty
+        ? ranking.title
+        : '${ranking.title}, ${details.join(', ')}';
+    return Semantics(
+      button: true,
+      label: semantic,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: ListTile(
+        key: ValueKey('ranking-${ranking.opaqueId}'),
+        minTileHeight: 80,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: SizedBox.square(
+          dimension: 60,
+          child: RankingArtwork(uri: ranking.artworkUri),
+        ),
+        title: Text(
+          ranking.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: details.isEmpty
+            ? const Text('Current ranking')
+            : Text(details.join(' · ')),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: onTap,
+      ),
+    );
+  }
 }
 
 class _RecommendationCollection extends StatelessWidget {

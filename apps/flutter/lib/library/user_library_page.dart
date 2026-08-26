@@ -11,6 +11,8 @@ import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
+import 'package:flutterustmusic/discover/ranking_gateway.dart';
+import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
@@ -48,6 +50,7 @@ class UserLibraryPage extends StatefulWidget {
     this.artistTrackGateway,
     this.artistAlbumGateway,
     this.recommendedPlaylistGateway,
+    this.rankingGateway,
     super.key,
   });
 
@@ -66,6 +69,7 @@ class UserLibraryPage extends StatefulWidget {
   final ArtistTrackGateway? artistTrackGateway;
   final ArtistAlbumGateway? artistAlbumGateway;
   final RecommendedPlaylistGateway? recommendedPlaylistGateway;
+  final RankingGateway? rankingGateway;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -81,6 +85,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final ArtistTrackGateway _artistTrackGateway;
   late final ArtistAlbumGateway _artistAlbumGateway;
   late final RecommendedPlaylistGateway _recommendedPlaylistGateway;
+  late final RankingGateway _rankingGateway;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -95,6 +100,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   AlbumSummary? _selectedAlbum;
   ArtistSummary? _selectedArtist;
   RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
+  RankingSummary? _selectedRanking;
   UserPlaylistSummary? _lastOpenedPlaylist;
   bool _searchOpen = false;
   bool _recommendationsOpen = false;
@@ -119,6 +125,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _recommendedPlaylistGateway =
         widget.recommendedPlaylistGateway ??
         const RustRecommendedPlaylistGateway();
+    _rankingGateway = widget.rankingGateway ?? const RustRankingGateway();
     _queuePlaybackController = QueuePlaybackController(
       widget.playbackQueueGateway,
       TrackPlaybackController(
@@ -160,16 +167,23 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     final selectedAlbum = _selectedAlbum;
     final selectedArtist = _selectedArtist;
     final selectedRecommendedPlaylist = _selectedRecommendedPlaylist;
+    final selectedRanking = _selectedRanking;
     final page = _recommendationsOpen
         ? IndexedStack(
-            index: selectedRecommendedPlaylist == null ? 0 : 1,
+            index: selectedRecommendedPlaylist != null
+                ? 1
+                : selectedRanking != null
+                ? 2
+                : 0,
             children: [
               RecommendedPlaylistsPage(
                 key: const ValueKey('recommended-playlists-page'),
                 gateway: _recommendedPlaylistGateway,
+                rankingGateway: _rankingGateway,
                 queuePlaybackController: _queuePlaybackController,
                 onBack: _closeRecommendations,
                 onOpenPlaylist: _openRecommendedPlaylist,
+                onOpenRanking: _openRanking,
                 onSignInAgain: widget.onSignInAgain,
               ),
               if (selectedRecommendedPlaylist == null)
@@ -184,6 +198,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   gateway: widget.detailGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnToRecommendations,
+                  onSignInAgain: widget.onSignInAgain,
+                ),
+              if (selectedRanking == null)
+                const SizedBox.shrink()
+              else
+                RankingPage(
+                  key: ValueKey('ranking-detail-${selectedRanking.opaqueId}'),
+                  ranking: selectedRanking,
+                  gateway: _rankingGateway,
+                  queuePlaybackController: _queuePlaybackController,
+                  onBack: _returnFromRanking,
                   onSignInAgain: widget.onSignInAgain,
                 ),
             ],
@@ -254,6 +279,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         selectedPlaylist != null ||
         _recommendationsOpen ||
         selectedRecommendedPlaylist != null ||
+        selectedRanking != null ||
         _searchOpen ||
         selectedAlbum != null ||
         selectedArtist != null;
@@ -298,6 +324,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _returnFromLocalPage() {
     if (_selectedRecommendedPlaylist != null) {
       _returnToRecommendations();
+    } else if (_selectedRanking != null) {
+      _returnFromRanking();
     } else if (_recommendationsOpen) {
       _closeRecommendations();
     } else if (_selectedAlbum != null) {
@@ -329,6 +357,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (!_recommendationsOpen) return;
     setState(() {
       _selectedRecommendedPlaylist = null;
+      _selectedRanking = null;
       _recommendationsOpen = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -341,7 +370,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openRecommendedPlaylist(RecommendedPlaylistSummary playlist) {
-    if (!_recommendationsOpen || _selectedRecommendedPlaylist != null) return;
+    if (!_recommendationsOpen ||
+        _selectedRecommendedPlaylist != null ||
+        _selectedRanking != null) {
+      return;
+    }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _selectedRecommendedPlaylist = playlist);
   }
@@ -349,6 +382,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _returnToRecommendations() {
     if (_selectedRecommendedPlaylist == null) return;
     setState(() => _selectedRecommendedPlaylist = null);
+  }
+
+  void _openRanking(RankingSummary ranking) {
+    if (!_recommendationsOpen ||
+        _selectedRecommendedPlaylist != null ||
+        _selectedRanking != null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _selectedRanking = ranking);
+  }
+
+  void _returnFromRanking() {
+    if (_selectedRanking == null) return;
+    setState(() => _selectedRanking = null);
   }
 
   void _closeSearch() {

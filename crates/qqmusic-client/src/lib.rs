@@ -17,6 +17,7 @@ mod media_resolution;
 mod owned_playlists;
 mod playlist_detail;
 mod qrc_cipher;
+mod rankings;
 mod recommendations;
 mod search;
 mod transport;
@@ -53,6 +54,10 @@ pub use owned_playlists::{
 pub use playlist_detail::{
     PlaylistDetailTrackField, QqMusicAlbumSummary, QqMusicArtistSummary,
     QqMusicPlaylistDetailError, QqMusicPlaylistTracksPage, QqMusicTrackSummary,
+};
+pub use rankings::{
+    QqMusicRankingGroup, QqMusicRankingSummary, QqMusicRankingTrackPage, QqMusicRankingsError,
+    RankingField, RankingGroupField, RankingTrackField,
 };
 pub use recommendations::{
     QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRecommendedPlaylistsPage,

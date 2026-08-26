@@ -6,6 +6,7 @@ pub mod library;
 pub mod lyrics;
 pub mod media;
 pub mod queue;
+pub mod rankings;
 pub mod recommendations;
 pub mod search;
 

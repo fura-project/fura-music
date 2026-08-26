@@ -7,9 +7,9 @@ use std::sync::{Arc, Mutex};
 use music_domain::{
     AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
     ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat, AudioQuality, PlaylistId,
-    PlaylistSummary, PlaylistTracksPage, ProviderId, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem,
-    TrackSearchPage, TrackSummary,
+    PlaylistSummary, PlaylistTracksPage, ProviderId, RankingGroup, RankingId, RankingSummary,
+    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
+    SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider, ArtistSearchProvider,
@@ -17,8 +17,8 @@ use provider_api::{
     MediaResolutionError, MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider,
     PlaylistDetailsProvider, ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge,
     QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-    RecommendationError, RecommendedPlaylistsProvider, SearchError, TrackSearchProvider,
-    UserLibraryError, UserPlaylistsProvider,
+    RankingsProvider, RecommendationError, RecommendedPlaylistsProvider, SearchError,
+    TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
@@ -26,10 +26,11 @@ use qqmusic_client::{
     QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicClient,
     QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
     QqMusicMediaError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QqMusicPlaylistDetailError, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
-    QqMusicSearchError, QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError,
-    WechatQrError, WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError,
-    WechatQrLoginProgress, WechatQrLoginSession,
+    QqMusicPlaylistDetailError, QqMusicRankingSummary, QqMusicRankingsError,
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+    QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -588,6 +589,56 @@ where
     }
 }
 
+impl<T> RankingsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = CatalogError;
+
+    async fn ranking_groups(&self) -> Result<Vec<RankingGroup>, Self::Error> {
+        let response = self.client().ranking_groups().await;
+        response
+            .as_ref()
+            .map_err(map_rankings_error)?
+            .iter()
+            .map(|group| {
+                let rankings = group
+                    .rankings()
+                    .iter()
+                    .map(map_ranking_summary)
+                    .collect::<Result<Vec<_>, _>>()?;
+                RankingGroup::new(group.title(), rankings)
+                    .map_err(|_| CatalogError::InvalidResponse)
+            })
+            .collect()
+    }
+
+    async fn ranking_tracks(
+        &self,
+        requested_id: RankingId,
+        offset: u32,
+        size: u32,
+    ) -> Result<RankingTracksPage, Self::Error> {
+        let top_id = parse_ranking_id(&requested_id)?;
+        let response = self.client().ranking_tracks(top_id, offset, size).await;
+        let page = response.as_ref().map_err(map_rankings_error)?;
+        let ranking = map_ranking_summary(page.ranking())?;
+        let tracks = page
+            .tracks()
+            .iter()
+            .map(map_track_summary)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| CatalogError::InvalidResponse)?;
+        Ok(RankingTracksPage::new(
+            ranking,
+            page.offset(),
+            page.total(),
+            page.has_more(),
+            tracks,
+        ))
+    }
+}
+
 impl<T> OwnedPlaylistsProvider for QqMusicProvider<T>
 where
     T: HttpTransport + 'static,
@@ -991,6 +1042,22 @@ fn map_recommended_playlist(
         .map_err(|_| RecommendationError::InvalidResponse)
 }
 
+fn map_ranking_summary(ranking: &QqMusicRankingSummary) -> Result<RankingSummary, CatalogError> {
+    let id = RankingId::new(
+        qq_music_provider_id(),
+        format!("ranking:{}", ranking.top_id()),
+    )
+    .map_err(|_| CatalogError::InvalidResponse)?;
+    RankingSummary::new(id, ranking.title())
+        .map(|summary| {
+            summary
+                .with_period(ranking.period().map(str::to_owned))
+                .with_artwork_uri(ranking.artwork_uri().map(str::to_owned))
+                .with_track_count(ranking.total())
+        })
+        .map_err(|_| CatalogError::InvalidResponse)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum QqMusicPlaylistRoute {
     Ordinary { playlist_id: u64 },
@@ -1152,6 +1219,21 @@ fn parse_artist_identity(requested_id: &ArtistId) -> Result<(u64, &str), Catalog
         .filter(|value| is_safe_track_mid(value))
         .ok_or(CatalogError::InvalidResponse)?;
     Ok((numeric_id, artist_mid))
+}
+
+fn parse_ranking_id(requested_id: &RankingId) -> Result<u64, CatalogError> {
+    if requested_id.provider() != &qq_music_provider_id() {
+        return Err(CatalogError::InvalidResponse);
+    }
+    let mut parts = requested_id.opaque().split(':');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some("ranking"), Some(raw_id), None) => raw_id
+            .parse::<u64>()
+            .ok()
+            .filter(|value| *value != 0)
+            .ok_or(CatalogError::InvalidResponse),
+        _ => Err(CatalogError::InvalidResponse),
+    }
 }
 
 fn map_search_item(track: &QqMusicTrackSummary) -> Result<TrackSearchItem, ()> {
@@ -1553,6 +1635,32 @@ fn map_recommendations_error<E>(
     }
 }
 
+fn map_rankings_error<E>(error: &QqMusicRankingsError<E>) -> CatalogError {
+    match error {
+        QqMusicRankingsError::Transport(_) => CatalogError::Network,
+        QqMusicRankingsError::HttpStatus(_) | QqMusicRankingsError::Upstream { .. } => {
+            CatalogError::ServiceUnavailable
+        }
+        QqMusicRankingsError::InvalidRankingId
+        | QqMusicRankingsError::InvalidPageSize { .. }
+        | QqMusicRankingsError::Serialize
+        | QqMusicRankingsError::InvalidJson
+        | QqMusicRankingsError::MissingGlobalCode
+        | QqMusicRankingsError::MissingResult
+        | QqMusicRankingsError::MissingResultCode
+        | QqMusicRankingsError::MissingData
+        | QqMusicRankingsError::MissingGroups
+        | QqMusicRankingsError::InvalidGroup { .. }
+        | QqMusicRankingsError::InvalidRanking { .. }
+        | QqMusicRankingsError::MismatchedRankingId
+        | QqMusicRankingsError::MissingTotal
+        | QqMusicRankingsError::MissingTracks
+        | QqMusicRankingsError::InvalidPagination
+        | QqMusicRankingsError::InvalidTrack { .. }
+        | QqMusicRankingsError::InvalidArtist { .. } => CatalogError::InvalidResponse,
+    }
+}
+
 fn map_media_error<E>(error: &QqMusicMediaError<E>) -> MediaResolutionError {
     match error {
         QqMusicMediaError::Transport { .. } => MediaResolutionError::Network,
@@ -1669,21 +1777,22 @@ mod tests {
 
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use music_domain::{
-        AlbumId, ArtistId, AudioFormat, AudioQuality, PlaylistId, ProviderId, TrackId,
+        AlbumId, ArtistId, AudioFormat, AudioQuality, PlaylistId, ProviderId, RankingId, TrackId,
     };
     use provider_api::{
         AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider, ArtistSearchProvider,
         ArtistTracksProvider, CatalogError, LyricsError, LyricsProvider, MediaResolutionError,
         MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
         ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
-        QrAuthenticationSession, QrImageFormat, RecommendationError, RecommendedPlaylistsProvider,
-        SearchError, TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+        QrAuthenticationSession, QrImageFormat, RankingsProvider, RecommendationError,
+        RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
+        UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
         HttpResponse, HttpTransport, LoginType, QqMusicAlbumSearchError, QqMusicAlbumTracksError,
         QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
-        QqMusicClient, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+        QqMusicClient, QqMusicRankingsError, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -2611,6 +2720,107 @@ mod tests {
             ),
             RecommendationError::InvalidResponse
         );
+    }
+
+    #[tokio::test]
+    async fn maps_public_ranking_groups_and_tracks_without_account_state() {
+        let list_provider =
+            QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+                "code": 0,
+                "music.musicToplist.Toplist.GetAll": {"code": 0, "data": {"group": [{
+                    "groupName": "Synthetic rankings",
+                    "toplist": [{
+                        "topId": 62001,
+                        "title": "Synthetic chart",
+                        "period": "fixture-period",
+                        "frontPicUrl": "https://example.invalid/chart.jpg",
+                        "totalNum": 31
+                    }]
+                }]}}
+            }))));
+        let groups = list_provider
+            .ranking_groups()
+            .await
+            .expect("ranking groups");
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].title(), "Synthetic rankings");
+        assert_eq!(groups[0].rankings().len(), 1);
+        let ranking = &groups[0].rankings()[0];
+        assert_eq!(ranking.id().provider().as_str(), "qq-music");
+        assert_eq!(ranking.id().opaque(), "ranking:62001");
+        assert_eq!(ranking.period(), Some("fixture-period"));
+        assert_eq!(ranking.track_count(), Some(31));
+        assert!(!list_provider.has_authenticated_credential());
+        assert!(!format!("{groups:?}").contains("Synthetic chart"));
+        assert!(!format!("{groups:?}").contains("62001"));
+
+        let detail_provider =
+            QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+                "code": 0,
+                "music.musicToplist.Toplist.GetDetail": {"code": 0, "data": {
+                    "data": {
+                        "topId": 62001,
+                        "title": "Synthetic chart",
+                        "period": "fixture-period",
+                        "frontPicUrl": "https://example.invalid/chart.jpg",
+                        "totalNum": 31
+                    },
+                    "songInfoList": [{
+                        "id": 41001,
+                        "mid": "fixtureTrackMid1",
+                        "title": "Synthetic Track",
+                        "type": 0,
+                        "interval": 245,
+                        "file": {"media_mid": "fixtureFileMid1"},
+                        "singer": [{"id": 42001, "mid": "artistMid", "name": "Artist"}],
+                        "album": {"id": 43001, "mid": "albumMid", "name": "Album"}
+                    }]
+                }}
+            }))));
+        let page = detail_provider
+            .ranking_tracks(
+                RankingId::new(
+                    ProviderId::new("qq-music").expect("provider"),
+                    "ranking:62001",
+                )
+                .expect("ranking ID"),
+                30,
+                5,
+            )
+            .await
+            .expect("ranking Tracks");
+
+        assert_eq!(page.ranking().id().opaque(), "ranking:62001");
+        assert_eq!(page.offset(), 30);
+        assert_eq!(page.total(), 31);
+        assert!(!page.has_more());
+        assert_eq!(page.tracks().len(), 1);
+        assert_eq!(page.tracks()[0].title(), "Synthetic Track");
+        assert!(!detail_provider.has_authenticated_credential());
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("Synthetic Track"));
+        assert!(!debug.contains("62001"));
+    }
+
+    #[test]
+    fn maps_ranking_failures_coarsely_and_rejects_invalid_opaque_identity() {
+        assert_eq!(
+            super::map_rankings_error(&QqMusicRankingsError::<Infallible>::HttpStatus(503)),
+            CatalogError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_rankings_error(&QqMusicRankingsError::<Infallible>::InvalidPagination),
+            CatalogError::InvalidResponse
+        );
+        for opaque in ["ranking:0", "ranking:not-a-number", "ranking:1:extra"] {
+            let id = RankingId::new(ProviderId::new("qq-music").expect("provider"), opaque)
+                .expect("structural identity");
+            assert_eq!(
+                super::parse_ranking_id(&id),
+                Err(CatalogError::InvalidResponse)
+            );
+        }
     }
 
     fn set_authenticated<T>(provider: &QqMusicProvider<T>, music_id: &str) {

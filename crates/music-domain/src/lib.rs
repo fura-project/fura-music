@@ -200,6 +200,210 @@ impl fmt::Display for InvalidPlaylistSummary {
 
 impl std::error::Error for InvalidPlaylistSummary {}
 
+/// Provider-scoped ranking identity. The opaque value is interpreted only by
+/// the owning Provider and must not be decoded by presentation code.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct RankingId {
+    provider: ProviderId,
+    opaque: String,
+}
+
+impl RankingId {
+    /// # Errors
+    ///
+    /// Returns [`InvalidRankingId`] when the provider-owned value is blank.
+    pub fn new(provider: ProviderId, opaque: impl Into<String>) -> Result<Self, InvalidRankingId> {
+        let opaque = opaque.into();
+        if opaque.trim().is_empty() {
+            return Err(InvalidRankingId);
+        }
+        Ok(Self { provider, opaque })
+    }
+
+    #[must_use]
+    pub const fn provider(&self) -> &ProviderId {
+        &self.provider
+    }
+
+    #[must_use]
+    pub fn opaque(&self) -> &str {
+        &self.opaque
+    }
+}
+
+impl fmt::Debug for RankingId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RankingId")
+            .field("provider", &self.provider)
+            .field("opaque", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidRankingId;
+
+impl fmt::Display for InvalidRankingId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ranking identity must have a non-empty provider value")
+    }
+}
+
+impl std::error::Error for InvalidRankingId {}
+
+/// Minimum provider-neutral current-ranking metadata needed by discovery and
+/// the ranking Track route. Historical-period selection is deliberately not
+/// part of this value.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RankingSummary {
+    id: RankingId,
+    title: String,
+    period: Option<String>,
+    artwork_uri: Option<String>,
+    track_count: Option<u32>,
+}
+
+impl RankingSummary {
+    /// # Errors
+    ///
+    /// Returns [`InvalidRankingSummary`] when the title is blank.
+    pub fn new(id: RankingId, title: impl Into<String>) -> Result<Self, InvalidRankingSummary> {
+        let title = title.into();
+        if title.trim().is_empty() {
+            return Err(InvalidRankingSummary);
+        }
+        Ok(Self {
+            id,
+            title,
+            period: None,
+            artwork_uri: None,
+            track_count: None,
+        })
+    }
+
+    #[must_use]
+    pub fn with_period(mut self, period: Option<String>) -> Self {
+        self.period = nonblank(period);
+        self
+    }
+
+    #[must_use]
+    pub fn with_artwork_uri(mut self, artwork_uri: Option<String>) -> Self {
+        self.artwork_uri = nonblank(artwork_uri);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_track_count(mut self, track_count: Option<u32>) -> Self {
+        self.track_count = track_count;
+        self
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> &RankingId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    #[must_use]
+    pub fn period(&self) -> Option<&str> {
+        self.period.as_deref()
+    }
+
+    #[must_use]
+    pub fn artwork_uri(&self) -> Option<&str> {
+        self.artwork_uri.as_deref()
+    }
+
+    #[must_use]
+    pub const fn track_count(&self) -> Option<u32> {
+        self.track_count
+    }
+}
+
+impl fmt::Debug for RankingSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RankingSummary")
+            .field("id", &self.id)
+            .field("title", &"[REDACTED]")
+            .field("has_period", &self.period.is_some())
+            .field("has_artwork", &self.artwork_uri.is_some())
+            .field("track_count", &self.track_count)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidRankingSummary;
+
+impl fmt::Display for InvalidRankingSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ranking summary title must not be empty")
+    }
+}
+
+impl std::error::Error for InvalidRankingSummary {}
+
+/// One provider-neutral editorial grouping of current rankings.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RankingGroup {
+    title: String,
+    rankings: Vec<RankingSummary>,
+}
+
+impl RankingGroup {
+    /// # Errors
+    ///
+    /// Returns [`InvalidRankingGroup`] for a blank title or empty group.
+    pub fn new(
+        title: impl Into<String>,
+        rankings: Vec<RankingSummary>,
+    ) -> Result<Self, InvalidRankingGroup> {
+        let title = title.into();
+        if title.trim().is_empty() || rankings.is_empty() {
+            return Err(InvalidRankingGroup);
+        }
+        Ok(Self { title, rankings })
+    }
+
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    #[must_use]
+    pub fn rankings(&self) -> &[RankingSummary] {
+        &self.rankings
+    }
+}
+
+impl fmt::Debug for RankingGroup {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RankingGroup")
+            .field("title", &"[REDACTED]")
+            .field("ranking_count", &self.rankings.len())
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidRankingGroup;
+
+impl fmt::Display for InvalidRankingGroup {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ranking group must have a title and at least one ranking")
+    }
+}
+
+impl std::error::Error for InvalidRankingGroup {}
+
 /// Provider-scoped track identity. Presentation and generic domain code must
 /// not infer media-resolution fields from the opaque value.
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -769,6 +973,74 @@ pub struct RecommendedPlaylistsPage {
     playlists: Vec<PlaylistSummary>,
 }
 
+/// One bounded page of the current Track list for a ranking. The owning
+/// Provider decides what "current" means and how the opaque ranking routes.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RankingTracksPage {
+    ranking: RankingSummary,
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    tracks: Vec<TrackSummary>,
+}
+
+impl RankingTracksPage {
+    #[must_use]
+    pub const fn new(
+        ranking: RankingSummary,
+        offset: u32,
+        total: u32,
+        has_more: bool,
+        tracks: Vec<TrackSummary>,
+    ) -> Self {
+        Self {
+            ranking,
+            offset,
+            total,
+            has_more,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn ranking(&self) -> &RankingSummary {
+        &self.ranking
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+}
+
+impl fmt::Debug for RankingTracksPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RankingTracksPage")
+            .field("ranking", &self.ranking)
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("track_count", &self.tracks.len())
+            .finish()
+    }
+}
+
 impl RecommendedPlaylistsPage {
     #[must_use]
     pub const fn new(offset: u32, has_more: bool, playlists: Vec<PlaylistSummary>) -> Self {
@@ -1234,8 +1506,9 @@ mod tests {
     use super::{
         AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSearchPage,
         ArtistSummary, AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage,
-        ProviderId, ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem,
-        TrackSearchPage, TrackSummary, TrackSummaryField,
+        ProviderId, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
+        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage,
+        TrackSummary, TrackSummaryField,
     };
 
     #[test]
@@ -1400,6 +1673,58 @@ mod tests {
         let debug = format!("{page:?}");
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("43001"));
+    }
+
+    #[test]
+    fn ranking_values_preserve_current_metadata_and_redact_content() {
+        let provider = ProviderId::new("qq-music").expect("provider");
+        let ranking = RankingSummary::new(
+            RankingId::new(provider.clone(), "ranking:62001").expect("ranking ID"),
+            "must-not-leak-ranking",
+        )
+        .expect("ranking")
+        .with_period(Some("private-period".into()))
+        .with_artwork_uri(Some("https://example.invalid/private.jpg".into()))
+        .with_track_count(Some(100));
+        let group =
+            RankingGroup::new("must-not-leak-group", vec![ranking.clone()]).expect("ranking group");
+        let track = TrackSummary::new(
+            TrackId::new(provider, "track:41001:0:fixture-mid:-").expect("track ID"),
+            "must-not-leak-track",
+            vec!["private-artist".into()],
+        )
+        .expect("track");
+        let page = RankingTracksPage::new(ranking, 0, 100, true, vec![track]);
+
+        assert_eq!(group.title(), "must-not-leak-group");
+        assert_eq!(group.rankings().len(), 1);
+        assert_eq!(group.rankings()[0].period(), Some("private-period"));
+        assert_eq!(group.rankings()[0].track_count(), Some(100));
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.total(), 100);
+        assert!(page.has_more());
+        assert_eq!(page.tracks().len(), 1);
+        let debug = format!("{group:?} {page:?}");
+        for private in [
+            "must-not-leak-group",
+            "must-not-leak-ranking",
+            "must-not-leak-track",
+            "private-period",
+            "private-artist",
+            "62001",
+            "41001",
+        ] {
+            assert!(!debug.contains(private));
+        }
+        assert!(RankingGroup::new("group", Vec::new()).is_err());
+        assert!(
+            RankingSummary::new(
+                RankingId::new(ProviderId::new("qq-music").expect("provider"), "ranking:1")
+                    .expect("ranking ID"),
+                "   "
+            )
+            .is_err()
+        );
     }
 
     #[test]

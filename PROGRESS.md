@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Current QQ ranking-list vertical slice"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -32,16 +32,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the fifth M3 slice: direct anonymous Artist-Album loading maps exact-size offset pages into existing provider-neutral `AlbumSummary` values through a small Catalog contract and cancellable Bridge. The real service proved `num` is the page-size field while the conflicting `number` reference was ignored. Flutter loads Albums lazily inside the existing Artist page, preserves both sections, adapts list/grid presentation, and nests the existing Album/queue path so back returns Album → Artist → Search without reloading prior state.
 - Implemented the sixth M3 slice: a separate direct anonymous Artist Search operation maps exact Desktop type-1 pages into existing provider-neutral `ArtistSummary` values through a cancellable typed Bridge. Flutter preserves independent Tracks/Artists query, results, pagination, cancellation, and stale-result state; direct results open the existing Artist Tracks/Albums and nested Album/queue path without reloading Search. Mixed Search, other result types, suggestions/history/hot words, Artist biography/follow, and a generic Search runtime remain excluded.
 - Implemented the seventh M3 slice: a separate direct anonymous Album Search operation maps exact Desktop type-2 pages into existing provider-neutral `AlbumSummary` values through a cancellable typed Bridge. Flutter preserves independent Tracks/Artists/Albums query, results, pagination, cancellation, and stale-result state; direct Albums open the existing Album Track/queue path without reloading Search, and the three-type control has a 360px regression. Mixed Search, other result types, suggestions/history/hot words, Album metadata/mutation, and a generic Search runtime remain excluded.
-- Revalidated the resulting baseline: Rust formatting, 203 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 216 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live Album Search/application compatibility, authenticated downstream playback, or search/discovery-to-CDN playback.
+- Implemented the eighth M3 slice: direct anonymous QQ Music ranking-list/detail operations map grouped current-ranking summaries and paged Tracks through a small provider-neutral Rankings contract and cancellable typed Bridge. Flutter preserves independent Playlists/Rankings discovery state, owns first/empty/error/retry/pagination/append-failure/cancel/stale/disposal behavior, and reuses the existing queue without adding history, subscriptions, third-party charts, heterogeneous Home shelves, or a generic catalog runtime.
+- Revalidated the resulting baseline: Rust formatting, 213 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 225 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live ranking application compatibility, authenticated downstream playback, or discovery-to-CDN playback.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Current QQ ranking lists are selected after two independent current implementations and bounded anonymous list/two-page detail evidence. The active finite slice adds grouped current rankings and paged Track detail to the existing Discover/queue route; historical periods and a generic home runtime remain excluded.
+- M3 remains active. The current-ranking slice is implemented and locally validated; the next action is a fresh global ranking of evidence-backed finite M3 work rather than automatically extending nearby ranking or presentation code.
 
 # Next Candidates
 
-1. Implement the selected current-ranking slice through direct QQ list/detail operations, provider-neutral values, cancellable Bridge operations, and the existing Discover/queue route.
+1. Run a fresh bounded M3 discovery/ranking pass across Roadmap authorization, current Risks, real QQ protocol evidence, and existing user-visible gaps; select one finite task only when its provenance and acceptance boundary are concrete.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
