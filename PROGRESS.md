@@ -100,6 +100,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added cross-layer regressions with observed `songtype: 13`, differing file/song MIDs, missing-file fallback, malformed identity, exact filename, and fixed vkey parameter. Rust now passes 150 offline tests (`19 + 2 + 29 + 76 + 24`) plus strict Clippy/formatting and the anonymous live media probe; strict Dart analysis, 103 Flutter tests, Linux release, and packaged typed-FFI smoke pass.
 - Added authenticated-surface playback shortcuts without moving transport state into Rust: hardware play/pause, previous, next, and stop keys plus `Ctrl+Space`, `Ctrl+Left`, and `Ctrl+Right` now use the same Track/Queue controller actions as the visible controls across library/detail navigation. Authentication failures cannot be retried by a shortcut. Strict Dart analysis, all 104 Flutter tests, formatting, and a Linux release build pass.
 - Added exact elapsed/duration progress and one-commit drag seeking for tracks with a positive known duration. The foreground session owns plugin seek, the controller accepts only the exact playing/paused session, clamps through Track duration, ignores position callbacks while seeking, suppresses stale/concurrent completions, and maps current seek failure coarsely without retaining the source. Unknown duration renders no progress. The Linux loopback fixture now serves valid byte ranges; local/loopback native playback, position, and seek pass alongside strict analysis, 109 Flutter tests, and a Linux release build.
+- Added a bounded foreground volume value owned by the existing Dart playback controller. It is applied before every fresh native session plays, survives queue track replacement within the authenticated surface, rejects non-finite/out-of-range values, converges after out-of-order updates, and isolates old-session failure. The adaptive control opens as a narrow bottom sheet or wide dialog and commits once on release; no persistence/settings abstraction was added. Strict analysis, 113 Flutter tests, Linux release, and native loopback volume/playback/seek pass.
 
 # In Progress
 
@@ -107,7 +108,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Next Candidates
 
-1. Add a bounded desktop foreground volume control that is applied to each fresh native session without leaking plugin state into the queue or Rust; keep persistence out until a real product requirement exists.
+1. Add current-track artwork to the compact now-playing surface using the existing provider-neutral URI and a local placeholder; keep layout adaptive and avoid a new fetch/cache abstraction.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 

@@ -128,6 +128,45 @@ void main() {
     expect(find.byKey(const ValueKey('now-playing-progress')), findsNothing);
   });
 
+  testWidgets('volume commits once and applies to replacement sessions', (
+    tester,
+  ) async {
+    final firstSession = _FakeAudioSession();
+    final secondSession = _FakeAudioSession();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('first-volume')),
+        _ImmediateMediaOperation(_success('second-volume')),
+      ]),
+      audio: _FakeAudioEngine([firstSession, secondSession]),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    expect(firstSession.volumes, [1]);
+
+    await tester.tap(find.byTooltip('Volume'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    final slider = find.byKey(const ValueKey('volume-slider'));
+    await tester.tapAt(tester.getCenter(slider));
+    await tester.pumpAndSettle();
+
+    expect(firstSession.volumes, hasLength(2));
+    expect(firstSession.volumes.last, closeTo(0.5, 0.05));
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('volume-percent'))).data,
+      '50%',
+    );
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Next'));
+    await tester.pumpAndSettle();
+    expect(secondSession.volumes, hasLength(1));
+    expect(secondSession.volumes.single, closeTo(0.5, 0.05));
+  });
+
   for (final failure in [
     LyricFailure.credentialRejected,
     LyricFailure.credentialRejectedStorageCleanupFailed,
@@ -486,7 +525,15 @@ void main() {
 
     expect(find.byTooltip('Pause'), findsOneWidget);
     expect(find.byTooltip('Stop'), findsOneWidget);
+    expect(find.byTooltip('Volume'), findsOneWidget);
     expect(find.byTooltip('Show queue'), findsOneWidget);
+    await tester.tap(find.byTooltip('Volume'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.byKey(const ValueKey('volume-slider')), findsOneWidget);
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
     expect(find.text('Queue'), findsOneWidget);
@@ -885,6 +932,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
       StreamController<ForegroundAudioFailure>.broadcast();
   final StreamController<int> _positions = StreamController<int>.broadcast();
   final List<int> seekPositions = [];
+  final List<double> volumes = [];
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -905,6 +953,11 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> seekToMs(int positionMs) async {
     seekPositions.add(positionMs);
     _positions.add(positionMs);
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    volumes.add(volume);
   }
 
   @override

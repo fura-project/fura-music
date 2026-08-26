@@ -33,12 +33,14 @@ class TrackPlaybackController extends ChangeNotifier {
   bool _resolving = false;
   bool _disposed = false;
   int _lastPlaybackPositionMs = 0;
+  double _lastPlaybackVolume = 1;
 
   TrackPlaybackStage get stage => _stage;
   PlaylistTrackSummary? get track => _track;
   MediaResolutionFailure? get resolutionFailure => _resolutionFailure;
   ForegroundAudioFailure? get engineFailure => _engineFailure;
   int get positionMs => _playback.positionMs;
+  double get volume => _playback.volume;
   int? get durationMs {
     final durationSeconds = _track?.durationSeconds;
     return durationSeconds == null || durationSeconds <= 0
@@ -140,6 +142,8 @@ class TrackPlaybackController extends ChangeNotifier {
     return _playback.seekToMs(boundedPosition);
   }
 
+  Future<void> setVolume(double volume) => _playback.setVolume(volume);
+
   Future<void> stop() async {
     ++_generation;
     _resolutionOperation?.cancel();
@@ -155,11 +159,14 @@ class TrackPlaybackController extends ChangeNotifier {
     if (_disposed || _resolving) return;
     final positionChanged = _lastPlaybackPositionMs != _playback.positionMs;
     _lastPlaybackPositionMs = _playback.positionMs;
+    final volumeChanged = _lastPlaybackVolume != _playback.volume;
+    _lastPlaybackVolume = _playback.volume;
     final playbackFailure = _playback.failure;
     if (_playback.stage == ForegroundPlaybackStage.error) {
       _engineFailure =
           playbackFailure ?? ForegroundAudioFailure.coreUnavailable;
-      if (!_setStage(TrackPlaybackStage.engineError) && positionChanged) {
+      if (!_setStage(TrackPlaybackStage.engineError) &&
+          (positionChanged || volumeChanged)) {
         notifyListeners();
       }
       return;
@@ -174,7 +181,7 @@ class TrackPlaybackController extends ChangeNotifier {
       ForegroundPlaybackStage.completed => TrackPlaybackStage.completed,
       ForegroundPlaybackStage.error => TrackPlaybackStage.engineError,
     });
-    if (!stageChanged && positionChanged) notifyListeners();
+    if (!stageChanged && (positionChanged || volumeChanged)) notifyListeners();
   }
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;

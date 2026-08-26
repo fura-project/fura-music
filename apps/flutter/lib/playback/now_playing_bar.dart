@@ -67,6 +67,7 @@ class NowPlayingBar extends StatelessWidget {
                                     controller: controller,
                                     onSignInAgain: onSignInAgain,
                                   ),
+                                _VolumeButton(controller: playback),
                                 _QueueButton(controller: controller),
                               ],
                             ),
@@ -101,6 +102,7 @@ class NowPlayingBar extends StatelessWidget {
                                 controller: controller,
                                 onSignInAgain: onSignInAgain,
                               ),
+                            _VolumeButton(controller: playback),
                             _QueueButton(controller: controller),
                           ],
                         ),
@@ -323,6 +325,125 @@ class _QueueButton extends StatelessWidget {
     onPressed: () => unawaited(showPlaybackQueue(context, controller)),
     icon: const Icon(Icons.queue_music_rounded),
   );
+}
+
+class _VolumeButton extends StatelessWidget {
+  const _VolumeButton({required this.controller});
+
+  final TrackPlaybackController controller;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('now-playing-volume'),
+    tooltip: 'Volume',
+    onPressed: () => unawaited(_showVolumeControl(context, controller)),
+    icon: Icon(
+      controller.volume == 0
+          ? Icons.volume_off_rounded
+          : controller.volume < 0.5
+          ? Icons.volume_down_rounded
+          : Icons.volume_up_rounded,
+    ),
+  );
+}
+
+Future<void> _showVolumeControl(
+  BuildContext context,
+  TrackPlaybackController controller,
+) async {
+  if (MediaQuery.sizeOf(context).width < 600) {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: _VolumePanel(controller: controller),
+        ),
+      ),
+    );
+    return;
+  }
+  await showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Volume'),
+      content: SizedBox(
+        width: 320,
+        child: _VolumePanel(controller: controller),
+      ),
+    ),
+  );
+}
+
+class _VolumePanel extends StatefulWidget {
+  const _VolumePanel({required this.controller});
+
+  final TrackPlaybackController controller;
+
+  @override
+  State<_VolumePanel> createState() => _VolumePanelState();
+}
+
+class _VolumePanelState extends State<_VolumePanel> {
+  double? _preview;
+  int _attempt = 0;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.controller,
+    builder: (context, _) {
+      final value = (_preview ?? widget.controller.volume)
+          .clamp(0, 1)
+          .toDouble();
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                value == 0
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_down_rounded,
+              ),
+              Expanded(
+                child: Slider(
+                  key: const ValueKey('volume-slider'),
+                  value: value,
+                  semanticFormatterCallback: (value) =>
+                      '${(value * 100).round()} percent',
+                  onChangeStart: (value) => setState(() => _preview = value),
+                  onChanged: (value) => setState(() => _preview = value),
+                  onChangeEnd: _commit,
+                ),
+              ),
+              Icon(
+                value < 0.5
+                    ? Icons.volume_down_rounded
+                    : Icons.volume_up_rounded,
+              ),
+            ],
+          ),
+          Text(
+            '${(value * 100).round()}%',
+            key: const ValueKey('volume-percent'),
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+        ],
+      );
+    },
+  );
+
+  void _commit(double value) {
+    final attempt = ++_attempt;
+    setState(() => _preview = value);
+    unawaited(() async {
+      await widget.controller.setVolume(value);
+      if (!mounted || attempt != _attempt) return;
+      setState(() => _preview = null);
+    }());
+  }
 }
 
 class _LyricsButton extends StatelessWidget {

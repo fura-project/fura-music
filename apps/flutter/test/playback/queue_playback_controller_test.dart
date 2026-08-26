@@ -378,6 +378,9 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> seekToMs(int positionMs) async {}
 
   @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
   Future<void> stop() async => emit(ForegroundAudioState.stopped);
 
   @override

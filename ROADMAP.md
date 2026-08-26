@@ -31,7 +31,7 @@ Deliver the smallest coherent user journey from QQ Music sign-in through word-le
 
 ## Next Milestone — M2 Reliability and Daily-Use Quality
 
-Scope is progressively elaborated only around current evidence. A remaining M1 acceptance observation does not globally block independent M2 work and does not become implicitly satisfied by that work. Expected themes are failure recovery, adaptive desktop/mobile polish, playback resilience, cache policy, accessibility, and packaging. The first bounded slice is desktop transport ergonomics: shared keyboard controls followed by truthful progress and seeking over the existing foreground session. This is not authorization for new providers or unrelated product features.
+Scope is progressively elaborated only around current evidence. A remaining M1 acceptance observation does not globally block independent M2 work and does not become implicitly satisfied by that work. Expected themes are failure recovery, adaptive desktop/mobile polish, playback resilience, cache policy, accessibility, and packaging. The first bounded slice is desktop transport ergonomics: shared keyboard controls, truthful progress/seeking, and session-local volume over the existing foreground session. This is not authorization for new providers or unrelated product features.
 
 ## Later direction
 

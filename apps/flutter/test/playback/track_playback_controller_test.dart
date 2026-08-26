@@ -38,12 +38,17 @@ void main() {
     expect(controller.stage, TrackPlaybackStage.playing);
     expect(gateway.requests, [('qq-music', 'track:41001:0:1:firstMid')]);
     expect(engine.requestedUris.single.queryParameters['vkey'], 'one');
-    var positionNotifications = 0;
-    controller.addListener(() => positionNotifications += 1);
+    expect(audioSession.volumes, [1]);
+    var playbackNotifications = 0;
+    controller.addListener(() => playbackNotifications += 1);
+    await controller.setVolume(0.6);
+    expect(controller.volume, 0.6);
+    expect(audioSession.volumes, [1, 0.6]);
+    expect(playbackNotifications, 1);
     audioSession.emitPosition(375);
     await Future<void>.delayed(Duration.zero);
     expect(controller.positionMs, 375);
-    expect(positionNotifications, 1);
+    expect(playbackNotifications, 2);
     expect(controller.durationMs, 120000);
     expect(controller.canSeek, isTrue);
     await controller.seekToMs(130000);
@@ -275,6 +280,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   final _failures = StreamController<ForegroundAudioFailure>.broadcast();
   final _positions = StreamController<int>.broadcast();
   final List<int> seekPositions = [];
+  final List<double> volumes = [];
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -295,6 +301,11 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> seekToMs(int positionMs) async {
     seekPositions.add(positionMs);
     emitPosition(positionMs);
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    volumes.add(volume);
   }
 
   @override

@@ -56,6 +56,93 @@ void main() {
     controller.dispose();
   });
 
+  test('volume applies before play and survives source replacement', () async {
+    final first = _FakeSession();
+    final second = _FakeSession();
+    final controller = ForegroundPlaybackController(
+      _FakeEngine.queued([Future.value(first), Future.value(second)]),
+    );
+
+    await controller.setVolume(0.4);
+    expect(controller.volume, 0.4);
+    await controller.playRemote(Uri.parse('https://audio.example.test/one'));
+    expect(first.volumes, [0.4]);
+    expect(first.playCalls, 1);
+
+    await controller.setVolume(0.25);
+    expect(first.volumes, [0.4, 0.25]);
+    await controller.playRemote(Uri.parse('https://audio.example.test/two'));
+    expect(second.volumes, [0.25]);
+    expect(second.playCalls, 1);
+
+    await controller.setVolume(double.nan);
+    await controller.setVolume(2);
+    expect(controller.volume, 0.25);
+    expect(second.volumes, [0.25]);
+    controller.dispose();
+  });
+
+  test('late old volume failure cannot cross source replacement', () async {
+    final oldVolume = Completer<void>();
+    final first = _FakeSession(
+      volumeResults: [Future.value(), oldVolume.future],
+    );
+    final second = _FakeSession();
+    final controller = ForegroundPlaybackController(
+      _FakeEngine.queued([Future.value(first), Future.value(second)]),
+    );
+    await controller.playRemote(Uri.parse('https://audio.example.test/one'));
+
+    final pendingVolume = controller.setVolume(0.35);
+    await Future<void>.delayed(Duration.zero);
+    await controller.playRemote(Uri.parse('https://audio.example.test/two'));
+    expect(second.volumes, [0.35]);
+
+    oldVolume.completeError(
+      const ForegroundAudioException(ForegroundAudioFailure.playback),
+    );
+    await pendingVolume;
+    expect(controller.stage, ForegroundPlaybackStage.playing);
+    expect(controller.failure, isNull);
+    controller.dispose();
+
+    final failing = _FakeSession(
+      volumeFailure: ForegroundAudioFailure.playback,
+    );
+    final failedController = ForegroundPlaybackController(
+      _FakeEngine.immediate(failing),
+    );
+    await failedController.playRemote(
+      Uri.parse('https://audio.example.test/failing'),
+    );
+    expect(failedController.stage, ForegroundPlaybackStage.error);
+    expect(failedController.failure, ForegroundAudioFailure.playback);
+    expect(failing.playCalls, 0);
+    failedController.dispose();
+  });
+
+  test('out-of-order volume updates converge to the latest value', () async {
+    final oldVolume = Completer<void>();
+    final session = _FakeSession(
+      volumeResults: [Future.value(), oldVolume.future, Future.value()],
+    );
+    final controller = ForegroundPlaybackController(
+      _FakeEngine.immediate(session),
+    );
+    await controller.playRemote(Uri.parse('https://audio.example.test/volume'));
+
+    final oldUpdate = controller.setVolume(0.3);
+    await Future<void>.delayed(Duration.zero);
+    await controller.setVolume(0.7);
+    oldVolume.complete();
+    await oldUpdate;
+
+    expect(controller.volume, 0.7);
+    expect(session.volumes, [1, 0.3, 0.7, 0.7]);
+    expect(controller.stage, ForegroundPlaybackStage.playing);
+    controller.dispose();
+  });
+
   test(
     'late old seek and current seek failure respect session ownership',
     () async {
@@ -245,6 +332,8 @@ class _FakeSession implements ForegroundAudioSession {
     this.throwOnDispose = false,
     this.seekResult,
     this.seekFailure,
+    this.volumeResults = const [],
+    this.volumeFailure,
   });
 
   final _states = StreamController<ForegroundAudioState>.broadcast();
@@ -254,11 +343,15 @@ class _FakeSession implements ForegroundAudioSession {
   final bool throwOnDispose;
   final Future<void>? seekResult;
   final ForegroundAudioFailure? seekFailure;
+  final List<Future<void>> volumeResults;
+  final ForegroundAudioFailure? volumeFailure;
   int playCalls = 0;
   int pauseCalls = 0;
   int stopCalls = 0;
   int disposeCalls = 0;
   final List<int> seekPositions = [];
+  final List<double> volumes = [];
+  int _nextVolumeResult = 0;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -288,6 +381,16 @@ class _FakeSession implements ForegroundAudioSession {
     if (failure != null) throw ForegroundAudioException(failure);
     final result = seekResult;
     if (result != null) await result;
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    volumes.add(volume);
+    final failure = volumeFailure;
+    if (failure != null) throw ForegroundAudioException(failure);
+    if (_nextVolumeResult < volumeResults.length) {
+      await volumeResults[_nextVolumeResult++];
+    }
   }
 
   @override

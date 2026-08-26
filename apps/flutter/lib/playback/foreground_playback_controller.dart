@@ -25,14 +25,17 @@ class ForegroundPlaybackController extends ChangeNotifier {
   StreamSubscription<ForegroundAudioFailure>? _failureSubscription;
   StreamSubscription<int>? _positionSubscription;
   int _positionMs = 0;
+  double _volume = 1;
   int _generation = 0;
   int _seekGeneration = 0;
+  int _volumeGeneration = 0;
   int? _pendingSeekGeneration;
   bool _disposed = false;
 
   ForegroundPlaybackStage get stage => _stage;
   ForegroundAudioFailure? get failure => _failure;
   int get positionMs => _positionMs;
+  double get volume => _volume;
   bool get canPause => _stage == ForegroundPlaybackStage.playing;
   bool get canResume => _stage == ForegroundPlaybackStage.paused;
 
@@ -78,6 +81,8 @@ class ForegroundPlaybackController extends ChangeNotifier {
     );
 
     try {
+      await _applyLatestVolume(generation, session);
+      if (!_isSessionCurrent(generation, session)) return;
       await session.play();
       if (_isSessionCurrent(generation, session)) {
         _setStage(ForegroundPlaybackStage.playing);
@@ -156,6 +161,25 @@ class ForegroundPlaybackController extends ChangeNotifier {
     }
   }
 
+  Future<void> setVolume(double volume) async {
+    if (_disposed || !volume.isFinite || volume < 0 || volume > 1) return;
+    if (_volume != volume) {
+      _volume = volume;
+      _volumeGeneration += 1;
+      notifyListeners();
+    }
+    final session = _session;
+    final generation = _generation;
+    if (session == null) return;
+    try {
+      await _applyLatestVolume(generation, session);
+    } on ForegroundAudioException catch (error) {
+      _failSession(generation, session, error.failure);
+    } on Object {
+      _failSession(generation, session, ForegroundAudioFailure.coreUnavailable);
+    }
+  }
+
   Future<void> stop() async {
     ++_generation;
     final session = _detachSession();
@@ -218,6 +242,18 @@ class ForegroundPlaybackController extends ChangeNotifier {
     _failure = failure;
     _setStage(ForegroundPlaybackStage.error);
     unawaited(_stopAndDispose(failed));
+  }
+
+  Future<void> _applyLatestVolume(
+    int generation,
+    ForegroundAudioSession session,
+  ) async {
+    while (_isSessionCurrent(generation, session)) {
+      final volumeGeneration = _volumeGeneration;
+      final volume = _volume;
+      await session.setVolume(volume);
+      if (volumeGeneration == _volumeGeneration) return;
+    }
   }
 
   ForegroundAudioSession? _detachSession() {

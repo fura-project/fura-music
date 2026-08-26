@@ -53,6 +53,7 @@ void main() {
           '?vkey=must-not-leak',
         ),
       );
+      await session.setVolume(0);
       final progressed = session.positionMs.firstWhere(
         (positionMs) => positionMs > 0,
       );
