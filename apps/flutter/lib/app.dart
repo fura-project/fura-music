@@ -11,6 +11,7 @@ import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 const _qqGreen = Color(0xFF24B86A);
@@ -24,6 +25,7 @@ class MusicApp extends StatelessWidget {
     MediaResolutionGateway? mediaResolutionGateway,
     LyricGateway? lyricGateway,
     PlaybackQueueGateway? playbackQueueGateway,
+    TrackSearchGateway? searchGateway,
     ForegroundAudioEngine? audioEngine,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
@@ -61,6 +63,7 @@ class MusicApp extends StatelessWidget {
       mediaResolutionGateway: mediaResolutionGateway,
       lyricGateway: lyricGateway,
       playbackQueueGateway: playbackQueueGateway ?? RustPlaybackQueueGateway(),
+      searchGateway: searchGateway ?? const RustTrackSearchGateway(),
       audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
@@ -75,6 +78,7 @@ class MusicApp extends StatelessWidget {
     required this.mediaResolutionGateway,
     required this.lyricGateway,
     required this.playbackQueueGateway,
+    required this.searchGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -87,6 +91,7 @@ class MusicApp extends StatelessWidget {
   final MediaResolutionGateway mediaResolutionGateway;
   final LyricGateway lyricGateway;
   final PlaybackQueueGateway playbackQueueGateway;
+  final TrackSearchGateway searchGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -106,6 +111,7 @@ class MusicApp extends StatelessWidget {
         mediaResolutionGateway: mediaResolutionGateway,
         lyricGateway: lyricGateway,
         playbackQueueGateway: playbackQueueGateway,
+        searchGateway: searchGateway,
         audioEngine: audioEngine,
         initialCredentialRestore: initialCredentialRestore,
       ),
@@ -136,6 +142,7 @@ class LoginPage extends StatefulWidget {
     required this.mediaResolutionGateway,
     required this.lyricGateway,
     required this.playbackQueueGateway,
+    required this.searchGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -148,6 +155,7 @@ class LoginPage extends StatefulWidget {
   final MediaResolutionGateway mediaResolutionGateway;
   final LyricGateway lyricGateway;
   final PlaybackQueueGateway playbackQueueGateway;
+  final TrackSearchGateway searchGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -190,6 +198,7 @@ class _LoginPageState extends State<LoginPage> {
             mediaResolutionGateway: widget.mediaResolutionGateway,
             lyricGateway: widget.lyricGateway,
             playbackQueueGateway: widget.playbackQueueGateway,
+            searchGateway: widget.searchGateway,
             audioEngine: widget.audioEngine,
             onSignInAgain: _controller.cancel,
             onSignOut: _controller.signOut,

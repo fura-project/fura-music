@@ -47,3 +47,7 @@ Reference implementations are research evidence only; no third-party runtime ser
 ## Selection
 
 Track search ranks first because it has the strongest current protocol evidence, highest immediate user value, and a finite path into the existing playback queue. Album/Artist and Home remain authorized M3 directions, not implementation commitments for this slice.
+
+## Implementation outcome
+
+Completed on 2026-08-26 within the selected boundary. The direct client, provider-neutral page, QQ Provider mapping, single-use cancellable Bridge, adaptive Flutter states, and existing queue/playback handoff are implemented. Offline protocol, Provider, Bridge, gateway/controller, navigation, and primary widget-flow coverage pass. The implementation did not add other result types, search history/suggestions, a navigation framework, a new Provider, or a third-party runtime service. The anonymous coarse protocol observation and local tests do not constitute a real-account search-to-CDN playback claim.

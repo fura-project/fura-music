@@ -5,13 +5,21 @@ import 'dart:ui' show SemanticsAction, Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/material.dart'
-    show FilledButton, GridView, InkWell, ListView, Scrollable, ScrollableState;
+    show
+        FilledButton,
+        GridView,
+        IconButton,
+        InkWell,
+        ListView,
+        Scrollable,
+        ScrollableState;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 void main() {
@@ -318,6 +326,34 @@ void main() {
 
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('No playlists yet'), findsOneWidget);
+  });
+
+  testWidgets('opens search from the library and restores entry focus', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        searchGateway: const _UnusedSearchGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final searchEntry = find.byKey(const ValueKey('open-track-search'));
+    await tester.tap(searchEntry);
+    await tester.pumpAndSettle();
+    expect(find.text('Search QQ Music'), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-search-field')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('track-search-back')));
+    await tester.pumpAndSettle();
+    expect(find.text('No playlists yet'), findsOneWidget);
+    expect(tester.widget<IconButton>(searchEntry).focusNode?.hasFocus, isTrue);
   });
 
   testWidgets('routes verified startup restore into the library', (
@@ -1150,6 +1186,17 @@ class _WidgetLibraryOperation implements UserLibraryLoadOperation {
 
   @override
   Future<UserLibraryResult> run() async => result;
+}
+
+class _UnusedSearchGateway implements TrackSearchGateway {
+  const _UnusedSearchGateway();
+
+  @override
+  TrackSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) => throw StateError('search should not run in this navigation test');
 }
 
 class _DetailRequest {

@@ -52,7 +52,13 @@ mod tests {
         assert_eq!(status.provider.display_name, "QQ Music");
         assert_eq!(
             status.provider.implemented_capabilities,
-            ["Authentication", "UserLibrary", "Lyrics", "MediaResolution"]
+            [
+                "Search",
+                "Authentication",
+                "UserLibrary",
+                "Lyrics",
+                "MediaResolution"
+            ]
         );
     }
 }

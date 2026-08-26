@@ -537,6 +537,60 @@ pub struct PlaylistTracksPage {
     tracks: Vec<TrackSummary>,
 }
 
+/// One provider-neutral page of Track search results. Source-specific query,
+/// ranking, and continuation rules remain behind the Provider boundary.
+#[derive(Clone, Eq, PartialEq)]
+pub struct TrackSearchPage {
+    page: u32,
+    total: u32,
+    has_more: bool,
+    tracks: Vec<TrackSummary>,
+}
+
+impl TrackSearchPage {
+    #[must_use]
+    pub const fn new(page: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+        Self {
+            page,
+            total,
+            has_more,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn page(&self) -> u32 {
+        self.page
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+}
+
+impl fmt::Debug for TrackSearchPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TrackSearchPage")
+            .field("page", &self.page)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("track_count", &self.tracks.len())
+            .finish()
+    }
+}
+
 impl PlaylistTracksPage {
     #[must_use]
     pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
@@ -589,7 +643,8 @@ fn nonblank(value: Option<String>) -> Option<String> {
 mod tests {
     use super::{
         AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
-        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSummary, TrackSummaryField,
+        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchPage, TrackSummary,
+        TrackSummaryField,
     };
 
     #[test]
@@ -663,6 +718,26 @@ mod tests {
         let debug = format!("{summary:?}");
         assert!(!debug.contains("Synthetic track"));
         assert!(!debug.contains("41001"));
+    }
+
+    #[test]
+    fn track_search_page_keeps_query_and_content_out_of_diagnostics() {
+        let id = TrackId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "track:41001:0:fixture-mid:-",
+        )
+        .expect("track ID");
+        let track = TrackSummary::new(id, "must-not-leak", vec!["private-artist".into()])
+            .expect("track summary");
+        let page = TrackSearchPage::new(2, 45, true, vec![track]);
+
+        assert_eq!(page.page(), 2);
+        assert_eq!(page.total(), 45);
+        assert!(page.has_more());
+        assert_eq!(page.tracks().len(), 1);
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("must-not-leak"));
+        assert!(!debug.contains("private-artist"));
     }
 
     #[test]

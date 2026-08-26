@@ -194,6 +194,14 @@ pub struct QqMusicArtistSummary {
 }
 
 impl QqMusicArtistSummary {
+    pub(crate) fn new(artist_id: Option<u64>, media_mid: Option<String>, name: String) -> Self {
+        Self {
+            artist_id,
+            media_mid,
+            name,
+        }
+    }
+
     #[must_use]
     pub const fn artist_id(&self) -> Option<u64> {
         self.artist_id
@@ -229,6 +237,18 @@ pub struct QqMusicAlbumSummary {
 }
 
 impl QqMusicAlbumSummary {
+    pub(crate) fn new(
+        album_id: Option<u64>,
+        media_mid: Option<String>,
+        name: Option<String>,
+    ) -> Self {
+        Self {
+            album_id,
+            media_mid,
+            name,
+        }
+    }
+
     #[must_use]
     pub const fn album_id(&self) -> Option<u64> {
         self.album_id
@@ -270,6 +290,31 @@ pub struct QqMusicTrackSummary {
 }
 
 impl QqMusicTrackSummary {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        track_id: u64,
+        song_mid: String,
+        file_media_mid: Option<String>,
+        title: String,
+        subtitle: Option<String>,
+        song_type: u32,
+        duration_seconds: u32,
+        artists: Vec<QqMusicArtistSummary>,
+        album: Option<QqMusicAlbumSummary>,
+    ) -> Self {
+        Self {
+            track_id,
+            song_mid,
+            file_media_mid,
+            title,
+            subtitle,
+            song_type,
+            duration_seconds,
+            artists,
+            album,
+        }
+    }
+
     #[must_use]
     pub const fn track_id(&self) -> u64 {
         self.track_id

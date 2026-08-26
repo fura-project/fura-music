@@ -19,6 +19,8 @@ import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/search/track_search_gateway.dart';
+import 'package:flutterustmusic/search/track_search_page.dart';
 
 class UserLibraryPage extends StatefulWidget {
   const UserLibraryPage({
@@ -30,6 +32,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.audioEngine,
     required this.onSignInAgain,
     required this.onSignOut,
+    this.searchGateway,
     super.key,
   });
 
@@ -41,6 +44,7 @@ class UserLibraryPage extends StatefulWidget {
   final ForegroundAudioEngine audioEngine;
   final VoidCallback onSignInAgain;
   final Future<CredentialSignOutResult> Function() onSignOut;
+  final TrackSearchGateway? searchGateway;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -49,12 +53,17 @@ class UserLibraryPage extends StatefulWidget {
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
+  late final TrackSearchGateway _searchGateway;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
+  );
+  final FocusNode _searchReturnFocusNode = FocusNode(
+    debugLabel: 'search entry',
   );
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
   UserPlaylistSummary? _lastOpenedPlaylist;
+  bool _searchOpen = false;
   bool _handledLyricCredentialRejection = false;
   bool _signingOut = false;
 
@@ -62,6 +71,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void initState() {
     super.initState();
     _controller = UserLibraryController(widget.gateway);
+    _searchGateway = widget.searchGateway ?? const RustTrackSearchGateway();
     _queuePlaybackController = QueuePlaybackController(
       widget.playbackQueueGateway,
       TrackPlaybackController(
@@ -92,13 +102,22 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _queuePlaybackController.dispose();
     _playlistReturnFocusNode.dispose();
+    _searchReturnFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final selectedPlaylist = _selectedPlaylist;
-    final page = selectedPlaylist != null
+    final page = _searchOpen
+        ? TrackSearchPage(
+            key: const ValueKey('track-search-page'),
+            gateway: _searchGateway,
+            queuePlaybackController: _queuePlaybackController,
+            onBack: _closeSearch,
+            onSignInAgain: widget.onSignInAgain,
+          )
+        : selectedPlaylist != null
         ? PlaylistDetailPage(
             key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
             playlist: selectedPlaylist,
@@ -112,23 +131,26 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       controller: _queuePlaybackController,
       child: page,
     );
-    final shortcutPage = selectedPlaylist == null
+    final hasLocalPage = selectedPlaylist != null || _searchOpen;
+    final shortcutPage = !hasLocalPage
         ? playbackPage
         : CallbackShortcuts(
             bindings: <ShortcutActivator, VoidCallback>{
               const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
-                  _returnToLibrary,
+                  _returnFromLocalPage,
               const SingleActivator(LogicalKeyboardKey.browserBack):
-                  _returnToLibrary,
+                  _returnFromLocalPage,
             },
             child: playbackPage,
           );
     return PageStorage(
       bucket: _pageStorageBucket,
       child: PopScope<void>(
-        canPop: selectedPlaylist == null,
+        canPop: !hasLocalPage,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop && _selectedPlaylist != null) _returnToLibrary();
+          if (!didPop && (_selectedPlaylist != null || _searchOpen)) {
+            _returnFromLocalPage();
+          }
         },
         child: shortcutPage,
       ),
@@ -148,6 +170,29 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     });
   }
 
+  void _returnFromLocalPage() {
+    if (_searchOpen) {
+      _closeSearch();
+    } else {
+      _returnToLibrary();
+    }
+  }
+
+  void _openSearch() {
+    if (_searchOpen || _selectedPlaylist != null) return;
+    setState(() => _searchOpen = true);
+  }
+
+  void _closeSearch() {
+    if (!_searchOpen) return;
+    setState(() => _searchOpen = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_searchOpen && _searchReturnFocusNode.context != null) {
+        _searchReturnFocusNode.requestFocus();
+      }
+    });
+  }
+
   void _openPlaylist(UserPlaylistSummary playlist) {
     setState(() {
       _lastOpenedPlaylist = playlist;
@@ -159,6 +204,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     appBar: AppBar(
       title: const Text('Your music'),
       actions: [
+        IconButton(
+          key: const ValueKey('open-track-search'),
+          focusNode: _searchReturnFocusNode,
+          tooltip: 'Search QQ Music',
+          onPressed: _openSearch,
+          icon: const Icon(Icons.search_rounded),
+        ),
         AnimatedBuilder(
           animation: _controller,
           builder: (context, _) => IconButton(

@@ -5,11 +5,12 @@ use std::future::Future;
 
 use music_domain::{
     PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource,
-    SynchronizedLyrics, TrackId,
+    SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ProviderCapability {
+    Search,
     Authentication,
     Catalog,
     Recommendations,
@@ -17,6 +18,39 @@ pub enum ProviderCapability {
     PlaylistMutation,
     Lyrics,
     MediaResolution,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SearchError {
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+}
+
+impl fmt::Display for SearchError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::Network => "search network request failed",
+            Self::ServiceUnavailable => "search service is unavailable",
+            Self::InvalidResponse => "search service returned an invalid response",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for SearchError {}
+
+/// Provider-neutral Track search. Query ranking and page conversion remain
+/// owned by the concrete Provider.
+pub trait TrackSearchProvider: MusicProvider + Sync {
+    type Error;
+
+    fn search_tracks(
+        &self,
+        query: String,
+        page: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<TrackSearchPage, Self::Error>> + Send;
 }
 
 /// Describes behavior that is implemented now, not planned future behavior.

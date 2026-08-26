@@ -2,11 +2,11 @@
 
 `flutterustmusic` is a modern, open-source, cross-platform, QQ Music-first client built with Flutter and an in-process Rust core.
 
-The first in-process vertical slice now implements sign-in, credential restore, user playlists and details, foreground playback and queue controls, and synchronized word-level lyrics. One user-operated real-account playback/queue/lyric observation remains before the M1 end-to-end acceptance claim; it does not block the active M3 QQ Music core-product workstream.
+The first in-process vertical slice implements sign-in, credential restore, user playlists and details, foreground playback and queue controls, and synchronized word-level lyrics. M3 now also includes direct QQ Music Track search feeding the existing playback queue. One user-operated real-account playback/queue/lyric observation remains before the M1 end-to-end acceptance claim; it does not block the active M3 QQ Music core-product workstream.
 
 ## Status
 
-The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 reliability and daily-use quality is checkpointed, and bounded M3 QQ Music core-product discovery is active. This is not a release-readiness claim, and real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
+The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 reliability and daily-use quality is checkpointed, and the first bounded M3 Search slice is implemented. This is not a release-readiness claim, and real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
 
 No release is available yet.
 
