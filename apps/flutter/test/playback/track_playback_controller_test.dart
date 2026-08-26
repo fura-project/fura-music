@@ -92,6 +92,64 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'serializes repeated activation against current transport state',
+    () async {
+      final pendingPause = Completer<void>();
+      final session = _FakeAudioSession(pauseResult: pendingPause.future);
+      final controller = TrackPlaybackController(
+        _FakeResolutionGateway([
+          _ImmediateResolution(_successfulResolution('repeated-activation')),
+        ]),
+        ForegroundPlaybackController(_FakeAudioEngine([session])),
+      );
+      await controller.playTrack(firstTrack);
+
+      final firstActivation = controller.activate();
+      await Future<void>.delayed(Duration.zero);
+      final secondActivation = controller.activate();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.pauseCalls, 1);
+      pendingPause.complete();
+      await Future.wait([firstActivation, secondActivation]);
+      expect(session.pauseCalls, 1);
+      expect(session.playCalls, 2);
+      expect(controller.stage, TrackPlaybackStage.playing);
+      controller.dispose();
+    },
+  );
+
+  test('drops queued activation after track replacement', () async {
+    final pendingPause = Completer<void>();
+    final firstSession = _FakeAudioSession(pauseResult: pendingPause.future);
+    final secondSession = _FakeAudioSession();
+    final controller = TrackPlaybackController(
+      _FakeResolutionGateway([
+        _ImmediateResolution(_successfulResolution('first-activation')),
+        _ImmediateResolution(_successfulResolution('replacement')),
+      ]),
+      ForegroundPlaybackController(
+        _FakeAudioEngine([firstSession, secondSession]),
+      ),
+    );
+    await controller.playTrack(firstTrack);
+
+    final firstActivation = controller.activate();
+    await Future<void>.delayed(Duration.zero);
+    final staleActivation = controller.activate();
+    await Future<void>.delayed(Duration.zero);
+    await controller.playTrack(secondTrack);
+
+    pendingPause.complete();
+    await Future.wait([firstActivation, staleActivation]);
+    expect(controller.track, same(secondTrack));
+    expect(controller.stage, TrackPlaybackStage.playing);
+    expect(secondSession.playCalls, 1);
+    expect(secondSession.pauseCalls, 0);
+    controller.dispose();
+  });
+
   test('keeps resolution failures distinct from engine failures', () async {
     for (final failure in [
       MediaResolutionFailure.authenticationRequired,
@@ -276,9 +334,14 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
 }
 
 class _FakeAudioSession implements ForegroundAudioSession {
+  _FakeAudioSession({this.pauseResult});
+
   final _states = StreamController<ForegroundAudioState>.broadcast();
   final _failures = StreamController<ForegroundAudioFailure>.broadcast();
   final _positions = StreamController<int>.broadcast();
+  final Future<void>? pauseResult;
+  int playCalls = 0;
+  int pauseCalls = 0;
   final List<int> seekPositions = [];
   final List<double> volumes = [];
 
@@ -292,10 +355,18 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Stream<int> get positionMs => _positions.stream;
 
   @override
-  Future<void> pause() async => emitState(ForegroundAudioState.paused);
+  Future<void> pause() async {
+    pauseCalls += 1;
+    final result = pauseResult;
+    if (result != null) await result;
+    emitState(ForegroundAudioState.paused);
+  }
 
   @override
-  Future<void> play() async => emitState(ForegroundAudioState.playing);
+  Future<void> play() async {
+    playCalls += 1;
+    emitState(ForegroundAudioState.playing);
+  }
 
   @override
   Future<void> seekToMs(int positionMs) async {

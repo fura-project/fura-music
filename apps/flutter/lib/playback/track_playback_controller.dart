@@ -29,6 +29,7 @@ class TrackPlaybackController extends ChangeNotifier {
   MediaResolutionFailure? _resolutionFailure;
   ForegroundAudioFailure? _engineFailure;
   MediaResolutionOperation? _resolutionOperation;
+  Future<void> _activationTail = Future<void>.value();
   int _generation = 0;
   bool _resolving = false;
   bool _disposed = false;
@@ -68,7 +69,21 @@ class TrackPlaybackController extends ChangeNotifier {
       _stage != TrackPlaybackStage.resolving &&
       _stage != TrackPlaybackStage.loading;
 
-  Future<void> activate() async {
+  Future<void> activate() {
+    final generation = _generation;
+    if (_track == null || !canActivate || _disposed) return Future.value();
+    final request = _activationTail.then<void>(
+      (_) => _activateCurrent(generation),
+    );
+    _activationTail = request.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return request;
+  }
+
+  Future<void> _activateCurrent(int generation) async {
+    if (!_isCurrent(generation)) return;
     final current = _track;
     if (current == null || !canActivate) return;
     switch (_stage) {
