@@ -168,6 +168,6 @@ Each phase is elaborated only through bounded discovery and finite, evidence-bac
 
 Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, adaptive/accessibility limits, debt review, and exact live/platform boundaries are recorded in `docs/development/m4-checkpoint-review.md`. Future reproduced Material/adaptive regressions remain valid bounded work; theme personas and signature visual experiments still require separate Roadmap authorization. The checkpoint is not project completion, release readiness, or M1 acceptance.
 
-## Evidence-Gated Later Direction
+## Active Direction — Evidence-Gated Later Work
 
 After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.

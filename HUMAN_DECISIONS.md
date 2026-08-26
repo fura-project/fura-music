@@ -22,11 +22,11 @@
 **Not blocked:**
 
 - The remaining M1 real-account playback, queue, and lyric acceptance observation.
-- Independent M2 reliability, accessibility, and daily-use work.
+- Evidence-backed post-M4 reliability, accessibility, and daily-use work within the Roadmap.
 - Development-signed local builds and tests.
-- QQ Music Provider/Core work within the Roadmap.
+- Evidence-backed QQ Music Provider/Core work within the Roadmap.
 
-**Current agent action:** Continue unrelated Roadmap work and keep generated or development-signed artifacts development-only.
+**Current agent action:** Continue any independently evidenced Roadmap work when available and keep generated or development-signed artifacts development-only.
 
 ## HD-002 — Default Material baseline before theme personas
 

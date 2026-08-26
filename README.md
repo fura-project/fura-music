@@ -6,7 +6,7 @@ The first in-process vertical slice implements sign-in, credential restore, user
 
 ## Status
 
-The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 reliability/daily-use quality, M3 QQ Music core-product coverage, and M4 Deliberate Material 3 Product Experience are checkpointed. Current work returns to evidence-gated whole-project ranking; this is not project completion, release readiness, recommendation-quality, or live catalog compatibility, and real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
+The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 reliability/daily-use quality, M3 QQ Music core-product coverage, and M4 Deliberate Material 3 Product Experience are checkpointed. Further work is evidence-gated; this is not project completion, release readiness, recommendation-quality, or live catalog compatibility, and real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
 
 No release is available yet.
 

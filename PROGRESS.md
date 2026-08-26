@@ -6,7 +6,7 @@ execution:
   acceptance_milestone: M1
   active_workstream: EVIDENCE_GATED_LATER_DIRECTION
   current_task: null
-  next_action: GLOBAL_RANKING
+  next_action: NO_LEGITIMATE_WORK
 ---
 
 # Current Milestone
@@ -66,13 +66,13 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M4 is checkpointed. Continuous execution now re-reads the evidence-gated later direction and current repository evidence; it does not treat the checkpoint as project completion or infer authorization for deferred themes, offline/cache, another Provider, release work, or a new product category.
+- Post-M4 global ranking found no current agent-executable task with both evidence and authorization. Execution remains ACTIVE rather than complete: M1 needs user operation, unavailable target evidence needs its target, release work needs HD-001, and offline/cache, another Provider, unavailable-Track modeling, exact breakpoint matrices, and theme personas remain trigger- or authorization-gated.
 
 # Next Candidates
 
-1. Re-rank the Roadmap's evidence-gated later direction against current user reports, risks, platform availability, and debt triggers.
-2. Select only work with fresh evidence and existing authorization; record `NO_LEGITIMATE_WORK` rather than inventing a feature if none exists.
-3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
+1. Resume the M1 acceptance path when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
+2. Select a bounded task when a reproduced bug, dependency/API breakage, target environment, debt trigger, or newly authorized Roadmap phase supplies provenance.
+3. Re-run whole-project ranking on new evidence; do not manufacture cache, Provider, theme, breakpoint, release, or product work meanwhile.
 
 # Blockers
 
