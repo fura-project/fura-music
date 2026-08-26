@@ -31,3 +31,9 @@ No QQ protocol request, identity parsing, credential access, Provider contract, 
 ## Selection
 
 Album-to-Artist navigation ranks first because it turns already-validated, already-rendered canonical metadata into a coherent existing catalog path for every Album origin. It is a finite product connection rather than visual polish, introduces no external dependency or protocol uncertainty, and can be proven with the current offline and packaged test environment.
+
+## Implementation outcome — 2026-08-27
+
+The selected slice is complete. `AlbumPage` exposes an optional action only after canonical details provide nonempty validated credits, opens one Artist directly, and presents a bounded bottom sheet or desktop dialog for collaborations. All four pre-existing Album instances receive the same callback; a separate outer Artist state and one nested Album state retain Favorite, Discover, Search, existing Artist, and playlist context beneath them.
+
+Focused regressions cover single and multi-credit selection, callback injection at every concrete Album origin, and the representative Album → Artist → nested Album → Artist → original Album/Search return chain without a second original-Album load. The full Flutter suite and Linux packaged Bridge path pass. No Rust, Provider, Bridge, credential, protocol, dependency, queue rule, or navigation framework changed.

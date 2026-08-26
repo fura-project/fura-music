@@ -19,6 +19,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
@@ -686,6 +687,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Saved Album Track'), findsOneWidget);
       expect(albumTracks.requests.single.$1, album);
+      expect(
+        tester.widget<AlbumPage>(find.byType(AlbumPage)).onOpenArtist,
+        isNotNull,
+      );
 
       await tester.tap(find.text('Saved Album Track'));
       await tester.pump();
@@ -788,6 +793,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Fresh Track'), findsOneWidget);
       expect(albumTracks.requests.single.$1, album);
+      expect(
+        tester.widget<AlbumPage>(find.byType(AlbumPage)).onOpenArtist,
+        isNotNull,
+      );
 
       await tester.tap(find.text('Fresh Track'));
       await tester.pump();
@@ -1027,6 +1036,16 @@ void main() {
       opaqueId: 'album:43001:fixtureAlbumMid',
       title: 'Direct Album',
     );
+    const artist = ArtistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'artist:42001:directAlbumArtistMid',
+      name: 'Direct Album Artist',
+    );
+    const nestedAlbum = AlbumSummary(
+      providerId: 'qq-music',
+      opaqueId: 'album:43002:nestedAlbumMid',
+      title: 'Nested Artist Album',
+    );
     const track = PlaylistTrackSummary(
       providerId: 'qq-music',
       opaqueId: 'track:41001:0:fixtureMid:-',
@@ -1039,6 +1058,12 @@ void main() {
     final albumTracks = _WidgetAlbumGateway(
       const AlbumTrackPageResult(offset: 0, total: 1, tracks: [track]),
     );
+    final artistTracks = _WidgetArtistGateway(
+      const ArtistTrackPageResult(offset: 0, total: 1, tracks: [track]),
+    );
+    final artistAlbums = _WidgetArtistAlbumGateway(
+      const ArtistAlbumPageResult(offset: 0, total: 1, albums: [nestedAlbum]),
+    );
     await tester.pumpWidget(
       MusicApp(
         bootstrap: _bootstrap,
@@ -1050,7 +1075,11 @@ void main() {
         searchGateway: const _UnusedSearchGateway(),
         albumSearchGateway: albumSearch,
         albumTrackGateway: albumTracks,
-        albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
+        albumDetailsGateway: const _WidgetAlbumDetailsGateway(
+          artists: [artist],
+        ),
+        artistTrackGateway: artistTracks,
+        artistAlbumGateway: artistAlbums,
       ),
     );
     await tester.pumpAndSettle();
@@ -1076,6 +1105,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
     expect(albumTracks.requests, [(album, 0, 30)]);
+    expect(
+      tester.widget<AlbumPage>(find.byType(AlbumPage)).onOpenArtist,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('album-open-artist')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
+    expect(artistTracks.requests, [(artist, 0, 30)]);
+
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artist-albums-content')), findsOneWidget);
+    expect(artistAlbums.requests, [(artist, 0, 30)]);
+    await tester.tap(find.byKey(const ValueKey('artist-album-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+    expect(albumTracks.requests, [(album, 0, 30), (nestedAlbum, 0, 30)]);
+
+    await tester.tap(find.byTooltip('Back to Artist'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artist-albums-content')), findsOneWidget);
+    final handled = await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(handled, isTrue);
+    expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+    expect(find.text('Direct Album'), findsOneWidget);
+    expect(albumTracks.requests, [(album, 0, 30), (nestedAlbum, 0, 30)]);
 
     await tester.tap(find.byKey(const ValueKey('album-back')));
     await tester.pumpAndSettle();
@@ -1504,6 +1561,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Back to playlist'), findsOneWidget);
     expect(find.text('Album context track'), findsOneWidget);
+    expect(
+      tester.widget<AlbumPage>(find.byType(AlbumPage)).onOpenArtist,
+      isNotNull,
+    );
     expect(
       albumGateway.requests.single.$1.opaqueId,
       'album:43001:fixtureAlbumMid',
@@ -2335,13 +2396,15 @@ class _WidgetAlbumGateway implements AlbumTrackGateway {
 }
 
 class _WidgetAlbumDetailsGateway implements AlbumDetailsGateway {
-  const _WidgetAlbumDetailsGateway();
+  const _WidgetAlbumDetailsGateway({this.artists = const []});
+
+  final List<ArtistSummary> artists;
 
   @override
   AlbumDetailsLoadOperation beginLoad(AlbumSummary album) =>
       _WidgetAlbumDetailsOperation(
         AlbumDetailsResult(
-          details: AlbumDetails(album: album, artists: const []),
+          details: AlbumDetails(album: album, artists: artists),
         ),
       );
 }

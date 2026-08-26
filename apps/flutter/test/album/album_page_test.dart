@@ -42,6 +42,7 @@ void main() {
     );
     addTearDown(playback.dispose);
     var backCalls = 0;
+    ArtistSummary? openedArtist;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -51,6 +52,7 @@ void main() {
           detailsGateway: const _AlbumDetailsGateway(),
           queuePlaybackController: playback,
           onBack: () => backCalls += 1,
+          onOpenArtist: (artist) => openedArtist = artist,
           onSignInAgain: () {},
         ),
       ),
@@ -63,6 +65,10 @@ void main() {
     expect(find.text('1 Track'), findsOneWidget);
     expect(find.text('Synthetic track'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('album-open-artist')));
+    await tester.pumpAndSettle();
+    expect(openedArtist?.name, 'Canonical artist');
 
     await tester.tap(find.byKey(const ValueKey('album-about')));
     await tester.pumpAndSettle();
@@ -112,7 +118,18 @@ void main() {
             opaqueId: 'album:51001:fixtureAlbumMid',
             title: 'Retried canonical album',
           ),
-          artists: [],
+          artists: [
+            ArtistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'artist:52001:firstArtistMid',
+              name: 'First Artist',
+            ),
+            ArtistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'artist:52002:secondArtistMid',
+              name: 'Second Artist',
+            ),
+          ],
           description: 'Desktop canonical description',
         ),
       ),
@@ -125,6 +142,7 @@ void main() {
       ),
     );
     addTearDown(playback.dispose);
+    ArtistSummary? openedArtist;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -134,6 +152,7 @@ void main() {
           detailsGateway: details,
           queuePlaybackController: playback,
           onBack: () {},
+          onOpenArtist: (artist) => openedArtist = artist,
           onSignInAgain: () {},
         ),
       ),
@@ -142,10 +161,18 @@ void main() {
 
     expect(find.text('Still playable Track'), findsOneWidget);
     expect(find.text('Album details are offline.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('album-open-artist')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('album-details-retry')));
     await tester.pumpAndSettle();
     expect(find.text('Retried canonical album'), findsOneWidget);
     expect(find.text('Still playable Track'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('album-open-artist')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('album-artist-1')));
+    await tester.pumpAndSettle();
+    expect(openedArtist?.name, 'Second Artist');
 
     await tester.tap(find.byKey(const ValueKey('album-about')));
     await tester.pumpAndSettle();

@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Album metadata-to-credited-Artist navigation"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -40,16 +40,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the thirteenth M3 slice: direct credential-bearing favorite-Album pages use the evidenced legacy profile-asset CGI rather than the nonfunctional musicu operation, map both observed field casings into existing opaque Albums, and preserve exact Provider credential candidate/rejection/replacement rules through a cancellable Bridge. Flutter retains an adaptive paged collection while existing Album Tracks/details/queue navigation is open, suppresses stale results, clears private rows after account loss, and cleans the shared vault only for the directly evidenced global rejection code. Favorite mutation, favorite Artists, cache/automatic refresh, generic library unions, Track context navigation, and generic navigation infrastructure remain excluded.
 - Implemented the fourteenth M3 slice: every QQ Track producer now preserves an optional validated provider-neutral Album identity through shared Domain mapping, the generated Bridge DTO, handwritten Dart adaptation, and the Rust positional queue round-trip. Playlist detail exposes the existing Album route only when that context exists through desktop secondary-click/keyboard menus and mobile long press; the Album overlays every playlist origin while retaining loaded rows, pagination, playback ownership, and local return state. Credited-Artist context, visible actions on other Track surfaces, global now-playing navigation, opaque-ID parsing, new queue rules, and a navigation framework remain excluded.
 - Implemented the fifteenth M3 slice: every shared QQ Track producer now preserves all validated provider-neutral credited Artist identities through Domain mapping, generated Bridge DTOs, handwritten Dart adaptation, and Rust queue round-trips. Playlist detail opens one credit directly or requires explicit bounded collaboration selection through existing desktop and mobile context surfaces; every playlist origin retains Artist and nested Album state so return unwinds Album → Artist → the same loaded playlist without replacing queue/playback ownership. Album-metadata links, actions on other Track surfaces, global now-playing navigation, biography/follow, opaque-ID parsing, new queue rules, and a navigation framework remain excluded.
+- Implemented the sixteenth M3 slice: canonical Album metadata credits are actionable from every pre-existing Album origin only after validated details load. One Artist opens directly and collaborations require bounded explicit selection; a separate retained Artist plus one nested Album overlay restores nested Album → Artist → the exact originating Album/collection while preserving its controller and the shared queue/playback owner. Pre-detail actions, recursive route history, global now-playing navigation, biography/follow, protocol changes, and generic navigation infrastructure remain excluded.
 - Revalidated the resulting baseline: Rust formatting, 250 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 266 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. A fresh global ranking selected Album metadata-to-credited-Artist navigation: expose only validated canonical credits, require explicit collaboration selection, retain a bounded Artist plus nested Album route above every existing Album origin, and restore the exact originating Album/collection and shared playback owner on return. Global now-playing navigation and availability/quality semantics remain deferred.
+- M3 remains active. Album metadata-to-credited-Artist navigation is complete; the next action is another repository-wide ranking across user-path value, protocol correctness, playback reliability, platform evidence, documented risks, and the remaining authorized M3 directions before selecting a finite task.
 
 # Next Candidates
 
-1. Implement the selected Album metadata-to-credited-Artist slice with bounded single/multi-credit actions, callback coverage for every Album origin, retained nested return state, and focused plus full regression coverage.
+1. Re-rank the active M3 workstream from repository evidence. Global now-playing catalog navigation and availability/quality remain candidates, but the former needs a separate ownership audit and the latter still lacks safe response evidence.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 

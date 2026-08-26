@@ -5,6 +5,7 @@ import 'package:flutterustmusic/album/album_controller.dart';
 import 'package:flutterustmusic/album/album_details_controller.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -17,6 +18,7 @@ class AlbumPage extends StatefulWidget {
     required this.queuePlaybackController,
     required this.onBack,
     required this.onSignInAgain,
+    this.onOpenArtist,
     this.backTooltip = 'Back to search results',
     super.key,
   });
@@ -27,6 +29,7 @@ class AlbumPage extends StatefulWidget {
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
   final String backTooltip;
 
   @override
@@ -83,6 +86,9 @@ class _AlbumPageState extends State<AlbumPage> {
                   canRetryDetails: _detailsController.canRetry,
                   onRetryDetails: _detailsController.retry,
                   onShowDescription: _showDescription,
+                  onOpenArtists: widget.onOpenArtist == null
+                      ? null
+                      : _openArtist,
                   total: _controller.stage == AlbumTrackStage.content
                       ? _controller.total
                       : null,
@@ -225,6 +231,38 @@ class _AlbumPageState extends State<AlbumPage> {
       ),
     );
   }
+
+  Future<void> _openArtist(List<ArtistSummary> artists) async {
+    final onOpenArtist = widget.onOpenArtist;
+    if (onOpenArtist == null || artists.isEmpty) return;
+    if (artists.length == 1) {
+      onOpenArtist(artists.single);
+      return;
+    }
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    final selected = compact
+        ? await showModalBottomSheet<ArtistSummary>(
+            context: context,
+            showDragHandle: true,
+            builder: (context) =>
+                _AlbumArtistSelection(artists: artists, compact: true),
+          )
+        : await showDialog<ArtistSummary>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Choose an Artist'),
+              content: _AlbumArtistSelection(artists: artists, compact: false),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          );
+    if (!mounted || selected == null) return;
+    onOpenArtist(selected);
+  }
 }
 
 class _AlbumHeader extends StatelessWidget {
@@ -236,6 +274,7 @@ class _AlbumHeader extends StatelessWidget {
     required this.canRetryDetails,
     required this.onRetryDetails,
     required this.onShowDescription,
+    required this.onOpenArtists,
     required this.total,
     required this.desktop,
   });
@@ -247,6 +286,7 @@ class _AlbumHeader extends StatelessWidget {
   final bool canRetryDetails;
   final VoidCallback onRetryDetails;
   final ValueChanged<String> onShowDescription;
+  final ValueChanged<List<ArtistSummary>>? onOpenArtists;
   final int? total;
   final bool desktop;
 
@@ -293,15 +333,28 @@ class _AlbumHeader extends StatelessWidget {
         ],
         if (artists case final names? when names.isNotEmpty) ...[
           const SizedBox(height: 6),
-          Text(
-            names,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: desktop ? TextAlign.start : TextAlign.center,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+          if (onOpenArtists == null)
+            Text(
+              names,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: desktop ? TextAlign.start : TextAlign.center,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            TextButton.icon(
+              key: const ValueKey('album-open-artist'),
+              onPressed: () => onOpenArtists!(details!.artists),
+              icon: const Icon(Icons.person_rounded),
+              label: Text(
+                names,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: desktop ? TextAlign.start : TextAlign.center,
+              ),
             ),
-          ),
         ],
         if (total case final count?) ...[
           const SizedBox(height: 8),
@@ -383,6 +436,48 @@ class _AlbumHeader extends StatelessWidget {
               : Column(children: [artwork, const SizedBox(height: 14), copy]),
         ),
       ),
+    );
+  }
+}
+
+class _AlbumArtistSelection extends StatelessWidget {
+  const _AlbumArtistSelection({required this.artists, required this.compact});
+
+  final List<ArtistSummary> artists;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = ListView(
+      shrinkWrap: compact,
+      padding: EdgeInsets.fromLTRB(8, compact ? 0 : 4, 8, compact ? 16 : 4),
+      children: [
+        if (compact)
+          const ListTile(
+            title: Text('Choose an Artist'),
+            subtitle: Text('This Album credits more than one Artist.'),
+          ),
+        for (var index = 0; index < artists.length; index++)
+          ListTile(
+            key: ValueKey('album-artist-$index'),
+            leading: const Icon(Icons.person_rounded),
+            title: Text(artists[index].name),
+            onTap: () => Navigator.pop(context, artists[index]),
+          ),
+      ],
+    );
+    return SafeArea(
+      top: !compact,
+      child: compact
+          ? ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
+              child: list,
+            )
+          : SizedBox(
+              width: 360,
+              height: (artists.length * 56.0).clamp(56.0, 336.0),
+              child: list,
+            ),
     );
   }
 }
