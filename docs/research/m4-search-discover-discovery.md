@@ -50,3 +50,7 @@ Shared Discover Track rows rank first because the common data and interaction co
 ## First outcome
 
 Implemented on 2026-08-27 as the sixth finite M4 slice. Radar and New songs now pass their existing presentation-safe Tracks, one-based positions, desktop mode, and exact play/queue callbacks into `MusicTrackTile`; both private reduced rows and artwork widgets were removed. Existing keys, lazy loading, Radar pagination, new-song category replacement, retained Discover state, and queue ownership remain unchanged. Focused 360 px journeys now assert the added Artist/Album/duration grammar and pass without overflow, as do strict Dart formatting/analysis, all 299 Flutter tests, Rust formatting, 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and packaged typed-Bridge integration. Four live QQ/WeChat tests remain gated and ignored; no credential, account endpoint, remote media, or user content was accessed.
+
+## Second selection
+
+After the Track-row slice, adaptive secondary selection ranks above the broader content-state migration. At compact widths it makes every Search/Discover type discoverable from one labeled control instead of relying on a partly off-screen horizontal segment, while medium/desktop can retain the efficient visible segmented grammar. The task is limited to a small presentation-only selector plus the two existing call sites; it must not consolidate controllers, alter lazy loading, replace the app shell, or introduce a navigation framework.

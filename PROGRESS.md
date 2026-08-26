@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "M4.4 Adaptive Search/Discover secondary selector"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -59,13 +59,13 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The Radar/New songs Track-row slice is complete. Global ranking returns to the two remaining bounded M4.4 candidates: adaptive secondary selection and shared page-family content states.
+- Global ranking selected the adaptive Search/Discover secondary selector. The finite slice replaces compact partly off-screen segmented controls with one explicit Material menu while retaining medium/desktop segmentation and every page controller.
 
 # Next Candidates
 
-1. Re-rank the adaptive Search/Discover secondary selector against bounded shared content-state migrations.
-2. Keep selected/current Track presentation deferred until a non-frame-driven listener exists; do not make long lists rebuild on playback position frames.
-3. Preserve the locally blocked M1 acceptance evidence and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
+1. Implement and validate one shared adaptive secondary selector for Search and Discover only.
+2. Re-rank bounded shared Search/Discover content-state migrations after the selector slice.
+3. Keep selected/current Track presentation deferred until a non-frame-driven listener exists, and preserve the locally blocked M1 acceptance evidence.
 
 # Blockers
 
