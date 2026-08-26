@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Authenticated favorite Albums"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -42,11 +42,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Existing Album-page metadata is implemented and fully offline/Linux validated; the next action is a fresh global evidence-backed candidate ranking rather than extending the nearest Album code.
+- M3 remains active. Authenticated favorite Albums are selected as the next finite slice after two current independent implementations, a real-account failure record for the tempting musicu route, and a bounded anonymous authentication-shape check. The implementation will use the legacy profile-asset CGI, exact credential candidate/rejection/replacement semantics, and the existing Album/queue route without accessing stored credentials for live probes.
 
 # Next Candidates
 
-1. Run the next global M3 discovery/ranking pass across authenticated favorite Albums, cross-surface Track-to-Album/Artist navigation, and any stronger reproduced correctness gap. Select only a finite candidate with current evidence; do not access stored account credentials or expand generic catalog/navigation infrastructure.
+1. Complete the selected authenticated favorite-Album page from direct QQ protocol through the existing Album/queue presentation path, with offline credential, pagination, cancellation, stale-result, compact/desktop, and packaged-Bridge coverage.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -79,6 +79,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Radar behavior has two current independent implementation references plus a bounded anonymous two-page structural probe and full offline client-to-presentation regression coverage. Both probed pages returned ten minimum-shape Tracks and `HasMore: true`, with one identity overlap; the implementation pages by service `Page`/`HasMore` and deduplicates opaque Track identity without preserving the older one-seed-row assumption. Anonymous structure and offline tests do not prove authenticated personalization, live application compatibility, or recommendation quality.
 - New-album behavior has a current direct implementation with live-gated area/pagination tests, bounded anonymous evidence, and full offline client-to-presentation regression coverage. Area 1 returned two exact non-overlapping five-row pages with numeric totals, and all six current area values returned zero codes plus one minimum-shape Album. The implementation keeps area typed, advances only by raw page length/total before deduplication, rejects invalid Album/Artist identity and Album title, and retains no returned catalog content; live application compatibility is not yet claimed.
 - Album-detail metadata has a current direct implementation/live-gated test, an independent legacy product path, bounded anonymous exact-MID/field-shape evidence, and full offline client-to-presentation regression coverage. The response MID matched the requested public MID and supplied canonical Album/Artist identity plus optional display strings without account material or retained content. The implementation bounds short text at 4 KiB and descriptions at 128 KiB, keeps metadata failure independent from Album Tracks, and does not claim live application compatibility from anonymous evidence.
+- Favorite-Album discovery has two current independent implementations of the authenticated profile-asset CGI plus a real-account record that the tempting `AlbumFavRead` musicu operation returns code `80000` with zero structure despite existing favorites. A current no-Cookie probe returned only rejection codes and no collection shape. The selected implementation must accept the two observed Album-field casing variants, treat only the directly evidenced authenticated rejection as credential rejection, and never use stored account material for automated discovery.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
