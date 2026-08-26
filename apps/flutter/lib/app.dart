@@ -503,7 +503,7 @@ class _AuthenticationContent extends StatelessWidget {
       children: [
         const _PanelIcon(icon: Icons.lock_reset_rounded),
         const SizedBox(height: 24),
-        _announcedTerminalMessage(context, title, detail),
+        _announcedAuthenticationMessage(context, title, detail),
         const SizedBox(height: 24),
         if (controller.stage == LoginStage.signOutStorageCleanupFailed)
           FilledButton.tonal(
@@ -602,24 +602,19 @@ class _AuthenticationContent extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 24),
-        Text(
+        _announcedAuthenticationMessage(
+          context,
           scanned
               ? 'Confirm on your phone'
               : reconnecting
               ? 'Reconnecting…'
               : 'Scan with WeChat',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        Text(
           scanned
               ? 'The code was scanned. Approve the sign-in in WeChat.'
               : reconnecting
               ? 'Your code is still active. We’ll retry the connection.'
               : 'Open WeChat, choose Scan, then point your camera here.',
-          textAlign: TextAlign.center,
-          style: _supportingStyle(context),
+          spacing: 8,
         ),
         const SizedBox(height: 24),
         Wrap(
@@ -691,7 +686,7 @@ class _AuthenticationContent extends StatelessWidget {
       children: [
         const _PanelIcon(icon: Icons.error_outline_rounded),
         const SizedBox(height: 24),
-        _announcedTerminalMessage(context, title, detail),
+        _announcedAuthenticationMessage(context, title, detail),
         const SizedBox(height: 24),
         if (controller.canRetry)
           FilledButton.tonal(
@@ -706,11 +701,12 @@ class _AuthenticationContent extends StatelessWidget {
     );
   }
 
-  Widget _announcedTerminalMessage(
+  Widget _announcedAuthenticationMessage(
     BuildContext context,
     String title,
-    String detail,
-  ) => Semantics(
+    String detail, {
+    double spacing = 10,
+  }) => Semantics(
     container: true,
     liveRegion: true,
     label: '$title. $detail',
@@ -723,7 +719,7 @@ class _AuthenticationContent extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: spacing),
         Text(
           detail,
           textAlign: TextAlign.center,

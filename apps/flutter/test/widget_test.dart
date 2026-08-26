@@ -159,6 +159,45 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('announces QR scan progress without merging controls', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final session = _WaitingSession();
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(session),
+      ),
+    );
+
+    await tester.ensureVisible(find.text('Continue with WeChat'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with WeChat'));
+    await tester.pumpAndSettle();
+    session.complete(
+      const LoginUpdate(
+        progress: LoginProgress.scannedAwaitingConfirmation,
+        sessionActive: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm on your phone'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('New code'), findsOneWidget);
+    final progressSemantics = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('Confirm on your phone')),
+    );
+    expect(progressSemantics.label, contains('Confirm on your phone'));
+    expect(progressSemantics.flagsCollection.isLiveRegion, isTrue);
+    expect(
+      progressSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
+    semantics.dispose();
+  });
+
   testWidgets('shows an explicitly rejected restored session', (tester) async {
     final session = _WaitingSession();
     await tester.pumpWidget(
@@ -1060,7 +1099,7 @@ class _PendingWidgetVerification implements CredentialVerificationOperation {
 }
 
 class _WaitingSession implements LoginSession {
-  final Completer<LoginUpdate> _advance = Completer<LoginUpdate>();
+  final List<Completer<LoginUpdate>> _advances = <Completer<LoginUpdate>>[];
   bool _active = true;
   int cancelCalls = 0;
 
@@ -1068,11 +1107,17 @@ class _WaitingSession implements LoginSession {
   bool get isActive => _active;
 
   @override
-  Future<LoginUpdate> advance() => _advance.future;
+  Future<LoginUpdate> advance() {
+    final advance = Completer<LoginUpdate>();
+    _advances.add(advance);
+    return advance.future.then((update) {
+      _active = update.sessionActive;
+      return update;
+    });
+  }
 
   void complete(LoginUpdate update) {
-    _active = update.sessionActive;
-    _advance.complete(update);
+    _advances.firstWhere((advance) => !advance.isCompleted).complete(update);
   }
 
   @override
