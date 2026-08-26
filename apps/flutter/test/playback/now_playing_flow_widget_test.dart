@@ -450,6 +450,84 @@ void main() {
     expect(find.textContaining('Paused'), findsOneWidget);
   });
 
+  testWidgets('desktop shortcuts remain active in lyrics and volume dialogs', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('first-modal-tools')),
+      _ImmediateMediaOperation(_success('second-modal-tools')),
+      _ImmediateMediaOperation(_success('returned-modal-tools')),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([
+        _FakeAudioSession(),
+        _FakeAudioSession(),
+        _FakeAudioSession(),
+      ]),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    await _sendControlShortcut(tester, LogicalKeyboardKey.arrowRight);
+    expect(_nowPlayingTitle(tester), 'Second track');
+
+    await tester.tap(find.byTooltip('Close lyrics'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Volume'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('volume-slider')), findsOneWidget);
+    await _sendControlShortcut(tester, LogicalKeyboardKey.arrowLeft);
+    expect(_nowPlayingTitle(tester), 'First track');
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paused'), findsOneWidget);
+  });
+
+  testWidgets('narrow lyric and volume sheets retain playback shortcuts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('narrow-modal-tools')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paused'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close lyrics'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Volume'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Playing'), findsOneWidget);
+  });
+
   testWidgets('desktop context actions preserve positional queue intent', (
     tester,
   ) async {

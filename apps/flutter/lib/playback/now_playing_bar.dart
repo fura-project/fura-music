@@ -6,6 +6,7 @@ import 'package:flutterustmusic/lyrics/lyric_panel.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_panel.dart';
+import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
@@ -71,7 +72,7 @@ class NowPlayingBar extends StatelessWidget {
                                     controller: controller,
                                     onSignInAgain: onSignInAgain,
                                   ),
-                                _VolumeButton(controller: playback),
+                                _VolumeButton(controller: controller),
                                 _QueueButton(controller: controller),
                               ],
                             ),
@@ -110,7 +111,7 @@ class NowPlayingBar extends StatelessWidget {
                                 controller: controller,
                                 onSignInAgain: onSignInAgain,
                               ),
-                            _VolumeButton(controller: playback),
+                            _VolumeButton(controller: controller),
                             _QueueButton(controller: controller),
                           ],
                         ),
@@ -338,7 +339,7 @@ class _QueueButton extends StatelessWidget {
 class _VolumeButton extends StatelessWidget {
   const _VolumeButton({required this.controller});
 
-  final TrackPlaybackController controller;
+  final QueuePlaybackController controller;
 
   @override
   Widget build(BuildContext context) => IconButton(
@@ -346,9 +347,9 @@ class _VolumeButton extends StatelessWidget {
     tooltip: 'Volume',
     onPressed: () => unawaited(_showVolumeControl(context, controller)),
     icon: Icon(
-      controller.volume == 0
+      controller.playback.volume == 0
           ? Icons.volume_off_rounded
-          : controller.volume < 0.5
+          : controller.playback.volume < 0.5
           ? Icons.volume_down_rounded
           : Icons.volume_up_rounded,
     ),
@@ -357,7 +358,7 @@ class _VolumeButton extends StatelessWidget {
 
 Future<void> _showVolumeControl(
   BuildContext context,
-  TrackPlaybackController controller,
+  QueuePlaybackController controller,
 ) async {
   if (MediaQuery.sizeOf(context).width < 600) {
     await showModalBottomSheet<void>(
@@ -365,9 +366,12 @@ Future<void> _showVolumeControl(
       showDragHandle: true,
       builder: (context) => SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: _VolumePanel(controller: controller),
+        child: PlaybackShortcuts(
+          controller: controller,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            child: _VolumePanel(controller: controller.playback),
+          ),
         ),
       ),
     );
@@ -377,9 +381,12 @@ Future<void> _showVolumeControl(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Volume'),
-      content: SizedBox(
-        width: 320,
-        child: _VolumePanel(controller: controller),
+      content: PlaybackShortcuts(
+        controller: controller,
+        child: SizedBox(
+          width: 320,
+          child: _VolumePanel(controller: controller.playback),
+        ),
       ),
     ),
   );
@@ -464,7 +471,13 @@ class _LyricsButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('now-playing-show-lyrics'),
     tooltip: 'Show lyrics',
-    onPressed: () => showLyrics(context, controller.lyrics!, onSignInAgain),
+    onPressed: () => showLyrics(
+      context,
+      controller.lyrics!,
+      onSignInAgain,
+      modalContentWrapper: (child) =>
+          PlaybackShortcuts(controller: controller, child: child),
+    ),
     icon: const Icon(Icons.lyrics_outlined),
   );
 }

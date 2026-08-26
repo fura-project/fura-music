@@ -5,8 +5,9 @@ import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 Future<void> showLyrics(
   BuildContext context,
   LyricController controller,
-  VoidCallback onSignInAgain,
-) {
+  VoidCallback onSignInAgain, {
+  Widget Function(Widget child)? modalContentWrapper,
+}) {
   if (MediaQuery.sizeOf(context).width < 600) {
     return showModalBottomSheet<void>(
       context: context,
@@ -14,10 +15,13 @@ Future<void> showLyrics(
       showDragHandle: true,
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.82,
-        child: LyricPanel(
-          controller: controller,
-          onClose: () => Navigator.of(context).pop(),
-          onSignInAgain: onSignInAgain,
+        child: _wrapModalContent(
+          LyricPanel(
+            controller: controller,
+            onClose: () => Navigator.of(context).pop(),
+            onSignInAgain: onSignInAgain,
+          ),
+          modalContentWrapper,
         ),
       ),
     );
@@ -27,15 +31,23 @@ Future<void> showLyrics(
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720, maxHeight: 720),
-        child: LyricPanel(
-          controller: controller,
-          onClose: () => Navigator.of(context).pop(),
-          onSignInAgain: onSignInAgain,
+        child: _wrapModalContent(
+          LyricPanel(
+            controller: controller,
+            onClose: () => Navigator.of(context).pop(),
+            onSignInAgain: onSignInAgain,
+          ),
+          modalContentWrapper,
         ),
       ),
     ),
   );
 }
+
+Widget _wrapModalContent(
+  Widget child,
+  Widget Function(Widget child)? wrapper,
+) => wrapper?.call(child) ?? child;
 
 class LyricPanel extends StatelessWidget {
   const LyricPanel({
