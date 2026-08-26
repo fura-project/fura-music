@@ -381,6 +381,58 @@ void main() {
     expect(find.text('Your playlists'), findsOneWidget);
   });
 
+  testWidgets('system back returns from local detail to the existing library', (
+    tester,
+  ) async {
+    final libraryGateway = _WidgetLibraryGateway([
+      const UserLibraryResult(
+        playlists: [
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'favorite:system-back',
+            title: 'System back playlist',
+          ),
+        ],
+      ),
+    ]);
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: libraryGateway,
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(
+            total: 1,
+            tracks: [
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:system-back',
+                title: 'System back track',
+                artistNames: [],
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('System back playlist').last);
+    await tester.pumpAndSettle();
+    expect(find.text('System back track'), findsOneWidget);
+
+    final handled = await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(handled, isTrue);
+    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.text('System back playlist'), findsOneWidget);
+    expect(libraryGateway._next, 1);
+    expect(find.text('System back track'), findsNothing);
+  });
+
   testWidgets('failed detail refresh keeps tracks visible and retries', (
     tester,
   ) async {

@@ -97,12 +97,23 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             playlist: selectedPlaylist,
             gateway: widget.detailGateway,
             queuePlaybackController: _queuePlaybackController,
-            onBack: () => setState(() => _selectedPlaylist = null),
+            onBack: _returnToLibrary,
             onSignInAgain: widget.onSignInAgain,
           )
         : _libraryScaffold();
-    return PlaybackShortcuts(controller: _queuePlaybackController, child: page);
+    return PopScope<void>(
+      canPop: selectedPlaylist == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selectedPlaylist != null) _returnToLibrary();
+      },
+      child: PlaybackShortcuts(
+        controller: _queuePlaybackController,
+        child: page,
+      ),
+    );
   }
+
+  void _returnToLibrary() => setState(() => _selectedPlaylist = null);
 
   Widget _libraryScaffold() => Scaffold(
     appBar: AppBar(
