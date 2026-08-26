@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
+import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
@@ -46,6 +48,7 @@ void main() {
         home: AlbumPage(
           album: album,
           gateway: const _AlbumGateway(track),
+          detailsGateway: const _AlbumDetailsGateway(),
           queuePlaybackController: playback,
           onBack: () => backCalls += 1,
           onSignInAgain: () {},
@@ -54,10 +57,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Synthetic album'), findsOneWidget);
+    expect(find.text('Canonical album'), findsOneWidget);
+    expect(find.text('Canonical artist'), findsOneWidget);
+    expect(find.textContaining('2026-08-26'), findsOneWidget);
     expect(find.text('1 Track'), findsOneWidget);
     expect(find.text('Synthetic track'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('album-about')));
+    await tester.pumpAndSettle();
+    expect(find.text('Canonical description'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('album-queue-0')));
     await tester.pumpAndSettle();
@@ -73,6 +84,138 @@ void main() {
     expect(backCalls, 1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Album detail failure leaves desktop Tracks usable and retries', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1100, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const album = AlbumSummary(
+      providerId: 'qq-music',
+      opaqueId: 'album:51001:fixtureAlbumMid',
+      title: 'Summary album',
+    );
+    const track = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41001:0:fixtureMid:-',
+      title: 'Still playable Track',
+      artistNames: ['Album artist'],
+    );
+    final details = _ScriptedAlbumDetailsGateway([
+      const AlbumDetailsResult(failure: AlbumDetailsFailure.network),
+      const AlbumDetailsResult(
+        details: AlbumDetails(
+          album: AlbumSummary(
+            providerId: 'qq-music',
+            opaqueId: 'album:51001:fixtureAlbumMid',
+            title: 'Retried canonical album',
+          ),
+          artists: [],
+          description: 'Desktop canonical description',
+        ),
+      ),
+    ]);
+    final playback = QueuePlaybackController(
+      _QueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AlbumPage(
+          album: album,
+          gateway: const _AlbumGateway(track),
+          detailsGateway: details,
+          queuePlaybackController: playback,
+          onBack: () {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Still playable Track'), findsOneWidget);
+    expect(find.text('Album details are offline.'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('album-details-retry')));
+    await tester.pumpAndSettle();
+    expect(find.text('Retried canonical album'), findsOneWidget);
+    expect(find.text('Still playable Track'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('album-about')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Desktop canonical description'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _AlbumDetailsGateway implements AlbumDetailsGateway {
+  const _AlbumDetailsGateway();
+
+  @override
+  AlbumDetailsLoadOperation beginLoad(AlbumSummary album) =>
+      const _AlbumDetailsOperation();
+}
+
+class _AlbumDetailsOperation implements AlbumDetailsLoadOperation {
+  const _AlbumDetailsOperation();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<AlbumDetailsResult> run() async => const AlbumDetailsResult(
+    details: AlbumDetails(
+      album: AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:51001:fixtureAlbumMid',
+        title: 'Canonical album',
+      ),
+      artists: [
+        ArtistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'artist:52001:fixtureArtistMid',
+          name: 'Canonical artist',
+        ),
+      ],
+      subtitle: 'Canonical subtitle',
+      releaseDate: '2026-08-26',
+      description: 'Canonical description',
+      language: 'Synthetic language',
+      albumType: 'Synthetic type',
+      genre: 'Synthetic genre',
+      company: 'Synthetic company',
+    ),
+  );
+}
+
+class _ScriptedAlbumDetailsGateway implements AlbumDetailsGateway {
+  _ScriptedAlbumDetailsGateway(this.results);
+
+  final List<AlbumDetailsResult> results;
+  int _next = 0;
+
+  @override
+  AlbumDetailsLoadOperation beginLoad(AlbumSummary album) =>
+      _ScriptedAlbumDetailsOperation(results[_next++]);
+}
+
+class _ScriptedAlbumDetailsOperation implements AlbumDetailsLoadOperation {
+  const _ScriptedAlbumDetailsOperation(this.result);
+
+  final AlbumDetailsResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<AlbumDetailsResult> run() async => result;
 }
 
 class _AlbumGateway implements AlbumTrackGateway {

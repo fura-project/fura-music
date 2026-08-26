@@ -682,6 +682,142 @@ impl fmt::Display for InvalidArtistSummary {
 
 impl std::error::Error for InvalidArtistSummary {}
 
+/// Provider-neutral canonical metadata for an existing Album transition.
+/// Provider rights, tracking, booklet, video, and mutation data are absent.
+#[derive(Clone, Eq, PartialEq)]
+pub struct AlbumDetails {
+    album: AlbumSummary,
+    artists: Vec<ArtistSummary>,
+    subtitle: Option<String>,
+    release_date: Option<String>,
+    description: Option<String>,
+    language: Option<String>,
+    album_type: Option<String>,
+    genre: Option<String>,
+    company: Option<String>,
+}
+
+impl AlbumDetails {
+    #[must_use]
+    pub fn new(album: AlbumSummary, artists: Vec<ArtistSummary>) -> Self {
+        Self {
+            album,
+            artists,
+            subtitle: None,
+            release_date: None,
+            description: None,
+            language: None,
+            album_type: None,
+            genre: None,
+            company: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_subtitle(mut self, value: Option<String>) -> Self {
+        self.subtitle = nonblank(value);
+        self
+    }
+
+    #[must_use]
+    pub fn with_release_date(mut self, value: Option<String>) -> Self {
+        self.release_date = nonblank(value);
+        self
+    }
+
+    #[must_use]
+    pub fn with_description(mut self, value: Option<String>) -> Self {
+        self.description = nonblank(value);
+        self
+    }
+
+    #[must_use]
+    pub fn with_language(mut self, value: Option<String>) -> Self {
+        self.language = nonblank(value);
+        self
+    }
+
+    #[must_use]
+    pub fn with_album_type(mut self, value: Option<String>) -> Self {
+        self.album_type = nonblank(value);
+        self
+    }
+
+    #[must_use]
+    pub fn with_genre(mut self, value: Option<String>) -> Self {
+        self.genre = nonblank(value);
+        self
+    }
+
+    #[must_use]
+    pub fn with_company(mut self, value: Option<String>) -> Self {
+        self.company = nonblank(value);
+        self
+    }
+
+    #[must_use]
+    pub const fn album(&self) -> &AlbumSummary {
+        &self.album
+    }
+
+    #[must_use]
+    pub fn artists(&self) -> &[ArtistSummary] {
+        &self.artists
+    }
+
+    #[must_use]
+    pub fn subtitle(&self) -> Option<&str> {
+        self.subtitle.as_deref()
+    }
+
+    #[must_use]
+    pub fn release_date(&self) -> Option<&str> {
+        self.release_date.as_deref()
+    }
+
+    #[must_use]
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    #[must_use]
+    pub fn language(&self) -> Option<&str> {
+        self.language.as_deref()
+    }
+
+    #[must_use]
+    pub fn album_type(&self) -> Option<&str> {
+        self.album_type.as_deref()
+    }
+
+    #[must_use]
+    pub fn genre(&self) -> Option<&str> {
+        self.genre.as_deref()
+    }
+
+    #[must_use]
+    pub fn company(&self) -> Option<&str> {
+        self.company.as_deref()
+    }
+}
+
+impl fmt::Debug for AlbumDetails {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AlbumDetails")
+            .field("album", &self.album)
+            .field("artist_count", &self.artists.len())
+            .field("has_subtitle", &self.subtitle.is_some())
+            .field("has_release_date", &self.release_date.is_some())
+            .field("has_description", &self.description.is_some())
+            .field("has_language", &self.language.is_some())
+            .field("has_album_type", &self.album_type.is_some())
+            .field("has_genre", &self.genre.is_some())
+            .field("has_company", &self.company.is_some())
+            .finish()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioFormat {
     Mp3,
@@ -1741,12 +1877,12 @@ fn nonblank(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSearchPage,
-        ArtistSummary, AudioFormat, AudioQuality, NewAlbumRegion, NewAlbumRelease,
-        NewAlbumReleasesPage, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
-        ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
-        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage,
-        TrackSummary, TrackSummaryField,
+        AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId,
+        ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, NewAlbumRegion,
+        NewAlbumRelease, NewAlbumReleasesPage, PlaylistId, PlaylistSearchPage, PlaylistSummary,
+        PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
+        RankingTracksPage, ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem,
+        TrackSearchPage, TrackSummary, TrackSummaryField,
     };
 
     #[test]
@@ -1911,6 +2047,42 @@ mod tests {
         let debug = format!("{page:?}");
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("43001"));
+    }
+
+    #[test]
+    fn album_details_keep_optional_metadata_and_content_out_of_diagnostics() {
+        let provider = ProviderId::new("qq-music").expect("provider");
+        let album = AlbumSummary::new(
+            AlbumId::new(provider.clone(), "album:43001:private-album-mid").expect("Album ID"),
+            "must-not-leak-album",
+        )
+        .expect("Album");
+        let artist = ArtistSummary::new(
+            ArtistId::new(provider, "artist:42001:private-artist-mid").expect("Artist ID"),
+            "must-not-leak-artist",
+        )
+        .expect("Artist");
+        let details = AlbumDetails::new(album, vec![artist])
+            .with_subtitle(Some("private-subtitle".into()))
+            .with_release_date(Some("2026-08-26".into()))
+            .with_description(Some("private-description".into()))
+            .with_language(Some("private-language".into()))
+            .with_album_type(Some("private-type".into()))
+            .with_genre(Some("private-genre".into()))
+            .with_company(Some("private-company".into()));
+
+        assert_eq!(details.artists().len(), 1);
+        assert_eq!(details.subtitle(), Some("private-subtitle"));
+        assert_eq!(details.release_date(), Some("2026-08-26"));
+        assert_eq!(details.description(), Some("private-description"));
+        assert_eq!(details.language(), Some("private-language"));
+        assert_eq!(details.album_type(), Some("private-type"));
+        assert_eq!(details.genre(), Some("private-genre"));
+        assert_eq!(details.company(), Some("private-company"));
+        let debug = format!("{details:?}");
+        for private in ["must-not-leak", "private-", "2026-08-26", "43001", "42001"] {
+            assert!(!debug.contains(private));
+        }
     }
 
     #[test]

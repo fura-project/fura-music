@@ -4,11 +4,11 @@ use std::fmt;
 use std::future::Future;
 
 use music_domain::{
-    AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistSearchPage,
-    ArtistTracksPage, NewAlbumRegion, NewAlbumReleasesPage, PlaylistId, PlaylistSearchPage,
-    PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId,
-    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackId,
-    TrackSearchPage,
+    AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
+    ArtistSearchPage, ArtistTracksPage, NewAlbumRegion, NewAlbumReleasesPage, PlaylistId,
+    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
+    RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
+    SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -172,6 +172,17 @@ pub trait AlbumTracksProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<AlbumTracksPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral canonical metadata for one Album. Track paging and Album
+/// mutation remain separate capabilities.
+pub trait AlbumDetailsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn album_details(
+        &self,
+        album_id: AlbumId,
+    ) -> impl Future<Output = Result<AlbumDetails, Self::Error>> + Send;
 }
 
 /// Provider-neutral offset-paged Artist Track browsing. Artist details,

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_controller.dart';
+import 'package:flutterustmusic/album/album_details_controller.dart';
+import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -11,6 +13,7 @@ class AlbumPage extends StatefulWidget {
   const AlbumPage({
     required this.album,
     required this.gateway,
+    required this.detailsGateway,
     required this.queuePlaybackController,
     required this.onBack,
     required this.onSignInAgain,
@@ -20,6 +23,7 @@ class AlbumPage extends StatefulWidget {
 
   final AlbumSummary album;
   final AlbumTrackGateway gateway;
+  final AlbumDetailsGateway detailsGateway;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
@@ -31,17 +35,24 @@ class AlbumPage extends StatefulWidget {
 
 class _AlbumPageState extends State<AlbumPage> {
   late final AlbumController _controller;
+  late final AlbumDetailsController _detailsController;
 
   @override
   void initState() {
     super.initState();
     _controller = AlbumController(widget.album, widget.gateway);
+    _detailsController = AlbumDetailsController(
+      widget.album,
+      widget.detailsGateway,
+    );
     unawaited(_controller.load());
+    unawaited(_detailsController.load());
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _detailsController.dispose();
     super.dispose();
   }
 
@@ -58,14 +69,20 @@ class _AlbumPageState extends State<AlbumPage> {
     ),
     body: SafeArea(
       child: AnimatedBuilder(
-        animation: _controller,
+        animation: Listenable.merge([_controller, _detailsController]),
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {
             final desktop = constraints.maxWidth >= 820;
             return Column(
               children: [
                 _AlbumHeader(
-                  album: widget.album,
+                  album: _detailsController.details?.album ?? widget.album,
+                  details: _detailsController.details,
+                  detailsStage: _detailsController.stage,
+                  detailsFailure: _detailsController.failure,
+                  canRetryDetails: _detailsController.canRetry,
+                  onRetryDetails: _detailsController.retry,
+                  onShowDescription: _showDescription,
                   total: _controller.stage == AlbumTrackStage.content
                       ? _controller.total
                       : null,
@@ -147,21 +164,102 @@ class _AlbumPageState extends State<AlbumPage> {
       ..showSnackBar(SnackBar(content: Text(message)));
     unawaited(playbackStart);
   }
+
+  void _showDescription(String description) {
+    final title = _detailsController.details?.album.title ?? widget.album.title;
+    if (MediaQuery.sizeOf(context).width < 600) {
+      unawaited(
+        showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (context) => FractionallySizedBox(
+            heightFactor: 0.72,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'About $title',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: SelectableText(description),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.tonal(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('About $title'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(child: SelectableText(description)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _AlbumHeader extends StatelessWidget {
   const _AlbumHeader({
     required this.album,
+    required this.details,
+    required this.detailsStage,
+    required this.detailsFailure,
+    required this.canRetryDetails,
+    required this.onRetryDetails,
+    required this.onShowDescription,
     required this.total,
     required this.desktop,
   });
 
   final AlbumSummary album;
+  final AlbumDetails? details;
+  final AlbumDetailsStage detailsStage;
+  final AlbumDetailsFailure? detailsFailure;
+  final bool canRetryDetails;
+  final VoidCallback onRetryDetails;
+  final ValueChanged<String> onShowDescription;
   final int? total;
   final bool desktop;
 
   @override
   Widget build(BuildContext context) {
+    final artists = details?.artists.map((artist) => artist.name).join(' · ');
+    final metadata = <String>[
+      ?details?.releaseDate,
+      ?details?.albumType,
+      ?details?.genre,
+      ?details?.language,
+      ?details?.company,
+    ];
     final artwork = SizedBox.square(
       dimension: desktop ? 132 : 92,
       child: _AlbumArtwork(uri: album.artworkUri),
@@ -183,9 +281,84 @@ class _AlbumHeader extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
+        if (details?.subtitle case final subtitle?) ...[
+          const SizedBox(height: 5),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: desktop ? TextAlign.start : TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+        if (artists case final names? when names.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            names,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: desktop ? TextAlign.start : TextAlign.center,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
         if (total case final count?) ...[
           const SizedBox(height: 8),
           Text('$count ${count == 1 ? 'Track' : 'Tracks'}'),
+        ],
+        if (metadata.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            metadata.join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: desktop ? TextAlign.start : TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (details?.description case final description?) ...[
+          const SizedBox(height: 4),
+          TextButton.icon(
+            key: const ValueKey('album-about'),
+            onPressed: () => onShowDescription(description),
+            icon: const Icon(Icons.notes_rounded),
+            label: const Text('About this Album'),
+          ),
+        ],
+        if (detailsStage == AlbumDetailsStage.loading) ...[
+          const SizedBox(height: 8),
+          const SizedBox(
+            width: 180,
+            child: LinearProgressIndicator(
+              key: ValueKey('album-details-loading'),
+            ),
+          ),
+        ] else if (detailsStage == AlbumDetailsStage.error) ...[
+          const SizedBox(height: 6),
+          Semantics(
+            liveRegion: true,
+            child: Wrap(
+              alignment: desktop ? WrapAlignment.start : WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: [
+                Text(
+                  _detailsFailureCopy(detailsFailure),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.error),
+                ),
+                if (canRetryDetails)
+                  TextButton(
+                    key: const ValueKey('album-details-retry'),
+                    onPressed: onRetryDetails,
+                    child: const Text('Retry details'),
+                  ),
+              ],
+            ),
+          ),
         ],
       ],
     );
@@ -433,4 +606,15 @@ String _failureCopy(AlbumTrackFailure? failure) => switch (failure) {
   AlbumTrackFailure.invalidResponse ||
   AlbumTrackFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected Album response.',
+};
+
+String _detailsFailureCopy(AlbumDetailsFailure? failure) => switch (failure) {
+  AlbumDetailsFailure.network => 'Album details are offline.',
+  AlbumDetailsFailure.serviceUnavailable =>
+    'Album details are temporarily unavailable.',
+  AlbumDetailsFailure.cancelled => 'Album detail loading was cancelled.',
+  AlbumDetailsFailure.coreUnavailable => 'Album details could not start.',
+  AlbumDetailsFailure.invalidResponse ||
+  AlbumDetailsFailure.alreadyRunning ||
+  null => 'Album details could not be read.',
 };

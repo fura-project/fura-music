@@ -19,6 +19,7 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -655,6 +656,7 @@ void main() {
           ),
           newAlbumGateway: newAlbums,
           albumTrackGateway: albumTracks,
+          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
           playbackQueueGateway: queue,
           lyricGateway: const _WidgetLyricGateway(),
         ),
@@ -729,6 +731,7 @@ void main() {
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
         searchGateway: search,
         albumTrackGateway: albumTracks,
+        albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
       ),
     );
     await tester.pumpAndSettle();
@@ -939,6 +942,7 @@ void main() {
         searchGateway: const _UnusedSearchGateway(),
         albumSearchGateway: albumSearch,
         albumTrackGateway: albumTracks,
+        albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
       ),
     );
     await tester.pumpAndSettle();
@@ -1126,6 +1130,7 @@ void main() {
         artistTrackGateway: artistTracks,
         artistAlbumGateway: artistAlbums,
         albumTrackGateway: albumTracks,
+        albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
       ),
     );
     await tester.pumpAndSettle();
@@ -2063,6 +2068,30 @@ class _WidgetAlbumGateway implements AlbumTrackGateway {
     requests.add((album, offset, size));
     return _WidgetAlbumOperation(result);
   }
+}
+
+class _WidgetAlbumDetailsGateway implements AlbumDetailsGateway {
+  const _WidgetAlbumDetailsGateway();
+
+  @override
+  AlbumDetailsLoadOperation beginLoad(AlbumSummary album) =>
+      _WidgetAlbumDetailsOperation(
+        AlbumDetailsResult(
+          details: AlbumDetails(album: album, artists: const []),
+        ),
+      );
+}
+
+class _WidgetAlbumDetailsOperation implements AlbumDetailsLoadOperation {
+  const _WidgetAlbumDetailsOperation(this.result);
+
+  final AlbumDetailsResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<AlbumDetailsResult> run() async => result;
 }
 
 class _WidgetArtistSearchGateway implements ArtistSearchGateway {

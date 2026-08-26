@@ -119,6 +119,17 @@ void main() {
       cancelledAlbumLoad.failure,
       QqMusicAlbumTrackPageLoadFailure.cancelled,
     );
+    final unusedAlbumDetailsLoad = beginQqMusicAlbumDetailsLoad(
+      providerId: 'qq-music',
+      opaqueAlbumId: 'album:43001:fixtureAlbumMid',
+    );
+    expect(unusedAlbumDetailsLoad.isActive, isTrue);
+    expect(unusedAlbumDetailsLoad.cancel(), isTrue);
+    final cancelledAlbumDetailsLoad = await unusedAlbumDetailsLoad.run();
+    expect(
+      cancelledAlbumDetailsLoad.failure,
+      QqMusicAlbumDetailsLoadFailure.cancelled,
+    );
     final unusedArtistLoad = beginQqMusicArtistTrackPageLoad(
       providerId: 'qq-music',
       opaqueArtistId: 'artist:61001:fixtureArtistMid',

@@ -5,6 +5,7 @@
 //! providers or Flutter.
 
 mod album;
+mod album_details;
 mod album_search;
 mod artist;
 mod artist_albums;
@@ -29,6 +30,7 @@ mod wechat_login;
 mod wechat_qr;
 
 pub use album::{AlbumTrackField, QqMusicAlbumTrackPage, QqMusicAlbumTracksError};
+pub use album_details::{AlbumDetailField, QqMusicAlbumDetails, QqMusicAlbumDetailsError};
 pub use album_search::{AlbumSearchField, QqMusicAlbumSearchError, QqMusicAlbumSearchPage};
 pub use artist::{ArtistTrackField, QqMusicArtistTrackPage, QqMusicArtistTracksError};
 pub use artist_albums::{ArtistAlbumField, QqMusicArtistAlbumPage, QqMusicArtistAlbumsError};

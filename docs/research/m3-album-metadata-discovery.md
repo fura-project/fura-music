@@ -39,3 +39,9 @@ Reference implementations remain research evidence only. Runtime requests will g
 ## Selection
 
 Existing Album-page metadata ranks first because it has exact current anonymous evidence, improves four implemented Album entry paths, and stays independent from both account credentials and Track/queue identity semantics. The metadata operation remains optional beside Track loading so external detail instability cannot regress the already working Album-to-queue path.
+
+## Implementation outcome
+
+The selected slice is implemented across provider-neutral `AlbumDetails`, a small Provider capability, direct anonymous QQ client, QQ Provider mapping, a single-use cancellable Bridge handle, and an independent Flutter gateway/controller beside the existing Track controller. Every current Album origin uses the same page. Canonical title, credited Artists, release/type/genre/language/company render in the adaptive header; the full bounded description remains reachable through a compact bottom sheet or desktop dialog. Metadata failure is explicit and retryable without hiding loaded Tracks or queue actions.
+
+Validation on 2026-08-26 passed Rust formatting, strict all-target/all-feature Clippy, 242 offline Rust tests with four separate live-gated tests ignored, strict Dart formatting and analysis, all 256 Flutter tests, the Linux x64 Release build, and the packaged Linux typed-Bridge integration. These checks prove offline request/mapping/redaction/lifecycle/UI behavior and Linux packaging of the new Bridge surface; they do not prove current live application compatibility, returned content quality, or QQ CDN playback. No account credential or returned Album content was used by implementation tests or retained in the repository.

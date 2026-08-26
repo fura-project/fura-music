@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
+import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
@@ -51,6 +52,7 @@ class UserLibraryPage extends StatefulWidget {
     this.albumSearchGateway,
     this.playlistSearchGateway,
     this.albumTrackGateway,
+    this.albumDetailsGateway,
     this.artistTrackGateway,
     this.artistAlbumGateway,
     this.recommendedPlaylistGateway,
@@ -73,6 +75,7 @@ class UserLibraryPage extends StatefulWidget {
   final AlbumSearchGateway? albumSearchGateway;
   final PlaylistSearchGateway? playlistSearchGateway;
   final AlbumTrackGateway? albumTrackGateway;
+  final AlbumDetailsGateway? albumDetailsGateway;
   final ArtistTrackGateway? artistTrackGateway;
   final ArtistAlbumGateway? artistAlbumGateway;
   final RecommendedPlaylistGateway? recommendedPlaylistGateway;
@@ -92,6 +95,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final AlbumSearchGateway _albumSearchGateway;
   late final PlaylistSearchGateway _playlistSearchGateway;
   late final AlbumTrackGateway _albumTrackGateway;
+  late final AlbumDetailsGateway _albumDetailsGateway;
   late final ArtistTrackGateway _artistTrackGateway;
   late final ArtistAlbumGateway _artistAlbumGateway;
   late final RecommendedPlaylistGateway _recommendedPlaylistGateway;
@@ -133,6 +137,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         widget.playlistSearchGateway ?? const RustPlaylistSearchGateway();
     _albumTrackGateway =
         widget.albumTrackGateway ?? const RustAlbumTrackGateway();
+    _albumDetailsGateway =
+        widget.albumDetailsGateway ?? const RustAlbumDetailsGateway();
     _artistTrackGateway =
         widget.artistTrackGateway ?? const RustArtistTrackGateway();
     _artistAlbumGateway =
@@ -241,6 +247,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   key: ValueKey('new-album-detail-${selectedAlbum.opaqueId}'),
                   album: selectedAlbum,
                   gateway: _albumTrackGateway,
+                  detailsGateway: _albumDetailsGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnFromRecommendedAlbum,
                   backTooltip: 'Back to new albums',
@@ -278,6 +285,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   key: ValueKey('album-page-${selectedAlbum.opaqueId}'),
                   album: selectedAlbum,
                   gateway: _albumTrackGateway,
+                  detailsGateway: _albumDetailsGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnFromAlbum,
                   backTooltip: selectedArtist == null

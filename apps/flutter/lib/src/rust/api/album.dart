@@ -4,12 +4,21 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'artist.dart';
 import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `album_id`, `bridge_album_summary`, `failed_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `album_id`, `bridge_album_summary`, `failed_details_load`, `failed_load`, `map_details_error`, `map_details_load`, `map_error`, `map_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+
+QqMusicAlbumDetailsLoadHandle beginQqMusicAlbumDetailsLoad({
+  required String providerId,
+  required String opaqueAlbumId,
+}) => RustLib.instance.api.crateApiAlbumBeginQqMusicAlbumDetailsLoad(
+  providerId: providerId,
+  opaqueAlbumId: opaqueAlbumId,
+);
 
 QqMusicAlbumTrackPageLoadHandle beginQqMusicAlbumTrackPageLoad({
   required String providerId,
@@ -23,6 +32,15 @@ QqMusicAlbumTrackPageLoadHandle beginQqMusicAlbumTrackPageLoad({
   size: size,
 );
 
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumDetailsLoadHandle>>
+abstract class QqMusicAlbumDetailsLoadHandle implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicAlbumDetailsLoad> run();
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumTrackPageLoadHandle>>
 abstract class QqMusicAlbumTrackPageLoadHandle implements RustOpaqueInterface {
   bool cancel();
@@ -30,6 +48,57 @@ abstract class QqMusicAlbumTrackPageLoadHandle implements RustOpaqueInterface {
   bool get isActive;
 
   Future<QqMusicAlbumTrackPageLoad> run();
+}
+
+class CatalogAlbumDetails {
+  final CatalogAlbumSummary album;
+  final List<CatalogArtistSummary> artists;
+  final String? subtitle;
+  final String? releaseDate;
+  final String? description;
+  final String? language;
+  final String? albumType;
+  final String? genre;
+  final String? company;
+
+  const CatalogAlbumDetails({
+    required this.album,
+    required this.artists,
+    this.subtitle,
+    this.releaseDate,
+    this.description,
+    this.language,
+    this.albumType,
+    this.genre,
+    this.company,
+  });
+
+  @override
+  int get hashCode =>
+      album.hashCode ^
+      artists.hashCode ^
+      subtitle.hashCode ^
+      releaseDate.hashCode ^
+      description.hashCode ^
+      language.hashCode ^
+      albumType.hashCode ^
+      genre.hashCode ^
+      company.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CatalogAlbumDetails &&
+          runtimeType == other.runtimeType &&
+          album == other.album &&
+          artists == other.artists &&
+          subtitle == other.subtitle &&
+          releaseDate == other.releaseDate &&
+          description == other.description &&
+          language == other.language &&
+          albumType == other.albumType &&
+          genre == other.genre &&
+          company == other.company;
 }
 
 class CatalogAlbumSummary {
@@ -61,6 +130,33 @@ class CatalogAlbumSummary {
           opaqueId == other.opaqueId &&
           title == other.title &&
           artworkUri == other.artworkUri;
+}
+
+class QqMusicAlbumDetailsLoad {
+  final CatalogAlbumDetails? details;
+  final QqMusicAlbumDetailsLoadFailure? failure;
+
+  const QqMusicAlbumDetailsLoad({this.details, this.failure});
+
+  @override
+  int get hashCode => details.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicAlbumDetailsLoad &&
+          runtimeType == other.runtimeType &&
+          details == other.details &&
+          failure == other.failure;
+}
+
+enum QqMusicAlbumDetailsLoadFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  cancelled,
+  alreadyRunning,
 }
 
 class QqMusicAlbumTrackPageLoad {
