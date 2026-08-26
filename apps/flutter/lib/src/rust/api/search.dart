@@ -5,6 +5,7 @@
 
 import '../frb_generated.dart';
 import 'album.dart';
+import 'artist.dart';
 import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -34,11 +35,16 @@ abstract class QqMusicTrackSearchPageLoadHandle implements RustOpaqueInterface {
 class QqMusicTrackSearchItem {
   final LibraryTrackSummary track;
   final CatalogAlbumSummary? album;
+  final List<CatalogArtistSummary> artists;
 
-  const QqMusicTrackSearchItem({required this.track, this.album});
+  const QqMusicTrackSearchItem({
+    required this.track,
+    this.album,
+    required this.artists,
+  });
 
   @override
-  int get hashCode => track.hashCode ^ album.hashCode;
+  int get hashCode => track.hashCode ^ album.hashCode ^ artists.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -46,7 +52,8 @@ class QqMusicTrackSearchItem {
       other is QqMusicTrackSearchItem &&
           runtimeType == other.runtimeType &&
           track == other.track &&
-          album == other.album;
+          album == other.album &&
+          artists == other.artists;
 }
 
 class QqMusicTrackSearchPageLoad {

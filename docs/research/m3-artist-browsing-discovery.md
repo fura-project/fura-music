@@ -44,3 +44,9 @@ Reference implementations remain research evidence only. No third-party server, 
 ## Selection
 
 Artist browsing ranks first because it extends the implemented Search catalog with high user value, both identity forms are already present, two current independent implementations exist, and both anonymous pagination paths advanced repeatably. The numeric-ID/`num` request is selected because it honored the requested bound exactly; the MID/`number` path remains independent behavioral corroboration. Home and availability remain authorized candidates, not implementation commitments.
+
+## Implementation outcome
+
+Completed on 2026-08-26 within the selected boundary. Search retains every validated credited Artist as a provider-neutral summary, while `QQMusicProvider` alone owns the opaque numeric-ID/MID representation. The direct client operation validates bounded offset pagination and maps only the established minimum Track shape. A single-use cancellable Bridge page operation feeds a Flutter controller with explicit first-page, empty, retry, append-failure, replacement, stale-result, and disposal behavior. Collaborations expose an explicit Artist selector; opening one Artist keeps Search mounted, and returned Tracks reuse the existing Rust-backed queue.
+
+Validation passed for 175 offline Rust tests, strict Clippy, strict Dart analysis, 181 Flutter tests, Linux x64 Release packaging, and the packaged Linux typed-Bridge integration. Four live QQ/WeChat tests remained separately gated and ignored. This evidence proves local mapping, lifecycle, presentation, navigation, queue handoff, and packaged Bridge behavior; it does not prove current live Artist compatibility or real-account search-to-CDN playback. No Artist detail, biography, artwork, albums, follows, Home, quality, new Provider, navigation framework, or generic catalog runtime was added.

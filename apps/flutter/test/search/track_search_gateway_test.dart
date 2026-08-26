@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
@@ -26,6 +27,13 @@ void main() {
               opaqueId: 'album:51001:fixtureAlbumMid',
               title: 'Synthetic album',
             ),
+            artists: [
+              bridge_artist.CatalogArtistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'artist:61001:fixtureArtistMid',
+                name: 'Artist one',
+              ),
+            ],
           ),
         ],
       ),
@@ -39,6 +47,7 @@ void main() {
     expect(result.items.single.track.title, 'Synthetic track');
     expect(result.items.single.track.artistNames, ['Artist one']);
     expect(result.items.single.album?.opaqueId, 'album:51001:fixtureAlbumMid');
+    expect(result.items.single.artists.single.name, 'Artist one');
   });
 
   test('maps every Bridge failure and rejects conflicting success data', () {

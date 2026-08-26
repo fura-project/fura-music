@@ -375,6 +375,109 @@ impl fmt::Display for InvalidAlbumSummary {
 
 impl std::error::Error for InvalidAlbumSummary {}
 
+/// Provider-scoped Artist identity. The opaque value is interpreted only by
+/// the owning Provider.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct ArtistId {
+    provider: ProviderId,
+    opaque: String,
+}
+
+impl ArtistId {
+    /// # Errors
+    ///
+    /// Returns [`InvalidArtistId`] when the provider-owned value is blank.
+    pub fn new(provider: ProviderId, opaque: impl Into<String>) -> Result<Self, InvalidArtistId> {
+        let opaque = opaque.into();
+        if opaque.trim().is_empty() {
+            return Err(InvalidArtistId);
+        }
+        Ok(Self { provider, opaque })
+    }
+
+    #[must_use]
+    pub const fn provider(&self) -> &ProviderId {
+        &self.provider
+    }
+
+    #[must_use]
+    pub fn opaque(&self) -> &str {
+        &self.opaque
+    }
+}
+
+impl fmt::Debug for ArtistId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ArtistId")
+            .field("provider", &self.provider)
+            .field("opaque", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidArtistId;
+
+impl fmt::Display for InvalidArtistId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("artist identity must have a non-empty provider value")
+    }
+}
+
+impl std::error::Error for InvalidArtistId {}
+
+/// Minimum provider-neutral Artist data needed for a catalog transition.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ArtistSummary {
+    id: ArtistId,
+    name: String,
+}
+
+impl ArtistSummary {
+    /// # Errors
+    ///
+    /// Returns [`InvalidArtistSummary`] when the name is blank.
+    pub fn new(id: ArtistId, name: impl Into<String>) -> Result<Self, InvalidArtistSummary> {
+        let name = name.into();
+        if name.trim().is_empty() {
+            return Err(InvalidArtistSummary);
+        }
+        Ok(Self { id, name })
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> &ArtistId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl fmt::Debug for ArtistSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ArtistSummary")
+            .field("id", &self.id)
+            .field("name", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidArtistSummary;
+
+impl fmt::Display for InvalidArtistSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("artist summary name must not be empty")
+    }
+}
+
+impl std::error::Error for InvalidArtistSummary {}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioFormat {
     Mp3,
@@ -668,17 +771,27 @@ pub struct TrackSearchPage {
 }
 
 /// One Track result plus optional catalog transitions evidenced by that
-/// result. Album identity remains absent when QQ omits a safe MID or title.
+/// result. Catalog identities remain absent when QQ omits their validated
+/// minimum fields.
 #[derive(Clone, Eq, PartialEq)]
 pub struct TrackSearchItem {
     track: TrackSummary,
     album: Option<AlbumSummary>,
+    artists: Vec<ArtistSummary>,
 }
 
 impl TrackSearchItem {
     #[must_use]
-    pub const fn new(track: TrackSummary, album: Option<AlbumSummary>) -> Self {
-        Self { track, album }
+    pub const fn new(
+        track: TrackSummary,
+        album: Option<AlbumSummary>,
+        artists: Vec<ArtistSummary>,
+    ) -> Self {
+        Self {
+            track,
+            album,
+            artists,
+        }
     }
 
     #[must_use]
@@ -690,6 +803,11 @@ impl TrackSearchItem {
     pub const fn album(&self) -> Option<&AlbumSummary> {
         self.album.as_ref()
     }
+
+    #[must_use]
+    pub fn artists(&self) -> &[ArtistSummary] {
+        &self.artists
+    }
 }
 
 impl fmt::Debug for TrackSearchItem {
@@ -698,6 +816,7 @@ impl fmt::Debug for TrackSearchItem {
             .debug_struct("TrackSearchItem")
             .field("track", &self.track)
             .field("album", &self.album)
+            .field("artists", &self.artists)
             .finish()
     }
 }
@@ -800,6 +919,60 @@ impl fmt::Debug for AlbumTracksPage {
     }
 }
 
+/// One bounded page of Artist Tracks. QQ-specific pagination and Artist route
+/// rules remain in the owning Provider.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ArtistTracksPage {
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    tracks: Vec<TrackSummary>,
+}
+
+impl ArtistTracksPage {
+    #[must_use]
+    pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+        Self {
+            offset,
+            total,
+            has_more,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+}
+
+impl fmt::Debug for ArtistTracksPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ArtistTracksPage")
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("track_count", &self.tracks.len())
+            .finish()
+    }
+}
+
 impl PlaylistTracksPage {
     #[must_use]
     pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
@@ -851,8 +1024,8 @@ fn nonblank(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlbumId, AlbumSummary, AlbumTracksPage, AudioFormat, AudioQuality, PlaylistId,
-        PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource,
+        AlbumId, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSummary, AudioFormat, AudioQuality,
+        PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource,
         ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
         TrackSummaryField,
     };
@@ -948,14 +1121,28 @@ mod tests {
             "private-album",
         )
         .expect("album summary");
-        let page =
-            TrackSearchPage::new(2, 45, true, vec![TrackSearchItem::new(track, Some(album))]);
+        let artist = ArtistSummary::new(
+            ArtistId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "artist:42001:fixture-artist-mid",
+            )
+            .expect("artist ID"),
+            "private-artist",
+        )
+        .expect("artist summary");
+        let page = TrackSearchPage::new(
+            2,
+            45,
+            true,
+            vec![TrackSearchItem::new(track, Some(album), vec![artist])],
+        );
 
         assert_eq!(page.page(), 2);
         assert_eq!(page.total(), 45);
         assert!(page.has_more());
         assert_eq!(page.items().len(), 1);
         assert!(page.items()[0].album().is_some());
+        assert_eq!(page.items()[0].artists().len(), 1);
         let debug = format!("{page:?}");
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("private-artist"));

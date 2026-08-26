@@ -5,6 +5,7 @@ use provider_api::{SearchError, TrackSearchProvider};
 use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
+use super::artist::{CatalogArtistSummary, bridge_artist_summary};
 use super::authentication::native_qq_music_provider;
 use super::library::{LibraryTrackSummary, bridge_track_summary};
 
@@ -22,6 +23,7 @@ pub enum QqMusicTrackSearchPageLoadFailure {
 pub struct QqMusicTrackSearchItem {
     pub track: LibraryTrackSummary,
     pub album: Option<CatalogAlbumSummary>,
+    pub artists: Vec<CatalogArtistSummary>,
 }
 
 impl fmt::Debug for QqMusicTrackSearchItem {
@@ -30,6 +32,7 @@ impl fmt::Debug for QqMusicTrackSearchItem {
             .debug_struct("QqMusicTrackSearchItem")
             .field("track", &self.track)
             .field("album", &self.album)
+            .field("artists", &self.artists)
             .finish()
     }
 }
@@ -157,6 +160,7 @@ fn map_load(
                 .map(|item| QqMusicTrackSearchItem {
                     track: bridge_track_summary(item.track()),
                     album: item.album().map(bridge_album_summary),
+                    artists: item.artists().iter().map(bridge_artist_summary).collect(),
                 })
                 .collect(),
             failure: None,
@@ -186,7 +190,8 @@ const fn map_error(error: SearchError) -> QqMusicTrackSearchPageLoadFailure {
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        AlbumId, AlbumSummary, ProviderId, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+        AlbumId, AlbumSummary, ArtistId, ArtistSummary, ProviderId, TrackId, TrackSearchItem,
+        TrackSearchPage, TrackSummary,
     };
     use provider_api::SearchError;
 
@@ -216,11 +221,20 @@ mod tests {
             "private-album",
         )
         .expect("Album summary");
+        let artist = ArtistSummary::new(
+            ArtistId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "artist:42001:fixtureArtistMid",
+            )
+            .expect("Artist ID"),
+            "private-artist",
+        )
+        .expect("Artist summary");
         let mapped = map_load(Ok(TrackSearchPage::new(
             1,
             31,
             true,
-            vec![TrackSearchItem::new(track, Some(album))],
+            vec![TrackSearchItem::new(track, Some(album), vec![artist])],
         )));
 
         assert_eq!(mapped.page, 1);
@@ -230,6 +244,7 @@ mod tests {
         assert_eq!(mapped.items[0].track.provider_id, "qq-music");
         assert_eq!(mapped.items[0].track.title, "must-not-leak");
         assert!(mapped.items[0].album.is_some());
+        assert_eq!(mapped.items[0].artists.len(), 1);
         let debug = format!("{mapped:?} {:?}", mapped.items[0]);
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("private-artist"));

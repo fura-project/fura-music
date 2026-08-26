@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
@@ -8,22 +9,28 @@ import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
-import 'package:flutterustmusic/search/track_search_gateway.dart';
-import 'package:flutterustmusic/search/track_search_page.dart';
 
 void main() {
-  testWidgets('search result can be queued or handed to playback', (
+  testWidgets('Artist Tracks can be queued, played, and returned from', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const artist = ArtistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'artist:61001:fixtureArtistMid',
+      name: 'Synthetic artist',
+    );
     const track = PlaylistTrackSummary(
       providerId: 'qq-music',
-      opaqueId: 'track:41001:0:searchMid:-',
-      title: 'Search result',
-      artistNames: ['Search artist'],
-      albumTitle: 'Search album',
-      durationSeconds: 180,
+      opaqueId: 'track:41001:0:fixtureMid:-',
+      title: 'Synthetic track',
+      artistNames: ['Synthetic artist'],
+      albumTitle: 'Synthetic album',
     );
-    final search = _SearchGateway(track);
     final queue = _QueueGateway();
     final playback = QueuePlaybackController(
       queue,
@@ -33,103 +40,67 @@ void main() {
       ),
     );
     addTearDown(playback.dispose);
-    ArtistSummary? openedArtist;
+    var backCalls = 0;
 
     await tester.pumpWidget(
       MaterialApp(
-        home: TrackSearchPage(
-          gateway: search,
+        home: ArtistPage(
+          artist: artist,
+          gateway: const _ArtistGateway(track),
           queuePlaybackController: playback,
-          onBack: () {},
-          onOpenAlbum: (_) {},
-          onOpenArtist: (artist) => openedArtist = artist,
+          onBack: () => backCalls += 1,
           onSignInAgain: () {},
         ),
       ),
     );
-
-    await tester.enterText(
-      find.byKey(const ValueKey('track-search-field')),
-      '  search words  ',
-    );
-    await tester.pump();
-    expect(find.byTooltip('Clear search'), findsOneWidget);
-    await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
 
-    expect(search.requests, [('search words', 1, 30)]);
-    expect(find.text('Search result'), findsOneWidget);
-    expect(find.text('Search artist · Search album'), findsOneWidget);
-    expect(find.text('1 result for “search words”'), findsOneWidget);
+    expect(find.text('Synthetic artist'), findsWidgets);
+    expect(find.text('1 Track'), findsOneWidget);
+    expect(find.text('Synthetic track'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('track-search-artist-0-1')));
-    await tester.pumpAndSettle();
-    expect(openedArtist?.name, 'Second artist');
-
-    await tester.tap(find.byKey(const ValueKey('track-search-queue-0')));
+    await tester.tap(find.byKey(const ValueKey('artist-queue-0')));
     await tester.pumpAndSettle();
     expect(queue.pushedTracks, [track]);
     expect(find.text('Added to queue'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
+    await tester.tap(find.byKey(const ValueKey('artist-track-0')));
     await tester.pumpAndSettle();
     expect(queue.replacedTracks, [track]);
     expect(queue.replacedIndex, 0);
+
+    await tester.tap(find.byKey(const ValueKey('artist-back')));
+    expect(backCalls, 1);
     expect(tester.takeException(), isNull);
   });
 }
 
-class _SearchGateway implements TrackSearchGateway {
-  _SearchGateway(this.track);
+class _ArtistGateway implements ArtistTrackGateway {
+  const _ArtistGateway(this.track);
 
   final PlaylistTrackSummary track;
-  final List<(String, int, int)> requests = [];
 
   @override
-  TrackSearchPageLoadOperation beginLoad({
-    required String query,
-    required int page,
+  ArtistTrackPageLoadOperation beginLoad({
+    required ArtistSummary artist,
+    required int offset,
     required int size,
-  }) {
-    requests.add((query, page, size));
-    return _SearchOperation(
-      TrackSearchPageResult(
-        page: page,
-        total: 1,
-        items: [
-          TrackSearchItem(
-            track: track,
-            artists: const [
-              ArtistSummary(
-                providerId: 'qq-music',
-                opaqueId: 'artist:61001:firstArtistMid',
-                name: 'First artist',
-              ),
-              ArtistSummary(
-                providerId: 'qq-music',
-                opaqueId: 'artist:61002:secondArtistMid',
-                name: 'Second artist',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  }) => _ArtistOperation(
+    ArtistTrackPageResult(offset: offset, total: 1, tracks: [track]),
+  );
 }
 
-class _SearchOperation implements TrackSearchPageLoadOperation {
-  const _SearchOperation(this.result);
+class _ArtistOperation implements ArtistTrackPageLoadOperation {
+  const _ArtistOperation(this.result);
 
-  final TrackSearchPageResult result;
+  final ArtistTrackPageResult result;
 
   @override
   bool cancel() => true;
 
   @override
-  Future<TrackSearchPageResult> run() async => result;
+  Future<ArtistTrackPageResult> run() async => result;
 }
 
 class _QueueGateway implements PlaybackQueueGateway {

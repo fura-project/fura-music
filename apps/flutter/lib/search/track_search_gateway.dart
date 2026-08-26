@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
@@ -29,10 +30,15 @@ class TrackSearchPageResult {
 }
 
 class TrackSearchItem {
-  const TrackSearchItem({required this.track, this.album});
+  const TrackSearchItem({
+    required this.track,
+    this.album,
+    this.artists = const [],
+  });
 
   final PlaylistTrackSummary track;
   final AlbumSummary? album;
+  final List<ArtistSummary> artists;
 }
 
 abstract interface class TrackSearchGateway {
@@ -160,7 +166,30 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
         artworkUri: album.artworkUri,
       );
     }
-    items.add(TrackSearchItem(track: mappedTrack, album: mappedAlbum));
+    final artists = <ArtistSummary>[];
+    for (final artist in item.artists) {
+      if (artist.providerId.trim().isEmpty ||
+          artist.opaqueId.trim().isEmpty ||
+          artist.name.trim().isEmpty) {
+        return const TrackSearchPageResult(
+          failure: TrackSearchFailure.invalidResponse,
+        );
+      }
+      artists.add(
+        ArtistSummary(
+          providerId: artist.providerId,
+          opaqueId: artist.opaqueId,
+          name: artist.name,
+        ),
+      );
+    }
+    items.add(
+      TrackSearchItem(
+        track: mappedTrack,
+        album: mappedAlbum,
+        artists: List.unmodifiable(artists),
+      ),
+    );
   }
   return TrackSearchPageResult(
     page: result.page,

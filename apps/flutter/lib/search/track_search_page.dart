@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -14,6 +15,7 @@ class TrackSearchPage extends StatefulWidget {
     required this.queuePlaybackController,
     required this.onBack,
     required this.onOpenAlbum,
+    required this.onOpenArtist,
     required this.onSignInAgain,
     super.key,
   });
@@ -22,6 +24,7 @@ class TrackSearchPage extends StatefulWidget {
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final ValueChanged<AlbumSummary> onOpenAlbum;
+  final ValueChanged<ArtistSummary> onOpenArtist;
   final VoidCallback onSignInAgain;
 
   @override
@@ -133,6 +136,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
       onPlay: _play,
       onQueue: _queue,
       onOpenAlbum: widget.onOpenAlbum,
+      onOpenArtist: widget.onOpenArtist,
       desktop: desktop,
     ),
   };
@@ -245,6 +249,7 @@ class _SearchResults extends StatelessWidget {
     required this.onPlay,
     required this.onQueue,
     required this.onOpenAlbum,
+    required this.onOpenArtist,
     required this.desktop,
     super.key,
   });
@@ -260,6 +265,7 @@ class _SearchResults extends StatelessWidget {
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary> onOpenAlbum;
+  final ValueChanged<ArtistSummary> onOpenArtist;
   final bool desktop;
 
   @override
@@ -305,6 +311,7 @@ class _SearchResults extends StatelessWidget {
           return _SearchTrackRow(
             track: item.track,
             album: item.album,
+            artists: item.artists,
             index: trackIndex,
             desktop: desktop,
             onPlay: () => onPlay(trackIndex),
@@ -312,6 +319,7 @@ class _SearchResults extends StatelessWidget {
             onOpenAlbum: item.album == null
                 ? null
                 : () => onOpenAlbum(item.album!),
+            onOpenArtist: onOpenArtist,
           );
         },
       ),
@@ -323,28 +331,32 @@ class _SearchTrackRow extends StatelessWidget {
   const _SearchTrackRow({
     required this.track,
     required this.album,
+    required this.artists,
     required this.index,
     required this.desktop,
     required this.onPlay,
     required this.onQueue,
     required this.onOpenAlbum,
+    required this.onOpenArtist,
   });
 
   final PlaylistTrackSummary track;
   final AlbumSummary? album;
+  final List<ArtistSummary> artists;
   final int index;
   final bool desktop;
   final VoidCallback onPlay;
   final VoidCallback onQueue;
   final VoidCallback? onOpenAlbum;
+  final ValueChanged<ArtistSummary> onOpenArtist;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final artists = track.artistNames.isEmpty
+    final artistCopy = track.artistNames.isEmpty
         ? 'Unknown artist'
         : track.artistNames.join(' · ');
-    final detail = [artists, ?track.albumTitle].join(' · ');
+    final detail = [artistCopy, ?track.albumTitle].join(' · ');
     return Semantics(
       container: true,
       child: ListTile(
@@ -370,6 +382,25 @@ class _SearchTrackRow extends StatelessWidget {
         trailing: Wrap(
           spacing: 2,
           children: [
+            if (artists.isNotEmpty)
+              PopupMenuButton<ArtistSummary>(
+                key: ValueKey('track-search-artist-$index'),
+                tooltip: 'Browse credited Artists',
+                onSelected: onOpenArtist,
+                itemBuilder: (context) => [
+                  for (
+                    var artistIndex = 0;
+                    artistIndex < artists.length;
+                    artistIndex++
+                  )
+                    PopupMenuItem<ArtistSummary>(
+                      key: ValueKey('track-search-artist-$index-$artistIndex'),
+                      value: artists[artistIndex],
+                      child: Text(artists[artistIndex].name),
+                    ),
+                ],
+                icon: const Icon(Icons.person_rounded),
+              ),
             if (album != null)
               IconButton(
                 key: ValueKey('track-search-album-$index'),

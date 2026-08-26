@@ -19,6 +19,7 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -425,6 +426,81 @@ void main() {
       'album query',
     );
     expect(search.requests, [('album query', 1, 30)]);
+  });
+
+  testWidgets('selects a credited Artist and preserves Search on return', (
+    tester,
+  ) async {
+    const firstArtist = ArtistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'artist:61001:firstArtistMid',
+      name: 'First artist',
+    );
+    const secondArtist = ArtistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'artist:61002:secondArtistMid',
+      name: 'Second artist',
+    );
+    const track = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41001:0:fixtureMid:-',
+      title: 'Synthetic collaboration',
+      artistNames: ['First artist', 'Second artist'],
+    );
+    final search = _WidgetSearchGateway(
+      const TrackSearchPageResult(
+        page: 1,
+        total: 1,
+        items: [
+          TrackSearchItem(track: track, artists: [firstArtist, secondArtist]),
+        ],
+      ),
+    );
+    final artistTracks = _WidgetArtistGateway(
+      const ArtistTrackPageResult(offset: 0, total: 1, tracks: [track]),
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        searchGateway: search,
+        artistTrackGateway: artistTracks,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-track-search')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      'artist query',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('track-search-artist-0-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
+    expect(artistTracks.requests, [(secondArtist, 0, 30)]);
+
+    await tester.tap(find.byKey(const ValueKey('artist-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('track-search-content')), findsOneWidget);
+    expect(find.text('Synthetic collaboration'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+          .controller
+          ?.text,
+      'artist query',
+    );
+    expect(search.requests, [('artist query', 1, 30)]);
   });
 
   testWidgets('routes verified startup restore into the library', (
@@ -1326,6 +1402,35 @@ class _WidgetAlbumOperation implements AlbumTrackPageLoadOperation {
 
   @override
   Future<AlbumTrackPageResult> run() async => result;
+}
+
+class _WidgetArtistGateway implements ArtistTrackGateway {
+  _WidgetArtistGateway(this.result);
+
+  final ArtistTrackPageResult result;
+  final List<(ArtistSummary, int, int)> requests = [];
+
+  @override
+  ArtistTrackPageLoadOperation beginLoad({
+    required ArtistSummary artist,
+    required int offset,
+    required int size,
+  }) {
+    requests.add((artist, offset, size));
+    return _WidgetArtistOperation(result);
+  }
+}
+
+class _WidgetArtistOperation implements ArtistTrackPageLoadOperation {
+  const _WidgetArtistOperation(this.result);
+
+  final ArtistTrackPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<ArtistTrackPageResult> run() async => result;
 }
 
 class _DetailRequest {

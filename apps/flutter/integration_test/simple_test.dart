@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart';
+import 'package:flutterustmusic/src/rust/api/artist.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
@@ -77,6 +78,19 @@ void main() {
     expect(
       cancelledAlbumLoad.failure,
       QqMusicAlbumTrackPageLoadFailure.cancelled,
+    );
+    final unusedArtistLoad = beginQqMusicArtistTrackPageLoad(
+      providerId: 'qq-music',
+      opaqueArtistId: 'artist:61001:fixtureArtistMid',
+      offset: 0,
+      size: 30,
+    );
+    expect(unusedArtistLoad.isActive, isTrue);
+    expect(unusedArtistLoad.cancel(), isTrue);
+    final cancelledArtistLoad = await unusedArtistLoad.run();
+    expect(
+      cancelledArtistLoad.failure,
+      QqMusicArtistTrackPageLoadFailure.cancelled,
     );
     final unusedMediaResolution = beginQqMusicMediaResolution(
       providerId: 'qq-music',

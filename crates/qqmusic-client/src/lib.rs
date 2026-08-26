@@ -5,6 +5,7 @@
 //! providers or Flutter.
 
 mod album;
+mod artist;
 mod credential;
 mod credential_verification;
 mod favorite_playlists;
@@ -20,6 +21,7 @@ mod wechat_login;
 mod wechat_qr;
 
 pub use album::{AlbumTrackField, QqMusicAlbumTrackPage, QqMusicAlbumTracksError};
+pub use artist::{ArtistTrackField, QqMusicArtistTrackPage, QqMusicArtistTracksError};
 pub use credential::{
     Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
     CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,

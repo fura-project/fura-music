@@ -1,4 +1,5 @@
 pub mod album;
+pub mod artist;
 pub mod authentication;
 pub mod bootstrap;
 pub mod library;

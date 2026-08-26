@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
+import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -36,6 +38,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.onSignOut,
     this.searchGateway,
     this.albumTrackGateway,
+    this.artistTrackGateway,
     super.key,
   });
 
@@ -49,6 +52,7 @@ class UserLibraryPage extends StatefulWidget {
   final Future<CredentialSignOutResult> Function() onSignOut;
   final TrackSearchGateway? searchGateway;
   final AlbumTrackGateway? albumTrackGateway;
+  final ArtistTrackGateway? artistTrackGateway;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -59,6 +63,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final QueuePlaybackController _queuePlaybackController;
   late final TrackSearchGateway _searchGateway;
   late final AlbumTrackGateway _albumTrackGateway;
+  late final ArtistTrackGateway _artistTrackGateway;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -68,6 +73,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
   AlbumSummary? _selectedAlbum;
+  ArtistSummary? _selectedArtist;
   UserPlaylistSummary? _lastOpenedPlaylist;
   bool _searchOpen = false;
   bool _handledLyricCredentialRejection = false;
@@ -80,6 +86,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _searchGateway = widget.searchGateway ?? const RustTrackSearchGateway();
     _albumTrackGateway =
         widget.albumTrackGateway ?? const RustAlbumTrackGateway();
+    _artistTrackGateway =
+        widget.artistTrackGateway ?? const RustArtistTrackGateway();
     _queuePlaybackController = QueuePlaybackController(
       widget.playbackQueueGateway,
       TrackPlaybackController(
@@ -118,9 +126,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   Widget build(BuildContext context) {
     final selectedPlaylist = _selectedPlaylist;
     final selectedAlbum = _selectedAlbum;
+    final selectedArtist = _selectedArtist;
     final page = _searchOpen
         ? IndexedStack(
-            index: selectedAlbum == null ? 0 : 1,
+            index: selectedAlbum != null
+                ? 1
+                : selectedArtist != null
+                ? 2
+                : 0,
             children: [
               TrackSearchPage(
                 key: const ValueKey('track-search-page'),
@@ -128,6 +141,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 queuePlaybackController: _queuePlaybackController,
                 onBack: _closeSearch,
                 onOpenAlbum: _openAlbum,
+                onOpenArtist: _openArtist,
                 onSignInAgain: widget.onSignInAgain,
               ),
               if (selectedAlbum == null)
@@ -137,6 +151,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   key: ValueKey('album-page-${selectedAlbum.opaqueId}'),
                   album: selectedAlbum,
                   gateway: _albumTrackGateway,
+                  queuePlaybackController: _queuePlaybackController,
+                  onBack: _returnToSearch,
+                  onSignInAgain: widget.onSignInAgain,
+                ),
+              if (selectedArtist == null)
+                const SizedBox.shrink()
+              else
+                ArtistPage(
+                  key: ValueKey('artist-page-${selectedArtist.opaqueId}'),
+                  artist: selectedArtist,
+                  gateway: _artistTrackGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnToSearch,
                   onSignInAgain: widget.onSignInAgain,
@@ -158,7 +183,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       child: page,
     );
     final hasLocalPage =
-        selectedPlaylist != null || _searchOpen || selectedAlbum != null;
+        selectedPlaylist != null ||
+        _searchOpen ||
+        selectedAlbum != null ||
+        selectedArtist != null;
     final shortcutPage = !hasLocalPage
         ? playbackPage
         : CallbackShortcuts(
@@ -198,7 +226,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _returnFromLocalPage() {
-    if (_selectedAlbum != null) {
+    if (_selectedAlbum != null || _selectedArtist != null) {
       _returnToSearch();
     } else if (_searchOpen) {
       _closeSearch();
@@ -216,6 +244,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (!_searchOpen) return;
     setState(() {
       _selectedAlbum = null;
+      _selectedArtist = null;
       _searchOpen = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -226,14 +255,27 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openAlbum(AlbumSummary album) {
-    if (!_searchOpen || _selectedAlbum != null) return;
+    if (!_searchOpen || _selectedAlbum != null || _selectedArtist != null) {
+      return;
+    }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _selectedAlbum = album);
   }
 
+  void _openArtist(ArtistSummary artist) {
+    if (!_searchOpen || _selectedAlbum != null || _selectedArtist != null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _selectedArtist = artist);
+  }
+
   void _returnToSearch() {
-    if (_selectedAlbum == null) return;
-    setState(() => _selectedAlbum = null);
+    if (_selectedAlbum == null && _selectedArtist == null) return;
+    setState(() {
+      _selectedAlbum = null;
+      _selectedArtist = null;
+    });
   }
 
   void _openPlaylist(UserPlaylistSummary playlist) {
