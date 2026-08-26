@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/navigation/music_section_selector.dart';
@@ -207,17 +208,17 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _trackBody(bool desktop) => switch (_controller.stage) {
-    TrackSearchStage.idle => const _SearchMessage(
+    TrackSearchStage.idle => const MusicContentStatePanel(
       key: ValueKey('track-search-idle'),
       icon: Icons.search_rounded,
       title: 'Find Tracks on QQ Music',
       detail: 'Search by song, Artist, or Album name.',
     ),
-    TrackSearchStage.loading => const Center(
+    TrackSearchStage.loading => const MusicLoadingPanel(
       key: ValueKey('track-search-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Searching QQ Music Tracks',
     ),
-    TrackSearchStage.empty => _SearchMessage(
+    TrackSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('track-search-empty'),
       icon: Icons.search_off_rounded,
       title: 'No tracks found',
@@ -227,7 +228,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         child: const Text('Edit search'),
       ),
     ),
-    TrackSearchStage.error => _SearchFailure(
+    TrackSearchStage.error => _searchFailure(
       key: const ValueKey('track-search-error'),
       detail: _trackFailureCopy(_controller.failure),
       canRetry: _controller.canRetry,
@@ -253,17 +254,17 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _artistBody(bool desktop) => switch (_artistController.stage) {
-    ArtistSearchStage.idle => const _SearchMessage(
+    ArtistSearchStage.idle => const MusicContentStatePanel(
       key: ValueKey('artist-search-idle'),
       icon: Icons.person_search_rounded,
       title: 'Find Artists on QQ Music',
       detail: 'Search by an Artist or group name.',
     ),
-    ArtistSearchStage.loading => const Center(
+    ArtistSearchStage.loading => const MusicLoadingPanel(
       key: ValueKey('artist-search-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Searching QQ Music Artists',
     ),
-    ArtistSearchStage.empty => _SearchMessage(
+    ArtistSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('artist-search-empty'),
       icon: Icons.person_off_outlined,
       title: 'No Artists found',
@@ -273,7 +274,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         child: const Text('Edit search'),
       ),
     ),
-    ArtistSearchStage.error => _SearchFailure(
+    ArtistSearchStage.error => _searchFailure(
       key: const ValueKey('artist-search-error'),
       detail: _artistFailureCopy(_artistController.failure),
       canRetry: _artistController.canRetry,
@@ -296,17 +297,17 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _albumBody(bool desktop) => switch (_albumController.stage) {
-    AlbumSearchStage.idle => const _SearchMessage(
+    AlbumSearchStage.idle => const MusicContentStatePanel(
       key: ValueKey('album-search-idle'),
       icon: Icons.album_rounded,
       title: 'Find Albums on QQ Music',
       detail: 'Search by an Album name.',
     ),
-    AlbumSearchStage.loading => const Center(
+    AlbumSearchStage.loading => const MusicLoadingPanel(
       key: ValueKey('album-search-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Searching QQ Music Albums',
     ),
-    AlbumSearchStage.empty => _SearchMessage(
+    AlbumSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('album-search-empty'),
       icon: Icons.album_outlined,
       title: 'No Albums found',
@@ -316,7 +317,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         child: const Text('Edit search'),
       ),
     ),
-    AlbumSearchStage.error => _SearchFailure(
+    AlbumSearchStage.error => _searchFailure(
       key: const ValueKey('album-search-error'),
       detail: _albumFailureCopy(_albumController.failure),
       canRetry: _albumController.canRetry,
@@ -339,17 +340,17 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _playlistBody(bool desktop) => switch (_playlistController.stage) {
-    PlaylistSearchStage.idle => const _SearchMessage(
+    PlaylistSearchStage.idle => const MusicContentStatePanel(
       key: ValueKey('playlist-search-idle'),
       icon: Icons.queue_music_rounded,
       title: 'Find Playlists on QQ Music',
       detail: 'Search by a public Playlist name.',
     ),
-    PlaylistSearchStage.loading => const Center(
+    PlaylistSearchStage.loading => const MusicLoadingPanel(
       key: ValueKey('playlist-search-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Searching QQ Music Playlists',
     ),
-    PlaylistSearchStage.empty => _SearchMessage(
+    PlaylistSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('playlist-search-empty'),
       icon: Icons.playlist_remove_rounded,
       title: 'No Playlists found',
@@ -359,7 +360,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         child: const Text('Edit search'),
       ),
     ),
-    PlaylistSearchStage.error => _SearchFailure(
+    PlaylistSearchStage.error => _searchFailure(
       key: const ValueKey('playlist-search-error'),
       detail: _playlistFailureCopy(_playlistController.failure),
       canRetry: _playlistController.canRetry,
@@ -380,6 +381,32 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
       desktop: desktop,
     ),
   };
+
+  Widget _searchFailure({
+    required Key key,
+    required String detail,
+    required bool canRetry,
+    required VoidCallback onRetry,
+    required VoidCallback onEdit,
+  }) => MusicContentStatePanel(
+    key: key,
+    icon: Icons.cloud_off_rounded,
+    title: 'Couldn’t search QQ Music',
+    detail: detail,
+    liveRegion: true,
+    action: Wrap(
+      spacing: 8,
+      alignment: WrapAlignment.center,
+      children: [
+        if (canRetry)
+          FilledButton.tonal(
+            onPressed: onRetry,
+            child: const Text('Try again'),
+          ),
+        TextButton(onPressed: onEdit, child: const Text('Edit search')),
+      ],
+    ),
+  );
 
   void _submit(String query) {
     switch (_searchType) {
@@ -1107,91 +1134,6 @@ class _SearchFooter extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-    ),
-  );
-}
-
-class _SearchFailure extends StatelessWidget {
-  const _SearchFailure({
-    required this.detail,
-    required this.canRetry,
-    required this.onRetry,
-    required this.onEdit,
-    super.key,
-  });
-
-  final String detail;
-  final bool canRetry;
-  final VoidCallback onRetry;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) => _SearchMessage(
-    icon: Icons.cloud_off_rounded,
-    title: 'Couldn’t search QQ Music',
-    detail: detail,
-    liveRegion: true,
-    action: Wrap(
-      spacing: 8,
-      alignment: WrapAlignment.center,
-      children: [
-        if (canRetry)
-          FilledButton.tonal(
-            onPressed: onRetry,
-            child: const Text('Try again'),
-          ),
-        TextButton(onPressed: onEdit, child: const Text('Edit search')),
-      ],
-    ),
-  );
-}
-
-class _SearchMessage extends StatelessWidget {
-  const _SearchMessage({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    this.action,
-    this.liveRegion = false,
-    super.key,
-  });
-
-  final IconData icon;
-  final String title;
-  final String detail;
-  final Widget? action;
-  final bool liveRegion;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Semantics(
-      container: true,
-      liveRegion: liveRegion,
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 18),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              detail,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (action != null) ...[const SizedBox(height: 18), action!],
-          ],
-        ),
-      ),
     ),
   );
 }

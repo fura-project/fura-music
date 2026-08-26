@@ -47,3 +47,9 @@ The catalog header, Discover Track rows, and adaptive Search/Discover secondary 
 ## Selection
 
 Shared Search content states remain the highest-value legal task after whole-project review. The slice closes an explicit active-Roadmap gap with existing components and no architecture expansion, while all higher-severity alternatives are either already covered, evidence-gated, environment-specific, or locally blocked.
+
+## Outcome
+
+Completed as a Search-only presentation slice. Track, Artist, Album, and Playlist Search now reuse `MusicLoadingPanel` and `MusicContentStatePanel`; exact keys, page-owned copy, edit/retry eligibility, controller/query/result/pagination state, and the single error live region remain unchanged. Loading labels identify the active result type.
+
+Regressions cover all four compact idle types, the Track loading → empty transition at 360 px, and retryable network failure with exactly one live region. Strict Dart formatting/analysis, all 304 Flutter tests, Rust formatting, 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain gated and ignored; no stored credential or live service was accessed, so this does not close the M1 real-account playback evidence gap.

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
@@ -22,6 +25,163 @@ Future<void> _selectSearchType(WidgetTester tester, String type) async {
 }
 
 void main() {
+  testWidgets('all Search types use the shared compact idle state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final playback = QueuePlaybackController(
+      _QueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TrackSearchPage(
+          gateway: _ResultSearchGateway(const TrackSearchPageResult()),
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+
+    for (final (type, panelKey) in [
+      ('tracks', 'track-search-idle'),
+      ('artists', 'artist-search-idle'),
+      ('albums', 'album-search-idle'),
+      ('playlists', 'playlist-search-idle'),
+    ]) {
+      if (type != 'tracks') await _selectSearchType(tester, type);
+      expect(find.byKey(ValueKey(panelKey)), findsOneWidget);
+      expect(find.byType(MusicContentStatePanel), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('compact Track Search labels loading and reaches shared empty', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final search = _ControlledSearchGateway();
+    final playback = QueuePlaybackController(
+      _QueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TrackSearchPage(
+          gateway: search,
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      'nothing here',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('track-search-loading')), findsOneWidget);
+    expect(find.byType(MusicLoadingPanel), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('track-search-loading')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label == 'Searching QQ Music Tracks',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    search.complete(const TrackSearchPageResult(page: 1, total: 0, items: []));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('track-search-empty')), findsOneWidget);
+    expect(find.text('No tracks found'), findsOneWidget);
+    expect(find.text('Edit search'), findsOneWidget);
+    expect(find.byType(MusicContentStatePanel), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('Track Search failure has one live region and both actions', (
+    tester,
+  ) async {
+    final playback = QueuePlaybackController(
+      _QueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+    final search = _ResultSearchGateway(
+      const TrackSearchPageResult(failure: TrackSearchFailure.network),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TrackSearchPage(
+          gateway: search,
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      'network failure',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('track-search-error')), findsOneWidget);
+    expect(find.text('Couldn’t search QQ Music'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+    expect(find.text('Edit search'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.liveRegion == true,
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('search result can be queued or handed to playback', (
     tester,
   ) async {
@@ -230,6 +390,44 @@ class _SearchOperation implements TrackSearchPageLoadOperation {
 
   @override
   Future<TrackSearchPageResult> run() async => result;
+}
+
+class _ResultSearchGateway implements TrackSearchGateway {
+  const _ResultSearchGateway(this.result);
+
+  final TrackSearchPageResult result;
+
+  @override
+  TrackSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) => _SearchOperation(result);
+}
+
+class _ControlledSearchGateway implements TrackSearchGateway {
+  final Completer<TrackSearchPageResult> _completer = Completer();
+
+  void complete(TrackSearchPageResult result) => _completer.complete(result);
+
+  @override
+  TrackSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) => _FutureSearchOperation(_completer.future);
+}
+
+class _FutureSearchOperation implements TrackSearchPageLoadOperation {
+  const _FutureSearchOperation(this.result);
+
+  final Future<TrackSearchPageResult> result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<TrackSearchPageResult> run() => result;
 }
 
 class _ArtistSearchGateway implements ArtistSearchGateway {
