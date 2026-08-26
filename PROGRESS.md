@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.4 Adaptive Search/Discover secondary selector"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: GLOBAL_RANKING
 ---
 
 # Current Milestone
@@ -55,16 +55,17 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Implemented the fourth M4 slice: Album Tracks, Artist Tracks/Albums, and Ranking now share bounded Material loading and content-state panels while each page retains its exact typed copy, retry eligibility, keys, and controller state. Loading exposes one page-specific assistive label; error live regions remain opt-in and are not duplicated. Search/Library/Playlist/Discover and append/refresh states remain untouched. Strict Dart checks, all 297 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the fifth M4 slice: Album, Artist, and Ranking now share one bounded adaptive Material catalog header with consistent artwork sizing, page-type eyebrow, semantic two-line title, compact centering, and desktop alignment. Album metadata/actions/detail retry, Artist section state, Ranking period/count, existing title keys, and all controllers remain page-owned. Direct 360 px/light and wide/dark regressions plus strict Dart checks, all 299 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the sixth M4 slice: authenticated Radar and typed New songs now reuse the established dense Material Track tile, adding predictable one-based position, artwork semantics/fallback, Album metadata, truthful duration, and compact/desktop density while retaining exact play/queue keys, callbacks, pagination/category state, and the single queue owner. Direct 360 px user-path regressions, strict Dart checks, all 299 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Implemented the seventh M4 slice: Search and Discover now share one official-Material adaptive secondary selector. Below 680 px a single labeled, keyboard-openable menu exposes every typed destination without horizontal discovery or overflow; medium/desktop keeps efficient visible segmentation. Exact query/controller state, lazy loading, return state, keys, app-shell navigation, and playback ownership remain unchanged. A direct regression caught and fixed an initially nested compact-button Row overflow; strict Dart checks, all 301 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Global ranking selected the adaptive Search/Discover secondary selector. The finite slice replaces compact partly off-screen segmented controls with one explicit Material menu while retaining medium/desktop segmentation and every page controller.
+- Three consecutive bounded presentation slices are complete (catalog header, Discover Track rows, and adaptive secondary selection). The required whole-project ranking must now compare the remaining M4 content-state gap against playback reliability, platform evidence, blockers, risks, and triggered debt before another presentation task begins.
 
 # Next Candidates
 
-1. Implement and validate one shared adaptive secondary selector for Search and Discover only.
-2. Re-rank bounded shared Search/Discover content-state migrations after the selector slice.
+1. Perform the required whole-project ranking across Roadmap, Risks, Blockers, TECH_DEBT triggers, playback reliability, and platform evidence.
+2. Keep the bounded shared Search/Discover content-state migration as the remaining M4.4 candidate if it still ranks first on evidence.
 3. Keep selected/current Track presentation deferred until a non-frame-driven listener exists, and preserve the locally blocked M1 acceptance evidence.
 
 # Blockers

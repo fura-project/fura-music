@@ -5,6 +5,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/navigation/music_section_selector.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/search/album_search_controller.dart';
@@ -126,35 +127,38 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
                   ),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SegmentedButton<_SearchType>(
-                        key: const ValueKey('search-types'),
-                        segments: const [
-                          ButtonSegment(
-                            value: _SearchType.tracks,
-                            icon: Icon(Icons.music_note_rounded),
-                            label: Text('Tracks'),
-                          ),
-                          ButtonSegment(
-                            value: _SearchType.artists,
-                            icon: Icon(Icons.person_rounded),
-                            label: Text('Artists'),
-                          ),
-                          ButtonSegment(
-                            value: _SearchType.albums,
-                            icon: Icon(Icons.album_rounded),
-                            label: Text('Albums'),
-                          ),
-                          ButtonSegment(
-                            value: _SearchType.playlists,
-                            icon: Icon(Icons.queue_music_rounded),
-                            label: Text('Playlists'),
-                          ),
-                        ],
-                        selected: {_searchType},
-                        onSelectionChanged: _selectSearchType,
-                      ),
+                    child: MusicSectionSelector<_SearchType>(
+                      controlKey: const ValueKey('search-types'),
+                      label: 'Search type',
+                      destinations: const [
+                        MusicSectionDestination(
+                          value: _SearchType.tracks,
+                          icon: Icons.music_note_rounded,
+                          label: 'Tracks',
+                          itemKey: ValueKey('search-type-tracks'),
+                        ),
+                        MusicSectionDestination(
+                          value: _SearchType.artists,
+                          icon: Icons.person_rounded,
+                          label: 'Artists',
+                          itemKey: ValueKey('search-type-artists'),
+                        ),
+                        MusicSectionDestination(
+                          value: _SearchType.albums,
+                          icon: Icons.album_rounded,
+                          label: 'Albums',
+                          itemKey: ValueKey('search-type-albums'),
+                        ),
+                        MusicSectionDestination(
+                          value: _SearchType.playlists,
+                          icon: Icons.queue_music_rounded,
+                          label: 'Playlists',
+                          itemKey: ValueKey('search-type-playlists'),
+                        ),
+                      ],
+                      selected: _searchType,
+                      compact: constraints.maxWidth < 680,
+                      onSelected: (value) => _selectSearchType({value}),
                     ),
                   ),
                 ),

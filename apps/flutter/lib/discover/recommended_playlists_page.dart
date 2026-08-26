@@ -15,6 +15,7 @@ import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/navigation/music_section_selector.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 
@@ -97,63 +98,68 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
           _rankingController,
           _radarController,
         ]),
-        builder: (context, _) => Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SegmentedButton<_DiscoverType>(
-                    key: const ValueKey('discover-type-selector'),
-                    segments: const [
-                      ButtonSegment(
+        builder: (context, _) => LayoutBuilder(
+          builder: (context, constraints) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: MusicSectionSelector<_DiscoverType>(
+                    controlKey: const ValueKey('discover-type-selector'),
+                    label: 'Discover section',
+                    destinations: const [
+                      MusicSectionDestination(
                         value: _DiscoverType.playlists,
-                        icon: Icon(Icons.queue_music_rounded),
-                        label: Text('Playlists'),
+                        icon: Icons.queue_music_rounded,
+                        label: 'Playlists',
+                        itemKey: ValueKey('discover-type-playlists'),
                       ),
-                      ButtonSegment(
+                      MusicSectionDestination(
                         value: _DiscoverType.rankings,
-                        icon: Icon(Icons.leaderboard_rounded),
-                        label: Text('Rankings'),
+                        icon: Icons.leaderboard_rounded,
+                        label: 'Rankings',
+                        itemKey: ValueKey('discover-type-rankings'),
                       ),
-                      ButtonSegment(
+                      MusicSectionDestination(
                         value: _DiscoverType.radar,
-                        icon: Icon(Icons.radar_rounded),
-                        label: Text('Radar'),
+                        icon: Icons.radar_rounded,
+                        label: 'Radar',
+                        itemKey: ValueKey('discover-type-radar'),
                       ),
-                      ButtonSegment(
+                      MusicSectionDestination(
                         value: _DiscoverType.newAlbums,
-                        icon: Icon(Icons.album_rounded),
-                        label: Text('New albums'),
+                        icon: Icons.album_rounded,
+                        label: 'New albums',
+                        itemKey: ValueKey('discover-type-new-albums'),
                       ),
-                      ButtonSegment(
+                      MusicSectionDestination(
                         value: _DiscoverType.newSongs,
-                        icon: Icon(Icons.new_releases_rounded),
-                        label: Text('New songs'),
+                        icon: Icons.new_releases_rounded,
+                        label: 'New songs',
+                        itemKey: ValueKey('discover-type-new-songs'),
                       ),
                     ],
-                    selected: {_type},
-                    onSelectionChanged: (selection) =>
-                        _selectType(selection.single),
+                    selected: _type,
+                    compact: constraints.maxWidth < 680,
+                    onSelected: _selectType,
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: switch (_type) {
-                  _DiscoverType.playlists => _playlistBody(),
-                  _DiscoverType.rankings => _rankingBody(),
-                  _DiscoverType.radar => _radarBody(),
-                  _DiscoverType.newAlbums => _newAlbumBody(),
-                  _DiscoverType.newSongs => _newSongBody(),
-                },
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: switch (_type) {
+                    _DiscoverType.playlists => _playlistBody(),
+                    _DiscoverType.rankings => _rankingBody(),
+                    _DiscoverType.radar => _radarBody(),
+                    _DiscoverType.newAlbums => _newAlbumBody(),
+                    _DiscoverType.newSongs => _newSongBody(),
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

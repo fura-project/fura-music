@@ -14,6 +14,13 @@ import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
 
+Future<void> _selectSearchType(WidgetTester tester, String type) async {
+  await tester.tap(find.byKey(const ValueKey('search-types')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey('search-type-$type')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('search result can be queued or handed to playback', (
     tester,
@@ -133,13 +140,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Track result'), findsOneWidget);
 
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Artists'),
-      ),
-    );
-    await tester.pumpAndSettle();
+    await _selectSearchType(tester, 'artists');
     expect(artistSearch.requests, [('track query', 1, 30)]);
     expect(find.text('Artist for track query'), findsOneWidget);
 
@@ -152,14 +153,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(openedArtist?.name, 'Artist for artist query');
 
-    final albumsChoice = find.descendant(
-      of: find.byKey(const ValueKey('search-types')),
-      matching: find.text('Albums'),
-    );
-    await tester.ensureVisible(albumsChoice);
-    await tester.pumpAndSettle();
-    await tester.tap(albumsChoice);
-    await tester.pumpAndSettle();
+    await _selectSearchType(tester, 'albums');
     expect(albumSearch.requests, [('artist query', 1, 30)]);
     expect(find.text('Album for artist query'), findsOneWidget);
 
@@ -169,32 +163,15 @@ void main() {
     expect(albumSearch.requests.last, ('album query', 1, 30));
     expect(find.text('Album for album query'), findsOneWidget);
 
-    final tracksChoice = find.descendant(
-      of: find.byKey(const ValueKey('search-types')),
-      matching: find.text('Tracks'),
-    );
-    await tester.ensureVisible(tracksChoice);
-    await tester.pumpAndSettle();
-    await tester.tap(tracksChoice);
-    await tester.pumpAndSettle();
+    await _selectSearchType(tester, 'tracks');
     expect(tester.widget<TextField>(field).controller?.text, 'track query');
     expect(find.text('Track result'), findsOneWidget);
 
-    final artistsChoice = find.descendant(
-      of: find.byKey(const ValueKey('search-types')),
-      matching: find.text('Artists'),
-    );
-    await tester.ensureVisible(artistsChoice);
-    await tester.pumpAndSettle();
-    await tester.tap(artistsChoice);
-    await tester.pumpAndSettle();
+    await _selectSearchType(tester, 'artists');
     expect(tester.widget<TextField>(field).controller?.text, 'artist query');
     expect(artistSearch.requests.length, 2);
 
-    await tester.ensureVisible(albumsChoice);
-    await tester.pumpAndSettle();
-    await tester.tap(albumsChoice);
-    await tester.pumpAndSettle();
+    await _selectSearchType(tester, 'albums');
     expect(tester.widget<TextField>(field).controller?.text, 'album query');
     expect(albumSearch.requests.length, 2);
     await tester.tap(find.byKey(const ValueKey('album-search-result-0')));

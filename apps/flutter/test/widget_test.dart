@@ -50,6 +50,21 @@ import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
+Future<void> _selectAdaptiveSection(
+  WidgetTester tester, {
+  required String control,
+  required String item,
+}) async {
+  final itemFinder = find.byKey(ValueKey(item));
+  if (itemFinder.evaluate().isEmpty) {
+    await tester.tap(find.byKey(ValueKey(control)));
+    await tester.pumpAndSettle();
+  }
+  await tester.ensureVisible(itemFinder);
+  await tester.tap(itemFinder);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('renders truthful bootstrap state', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
@@ -717,8 +732,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(rankings.groupLoads, 0);
 
-      await tester.tap(find.text('Rankings'));
-      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-rankings',
+      );
       expect(find.byKey(const ValueKey('rankings-content')), findsOneWidget);
       expect(find.text('Synthetic charts'), findsOneWidget);
       expect(find.text('Synthetic ranking'), findsOneWidget);
@@ -734,12 +752,16 @@ void main() {
       expect(find.byKey(const ValueKey('rankings-content')), findsOneWidget);
       expect(rankings.groupLoads, 1);
 
-      final playlistsTab = find.text('Playlists');
-      await tester.ensureVisible(playlistsTab);
-      await tester.tap(playlistsTab);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Rankings'));
-      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-playlists',
+      );
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-rankings',
+      );
       expect(find.text('Synthetic ranking'), findsOneWidget);
       expect(rankings.groupLoads, 1);
       expect(tester.takeException(), isNull);
@@ -787,11 +809,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(radar.pages, isEmpty);
 
-      final radarTab = find.text('Radar');
-      await tester.ensureVisible(radarTab);
-      await tester.pumpAndSettle();
-      await tester.tap(radarTab);
-      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-radar',
+      );
       expect(find.byKey(const ValueKey('radar-content')), findsOneWidget);
       expect(find.text('Radar Track'), findsOneWidget);
       expect(find.text('Radar artist · Radar Album · 3:05'), findsOneWidget);
@@ -807,12 +829,16 @@ void main() {
       expect(queue.replacements.single.$1, [track]);
       expect(queue.replacements.single.$2, 0);
 
-      await tester.ensureVisible(find.text('Playlists'));
-      await tester.tap(find.text('Playlists'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(radarTab);
-      await tester.tap(radarTab);
-      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-playlists',
+      );
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-radar',
+      );
       expect(find.byKey(const ValueKey('radar-track-0')), findsOneWidget);
       expect(radar.pages, [1]);
       expect(tester.takeException(), isNull);
@@ -1155,10 +1181,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(newAlbums.requests, isEmpty);
 
-      final newAlbumsTab = find.text('New albums');
-      await tester.ensureVisible(newAlbumsTab);
-      await tester.tap(newAlbumsTab);
-      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-new-albums',
+      );
       expect(find.byKey(const ValueKey('new-albums-content')), findsOneWidget);
       expect(find.text('Fresh Album'), findsOneWidget);
       expect(find.textContaining('Fresh Artist'), findsOneWidget);
@@ -1243,10 +1270,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(newSongs.requests, isEmpty);
 
-      final newSongsTab = find.text('New songs');
-      await tester.ensureVisible(newSongsTab);
-      await tester.tap(newSongsTab);
-      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-new-songs',
+      );
       expect(find.byKey(const ValueKey('new-songs-content')), findsOneWidget);
       expect(find.text('Latest Track'), findsOneWidget);
       expect(find.text('Latest Artist · Latest Album · 3:21'), findsOneWidget);
@@ -1272,13 +1300,16 @@ void main() {
         NewSongCategory.japan,
       ]);
 
-      final playlistsTab = find.text('Playlists');
-      await tester.ensureVisible(playlistsTab);
-      await tester.tap(playlistsTab);
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(newSongsTab);
-      await tester.tap(newSongsTab);
-      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-playlists',
+      );
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-new-songs',
+      );
       expect(find.text('Japan Track'), findsOneWidget);
       expect(newSongs.requests, [
         NewSongCategory.latest,
@@ -2045,13 +2076,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('open-track-search')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Artists'),
-      ),
+    await _selectAdaptiveSection(
+      tester,
+      control: 'search-types',
+      item: 'search-type-artists',
     );
-    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('track-search-field')),
       'direct Artist query',
@@ -2137,13 +2166,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('open-track-search')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Albums'),
-      ),
+    await _selectAdaptiveSection(
+      tester,
+      control: 'search-types',
+      item: 'search-type-albums',
     );
-    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('track-search-field')),
       'direct Album query',
@@ -2246,14 +2273,11 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('open-track-search')));
       await tester.pumpAndSettle();
-      final playlistsChoice = find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Playlists'),
+      await _selectAdaptiveSection(
+        tester,
+        control: 'search-types',
+        item: 'search-type-playlists',
       );
-      await tester.ensureVisible(playlistsChoice);
-      await tester.pumpAndSettle();
-      await tester.tap(playlistsChoice);
-      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('track-search-field')),
         'direct Playlist query',

@@ -54,3 +54,7 @@ Implemented on 2026-08-27 as the sixth finite M4 slice. Radar and New songs now 
 ## Second selection
 
 After the Track-row slice, adaptive secondary selection ranks above the broader content-state migration. At compact widths it makes every Search/Discover type discoverable from one labeled control instead of relying on a partly off-screen horizontal segment, while medium/desktop can retain the efficient visible segmented grammar. The task is limited to a small presentation-only selector plus the two existing call sites; it must not consolidate controllers, alter lazy loading, replace the app shell, or introduce a navigation framework.
+
+## Second outcome
+
+Implemented on 2026-08-27 as the seventh finite M4 slice. `MusicSectionSelector` maps the two proven destination lists to a labeled `MenuAnchor`/`OutlinedButton` below 680 px and a horizontally safe `SegmentedButton` at wider widths. Search and Discover retain every independent controller, visited/lazy-load rule, query, content snapshot, animation, and return path. Compact touch journeys and medium/desktop selection pass; a direct 360 px Tab/Enter regression proves keyboard opening and caught the first nested-label Row overflow before commit. Validation passed strict Dart formatting/analysis, all 301 Flutter tests, Rust formatting, 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and packaged typed-Bridge integration. Four live QQ/WeChat tests remain gated and ignored; no credential, account endpoint, remote media, or user content was accessed.
