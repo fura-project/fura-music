@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/ranking_controller.dart';
@@ -165,36 +166,13 @@ class _RankingHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final artwork = SizedBox.square(
-      dimension: desktop ? 132 : 92,
-      child: RankingArtwork(uri: ranking.artworkUri),
-    );
-    final copy = Column(
-      crossAxisAlignment: desktop
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
+    return MusicCatalogHeader(
+      artwork: RankingArtwork(uri: ranking.artworkUri),
+      eyebrow: 'QQ MUSIC RANKING',
+      title: ranking.title,
+      titleKey: const ValueKey('ranking-title'),
+      desktop: desktop,
       children: [
-        Text(
-          'QQ MUSIC RANKING',
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Semantics(
-          header: true,
-          child: Text(
-            ranking.title,
-            key: const ValueKey('ranking-title'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: desktop ? TextAlign.start : TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ),
         if (ranking.period case final period?) ...[
           const SizedBox(height: 6),
           Text(period),
@@ -204,28 +182,6 @@ class _RankingHeader extends StatelessWidget {
           Text('$count ${count == 1 ? 'Track' : 'Tracks'}'),
         ],
       ],
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        desktop ? 48 : 20,
-        desktop ? 20 : 12,
-        desktop ? 48 : 20,
-        20,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1040),
-          child: desktop
-              ? Row(
-                  children: [
-                    artwork,
-                    const SizedBox(width: 24),
-                    Expanded(child: copy),
-                  ],
-                )
-              : Column(children: [artwork, const SizedBox(height: 14), copy]),
-        ),
-      ),
     );
   }
 }

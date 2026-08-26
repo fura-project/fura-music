@@ -41,3 +41,7 @@
 ## Selection
 
 The shared adaptive catalog header frame ranks first because three existing implementations prove the common layout, while every page-specific child and controller boundary can remain where it is. The component must define only the shared frame and title hierarchy, not a universal catalog data model.
+
+## Outcome
+
+Implemented on 2026-08-27 as the fifth finite M4 slice. `MusicCatalogHeader` now owns only the proven 92/132 px artwork frame, compact/wide placement, page-type eyebrow, and semantic two-line title. Album, Artist, and Ranking retain their existing title keys and every page-specific child, action, retry rule, section, controller, and artwork implementation. Focused light/compact and dark/wide regressions pass without overflow, as do strict Dart formatting/analysis, all 299 Flutter tests, Rust formatting, 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and packaged typed-Bridge integration. Four live QQ/WeChat tests remain gated and ignored; no credential, account endpoint, remote media, or user content was accessed.

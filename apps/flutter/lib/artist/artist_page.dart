@@ -6,6 +6,7 @@ import 'package:flutterustmusic/artist/artist_album_controller.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_controller.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -268,66 +269,31 @@ class _ArtistHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final portrait = SizedBox.square(
-      dimension: desktop ? 132 : 92,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            colors: [colors.primaryContainer, colors.tertiaryContainer],
-          ),
-        ),
-        child: Icon(
-          Icons.person_rounded,
-          size: desktop ? 68 : 48,
-          color: colors.onPrimaryContainer,
+    final portrait = DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [colors.primaryContainer, colors.tertiaryContainer],
         ),
       ),
+      child: Icon(
+        Icons.person_rounded,
+        size: desktop ? 68 : 48,
+        color: colors.onPrimaryContainer,
+      ),
     );
-    final copy = Column(
-      crossAxisAlignment: desktop
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
+    return MusicCatalogHeader(
+      artwork: portrait,
+      eyebrow: 'ARTIST',
+      title: artist.name,
+      titleKey: const ValueKey('artist-name'),
+      desktop: desktop,
       children: [
-        Semantics(
-          header: true,
-          child: Text(
-            artist.name,
-            key: const ValueKey('artist-name'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: desktop ? TextAlign.start : TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ),
         if (total case final count?) ...[
           const SizedBox(height: 8),
           Text('$count ${count == 1 ? totalLabel : '${totalLabel}s'}'),
         ],
       ],
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        desktop ? 48 : 20,
-        desktop ? 20 : 12,
-        desktop ? 48 : 20,
-        20,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1040),
-          child: desktop
-              ? Row(
-                  children: [
-                    portrait,
-                    const SizedBox(width: 24),
-                    Expanded(child: copy),
-                  ],
-                )
-              : Column(children: [portrait, const SizedBox(height: 14), copy]),
-        ),
-      ),
     );
   }
 }

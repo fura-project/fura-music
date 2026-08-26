@@ -6,6 +6,7 @@ import 'package:flutterustmusic/album/album_details_controller.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -302,27 +303,13 @@ class _AlbumHeader extends StatelessWidget {
       ?details?.language,
       ?details?.company,
     ];
-    final artwork = SizedBox.square(
-      dimension: desktop ? 132 : 92,
-      child: _AlbumArtwork(uri: album.artworkUri),
-    );
-    final copy = Column(
-      crossAxisAlignment: desktop
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
+    return MusicCatalogHeader(
+      artwork: _AlbumArtwork(uri: album.artworkUri),
+      eyebrow: 'ALBUM',
+      title: album.title,
+      titleKey: const ValueKey('album-title'),
+      desktop: desktop,
       children: [
-        Semantics(
-          header: true,
-          child: Text(
-            album.title,
-            key: const ValueKey('album-title'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: desktop ? TextAlign.start : TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ),
         if (details?.subtitle case final subtitle?) ...[
           const SizedBox(height: 5),
           Text(
@@ -416,28 +403,6 @@ class _AlbumHeader extends StatelessWidget {
           ),
         ],
       ],
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        desktop ? 48 : 20,
-        desktop ? 20 : 12,
-        desktop ? 48 : 20,
-        20,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1040),
-          child: desktop
-              ? Row(
-                  children: [
-                    artwork,
-                    const SizedBox(width: 24),
-                    Expanded(child: copy),
-                  ],
-                )
-              : Column(children: [artwork, const SizedBox(height: 14), copy]),
-        ),
-      ),
     );
   }
 }

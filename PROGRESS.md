@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.3 Shared adaptive catalog header frame"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -53,16 +53,17 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Implemented the second M4 slice: the authenticated root now exposes Library, Discover, and Search as retained primary destinations through an official Material `NavigationRail` on wide layouts and `NavigationBar` at compact widths. Page-local saved collections/refresh and account sign-out remain classified actions; embedded Search/Discover preserve loaded state across destination changes and resize; focus, keyboard, platform/AppBar back, detail overlays, and the single shared playback owner remain intact. A regression found and fixed an outer shortcut-wrapper rebuild that previously disposed retained content. Strict Dart checks, all 292 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the third M4 slice: Album, Artist Tracks, and Ranking now share one bounded dense Material Track tile over the existing presentation model. Compact and desktop layouts consistently expose position, artwork with local fallback, title/subtitle, Artist/Album metadata, truthful duration, play activation, and queue action while preserving each page's keys, paging, controllers, and failure semantics. Playlist/Search context rows remain intentionally separate. Strict Dart checks, all 295 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the fourth M4 slice: Album Tracks, Artist Tracks/Albums, and Ranking now share bounded Material loading and content-state panels while each page retains its exact typed copy, retry eligibility, keys, and controller state. Loading exposes one page-specific assistive label; error live regions remain opt-in and are not duplicated. Search/Library/Playlist/Discover and append/refresh states remain untouched. Strict Dart checks, all 297 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Implemented the fifth M4 slice: Album, Artist, and Ranking now share one bounded adaptive Material catalog header with consistent artwork sizing, page-type eyebrow, semantic two-line title, compact centering, and desktop alignment. Album metadata/actions/detail retry, Artist section state, Ranking period/count, existing title keys, and all controllers remain page-owned. Direct 360 px/light and wide/dark regressions plus strict Dart checks, all 299 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Whole-project ranking selected the three concretely duplicated Album/Artist/Ranking adaptive header frames. The finite slice standardizes only artwork/page-type/title layout; every page-specific metadata, action, controller, and section remains owned locally.
+- The shared Album/Artist/Ranking header slice is complete. Global ranking now returns to the authorized M4.4 Search/Discover hierarchy rather than continuing local catalog presentation work.
 
 # Next Candidates
 
-1. Implement and validate the shared adaptive header frame on Album, Artist, and Ranking only.
-2. Re-rank M4.4 Search/Discover hierarchy after the bounded core-browsing frame; do not start current-playing row animation without a non-frame-driven listener.
+1. Run a bounded M4.4 Search/Discover hierarchy audit and select at most three evidence-backed candidates.
+2. Keep selected/current Track presentation deferred until a non-frame-driven listener exists; do not make long lists rebuild on playback position frames.
 3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers
