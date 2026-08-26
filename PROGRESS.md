@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.3 Shared catalog content-state panels"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -52,16 +52,17 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Implemented the first M4 slice: one centralized official-Flutter light/dark Material theme now defines conservative typography, surface hierarchy, component defaults, and small spacing/shape/motion tokens. Authentication and Library are the only representative migrations. A new dark 360 px regression caught and fixed a page-margin/panel-padding mix-up; 290 Flutter tests, strict Dart checks, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the second M4 slice: the authenticated root now exposes Library, Discover, and Search as retained primary destinations through an official Material `NavigationRail` on wide layouts and `NavigationBar` at compact widths. Page-local saved collections/refresh and account sign-out remain classified actions; embedded Search/Discover preserve loaded state across destination changes and resize; focus, keyboard, platform/AppBar back, detail overlays, and the single shared playback owner remain intact. A regression found and fixed an outer shortcut-wrapper rebuild that previously disposed retained content. Strict Dart checks, all 292 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the third M4 slice: Album, Artist Tracks, and Ranking now share one bounded dense Material Track tile over the existing presentation model. Compact and desktop layouts consistently expose position, artwork with local fallback, title/subtitle, Artist/Album metadata, truthful duration, play activation, and queue action while preserving each page's keys, paging, controllers, and failure semantics. Playlist/Search context rows remain intentionally separate. Strict Dart checks, all 295 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Implemented the fourth M4 slice: Album Tracks, Artist Tracks/Albums, and Ranking now share bounded Material loading and content-state panels while each page retains its exact typed copy, retry eligibility, keys, and controller state. Loading exposes one page-specific assistive label; error live regions remain opt-in and are not duplicated. Search/Library/Playlist/Discover and append/refresh states remain untouched. Strict Dart checks, all 297 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Global ranking found no new correctness, Provider, playback, debt-trigger, or platform task that outranks the active M4 state-consistency evidence. The selected finite slice shares loading/message presentation across Album, Artist Tracks/Albums, and Ranking while leaving typed copy, retry rules, and other pages untouched.
+- The bounded catalog content-state slice is complete. A new whole-project ranking is required before more presentation work; core browsing headers remain the strongest documented M4 candidate, while selected/current Track presentation still lacks a safe non-frame-driven observation seam.
 
 # Next Candidates
 
-1. Implement and validate the selected catalog loading/message panels on Album, Artist Tracks/Albums, and Ranking only.
-2. Re-rank core browsing header alignment after the content-state grammar is proven; do not start current-playing row animation without a non-frame-driven listener.
+1. Re-rank core browsing header alignment against any newly reproduced correctness, playback, Provider, platform, or accessibility issue.
+2. Do not start current-playing row animation without a non-frame-driven listener, and do not spread the catalog state panel to semantically different pages without a new bounded audit.
 3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers

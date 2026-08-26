@@ -41,3 +41,9 @@
 ## Selection
 
 The catalog content-state panels rank first because three exact implementations and unlabeled loaders provide direct evidence, while typed state and recovery rules can remain untouched at each page. The slice must stop at the selected catalog pages and preserve existing live-region boundaries.
+
+## Outcome
+
+Completed on 2026-08-27. Album Tracks, Artist Tracks/Albums, and Ranking now use one `MusicLoadingPanel` and one `MusicContentStatePanel`. Loading presents a visible label plus one merged assistive label; empty/error panels share Material hierarchy; each caller still owns typed copy, retry eligibility, keys, and the decision to create an error live region.
+
+Focused tests cover 360 px dark loading, exact loading semantics, one opt-in error live region, and retry activation. Consuming page suites and full validation pass. Search, Library, Playlist, Discover, append failures, refresh banners, controller models, and snackbars were not changed; no dependency, protocol, Domain, Bridge, queue, or Rust change was introduced.

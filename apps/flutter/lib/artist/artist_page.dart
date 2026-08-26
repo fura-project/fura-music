@@ -6,6 +6,7 @@ import 'package:flutterustmusic/artist/artist_album_controller.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_controller.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -155,17 +156,17 @@ class _ArtistPageState extends State<ArtistPage> {
   }
 
   Widget _trackBody(bool desktop) => switch (_controller.stage) {
-    ArtistTrackStage.loading => const Center(
+    ArtistTrackStage.loading => const MusicLoadingPanel(
       key: ValueKey('artist-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading Artist Tracks',
     ),
-    ArtistTrackStage.empty => const _ArtistMessage(
+    ArtistTrackStage.empty => const MusicContentStatePanel(
       key: ValueKey('artist-empty'),
       icon: Icons.person_off_outlined,
       title: 'This Artist has no available Tracks',
       detail: 'QQ Music returned an empty Artist Track list.',
     ),
-    ArtistTrackStage.error => _ArtistMessage(
+    ArtistTrackStage.error => MusicContentStatePanel(
       key: const ValueKey('artist-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this Artist',
@@ -193,17 +194,17 @@ class _ArtistPageState extends State<ArtistPage> {
   };
 
   Widget _albumBody(bool desktop) => switch (_albumController.stage) {
-    ArtistAlbumStage.loading => const Center(
+    ArtistAlbumStage.loading => const MusicLoadingPanel(
       key: ValueKey('artist-albums-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading Artist Albums',
     ),
-    ArtistAlbumStage.empty => const _ArtistMessage(
+    ArtistAlbumStage.empty => const MusicContentStatePanel(
       key: ValueKey('artist-albums-empty'),
       icon: Icons.album_outlined,
       title: 'This Artist has no available Albums',
       detail: 'QQ Music returned an empty Artist Album list.',
     ),
-    ArtistAlbumStage.error => _ArtistMessage(
+    ArtistAlbumStage.error => MusicContentStatePanel(
       key: const ValueKey('artist-albums-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this Artist’s Albums',
@@ -651,50 +652,6 @@ class _ArtistFooter extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-    ),
-  );
-}
-
-class _ArtistMessage extends StatelessWidget {
-  const _ArtistMessage({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    this.action,
-    this.liveRegion = false,
-    super.key,
-  });
-
-  final IconData icon;
-  final String title;
-  final String detail;
-  final Widget? action;
-  final bool liveRegion;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Semantics(
-      container: true,
-      liveRegion: liveRegion,
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(detail, textAlign: TextAlign.center),
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
-        ),
-      ),
     ),
   );
 }

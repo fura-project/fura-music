@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
@@ -91,17 +92,17 @@ class _RankingPageState extends State<RankingPage> {
   );
 
   Widget _body(bool desktop) => switch (_controller.stage) {
-    RankingTrackStage.loading => const Center(
+    RankingTrackStage.loading => const MusicLoadingPanel(
       key: ValueKey('ranking-tracks-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading Ranking Tracks',
     ),
-    RankingTrackStage.empty => const _RankingMessage(
+    RankingTrackStage.empty => const MusicContentStatePanel(
       key: ValueKey('ranking-tracks-empty'),
       icon: Icons.leaderboard_outlined,
       title: 'This ranking has no available Tracks',
       detail: 'QQ Music returned an empty current-ranking Track list.',
     ),
-    RankingTrackStage.error => _RankingMessage(
+    RankingTrackStage.error => MusicContentStatePanel(
       key: const ValueKey('ranking-tracks-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this ranking',
@@ -381,50 +382,6 @@ class RankingArtwork extends StatelessWidget {
             ),
     );
   }
-}
-
-class _RankingMessage extends StatelessWidget {
-  const _RankingMessage({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    this.action,
-    this.liveRegion = false,
-    super.key,
-  });
-
-  final IconData icon;
-  final String title;
-  final String detail;
-  final Widget? action;
-  final bool liveRegion;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Semantics(
-      container: true,
-      liveRegion: liveRegion,
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(detail, textAlign: TextAlign.center),
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 String rankingFailureCopy(RankingFailure? failure) => switch (failure) {

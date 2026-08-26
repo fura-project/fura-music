@@ -6,6 +6,7 @@ import 'package:flutterustmusic/album/album_details_controller.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -114,17 +115,17 @@ class _AlbumPageState extends State<AlbumPage> {
   );
 
   Widget _body(bool desktop) => switch (_controller.stage) {
-    AlbumTrackStage.loading => const Center(
+    AlbumTrackStage.loading => const MusicLoadingPanel(
       key: ValueKey('album-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading Album Tracks',
     ),
-    AlbumTrackStage.empty => const _AlbumMessage(
+    AlbumTrackStage.empty => const MusicContentStatePanel(
       key: ValueKey('album-empty'),
       icon: Icons.album_outlined,
       title: 'This Album has no available Tracks',
       detail: 'QQ Music returned an empty Album Track list.',
     ),
-    AlbumTrackStage.error => _AlbumMessage(
+    AlbumTrackStage.error => MusicContentStatePanel(
       key: const ValueKey('album-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this Album',
@@ -616,50 +617,6 @@ class _AlbumFooter extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-    ),
-  );
-}
-
-class _AlbumMessage extends StatelessWidget {
-  const _AlbumMessage({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    this.action,
-    this.liveRegion = false,
-    super.key,
-  });
-
-  final IconData icon;
-  final String title;
-  final String detail;
-  final Widget? action;
-  final bool liveRegion;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Semantics(
-      container: true,
-      liveRegion: liveRegion,
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(detail, textAlign: TextAlign.center),
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
-        ),
-      ),
     ),
   );
 }
