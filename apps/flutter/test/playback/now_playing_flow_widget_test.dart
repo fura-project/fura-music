@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:ui' show SemanticsAction;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -913,6 +913,18 @@ void main() {
       tester.getSemantics(find.byKey(const ValueKey('queue-entry-0'))).label,
       'First track\nFixture artist',
     );
+    final currentSemantics = tester
+        .getSemantics(find.byKey(const ValueKey('queue-entry-0')))
+        .getSemanticsData();
+    final nextSemantics = tester
+        .getSemantics(find.byKey(const ValueKey('queue-entry-1')))
+        .getSemanticsData();
+    expect(currentSemantics.flagsCollection.isSelected, Tristate.isTrue);
+    expect(currentSemantics.flagsCollection.isButton, isFalse);
+    expect(currentSemantics.hasAction(SemanticsAction.tap), isFalse);
+    expect(nextSemantics.flagsCollection.isSelected, Tristate.isFalse);
+    expect(nextSemantics.flagsCollection.isButton, isTrue);
+    expect(nextSemantics.hasAction(SemanticsAction.tap), isTrue);
 
     queue.nextRemoveResult = const PlaybackQueueResult(
       failure: PlaybackQueueFailure.coreUnavailable,
@@ -931,8 +943,6 @@ void main() {
       failureSemantics.getSemanticsData().flagsCollection.isLiveRegion,
       isTrue,
     );
-    semantics.dispose();
-
     await tester.tap(find.byKey(const ValueKey('queue-entry-1')));
     await tester.pumpAndSettle();
     expect(media.requests, hasLength(2));
@@ -944,6 +954,18 @@ void main() {
       find.byKey(const ValueKey('queue-current-indicator-1')),
       findsOneWidget,
     );
+    final previousSemantics = tester
+        .getSemantics(find.byKey(const ValueKey('queue-entry-0')))
+        .getSemanticsData();
+    final selectedSemantics = tester
+        .getSemantics(find.byKey(const ValueKey('queue-entry-1')))
+        .getSemanticsData();
+    expect(previousSemantics.flagsCollection.isSelected, Tristate.isFalse);
+    expect(previousSemantics.flagsCollection.isButton, isTrue);
+    expect(previousSemantics.hasAction(SemanticsAction.tap), isTrue);
+    expect(selectedSemantics.flagsCollection.isSelected, Tristate.isTrue);
+    expect(selectedSemantics.flagsCollection.isButton, isFalse);
+    expect(selectedSemantics.hasAction(SemanticsAction.tap), isFalse);
 
     await tester.tap(find.byKey(const ValueKey('queue-remove-0')));
     await tester.pumpAndSettle();
@@ -956,6 +978,7 @@ void main() {
     expect(find.textContaining('The queue is empty'), findsOneWidget);
     expect(find.byKey(const ValueKey('now-playing-title')), findsNothing);
     expect(media.requests, hasLength(2));
+    semantics.dispose();
   });
 
   testWidgets('queue clear requires confirmation and keeps shortcuts active', (

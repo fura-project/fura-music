@@ -160,7 +160,7 @@ class PlaybackQueuePanel extends StatelessWidget {
                               : track.artistNames.join(' · ');
                           return Semantics(
                             selected: current,
-                            button: true,
+                            button: !current,
                             child: ListTile(
                               key: ValueKey('queue-entry-$index'),
                               selected: current,
