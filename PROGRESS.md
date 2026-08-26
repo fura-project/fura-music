@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Playlist Track-to-Album navigation"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -43,11 +43,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. The completed favorite-Album slice has returned to global task ranking; the next task must have fresh Roadmap or reproduced-product provenance rather than continuing nearby library polish by default.
+- M3 remains active. Repository-wide Track mapping audit reproduced that every non-Search Track surface discards Album/Artist catalog identity already present in the common QQ protocol model. The selected finite slice preserves optional Album context through shared Domain/Bridge/queue values and exposes it from playlist-detail interactions through a retained existing Album route; Artist and global now-playing transitions remain deferred.
 
 # Next Candidates
 
-1. Audit the reproduced cross-surface Track identity gap and bound the smallest Album/Artist context-navigation slice without parsing QQ opaque IDs in Flutter or widening every producer speculatively.
+1. Implement the selected playlist Track-to-Album slice with shared identity preservation, exact queue round-trip, desktop/mobile context actions, retained return state, and full regression coverage.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
