@@ -41,3 +41,9 @@
 ## Selection
 
 The shared dense catalog Track tile ranks first because it is backed by three concrete duplicate implementations, serves the highest-frequency content in those pages, and can establish one product grammar without touching navigation, protocol, queue semantics, or contextual Playlist/Search behavior. The component must stay small and accept only differences already present in the three selected surfaces.
+
+## Outcome
+
+Completed on 2026-08-27. Album, Artist Tracks, and Ranking now use one small Flutter `MusicTrackTile` that consistently presents position, local-or-network artwork, title/subtitle, Artist/Album metadata, known or explicitly unknown duration, play activation, and add-to-queue action at compact and desktop density. Existing page keys, callbacks, pagination footers, controllers, and typed failure behavior remain unchanged.
+
+Focused tests cover 360 px reachability, desktop/dark density, artwork semantics, known/unknown duration, and both actions; the three consuming page suites and full project validation pass. The component did not absorb Playlist/Search context actions or listen to the frame-driven playback notifier for selected-state animation, avoiding both a configuration-heavy universal row and per-frame list rebuilds. No dependency, controller, queue, protocol, Domain, Bridge, or Rust change was introduced.

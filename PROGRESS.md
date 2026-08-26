@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.3 Shared dense catalog Track tile"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -51,16 +51,17 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Activated M4 from an explicit human product decision: establish a coherent official-Flutter Material 3 desktop/compact baseline before any deferred theme personas or signature visual experiments. M1's user-operated playback observation and HD-001 remain locally scoped rather than blocking this workstream.
 - Implemented the first M4 slice: one centralized official-Flutter light/dark Material theme now defines conservative typography, surface hierarchy, component defaults, and small spacing/shape/motion tokens. Authentication and Library are the only representative migrations. A new dark 360 px regression caught and fixed a page-margin/panel-padding mix-up; 290 Flutter tests, strict Dart checks, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the second M4 slice: the authenticated root now exposes Library, Discover, and Search as retained primary destinations through an official Material `NavigationRail` on wide layouts and `NavigationBar` at compact widths. Page-local saved collections/refresh and account sign-out remain classified actions; embedded Search/Discover preserve loaded state across destination changes and resize; focus, keyboard, platform/AppBar back, detail overlays, and the single shared playback owner remain intact. A regression found and fixed an outer shortcut-wrapper rebuild that previously disposed retained content. Strict Dart checks, all 292 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Implemented the third M4 slice: Album, Artist Tracks, and Ranking now share one bounded dense Material Track tile over the existing presentation model. Compact and desktop layouts consistently expose position, artwork with local fallback, title/subtitle, Artist/Album metadata, truthful duration, play activation, and queue action while preserving each page's keys, paging, controllers, and failure semantics. Playlist/Search context rows remain intentionally separate. Strict Dart checks, all 295 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Whole-project ranking selected one shared dense catalog Track tile for the three concretely duplicated Album, Artist Track, and Ranking rows. Playlist/Search contextual rows, current-playing animation, headers, and async-state consolidation remain outside this finite slice.
+- M4.3's first bounded core-browsing slice is complete. Whole-project ranking must now compare the evidenced asynchronous-state and browsing-header gaps without expanding the Track component into contextual Playlist/Search behavior.
 
 # Next Candidates
 
-1. Implement and validate the selected shared catalog Track tile on Album, Artist Tracks, and Ranking only.
-2. Re-rank the shared asynchronous state panel against core browsing header alignment after the Track grammar is proven.
+1. Re-rank the shared asynchronous state panel against core browsing header alignment after the Track grammar is proven.
+2. Select another bounded representative slice; do not generalize all pages or start current-playing row animation without evidence for a non-frame-driven listener.
 3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers

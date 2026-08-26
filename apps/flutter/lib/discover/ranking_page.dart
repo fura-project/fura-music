@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -280,42 +281,14 @@ class _RankingTracks extends StatelessWidget {
             );
           }
           final track = tracks[index];
-          final artists = track.artistNames.isEmpty
-              ? 'Unknown artist'
-              : track.artistNames.join(' · ');
-          return ListTile(
-            key: ValueKey('ranking-track-$index'),
-            minTileHeight: desktop ? 64 : 72,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            leading: SizedBox(
-              width: 36,
-              child: Text(
-                '${index + 1}',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-            ),
-            title: Text(
-              track.subtitle == null
-                  ? track.title
-                  : '${track.title} · ${track.subtitle}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              artists,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            onTap: () => onPlay(index),
-            trailing: IconButton(
-              key: ValueKey('ranking-queue-$index'),
-              tooltip: 'Add ${track.title} to queue',
-              onPressed: () => onQueue(track),
-              icon: const Icon(Icons.playlist_add_rounded),
-            ),
+          return MusicTrackTile(
+            itemKey: ValueKey('ranking-track-$index'),
+            queueKey: ValueKey('ranking-queue-$index'),
+            track: track,
+            position: index + 1,
+            desktop: desktop,
+            onPlay: () => onPlay(index),
+            onQueue: () => onQueue(track),
           );
         },
       ),

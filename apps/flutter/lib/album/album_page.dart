@@ -6,6 +6,7 @@ import 'package:flutterustmusic/album/album_details_controller.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -530,42 +531,14 @@ class _AlbumTracks extends StatelessWidget {
             );
           }
           final track = tracks[index];
-          final artists = track.artistNames.isEmpty
-              ? 'Unknown artist'
-              : track.artistNames.join(' · ');
-          return ListTile(
-            key: ValueKey('album-track-$index'),
-            minTileHeight: desktop ? 64 : 72,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            leading: SizedBox(
-              width: 36,
-              child: Text(
-                '${index + 1}',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-            ),
-            title: Text(
-              track.subtitle == null
-                  ? track.title
-                  : '${track.title} · ${track.subtitle}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              artists,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            onTap: () => onPlay(index),
-            trailing: IconButton(
-              key: ValueKey('album-queue-$index'),
-              tooltip: 'Add ${track.title} to queue',
-              onPressed: () => onQueue(track),
-              icon: const Icon(Icons.playlist_add_rounded),
-            ),
+          return MusicTrackTile(
+            itemKey: ValueKey('album-track-$index'),
+            queueKey: ValueKey('album-queue-$index'),
+            track: track,
+            position: index + 1,
+            desktop: desktop,
+            onPlay: () => onPlay(index),
+            onQueue: () => onQueue(track),
           );
         },
       ),

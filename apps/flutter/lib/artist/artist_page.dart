@@ -6,6 +6,7 @@ import 'package:flutterustmusic/artist/artist_album_controller.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_controller.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -594,41 +595,14 @@ class _ArtistTracks extends StatelessWidget {
             );
           }
           final track = tracks[index];
-          final detail = [
-            if (track.artistNames.isNotEmpty) track.artistNames.join(' · '),
-            ?track.albumTitle,
-          ].join(' · ');
-          return ListTile(
-            key: ValueKey('artist-track-$index'),
-            minTileHeight: desktop ? 64 : 72,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            leading: SizedBox(
-              width: 36,
-              child: Text(
-                '${index + 1}',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-            ),
-            title: Text(
-              track.subtitle == null
-                  ? track.title
-                  : '${track.title} · ${track.subtitle}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: detail.isEmpty
-                ? null
-                : Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),
-            onTap: () => onPlay(index),
-            trailing: IconButton(
-              key: ValueKey('artist-queue-$index'),
-              tooltip: 'Add ${track.title} to queue',
-              onPressed: () => onQueue(track),
-              icon: const Icon(Icons.playlist_add_rounded),
-            ),
+          return MusicTrackTile(
+            itemKey: ValueKey('artist-track-$index'),
+            queueKey: ValueKey('artist-queue-$index'),
+            track: track,
+            position: index + 1,
+            desktop: desktop,
+            onPlay: () => onPlay(index),
+            onQueue: () => onQueue(track),
           );
         },
       ),
