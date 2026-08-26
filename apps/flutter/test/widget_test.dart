@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' show SemanticsAction, Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
+import 'package:flutter/material.dart' show FilledButton;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -451,12 +452,13 @@ void main() {
   testWidgets('failed sign-out vault cleanup remains explicit and retryable', (
     tester,
   ) async {
+    final retry = Completer<CredentialSignOutResult>();
     final authentication = _WidgetGateway(
       _WaitingSession(),
       authenticated: true,
       signOutResults: [
         CredentialSignOutResult.storageCleanupFailed,
-        CredentialSignOutResult.signedOut,
+        retry.future,
       ],
     );
     await tester.pumpWidget(
@@ -479,8 +481,16 @@ void main() {
     await tester.ensureVisible(find.text('Try removing it again'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Try removing it again'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(authentication.signOutCalls, 2);
+    expect(find.text('Removing saved session…'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+
+    retry.complete(CredentialSignOutResult.signedOut);
+    await tester.pumpAndSettle();
     expect(find.text('Continue with WeChat'), findsOneWidget);
   });
 
@@ -553,7 +563,7 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
     this.session, {
     this.authenticated = false,
     CredentialVerificationOperation? verificationOperation,
-    List<CredentialSignOutResult> signOutResults = const [
+    List<FutureOr<CredentialSignOutResult>> signOutResults = const [
       CredentialSignOutResult.signedOut,
     ],
   }) : _verificationOperation =
@@ -566,7 +576,7 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
   final _WaitingSession session;
   bool authenticated;
   final CredentialVerificationOperation _verificationOperation;
-  final List<CredentialSignOutResult> _signOutResults;
+  final List<FutureOr<CredentialSignOutResult>> _signOutResults;
   int signOutCalls = 0;
 
   @override
@@ -602,7 +612,7 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
 
   @override
   Future<CredentialSignOutResult> signOut() async {
-    final result = _signOutResults[signOutCalls++];
+    final result = await _signOutResults[signOutCalls++];
     if (result != CredentialSignOutResult.coreUnavailable) {
       authenticated = false;
     }

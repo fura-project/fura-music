@@ -62,6 +62,7 @@ class LoginController extends ChangeNotifier {
   CredentialSaveState _credentialSaveState = CredentialSaveState.none;
   CredentialRestoreResult _credentialRestoreResult;
   CredentialVerificationResult? _credentialVerificationResult;
+  Future<CredentialSignOutResult>? _signOutOperation;
   int _generation = 0;
   bool _disposed = false;
 
@@ -88,13 +89,19 @@ class LoginController extends ChangeNotifier {
           _credentialVerificationResult ==
               CredentialVerificationResult.invalidResponse);
 
-  bool get canRetrySignOut => _stage == LoginStage.signOutStorageCleanupFailed;
+  bool get isSigningOut => _signOutOperation != null;
 
-  Future<CredentialSignOutResult> signOut() async {
+  bool get canRetrySignOut =>
+      _stage == LoginStage.signOutStorageCleanupFailed && !isSigningOut;
+
+  Future<CredentialSignOutResult> signOut() {
+    final activeOperation = _signOutOperation;
+    if (activeOperation != null) return activeOperation;
+
     final previousStage = _stage;
     if (previousStage != LoginStage.authenticated &&
         previousStage != LoginStage.signOutStorageCleanupFailed) {
-      return CredentialSignOutResult.coreUnavailable;
+      return Future.value(CredentialSignOutResult.coreUnavailable);
     }
 
     final generation = ++_generation;
@@ -104,25 +111,47 @@ class LoginController extends ChangeNotifier {
     _startOperation = null;
     _session?.cancel();
     _session = null;
-    final result = await _gateway.signOut();
-    if (!_isCurrent(generation)) return result;
+    final completer = Completer<CredentialSignOutResult>();
+    final operation = completer.future;
+    _signOutOperation = operation;
+    _notify();
+    unawaited(_finishSignOut(operation, completer, generation, previousStage));
+    return operation;
+  }
 
-    if (result == CredentialSignOutResult.coreUnavailable) {
-      _stage = previousStage;
-      _notify();
-      return result;
+  Future<void> _finishSignOut(
+    Future<CredentialSignOutResult> operation,
+    Completer<CredentialSignOutResult> completer,
+    int generation,
+    LoginStage previousStage,
+  ) async {
+    CredentialSignOutResult result;
+    try {
+      result = await _gateway.signOut();
+    } on Object {
+      result = CredentialSignOutResult.coreUnavailable;
     }
 
-    _qrImageBytes = null;
-    _failure = null;
-    _credentialSaveState = CredentialSaveState.none;
-    _credentialRestoreResult = CredentialRestoreResult.signedOut;
-    _credentialVerificationResult = null;
-    _stage = result == CredentialSignOutResult.signedOut
-        ? LoginStage.idle
-        : LoginStage.signOutStorageCleanupFailed;
+    if (_isCurrent(generation)) {
+      if (result == CredentialSignOutResult.coreUnavailable) {
+        _stage = previousStage;
+      } else {
+        _qrImageBytes = null;
+        _failure = null;
+        _credentialSaveState = CredentialSaveState.none;
+        _credentialRestoreResult = CredentialRestoreResult.signedOut;
+        _credentialVerificationResult = null;
+        _stage = result == CredentialSignOutResult.signedOut
+            ? LoginStage.idle
+            : LoginStage.signOutStorageCleanupFailed;
+      }
+    }
+
+    if (identical(_signOutOperation, operation)) {
+      _signOutOperation = null;
+    }
     _notify();
-    return result;
+    completer.complete(result);
   }
 
   Future<void> verifyRestoredCredential() async {

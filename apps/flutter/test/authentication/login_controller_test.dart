@@ -366,6 +366,47 @@ void main() {
     expect(controller.stage, LoginStage.authenticated);
     expect(gateway.signOutCalls, 1);
   });
+
+  test('concurrent sign out callers share one in-flight operation', () async {
+    final pending = Completer<CredentialSignOutResult>();
+    final gateway = _FakeGateway.immediate(
+      _successfulStart(_FakeLoginSession()),
+      authenticated: true,
+      signOutResults: [pending.future],
+    );
+    final controller = LoginController(gateway);
+
+    final first = controller.signOut();
+    final second = controller.signOut();
+    expect(identical(first, second), isTrue);
+    expect(controller.isSigningOut, isTrue);
+    expect(gateway.signOutCalls, 1);
+
+    pending.complete(CredentialSignOutResult.storageCleanupFailed);
+    expect(await first, CredentialSignOutResult.storageCleanupFailed);
+    expect(controller.isSigningOut, isFalse);
+    expect(controller.canRetrySignOut, isTrue);
+  });
+
+  test(
+    'unexpected gateway sign-out failure restores authenticated state',
+    () async {
+      final pending = Completer<CredentialSignOutResult>();
+      final gateway = _FakeGateway.immediate(
+        _successfulStart(_FakeLoginSession()),
+        authenticated: true,
+        signOutResults: [pending.future],
+      );
+      final controller = LoginController(gateway);
+
+      final signOut = controller.signOut();
+      pending.completeError(StateError('synthetic gateway failure'));
+
+      expect(await signOut, CredentialSignOutResult.coreUnavailable);
+      expect(controller.stage, LoginStage.authenticated);
+      expect(controller.isSigningOut, isFalse);
+    },
+  );
 }
 
 LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
@@ -381,7 +422,7 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
     LoginStart result, {
     this.persistenceResult = CredentialPersistenceResult.stored,
     this.authenticated = false,
-    List<CredentialSignOutResult> signOutResults = const [
+    List<FutureOr<CredentialSignOutResult>> signOutResults = const [
       CredentialSignOutResult.signedOut,
     ],
   }) : _immediateResult = result,
@@ -399,7 +440,7 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
   final List<Completer<LoginStart>>? _pendingStarts;
   final CredentialPersistenceResult persistenceResult;
   bool authenticated;
-  final List<CredentialSignOutResult> _signOutResults;
+  final List<FutureOr<CredentialSignOutResult>> _signOutResults;
   final List<_FakeStartOperation> operations = <_FakeStartOperation>[];
   final List<Completer<CredentialVerificationResult>> _pendingVerifications =
       <Completer<CredentialVerificationResult>>[];
@@ -449,7 +490,7 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
 
   @override
   Future<CredentialSignOutResult> signOut() async {
-    final result = _signOutResults[signOutCalls++];
+    final result = await _signOutResults[signOutCalls++];
     if (result != CredentialSignOutResult.coreUnavailable) {
       authenticated = false;
     }

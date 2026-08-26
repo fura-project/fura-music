@@ -515,10 +515,16 @@ class _AuthenticationContent extends StatelessWidget {
           style: _supportingStyle(context),
         ),
         const SizedBox(height: 24),
-        if (controller.canRetrySignOut)
+        if (controller.stage == LoginStage.signOutStorageCleanupFailed)
           FilledButton.tonal(
-            onPressed: () => controller.signOut(),
-            child: const Text('Try removing it again'),
+            onPressed: controller.canRetrySignOut
+                ? () => controller.signOut()
+                : null,
+            child: Text(
+              controller.isSigningOut
+                  ? 'Removing saved session…'
+                  : 'Try removing it again',
+            ),
           )
         else if (controller.canRetryCredentialVerification)
           FilledButton.tonal(
