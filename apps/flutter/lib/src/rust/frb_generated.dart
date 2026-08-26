@@ -74,7 +74,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1197755473;
+  int get rustContentHash => 591508787;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -237,6 +237,8 @@ abstract class RustLibApi extends BaseApi {
   crateApiAuthenticationRestoreQqMusicCredentialFromSecureStorage({
     Uint8List? secretBytes,
   });
+
+  bool crateApiAuthenticationSignOutQqMusic();
 
   Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin({
     required int attemptId,
@@ -1506,6 +1508,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  bool crateApiAuthenticationSignOutQqMusic() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAuthenticationSignOutQqMusicConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAuthenticationSignOutQqMusicConstMeta =>
+      const TaskConstMeta(debugName: "sign_out_qq_music", argNames: []);
+
+  @override
   Future<QqMusicQrLoginStart> crateApiAuthenticationStartQqMusicWechatQrLogin({
     required int attemptId,
   }) {
@@ -1517,7 +1541,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1551,7 +1575,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 41,
             port: port_,
           );
         },

@@ -57,12 +57,20 @@ enum CredentialVerificationResult {
   coreUnavailable,
 }
 
+enum CredentialSignOutResult {
+  signedOut,
+  storageCleanupFailed,
+  coreUnavailable,
+}
+
 typedef CredentialRestoreImporter = CredentialRestoreResult Function(
   Uint8List? secretBytes,
 );
 
 typedef CredentialVerificationOperationFactory =
     CredentialVerificationOperation Function();
+
+typedef CredentialSignOutCore = bool Function();
 
 class LoginChallenge {
   const LoginChallenge({required this.imageFormat, required this.imageBytes});
@@ -99,6 +107,7 @@ abstract interface class QqMusicAuthenticationGateway {
   Future<CredentialPersistenceResult> persistAuthenticatedCredential();
   Future<CredentialRestoreResult> restoreCredential();
   CredentialVerificationOperation beginCredentialVerification();
+  Future<CredentialSignOutResult> signOut();
 }
 
 abstract interface class LoginStartOperation {
@@ -116,17 +125,20 @@ class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
     CredentialVault? credentialVault,
     CredentialRestoreImporter? credentialImporter,
     CredentialVerificationOperationFactory? verificationOperationFactory,
+    CredentialSignOutCore? credentialSignOutCore,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        ),
        _credentialImporter =
            credentialImporter ?? _restoreQqMusicCredentialInRust,
        _verificationOperationFactory =
-           verificationOperationFactory ?? _reserveRustCredentialVerification;
+           verificationOperationFactory ?? _reserveRustCredentialVerification,
+       _credentialSignOutCore = credentialSignOutCore ?? bridge.signOutQqMusic;
 
   final CredentialVault _credentialVault;
   final CredentialRestoreImporter _credentialImporter;
   final CredentialVerificationOperationFactory _verificationOperationFactory;
+  final CredentialSignOutCore _credentialSignOutCore;
 
   @override
   bool get hasAuthenticatedCredential =>
@@ -178,6 +190,24 @@ class RustQqMusicAuthenticationGateway implements QqMusicAuthenticationGateway {
       return CredentialRestoreResult.coreUnavailable;
     } finally {
       secretBytes?.fillRange(0, secretBytes.length, 0);
+    }
+  }
+
+  @override
+  Future<CredentialSignOutResult> signOut() async {
+    try {
+      if (!_credentialSignOutCore()) {
+        return CredentialSignOutResult.coreUnavailable;
+      }
+    } catch (_) {
+      return CredentialSignOutResult.coreUnavailable;
+    }
+
+    try {
+      await _credentialVault.delete();
+      return CredentialSignOutResult.signedOut;
+    } catch (_) {
+      return CredentialSignOutResult.storageCleanupFailed;
     }
   }
 }

@@ -275,6 +275,19 @@ pub fn qq_music_has_authenticated_credential() -> bool {
         .is_ok_and(QrAuthenticationProvider::has_authenticated_credential)
 }
 
+/// Clears the process-local QQ Music credential and cancels authentication
+/// work. The Flutter platform edge deletes the separately stored vault entry
+/// only after this succeeds.
+#[flutter_rust_bridge::frb(sync)]
+pub fn sign_out_qq_music() -> bool {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return false;
+    };
+    *start_attempt_guard() = None;
+    QrAuthenticationProvider::sign_out(provider);
+    true
+}
+
 /// Produces a short-lived secret payload for immediate handoff to the platform
 /// secure-storage plugin. Do not log, cache, or retain the returned bytes.
 #[flutter_rust_bridge::frb(sync)]

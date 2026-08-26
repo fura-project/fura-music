@@ -192,6 +192,7 @@ class _LoginPageState extends State<LoginPage> {
             playbackQueueGateway: widget.playbackQueueGateway,
             audioEngine: widget.audioEngine,
             onSignInAgain: _controller.cancel,
+            onSignOut: _controller.signOut,
           );
         }
         return Scaffold(
@@ -358,7 +359,8 @@ class _AuthenticationContent extends StatelessWidget {
     if (stage == LoginStage.storedCredentialExpired ||
         stage == LoginStage.restoreError ||
         stage == LoginStage.credentialRejected ||
-        stage == LoginStage.verificationError) {
+        stage == LoginStage.verificationError ||
+        stage == LoginStage.signOutStorageCleanupFailed) {
       return _restoreTerminal(context);
     }
     if (stage == LoginStage.starting) return _starting(context);
@@ -460,6 +462,11 @@ class _AuthenticationContent extends StatelessWidget {
   Widget _restoreTerminal(BuildContext context) {
     final result = controller.credentialRestoreResult;
     final (title, detail) = switch (controller.stage) {
+      LoginStage.signOutStorageCleanupFailed => (
+        'Signed out, but saved session remains',
+        'The active QQ Music session was cleared, but secure storage could not '
+            'remove its saved copy. It may appear again after restart.',
+      ),
       LoginStage.credentialRejected || LoginStage.verificationError =>
         _verificationTerminalCopy(controller.credentialVerificationResult),
       _ => switch (result) {
@@ -508,7 +515,12 @@ class _AuthenticationContent extends StatelessWidget {
           style: _supportingStyle(context),
         ),
         const SizedBox(height: 24),
-        if (controller.canRetryCredentialVerification)
+        if (controller.canRetrySignOut)
+          FilledButton.tonal(
+            onPressed: () => controller.signOut(),
+            child: const Text('Try removing it again'),
+          )
+        else if (controller.canRetryCredentialVerification)
           FilledButton.tonal(
             onPressed: controller.retryCredentialVerification,
             child: const Text('Try verification again'),

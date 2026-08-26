@@ -44,7 +44,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1197755473;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 591508787;
 
 // Section: executor
 
@@ -1759,6 +1759,35 @@ fn wire__crate__api__authentication__restore_qq_music_credential_from_secure_sto
         },
     )
 }
+fn wire__crate__api__authentication__sign_out_qq_music_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sign_out_qq_music",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(crate::api::authentication::sign_out_qq_music())?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2995,13 +3024,13 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         34 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
+        40 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(
+        41 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(
             port,
             ptr,
             rust_vec_len,
@@ -3139,6 +3168,7 @@ fn pde_ffi_dispatcher_sync_impl(
                 data_len,
             )
         }
+        39 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

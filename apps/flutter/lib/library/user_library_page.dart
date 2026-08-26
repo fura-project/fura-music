@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -25,6 +26,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.playbackQueueGateway,
     required this.audioEngine,
     required this.onSignInAgain,
+    required this.onSignOut,
     super.key,
   });
 
@@ -35,6 +37,7 @@ class UserLibraryPage extends StatefulWidget {
   final PlaybackQueueGateway playbackQueueGateway;
   final ForegroundAudioEngine audioEngine;
   final VoidCallback onSignInAgain;
+  final Future<CredentialSignOutResult> Function() onSignOut;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -45,6 +48,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final QueuePlaybackController _queuePlaybackController;
   UserPlaylistSummary? _selectedPlaylist;
   bool _handledLyricCredentialRejection = false;
+  bool _signingOut = false;
 
   @override
   void initState() {
@@ -112,6 +116,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             icon: const Icon(Icons.refresh_rounded),
           ),
         ),
+        IconButton(
+          key: const ValueKey('sign-out'),
+          tooltip: 'Sign out',
+          onPressed: _signingOut ? null : _confirmSignOut,
+          icon: const Icon(Icons.logout_rounded),
+        ),
         const SizedBox(width: 8),
       ],
     ),
@@ -131,6 +141,49 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       onSignInAgain: widget.onSignInAgain,
     ),
   );
+
+  Future<void> _confirmSignOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => PlaybackShortcuts(
+        controller: _queuePlaybackController,
+        child: AlertDialog(
+          title: const Text('Sign out on this device?'),
+          content: const Text(
+            'This will stop playback and remove the saved QQ Music session '
+            'from this device.',
+          ),
+          actions: [
+            TextButton(
+              key: const ValueKey('sign-out-cancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('sign-out-confirm'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sign out'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _signingOut = true);
+    final signOut = widget.onSignOut();
+    await _queuePlaybackController.playback.stop();
+    final result = await signOut;
+    if (!mounted) return;
+    setState(() => _signingOut = false);
+    if (result == CredentialSignOutResult.coreUnavailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Couldn’t sign out. Your local session is unchanged.'),
+        ),
+      );
+    }
+  }
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
     UserLibraryStage.loading => const _LibraryLoading(

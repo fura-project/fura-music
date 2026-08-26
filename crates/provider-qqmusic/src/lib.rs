@@ -226,6 +226,17 @@ impl<T> QqMusicProvider<T> {
         self.login.cancel_active()
     }
 
+    /// Cancels local authentication work and removes every retained QQ Music
+    /// credential state from this process. Platform-vault cleanup remains the
+    /// responsibility of the application edge.
+    pub fn sign_out(&self) {
+        self.login.cancel_active();
+        let mut credential = credential_guard(&self.credential);
+        let mut verification = restore_verification_guard(&self.active_restore_verification);
+        *credential = QqMusicCredentialState::SignedOut;
+        *verification = None;
+    }
+
     /// Exports the current credential as a short-lived, versioned secret
     /// document for the platform secure-storage adapter.
     ///
@@ -592,6 +603,10 @@ where
 
     fn has_authenticated_credential(&self) -> bool {
         QqMusicProvider::has_authenticated_credential(self)
+    }
+
+    fn sign_out(&self) {
+        QqMusicProvider::sign_out(self);
     }
 }
 
@@ -2529,6 +2544,32 @@ mod tests {
         assert!(provider.restored_credential().is_none());
     }
 
+    #[tokio::test]
+    async fn sign_out_supersedes_late_server_verification() {
+        let verification_started = Arc::new(Notify::new());
+        let release_verification = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedVerificationTransport {
+            verification_started: Arc::clone(&verification_started),
+            release_verification: Arc::clone(&release_verification),
+        }));
+        restore_candidate(&provider);
+        let attempt_id = provider
+            .reserve_restored_credential_verification()
+            .expect("verification attempt");
+
+        let verification = provider.verify_restored_credential(attempt_id);
+        let sign_out = async {
+            verification_started.notified().await;
+            provider.sign_out();
+            release_verification.notify_one();
+        };
+        let (result, ()) = tokio::join!(verification, sign_out);
+
+        assert_eq!(result, Err(provider_api::AuthenticationError::Replaced));
+        assert!(!provider.has_authenticated_credential());
+        assert!(provider.restored_credential().is_none());
+    }
+
     #[test]
     fn stale_verification_attempt_cannot_cancel_its_replacement() {
         let provider = QqMusicProvider::new(QqMusicClient::new(()));
@@ -2595,6 +2636,36 @@ mod tests {
             .restored_credential()
             .expect("expired credential is retained for a future decision");
         assert_eq!(state, QqMusicCredentialRestoreState::LocallyExpired);
+    }
+
+    #[tokio::test]
+    async fn sign_out_clears_authenticated_restore_and_active_qr_state() {
+        let authenticated =
+            QqMusicProvider::new(QqMusicClient::new(SuccessfulAuthenticationTransport));
+        set_authenticated(&authenticated, "123456");
+        assert!(authenticated.has_authenticated_credential());
+        authenticated.sign_out();
+        assert!(!authenticated.has_authenticated_credential());
+        assert!(authenticated.restored_credential().is_none());
+
+        let restored = QqMusicProvider::new(QqMusicClient::new(()));
+        restore_candidate(&restored);
+        let verification = restored
+            .reserve_restored_credential_verification()
+            .expect("verification attempt");
+        restored.sign_out();
+        assert!(restored.restored_credential().is_none());
+        assert!(!restored.cancel_restored_credential_verification(verification));
+
+        let qr = QqMusicProvider::new(QqMusicClient::new(SuccessfulAuthenticationTransport));
+        let session = qr
+            .begin_qr_authentication()
+            .await
+            .expect("active QR session");
+        assert!(session.is_active());
+        qr.sign_out();
+        assert!(!session.is_active());
+        assert!(!qr.has_authenticated_credential());
     }
 
     #[test]

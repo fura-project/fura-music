@@ -485,6 +485,45 @@ void main() {
     ]);
   });
 
+  testWidgets('sign out stops playback before credential cleanup completes', (
+    tester,
+  ) async {
+    final signOut = Completer<CredentialSignOutResult>();
+    final session = _FakeAudioSession();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('sign-out-stop')),
+      ]),
+      audio: _FakeAudioEngine([session]),
+      authenticationGateway: _AuthenticatedGateway(
+        onSignOut: () => signOut.future,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Sign out'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
+    await tester.pump();
+
+    expect(session.stopCalls, 1);
+    expect(find.textContaining('Stopped'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('sign-out')))
+          .onPressed,
+      isNull,
+    );
+
+    signOut.complete(CredentialSignOutResult.signedOut);
+    await tester.pumpAndSettle();
+    expect(find.text('Continue with WeChat'), findsOneWidget);
+  });
+
   testWidgets('track action semantics do not repeat visible metadata', (
     tester,
   ) async {
@@ -1142,11 +1181,13 @@ Future<void> _openDetail(
   String secondTitle = 'Second track',
   int? durationSeconds = 120,
   String? artworkUri,
+  QqMusicAuthenticationGateway? authenticationGateway,
 }) async {
   await tester.pumpWidget(
     MusicApp(
       bootstrap: _bootstrap,
-      authenticationGateway: const _AuthenticatedGateway(),
+      authenticationGateway:
+          authenticationGateway ?? const _AuthenticatedGateway(),
       libraryGateway: const _LibraryGateway(),
       playlistDetailGateway: _DetailGateway(
         firstOpaqueId,
@@ -1304,7 +1345,9 @@ const _bootstrap = BootstrapStatus(
 );
 
 class _AuthenticatedGateway implements QqMusicAuthenticationGateway {
-  const _AuthenticatedGateway();
+  const _AuthenticatedGateway({this.onSignOut});
+
+  final Future<CredentialSignOutResult> Function()? onSignOut;
 
   @override
   bool get hasAuthenticatedCredential => true;
@@ -1323,6 +1366,10 @@ class _AuthenticatedGateway implements QqMusicAuthenticationGateway {
   @override
   Future<CredentialRestoreResult> restoreCredential() async =>
       CredentialRestoreResult.signedOut;
+
+  @override
+  Future<CredentialSignOutResult> signOut() async =>
+      onSignOut?.call() ?? CredentialSignOutResult.signedOut;
 }
 
 class _LibraryGateway implements UserLibraryGateway {
@@ -1541,6 +1588,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   final StreamController<int> _positions = StreamController<int>.broadcast();
   final List<int> seekPositions = [];
   final List<double> volumes = [];
+  int stopCalls = 0;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -1569,7 +1617,10 @@ class _FakeAudioSession implements ForegroundAudioSession {
   }
 
   @override
-  Future<void> stop() async => _states.add(ForegroundAudioState.stopped);
+  Future<void> stop() async {
+    stopCalls += 1;
+    _states.add(ForegroundAudioState.stopped);
+  }
 
   @override
   Future<void> dispose() async {

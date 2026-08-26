@@ -145,6 +145,7 @@ pub trait QrAuthenticationProvider: MusicProvider + Sync {
         &self,
     ) -> impl Future<Output = Result<Self::Session, Self::Error>> + Send;
     fn has_authenticated_credential(&self) -> bool;
+    fn sign_out(&self);
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

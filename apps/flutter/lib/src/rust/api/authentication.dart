@@ -27,6 +27,12 @@ bool cancelQqMusicWechatQrLoginStart({required int attemptId}) =>
 bool qqMusicHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiAuthenticationQqMusicHasAuthenticatedCredential();
 
+/// Clears the process-local QQ Music credential and cancels authentication
+/// work. The Flutter platform edge deletes the separately stored vault entry
+/// only after this succeeds.
+bool signOutQqMusic() =>
+    RustLib.instance.api.crateApiAuthenticationSignOutQqMusic();
+
 /// Produces a short-lived secret payload for immediate handoff to the platform
 /// secure-storage plugin. Do not log, cache, or retain the returned bytes.
 QqMusicCredentialExport exportQqMusicCredentialForSecureStorage() => RustLib

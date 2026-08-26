@@ -316,6 +316,56 @@ void main() {
     await verification;
     expect(controller.stage, LoginStage.verifyingStoredCredential);
   });
+
+  test('sign out reaches idle only after core and vault success', () async {
+    final gateway = _FakeGateway.immediate(
+      _successfulStart(_FakeLoginSession()),
+      authenticated: true,
+    );
+    final controller = LoginController(gateway);
+
+    expect(controller.stage, LoginStage.authenticated);
+    expect(await controller.signOut(), CredentialSignOutResult.signedOut);
+    expect(controller.stage, LoginStage.idle);
+    expect(gateway.signOutCalls, 1);
+  });
+
+  test('sign out keeps a failed vault cleanup retryable', () async {
+    final gateway = _FakeGateway.immediate(
+      _successfulStart(_FakeLoginSession()),
+      authenticated: true,
+      signOutResults: [
+        CredentialSignOutResult.storageCleanupFailed,
+        CredentialSignOutResult.signedOut,
+      ],
+    );
+    final controller = LoginController(gateway);
+
+    expect(
+      await controller.signOut(),
+      CredentialSignOutResult.storageCleanupFailed,
+    );
+    expect(controller.stage, LoginStage.signOutStorageCleanupFailed);
+    expect(controller.canRetrySignOut, isTrue);
+
+    expect(await controller.signOut(), CredentialSignOutResult.signedOut);
+    expect(controller.stage, LoginStage.idle);
+    expect(controller.canRetrySignOut, isFalse);
+    expect(gateway.signOutCalls, 2);
+  });
+
+  test('core sign-out failure keeps the authenticated surface', () async {
+    final gateway = _FakeGateway.immediate(
+      _successfulStart(_FakeLoginSession()),
+      authenticated: true,
+      signOutResults: [CredentialSignOutResult.coreUnavailable],
+    );
+    final controller = LoginController(gateway);
+
+    expect(await controller.signOut(), CredentialSignOutResult.coreUnavailable);
+    expect(controller.stage, LoginStage.authenticated);
+    expect(gateway.signOutCalls, 1);
+  });
 }
 
 LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
@@ -330,26 +380,36 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
   _FakeGateway.immediate(
     LoginStart result, {
     this.persistenceResult = CredentialPersistenceResult.stored,
+    this.authenticated = false,
+    List<CredentialSignOutResult> signOutResults = const [
+      CredentialSignOutResult.signedOut,
+    ],
   }) : _immediateResult = result,
-       _pendingStarts = null;
+       _pendingStarts = null,
+       _signOutResults = List.of(signOutResults);
 
   _FakeGateway.pending()
     : persistenceResult = CredentialPersistenceResult.stored,
+      authenticated = false,
       _immediateResult = null,
-      _pendingStarts = <Completer<LoginStart>>[];
+      _pendingStarts = <Completer<LoginStart>>[],
+      _signOutResults = [CredentialSignOutResult.signedOut];
 
   final LoginStart? _immediateResult;
   final List<Completer<LoginStart>>? _pendingStarts;
   final CredentialPersistenceResult persistenceResult;
+  bool authenticated;
+  final List<CredentialSignOutResult> _signOutResults;
   final List<_FakeStartOperation> operations = <_FakeStartOperation>[];
   final List<Completer<CredentialVerificationResult>> _pendingVerifications =
       <Completer<CredentialVerificationResult>>[];
   final List<_FakeVerificationOperation> verificationOperations =
       <_FakeVerificationOperation>[];
   int persistCalls = 0;
+  int signOutCalls = 0;
 
   @override
-  bool get hasAuthenticatedCredential => false;
+  bool get hasAuthenticatedCredential => authenticated;
 
   @override
   LoginStartOperation beginStart() {
@@ -386,6 +446,15 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
   @override
   Future<CredentialRestoreResult> restoreCredential() async =>
       CredentialRestoreResult.signedOut;
+
+  @override
+  Future<CredentialSignOutResult> signOut() async {
+    final result = _signOutResults[signOutCalls++];
+    if (result != CredentialSignOutResult.coreUnavailable) {
+      authenticated = false;
+    }
+    return result;
+  }
 
   void completeStart(int index, LoginStart result) {
     _pendingStarts![index].complete(result);

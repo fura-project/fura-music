@@ -9,6 +9,7 @@ enum LoginStage {
   verifyingStoredCredential,
   credentialRejected,
   verificationError,
+  signOutStorageCleanupFailed,
   storedCredentialExpired,
   restoreError,
   starting,
@@ -86,6 +87,43 @@ class LoginController extends ChangeNotifier {
               CredentialVerificationResult.serviceUnavailable ||
           _credentialVerificationResult ==
               CredentialVerificationResult.invalidResponse);
+
+  bool get canRetrySignOut => _stage == LoginStage.signOutStorageCleanupFailed;
+
+  Future<CredentialSignOutResult> signOut() async {
+    final previousStage = _stage;
+    if (previousStage != LoginStage.authenticated &&
+        previousStage != LoginStage.signOutStorageCleanupFailed) {
+      return CredentialSignOutResult.coreUnavailable;
+    }
+
+    final generation = ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
+    _startOperation?.cancel();
+    _startOperation = null;
+    _session?.cancel();
+    _session = null;
+    final result = await _gateway.signOut();
+    if (!_isCurrent(generation)) return result;
+
+    if (result == CredentialSignOutResult.coreUnavailable) {
+      _stage = previousStage;
+      _notify();
+      return result;
+    }
+
+    _qrImageBytes = null;
+    _failure = null;
+    _credentialSaveState = CredentialSaveState.none;
+    _credentialRestoreResult = CredentialRestoreResult.signedOut;
+    _credentialVerificationResult = null;
+    _stage = result == CredentialSignOutResult.signedOut
+        ? LoginStage.idle
+        : LoginStage.signOutStorageCleanupFailed;
+    _notify();
+    return result;
+  }
 
   Future<void> verifyRestoredCredential() async {
     if (_stage != LoginStage.verificationRequired &&

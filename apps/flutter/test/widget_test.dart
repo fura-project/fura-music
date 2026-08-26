@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show SemanticsAction, Size;
 
+import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -401,6 +402,104 @@ void main() {
     expect(find.text('No playlists yet'), findsOneWidget);
   });
 
+  testWidgets('sign out requires confirmation and returns to QR login', (
+    tester,
+  ) async {
+    final authentication = _WidgetGateway(
+      _WaitingSession(),
+      authenticated: true,
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: authentication,
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Sign out'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign out on this device?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('sign-out-cancel')));
+    await tester.pumpAndSettle();
+    expect(authentication.signOutCalls, 0);
+    expect(find.text('Your music'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Sign out'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
+    await tester.pumpAndSettle();
+    expect(authentication.signOutCalls, 1);
+    expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('user-library-page')), findsNothing);
+  });
+
+  testWidgets('failed sign-out vault cleanup remains explicit and retryable', (
+    tester,
+  ) async {
+    final authentication = _WidgetGateway(
+      _WaitingSession(),
+      authenticated: true,
+      signOutResults: [
+        CredentialSignOutResult.storageCleanupFailed,
+        CredentialSignOutResult.signedOut,
+      ],
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: authentication,
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Sign out'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Signed out, but saved session remains'), findsOneWidget);
+    expect(find.text('Try removing it again'), findsOneWidget);
+    expect(find.byKey(const ValueKey('user-library-page')), findsNothing);
+
+    await tester.ensureVisible(find.text('Try removing it again'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Try removing it again'));
+    await tester.pumpAndSettle();
+    expect(authentication.signOutCalls, 2);
+    expect(find.text('Continue with WeChat'), findsOneWidget);
+  });
+
+  testWidgets('core sign-out failure keeps the authenticated library', (
+    tester,
+  ) async {
+    final authentication = _WidgetGateway(
+      _WaitingSession(),
+      authenticated: true,
+      signOutResults: [CredentialSignOutResult.coreUnavailable],
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: authentication,
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Sign out'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('user-library-page')), findsOneWidget);
+    expect(
+      find.text('Couldn’t sign out. Your local session is unchanged.'),
+      findsOneWidget,
+    );
+    expect(authentication.signOutCalls, 1);
+  });
+
   testWidgets('returns rejected library credentials to sign-in', (
     tester,
   ) async {
@@ -441,15 +540,21 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
     this.session, {
     this.authenticated = false,
     CredentialVerificationOperation? verificationOperation,
+    List<CredentialSignOutResult> signOutResults = const [
+      CredentialSignOutResult.signedOut,
+    ],
   }) : _verificationOperation =
            verificationOperation ??
            const _ImmediateWidgetVerification(
              CredentialVerificationResult.noRestoredCredential,
-           );
+           ),
+       _signOutResults = List.of(signOutResults);
 
   final _WaitingSession session;
-  final bool authenticated;
+  bool authenticated;
   final CredentialVerificationOperation _verificationOperation;
+  final List<CredentialSignOutResult> _signOutResults;
+  int signOutCalls = 0;
 
   @override
   bool get hasAuthenticatedCredential => authenticated;
@@ -481,6 +586,15 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
   @override
   Future<CredentialRestoreResult> restoreCredential() async =>
       CredentialRestoreResult.signedOut;
+
+  @override
+  Future<CredentialSignOutResult> signOut() async {
+    final result = _signOutResults[signOutCalls++];
+    if (result != CredentialSignOutResult.coreUnavailable) {
+      authenticated = false;
+    }
+    return result;
+  }
 }
 
 class _WidgetLibraryGateway implements UserLibraryGateway {

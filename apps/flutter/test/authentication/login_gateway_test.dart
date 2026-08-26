@@ -134,14 +134,58 @@ void main() {
     expect(await restore, CredentialRestoreResult.signedOut);
     expect(vault.events, <String>['delete-start', 'delete-end', 'read']);
   });
+
+  test('sign out clears Rust before deleting the serialized vault', () async {
+    final events = <String>[];
+    final vault = _FakeVault(events: events);
+    final gateway = RustQqMusicAuthenticationGateway(
+      credentialVault: vault,
+      credentialSignOutCore: () {
+        events.add('core');
+        return true;
+      },
+    );
+
+    final result = await gateway.signOut();
+
+    expect(result, CredentialSignOutResult.signedOut);
+    expect(events, ['core', 'vault']);
+    expect(vault.deleteCalls, 1);
+  });
+
+  test('sign out retains the vault when the Rust core cannot clear', () async {
+    final vault = _FakeVault();
+    final gateway = RustQqMusicAuthenticationGateway(
+      credentialVault: vault,
+      credentialSignOutCore: () => false,
+    );
+
+    expect(await gateway.signOut(), CredentialSignOutResult.coreUnavailable);
+    expect(vault.deleteCalls, 0);
+  });
+
+  test('sign out reports a vault cleanup failure after Rust cleared', () async {
+    final vault = _FakeVault(deleteError: StateError('vault unavailable'));
+    final gateway = RustQqMusicAuthenticationGateway(
+      credentialVault: vault,
+      credentialSignOutCore: () => true,
+    );
+
+    expect(
+      await gateway.signOut(),
+      CredentialSignOutResult.storageCleanupFailed,
+    );
+    expect(vault.deleteCalls, 1);
+  });
 }
 
 class _FakeVault implements CredentialVault {
-  _FakeVault({this.result, this.error, this.deleteError});
+  _FakeVault({this.result, this.error, this.deleteError, this.events});
 
   final Uint8List? result;
   final Object? error;
   final Object? deleteError;
+  final List<String>? events;
   int deleteCalls = 0;
 
   @override
@@ -157,6 +201,7 @@ class _FakeVault implements CredentialVault {
   @override
   Future<void> delete() async {
     deleteCalls += 1;
+    events?.add('vault');
     final deleteError = this.deleteError;
     if (deleteError != null) throw deleteError;
   }
