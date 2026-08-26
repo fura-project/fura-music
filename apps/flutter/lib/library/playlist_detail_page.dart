@@ -151,6 +151,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       key: const ValueKey('playlist-detail-error'),
       failure: _controller.failure,
       canRetry: _controller.canRetry,
+      showSignInAgain: false,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
     ),
@@ -159,6 +160,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       key: const ValueKey('playlist-detail-authentication-error'),
       failure: _controller.failure,
       canRetry: false,
+      showSignInAgain: true,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
     ),
@@ -613,6 +615,7 @@ class _DetailFailure extends StatelessWidget {
   const _DetailFailure({
     required this.failure,
     required this.canRetry,
+    required this.showSignInAgain,
     required this.onRetry,
     required this.onSignInAgain,
     super.key,
@@ -620,6 +623,7 @@ class _DetailFailure extends StatelessWidget {
 
   final UserLibraryFailure? failure;
   final bool canRetry;
+  final bool showSignInAgain;
   final VoidCallback onRetry;
   final VoidCallback onSignInAgain;
 
@@ -638,10 +642,11 @@ class _DetailFailure extends StatelessWidget {
             onPressed: onRetry,
             child: const Text('Try again'),
           ),
-        TextButton(
-          onPressed: onSignInAgain,
-          child: const Text('Sign in again'),
-        ),
+        if (showSignInAgain)
+          TextButton(
+            onPressed: onSignInAgain,
+            child: const Text('Sign in again'),
+          ),
       ],
     );
   }

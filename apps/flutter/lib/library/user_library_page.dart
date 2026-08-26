@@ -234,6 +234,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       key: const ValueKey('user-library-error'),
       failure: _controller.failure,
       canRetry: _controller.canRetry,
+      showSignInAgain: false,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
     ),
@@ -242,6 +243,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       key: const ValueKey('user-library-authentication-error'),
       failure: _controller.failure,
       canRetry: false,
+      showSignInAgain: true,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
     ),
@@ -514,6 +516,7 @@ class _LibraryFailure extends StatelessWidget {
   const _LibraryFailure({
     required this.failure,
     required this.canRetry,
+    required this.showSignInAgain,
     required this.onRetry,
     required this.onSignInAgain,
     super.key,
@@ -521,6 +524,7 @@ class _LibraryFailure extends StatelessWidget {
 
   final UserLibraryFailure? failure;
   final bool canRetry;
+  final bool showSignInAgain;
   final VoidCallback onRetry;
   final VoidCallback onSignInAgain;
 
@@ -542,10 +546,11 @@ class _LibraryFailure extends StatelessWidget {
             onPressed: onRetry,
             child: const Text('Try again'),
           ),
-        TextButton(
-          onPressed: onSignInAgain,
-          child: const Text('Sign in again'),
-        ),
+        if (showSignInAgain)
+          TextButton(
+            onPressed: onSignInAgain,
+            child: const Text('Sign in again'),
+          ),
       ],
     );
   }

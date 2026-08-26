@@ -565,9 +565,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
+    expect(find.text('Sign in again'), findsNothing);
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
     expect(find.text('No playlists yet'), findsOneWidget);
+  });
+
+  testWidgets('transient detail failure does not discard the active session', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(
+            playlists: [
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'favorite:transient-detail',
+                title: 'Transient detail',
+              ),
+            ],
+          ),
+        ]),
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(failure: UserLibraryFailure.network),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Transient detail').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+    expect(find.text('Sign in again'), findsNothing);
+    expect(find.byTooltip('Back to playlists'), findsOneWidget);
   });
 
   testWidgets('failed refresh keeps the complete library visible and retries', (
