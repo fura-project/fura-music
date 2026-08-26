@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -550,38 +551,14 @@ class _NewSongCollection extends StatelessWidget {
                   itemCount: tracks.length,
                   itemBuilder: (context, index) {
                     final track = tracks[index];
-                    final artists = track.artistNames.isEmpty
-                        ? 'Unknown artist'
-                        : track.artistNames.join(' · ');
-                    return ListTile(
-                      key: ValueKey('new-song-track-$index'),
-                      minTileHeight: desktop ? 64 : 72,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      leading: SizedBox.square(
-                        dimension: 48,
-                        child: _NewSongArtwork(uri: track.artworkUri),
-                      ),
-                      title: Text(
-                        track.subtitle == null
-                            ? track.title
-                            : '${track.title} · ${track.subtitle}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        artists,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () => onPlay(index),
-                      trailing: IconButton(
-                        key: ValueKey('new-song-queue-$index'),
-                        tooltip: 'Add ${track.title} to queue',
-                        onPressed: () => onQueue(track),
-                        icon: const Icon(Icons.playlist_add_rounded),
-                      ),
+                    return MusicTrackTile(
+                      itemKey: ValueKey('new-song-track-$index'),
+                      queueKey: ValueKey('new-song-queue-$index'),
+                      track: track,
+                      position: index + 1,
+                      desktop: desktop,
+                      onPlay: () => onPlay(index),
+                      onQueue: () => onQueue(track),
                     );
                   },
                 ),
@@ -623,35 +600,6 @@ class _NewSongCategoryPicker extends StatelessWidget {
       ],
     ),
   );
-}
-
-class _NewSongArtwork extends StatelessWidget {
-  const _NewSongArtwork({this.uri});
-
-  final String? uri;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.tertiaryContainer, colors.primaryContainer],
-        ),
-      ),
-      child: Icon(Icons.music_note_rounded, color: colors.onTertiaryContainer),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: uri == null
-          ? placeholder
-          : Image.network(
-              uri!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
-            ),
-    );
-  }
 }
 
 class _NewAlbumShell extends StatelessWidget {
@@ -1187,38 +1135,14 @@ class _RadarCollection extends StatelessWidget {
               }
               final trackIndex = index - 1;
               final track = tracks[trackIndex];
-              final artists = track.artistNames.isEmpty
-                  ? 'Unknown artist'
-                  : track.artistNames.join(' · ');
-              return ListTile(
-                key: ValueKey('radar-track-$trackIndex'),
-                minTileHeight: desktop ? 64 : 72,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                leading: SizedBox.square(
-                  dimension: 48,
-                  child: _RadarArtwork(uri: track.artworkUri),
-                ),
-                title: Text(
-                  track.subtitle == null
-                      ? track.title
-                      : '${track.title} · ${track.subtitle}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  artists,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () => onPlay(trackIndex),
-                trailing: IconButton(
-                  key: ValueKey('radar-queue-$trackIndex'),
-                  tooltip: 'Add ${track.title} to queue',
-                  onPressed: () => onQueue(track),
-                  icon: const Icon(Icons.playlist_add_rounded),
-                ),
+              return MusicTrackTile(
+                itemKey: ValueKey('radar-track-$trackIndex'),
+                queueKey: ValueKey('radar-queue-$trackIndex'),
+                track: track,
+                position: trackIndex + 1,
+                desktop: desktop,
+                onPlay: () => onPlay(trackIndex),
+                onQueue: () => onQueue(track),
               );
             },
           ),
@@ -1226,35 +1150,6 @@ class _RadarCollection extends StatelessWidget {
       );
     },
   );
-}
-
-class _RadarArtwork extends StatelessWidget {
-  const _RadarArtwork({this.uri});
-
-  final String? uri;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Icon(Icons.radar_rounded, color: colors.onPrimaryContainer),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: uri == null
-          ? placeholder
-          : Image.network(
-              uri!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
-            ),
-    );
-  }
 }
 
 class _RadarFooter extends StatelessWidget {

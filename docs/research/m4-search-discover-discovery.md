@@ -46,3 +46,7 @@
 ## Selection
 
 Shared Discover Track rows rank first because the common data and interaction contract already exists, the visible inconsistency affects two current high-value Track journeys, and the slice can be completed without changing state ownership or navigation. Selector and state-panel work remain valid M4.4 candidates but require separate focused evidence and regressions.
+
+## First outcome
+
+Implemented on 2026-08-27 as the sixth finite M4 slice. Radar and New songs now pass their existing presentation-safe Tracks, one-based positions, desktop mode, and exact play/queue callbacks into `MusicTrackTile`; both private reduced rows and artwork widgets were removed. Existing keys, lazy loading, Radar pagination, new-song category replacement, retained Discover state, and queue ownership remain unchanged. Focused 360 px journeys now assert the added Artist/Album/duration grammar and pass without overflow, as do strict Dart formatting/analysis, all 299 Flutter tests, Rust formatting, 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and packaged typed-Bridge integration. Four live QQ/WeChat tests remain gated and ignored; no credential, account endpoint, remote media, or user content was accessed.

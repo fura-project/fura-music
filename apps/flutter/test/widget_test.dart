@@ -758,6 +758,8 @@ void main() {
         opaqueId: 'track:41001:0:fixtureRadarMid:-',
         title: 'Radar Track',
         artistNames: ['Radar artist'],
+        albumTitle: 'Radar Album',
+        durationSeconds: 185,
       );
       final radar = _WidgetRadarGateway(
         const RadarTrackPageResult(page: 1, tracks: [track]),
@@ -792,6 +794,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('radar-content')), findsOneWidget);
       expect(find.text('Radar Track'), findsOneWidget);
+      expect(find.text('Radar artist · Radar Album · 3:05'), findsOneWidget);
       expect(radar.pages, [1]);
 
       await tester.tap(find.byKey(const ValueKey('radar-queue-0')));
@@ -1197,6 +1200,8 @@ void main() {
         opaqueId: 'track:41001:0:fixtureLatestMid:-',
         title: 'Latest Track',
         artistNames: ['Latest Artist'],
+        albumTitle: 'Latest Album',
+        durationSeconds: 201,
       );
       const japanTrack = PlaylistTrackSummary(
         providerId: 'qq-music',
@@ -1244,6 +1249,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('new-songs-content')), findsOneWidget);
       expect(find.text('Latest Track'), findsOneWidget);
+      expect(find.text('Latest Artist · Latest Album · 3:21'), findsOneWidget);
       expect(newSongs.requests, [NewSongCategory.latest]);
 
       await tester.tap(find.byKey(const ValueKey('new-song-queue-0')));

@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.4 Shared Discover Track rows"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -54,17 +54,18 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Implemented the third M4 slice: Album, Artist Tracks, and Ranking now share one bounded dense Material Track tile over the existing presentation model. Compact and desktop layouts consistently expose position, artwork with local fallback, title/subtitle, Artist/Album metadata, truthful duration, play activation, and queue action while preserving each page's keys, paging, controllers, and failure semantics. Playlist/Search context rows remain intentionally separate. Strict Dart checks, all 295 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the fourth M4 slice: Album Tracks, Artist Tracks/Albums, and Ranking now share bounded Material loading and content-state panels while each page retains its exact typed copy, retry eligibility, keys, and controller state. Loading exposes one page-specific assistive label; error live regions remain opt-in and are not duplicated. Search/Library/Playlist/Discover and append/refresh states remain untouched. Strict Dart checks, all 297 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the fifth M4 slice: Album, Artist, and Ranking now share one bounded adaptive Material catalog header with consistent artwork sizing, page-type eyebrow, semantic two-line title, compact centering, and desktop alignment. Album metadata/actions/detail retry, Artist section state, Ranking period/count, existing title keys, and all controllers remain page-owned. Direct 360 px/light and wide/dark regressions plus strict Dart checks, all 299 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Implemented the sixth M4 slice: authenticated Radar and typed New songs now reuse the established dense Material Track tile, adding predictable one-based position, artwork semantics/fallback, Album metadata, truthful duration, and compact/desktop density while retaining exact play/queue keys, callbacks, pagination/category state, and the single queue owner. Direct 360 px user-path regressions, strict Dart checks, all 299 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The bounded M4.4 Search/Discover audit selected the two duplicated Radar/New songs Track rows. The finite slice extends the existing catalog grammar without changing Search rows, selectors, state machines, navigation, or queue ownership.
+- The Radar/New songs Track-row slice is complete. Global ranking returns to the two remaining bounded M4.4 candidates: adaptive secondary selection and shared page-family content states.
 
 # Next Candidates
 
-1. Implement and validate shared `MusicTrackTile` presentation for Radar and New songs only.
-2. Re-rank the adaptive Search/Discover secondary selector against bounded shared content-state migrations after this slice.
-3. Keep selected/current Track presentation deferred until a non-frame-driven listener exists, and preserve the locally blocked M1 acceptance evidence.
+1. Re-rank the adaptive Search/Discover secondary selector against bounded shared content-state migrations.
+2. Keep selected/current Track presentation deferred until a non-frame-driven listener exists; do not make long lists rebuild on playback position frames.
+3. Preserve the locally blocked M1 acceptance evidence and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers
 
