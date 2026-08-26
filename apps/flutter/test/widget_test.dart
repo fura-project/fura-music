@@ -549,6 +549,7 @@ void main() {
   });
 
   testWidgets('retries a transient library failure', (tester) async {
+    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       MusicApp(
         bootstrap: _bootstrap,
@@ -566,6 +567,19 @@ void main() {
 
     expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
     expect(find.text('Sign in again'), findsNothing);
+    final failureSemantics = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('Couldn’t reach QQ Music')),
+    );
+    expect(failureSemantics.label, contains('Couldn’t reach QQ Music'));
+    expect(
+      failureSemantics.getSemanticsData().flagsCollection.isLiveRegion,
+      isTrue,
+    );
+    expect(
+      failureSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
+    semantics.dispose();
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
     expect(find.text('No playlists yet'), findsOneWidget);
@@ -574,6 +588,7 @@ void main() {
   testWidgets('transient detail failure does not discard the active session', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       MusicApp(
         bootstrap: _bootstrap,
@@ -605,6 +620,19 @@ void main() {
     expect(find.text('Try again'), findsOneWidget);
     expect(find.text('Sign in again'), findsNothing);
     expect(find.byTooltip('Back to playlists'), findsOneWidget);
+    final failureSemantics = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('Couldn’t reach QQ Music')),
+    );
+    expect(failureSemantics.label, contains('Couldn’t reach QQ Music'));
+    expect(
+      failureSemantics.getSemanticsData().flagsCollection.isLiveRegion,
+      isTrue,
+    );
+    expect(
+      failureSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
+    semantics.dispose();
   });
 
   testWidgets('failed refresh keeps the complete library visible and retries', (

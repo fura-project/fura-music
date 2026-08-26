@@ -540,6 +540,7 @@ class _LibraryFailure extends StatelessWidget {
           : Icons.cloud_off_rounded,
       title: title,
       detail: detail,
+      announce: true,
       actions: [
         if (canRetry)
           FilledButton.tonal(
@@ -562,16 +563,51 @@ class _CenteredLibraryMessage extends StatelessWidget {
     required this.title,
     required this.detail,
     required this.actions,
+    this.announce = false,
   });
 
   final IconData icon;
   final String title;
   final String detail;
   final List<Widget> actions;
+  final bool announce;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final message = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Icon(
+            icon,
+            color: theme.colorScheme.onPrimaryContainer,
+            size: 32,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          detail,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.45,
+          ),
+        ),
+      ],
+    );
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
@@ -580,34 +616,16 @@ class _CenteredLibraryMessage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Icon(
-                  icon,
-                  color: theme.colorScheme.onPrimaryContainer,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                detail,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.45,
-                ),
-              ),
+              if (announce)
+                Semantics(
+                  container: true,
+                  liveRegion: true,
+                  label: '$title. $detail',
+                  excludeSemantics: true,
+                  child: message,
+                )
+              else
+                message,
               if (actions.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 Wrap(

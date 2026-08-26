@@ -636,6 +636,7 @@ class _DetailFailure extends StatelessWidget {
           : Icons.cloud_off_rounded,
       title: title,
       detail: detail,
+      announce: true,
       actions: [
         if (canRetry)
           FilledButton.tonal(
@@ -658,6 +659,7 @@ class _DetailMessage extends StatelessWidget {
     required this.title,
     required this.detail,
     this.actions = const [],
+    this.announce = false,
     super.key,
   });
 
@@ -665,27 +667,45 @@ class _DetailMessage extends StatelessWidget {
   final String title;
   final String detail;
   final List<Widget> actions;
+  final bool announce;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(height: 18),
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(detail, textAlign: TextAlign.center),
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Wrap(spacing: 8, children: actions),
+  Widget build(BuildContext context) {
+    final message = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(height: 18),
+        Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        Text(detail, textAlign: TextAlign.center),
+      ],
+    );
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (announce)
+              Semantics(
+                container: true,
+                liveRegion: true,
+                label: '$title. $detail',
+                excludeSemantics: true,
+                child: message,
+              )
+            else
+              message,
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Wrap(spacing: 8, children: actions),
+            ],
           ],
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 (String, String) _failureCopy(UserLibraryFailure? failure) => switch (failure) {
