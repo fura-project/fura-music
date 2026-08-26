@@ -6,6 +6,7 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
@@ -30,6 +31,7 @@ class MusicApp extends StatelessWidget {
     TrackSearchGateway? searchGateway,
     AlbumTrackGateway? albumTrackGateway,
     ArtistTrackGateway? artistTrackGateway,
+    RecommendedPlaylistGateway? recommendedPlaylistGateway,
     ForegroundAudioEngine? audioEngine,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
@@ -70,6 +72,8 @@ class MusicApp extends StatelessWidget {
       searchGateway: searchGateway ?? const RustTrackSearchGateway(),
       albumTrackGateway: albumTrackGateway ?? const RustAlbumTrackGateway(),
       artistTrackGateway: artistTrackGateway ?? const RustArtistTrackGateway(),
+      recommendedPlaylistGateway:
+          recommendedPlaylistGateway ?? const RustRecommendedPlaylistGateway(),
       audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
@@ -87,6 +91,7 @@ class MusicApp extends StatelessWidget {
     required this.searchGateway,
     required this.albumTrackGateway,
     required this.artistTrackGateway,
+    required this.recommendedPlaylistGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -102,6 +107,7 @@ class MusicApp extends StatelessWidget {
   final TrackSearchGateway searchGateway;
   final AlbumTrackGateway albumTrackGateway;
   final ArtistTrackGateway artistTrackGateway;
+  final RecommendedPlaylistGateway recommendedPlaylistGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -124,6 +130,7 @@ class MusicApp extends StatelessWidget {
         searchGateway: searchGateway,
         albumTrackGateway: albumTrackGateway,
         artistTrackGateway: artistTrackGateway,
+        recommendedPlaylistGateway: recommendedPlaylistGateway,
         audioEngine: audioEngine,
         initialCredentialRestore: initialCredentialRestore,
       ),
@@ -157,6 +164,7 @@ class LoginPage extends StatefulWidget {
     required this.searchGateway,
     required this.albumTrackGateway,
     required this.artistTrackGateway,
+    required this.recommendedPlaylistGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -172,6 +180,7 @@ class LoginPage extends StatefulWidget {
   final TrackSearchGateway searchGateway;
   final AlbumTrackGateway albumTrackGateway;
   final ArtistTrackGateway artistTrackGateway;
+  final RecommendedPlaylistGateway recommendedPlaylistGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -217,6 +226,7 @@ class _LoginPageState extends State<LoginPage> {
             searchGateway: widget.searchGateway,
             albumTrackGateway: widget.albumTrackGateway,
             artistTrackGateway: widget.artistTrackGateway,
+            recommendedPlaylistGateway: widget.recommendedPlaylistGateway,
             audioEngine: widget.audioEngine,
             onSignInAgain: _controller.cancel,
             onSignOut: _controller.signOut,

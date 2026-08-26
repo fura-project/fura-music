@@ -55,6 +55,7 @@ mod tests {
             [
                 "Search",
                 "Catalog",
+                "Recommendations",
                 "Authentication",
                 "UserLibrary",
                 "Lyrics",

@@ -8,6 +8,7 @@ import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
+import 'package:flutterustmusic/src/rust/api/recommendations.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
@@ -22,6 +23,7 @@ void main() {
     expect(status.provider.implementedCapabilities, [
       'Search',
       'Catalog',
+      'Recommendations',
       'Authentication',
       'UserLibrary',
       'Lyrics',
@@ -91,6 +93,17 @@ void main() {
     expect(
       cancelledArtistLoad.failure,
       QqMusicArtistTrackPageLoadFailure.cancelled,
+    );
+    final unusedRecommendationLoad = beginQqMusicRecommendedPlaylistPageLoad(
+      offset: 0,
+      size: 20,
+    );
+    expect(unusedRecommendationLoad.isActive, isTrue);
+    expect(unusedRecommendationLoad.cancel(), isTrue);
+    final cancelledRecommendationLoad = await unusedRecommendationLoad.run();
+    expect(
+      cancelledRecommendationLoad.failure,
+      QqMusicRecommendedPlaylistPageLoadFailure.cancelled,
     );
     final unusedMediaResolution = beginQqMusicMediaResolution(
       providerId: 'qq-music',

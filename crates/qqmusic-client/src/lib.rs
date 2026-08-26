@@ -14,6 +14,7 @@ mod media_resolution;
 mod owned_playlists;
 mod playlist_detail;
 mod qrc_cipher;
+mod recommendations;
 mod search;
 mod transport;
 mod wechat_exchange;
@@ -46,6 +47,10 @@ pub use owned_playlists::{
 pub use playlist_detail::{
     PlaylistDetailTrackField, QqMusicAlbumSummary, QqMusicArtistSummary,
     QqMusicPlaylistDetailError, QqMusicPlaylistTracksPage, QqMusicTrackSummary,
+};
+pub use recommendations::{
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRecommendedPlaylistsPage,
+    RecommendedPlaylistField,
 };
 pub use search::{QqMusicSearchError, QqMusicTrackSearchPage, SearchTrackField};
 pub use transport::{

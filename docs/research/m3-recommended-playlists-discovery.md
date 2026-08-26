@@ -4,7 +4,8 @@
 
 - L-1124/QQMusicApi commit `108617ffe80abefec6358717b9f4d3677550db10` implements offset-paged recommended playlists with `music.playlist.PlaylistSquare/GetRecommendFeed`, `From`, and `Size`, and models `List[*].Playlist.basic`, `HasMore`, and `FromLimit`.
 - Yyyangshenghao/simple-music commit `301d1ca159e88f6226acbc95fb01a28a99234e79` independently implements the same module, method, and offset/size request, maps the nested playlist identity/title/cover/creator/count shape separately from other QQ playlist responses, and uses the results as an existing discovery flow.
-- A bounded anonymous POST requested ten rows with `From: 0` and `Size: 10`. It returned zero global/module codes, exactly ten entries, boolean continuation, numeric next-offset metadata, and the independently documented `Playlist.basic` shape with playlist identity, title, cover, creator, track count, and play count fields.
+- A bounded anonymous POST requested ten rows with `From: 0` and `Size: 10`. It returned zero global/module codes, exactly ten entries, boolean continuation, numeric `FromLimit` metadata, and the independently documented `Playlist.basic` shape with playlist identity, title, cover, creator, track count, and play count fields.
+- Follow-up bounded probes established that `FromLimit` is not a next-page cursor: using it as `From` skipped to a terminal non-overlapping page, while `From: 0` then `From: 10` returned two exact ten-row, non-overlapping pages and retained the same `FromLimit`. The implementation therefore advances by the raw returned row count and does not expose `FromLimit` as a cursor or total.
 - The probe used no Cookie, token, stored credential, user identifier, or user data. It printed only codes, field names, counts, and JSON value types; no playlist identifier, title, creator, artwork URL, response body, or content was printed, retained, or committed.
 
 Reference implementations remain research evidence only. The runtime will call QQ Music directly and will not import third-party response models or depend on a third-party server.
@@ -43,3 +44,9 @@ Reference implementations remain research evidence only. The runtime will call Q
 ## Selection
 
 Recommended playlists rank first because they add query-free discovery with a stable, bounded response and reuse the already proven public playlist-detail and queue path. This delivers a coherent QQ Music-native product gap without committing to the volatile heterogeneous home feed. Home shelves and availability remain authorized discovery candidates, not implicit implementation work.
+
+## Implementation outcome
+
+Implemented on 2026-08-26 as `QQMusicClient` direct anonymous loading → `RecommendedPlaylistsProvider` → provider-neutral `RecommendedPlaylistsPage` → single-use cancellable Bridge → adaptive Flutter Discover page. Public playlist rows use Provider-owned `catalog:<id>` identities and open the existing authenticated playlist-detail page; Flutter does not parse the identity or duplicate Track loading. Initial/empty/error/retry, append failure/retry, exact-offset pagination, cancellation, stale-result suppression, disposal, adaptive list/grid navigation, state preservation, and packaged Bridge cancellation have offline regression coverage.
+
+Validation passed with Rust formatting, 182 offline Rust tests, strict Clippy, strict Dart analysis, 190 Flutter tests, Linux x64 Release build, and packaged Linux typed-Bridge integration. Four live QQ/WeChat tests remain separately gated and ignored. This evidence does not claim that the live recommendation endpoint or a recommended playlist's authenticated Track playback works for every account at this moment.

@@ -8,6 +8,8 @@ import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
@@ -39,6 +41,7 @@ class UserLibraryPage extends StatefulWidget {
     this.searchGateway,
     this.albumTrackGateway,
     this.artistTrackGateway,
+    this.recommendedPlaylistGateway,
     super.key,
   });
 
@@ -53,6 +56,7 @@ class UserLibraryPage extends StatefulWidget {
   final TrackSearchGateway? searchGateway;
   final AlbumTrackGateway? albumTrackGateway;
   final ArtistTrackGateway? artistTrackGateway;
+  final RecommendedPlaylistGateway? recommendedPlaylistGateway;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -64,18 +68,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final TrackSearchGateway _searchGateway;
   late final AlbumTrackGateway _albumTrackGateway;
   late final ArtistTrackGateway _artistTrackGateway;
+  late final RecommendedPlaylistGateway _recommendedPlaylistGateway;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
   final FocusNode _searchReturnFocusNode = FocusNode(
     debugLabel: 'search entry',
   );
+  final FocusNode _recommendationsReturnFocusNode = FocusNode(
+    debugLabel: 'recommendations entry',
+  );
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
   AlbumSummary? _selectedAlbum;
   ArtistSummary? _selectedArtist;
+  RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
   UserPlaylistSummary? _lastOpenedPlaylist;
   bool _searchOpen = false;
+  bool _recommendationsOpen = false;
   bool _handledLyricCredentialRejection = false;
   bool _signingOut = false;
 
@@ -88,6 +98,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         widget.albumTrackGateway ?? const RustAlbumTrackGateway();
     _artistTrackGateway =
         widget.artistTrackGateway ?? const RustArtistTrackGateway();
+    _recommendedPlaylistGateway =
+        widget.recommendedPlaylistGateway ??
+        const RustRecommendedPlaylistGateway();
     _queuePlaybackController = QueuePlaybackController(
       widget.playbackQueueGateway,
       TrackPlaybackController(
@@ -119,6 +132,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _queuePlaybackController.dispose();
     _playlistReturnFocusNode.dispose();
     _searchReturnFocusNode.dispose();
+    _recommendationsReturnFocusNode.dispose();
     super.dispose();
   }
 
@@ -127,7 +141,36 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     final selectedPlaylist = _selectedPlaylist;
     final selectedAlbum = _selectedAlbum;
     final selectedArtist = _selectedArtist;
-    final page = _searchOpen
+    final selectedRecommendedPlaylist = _selectedRecommendedPlaylist;
+    final page = _recommendationsOpen
+        ? IndexedStack(
+            index: selectedRecommendedPlaylist == null ? 0 : 1,
+            children: [
+              RecommendedPlaylistsPage(
+                key: const ValueKey('recommended-playlists-page'),
+                gateway: _recommendedPlaylistGateway,
+                queuePlaybackController: _queuePlaybackController,
+                onBack: _closeRecommendations,
+                onOpenPlaylist: _openRecommendedPlaylist,
+                onSignInAgain: widget.onSignInAgain,
+              ),
+              if (selectedRecommendedPlaylist == null)
+                const SizedBox.shrink()
+              else
+                PlaylistDetailPage(
+                  key: ValueKey(
+                    'recommended-playlist-detail-'
+                    '${selectedRecommendedPlaylist.opaqueId}',
+                  ),
+                  playlist: selectedRecommendedPlaylist.toPlaylistSummary(),
+                  gateway: widget.detailGateway,
+                  queuePlaybackController: _queuePlaybackController,
+                  onBack: _returnToRecommendations,
+                  onSignInAgain: widget.onSignInAgain,
+                ),
+            ],
+          )
+        : _searchOpen
         ? IndexedStack(
             index: selectedAlbum != null
                 ? 1
@@ -184,6 +227,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     final hasLocalPage =
         selectedPlaylist != null ||
+        _recommendationsOpen ||
+        selectedRecommendedPlaylist != null ||
         _searchOpen ||
         selectedAlbum != null ||
         selectedArtist != null;
@@ -203,7 +248,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       child: PopScope<void>(
         canPop: !hasLocalPage,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop && (_selectedPlaylist != null || _searchOpen)) {
+          if (!didPop && hasLocalPage) {
             _returnFromLocalPage();
           }
         },
@@ -226,7 +271,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _returnFromLocalPage() {
-    if (_selectedAlbum != null || _selectedArtist != null) {
+    if (_selectedRecommendedPlaylist != null) {
+      _returnToRecommendations();
+    } else if (_recommendationsOpen) {
+      _closeRecommendations();
+    } else if (_selectedAlbum != null || _selectedArtist != null) {
       _returnToSearch();
     } else if (_searchOpen) {
       _closeSearch();
@@ -236,8 +285,43 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openSearch() {
-    if (_searchOpen || _selectedPlaylist != null) return;
+    if (_searchOpen || _recommendationsOpen || _selectedPlaylist != null) {
+      return;
+    }
     setState(() => _searchOpen = true);
+  }
+
+  void _openRecommendations() {
+    if (_recommendationsOpen || _searchOpen || _selectedPlaylist != null) {
+      return;
+    }
+    setState(() => _recommendationsOpen = true);
+  }
+
+  void _closeRecommendations() {
+    if (!_recommendationsOpen) return;
+    setState(() {
+      _selectedRecommendedPlaylist = null;
+      _recommendationsOpen = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          !_recommendationsOpen &&
+          _recommendationsReturnFocusNode.context != null) {
+        _recommendationsReturnFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _openRecommendedPlaylist(RecommendedPlaylistSummary playlist) {
+    if (!_recommendationsOpen || _selectedRecommendedPlaylist != null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _selectedRecommendedPlaylist = playlist);
+  }
+
+  void _returnToRecommendations() {
+    if (_selectedRecommendedPlaylist == null) return;
+    setState(() => _selectedRecommendedPlaylist = null);
   }
 
   void _closeSearch() {
@@ -289,6 +373,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     appBar: AppBar(
       title: const Text('Your music'),
       actions: [
+        IconButton(
+          key: const ValueKey('open-recommendations'),
+          focusNode: _recommendationsReturnFocusNode,
+          tooltip: 'Discover QQ Music playlists',
+          onPressed: _openRecommendations,
+          icon: const Icon(Icons.explore_rounded),
+        ),
         IconButton(
           key: const ValueKey('open-track-search'),
           focusNode: _searchReturnFocusNode,

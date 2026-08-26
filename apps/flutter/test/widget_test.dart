@@ -21,6 +21,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
@@ -359,6 +360,87 @@ void main() {
     expect(find.text('No playlists yet'), findsOneWidget);
     expect(tester.widget<IconButton>(searchEntry).focusNode?.hasFocus, isTrue);
   });
+
+  testWidgets(
+    'opens a recommendation through existing detail and preserves discovery',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const playlist = RecommendedPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'catalog:81001',
+        title: 'Synthetic discovery',
+        trackCount: 1,
+      );
+      final recommendations = _WidgetRecommendedPlaylistGateway(
+        const RecommendedPlaylistPageResult(playlists: [playlist]),
+      );
+      final detail = _WidgetDetailGateway([
+        const PlaylistTrackPageResult(
+          total: 1,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'track:41001:0:fixtureMid:-',
+              title: 'Recommended track',
+              artistNames: ['Discovery artist'],
+            ),
+          ],
+        ),
+      ]);
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          playlistDetailGateway: detail,
+          recommendedPlaylistGateway: recommendations,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final discoverEntry = find.byKey(const ValueKey('open-recommendations'));
+      await tester.tap(discoverEntry);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('recommendations-content')),
+        findsOneWidget,
+      );
+      expect(find.text('Synthetic discovery'), findsOneWidget);
+      expect(recommendations.requests, [(0, 20)]);
+      expect(find.byType(GridView), findsNothing);
+
+      tester.view.physicalSize = const Size(1000, 700);
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsOneWidget);
+      expect(find.text('Synthetic discovery'), findsOneWidget);
+      expect(recommendations.requests, [(0, 20)]);
+
+      await tester.tap(find.byKey(const ValueKey('recommendations-item-0')));
+      await tester.pumpAndSettle();
+      expect(find.text('Recommended track'), findsOneWidget);
+      expect(detail.requests.single.playlist.opaqueId, 'catalog:81001');
+
+      await tester.tap(find.byTooltip('Back to playlists'));
+      await tester.pumpAndSettle();
+      expect(find.text('Synthetic discovery'), findsOneWidget);
+      expect(recommendations.requests, [(0, 20)]);
+
+      await tester.tap(find.byKey(const ValueKey('recommendations-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('No playlists yet'), findsOneWidget);
+      expect(
+        tester.widget<IconButton>(discoverEntry).focusNode?.hasFocus,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('returns from Album to the preserved Search query and results', (
     tester,
@@ -1431,6 +1513,35 @@ class _WidgetArtistOperation implements ArtistTrackPageLoadOperation {
 
   @override
   Future<ArtistTrackPageResult> run() async => result;
+}
+
+class _WidgetRecommendedPlaylistGateway implements RecommendedPlaylistGateway {
+  _WidgetRecommendedPlaylistGateway(this.result);
+
+  final RecommendedPlaylistPageResult result;
+  final List<(int, int)> requests = [];
+
+  @override
+  RecommendedPlaylistPageLoadOperation beginLoad({
+    required int offset,
+    required int size,
+  }) {
+    requests.add((offset, size));
+    return _WidgetRecommendedPlaylistOperation(result);
+  }
+}
+
+class _WidgetRecommendedPlaylistOperation
+    implements RecommendedPlaylistPageLoadOperation {
+  const _WidgetRecommendedPlaylistOperation(this.result);
+
+  final RecommendedPlaylistPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<RecommendedPlaylistPageResult> run() async => result;
 }
 
 class _DetailRequest {

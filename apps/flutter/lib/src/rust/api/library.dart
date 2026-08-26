@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bridge_track_summary`, `domain_playlist_id`, `domain_track_summary`, `failed_load`, `failed_track_page`, `map_error`, `map_load`, `map_track_page_error`, `map_track_page_load`
+// These functions are ignored because they are not marked as `pub`: `bridge_playlist_summary`, `bridge_track_summary`, `domain_playlist_id`, `domain_track_summary`, `failed_load`, `failed_track_page`, `map_error`, `map_load`, `map_track_page_error`, `map_track_page_load`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicUserPlaylistLoadHandle beginQqMusicUserPlaylistLoad() =>

@@ -760,6 +760,52 @@ pub struct PlaylistTracksPage {
     tracks: Vec<TrackSummary>,
 }
 
+/// One bounded page of provider-neutral playlist recommendations. The owning
+/// Provider decides recommendation ranking and source-specific continuation.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RecommendedPlaylistsPage {
+    offset: u32,
+    has_more: bool,
+    playlists: Vec<PlaylistSummary>,
+}
+
+impl RecommendedPlaylistsPage {
+    #[must_use]
+    pub const fn new(offset: u32, has_more: bool, playlists: Vec<PlaylistSummary>) -> Self {
+        Self {
+            offset,
+            has_more,
+            playlists,
+        }
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn playlists(&self) -> &[PlaylistSummary] {
+        &self.playlists
+    }
+}
+
+impl fmt::Debug for RecommendedPlaylistsPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RecommendedPlaylistsPage")
+            .field("offset", &self.offset)
+            .field("has_more", &self.has_more)
+            .field("playlist_count", &self.playlists.len())
+            .finish()
+    }
+}
+
 /// One provider-neutral page of Track search results. Source-specific query,
 /// ranking, and continuation rules remain behind the Provider boundary.
 #[derive(Clone, Eq, PartialEq)]

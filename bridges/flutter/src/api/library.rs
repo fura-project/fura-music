@@ -28,6 +28,18 @@ impl fmt::Debug for LibraryPlaylistSummary {
     }
 }
 
+pub(super) fn bridge_playlist_summary(
+    playlist: &music_domain::PlaylistSummary,
+) -> LibraryPlaylistSummary {
+    LibraryPlaylistSummary {
+        provider_id: playlist.id().provider().to_string(),
+        opaque_id: playlist.id().opaque().to_owned(),
+        title: playlist.title().to_owned(),
+        artwork_uri: playlist.artwork_uri().map(str::to_owned),
+        track_count: playlist.track_count(),
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicUserPlaylistLoadFailure {
     CoreUnavailable,
@@ -136,16 +148,7 @@ fn map_load(
 ) -> QqMusicUserPlaylistLoad {
     match result {
         Ok(playlists) => QqMusicUserPlaylistLoad {
-            playlists: playlists
-                .into_iter()
-                .map(|playlist| LibraryPlaylistSummary {
-                    provider_id: playlist.id().provider().to_string(),
-                    opaque_id: playlist.id().opaque().to_owned(),
-                    title: playlist.title().to_owned(),
-                    artwork_uri: playlist.artwork_uri().map(str::to_owned),
-                    track_count: playlist.track_count(),
-                })
-                .collect(),
+            playlists: playlists.iter().map(bridge_playlist_summary).collect(),
             failure: None,
         },
         Err(error) => failed_load(map_error(error)),

@@ -6,26 +6,27 @@ use std::sync::{Arc, Mutex};
 
 use music_domain::{
     AlbumId, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSummary, ArtistTracksPage, AudioFormat,
-    AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource,
-    SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem,
-    TrackSearchPage, TrackSummary,
+    AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
+    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
+    TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumTracksProvider, ArtistTracksProvider, AuthenticationError, CatalogError, LyricsError,
     LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
     OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability, ProviderDescriptor,
     QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
-    QrAuthenticationSession, QrImageFormat, SearchError, TrackSearchProvider, UserLibraryError,
-    UserPlaylistsProvider,
+    QrAuthenticationSession, QrImageFormat, RecommendationError, RecommendedPlaylistsProvider,
+    SearchError, TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
     HttpTransport, QqMusicAlbumTracksError, QqMusicArtistTracksError, QqMusicClient,
     QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
     QqMusicMediaError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QqMusicPlaylistDetailError, QqMusicSearchError, QqMusicTrackSummary, QrImageMediaType,
-    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    QqMusicPlaylistDetailError, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
+    QqMusicSearchError, QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError,
+    WechatQrError, WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError,
+    WechatQrLoginProgress, WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -359,6 +360,7 @@ impl<T> MusicProvider for QqMusicProvider<T> {
             capabilities: vec![
                 ProviderCapability::Search,
                 ProviderCapability::Catalog,
+                ProviderCapability::Recommendations,
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
                 ProviderCapability::Lyrics,
@@ -459,6 +461,32 @@ where
             page.total(),
             page.has_more(),
             tracks,
+        ))
+    }
+}
+
+impl<T> RecommendedPlaylistsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = RecommendationError;
+
+    async fn recommended_playlists(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> Result<RecommendedPlaylistsPage, Self::Error> {
+        let response = self.client().recommended_playlists(offset, size).await;
+        let page = response.as_ref().map_err(map_recommendations_error)?;
+        let playlists = page
+            .playlists()
+            .iter()
+            .map(map_recommended_playlist)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(RecommendedPlaylistsPage::new(
+            page.offset(),
+            page.has_more(),
+            playlists,
         ))
     }
 }
@@ -849,6 +877,23 @@ fn map_favorite_playlist(
         .map_err(|_| UserLibraryError::InvalidResponse)
 }
 
+fn map_recommended_playlist(
+    playlist: &QqMusicRecommendedPlaylist,
+) -> Result<PlaylistSummary, RecommendationError> {
+    let id = PlaylistId::new(
+        qq_music_provider_id(),
+        format!("catalog:{}", playlist.playlist_id()),
+    )
+    .map_err(|_| RecommendationError::InvalidResponse)?;
+    PlaylistSummary::new(id, playlist.title())
+        .map(|summary| {
+            summary
+                .with_artwork_uri(playlist.cover_url().map(str::to_owned))
+                .with_track_count(playlist.track_count())
+        })
+        .map_err(|_| RecommendationError::InvalidResponse)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum QqMusicPlaylistRoute {
     Ordinary { playlist_id: u64 },
@@ -941,6 +986,8 @@ fn parse_playlist_route(
     }
     let mut parts = playlist_id.opaque().split(':');
     match (parts.next(), parts.next(), parts.next(), parts.next()) {
+        (Some("catalog"), Some(raw_id), None, None) => parse_nonzero_u64(raw_id)
+            .map(|playlist_id| QqMusicPlaylistRoute::Ordinary { playlist_id }),
         (Some("favorite"), Some(raw_id), None, None) => parse_nonzero_u64(raw_id)
             .map(|playlist_id| QqMusicPlaylistRoute::Ordinary { playlist_id }),
         (Some("owned"), Some(raw_id), Some(raw_directory_id), None) => {
@@ -1295,6 +1342,31 @@ fn map_artist_tracks_error<E>(error: &QqMusicArtistTracksError<E>) -> CatalogErr
     }
 }
 
+fn map_recommendations_error<E>(
+    error: &QqMusicRecommendedPlaylistsError<E>,
+) -> RecommendationError {
+    match error {
+        QqMusicRecommendedPlaylistsError::Transport(_) => RecommendationError::Network,
+        QqMusicRecommendedPlaylistsError::HttpStatus(_)
+        | QqMusicRecommendedPlaylistsError::Upstream { .. } => {
+            RecommendationError::ServiceUnavailable
+        }
+        QqMusicRecommendedPlaylistsError::InvalidPageSize { .. }
+        | QqMusicRecommendedPlaylistsError::Serialize
+        | QqMusicRecommendedPlaylistsError::InvalidJson
+        | QqMusicRecommendedPlaylistsError::MissingGlobalCode
+        | QqMusicRecommendedPlaylistsError::MissingResult
+        | QqMusicRecommendedPlaylistsError::MissingResultCode
+        | QqMusicRecommendedPlaylistsError::MissingData
+        | QqMusicRecommendedPlaylistsError::MissingPlaylists
+        | QqMusicRecommendedPlaylistsError::MissingHasMore
+        | QqMusicRecommendedPlaylistsError::InvalidPagination
+        | QqMusicRecommendedPlaylistsError::InvalidPlaylist { .. } => {
+            RecommendationError::InvalidResponse
+        }
+    }
+}
+
 fn map_media_error<E>(error: &QqMusicMediaError<E>) -> MediaResolutionError {
     match error {
         QqMusicMediaError::Transport { .. } => MediaResolutionError::Network,
@@ -1417,13 +1489,14 @@ mod tests {
         AlbumTracksProvider, ArtistTracksProvider, CatalogError, LyricsError, LyricsProvider,
         MediaResolutionError, MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider,
         PlaylistDetailsProvider, ProviderCapability, QrAuthenticationProgress,
-        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, SearchError,
-        TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RecommendationError,
+        RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
+        UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
         HttpResponse, HttpTransport, LoginType, QqMusicAlbumTracksError, QqMusicArtistTracksError,
-        QqMusicClient, QqMusicSearchError,
+        QqMusicClient, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -1902,6 +1975,7 @@ mod tests {
             [
                 ProviderCapability::Search,
                 ProviderCapability::Catalog,
+                ProviderCapability::Recommendations,
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
                 ProviderCapability::Lyrics,
@@ -2118,6 +2192,64 @@ mod tests {
                 &QqMusicArtistTracksError::<Infallible>::InvalidPagination
             ),
             CatalogError::InvalidResponse
+        );
+    }
+
+    #[tokio::test]
+    async fn maps_public_recommended_playlists_without_account_state() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "recommend": {
+                "code": 0,
+                "data": {
+                    "List": [{
+                        "Playlist": {"basic": {
+                            "tid": 81001,
+                            "title": "Synthetic discovery",
+                            "cover": {"medium_url": "https://example.invalid/discovery.jpg"},
+                            "song_cnt": 27
+                        }}
+                    }],
+                    "HasMore": true
+                }
+            }
+        }))));
+
+        let page = provider
+            .recommended_playlists(20, 20)
+            .await
+            .expect("recommended playlists");
+
+        assert_eq!(page.offset(), 20);
+        assert!(page.has_more());
+        assert_eq!(page.playlists().len(), 1);
+        let playlist = &page.playlists()[0];
+        assert_eq!(playlist.id().provider().as_str(), "qq-music");
+        assert_eq!(playlist.id().opaque(), "catalog:81001");
+        assert_eq!(playlist.title(), "Synthetic discovery");
+        assert_eq!(
+            playlist.artwork_uri(),
+            Some("https://example.invalid/discovery.jpg")
+        );
+        assert_eq!(playlist.track_count(), Some(27));
+        assert!(!provider.has_authenticated_credential());
+        assert!(!format!("{page:?}").contains("Synthetic discovery"));
+        assert!(!format!("{page:?}").contains("81001"));
+    }
+
+    #[test]
+    fn maps_recommendation_failures_coarsely() {
+        assert_eq!(
+            super::map_recommendations_error(
+                &QqMusicRecommendedPlaylistsError::<Infallible>::HttpStatus(503)
+            ),
+            RecommendationError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_recommendations_error(
+                &QqMusicRecommendedPlaylistsError::<Infallible>::InvalidPagination
+            ),
+            RecommendationError::InvalidResponse
         );
     }
 
@@ -2495,6 +2627,7 @@ mod tests {
             playlist_detail_page_json(&tracks, 51, true),
             playlist_detail_page_json(&tracks_without_file_media_mid, 1, false),
             playlist_detail_page_json(&tracks, 1, false),
+            playlist_detail_page_json(&tracks, 1, false),
         ])));
         set_authenticated(&provider, "123456");
 
@@ -2534,9 +2667,13 @@ mod tests {
             .playlist_tracks_page(qq_playlist_id("owned:7001:201"), 0, 100)
             .await
             .expect("liked-songs detail");
+        provider
+            .playlist_tracks_page(qq_playlist_id("catalog:81001"), 0, 100)
+            .await
+            .expect("recommended catalog playlist detail");
 
         let requests = provider.client().transport().requests();
-        assert_eq!(requests.len(), 3);
+        assert_eq!(requests.len(), 4);
         let params = requests
             .iter()
             .map(|request| {
@@ -2554,6 +2691,7 @@ mod tests {
         assert_eq!(params[2]["disstid"], 0);
         assert_eq!(params[2]["dirid"], 201);
         assert_eq!(params[2]["enc_host_uin"], "encrypted-123456");
+        assert_eq!(params[3]["disstid"], 81001);
     }
 
     #[tokio::test]
@@ -2566,6 +2704,8 @@ mod tests {
             foreign,
             qq_playlist_id("favorite:0"),
             qq_playlist_id("favorite:not-a-number"),
+            qq_playlist_id("catalog:0"),
+            qq_playlist_id("catalog:not-a-number"),
             qq_playlist_id("owned:7001"),
             qq_playlist_id("owned:7001:201:extra"),
         ] {

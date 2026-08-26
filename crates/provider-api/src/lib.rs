@@ -5,8 +5,8 @@ use std::future::Future;
 
 use music_domain::{
     AlbumId, AlbumTracksPage, ArtistId, ArtistTracksPage, PlaylistId, PlaylistSummary,
-    PlaylistTracksPage, ProviderId, ResolvedMediaSource, SynchronizedLyrics, TrackId,
-    TrackSearchPage,
+    PlaylistTracksPage, ProviderId, RecommendedPlaylistsPage, ResolvedMediaSource,
+    SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -61,6 +61,26 @@ impl fmt::Display for CatalogError {
 
 impl std::error::Error for CatalogError {}
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecommendationError {
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+}
+
+impl fmt::Display for RecommendationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::Network => "recommendation network request failed",
+            Self::ServiceUnavailable => "recommendation service is unavailable",
+            Self::InvalidResponse => "recommendation service returned an invalid response",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for RecommendationError {}
+
 /// Provider-neutral Track search. Query ranking and page conversion remain
 /// owned by the concrete Provider.
 pub trait TrackSearchProvider: MusicProvider + Sync {
@@ -98,6 +118,18 @@ pub trait ArtistTracksProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<ArtistTracksPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral offset-paged playlist recommendations. Personalization,
+/// mutation, and heterogeneous home-feed cards are separate capabilities.
+pub trait RecommendedPlaylistsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn recommended_playlists(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<RecommendedPlaylistsPage, Self::Error>> + Send;
 }
 
 /// Describes behavior that is implemented now, not planned future behavior.

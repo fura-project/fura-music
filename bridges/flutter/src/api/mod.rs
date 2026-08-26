@@ -6,6 +6,7 @@ pub mod library;
 pub mod lyrics;
 pub mod media;
 pub mod queue;
+pub mod recommendations;
 pub mod search;
 
 fn domain_track_id(provider_id: &str, opaque_track_id: &str) -> Result<music_domain::TrackId, ()> {
