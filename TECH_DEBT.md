@@ -10,11 +10,11 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Why accepted:** Linux is first-class and the direct build uses the same Cargo workspace, lockfile, crate type, and Rust compiler already validated by the core suite. Replacing the whole bridge or installing a conflicting toolchain would be larger and riskier during the executable-foundation task.
 
-**Impact:** The Linux CMake and Linux-host Android Gradle integration are no longer fully generator-owned. Android system-Cargo support is deliberately limited to one explicit ARM64 or x64 build. A release ARM64 APK contained the bridge and passed 16 KB alignment checks; x64 packaged FFI passed on Android 16. The installed host still needs its matching `rust-src` package for an ordinary repeat build.
+**Impact:** The Linux CMake and Linux-host Android Gradle integration are no longer fully generator-owned. Android system-Cargo support is deliberately limited to one explicit ARM64 or x64 build. Matching system `rust-src` is installed; a clean release ARM64 build compiled `std` from it, produced a complete single-ABI APK, passed 16 KB alignment/signature checks, and started under the AVD's ARM64 translation. Native x64 packaged FFI passed on Android 16.
 
-**Risk:** Re-running bridge integration could overwrite the customization; other Android ABI sets and non-Linux target builds still need verified toolchain paths. Emulator success does not prove physical-device or additional-ABI behavior.
+**Risk:** Re-running bridge integration could overwrite the customization; other Android ABI sets and non-Linux target builds still need verified toolchain paths. Future dependency changes could reintroduce incomplete ABI advertising or compiler-runtime symbols unless the current guards remain. Emulator and translation success do not prove physical-device behavior.
 
-**Suggested solution:** Adopt upstream Cargokit/native-assets system-Rust support when it can replace the two localized paths without losing the current Cargo lockfile, NDK API 24 toolchain, or 16 KB page alignment. Add another ABI only when a Roadmap or runtime target requires it.
+**Suggested solution:** Adopt upstream Cargokit/native-assets system-Rust support when it can replace the two localized paths without losing the current Cargo lockfile, NDK API 24 toolchain, target-aligned ABI filtering, NDK compiler-runtime linkage, unresolved-symbol gate, or 16 KB page alignment. Add another ABI only when a Roadmap or runtime target requires it.
 
 **Trigger condition:** The Android ARM64 build and x64 emulator triggers were handled on 2026-08-26. Reassess when FRB/Cargokit gains supported system-Rust builds, regeneration overwrites either customization, or another target/ABI becomes required.
 

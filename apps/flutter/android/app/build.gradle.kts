@@ -4,6 +4,18 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val flutterAndroidAbis =
+    mapOf(
+        "android-arm" to "armeabi-v7a",
+        "android-arm64" to "arm64-v8a",
+        "android-x64" to "x86_64",
+    )
+val requestedAndroidAbis =
+    providers.gradleProperty("target-platform").orNull?.split(",")?.map { platform ->
+        flutterAndroidAbis[platform]
+            ?: throw GradleException("Unsupported Flutter Android target: $platform")
+    }?.toSet()
+
 android {
     namespace = "dev.axiaobo.flutterustmusic"
     compileSdk = flutter.compileSdkVersion
@@ -26,6 +38,16 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Flutter limits its engine output to target-platform, but a transitive
+        // JNI dependency can otherwise add libraries for unrelated ABIs. Keep
+        // Android's compatibility metadata aligned with the complete app.
+        requestedAndroidAbis?.let { abis ->
+            ndk {
+                abiFilters.clear()
+                abiFilters.addAll(abis)
+            }
+        }
     }
 
     buildTypes {

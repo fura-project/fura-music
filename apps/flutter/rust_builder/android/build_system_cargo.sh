@@ -72,7 +72,7 @@ fi
 
 ndk_bin="$sdk_directory/ndk/$ndk_version/toolchains/llvm/prebuilt/linux-x86_64/bin"
 target_clang="$ndk_bin/${rust_target}${min_sdk}-clang"
-for tool in clang clang++ llvm-ar llvm-ranlib "${rust_target}${min_sdk}-clang"; do
+for tool in clang clang++ llvm-ar llvm-nm llvm-ranlib "${rust_target}${min_sdk}-clang"; do
   if [[ ! -x $ndk_bin/$tool ]]; then
     echo "Missing Android NDK tool: $ndk_bin/$tool" >&2
     exit 69
@@ -93,6 +93,15 @@ unit_separator=$'\x1f'
 rust_flags="-L${unit_separator}$libgcc_workaround"
 rust_flags+="${unit_separator}-C${unit_separator}link-arg=-Wl,--hash-style=both"
 rust_flags+="${unit_separator}-C${unit_separator}link-arg=-Wl,-z,max-page-size=16384"
+if [[ $rust_target == aarch64-linux-android ]]; then
+  clang_resource_dir=$($ndk_bin/clang --print-resource-dir)
+  compiler_rt_builtins="$clang_resource_dir/lib/linux/libclang_rt.builtins-aarch64-android.a"
+  if [[ ! -f $compiler_rt_builtins ]]; then
+    echo "Missing Android AArch64 compiler runtime: $compiler_rt_builtins" >&2
+    exit 69
+  fi
+  rust_flags+="${unit_separator}-C${unit_separator}link-arg=$compiler_rt_builtins"
+fi
 if [[ -n ${CARGO_ENCODED_RUSTFLAGS:-} ]]; then
   rust_flags="${CARGO_ENCODED_RUSTFLAGS}${unit_separator}${rust_flags}"
 fi
@@ -119,6 +128,16 @@ env \
 rust_library_path="$target_dir/$rust_target/$cargo_profile_dir/librust_lib_flutterustmusic.so"
 if [[ ! -f $rust_library_path ]]; then
   echo "Cargo completed without the expected Rust bridge library: $rust_library_path" >&2
+  exit 70
+fi
+unresolved_aarch64_builtins=$(
+  "$ndk_bin/llvm-nm" -u "$rust_library_path" |
+    awk '$NF ~ /^__aarch64_/ { print $NF }' |
+    sort -u
+)
+if [[ -n $unresolved_aarch64_builtins ]]; then
+  echo "Rust bridge has unresolved AArch64 compiler-runtime symbols:" >&2
+  echo "$unresolved_aarch64_builtins" >&2
   exit 70
 fi
 cp -- "$rust_library_path" "$output_dir/$android_abi/librust_lib_flutterustmusic.so"

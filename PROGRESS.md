@@ -89,10 +89,14 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Extended the Linux-host system-Cargo task only to the x64 ABI required by the existing Android 16 AVD. A task-attachment regression first produced an installable APK without the Rust library; APK inspection exposed it, and project-scoped `afterEvaluate` binding now puts system-Cargo before both JNI/native merge tasks. The rebuilt x64 APK contains a stripped Android-24 Rust ELF with 16 KB-aligned LOAD segments.
 - Ran the x64 APK on the existing Android 16 emulator. Packaged FFI passed 1/1 through real FRB initialization and Domain calls; the randomized non-account vault write/read/delete/absence contract passed 1/1; and native local-MP3 play/pause/resume/stop passed 1/1. The Linux loopback-HTTP audio case was deliberately skipped on Android rather than weakening cleartext policy. This resolves the M1 Android runtime instance of TD-004 without claiming physical-device, remote-CDN, audio-focus, or real-account coverage.
 - Installed and launched the actual x64 application entrypoint on the same Android 16 emulator. The signed-out Material surface initialized the Rust core, exposed the expected QQ Music sign-in action, fit the 1080 x 2400 viewport without visible clipping or overflow, and logged no Flutter/native fatal error. The secure-storage compatibility change performed one empty legacy-algorithm migration on first launch; a force-stop and second launch did not repeat it. No QR challenge, credential, account data, or remote media was requested, and the test installation was removed afterward.
+- Repeated the Android ARM64 release from a clean Flutter build after the matching distribution `rust-src` 1.97.1-1 was installed. Cargo compiled `core`, `std`, and compiler builtins directly from `/usr/lib/rustlib/src/rust/library`; no temporary mount, alternate sysroot, rustup, or privilege escalation was used.
+- APK inspection exposed two latent ARM64 packaging defects. A transitive JNI plugin contributed isolated x64/ARMv7 libraries, causing Android to select x64 and crash on the AArch64 Flutter engine; the Rust bridge also retained an unresolved `__aarch64_cas4_acq_rel`. Both were reproduced on the AVD before repair.
+- Aligned Gradle ABI filters with Flutter's explicit target platform, linked the NDK AArch64 compiler-runtime archive, and added a build failure gate for unresolved `__aarch64_*` symbols. The clean 23.0 MB release APK now contains the complete four-library ARM64 set only, has no unresolved compiler-runtime symbol, retains four 0x4000-aligned Rust LOAD segments, and passes APK v2 plus `zipalign -P 16` verification.
+- Installed the corrected ARM64 APK on the Android 16 AVD's ARM64 translation path. Android selected `arm64-v8a`; Flutter, JNI, and Rust loaded, and the real signed-out QQ Music surface rendered. A native x64 debug rebuild then contained only x64 libraries and rendered the same entrypoint. These smokes prove both packaging paths on this AVD, not physical ARM64 behavior, account flow, remote media, or audio focus.
 
 # In Progress
 
-- **Idle — no legitimate work available.** Every M1 implementation, offline/platform validation, architecture review, and scope review that can run without account authority is complete. The checkpoint needs an explicitly authorized, secret-safe real-account vertical-slice smoke; credentials and user actions must not be inferred from autonomous scope. Resume when that authorization and a user able to scan the short-lived QR code are available.
+- **Idle — no legitimate work available.** Every M1 implementation, offline/platform validation, architecture review, scope review, and currently available Android build/runtime check that can run without account authority is complete. The checkpoint needs an explicitly authorized, secret-safe real-account vertical-slice smoke; credentials and user actions must not be inferred from autonomous scope. Resume when that authorization and a user able to scan the short-lived QR code are available.
 
 # Next Candidates
 
@@ -101,7 +105,6 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Blockers
 
-- The installed system Rust lacks its matching `rust-src` package, and this session has no passwordless privilege to install it. The signed package was sufficient for an ephemeral proof build; an ordinary repeat requires `sudo pacman -S rust-src` or an equivalent matching distribution installation.
 - The code and fixture/widget evidence cover the complete user journey, but this checkout has not completed an authorized real QQ Music account flow from QR exchange through restored library, media playback, and synchronized lyrics. The Roadmap's user-facing criteria therefore remain unverified end to end.
 
 # Pending Human Decisions
@@ -120,6 +123,7 @@ None.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
 - `audioplayers` local MP3 lifecycle is proven on Linux and the Android x64 emulator. Android remote transport, audio focus/interruption, physical-device behavior, and Apple/Windows runtime paths remain unverified before release claims.
+- The corrected ARM64 application starts under the current x64 AVD's ARM64 translation layer, but this is not physical-device evidence and does not prove hardware-specific rendering, media, or lifecycle behavior.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).

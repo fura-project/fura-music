@@ -54,6 +54,8 @@ flutter test integration_test/secure_storage_test.dart -d <android-device>
 flutter test integration_test/playback_engine_test.dart -d <android-device>
 ```
 
+The application keeps Gradle's ABI filter aligned with Flutter's explicit `target-platform`; otherwise transitive JNI libraries can make a single-target APK advertise ABIs that do not contain Flutter or Rust. The system-Cargo ARM64 path also links the NDK compiler runtime and rejects unresolved `__aarch64_*` symbols before packaging. Do not disable either guard when reproducing these builds.
+
 The playback integration runs the local-file lifecycle on Android; its loopback-HTTP case remains Linux-only so tests do not weaken Android cleartext policy. The recorded non-ASCII Flutter SDK path needs the local logical-root invocation documented in `MEMORY.md`; that environment issue is not patched into the repository or SDK.
 
 `dart analyze` is deliberate for the current local non-ASCII checkout-path issue recorded in `MEMORY.md`.
