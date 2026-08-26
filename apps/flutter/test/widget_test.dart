@@ -4,7 +4,8 @@ import 'dart:typed_data';
 import 'dart:ui' show SemanticsAction, Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
-import 'package:flutter/material.dart' show FilledButton, InkWell;
+import 'package:flutter/material.dart'
+    show FilledButton, GridView, InkWell, ListView, Scrollable, ScrollableState;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
@@ -548,6 +549,124 @@ void main() {
     expect(find.text('Your playlists'), findsOneWidget);
     expect(libraryGateway._next, 1);
     expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
+  });
+
+  testWidgets('detail return preserves desktop playlist position and focus', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final playlists = List.generate(
+      30,
+      (index) => UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'favorite:scroll-$index',
+        title: 'Playlist $index',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          UserLibraryResult(playlists: playlists),
+        ]),
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final grid = find.byType(GridView);
+    final scrollable = find.descendant(
+      of: grid,
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Playlist 24'),
+      500,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    final before = tester.state<ScrollableState>(scrollable).position.pixels;
+    await tester.tap(find.text('Playlist 24'));
+    await tester.pumpAndSettle();
+    expect(find.text('This playlist is empty'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+
+    final after = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(after, moreOrLessEquals(before, epsilon: 1));
+    final playlistAction = find.ancestor(
+      of: find.text('Playlist 24'),
+      matching: find.byType(InkWell),
+    );
+    expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
+  });
+
+  testWidgets('detail return preserves narrow playlist position', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final playlists = List.generate(
+      30,
+      (index) => UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'favorite:narrow-scroll-$index',
+        title: 'Narrow playlist $index',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          UserLibraryResult(playlists: playlists),
+        ]),
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byType(ListView);
+    final scrollable = find.descendant(
+      of: list,
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Narrow playlist 24'),
+      400,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    final before = tester.state<ScrollableState>(scrollable).position.pixels;
+    await tester.tap(find.text('Narrow playlist 24'));
+    await tester.pumpAndSettle();
+    expect(find.text('This playlist is empty'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+
+    final after = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(after, moreOrLessEquals(before, epsilon: 1));
+    expect(find.text('Narrow playlist 24'), findsOneWidget);
   });
 
   testWidgets('failed detail refresh keeps tracks visible and retries', (

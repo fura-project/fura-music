@@ -52,6 +52,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
+  final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
   UserPlaylistSummary? _lastOpenedPlaylist;
   bool _handledLyricCredentialRejection = false;
@@ -122,12 +123,15 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             },
             child: playbackPage,
           );
-    return PopScope<void>(
-      canPop: selectedPlaylist == null,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _selectedPlaylist != null) _returnToLibrary();
-      },
-      child: shortcutPage,
+    return PageStorage(
+      bucket: _pageStorageBucket,
+      child: PopScope<void>(
+        canPop: selectedPlaylist == null,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _selectedPlaylist != null) _returnToLibrary();
+        },
+        child: shortcutPage,
+      ),
     );
   }
 
@@ -334,6 +338,7 @@ class _PlaylistCollection extends StatelessWidget {
               Expanded(
                 child: desktop
                     ? GridView.builder(
+                        key: const PageStorageKey<String>('user-playlist-grid'),
                         gridDelegate:
                             const SliverGridDelegateWithMaxCrossAxisExtent(
                               maxCrossAxisExtent: 220,
@@ -349,6 +354,7 @@ class _PlaylistCollection extends StatelessWidget {
                         ),
                       )
                     : ListView.separated(
+                        key: const PageStorageKey<String>('user-playlist-list'),
                         itemCount: playlists.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) => _PlaylistListItem(
