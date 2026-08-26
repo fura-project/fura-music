@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Existing Album-page metadata vertical slice"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -41,11 +41,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. The regional new-Album slice is implemented and fully offline/Linux validated; the next action is a global evidence-backed candidate ranking rather than automatically extending the nearest Discover code.
+- M3 remains active. Existing Album-page metadata is selected after a global ranking, current direct/legacy product references, and bounded anonymous exact-request/field-shape evidence. The finite slice enriches every existing Album origin while keeping metadata failure independent from Track/queue availability.
 
 # Next Candidates
 
-1. Run the next bounded M3 discovery/ranking pass across existing Album-detail metadata, authenticated favorite Albums, and cross-surface Track-to-Album/Artist navigation. Select only a finite candidate with sufficient current evidence; do not access the stored account credential or introduce generic catalog/navigation infrastructure.
+1. Implement the selected Album metadata slice with a bounded provider-neutral detail value, exact anonymous QQ operation, cancellable Bridge load, independent Flutter metadata lifecycle, and adaptive canonical metadata/description on the existing Album page.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -77,6 +77,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Playlist-search behavior has two current source/fixture references plus a bounded anonymous three-page Desktop probe and full offline client-to-presentation regression coverage. The observed response supplied numeric-string identity, nonblank title, artwork, Track count, and service page metadata without retaining content; one nonterminal page returned fewer rows than requested, so continuation follows `nextpage`. Live application compatibility is not yet claimed.
 - Radar behavior has two current independent implementation references plus a bounded anonymous two-page structural probe and full offline client-to-presentation regression coverage. Both probed pages returned ten minimum-shape Tracks and `HasMore: true`, with one identity overlap; the implementation pages by service `Page`/`HasMore` and deduplicates opaque Track identity without preserving the older one-seed-row assumption. Anonymous structure and offline tests do not prove authenticated personalization, live application compatibility, or recommendation quality.
 - New-album behavior has a current direct implementation with live-gated area/pagination tests, bounded anonymous evidence, and full offline client-to-presentation regression coverage. Area 1 returned two exact non-overlapping five-row pages with numeric totals, and all six current area values returned zero codes plus one minimum-shape Album. The implementation keeps area typed, advances only by raw page length/total before deduplication, rejects invalid Album/Artist identity and Album title, and retains no returned catalog content; live application compatibility is not yet claimed.
+- Album-detail metadata has a current direct implementation/live-gated test, an independent legacy product path, and bounded anonymous exact-MID/field-shape evidence. The response MID matched the requested public MID and supplied canonical Album/Artist identity plus optional display strings without account material or retained content. The implementation must bound all returned text, keep metadata failure independent from Album Tracks, and must not claim live application compatibility from anonymous evidence.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
