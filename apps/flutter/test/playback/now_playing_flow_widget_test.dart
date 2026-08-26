@@ -999,6 +999,86 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('queue rows adapt existing metadata without changing actions', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('queue-metadata')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      durationSeconds: 125,
+      albumTitle: 'Fixture album',
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('queue-entry-0')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('queue-entry-1')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Fixture artist · Fixture album · 2:05'),
+      findsNWidgets(2),
+    );
+    expect(find.byKey(const ValueKey('queue-duration-0')), findsNothing);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('queue-entry-0'))).label,
+      contains('Fixture artist · Fixture album · 2:05'),
+    );
+    expect(find.byKey(const ValueKey('queue-remove-0')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1000, 700);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('Fixture artist · Fixture album'), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('queue-duration-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('queue-duration-1')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('queue-entry-0')),
+        matching: find.text('2:05'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('queue-entry-1')),
+        matching: find.text('2:05'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('queue-remove-1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
   testWidgets('queue clear requires confirmation and keeps shortcuts active', (
     tester,
   ) async {
@@ -1265,6 +1345,7 @@ Future<void> _openDetail(
   String secondTitle = 'Second track',
   int? durationSeconds = 120,
   String? artworkUri,
+  String? albumTitle,
   QqMusicAuthenticationGateway? authenticationGateway,
 }) async {
   await tester.pumpWidget(
@@ -1279,6 +1360,7 @@ Future<void> _openDetail(
         secondTitle,
         durationSeconds,
         artworkUri,
+        albumTitle,
       ),
       mediaResolutionGateway: media,
       lyricGateway:
@@ -1489,6 +1571,7 @@ class _DetailGateway implements PlaylistDetailGateway {
     this.secondTitle,
     this.durationSeconds,
     this.artworkUri,
+    this.albumTitle,
   );
 
   final String firstOpaqueId;
@@ -1496,6 +1579,7 @@ class _DetailGateway implements PlaylistDetailGateway {
   final String secondTitle;
   final int? durationSeconds;
   final String? artworkUri;
+  final String? albumTitle;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
@@ -1508,6 +1592,7 @@ class _DetailGateway implements PlaylistDetailGateway {
     secondTitle,
     durationSeconds,
     artworkUri,
+    albumTitle,
   );
 }
 
@@ -1518,6 +1603,7 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
     this.secondTitle,
     this.durationSeconds,
     this.artworkUri,
+    this.albumTitle,
   );
 
   final String firstOpaqueId;
@@ -1525,6 +1611,7 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
   final String secondTitle;
   final int? durationSeconds;
   final String? artworkUri;
+  final String? albumTitle;
 
   @override
   bool cancel() => true;
@@ -1538,6 +1625,7 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         opaqueId: firstOpaqueId,
         title: 'First track',
         artistNames: const ['Fixture artist'],
+        albumTitle: albumTitle,
         durationSeconds: durationSeconds,
         artworkUri: artworkUri,
       ),
@@ -1546,6 +1634,7 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         opaqueId: secondOpaqueId,
         title: secondTitle,
         artistNames: const ['Fixture artist'],
+        albumTitle: albumTitle,
         durationSeconds: durationSeconds,
         artworkUri: artworkUri,
       ),

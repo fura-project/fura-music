@@ -45,3 +45,9 @@ This bounded pass inspected the mini player, expanded Now Playing, adaptive Queu
 ## Selection
 
 Adaptive Queue information hierarchy is the highest-value bounded M4.5 slice. It exposes existing honest data in a high-frequency surface, has clear compact/desktop acceptance criteria, and does not alter playback, queue, lyric, Provider, or Bridge ownership.
+
+## Outcome
+
+Completed on 2026-08-27. Queue rows now show one-based visual position, existing Artist/Album metadata, and truthful duration; compact sheets keep duration in metadata while desktop dialogs use a dedicated duration column. Current selection, duplicate positions, positional removal, artwork, action keys, and the existing Queue semantics remain unchanged.
+
+The focused Queue/Now Playing suite passes 32 tests. Strict Dart formatting and analysis, all 308 Flutter tests, 267 offline Rust tests, strict all-target Clippy, the Linux x64 Release build, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain gated and ignored, so this outcome does not close the user-operated M1 real-account playback, queue, or lyric observation.

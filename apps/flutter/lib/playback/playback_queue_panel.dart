@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
+import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
@@ -62,6 +63,7 @@ class PlaybackQueuePanel extends StatelessWidget {
       builder: (context, _) {
         final tracks = controller.tracks;
         final theme = Theme.of(context);
+        final desktop = MediaQuery.sizeOf(context).width >= 600;
         return SafeArea(
           top: false,
           child: Column(
@@ -155,43 +157,15 @@ class PlaybackQueuePanel extends StatelessWidget {
                         itemBuilder: (context, index) {
                           final track = tracks[index];
                           final current = index == controller.currentIndex;
-                          final artist = track.artistNames.isEmpty
-                              ? 'Unknown artist'
-                              : track.artistNames.join(' · ');
-                          return Semantics(
-                            selected: current,
-                            button: !current,
-                            child: ListTile(
-                              key: ValueKey('queue-entry-$index'),
-                              selected: current,
-                              selectedTileColor:
-                                  theme.colorScheme.secondaryContainer,
-                              leading: _QueueArtwork(
-                                track: track,
-                                current: current,
-                                index: index,
-                              ),
-                              title: Text(
-                                track.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                artist,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: current
-                                  ? null
-                                  : () => unawaited(controller.select(index)),
-                              trailing: IconButton(
-                                key: ValueKey('queue-remove-$index'),
-                                tooltip: 'Remove from queue',
-                                onPressed: () =>
-                                    unawaited(controller.remove(index)),
-                                icon: const Icon(Icons.close_rounded),
-                              ),
-                            ),
+                          return _QueueTrackTile(
+                            track: track,
+                            index: index,
+                            current: current,
+                            desktop: desktop,
+                            onSelect: current
+                                ? null
+                                : () => unawaited(controller.select(index)),
+                            onRemove: () => unawaited(controller.remove(index)),
                           );
                         },
                       ),
@@ -200,6 +174,116 @@ class PlaybackQueuePanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _QueueTrackTile extends StatelessWidget {
+  const _QueueTrackTile({
+    required this.track,
+    required this.index,
+    required this.current,
+    required this.desktop,
+    required this.onSelect,
+    required this.onRemove,
+  });
+
+  final PlaylistTrackSummary track;
+  final int index;
+  final bool current;
+  final bool desktop;
+  final VoidCallback? onSelect;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final duration = formatTrackDuration(track.durationSeconds);
+    final album = track.albumTitle?.trim();
+    final metadata = [
+      track.artistNames.isEmpty
+          ? 'Unknown artist'
+          : track.artistNames.join(' · '),
+      if (album != null && album.isNotEmpty) album,
+      if (!desktop) duration,
+    ].join(' · ');
+
+    return Semantics(
+      selected: current,
+      button: !current,
+      child: ListTile(
+        key: ValueKey('queue-entry-$index'),
+        minTileHeight: desktop ? 64 : 72,
+        contentPadding: EdgeInsets.symmetric(horizontal: desktop ? 12 : 8),
+        selected: current,
+        selectedTileColor: theme.colorScheme.secondaryContainer,
+        leading: SizedBox(
+          width: 76,
+          child: Row(
+            children: [
+              ExcludeSemantics(
+                child: SizedBox(
+                  width: 28,
+                  child: Text(
+                    '${index + 1}',
+                    key: ValueKey('queue-position-$index'),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _QueueArtwork(track: track, current: current, index: index),
+            ],
+          ),
+        ),
+        title: Text(
+          track.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: Text(
+          metadata,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        onTap: onSelect,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (desktop) ...[
+              ExcludeSemantics(
+                child: SizedBox(
+                  width: 48,
+                  child: Text(
+                    duration,
+                    key: ValueKey('queue-duration-$index'),
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            IconButton(
+              key: ValueKey('queue-remove-$index'),
+              tooltip: 'Remove from queue',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
