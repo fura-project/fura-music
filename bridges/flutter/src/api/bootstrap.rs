@@ -54,6 +54,7 @@ mod tests {
             status.provider.implemented_capabilities,
             [
                 "Search",
+                "Catalog",
                 "Authentication",
                 "UserLibrary",
                 "Lyrics",

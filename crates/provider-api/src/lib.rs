@@ -4,8 +4,8 @@ use std::fmt;
 use std::future::Future;
 
 use music_domain::{
-    PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, ResolvedMediaSource,
-    SynchronizedLyrics, TrackId, TrackSearchPage,
+    AlbumId, AlbumTracksPage, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
+    ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -40,6 +40,26 @@ impl fmt::Display for SearchError {
 
 impl std::error::Error for SearchError {}
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CatalogError {
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+}
+
+impl fmt::Display for CatalogError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::Network => "catalog network request failed",
+            Self::ServiceUnavailable => "catalog service is unavailable",
+            Self::InvalidResponse => "catalog service returned an invalid response",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for CatalogError {}
+
 /// Provider-neutral Track search. Query ranking and page conversion remain
 /// owned by the concrete Provider.
 pub trait TrackSearchProvider: MusicProvider + Sync {
@@ -51,6 +71,19 @@ pub trait TrackSearchProvider: MusicProvider + Sync {
         page: u32,
         size: u32,
     ) -> impl Future<Output = Result<TrackSearchPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral offset-paged Album Track browsing. Album metadata and
+/// mutation are deliberately separate future capabilities.
+pub trait AlbumTracksProvider: MusicProvider + Sync {
+    type Error;
+
+    fn album_tracks(
+        &self,
+        album_id: AlbumId,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<AlbumTracksPage, Self::Error>> + Send;
 }
 
 /// Describes behavior that is implemented now, not planned future behavior.

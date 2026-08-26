@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use provider_api::{SearchError, TrackSearchProvider};
 use tokio::sync::Notify;
 
+use super::album::{CatalogAlbumSummary, bridge_album_summary};
 use super::authentication::native_qq_music_provider;
 use super::library::{LibraryTrackSummary, bridge_track_summary};
 
@@ -18,11 +19,27 @@ pub enum QqMusicTrackSearchPageLoadFailure {
 }
 
 #[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicTrackSearchItem {
+    pub track: LibraryTrackSummary,
+    pub album: Option<CatalogAlbumSummary>,
+}
+
+impl fmt::Debug for QqMusicTrackSearchItem {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicTrackSearchItem")
+            .field("track", &self.track)
+            .field("album", &self.album)
+            .finish()
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicTrackSearchPageLoad {
     pub page: u32,
     pub total: u32,
     pub has_more: bool,
-    pub tracks: Vec<LibraryTrackSummary>,
+    pub items: Vec<QqMusicTrackSearchItem>,
     pub failure: Option<QqMusicTrackSearchPageLoadFailure>,
 }
 
@@ -33,7 +50,7 @@ impl fmt::Debug for QqMusicTrackSearchPageLoad {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
-            .field("track_count", &self.tracks.len())
+            .field("item_count", &self.items.len())
             .field("failure", &self.failure)
             .finish()
     }
@@ -134,7 +151,14 @@ fn map_load(
             page: page.page(),
             total: page.total(),
             has_more: page.has_more(),
-            tracks: page.tracks().iter().map(bridge_track_summary).collect(),
+            items: page
+                .items()
+                .iter()
+                .map(|item| QqMusicTrackSearchItem {
+                    track: bridge_track_summary(item.track()),
+                    album: item.album().map(bridge_album_summary),
+                })
+                .collect(),
             failure: None,
         },
         Err(error) => failed_load(map_error(error)),
@@ -146,7 +170,7 @@ const fn failed_load(failure: QqMusicTrackSearchPageLoadFailure) -> QqMusicTrack
         page: 0,
         total: 0,
         has_more: false,
-        tracks: Vec::new(),
+        items: Vec::new(),
         failure: Some(failure),
     }
 }
@@ -161,7 +185,9 @@ const fn map_error(error: SearchError) -> QqMusicTrackSearchPageLoadFailure {
 
 #[cfg(test)]
 mod tests {
-    use music_domain::{ProviderId, TrackId, TrackSearchPage, TrackSummary};
+    use music_domain::{
+        AlbumId, AlbumSummary, ProviderId, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    };
     use provider_api::SearchError;
 
     use super::{
@@ -181,18 +207,35 @@ mod tests {
             vec!["private-artist".into()],
         )
         .expect("track summary");
-        let mapped = map_load(Ok(TrackSearchPage::new(1, 31, true, vec![track])));
+        let album = AlbumSummary::new(
+            AlbumId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "album:43001:fixtureAlbumMid",
+            )
+            .expect("Album ID"),
+            "private-album",
+        )
+        .expect("Album summary");
+        let mapped = map_load(Ok(TrackSearchPage::new(
+            1,
+            31,
+            true,
+            vec![TrackSearchItem::new(track, Some(album))],
+        )));
 
         assert_eq!(mapped.page, 1);
         assert_eq!(mapped.total, 31);
         assert!(mapped.has_more);
-        assert_eq!(mapped.tracks.len(), 1);
-        assert_eq!(mapped.tracks[0].provider_id, "qq-music");
-        assert_eq!(mapped.tracks[0].title, "must-not-leak");
-        let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
+        assert_eq!(mapped.items.len(), 1);
+        assert_eq!(mapped.items[0].track.provider_id, "qq-music");
+        assert_eq!(mapped.items[0].track.title, "must-not-leak");
+        assert!(mapped.items[0].album.is_some());
+        let debug = format!("{mapped:?} {:?}", mapped.items[0]);
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("private-artist"));
         assert!(!debug.contains("41001"));
+        assert!(!debug.contains("private-album"));
+        assert!(!debug.contains("43001"));
     }
 
     #[test]

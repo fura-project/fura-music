@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -12,6 +13,7 @@ class TrackSearchPage extends StatefulWidget {
     required this.gateway,
     required this.queuePlaybackController,
     required this.onBack,
+    required this.onOpenAlbum,
     required this.onSignInAgain,
     super.key,
   });
@@ -19,6 +21,7 @@ class TrackSearchPage extends StatefulWidget {
   final TrackSearchGateway gateway;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
+  final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
 
   @override
@@ -120,7 +123,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     TrackSearchStage.content => _SearchResults(
       key: const ValueKey('track-search-content'),
       query: _controller.query,
-      tracks: _controller.tracks,
+      items: _controller.items,
       total: _controller.total,
       hasMore: _controller.hasMore,
       isLoadingMore: _controller.isLoadingMore,
@@ -129,6 +132,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
       onRetryMore: _controller.retryMore,
       onPlay: _play,
       onQueue: _queue,
+      onOpenAlbum: widget.onOpenAlbum,
       desktop: desktop,
     ),
   };
@@ -231,7 +235,7 @@ class _SearchField extends StatelessWidget {
 class _SearchResults extends StatelessWidget {
   const _SearchResults({
     required this.query,
-    required this.tracks,
+    required this.items,
     required this.total,
     required this.hasMore,
     required this.isLoadingMore,
@@ -240,12 +244,13 @@ class _SearchResults extends StatelessWidget {
     required this.onRetryMore,
     required this.onPlay,
     required this.onQueue,
+    required this.onOpenAlbum,
     required this.desktop,
     super.key,
   });
 
   final String query;
-  final List<PlaylistTrackSummary> tracks;
+  final List<TrackSearchItem> items;
   final int total;
   final bool hasMore;
   final bool isLoadingMore;
@@ -254,6 +259,7 @@ class _SearchResults extends StatelessWidget {
   final VoidCallback onRetryMore;
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
+  final ValueChanged<AlbumSummary> onOpenAlbum;
   final bool desktop;
 
   @override
@@ -268,7 +274,7 @@ class _SearchResults extends StatelessWidget {
           desktop ? 40 : 12,
           24,
         ),
-        itemCount: tracks.length + 2,
+        itemCount: items.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
             return Padding(
@@ -285,7 +291,7 @@ class _SearchResults extends StatelessWidget {
               ),
             );
           }
-          if (index == tracks.length + 1) {
+          if (index == items.length + 1) {
             return _SearchFooter(
               hasMore: hasMore,
               isLoadingMore: isLoadingMore,
@@ -295,12 +301,17 @@ class _SearchResults extends StatelessWidget {
             );
           }
           final trackIndex = index - 1;
+          final item = items[trackIndex];
           return _SearchTrackRow(
-            track: tracks[trackIndex],
+            track: item.track,
+            album: item.album,
             index: trackIndex,
             desktop: desktop,
             onPlay: () => onPlay(trackIndex),
-            onQueue: () => onQueue(tracks[trackIndex]),
+            onQueue: () => onQueue(item.track),
+            onOpenAlbum: item.album == null
+                ? null
+                : () => onOpenAlbum(item.album!),
           );
         },
       ),
@@ -311,17 +322,21 @@ class _SearchResults extends StatelessWidget {
 class _SearchTrackRow extends StatelessWidget {
   const _SearchTrackRow({
     required this.track,
+    required this.album,
     required this.index,
     required this.desktop,
     required this.onPlay,
     required this.onQueue,
+    required this.onOpenAlbum,
   });
 
   final PlaylistTrackSummary track;
+  final AlbumSummary? album;
   final int index;
   final bool desktop;
   final VoidCallback onPlay;
   final VoidCallback onQueue;
+  final VoidCallback? onOpenAlbum;
 
   @override
   Widget build(BuildContext context) {
@@ -352,11 +367,23 @@ class _SearchTrackRow extends StatelessWidget {
         ),
         subtitle: Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),
         onTap: onPlay,
-        trailing: IconButton(
-          key: ValueKey('track-search-queue-$index'),
-          tooltip: 'Add ${track.title} to queue',
-          onPressed: onQueue,
-          icon: const Icon(Icons.playlist_add_rounded),
+        trailing: Wrap(
+          spacing: 2,
+          children: [
+            if (album != null)
+              IconButton(
+                key: ValueKey('track-search-album-$index'),
+                tooltip: 'Open ${album!.title}',
+                onPressed: onOpenAlbum,
+                icon: const Icon(Icons.album_rounded),
+              ),
+            IconButton(
+              key: ValueKey('track-search-queue-$index'),
+              tooltip: 'Add ${track.title} to queue',
+              onPressed: onQueue,
+              icon: const Icon(Icons.playlist_add_rounded),
+            ),
+          ],
         ),
       ),
     );

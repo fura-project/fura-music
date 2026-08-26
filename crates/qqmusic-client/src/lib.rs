@@ -4,6 +4,7 @@
 //! evidence. The client owns native HTTPS transport without exposing it to
 //! providers or Flutter.
 
+mod album;
 mod credential;
 mod credential_verification;
 mod favorite_playlists;
@@ -18,6 +19,7 @@ mod wechat_exchange;
 mod wechat_login;
 mod wechat_qr;
 
+pub use album::{AlbumTrackField, QqMusicAlbumTrackPage, QqMusicAlbumTracksError};
 pub use credential::{
     Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
     CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,

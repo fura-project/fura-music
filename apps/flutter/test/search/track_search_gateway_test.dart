@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
+import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
@@ -10,14 +11,21 @@ void main() {
         page: 1,
         total: 31,
         hasMore: true,
-        tracks: [
-          bridge_library.LibraryTrackSummary(
-            providerId: 'qq-music',
-            opaqueId: 'track:41001:0:fixtureMid:-',
-            title: 'Synthetic track',
-            artistNames: ['Artist one'],
-            albumTitle: 'Synthetic album',
-            durationSeconds: 245,
+        items: [
+          bridge.QqMusicTrackSearchItem(
+            track: bridge_library.LibraryTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'track:41001:0:fixtureMid:-',
+              title: 'Synthetic track',
+              artistNames: ['Artist one'],
+              albumTitle: 'Synthetic album',
+              durationSeconds: 245,
+            ),
+            album: bridge_album.CatalogAlbumSummary(
+              providerId: 'qq-music',
+              opaqueId: 'album:51001:fixtureAlbumMid',
+              title: 'Synthetic album',
+            ),
           ),
         ],
       ),
@@ -27,9 +35,10 @@ void main() {
     expect(result.page, 1);
     expect(result.total, 31);
     expect(result.hasMore, isTrue);
-    expect(result.tracks.single.providerId, 'qq-music');
-    expect(result.tracks.single.title, 'Synthetic track');
-    expect(result.tracks.single.artistNames, ['Artist one']);
+    expect(result.items.single.track.providerId, 'qq-music');
+    expect(result.items.single.track.title, 'Synthetic track');
+    expect(result.items.single.track.artistNames, ['Artist one']);
+    expect(result.items.single.album?.opaqueId, 'album:51001:fixtureAlbumMid');
   });
 
   test('maps every Bridge failure and rejects conflicting success data', () {
@@ -56,7 +65,7 @@ void main() {
         page: 1,
         total: 0,
         hasMore: false,
-        tracks: [],
+        items: [],
         failure: bridge.QqMusicTrackSearchPageLoadFailure.network,
       ),
     );

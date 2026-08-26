@@ -4,12 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'album.dart';
 import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `failed_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicTrackSearchPageLoadHandle beginQqMusicTrackSearchPageLoad({
   required String query,
@@ -30,18 +31,36 @@ abstract class QqMusicTrackSearchPageLoadHandle implements RustOpaqueInterface {
   Future<QqMusicTrackSearchPageLoad> run();
 }
 
+class QqMusicTrackSearchItem {
+  final LibraryTrackSummary track;
+  final CatalogAlbumSummary? album;
+
+  const QqMusicTrackSearchItem({required this.track, this.album});
+
+  @override
+  int get hashCode => track.hashCode ^ album.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicTrackSearchItem &&
+          runtimeType == other.runtimeType &&
+          track == other.track &&
+          album == other.album;
+}
+
 class QqMusicTrackSearchPageLoad {
   final int page;
   final int total;
   final bool hasMore;
-  final List<LibraryTrackSummary> tracks;
+  final List<QqMusicTrackSearchItem> items;
   final QqMusicTrackSearchPageLoadFailure? failure;
 
   const QqMusicTrackSearchPageLoad({
     required this.page,
     required this.total,
     required this.hasMore,
-    required this.tracks,
+    required this.items,
     this.failure,
   });
 
@@ -50,7 +69,7 @@ class QqMusicTrackSearchPageLoad {
       page.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
-      tracks.hashCode ^
+      items.hashCode ^
       failure.hashCode;
 
   @override
@@ -61,7 +80,7 @@ class QqMusicTrackSearchPageLoad {
           page == other.page &&
           total == other.total &&
           hasMore == other.hasMore &&
-          tracks == other.tracks &&
+          items == other.items &&
           failure == other.failure;
 }
 

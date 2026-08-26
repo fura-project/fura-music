@@ -15,7 +15,7 @@ class TrackSearchController extends ChangeNotifier {
 
   TrackSearchStage _stage = TrackSearchStage.idle;
   String _query = '';
-  List<PlaylistTrackSummary> _tracks = const [];
+  List<TrackSearchItem> _items = const [];
   TrackSearchFailure? _failure;
   TrackSearchFailure? _appendFailure;
   int _total = 0;
@@ -28,7 +28,9 @@ class TrackSearchController extends ChangeNotifier {
 
   TrackSearchStage get stage => _stage;
   String get query => _query;
-  List<PlaylistTrackSummary> get tracks => _tracks;
+  List<TrackSearchItem> get items => _items;
+  List<PlaylistTrackSummary> get tracks =>
+      List.unmodifiable(_items.map((item) => item.track));
   TrackSearchFailure? get failure => _failure;
   TrackSearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
@@ -58,7 +60,7 @@ class TrackSearchController extends ChangeNotifier {
     );
     _operation = operation;
     _query = normalized;
-    _tracks = const [];
+    _items = const [];
     _failure = null;
     _appendFailure = null;
     _total = 0;
@@ -73,11 +75,11 @@ class TrackSearchController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
 
     if (_validPage(result, expectedPage: 1)) {
-      _tracks = List.unmodifiable(result.tracks);
+      _items = List.unmodifiable(result.items);
       _total = result.total;
       _nextPage = 2;
       _hasMore = result.hasMore;
-      _stage = _tracks.isEmpty
+      _stage = _items.isEmpty
           ? TrackSearchStage.empty
           : TrackSearchStage.content;
     } else {
@@ -107,13 +109,14 @@ class TrackSearchController extends ChangeNotifier {
     _isLoadingMore = false;
 
     if (_validPage(result, expectedPage: expectedPage)) {
-      final seen = _tracks
-          .map((track) => '${track.providerId}\u0000${track.opaqueId}')
+      final seen = _items
+          .map((item) => '${item.track.providerId}\u0000${item.track.opaqueId}')
           .toSet();
-      final additions = result.tracks.where(
-        (track) => seen.add('${track.providerId}\u0000${track.opaqueId}'),
+      final additions = result.items.where(
+        (item) =>
+            seen.add('${item.track.providerId}\u0000${item.track.opaqueId}'),
       );
-      _tracks = List.unmodifiable([..._tracks, ...additions]);
+      _items = List.unmodifiable([..._items, ...additions]);
       _total = result.total;
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
@@ -136,7 +139,7 @@ class TrackSearchController extends ChangeNotifier {
     _operation?.cancel();
     _operation = null;
     _query = '';
-    _tracks = const [];
+    _items = const [];
     _failure = null;
     _appendFailure = null;
     _total = 0;
@@ -150,8 +153,8 @@ class TrackSearchController extends ChangeNotifier {
   bool _validPage(TrackSearchPageResult result, {required int expectedPage}) =>
       result.failure == null &&
       result.page == expectedPage &&
-      result.total >= result.tracks.length &&
-      (!result.hasMore || result.tracks.isNotEmpty);
+      result.total >= result.items.length &&
+      (!result.hasMore || result.items.isNotEmpty);
 
   bool _isRetryable(TrackSearchFailure? failure) =>
       failure == TrackSearchFailure.coreUnavailable ||

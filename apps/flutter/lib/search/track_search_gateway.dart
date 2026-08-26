@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
@@ -16,15 +17,22 @@ class TrackSearchPageResult {
     this.page = 0,
     this.total = 0,
     this.hasMore = false,
-    this.tracks = const [],
+    this.items = const [],
     this.failure,
   });
 
   final int page;
   final int total;
   final bool hasMore;
-  final List<PlaylistTrackSummary> tracks;
+  final List<TrackSearchItem> items;
   final TrackSearchFailure? failure;
+}
+
+class TrackSearchItem {
+  const TrackSearchItem({required this.track, this.album});
+
+  final PlaylistTrackSummary track;
+  final AlbumSummary? album;
 }
 
 abstract interface class TrackSearchGateway {
@@ -97,7 +105,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     if (result.page != 0 ||
         result.total != 0 ||
         result.hasMore ||
-        result.tracks.isNotEmpty) {
+        result.items.isNotEmpty) {
       return const TrackSearchPageResult(
         failure: TrackSearchFailure.invalidResponse,
       );
@@ -106,14 +114,15 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
   }
   if (result.page <= 0 ||
       result.total < 0 ||
-      result.tracks.length > result.total ||
-      (result.hasMore && result.tracks.isEmpty)) {
+      result.items.length > result.total ||
+      (result.hasMore && result.items.isEmpty)) {
     return const TrackSearchPageResult(
       failure: TrackSearchFailure.invalidResponse,
     );
   }
-  final tracks = <PlaylistTrackSummary>[];
-  for (final track in result.tracks) {
+  final items = <TrackSearchItem>[];
+  for (final item in result.items) {
+    final track = item.track;
     if (track.providerId.trim().isEmpty ||
         track.opaqueId.trim().isEmpty ||
         track.title.trim().isEmpty ||
@@ -123,24 +132,41 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
         failure: TrackSearchFailure.invalidResponse,
       );
     }
-    tracks.add(
-      PlaylistTrackSummary(
-        providerId: track.providerId,
-        opaqueId: track.opaqueId,
-        title: track.title,
-        artistNames: List.unmodifiable(track.artistNames),
-        subtitle: track.subtitle,
-        albumTitle: track.albumTitle,
-        artworkUri: track.artworkUri,
-        durationSeconds: track.durationSeconds,
-      ),
+    final mappedTrack = PlaylistTrackSummary(
+      providerId: track.providerId,
+      opaqueId: track.opaqueId,
+      title: track.title,
+      artistNames: List.unmodifiable(track.artistNames),
+      subtitle: track.subtitle,
+      albumTitle: track.albumTitle,
+      artworkUri: track.artworkUri,
+      durationSeconds: track.durationSeconds,
     );
+    final album = item.album;
+    AlbumSummary? mappedAlbum;
+    if (album != null) {
+      if (album.providerId.trim().isEmpty ||
+          album.opaqueId.trim().isEmpty ||
+          album.title.trim().isEmpty ||
+          (album.artworkUri != null && album.artworkUri!.trim().isEmpty)) {
+        return const TrackSearchPageResult(
+          failure: TrackSearchFailure.invalidResponse,
+        );
+      }
+      mappedAlbum = AlbumSummary(
+        providerId: album.providerId,
+        opaqueId: album.opaqueId,
+        title: album.title,
+        artworkUri: album.artworkUri,
+      );
+    }
+    items.add(TrackSearchItem(track: mappedTrack, album: mappedAlbum));
   }
   return TrackSearchPageResult(
     page: result.page,
     total: result.total,
     hasMore: result.hasMore,
-    tracks: List.unmodifiable(tracks),
+    items: List.unmodifiable(items),
   );
 }
 

@@ -18,18 +18,20 @@ void main() {
     title: 'Second result',
     artistNames: ['Artist'],
   );
+  const firstItem = TrackSearchItem(track: firstTrack);
+  const secondItem = TrackSearchItem(track: secondTrack);
 
   test('maps content empty and retryable first-page failure', () async {
     final gateway = _ScriptedGateway([
       _ImmediateOperation(
-        const TrackSearchPageResult(page: 1, total: 1, tracks: [firstTrack]),
+        const TrackSearchPageResult(page: 1, total: 1, items: [firstItem]),
       ),
       _ImmediateOperation(const TrackSearchPageResult(page: 1)),
       _ImmediateOperation(
         const TrackSearchPageResult(failure: TrackSearchFailure.network),
       ),
       _ImmediateOperation(
-        const TrackSearchPageResult(page: 1, total: 1, tracks: [secondTrack]),
+        const TrackSearchPageResult(page: 1, total: 1, items: [secondItem]),
       ),
     ]);
     final controller = TrackSearchController(gateway);
@@ -65,7 +67,7 @@ void main() {
     final gateway = _ScriptedGateway([
       oldOperation,
       _ImmediateOperation(
-        const TrackSearchPageResult(page: 1, total: 1, tracks: [secondTrack]),
+        const TrackSearchPageResult(page: 1, total: 1, items: [secondItem]),
       ),
     ]);
     final controller = TrackSearchController(gateway);
@@ -78,7 +80,7 @@ void main() {
     expect(controller.tracks, [secondTrack]);
 
     oldResult.complete(
-      const TrackSearchPageResult(page: 1, total: 1, tracks: [firstTrack]),
+      const TrackSearchPageResult(page: 1, total: 1, items: [firstItem]),
     );
     await oldRequest;
     expect(controller.query, 'new query');
@@ -95,14 +97,14 @@ void main() {
             page: 1,
             total: 3,
             hasMore: true,
-            tracks: [firstTrack],
+            items: [firstItem],
           ),
         ),
         _ImmediateOperation(
           const TrackSearchPageResult(
             page: 2,
             total: 3,
-            tracks: [firstTrack, secondTrack],
+            items: [firstItem, secondItem],
           ),
         ),
         _ImmediateOperation(
@@ -122,7 +124,7 @@ void main() {
             page: 1,
             total: 2,
             hasMore: true,
-            tracks: [firstTrack],
+            items: [firstItem],
           ),
         ),
         gateway.operations.last,
@@ -151,7 +153,7 @@ void main() {
     expect(controller.stage, TrackSearchStage.idle);
     expect(controller.query, isEmpty);
     result.complete(
-      const TrackSearchPageResult(page: 1, total: 1, tracks: [firstTrack]),
+      const TrackSearchPageResult(page: 1, total: 1, items: [firstItem]),
     );
     await request;
     expect(controller.stage, TrackSearchStage.idle);

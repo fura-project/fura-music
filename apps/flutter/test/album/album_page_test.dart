@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
@@ -7,22 +9,27 @@ import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
-import 'package:flutterustmusic/search/track_search_gateway.dart';
-import 'package:flutterustmusic/search/track_search_page.dart';
 
 void main() {
-  testWidgets('search result can be queued or handed to playback', (
+  testWidgets('Album Tracks can be queued, played, and returned from', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const album = AlbumSummary(
+      providerId: 'qq-music',
+      opaqueId: 'album:51001:fixtureAlbumMid',
+      title: 'Synthetic album',
+    );
     const track = PlaylistTrackSummary(
       providerId: 'qq-music',
-      opaqueId: 'track:41001:0:searchMid:-',
-      title: 'Search result',
-      artistNames: ['Search artist'],
-      albumTitle: 'Search album',
-      durationSeconds: 180,
+      opaqueId: 'track:41001:0:fixtureMid:-',
+      title: 'Synthetic track',
+      artistNames: ['Album artist'],
     );
-    final search = _SearchGateway(track);
     final queue = _QueueGateway();
     final playback = QueuePlaybackController(
       queue,
@@ -32,79 +39,67 @@ void main() {
       ),
     );
     addTearDown(playback.dispose);
+    var backCalls = 0;
 
     await tester.pumpWidget(
       MaterialApp(
-        home: TrackSearchPage(
-          gateway: search,
+        home: AlbumPage(
+          album: album,
+          gateway: const _AlbumGateway(track),
           queuePlaybackController: playback,
-          onBack: () {},
-          onOpenAlbum: (_) {},
+          onBack: () => backCalls += 1,
           onSignInAgain: () {},
         ),
       ),
     );
-
-    await tester.enterText(
-      find.byKey(const ValueKey('track-search-field')),
-      '  search words  ',
-    );
-    await tester.pump();
-    expect(find.byTooltip('Clear search'), findsOneWidget);
-    await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
 
-    expect(search.requests, [('search words', 1, 30)]);
-    expect(find.text('Search result'), findsOneWidget);
-    expect(find.text('Search artist · Search album'), findsOneWidget);
-    expect(find.text('1 result for “search words”'), findsOneWidget);
+    expect(find.text('Synthetic album'), findsOneWidget);
+    expect(find.text('1 Track'), findsOneWidget);
+    expect(find.text('Synthetic track'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const ValueKey('track-search-queue-0')));
+    await tester.tap(find.byKey(const ValueKey('album-queue-0')));
     await tester.pumpAndSettle();
     expect(queue.pushedTracks, [track]);
     expect(find.text('Added to queue'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
+    await tester.tap(find.byKey(const ValueKey('album-track-0')));
     await tester.pumpAndSettle();
     expect(queue.replacedTracks, [track]);
     expect(queue.replacedIndex, 0);
+
+    await tester.tap(find.byKey(const ValueKey('album-back')));
+    expect(backCalls, 1);
     expect(tester.takeException(), isNull);
   });
 }
 
-class _SearchGateway implements TrackSearchGateway {
-  _SearchGateway(this.track);
+class _AlbumGateway implements AlbumTrackGateway {
+  const _AlbumGateway(this.track);
 
   final PlaylistTrackSummary track;
-  final List<(String, int, int)> requests = [];
 
   @override
-  TrackSearchPageLoadOperation beginLoad({
-    required String query,
-    required int page,
+  AlbumTrackPageLoadOperation beginLoad({
+    required AlbumSummary album,
+    required int offset,
     required int size,
-  }) {
-    requests.add((query, page, size));
-    return _SearchOperation(
-      TrackSearchPageResult(
-        page: page,
-        total: 1,
-        items: [TrackSearchItem(track: track)],
-      ),
-    );
-  }
+  }) => _AlbumOperation(
+    AlbumTrackPageResult(offset: offset, total: 1, tracks: [track]),
+  );
 }
 
-class _SearchOperation implements TrackSearchPageLoadOperation {
-  const _SearchOperation(this.result);
+class _AlbumOperation implements AlbumTrackPageLoadOperation {
+  const _AlbumOperation(this.result);
 
-  final TrackSearchPageResult result;
+  final AlbumTrackPageResult result;
 
   @override
   bool cancel() => true;
 
   @override
-  Future<TrackSearchPageResult> run() async => result;
+  Future<AlbumTrackPageResult> run() async => result;
 }
 
 class _QueueGateway implements PlaybackQueueGateway {

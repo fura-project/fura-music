@@ -12,9 +12,12 @@ import 'package:flutter/material.dart'
         InkWell,
         ListView,
         Scrollable,
-        ScrollableState;
+        ScrollableState,
+        TextField,
+        TextInputAction;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -354,6 +357,74 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No playlists yet'), findsOneWidget);
     expect(tester.widget<IconButton>(searchEntry).focusNode?.hasFocus, isTrue);
+  });
+
+  testWidgets('returns from Album to the preserved Search query and results', (
+    tester,
+  ) async {
+    const album = AlbumSummary(
+      providerId: 'qq-music',
+      opaqueId: 'album:51001:fixtureAlbumMid',
+      title: 'Synthetic album',
+    );
+    const track = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41001:0:fixtureMid:-',
+      title: 'Synthetic track',
+      artistNames: ['Artist'],
+      albumTitle: 'Synthetic album',
+    );
+    final search = _WidgetSearchGateway(
+      const TrackSearchPageResult(
+        page: 1,
+        total: 1,
+        items: [TrackSearchItem(track: track, album: album)],
+      ),
+    );
+    final albumTracks = _WidgetAlbumGateway(
+      const AlbumTrackPageResult(offset: 0, total: 1, tracks: [track]),
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        searchGateway: search,
+        albumTrackGateway: albumTracks,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-track-search')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      'album query',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    expect(search.requests, [('album query', 1, 30)]);
+
+    await tester.tap(find.byKey(const ValueKey('track-search-album-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+    expect(albumTracks.requests, [(album, 0, 30)]);
+
+    await tester.tap(find.byKey(const ValueKey('album-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('track-search-content')), findsOneWidget);
+    expect(find.text('Synthetic track'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+          .controller
+          ?.text,
+      'album query',
+    );
+    expect(search.requests, [('album query', 1, 30)]);
   });
 
   testWidgets('routes verified startup restore into the library', (
@@ -1197,6 +1268,64 @@ class _UnusedSearchGateway implements TrackSearchGateway {
     required int page,
     required int size,
   }) => throw StateError('search should not run in this navigation test');
+}
+
+class _WidgetSearchGateway implements TrackSearchGateway {
+  _WidgetSearchGateway(this.result);
+
+  final TrackSearchPageResult result;
+  final List<(String, int, int)> requests = [];
+
+  @override
+  TrackSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) {
+    requests.add((query, page, size));
+    return _WidgetSearchOperation(result);
+  }
+}
+
+class _WidgetSearchOperation implements TrackSearchPageLoadOperation {
+  const _WidgetSearchOperation(this.result);
+
+  final TrackSearchPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<TrackSearchPageResult> run() async => result;
+}
+
+class _WidgetAlbumGateway implements AlbumTrackGateway {
+  _WidgetAlbumGateway(this.result);
+
+  final AlbumTrackPageResult result;
+  final List<(AlbumSummary, int, int)> requests = [];
+
+  @override
+  AlbumTrackPageLoadOperation beginLoad({
+    required AlbumSummary album,
+    required int offset,
+    required int size,
+  }) {
+    requests.add((album, offset, size));
+    return _WidgetAlbumOperation(result);
+  }
+}
+
+class _WidgetAlbumOperation implements AlbumTrackPageLoadOperation {
+  const _WidgetAlbumOperation(this.result);
+
+  final AlbumTrackPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<AlbumTrackPageResult> run() async => result;
 }
 
 class _DetailRequest {

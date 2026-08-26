@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Implement Album browsing from Track search"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -26,16 +26,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Refreshed the current Android 16 x64 signed-out runtime after the recent M2 presentation changes. A direct logical-root Flutter invocation produced an x64-only Debug APK containing Flutter, Dart JNI, and Rust; clean install plus force-stop/relaunch both rendered the 1080×2400 sign-in surface without visible clipping, Flutter fatal errors, exceptions, or ANRs. The empty secure-storage algorithm migration ran only on first launch. The exact test package was uninstalled and the AVD stopped; no QR, account, QQ endpoint, or remote media was touched.
 - Completed the M2 reliability and daily-use checkpoint against all eight Roadmap exit criteria. The current Linux release bundle builds; the review preserves the exact Android, physical-device, live QQ, and unavailable-platform evidence limits instead of promoting them into broader claims.
 - Implemented the first M3 slice: anonymous, direct QQ Music Track search through `QQMusicClient` → `TrackSearchProvider` → provider-neutral Domain → cancellable typed Bridge → adaptive Flutter search. Query replacement suppresses stale results; first-page, empty, retry, pagination, append failure, clear, and disposal are explicit; results start or append to the existing Rust-backed playback queue. Other result types, suggestions/history, quality selection, and navigation-framework changes remain out of scope.
-- Revalidated the resulting baseline: Rust formatting, 161 offline Rust tests, strict Clippy, strict Dart analysis, all 165 Flutter tests, and the Linux x64 Release bundle pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove real-account search-to-CDN playback.
+- Implemented the second M3 slice: Track-search items retain an optional opaque Album identity, and a direct bounded QQ Music Album-song request maps paged Tracks through the provider-neutral Catalog contract and a cancellable typed Bridge. Flutter owns explicit page/retry/append/cancel/stale/disposal state, preserves Search while Album is open, and reuses the existing Rust-backed queue without treating Album as a playlist or adding a navigation framework.
+- Revalidated the resulting baseline: Rust formatting, 168 offline Rust tests, strict Clippy, strict Dart analysis, all 173 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live Album compatibility or real-account search-to-CDN playback.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 discovery selected Album browsing from Track search. The finite slice preserves an optional provider-neutral Album identity on Search results, loads bounded Album-song pages directly from QQ Music, returns locally to preserved Search state, and hands Tracks to the existing queue. Album metadata expansion/mutation, Album-type search, Artist, Home, and navigation-framework work are excluded.
+- M3 returns to bounded discovery after completing Track search and Album browsing. Artist and Home remain authorized spaces but retain the evidence gaps recorded in the Album discovery note; neither is an implementation commitment yet.
 
 # Next Candidates
 
-1. Implement and prove the selected Album-browsing slice across Domain, client, Provider, cancellable Bridge, adaptive Flutter state/navigation, and the existing queue.
+1. Run one bounded M3 product-completeness discovery pass and rank at most three evidence-backed candidates after the completed Album slice.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -57,7 +58,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - The successful login shape supplied the encrypted identity needed for the combined library. Other future login shapes must still fail truthfully if QQ omits it rather than silently showing a partial collection.
 - Authenticated playlist/detail navigation has user-reported acceptance evidence, but no user-derived response or identifier is retained.
 - Track-search request shape has two current independent implementation references plus one bounded anonymous coarse probe; the full response and Track content were not retained, and no authenticated search-to-playback observation has been claimed.
-- Album detail/song request shape has current implementation evidence and one bounded anonymous coarse probe. Artist discovery remains deferred because its bounded probe returned an unresolved detail code and ignored the requested song-row count.
+- Album-song request shape has current implementation evidence, one bounded anonymous coarse probe, and offline regression coverage. Live Album compatibility is not claimed. Artist discovery remains deferred because its bounded probe returned an unresolved detail code and ignored the requested song-row count.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -33,6 +35,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.onSignInAgain,
     required this.onSignOut,
     this.searchGateway,
+    this.albumTrackGateway,
     super.key,
   });
 
@@ -45,6 +48,7 @@ class UserLibraryPage extends StatefulWidget {
   final VoidCallback onSignInAgain;
   final Future<CredentialSignOutResult> Function() onSignOut;
   final TrackSearchGateway? searchGateway;
+  final AlbumTrackGateway? albumTrackGateway;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -54,6 +58,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
   late final TrackSearchGateway _searchGateway;
+  late final AlbumTrackGateway _albumTrackGateway;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -62,6 +67,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   );
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
+  AlbumSummary? _selectedAlbum;
   UserPlaylistSummary? _lastOpenedPlaylist;
   bool _searchOpen = false;
   bool _handledLyricCredentialRejection = false;
@@ -72,6 +78,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     super.initState();
     _controller = UserLibraryController(widget.gateway);
     _searchGateway = widget.searchGateway ?? const RustTrackSearchGateway();
+    _albumTrackGateway =
+        widget.albumTrackGateway ?? const RustAlbumTrackGateway();
     _queuePlaybackController = QueuePlaybackController(
       widget.playbackQueueGateway,
       TrackPlaybackController(
@@ -109,13 +117,31 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   @override
   Widget build(BuildContext context) {
     final selectedPlaylist = _selectedPlaylist;
+    final selectedAlbum = _selectedAlbum;
     final page = _searchOpen
-        ? TrackSearchPage(
-            key: const ValueKey('track-search-page'),
-            gateway: _searchGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _closeSearch,
-            onSignInAgain: widget.onSignInAgain,
+        ? IndexedStack(
+            index: selectedAlbum == null ? 0 : 1,
+            children: [
+              TrackSearchPage(
+                key: const ValueKey('track-search-page'),
+                gateway: _searchGateway,
+                queuePlaybackController: _queuePlaybackController,
+                onBack: _closeSearch,
+                onOpenAlbum: _openAlbum,
+                onSignInAgain: widget.onSignInAgain,
+              ),
+              if (selectedAlbum == null)
+                const SizedBox.shrink()
+              else
+                AlbumPage(
+                  key: ValueKey('album-page-${selectedAlbum.opaqueId}'),
+                  album: selectedAlbum,
+                  gateway: _albumTrackGateway,
+                  queuePlaybackController: _queuePlaybackController,
+                  onBack: _returnToSearch,
+                  onSignInAgain: widget.onSignInAgain,
+                ),
+            ],
           )
         : selectedPlaylist != null
         ? PlaylistDetailPage(
@@ -131,7 +157,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       controller: _queuePlaybackController,
       child: page,
     );
-    final hasLocalPage = selectedPlaylist != null || _searchOpen;
+    final hasLocalPage =
+        selectedPlaylist != null || _searchOpen || selectedAlbum != null;
     final shortcutPage = !hasLocalPage
         ? playbackPage
         : CallbackShortcuts(
@@ -171,7 +198,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _returnFromLocalPage() {
-    if (_searchOpen) {
+    if (_selectedAlbum != null) {
+      _returnToSearch();
+    } else if (_searchOpen) {
       _closeSearch();
     } else {
       _returnToLibrary();
@@ -185,12 +214,26 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _closeSearch() {
     if (!_searchOpen) return;
-    setState(() => _searchOpen = false);
+    setState(() {
+      _selectedAlbum = null;
+      _searchOpen = false;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_searchOpen && _searchReturnFocusNode.context != null) {
         _searchReturnFocusNode.requestFocus();
       }
     });
+  }
+
+  void _openAlbum(AlbumSummary album) {
+    if (!_searchOpen || _selectedAlbum != null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _selectedAlbum = album);
+  }
+
+  void _returnToSearch() {
+    if (_selectedAlbum == null) return;
+    setState(() => _selectedAlbum = null);
   }
 
   void _openPlaylist(UserPlaylistSummary playlist) {

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/src/rust/api/album.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
@@ -6,6 +7,7 @@ import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
+import 'package:flutterustmusic/src/rust/api/search.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -17,6 +19,8 @@ void main() {
 
     expect(status.provider.id, 'qq-music');
     expect(status.provider.implementedCapabilities, [
+      'Search',
+      'Catalog',
       'Authentication',
       'UserLibrary',
       'Lyrics',
@@ -48,6 +52,31 @@ void main() {
     expect(
       cancelledTrackPageLoad.failure,
       QqMusicPlaylistTrackPageLoadFailure.cancelled,
+    );
+    final unusedSearchLoad = beginQqMusicTrackSearchPageLoad(
+      query: 'synthetic query',
+      page: 1,
+      size: 30,
+    );
+    expect(unusedSearchLoad.isActive, isTrue);
+    expect(unusedSearchLoad.cancel(), isTrue);
+    final cancelledSearchLoad = await unusedSearchLoad.run();
+    expect(
+      cancelledSearchLoad.failure,
+      QqMusicTrackSearchPageLoadFailure.cancelled,
+    );
+    final unusedAlbumLoad = beginQqMusicAlbumTrackPageLoad(
+      providerId: 'qq-music',
+      opaqueAlbumId: 'album:43001:fixtureAlbumMid',
+      offset: 0,
+      size: 30,
+    );
+    expect(unusedAlbumLoad.isActive, isTrue);
+    expect(unusedAlbumLoad.cancel(), isTrue);
+    final cancelledAlbumLoad = await unusedAlbumLoad.run();
+    expect(
+      cancelledAlbumLoad.failure,
+      QqMusicAlbumTrackPageLoadFailure.cancelled,
     );
     final unusedMediaResolution = beginQqMusicMediaResolution(
       providerId: 'qq-music',
