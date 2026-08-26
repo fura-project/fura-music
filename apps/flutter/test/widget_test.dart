@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' show SemanticsAction, Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
-import 'package:flutter/material.dart' show FilledButton;
+import 'package:flutter/material.dart' show FilledButton, InkWell;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
@@ -521,17 +521,25 @@ void main() {
     expect(find.text('System back playlist'), findsOneWidget);
     expect(libraryGateway._next, 1);
     expect(find.text('System back track'), findsNothing);
+    final playlistAction = find.ancestor(
+      of: find.text('System back playlist'),
+      matching: find.byType(InkWell),
+    );
+    expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
 
-    await tester.tap(find.text('System back playlist').last);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
+    expect(find.text('System back track'), findsOneWidget);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
     await tester.pumpAndSettle();
     expect(find.text('Your playlists'), findsOneWidget);
+    expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
 
-    await tester.tap(find.text('System back playlist').last);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
+    expect(find.text('System back track'), findsOneWidget);
     await tester.sendKeyEvent(
       LogicalKeyboardKey.browserBack,
       platform: 'windows',
@@ -539,6 +547,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Your playlists'), findsOneWidget);
     expect(libraryGateway._next, 1);
+    expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
   });
 
   testWidgets('failed detail refresh keeps tracks visible and retries', (

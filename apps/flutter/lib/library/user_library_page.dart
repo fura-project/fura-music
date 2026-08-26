@@ -49,7 +49,11 @@ class UserLibraryPage extends StatefulWidget {
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
+  final FocusNode _playlistReturnFocusNode = FocusNode(
+    debugLabel: 'last opened playlist',
+  );
   UserPlaylistSummary? _selectedPlaylist;
+  UserPlaylistSummary? _lastOpenedPlaylist;
   bool _handledLyricCredentialRejection = false;
   bool _signingOut = false;
 
@@ -86,6 +90,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _controller.dispose();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _queuePlaybackController.dispose();
+    _playlistReturnFocusNode.dispose();
     super.dispose();
   }
 
@@ -126,7 +131,25 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
   }
 
-  void _returnToLibrary() => setState(() => _selectedPlaylist = null);
+  void _returnToLibrary() {
+    if (_selectedPlaylist == null) return;
+    setState(() => _selectedPlaylist = null);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _selectedPlaylist != null ||
+          _playlistReturnFocusNode.context == null) {
+        return;
+      }
+      _playlistReturnFocusNode.requestFocus();
+    });
+  }
+
+  void _openPlaylist(UserPlaylistSummary playlist) {
+    setState(() {
+      _lastOpenedPlaylist = playlist;
+      _selectedPlaylist = playlist;
+    });
+  }
 
   Widget _libraryScaffold() => Scaffold(
     appBar: AppBar(
@@ -225,7 +248,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     UserLibraryStage.content => _PlaylistCollection(
       key: const ValueKey('user-library-content'),
       playlists: _controller.playlists,
-      onSelected: (playlist) => setState(() => _selectedPlaylist = playlist),
+      onSelected: _openPlaylist,
+      returnFocusPlaylist: _lastOpenedPlaylist,
+      returnFocusNode: _playlistReturnFocusNode,
     ),
     UserLibraryStage.empty => const _LibraryEmpty(
       key: ValueKey('user-library-empty'),
@@ -254,11 +279,25 @@ class _PlaylistCollection extends StatelessWidget {
   const _PlaylistCollection({
     required this.playlists,
     required this.onSelected,
+    required this.returnFocusPlaylist,
+    required this.returnFocusNode,
     super.key,
   });
 
   final List<UserPlaylistSummary> playlists;
   final ValueChanged<UserPlaylistSummary> onSelected;
+  final UserPlaylistSummary? returnFocusPlaylist;
+  final FocusNode returnFocusNode;
+
+  FocusNode? _focusNodeFor(UserPlaylistSummary playlist) {
+    final target = returnFocusPlaylist;
+    if (target == null ||
+        target.providerId != playlist.providerId ||
+        target.opaqueId != playlist.opaqueId) {
+      return null;
+    }
+    return returnFocusNode;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +345,7 @@ class _PlaylistCollection extends StatelessWidget {
                         itemBuilder: (context, index) => _PlaylistGridItem(
                           playlist: playlists[index],
                           onTap: () => onSelected(playlists[index]),
+                          focusNode: _focusNodeFor(playlists[index]),
                         ),
                       )
                     : ListView.separated(
@@ -314,6 +354,7 @@ class _PlaylistCollection extends StatelessWidget {
                         itemBuilder: (context, index) => _PlaylistListItem(
                           playlist: playlists[index],
                           onTap: () => onSelected(playlists[index]),
+                          focusNode: _focusNodeFor(playlists[index]),
                         ),
                       ),
               ),
@@ -326,10 +367,15 @@ class _PlaylistCollection extends StatelessWidget {
 }
 
 class _PlaylistGridItem extends StatelessWidget {
-  const _PlaylistGridItem({required this.playlist, required this.onTap});
+  const _PlaylistGridItem({
+    required this.playlist,
+    required this.onTap,
+    required this.focusNode,
+  });
 
   final UserPlaylistSummary playlist;
   final VoidCallback onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -340,6 +386,7 @@ class _PlaylistGridItem extends StatelessWidget {
       excludeSemantics: true,
       onTap: onTap,
       child: InkWell(
+        focusNode: focusNode,
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Column(
@@ -373,10 +420,15 @@ class _PlaylistGridItem extends StatelessWidget {
 }
 
 class _PlaylistListItem extends StatelessWidget {
-  const _PlaylistListItem({required this.playlist, required this.onTap});
+  const _PlaylistListItem({
+    required this.playlist,
+    required this.onTap,
+    required this.focusNode,
+  });
 
   final UserPlaylistSummary playlist;
   final VoidCallback onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -387,6 +439,7 @@ class _PlaylistListItem extends StatelessWidget {
       excludeSemantics: true,
       onTap: onTap,
       child: InkWell(
+        focusNode: focusNode,
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Padding(
