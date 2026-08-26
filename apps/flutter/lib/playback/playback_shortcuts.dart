@@ -31,7 +31,7 @@ class PlaybackShortcuts extends StatelessWidget {
           _advancePlayback,
       const SingleActivator(LogicalKeyboardKey.mediaStop): _stopPlayback,
     },
-    child: Focus(autofocus: true, child: child),
+    child: Focus(autofocus: true, skipTraversal: true, child: child),
   );
 
   void _activatePlayback() {

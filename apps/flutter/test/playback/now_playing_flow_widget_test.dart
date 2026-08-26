@@ -465,11 +465,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(Dialog), findsOneWidget);
+    expect(FocusManager.instance.primaryFocus?.skipTraversal, isTrue);
     await _sendControlShortcut(tester, LogicalKeyboardKey.arrowRight);
     expect(_nowPlayingTitle(tester), 'Second track');
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
     await tester.pumpAndSettle();
     expect(find.textContaining('Paused'), findsOneWidget);
+  });
+
+  testWidgets('desktop traversal reaches consecutive track actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway(const []),
+      audio: _FakeAudioEngine(const []),
+    );
+    final first = find.byKey(const ValueKey('playlist-track-row-1'));
+    final second = find.byKey(const ValueKey('playlist-track-row-2'));
+
+    for (var attempt = 0; attempt < 8; attempt += 1) {
+      if (tester.widget<InkWell>(first).focusNode?.hasFocus ?? false) break;
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(tester.widget<InkWell>(first).focusNode?.hasFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(tester.widget<InkWell>(second).focusNode?.hasFocus, isTrue);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f10);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Play from here'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
   });
 
   testWidgets('desktop shortcuts remain active in lyrics and volume dialogs', (
