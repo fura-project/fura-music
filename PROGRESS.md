@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "M4.4 Shared Discover Track rows"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -58,13 +58,13 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The shared Album/Artist/Ranking header slice is complete. Global ranking now returns to the authorized M4.4 Search/Discover hierarchy rather than continuing local catalog presentation work.
+- The bounded M4.4 Search/Discover audit selected the two duplicated Radar/New songs Track rows. The finite slice extends the existing catalog grammar without changing Search rows, selectors, state machines, navigation, or queue ownership.
 
 # Next Candidates
 
-1. Run a bounded M4.4 Search/Discover hierarchy audit and select at most three evidence-backed candidates.
-2. Keep selected/current Track presentation deferred until a non-frame-driven listener exists; do not make long lists rebuild on playback position frames.
-3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
+1. Implement and validate shared `MusicTrackTile` presentation for Radar and New songs only.
+2. Re-rank the adaptive Search/Discover secondary selector against bounded shared content-state migrations after this slice.
+3. Keep selected/current Track presentation deferred until a non-frame-driven listener exists, and preserve the locally blocked M1 acceptance evidence.
 
 # Blockers
 
