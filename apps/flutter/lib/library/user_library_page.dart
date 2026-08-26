@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
@@ -101,15 +102,27 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             onSignInAgain: widget.onSignInAgain,
           )
         : _libraryScaffold();
+    final playbackPage = PlaybackShortcuts(
+      controller: _queuePlaybackController,
+      child: page,
+    );
+    final shortcutPage = selectedPlaylist == null
+        ? playbackPage
+        : CallbackShortcuts(
+            bindings: <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
+                  _returnToLibrary,
+              const SingleActivator(LogicalKeyboardKey.browserBack):
+                  _returnToLibrary,
+            },
+            child: playbackPage,
+          );
     return PopScope<void>(
       canPop: selectedPlaylist == null,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _selectedPlaylist != null) _returnToLibrary();
       },
-      child: PlaybackShortcuts(
-        controller: _queuePlaybackController,
-        child: page,
-      ),
+      child: shortcutPage,
     );
   }
 

@@ -5,6 +5,7 @@ import 'dart:ui' show SemanticsAction, Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/material.dart' show FilledButton;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -381,7 +382,7 @@ void main() {
     expect(find.text('Your playlists'), findsOneWidget);
   });
 
-  testWidgets('system back returns from local detail to the existing library', (
+  testWidgets('system and desktop back return to the existing library', (
     tester,
   ) async {
     final libraryGateway = _WidgetLibraryGateway([
@@ -403,19 +404,22 @@ void main() {
           authenticated: true,
         ),
         libraryGateway: libraryGateway,
-        playlistDetailGateway: _WidgetDetailGateway([
-          const PlaylistTrackPageResult(
-            total: 1,
-            tracks: [
-              PlaylistTrackSummary(
-                providerId: 'qq-music',
-                opaqueId: 'track:system-back',
-                title: 'System back track',
-                artistNames: [],
-              ),
-            ],
+        playlistDetailGateway: _WidgetDetailGateway(
+          List.filled(
+            3,
+            const PlaylistTrackPageResult(
+              total: 1,
+              tracks: [
+                PlaylistTrackSummary(
+                  providerId: 'qq-music',
+                  opaqueId: 'track:system-back',
+                  title: 'System back track',
+                  artistNames: [],
+                ),
+              ],
+            ),
           ),
-        ]),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -431,6 +435,24 @@ void main() {
     expect(find.text('System back playlist'), findsOneWidget);
     expect(libraryGateway._next, 1);
     expect(find.text('System back track'), findsNothing);
+
+    await tester.tap(find.text('System back playlist').last);
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Your playlists'), findsOneWidget);
+
+    await tester.tap(find.text('System back playlist').last);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(
+      LogicalKeyboardKey.browserBack,
+      platform: 'windows',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Your playlists'), findsOneWidget);
+    expect(libraryGateway._next, 1);
   });
 
   testWidgets('failed detail refresh keeps tracks visible and retries', (
