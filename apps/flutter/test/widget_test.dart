@@ -88,6 +88,7 @@ void main() {
   testWidgets('does not present an unverified restored session as signed in', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     final session = _WaitingSession();
     final verification = _PendingWidgetVerification();
     await tester.pumpWidget(
@@ -110,6 +111,52 @@ void main() {
     expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
     expect(find.text('Try verification again'), findsOneWidget);
     expect(find.text('You’re signed in'), findsNothing);
+    final failureSemantics = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('Couldn’t reach QQ Music')),
+    );
+    expect(failureSemantics.label, contains('Couldn’t reach QQ Music'));
+    expect(failureSemantics.flagsCollection.isLiveRegion, isTrue);
+    expect(
+      failureSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('announces a terminal QR sign-in failure', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final session = _WaitingSession();
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(session),
+      ),
+    );
+
+    await tester.ensureVisible(find.text('Continue with WeChat'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with WeChat'));
+    await tester.pump();
+    session.complete(
+      const LoginUpdate(
+        failure: LoginFailure.serviceUnavailable,
+        sessionActive: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('QQ Music is unavailable'), findsOneWidget);
+    expect(find.text('Get a new code'), findsOneWidget);
+    final failureSemantics = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('QQ Music is unavailable')),
+    );
+    expect(failureSemantics.label, contains('QQ Music is unavailable'));
+    expect(failureSemantics.flagsCollection.isLiveRegion, isTrue);
+    expect(
+      failureSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
+    semantics.dispose();
   });
 
   testWidgets('shows an explicitly rejected restored session', (tester) async {

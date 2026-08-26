@@ -503,17 +503,7 @@ class _AuthenticationContent extends StatelessWidget {
       children: [
         const _PanelIcon(icon: Icons.lock_reset_rounded),
         const SizedBox(height: 24),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 10),
-        Text(
-          detail,
-          textAlign: TextAlign.center,
-          style: _supportingStyle(context),
-        ),
+        _announcedTerminalMessage(context, title, detail),
         const SizedBox(height: 24),
         if (controller.stage == LoginStage.signOutStorageCleanupFailed)
           FilledButton.tonal(
@@ -701,17 +691,7 @@ class _AuthenticationContent extends StatelessWidget {
       children: [
         const _PanelIcon(icon: Icons.error_outline_rounded),
         const SizedBox(height: 24),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 10),
-        Text(
-          detail,
-          textAlign: TextAlign.center,
-          style: _supportingStyle(context),
-        ),
+        _announcedTerminalMessage(context, title, detail),
         const SizedBox(height: 24),
         if (controller.canRetry)
           FilledButton.tonal(
@@ -725,6 +705,33 @@ class _AuthenticationContent extends StatelessWidget {
       ],
     );
   }
+
+  Widget _announcedTerminalMessage(
+    BuildContext context,
+    String title,
+    String detail,
+  ) => Semantics(
+    container: true,
+    liveRegion: true,
+    label: '$title. $detail',
+    excludeSemantics: true,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          detail,
+          textAlign: TextAlign.center,
+          style: _supportingStyle(context),
+        ),
+      ],
+    ),
+  );
 
   TextStyle? _supportingStyle(BuildContext context) => Theme.of(context)
       .textTheme
