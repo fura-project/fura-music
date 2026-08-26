@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "M4.6 Cross-platform product audit"
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -64,12 +64,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The Expanded Now Playing control hierarchy is complete. M4 remains active and the next action is whole-project ranking before another finite slice.
+- Post-playback global ranking selected a bounded M4.6 cross-platform product audit. It will review the integrated eleven-slice baseline before authorizing another implementation task.
 
 # Next Candidates
 
-1. Re-rank Lyrics state-language alignment against an M4.6 cross-platform product audit.
-2. Prefer a reproduced cross-surface gap over speculative presentation polish.
+1. Complete the bounded M4.6 width/theme/input/focus/state evidence matrix and rank at most three concrete gaps.
+2. Implement only the highest-value finite candidate if the audit reproduces one.
 3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
 
 # Blockers
