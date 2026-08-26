@@ -7,18 +7,20 @@ use std::sync::{Arc, Mutex};
 use music_domain::{
     AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
     ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat, AudioQuality, PlaylistId,
-    PlaylistSummary, PlaylistTracksPage, ProviderId, RankingGroup, RankingId, RankingSummary,
-    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
-    SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RankingGroup, RankingId,
+    RankingSummary, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
+    SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem,
+    TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider, ArtistSearchProvider,
     ArtistTracksProvider, AuthenticationError, CatalogError, LyricsError, LyricsProvider,
     MediaResolutionError, MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider,
-    PlaylistDetailsProvider, ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge,
-    QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-    RankingsProvider, RecommendationError, RecommendedPlaylistsProvider, SearchError,
-    TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+    PlaylistDetailsProvider, PlaylistSearchProvider, ProviderCapability, ProviderDescriptor,
+    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
+    QrAuthenticationSession, QrImageFormat, RankingsProvider, RecommendationError,
+    RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
+    UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
@@ -26,11 +28,11 @@ use qqmusic_client::{
     QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicClient,
     QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
     QqMusicMediaError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QqMusicPlaylistDetailError, QqMusicRankingSummary, QqMusicRankingsError,
-    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
-    QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
-    WechatQrLoginSession,
+    QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
+    QqMusicRankingSummary, QqMusicRankingsError, QqMusicRecommendedPlaylist,
+    QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackSummary, QrImageMediaType,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -466,6 +468,37 @@ where
             page.total(),
             page.has_more(),
             albums,
+        ))
+    }
+}
+
+impl<T> PlaylistSearchProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = SearchError;
+
+    async fn search_playlists(
+        &self,
+        query: String,
+        page: u32,
+        size: u32,
+    ) -> Result<PlaylistSearchPage, Self::Error> {
+        let response = self.client().search_playlists(&query, page, size).await;
+        let page = response.as_ref().map_err(map_playlist_search_error)?;
+        if page.has_more() && page.playlists().is_empty() {
+            return Err(SearchError::InvalidResponse);
+        }
+        let playlists = page
+            .playlists()
+            .iter()
+            .map(map_playlist_search_summary)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(PlaylistSearchPage::new(
+            page.page(),
+            page.total(),
+            page.has_more(),
+            playlists,
         ))
     }
 }
@@ -1058,6 +1091,23 @@ fn map_ranking_summary(ranking: &QqMusicRankingSummary) -> Result<RankingSummary
         .map_err(|_| CatalogError::InvalidResponse)
 }
 
+fn map_playlist_search_summary(
+    playlist: &QqMusicPlaylistSearchSummary,
+) -> Result<PlaylistSummary, SearchError> {
+    let id = PlaylistId::new(
+        qq_music_provider_id(),
+        format!("catalog:{}", playlist.playlist_id()),
+    )
+    .map_err(|_| SearchError::InvalidResponse)?;
+    PlaylistSummary::new(id, playlist.title())
+        .map(|summary| {
+            summary
+                .with_artwork_uri(playlist.artwork_uri().map(str::to_owned))
+                .with_track_count(Some(playlist.track_count()))
+        })
+        .map_err(|_| SearchError::InvalidResponse)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum QqMusicPlaylistRoute {
     Ordinary { playlist_id: u64 },
@@ -1537,6 +1587,34 @@ fn map_album_search_error<E>(error: &QqMusicAlbumSearchError<E>) -> SearchError 
     }
 }
 
+fn map_playlist_search_error<E>(error: &QqMusicPlaylistSearchError<E>) -> SearchError {
+    match error {
+        QqMusicPlaylistSearchError::Transport(_) => SearchError::Network,
+        QqMusicPlaylistSearchError::HttpStatus(_) | QqMusicPlaylistSearchError::Upstream { .. } => {
+            SearchError::ServiceUnavailable
+        }
+        QqMusicPlaylistSearchError::InvalidQuery
+        | QqMusicPlaylistSearchError::InvalidPage { .. }
+        | QqMusicPlaylistSearchError::InvalidPageSize { .. }
+        | QqMusicPlaylistSearchError::Serialize
+        | QqMusicPlaylistSearchError::InvalidJson
+        | QqMusicPlaylistSearchError::MissingGlobalCode
+        | QqMusicPlaylistSearchError::MissingResult
+        | QqMusicPlaylistSearchError::MissingResultCode
+        | QqMusicPlaylistSearchError::MissingData
+        | QqMusicPlaylistSearchError::MissingBody
+        | QqMusicPlaylistSearchError::MissingPlaylistResults
+        | QqMusicPlaylistSearchError::MissingPlaylists
+        | QqMusicPlaylistSearchError::MissingMeta
+        | QqMusicPlaylistSearchError::MissingCurrentPage
+        | QqMusicPlaylistSearchError::MissingNextPage
+        | QqMusicPlaylistSearchError::MissingTotal
+        | QqMusicPlaylistSearchError::MissingPageSize
+        | QqMusicPlaylistSearchError::InvalidPagination
+        | QqMusicPlaylistSearchError::InvalidPlaylist { .. } => SearchError::InvalidResponse,
+    }
+}
+
 fn map_album_tracks_error<E>(error: &QqMusicAlbumTracksError<E>) -> CatalogError {
     match error {
         QqMusicAlbumTracksError::Transport(_) => CatalogError::Network,
@@ -1783,16 +1861,17 @@ mod tests {
         AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider, ArtistSearchProvider,
         ArtistTracksProvider, CatalogError, LyricsError, LyricsProvider, MediaResolutionError,
         MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
-        ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
-        QrAuthenticationSession, QrImageFormat, RankingsProvider, RecommendationError,
-        RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
-        UserPlaylistsProvider,
+        PlaylistSearchProvider, ProviderCapability, QrAuthenticationProgress,
+        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RankingsProvider,
+        RecommendationError, RecommendedPlaylistsProvider, SearchError, TrackSearchProvider,
+        UserLibraryError, UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
         HttpResponse, HttpTransport, LoginType, QqMusicAlbumSearchError, QqMusicAlbumTracksError,
         QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
-        QqMusicClient, QqMusicRankingsError, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+        QqMusicClient, QqMusicPlaylistSearchError, QqMusicRankingsError,
+        QqMusicRecommendedPlaylistsError, QqMusicSearchError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -2425,6 +2504,43 @@ mod tests {
         assert!(!debug.contains("private.jpg"));
     }
 
+    #[tokio::test]
+    async fn maps_public_playlist_search_without_account_state() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "music.search.SearchCgiService": {
+                "code": 0,
+                "data": {
+                    "body": {"songlist": {"list": [{
+                        "dissid": "81001",
+                        "dissname": "Synthetic Playlist",
+                        "imgurl": "https://example.invalid/private.jpg",
+                        "song_count": 12
+                    }]}},
+                    "meta": {"curpage": 1, "nextpage": -1, "sum": 1, "perpage": 30}
+                }
+            }
+        }))));
+
+        let page = provider
+            .search_playlists("synthetic query".into(), 1, 30)
+            .await
+            .expect("Playlist search page");
+
+        assert_eq!(page.page(), 1);
+        assert_eq!(page.total(), 1);
+        assert!(!page.has_more());
+        assert_eq!(page.playlists().len(), 1);
+        assert_eq!(page.playlists()[0].id().opaque(), "catalog:81001");
+        assert_eq!(page.playlists()[0].title(), "Synthetic Playlist");
+        assert_eq!(page.playlists()[0].track_count(), Some(12));
+        assert!(!provider.has_authenticated_credential());
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("Synthetic Playlist"));
+        assert!(!debug.contains("81001"));
+        assert!(!debug.contains("private.jpg"));
+    }
+
     #[test]
     fn maps_search_failures_without_guessing_account_state() {
         assert_eq!(
@@ -2454,6 +2570,18 @@ mod tests {
         assert_eq!(
             super::map_album_search_error(
                 &QqMusicAlbumSearchError::<Infallible>::InvalidPagination
+            ),
+            SearchError::InvalidResponse
+        );
+        assert_eq!(
+            super::map_playlist_search_error(
+                &QqMusicPlaylistSearchError::<Infallible>::HttpStatus(503)
+            ),
+            SearchError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_playlist_search_error(
+                &QqMusicPlaylistSearchError::<Infallible>::InvalidPagination
             ),
             SearchError::InvalidResponse
         );

@@ -46,6 +46,7 @@ void main() {
           onBack: () {},
           onOpenAlbum: (_) {},
           onOpenArtist: (artist) => openedArtist = artist,
+          onOpenPlaylist: (_) {},
           onSignInAgain: () {},
         ),
       ),
@@ -120,6 +121,7 @@ void main() {
           onBack: () {},
           onOpenAlbum: (album) => openedAlbum = album,
           onOpenArtist: (artist) => openedArtist = artist,
+          onOpenPlaylist: (_) {},
           onSignInAgain: () {},
         ),
       ),
@@ -150,12 +152,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(openedArtist?.name, 'Artist for artist query');
 
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Albums'),
-      ),
+    final albumsChoice = find.descendant(
+      of: find.byKey(const ValueKey('search-types')),
+      matching: find.text('Albums'),
     );
+    await tester.ensureVisible(albumsChoice);
+    await tester.pumpAndSettle();
+    await tester.tap(albumsChoice);
     await tester.pumpAndSettle();
     expect(albumSearch.requests, [('artist query', 1, 30)]);
     expect(find.text('Album for artist query'), findsOneWidget);
@@ -166,32 +169,31 @@ void main() {
     expect(albumSearch.requests.last, ('album query', 1, 30));
     expect(find.text('Album for album query'), findsOneWidget);
 
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Tracks'),
-      ),
+    final tracksChoice = find.descendant(
+      of: find.byKey(const ValueKey('search-types')),
+      matching: find.text('Tracks'),
     );
+    await tester.ensureVisible(tracksChoice);
+    await tester.pumpAndSettle();
+    await tester.tap(tracksChoice);
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller?.text, 'track query');
     expect(find.text('Track result'), findsOneWidget);
 
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Artists'),
-      ),
+    final artistsChoice = find.descendant(
+      of: find.byKey(const ValueKey('search-types')),
+      matching: find.text('Artists'),
     );
+    await tester.ensureVisible(artistsChoice);
+    await tester.pumpAndSettle();
+    await tester.tap(artistsChoice);
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller?.text, 'artist query');
     expect(artistSearch.requests.length, 2);
 
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('search-types')),
-        matching: find.text('Albums'),
-      ),
-    );
+    await tester.ensureVisible(albumsChoice);
+    await tester.pumpAndSettle();
+    await tester.tap(albumsChoice);
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller?.text, 'album query');
     expect(albumSearch.requests.length, 2);

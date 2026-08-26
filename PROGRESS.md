@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Direct QQ Music playlist search vertical slice"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -33,16 +33,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the sixth M3 slice: a separate direct anonymous Artist Search operation maps exact Desktop type-1 pages into existing provider-neutral `ArtistSummary` values through a cancellable typed Bridge. Flutter preserves independent Tracks/Artists query, results, pagination, cancellation, and stale-result state; direct results open the existing Artist Tracks/Albums and nested Album/queue path without reloading Search. Mixed Search, other result types, suggestions/history/hot words, Artist biography/follow, and a generic Search runtime remain excluded.
 - Implemented the seventh M3 slice: a separate direct anonymous Album Search operation maps exact Desktop type-2 pages into existing provider-neutral `AlbumSummary` values through a cancellable typed Bridge. Flutter preserves independent Tracks/Artists/Albums query, results, pagination, cancellation, and stale-result state; direct Albums open the existing Album Track/queue path without reloading Search, and the three-type control has a 360px regression. Mixed Search, other result types, suggestions/history/hot words, Album metadata/mutation, and a generic Search runtime remain excluded.
 - Implemented the eighth M3 slice: direct anonymous QQ Music ranking-list/detail operations map grouped current-ranking summaries and paged Tracks through a small provider-neutral Rankings contract and cancellable typed Bridge. Flutter preserves independent Playlists/Rankings discovery state, owns first/empty/error/retry/pagination/append-failure/cancel/stale/disposal behavior, and reuses the existing queue without adding history, subscriptions, third-party charts, heterogeneous Home shelves, or a generic catalog runtime.
-- Revalidated the resulting baseline: Rust formatting, 213 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 225 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live ranking application compatibility, authenticated downstream playback, or discovery-to-CDN playback.
+- Implemented the ninth M3 slice: direct anonymous QQ Music Playlist Search maps exact Desktop type-3 pages into provider-neutral playlist summaries through a cancellable typed Bridge. Flutter preserves independent Tracks/Artists/Albums/Playlists query and result state, keeps the four-type selector usable on a narrow screen, opens the existing public playlist-detail/queue route, and restores Search without reloading. Pagination follows server `nextpage` even when a nonterminal page is shorter than the requested size; mixed Search, creator profiles, history/suggestions/hot words, mutation, and generic Search/navigation infrastructure remain excluded.
+- Revalidated the resulting baseline: Rust formatting, 221 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 233 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live Playlist Search application compatibility, authenticated downstream playback, or Search-to-CDN playback.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Direct Playlist Search is selected after current independent source/fixture evidence and a bounded anonymous three-page Desktop probe. The active finite slice adds independent Playlist Search state and reuses existing public playlist detail/queue ownership; mixed results and generic Search/navigation infrastructure remain excluded.
+- M3 remains active. No finite implementation task is currently selected; the next action is a global evidence-backed task-ranking pass rather than extending the just-edited Search surface by proximity.
 
 # Next Candidates
 
-1. Implement the selected direct Playlist Search slice with service-owned page continuation, provider-neutral playlist summaries, a cancellable Bridge operation, independent Flutter state, and the existing public playlist detail/queue route.
+1. Re-rank the next bounded M3 slice against current Roadmap scope, real protocol/product evidence, user-path value, risks, and the presentation-polish guard before selecting implementation.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -71,7 +72,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Artist-search behavior has three current implementation/fixture references plus one bounded anonymous exact-size/terminal-page probe. The real response supplied the numeric ID, MID, and name required by existing Artist browsing without retaining query or result content; live application compatibility is not yet claimed.
 - Album-search behavior has two current independent implementation references plus one bounded anonymous five-page exact-size/terminal probe. The real response supplied the numeric ID, MID, and title required by existing Album browsing without retaining query or result content; live application compatibility is not yet claimed.
 - Ranking-list behavior has two independent current implementation references plus bounded anonymous list and two-page detail probes. Four non-empty groups, 30 valid summaries, optional period metadata, exact five-row detail pages, stable identity/period, and non-overlapping Track identity were observed without retaining content; live application compatibility is not yet claimed.
-- Playlist-search behavior has two current source/fixture references plus a bounded anonymous three-page Desktop probe. The observed response supplied numeric-string identity, nonblank title, artwork, Track count, and service page metadata without retaining content; one nonterminal page returned fewer rows than requested, so continuation must follow `nextpage`. Live application compatibility is not yet claimed.
+- Playlist-search behavior has two current source/fixture references plus a bounded anonymous three-page Desktop probe and full offline client-to-presentation regression coverage. The observed response supplied numeric-string identity, nonblank title, artwork, Track count, and service page metadata without retaining content; one nonterminal page returned fewer rows than requested, so continuation follows `nextpage`. Live application compatibility is not yet claimed.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.

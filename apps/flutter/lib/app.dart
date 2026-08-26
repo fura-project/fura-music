@@ -18,6 +18,7 @@ import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
+import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
@@ -35,6 +36,7 @@ class MusicApp extends StatelessWidget {
     TrackSearchGateway? searchGateway,
     ArtistSearchGateway? artistSearchGateway,
     AlbumSearchGateway? albumSearchGateway,
+    PlaylistSearchGateway? playlistSearchGateway,
     AlbumTrackGateway? albumTrackGateway,
     ArtistTrackGateway? artistTrackGateway,
     ArtistAlbumGateway? artistAlbumGateway,
@@ -81,6 +83,8 @@ class MusicApp extends StatelessWidget {
       artistSearchGateway:
           artistSearchGateway ?? const RustArtistSearchGateway(),
       albumSearchGateway: albumSearchGateway ?? const RustAlbumSearchGateway(),
+      playlistSearchGateway:
+          playlistSearchGateway ?? const RustPlaylistSearchGateway(),
       albumTrackGateway: albumTrackGateway ?? const RustAlbumTrackGateway(),
       artistTrackGateway: artistTrackGateway ?? const RustArtistTrackGateway(),
       artistAlbumGateway: artistAlbumGateway ?? const RustArtistAlbumGateway(),
@@ -104,6 +108,7 @@ class MusicApp extends StatelessWidget {
     required this.searchGateway,
     required this.artistSearchGateway,
     required this.albumSearchGateway,
+    required this.playlistSearchGateway,
     required this.albumTrackGateway,
     required this.artistTrackGateway,
     required this.artistAlbumGateway,
@@ -124,6 +129,7 @@ class MusicApp extends StatelessWidget {
   final TrackSearchGateway searchGateway;
   final ArtistSearchGateway artistSearchGateway;
   final AlbumSearchGateway albumSearchGateway;
+  final PlaylistSearchGateway playlistSearchGateway;
   final AlbumTrackGateway albumTrackGateway;
   final ArtistTrackGateway artistTrackGateway;
   final ArtistAlbumGateway artistAlbumGateway;
@@ -151,6 +157,7 @@ class MusicApp extends StatelessWidget {
         searchGateway: searchGateway,
         artistSearchGateway: artistSearchGateway,
         albumSearchGateway: albumSearchGateway,
+        playlistSearchGateway: playlistSearchGateway,
         albumTrackGateway: albumTrackGateway,
         artistTrackGateway: artistTrackGateway,
         artistAlbumGateway: artistAlbumGateway,
@@ -189,6 +196,7 @@ class LoginPage extends StatefulWidget {
     required this.searchGateway,
     required this.artistSearchGateway,
     required this.albumSearchGateway,
+    required this.playlistSearchGateway,
     required this.albumTrackGateway,
     required this.artistTrackGateway,
     required this.artistAlbumGateway,
@@ -209,6 +217,7 @@ class LoginPage extends StatefulWidget {
   final TrackSearchGateway searchGateway;
   final ArtistSearchGateway artistSearchGateway;
   final AlbumSearchGateway albumSearchGateway;
+  final PlaylistSearchGateway playlistSearchGateway;
   final AlbumTrackGateway albumTrackGateway;
   final ArtistTrackGateway artistTrackGateway;
   final ArtistAlbumGateway artistAlbumGateway;
@@ -259,6 +268,7 @@ class _LoginPageState extends State<LoginPage> {
             searchGateway: widget.searchGateway,
             artistSearchGateway: widget.artistSearchGateway,
             albumSearchGateway: widget.albumSearchGateway,
+            playlistSearchGateway: widget.playlistSearchGateway,
             albumTrackGateway: widget.albumTrackGateway,
             artistTrackGateway: widget.artistTrackGateway,
             artistAlbumGateway: widget.artistAlbumGateway,

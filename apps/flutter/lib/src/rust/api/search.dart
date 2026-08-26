@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_album_load`, `failed_artist_load`, `failed_load`, `map_album_error`, `map_album_load`, `map_artist_error`, `map_artist_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_album_load`, `failed_artist_load`, `failed_load`, `failed_playlist_load`, `map_album_error`, `map_album_load`, `map_artist_error`, `map_artist_load`, `map_error`, `map_load`, `map_playlist_error`, `map_playlist_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicTrackSearchPageLoadHandle beginQqMusicTrackSearchPageLoad({
   required String query,
@@ -43,6 +43,16 @@ QqMusicAlbumSearchPageLoadHandle beginQqMusicAlbumSearchPageLoad({
   size: size,
 );
 
+QqMusicPlaylistSearchPageLoadHandle beginQqMusicPlaylistSearchPageLoad({
+  required String query,
+  required int page,
+  required int size,
+}) => RustLib.instance.api.crateApiSearchBeginQqMusicPlaylistSearchPageLoad(
+  query: query,
+  page: page,
+  size: size,
+);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumSearchPageLoadHandle>>
 abstract class QqMusicAlbumSearchPageLoadHandle implements RustOpaqueInterface {
   bool cancel();
@@ -60,6 +70,16 @@ abstract class QqMusicArtistSearchPageLoadHandle
   bool get isActive;
 
   Future<QqMusicArtistSearchPageLoad> run();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPlaylistSearchPageLoadHandle>>
+abstract class QqMusicPlaylistSearchPageLoadHandle
+    implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicPlaylistSearchPageLoad> run();
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicTrackSearchPageLoadHandle>>
@@ -151,6 +171,50 @@ class QqMusicArtistSearchPageLoad {
 }
 
 enum QqMusicArtistSearchPageLoadFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  cancelled,
+  alreadyRunning,
+}
+
+class QqMusicPlaylistSearchPageLoad {
+  final int page;
+  final int total;
+  final bool hasMore;
+  final List<LibraryPlaylistSummary> playlists;
+  final QqMusicPlaylistSearchPageLoadFailure? failure;
+
+  const QqMusicPlaylistSearchPageLoad({
+    required this.page,
+    required this.total,
+    required this.hasMore,
+    required this.playlists,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      page.hashCode ^
+      total.hashCode ^
+      hasMore.hashCode ^
+      playlists.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicPlaylistSearchPageLoad &&
+          runtimeType == other.runtimeType &&
+          page == other.page &&
+          total == other.total &&
+          hasMore == other.hasMore &&
+          playlists == other.playlists &&
+          failure == other.failure;
+}
+
+enum QqMusicPlaylistSearchPageLoadFailure {
   coreUnavailable,
   network,
   serviceUnavailable,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -10,6 +11,8 @@ import 'package:flutterustmusic/search/album_search_controller.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_controller.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
+import 'package:flutterustmusic/search/playlist_search_controller.dart';
+import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_controller.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 
@@ -20,9 +23,11 @@ class TrackSearchPage extends StatefulWidget {
     required this.onBack,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.onOpenPlaylist,
     required this.onSignInAgain,
     this.artistGateway,
     this.albumGateway,
+    this.playlistGateway,
     super.key,
   });
 
@@ -31,20 +36,23 @@ class TrackSearchPage extends StatefulWidget {
   final VoidCallback onBack;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final ValueChanged<ArtistSummary> onOpenArtist;
+  final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final VoidCallback onSignInAgain;
   final ArtistSearchGateway? artistGateway;
   final AlbumSearchGateway? albumGateway;
+  final PlaylistSearchGateway? playlistGateway;
 
   @override
   State<TrackSearchPage> createState() => _TrackSearchPageState();
 }
 
-enum _SearchType { tracks, artists, albums }
+enum _SearchType { tracks, artists, albums, playlists }
 
 class _TrackSearchPageState extends State<TrackSearchPage> {
   late final TrackSearchController _controller;
   late final ArtistSearchController _artistController;
   late final AlbumSearchController _albumController;
+  late final PlaylistSearchController _playlistController;
   late final Listenable _controllers;
   final TextEditingController _queryController = TextEditingController();
   final FocusNode _queryFocusNode = FocusNode(debugLabel: 'track search');
@@ -61,10 +69,14 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     _albumController = AlbumSearchController(
       widget.albumGateway ?? const RustAlbumSearchGateway(),
     );
+    _playlistController = PlaylistSearchController(
+      widget.playlistGateway ?? const RustPlaylistSearchGateway(),
+    );
     _controllers = Listenable.merge([
       _controller,
       _artistController,
       _albumController,
+      _playlistController,
     ]);
   }
 
@@ -73,6 +85,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     _controller.dispose();
     _artistController.dispose();
     _albumController.dispose();
+    _playlistController.dispose();
     _queryController.dispose();
     _queryFocusNode.dispose();
     super.dispose();
@@ -102,11 +115,12 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
                   focusNode: _queryFocusNode,
                   desktop: desktop,
                   loading: _isLoading,
-                  hintText: _searchType == _SearchType.tracks
-                      ? 'Song, Artist, or Album name'
-                      : _searchType == _SearchType.artists
-                      ? 'Artist name'
-                      : 'Album name',
+                  hintText: switch (_searchType) {
+                    _SearchType.tracks => 'Song, Artist, or Album name',
+                    _SearchType.artists => 'Artist name',
+                    _SearchType.albums => 'Album name',
+                    _SearchType.playlists => 'Playlist name',
+                  },
                   onSubmitted: _submit,
                   onClear: _clear,
                 ),
@@ -117,37 +131,49 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
                     desktop ? 48 : 20,
                     14,
                   ),
-                  child: SegmentedButton<_SearchType>(
-                    key: const ValueKey('search-types'),
-                    segments: const [
-                      ButtonSegment(
-                        value: _SearchType.tracks,
-                        icon: Icon(Icons.music_note_rounded),
-                        label: Text('Tracks'),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SegmentedButton<_SearchType>(
+                        key: const ValueKey('search-types'),
+                        segments: const [
+                          ButtonSegment(
+                            value: _SearchType.tracks,
+                            icon: Icon(Icons.music_note_rounded),
+                            label: Text('Tracks'),
+                          ),
+                          ButtonSegment(
+                            value: _SearchType.artists,
+                            icon: Icon(Icons.person_rounded),
+                            label: Text('Artists'),
+                          ),
+                          ButtonSegment(
+                            value: _SearchType.albums,
+                            icon: Icon(Icons.album_rounded),
+                            label: Text('Albums'),
+                          ),
+                          ButtonSegment(
+                            value: _SearchType.playlists,
+                            icon: Icon(Icons.queue_music_rounded),
+                            label: Text('Playlists'),
+                          ),
+                        ],
+                        selected: {_searchType},
+                        onSelectionChanged: _selectSearchType,
                       ),
-                      ButtonSegment(
-                        value: _SearchType.artists,
-                        icon: Icon(Icons.person_rounded),
-                        label: Text('Artists'),
-                      ),
-                      ButtonSegment(
-                        value: _SearchType.albums,
-                        icon: Icon(Icons.album_rounded),
-                        label: Text('Albums'),
-                      ),
-                    ],
-                    selected: {_searchType},
-                    onSelectionChanged: _selectSearchType,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
-                    child: _searchType == _SearchType.tracks
-                        ? _trackBody(desktop)
-                        : _searchType == _SearchType.artists
-                        ? _artistBody(desktop)
-                        : _albumBody(desktop),
+                    child: switch (_searchType) {
+                      _SearchType.tracks => _trackBody(desktop),
+                      _SearchType.artists => _artistBody(desktop),
+                      _SearchType.albums => _albumBody(desktop),
+                      _SearchType.playlists => _playlistBody(desktop),
+                    },
                   ),
                 ),
               ],
@@ -166,6 +192,8 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     _SearchType.tracks => _controller.stage == TrackSearchStage.loading,
     _SearchType.artists => _artistController.stage == ArtistSearchStage.loading,
     _SearchType.albums => _albumController.stage == AlbumSearchStage.loading,
+    _SearchType.playlists =>
+      _playlistController.stage == PlaylistSearchStage.loading,
   };
 
   Widget _trackBody(bool desktop) => switch (_controller.stage) {
@@ -300,6 +328,49 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     ),
   };
 
+  Widget _playlistBody(bool desktop) => switch (_playlistController.stage) {
+    PlaylistSearchStage.idle => const _SearchMessage(
+      key: ValueKey('playlist-search-idle'),
+      icon: Icons.queue_music_rounded,
+      title: 'Find Playlists on QQ Music',
+      detail: 'Search by a public Playlist name.',
+    ),
+    PlaylistSearchStage.loading => const Center(
+      key: ValueKey('playlist-search-loading'),
+      child: CircularProgressIndicator(),
+    ),
+    PlaylistSearchStage.empty => _SearchMessage(
+      key: const ValueKey('playlist-search-empty'),
+      icon: Icons.playlist_remove_rounded,
+      title: 'No Playlists found',
+      detail: 'Try a different spelling or a broader search.',
+      action: TextButton(
+        onPressed: _focusQuery,
+        child: const Text('Edit search'),
+      ),
+    ),
+    PlaylistSearchStage.error => _SearchFailure(
+      key: const ValueKey('playlist-search-error'),
+      detail: _playlistFailureCopy(_playlistController.failure),
+      canRetry: _playlistController.canRetry,
+      onRetry: _playlistController.retry,
+      onEdit: _focusQuery,
+    ),
+    PlaylistSearchStage.content => _PlaylistSearchResults(
+      key: const ValueKey('playlist-search-content'),
+      query: _playlistController.query,
+      playlists: _playlistController.playlists,
+      total: _playlistController.total,
+      hasMore: _playlistController.hasMore,
+      isLoadingMore: _playlistController.isLoadingMore,
+      appendFailure: _playlistController.appendFailure != null,
+      onLoadMore: _playlistController.loadMore,
+      onRetryMore: _playlistController.retryMore,
+      onOpenPlaylist: widget.onOpenPlaylist,
+      desktop: desktop,
+    ),
+  };
+
   void _submit(String query) {
     switch (_searchType) {
       case _SearchType.tracks:
@@ -310,6 +381,9 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         break;
       case _SearchType.albums:
         unawaited(_albumController.submit(query));
+        break;
+      case _SearchType.playlists:
+        unawaited(_playlistController.submit(query));
         break;
     }
   }
@@ -332,6 +406,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
       _SearchType.tracks => _controller.query,
       _SearchType.artists => _artistController.query,
       _SearchType.albums => _albumController.query,
+      _SearchType.playlists => _playlistController.query,
     });
   }
 
@@ -353,6 +428,9 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         break;
       case _SearchType.albums:
         _albumController.clear();
+        break;
+      case _SearchType.playlists:
+        _playlistController.clear();
         break;
     }
     _focusQuery();
@@ -728,6 +806,133 @@ class _AlbumSearchResults extends StatelessWidget {
   );
 }
 
+class _PlaylistSearchResults extends StatelessWidget {
+  const _PlaylistSearchResults({
+    required this.query,
+    required this.playlists,
+    required this.total,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.appendFailure,
+    required this.onLoadMore,
+    required this.onRetryMore,
+    required this.onOpenPlaylist,
+    required this.desktop,
+    super.key,
+  });
+
+  final String query;
+  final List<UserPlaylistSummary> playlists;
+  final int total;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final bool appendFailure;
+  final VoidCallback onLoadMore;
+  final VoidCallback onRetryMore;
+  final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 920),
+      child: ListView.builder(
+        key: const PageStorageKey('playlist-search-results'),
+        padding: EdgeInsets.fromLTRB(
+          desktop ? 40 : 12,
+          0,
+          desktop ? 40 : 12,
+          24,
+        ),
+        itemCount: playlists.length + 2,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  '$total ${total == 1 ? 'Playlist' : 'Playlists'} for “$query”',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            );
+          }
+          if (index == playlists.length + 1) {
+            return _SearchFooter(
+              hasMore: hasMore,
+              isLoadingMore: isLoadingMore,
+              appendFailure: appendFailure,
+              onLoadMore: onLoadMore,
+              onRetryMore: onRetryMore,
+            );
+          }
+          final playlistIndex = index - 1;
+          final playlist = playlists[playlistIndex];
+          return ListTile(
+            key: ValueKey('playlist-search-result-$playlistIndex'),
+            minTileHeight: desktop ? 68 : 72,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            leading: SizedBox.square(
+              dimension: desktop ? 48 : 52,
+              child: _PlaylistArtwork(uri: playlist.artworkUri),
+            ),
+            title: Text(
+              playlist.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            subtitle: playlist.trackCount == null
+                ? const Text('Playlist')
+                : Text('${playlist.trackCount} Tracks'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => onOpenPlaylist(playlist),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+class _PlaylistArtwork extends StatelessWidget {
+  const _PlaylistArtwork({this.uri});
+
+  final String? uri;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [colors.secondaryContainer, colors.primaryContainer],
+        ),
+      ),
+      child: Icon(
+        Icons.queue_music_rounded,
+        color: colors.onSecondaryContainer,
+      ),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: uri == null
+          ? placeholder
+          : Image.network(
+              uri!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => placeholder,
+            ),
+    );
+  }
+}
+
 class _SearchTrackRow extends StatelessWidget {
   const _SearchTrackRow({
     required this.track,
@@ -1016,3 +1221,16 @@ String _albumFailureCopy(AlbumSearchFailure? failure) => switch (failure) {
   AlbumSearchFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected Album search response.',
 };
+
+String _playlistFailureCopy(PlaylistSearchFailure? failure) =>
+    switch (failure) {
+      PlaylistSearchFailure.network => 'Check your connection and try again.',
+      PlaylistSearchFailure.serviceUnavailable =>
+        'QQ Music Playlist search is temporarily unavailable.',
+      PlaylistSearchFailure.cancelled => 'The Playlist search was cancelled.',
+      PlaylistSearchFailure.coreUnavailable =>
+        'The local music core is unavailable. Restart the app and try again.',
+      PlaylistSearchFailure.invalidResponse ||
+      PlaylistSearchFailure.alreadyRunning ||
+      null => 'QQ Music returned an unexpected Playlist search response.',
+    };

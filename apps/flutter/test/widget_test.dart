@@ -28,6 +28,7 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
+import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
@@ -810,6 +811,97 @@ void main() {
     );
     expect(albumSearch.requests, [('direct Album query', 1, 30)]);
   });
+
+  testWidgets(
+    'opens a direct Playlist result and preserves Playlist Search on a narrow screen',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const playlist = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'catalog:81001',
+        title: 'Direct Playlist',
+        trackCount: 1,
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureMid:-',
+        title: 'Playlist Track',
+        artistNames: ['Playlist Artist'],
+      );
+      final playlistSearch = _WidgetPlaylistSearchGateway(
+        const PlaylistSearchPageResult(
+          page: 1,
+          total: 1,
+          playlists: [playlist],
+        ),
+      );
+      final playlistDetail = _WidgetDetailGateway([
+        const PlaylistTrackPageResult(offset: 0, total: 1, tracks: [track]),
+      ]);
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          searchGateway: const _UnusedSearchGateway(),
+          playlistSearchGateway: playlistSearch,
+          playlistDetailGateway: playlistDetail,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      final playlistsChoice = find.descendant(
+        of: find.byKey(const ValueKey('search-types')),
+        matching: find.text('Playlists'),
+      );
+      await tester.ensureVisible(playlistsChoice);
+      await tester.pumpAndSettle();
+      await tester.tap(playlistsChoice);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'direct Playlist query',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+
+      expect(playlistSearch.requests, [('direct Playlist query', 1, 30)]);
+      await tester.tap(find.byKey(const ValueKey('playlist-search-result-0')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('playlist-detail-content')),
+        findsOneWidget,
+      );
+      expect(playlistDetail.requests.single.playlist.opaqueId, 'catalog:81001');
+      expect(find.text('Playlist Track'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('playlist-detail-back')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('playlist-search-content')),
+        findsOneWidget,
+      );
+      expect(find.text('Direct Playlist'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+            .controller
+            ?.text,
+        'direct Playlist query',
+      );
+      expect(playlistSearch.requests, [('direct Playlist query', 1, 30)]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('nests Album navigation inside a preserved Artist and Search', (
     tester,
@@ -1862,6 +1954,36 @@ class _WidgetAlbumSearchOperation implements AlbumSearchPageLoadOperation {
 
   @override
   Future<AlbumSearchPageResult> run() async => result;
+}
+
+class _WidgetPlaylistSearchGateway implements PlaylistSearchGateway {
+  _WidgetPlaylistSearchGateway(this.result);
+
+  final PlaylistSearchPageResult result;
+  final List<(String, int, int)> requests = [];
+
+  @override
+  PlaylistSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) {
+    requests.add((query, page, size));
+    return _WidgetPlaylistSearchOperation(result);
+  }
+}
+
+class _WidgetPlaylistSearchOperation
+    implements PlaylistSearchPageLoadOperation {
+  const _WidgetPlaylistSearchOperation(this.result);
+
+  final PlaylistSearchPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PlaylistSearchPageResult> run() async => result;
 }
 
 class _WidgetAlbumOperation implements AlbumTrackPageLoadOperation {

@@ -36,3 +36,9 @@ Reference implementations remain research evidence only. Runtime requests will g
 ## Selection
 
 Direct Playlist Search ranks first because it is an authorized QQ-native catalog capability with current request/fixture evidence, explicit service pagination behavior, and a finite route into already tested detail and queue owners. The task reuses `PlaylistSummary` and the existing public catalog identity; it does not justify a heterogeneous Search model or broader Home abstraction.
+
+## Implementation outcome
+
+Implemented on 2026-08-26 as the ninth finite M3 slice. `QQMusicClient` now owns the bounded anonymous Desktop type-3 request and response validation; `QQMusicProvider` maps validated rows into provider-neutral `PlaylistSearchPage` values with opaque public-catalog identity; and a single-use cancellable Bridge exposes typed page/failure output without query or content diagnostics. Flutter owns independent Playlist query, replacement, empty/error/retry, pagination, append-failure, cancellation, stale-result, clear, and disposal state, and opens the existing playlist-detail/queue route while preserving Search.
+
+Offline regressions cover the exact request shape, invalid inputs/identity/pagination, the observed short nonterminal-page rule, Provider mapping without account state, Bridge redaction/cancellation, Dart mapping/lifecycle, and the 390px Search → playlist → Search path. The completed baseline is 221 Rust tests and 233 Flutter tests with strict formatting, analysis, and Clippy; Linux x64 Release and packaged typed-Bridge integration also pass. The four live QQ/WeChat tests remain separately gated and ignored. This proves the repository implementation and packaging path, not current live Playlist Search application compatibility or authenticated Search-to-CDN playback.
