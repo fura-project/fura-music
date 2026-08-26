@@ -365,6 +365,11 @@ class _TrackRowState extends State<_TrackRow> {
         label: '$title, $artists',
         container: true,
         button: true,
+        excludeSemantics: true,
+        onTap: widget.onTap,
+        onLongPress: widget.desktop
+            ? null
+            : () => unawaited(_showMobileActions(context)),
         child: InkWell(
           key: ValueKey('playlist-track-row-${widget.index}'),
           focusNode: _focusNode,

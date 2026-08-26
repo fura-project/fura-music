@@ -249,6 +249,8 @@ class _PlaylistGridItem extends StatelessWidget {
     return Semantics(
       label: _semanticLabel(playlist),
       button: true,
+      excludeSemantics: true,
+      onTap: onTap,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
@@ -294,6 +296,8 @@ class _PlaylistListItem extends StatelessWidget {
     return Semantics(
       label: _semanticLabel(playlist),
       button: true,
+      excludeSemantics: true,
+      onTap: onTap,
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,

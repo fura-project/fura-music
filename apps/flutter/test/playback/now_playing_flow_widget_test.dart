@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -420,6 +421,27 @@ void main() {
     ]);
   });
 
+  testWidgets('track action semantics do not repeat visible metadata', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway(const []),
+      audio: _FakeAudioEngine(const []),
+    );
+
+    final trackSemantics = tester.getSemantics(
+      find.byKey(const ValueKey('playlist-track-row-1')),
+    );
+    expect(trackSemantics.label, 'First track, Fixture artist');
+    expect(
+      trackSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    semantics.dispose();
+  });
+
   testWidgets('desktop shortcuts remain active while queue dialog has focus', (
     tester,
   ) async {
@@ -597,6 +619,7 @@ void main() {
   testWidgets('mobile long press exposes the same bounded track actions', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -611,6 +634,15 @@ void main() {
       audio: _FakeAudioEngine([_FakeAudioSession()]),
       queue: queue,
     );
+
+    final trackSemantics = tester.getSemantics(
+      find.byKey(const ValueKey('playlist-track-row-2')),
+    );
+    expect(
+      trackSemantics.getSemanticsData().hasAction(SemanticsAction.longPress),
+      isTrue,
+    );
+    semantics.dispose();
 
     await tester.longPress(find.byKey(const ValueKey('playlist-track-row-2')));
     await tester.pumpAndSettle();
@@ -666,6 +698,7 @@ void main() {
   testWidgets('queue panel preserves and removes duplicate positions', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     final media = _FakeMediaGateway([
       _ImmediateMediaOperation(_success('duplicate')),
       _ImmediateMediaOperation(_success('selected-duplicate')),
@@ -687,6 +720,11 @@ void main() {
     expect(find.byKey(const ValueKey('queue-entry-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('queue-entry-1')), findsOneWidget);
     expect(find.text('2 tracks'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('queue-entry-0'))).label,
+      'First track\nFixture artist',
+    );
+    semantics.dispose();
 
     await tester.tap(find.byKey(const ValueKey('queue-entry-1')));
     await tester.pumpAndSettle();

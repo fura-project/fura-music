@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' show Size;
+import 'dart:ui' show SemanticsAction, Size;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
@@ -150,6 +150,7 @@ void main() {
   testWidgets('routes an authenticated account into its user playlists', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -188,6 +189,15 @@ void main() {
     expect(find.text('Synthetic favorites'), findsOneWidget);
     expect(find.text('Synthetic saved mix'), findsOneWidget);
     expect(find.text('42 tracks'), findsOneWidget);
+    final playlistSemantics = tester.getSemantics(
+      find.text('Synthetic favorites'),
+    );
+    expect(playlistSemantics.label, 'Synthetic favorites, 42 tracks');
+    expect(
+      playlistSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    semantics.dispose();
     expect(find.text('You’re signed in'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -245,6 +255,7 @@ void main() {
   testWidgets('renders user playlists without overflow on a narrow screen', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -273,6 +284,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Narrow playlist'), findsOneWidget);
+    final playlistSemantics = tester.getSemantics(find.text('Narrow playlist'));
+    expect(playlistSemantics.label, 'Narrow playlist');
+    expect(
+      playlistSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    semantics.dispose();
     expect(tester.takeException(), isNull);
   });
 
