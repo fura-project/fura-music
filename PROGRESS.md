@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "Implement QQ Music track search vertical slice"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -31,11 +31,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 bounded discovery is active. It must rank at most three QQ Music core-product candidates from authorized product/protocol evidence before selecting one finite vertical slice; the M2 checkpoint is not a stop point.
+- M3 discovery ranked Track search first, followed by Album/Artist browsing and Home/recommendations. Search has cross-validated `music.search.SearchCgiService` evidence plus a secret-free anonymous coarse probe. The selected finite slice covers provider-neutral paged Track results through direct protocol, Provider, cancellable Bridge, adaptive Flutter states, and the existing playback queue. It excludes other result types, suggestions/history, a navigation rewrite, and quality selection.
 
 # Next Candidates
 
-1. Run a bounded M3 QQ Music core-product discovery pass, record at most three evidence-backed candidates, and select the highest-value finite vertical slice.
+1. Implement the selected QQ Music Track search vertical slice and prove query replacement, cancellation, pagination, failure/empty states, and playback handoff offline.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
