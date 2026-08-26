@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: M3
+  active_workstream: EVIDENCE_GATED_LATER_DIRECTION
   current_task: null
-  next_action: GLOBAL_RANKING
+  next_action: NO_LEGITIMATE_WORK
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2 is checkpointed and M3 QQ Music core-product coverage is active.
+M1's real-account playback observation remains open; M2 and M3 are checkpointed, and later work is evidence-gated.
 
 # Completed Recently
 
@@ -47,16 +47,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the twentieth M3 slice: direct credential-bearing favorite-Artist pages call the evidenced `music.concern.RelationList/GetFollowSingerList` operation with exact encrypted identity/offset/size, strict code/row/page bounds, redacted diagnostics, and Provider credential candidate/rejection/replacement rules. Rows become honest MID-only Artist identities; the existing Artist Track client now routes those identities through the already-evidenced MID request instead of fabricating a numeric ID. The cancellable Bridge and adaptive Flutter collection preserve raw-row pagination, stale/disposal cancellation, shared-vault rejection cleanup, compact pointer and desktop keyboard access, and retained collection → Artist → Album/queue return. Follow mutation, biography/social data, cache/automatic refresh, account probing, Track availability/quality, and generic library/navigation infrastructure remain excluded.
 - Implemented the twenty-first M3 slice: the authenticated root no longer hides `Your music` to fit six independent actions at 360 px. Compact width groups only favorite Artists/Albums into a bounded typed menu while Search, Discover, refresh, and sign-out stay direct; wider layouts retain the two original collection icons. The menu supports semantic tap and Enter, exact collection selection, no-overflow rendering, retained collection/detail state, and focus restoration to the compact or wide entry actually mounted. No navigation framework, collection controller, protocol, Domain, Bridge, playback, dependency, or unrelated design change was introduced.
 - Revalidated the resulting baseline: Rust formatting, 267 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 287 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Artist/new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
+- Completed the M3 QQ Music core-product checkpoint against eight explicit Roadmap criteria. The review found no Provider/UI leakage, sidecar, generated-artifact drift, unapproved Provider, product-category expansion, or untracked debt trigger; it keeps Track availability/quality, overlapping personalized feeds, heterogeneous Home, offline/cache, unavailable platforms, and release claims explicitly evidence-gated.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. The compact authenticated-action regression is resolved and the next action is another whole-project ranking; “Guess you like” remains lower-value overlap with Radar, heterogeneous Home lacks a stable bounded Domain, and Track availability remains evidence-blocked.
+- No implementation task is active. Whole-project ranking found no remaining unblocked candidate with sufficient provenance: “Guess you like” overlaps Radar, heterogeneous Home lacks a stable bounded Domain, availability/quality lacks sanitized behavior, offline/cache lacks a reproduced reliability gap, and additional platform validation lacks an available target environment.
 
 # Next Candidates
 
-1. Re-rank the remaining Roadmap-authorized directions after the compact regression fix; do not manufacture another presentation task or implement overlapping recommendation feeds without a distinct product role.
-2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
+1. When the user chooses to exercise the existing acceptance request, rebuild/relaunch Linux debug and retest one ordinary track; preserve only coarse outcomes and never automate access to stored account material.
+2. Re-rank Track availability/quality, Home/personalized recommendations, or offline/cache only after sanitized behavior, a distinct product role, or a reproduced reliability gap supplies Task Provenance.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
 # Blockers

@@ -65,7 +65,7 @@ Completed slices cover shared keyboard/media transport, truthful seek and volume
 
 Completed on 2026-08-26. The criterion-by-criterion evidence and its explicit platform/live-service limits are recorded in `docs/development/m2-checkpoint-review.md`. Later M2-class regressions remain valid bug work; the checkpoint is not a prohibition on fixes.
 
-## Active Workstream — M3 QQ Music Core Product Coverage
+## Completed Checkpoint — M3 QQ Music Core Product Coverage
 
 ### Goal
 
@@ -81,6 +81,17 @@ Expand from the first vertical slice into a coherent QQ Music client while prese
 - Other QQ-native catalog flows discovered from real product use and bounded before implementation.
 
 M3 begins with bounded discovery after the M2 checkpoint. Each slice requires discovery or protocol/product evidence, a finite acceptance boundary, and offline regression coverage where reusable mapping or rules are introduced. This is not authorization for external Providers, podcast/social features, a plugin marketplace, or a download platform.
+
+### Exit criteria
+
+1. QQ Music Track, Artist, Album, and Playlist Search route through provider-neutral results into existing browsing and queue paths.
+2. Album and Artist browsing preserve opaque identity boundaries and support coherent retained return from every implemented origin.
+3. Discovery includes several evidence-backed QQ-native catalog/recommendation surfaces without exposing raw heterogeneous cards to Flutter.
+4. Richer authenticated library navigation covers the existing playlist, favorite-Album, and favorite-Artist collections with exact account replacement/rejection handling.
+5. Current Track and now-playing surfaces remain adaptive and reuse one queue/playback/lyric owner.
+6. Offline tests and available platform checks cover introduced reusable rules and reproduced adaptive/navigation failures while live-service claims remain separately bounded.
+7. Architecture/scope review finds no Provider/UI leakage, sidecar, speculative infrastructure, unapproved Provider, or product-category expansion.
+8. Unsupported availability/quality, Home, offline/cache, platform, and release claims remain explicitly deferred rather than guessed.
 
 ### Progress
 
@@ -106,6 +117,10 @@ M3 begins with bounded discovery after the M2 checkpoint. Each slice requires di
 - **Authenticated favorite Artists:** implemented as the twentieth finite M3 slice on 2026-08-27 after two independent current implementations, one current login-gated integration route, and the repository's prior bounded proof that Artist browsing accepts MID without numeric ID. A direct credential-bearing `music.concern.RelationList/GetFollowSingerList` page maps required MID/name rows into honest `artist:-:<mid>` summaries through exact credential candidate/rejection/replacement rules and a cancellable Bridge. Flutter retains an adaptive collection through Artist Tracks/Albums and nested Album/queue navigation, advances by raw rows, suppresses stale work, and cleans the shared vault only after explicit rejection. Follow/unfollow mutation, biography/social fields, cache/automatic refresh, stored-account probing, numeric-ID fabrication, generic library unions, and navigation infrastructure remain out of scope.
 - **Compact saved-collection actions:** implemented as the twenty-first finite M3 slice on 2026-08-27 from a reproduced 360 px conflict after the authenticated root reached six toolbar actions. The `Your music` title remains visible; compact width groups only favorite Artists/Albums into one bounded typed menu while Search, Discover, refresh, and sign-out remain direct, and wider layouts keep the two original collection icons. Touch/pointer, semantics, Enter activation, no-overflow, exact destination, retained state, and compact/wide focus-return regressions pass without adding a navigation framework or changing collection controllers.
 
-## Later direction
+### Checkpoint
+
+Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, deferred directions, and exact live/platform limits are recorded in `docs/development/m3-checkpoint-review.md`. Future M3-class regressions or newly evidenced QQ-native gaps remain valid bounded work; the checkpoint is not a claim of release readiness or live-service compatibility.
+
+## Evidence-Gated Later Direction
 
 After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.
