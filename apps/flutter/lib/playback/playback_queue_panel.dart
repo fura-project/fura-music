@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -158,16 +159,10 @@ class PlaybackQueuePanel extends StatelessWidget {
                               selected: current,
                               selectedTileColor:
                                   theme.colorScheme.secondaryContainer,
-                              leading: SizedBox.square(
-                                dimension: 32,
-                                child: Center(
-                                  child: current
-                                      ? Icon(
-                                          Icons.graphic_eq_rounded,
-                                          color: theme.colorScheme.primary,
-                                        )
-                                      : Text('${index + 1}'),
-                                ),
+                              leading: _QueueArtwork(
+                                track: track,
+                                current: current,
+                                index: index,
                               ),
                               title: Text(
                                 track.title,
@@ -198,6 +193,76 @@ class PlaybackQueuePanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _QueueArtwork extends StatelessWidget {
+  const _QueueArtwork({
+    required this.track,
+    required this.current,
+    required this.index,
+  });
+
+  final PlaylistTrackSummary track;
+  final bool current;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final artworkUri = track.artworkUri;
+    return SizedBox.square(
+      key: ValueKey('queue-artwork-$index'),
+      dimension: 40,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (artworkUri == null)
+              const _QueueArtworkPlaceholder()
+            else
+              Image.network(
+                artworkUri,
+                fit: BoxFit.cover,
+                excludeFromSemantics: true,
+                gaplessPlayback: true,
+                loadingBuilder: (context, child, progress) =>
+                    progress == null ? child : const _QueueArtworkPlaceholder(),
+                errorBuilder: (context, error, stackTrace) =>
+                    const _QueueArtworkPlaceholder(),
+              ),
+            if (current)
+              ColoredBox(
+                key: ValueKey('queue-current-indicator-$index'),
+                color: Colors.black.withValues(alpha: 0.42),
+                child: const Icon(
+                  Icons.graphic_eq_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QueueArtworkPlaceholder extends StatelessWidget {
+  const _QueueArtworkPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ColoredBox(
+      key: const ValueKey('queue-artwork-placeholder'),
+      color: colors.surfaceContainerHighest,
+      child: Icon(
+        Icons.album_outlined,
+        color: colors.onSurfaceVariant,
+        size: 22,
+      ),
     );
   }
 }

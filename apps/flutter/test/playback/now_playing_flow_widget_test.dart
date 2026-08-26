@@ -213,6 +213,12 @@ void main() {
       find.byKey(const ValueKey('now-playing-artwork-placeholder')),
       findsOneWidget,
     );
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('queue-artwork-placeholder')),
+      findsNWidgets(2),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -849,6 +855,20 @@ void main() {
 
     expect(find.byKey(const ValueKey('queue-entry-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('queue-entry-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('queue-artwork-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('queue-artwork-1')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('queue-artwork-placeholder')),
+      findsNWidgets(2),
+    );
+    expect(
+      find.byKey(const ValueKey('queue-current-indicator-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('queue-current-indicator-1')),
+      findsNothing,
+    );
     expect(find.text('2 tracks'), findsOneWidget);
     expect(
       tester.getSemantics(find.byKey(const ValueKey('queue-entry-0'))).label,
@@ -877,6 +897,14 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('queue-entry-1')));
     await tester.pumpAndSettle();
     expect(media.requests, hasLength(2));
+    expect(
+      find.byKey(const ValueKey('queue-current-indicator-0')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('queue-current-indicator-1')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('queue-remove-0')));
     await tester.pumpAndSettle();
