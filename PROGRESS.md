@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Current Track catalog navigation"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -47,11 +47,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. The typed QQ new-song slice is complete; the next action is a fresh global ranking rather than another nearby Discover or presentation change. Favorite Artists remains evidence-blocked and global now-playing navigation remains deferred pending an independent ownership audit.
+- M3 remains active. A fresh global ranking selected current Track catalog navigation after an ownership audit proved that all repeated now-playing bars share one authenticated presentation owner and already-validated Album/Artist context. The finite task is one adaptive action plus one topmost retained Artist/Album overlay; Favorite Artists and Track availability remain evidence-blocked.
 
 # Next Candidates
 
-1. Re-rank the remaining M3 evidence across user-visible gaps, Provider correctness, platform validation, and deferred navigation ownership before selecting another finite task; do not default to adjacent Discover polish.
+1. Implement current Track → Album/credited Artist navigation through one presentation callback scope and topmost bounded retained overlay, with exact return and playback/state-preservation regressions.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
