@@ -27,8 +27,7 @@ import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
-
-const _qqGreen = Color(0xFF24B86A);
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class MusicApp extends StatelessWidget {
   factory MusicApp({
@@ -186,8 +185,8 @@ class MusicApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Flutterust Music',
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
+      theme: MusicMaterialTheme.light(),
+      darkTheme: MusicMaterialTheme.dark(),
       themeMode: ThemeMode.system,
       home: LoginPage(
         bootstrap: bootstrap,
@@ -215,20 +214,6 @@ class MusicApp extends StatelessWidget {
         audioEngine: audioEngine,
         initialCredentialRestore: initialCredentialRestore,
       ),
-    );
-  }
-
-  ThemeData _theme(Brightness brightness) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _qqGreen,
-      brightness: brightness,
-      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-    );
-
-    return ThemeData(
-      colorScheme: colorScheme,
-      useMaterial3: true,
-      scaffoldBackgroundColor: colorScheme.surface,
     );
   }
 }
@@ -381,8 +366,10 @@ class _LoginPageState extends State<LoginPage> {
 
                 return SingleChildScrollView(
                   padding: EdgeInsets.symmetric(
-                    horizontal: wide ? 56 : 24,
-                    vertical: wide ? 48 : 28,
+                    horizontal: wide
+                        ? MusicSpacing.pageWide
+                        : MusicSpacing.page,
+                    vertical: wide ? MusicSpacing.pageWide : MusicSpacing.panel,
                   ),
                   child: Center(
                     child: ConstrainedBox(
@@ -472,15 +459,15 @@ class _AuthenticationPanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: MusicRadii.panel,
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(MusicSpacing.panel),
         child: AnimatedBuilder(
           animation: controller,
           builder: (context, _) => AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
+            duration: MusicMotion.stateChange,
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             child: _AuthenticationContent(
@@ -940,7 +927,7 @@ class _PanelIcon extends StatelessWidget {
       height: 56,
       decoration: BoxDecoration(
         color: colors.primaryContainer,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: MusicRadii.content,
       ),
       child: Icon(icon, color: colors.onPrimaryContainer, size: 30),
     );

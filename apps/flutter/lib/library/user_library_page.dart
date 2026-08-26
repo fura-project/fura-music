@@ -43,6 +43,7 @@ import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class UserLibraryPage extends StatefulWidget {
   const UserLibraryPage({
@@ -1200,7 +1201,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               ),
             Expanded(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
+                duration: MusicMotion.stateChange,
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 child: _body(context),
@@ -1314,10 +1315,10 @@ class _PlaylistCollection extends StatelessWidget {
         final desktop = constraints.maxWidth >= 760;
         return Padding(
           padding: EdgeInsets.fromLTRB(
-            desktop ? 48 : 20,
-            desktop ? 28 : 16,
-            desktop ? 48 : 20,
-            20,
+            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
+            desktop ? MusicSpacing.section : MusicSpacing.contentGap,
+            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
+            MusicSpacing.pageCompact,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1337,7 +1338,11 @@ class _PlaylistCollection extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              SizedBox(height: desktop ? 28 : 20),
+              SizedBox(
+                height: desktop
+                    ? MusicSpacing.section
+                    : MusicSpacing.pageCompact,
+              ),
               Expanded(
                 child: desktop
                     ? GridView.builder(
@@ -1359,7 +1364,8 @@ class _PlaylistCollection extends StatelessWidget {
                     : ListView.separated(
                         key: const PageStorageKey<String>('user-playlist-list'),
                         itemCount: playlists.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: MusicSpacing.itemGap),
                         itemBuilder: (context, index) => _PlaylistListItem(
                           playlist: playlists[index],
                           onTap: () => onSelected(playlists[index]),
@@ -1396,7 +1402,7 @@ class _PlaylistGridItem extends StatelessWidget {
       onTap: onTap,
       child: InkWell(
         focusNode: focusNode,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: MusicRadii.artwork,
         onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1449,7 +1455,7 @@ class _PlaylistListItem extends StatelessWidget {
       onTap: onTap,
       child: InkWell(
         focusNode: focusNode,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: MusicRadii.content,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1459,7 +1465,7 @@ class _PlaylistListItem extends StatelessWidget {
                 dimension: 72,
                 child: _PlaylistArtwork(playlist: playlist),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: MusicSpacing.contentGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1501,7 +1507,7 @@ class _PlaylistArtwork extends StatelessWidget {
   Widget build(BuildContext context) {
     final uri = playlist.artworkUri;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: MusicRadii.artwork,
       child: uri == null
           ? const _ArtworkPlaceholder()
           : Image.network(

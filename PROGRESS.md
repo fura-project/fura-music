@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.1 Default Material foundation"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: GLOBAL_RANKING
 ---
 
 # Current Milestone
@@ -49,18 +49,18 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Revalidated the resulting baseline: Rust formatting, 267 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 287 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Artist/new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
 - Completed the M3 QQ Music core-product checkpoint against eight explicit Roadmap criteria. The review found no Provider/UI leakage, sidecar, generated-artifact drift, unapproved Provider, product-category expansion, or untracked debt trigger; it keeps Track availability/quality, overlapping personalized feeds, heterogeneous Home, offline/cache, unavailable platforms, and release claims explicitly evidence-gated.
 - Activated M4 from an explicit human product decision: establish a coherent official-Flutter Material 3 desktop/compact baseline before any deferred theme personas or signature visual experiments. M1's user-operated playback observation and HD-001 remain locally scoped rather than blocking this workstream.
+- Implemented the first M4 slice: one centralized official-Flutter light/dark Material theme now defines conservative typography, surface hierarchy, component defaults, and small spacing/shape/motion tokens. Authentication and Library are the only representative migrations. A new dark 360 px regression caught and fixed a page-margin/panel-padding mix-up; 290 Flutter tests, strict Dart checks, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M4 bounded discovery audited Theme, authenticated shell, major browsing/playback journeys, adaptive widths, light/dark behavior, and existing keyboard/pointer/touch/semantic regressions. It selected a finite Default Material foundation before the higher-risk adaptive App Shell.
-- Current finite task: centralize the official-Flutter Material theme and a small set of repeated tokens, establish conservative component defaults, and migrate only Authentication plus the Library collection as representative consumers. App Shell, wholesale row/state migration, theme personas, and framework changes are explicit non-goals.
+- The M4 Default Material foundation slice is complete and undergoing whole-project ranking. No implementation task is active between slices; App Shell and shared music content/state vocabulary remain bounded candidates rather than implicit refactors.
 
 # Next Candidates
 
-1. Implement and validate the selected M4.1 Default Material foundation without broad page rewrites.
-2. After that slice, globally rerank the adaptive authenticated App Shell against the shared music content/state vocabulary using current regressions and retained-state risk.
-3. Preserve the user-operated M1 acceptance request for a convenient later observation, and keep protocol/platform directions outside M4 evidence-gated.
+1. Rank the adaptive authenticated App Shell against a smaller shared music content/state vocabulary slice using the completed theme foundation and existing retained-state regressions.
+2. Preserve the user-operated M1 acceptance request for a convenient later observation; never automate stored account material.
+3. Keep protocol, offline/cache, release, and unavailable-platform directions outside M4 evidence-gated.
 
 # Blockers
 

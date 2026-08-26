@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
+        Brightness,
         FilledButton,
         Focus,
         FocusManager,
@@ -17,7 +18,8 @@ import 'package:flutter/material.dart'
         Scrollable,
         ScrollableState,
         TextField,
-        TextInputAction;
+        TextInputAction,
+        Theme;
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
@@ -115,6 +117,63 @@ void main() {
     await tester.ensureVisible(find.text('Continue with WeChat'));
     await tester.pumpAndSettle();
     expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('applies the dark Material foundation to auth and Library', (
+    tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        key: const ValueKey('dark-auth-app'),
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+      ),
+    );
+
+    final authTheme = Theme.of(
+      tester.element(find.text('Continue with WeChat')),
+    );
+    expect(authTheme.brightness, Brightness.dark);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(
+      MusicApp(
+        key: const ValueKey('dark-library-app'),
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(
+            playlists: [
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'owned:7001:201',
+                title: 'Synthetic favorites',
+                trackCount: 42,
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your music'), findsOneWidget);
+    expect(find.text('Synthetic favorites'), findsOneWidget);
+    expect(
+      Theme.of(tester.element(find.text('Your music'))).brightness,
+      Brightness.dark,
+    );
     expect(tester.takeException(), isNull);
   });
 

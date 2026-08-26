@@ -51,3 +51,11 @@ This bounded pass inspected the current `ThemeData`, signed-out authentication s
 ## Selection
 
 The Default Material foundation ranks first because it is the smallest common prerequisite, directly addresses the audited absence of a product theme, and reduces visual rework before the higher-risk App Shell change. Its first implementation remains deliberately representative rather than repository-wide.
+
+## First-slice outcome
+
+Implemented the selected bounded foundation in `apps/flutter/lib/theme/material_theme.dart`. Light and dark themes now share centralized typography, surface hierarchy, component defaults, conservative spacing/shape/motion tokens, and the existing QQ-green seeded fidelity scheme. `MusicApp` consumes that theme, while only the signed-out Authentication surface and authenticated Library collection migrate representative local values.
+
+A new dark 360 px Authentication/Library regression initially reproduced a 3.8 px overflow because the first pass confused page margin with panel padding. The implementation now preserves separate 24 px page and 28 px panel tokens; the regression passes without weakening the panel or the existing 360 px Library reachability. No App Shell, broad row/state primitive, dependency, protocol, Bridge, Rust, controller, or navigation ownership changed.
+
+Validation passed strict Dart formatting/analysis, all 290 Flutter tests, Rust formatting, all 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and the packaged Linux typed-Bridge integration. Four live QQ/WeChat tests remained gated and ignored; no stored credential, account endpoint, remote media, or user data was used.
