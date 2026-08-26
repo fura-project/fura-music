@@ -86,6 +86,150 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'refresh retains the last complete snapshot after a transient failure',
+    () async {
+      final gateway = _FakeGateway();
+      final controller = UserLibraryController(gateway);
+
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        const UserLibraryResult(
+          playlists: [
+            UserPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'favorite:current',
+              title: 'Current library',
+            ),
+          ],
+        ),
+      );
+      await initial;
+
+      final refresh = controller.refresh();
+      expect(controller.stage, UserLibraryStage.content);
+      expect(controller.playlists.single.title, 'Current library');
+      expect(controller.isRefreshing, isTrue);
+      expect(controller.isLoading, isTrue);
+
+      gateway.complete(
+        1,
+        const UserLibraryResult(failure: UserLibraryFailure.network),
+      );
+      await refresh;
+
+      expect(controller.stage, UserLibraryStage.content);
+      expect(controller.playlists.single.title, 'Current library');
+      expect(controller.isRefreshing, isFalse);
+      expect(controller.isLoading, isFalse);
+      expect(controller.failure, isNull);
+      expect(controller.refreshFailure, UserLibraryFailure.network);
+      expect(controller.canRetryRefresh, isTrue);
+
+      final retry = controller.refresh();
+      expect(controller.refreshFailure, isNull);
+      expect(controller.isRefreshing, isTrue);
+      gateway.complete(2, const UserLibraryResult());
+      await retry;
+
+      expect(controller.stage, UserLibraryStage.empty);
+      expect(controller.playlists, isEmpty);
+      expect(controller.refreshFailure, isNull);
+
+      controller.dispose();
+    },
+  );
+
+  test('refresh clears private content after credential rejection', () async {
+    final gateway = _FakeGateway();
+    final controller = UserLibraryController(gateway);
+
+    final initial = controller.load();
+    gateway.complete(
+      0,
+      const UserLibraryResult(
+        playlists: [
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'owned:private:201',
+            title: 'Private library',
+          ),
+        ],
+      ),
+    );
+    await initial;
+
+    final refresh = controller.refresh();
+    gateway.complete(
+      1,
+      const UserLibraryResult(failure: UserLibraryFailure.credentialRejected),
+    );
+    await refresh;
+
+    expect(controller.stage, UserLibraryStage.credentialRejected);
+    expect(controller.playlists, isEmpty);
+    expect(controller.refreshFailure, isNull);
+
+    controller.dispose();
+  });
+
+  test('replacement refresh cancels and suppresses its late result', () async {
+    final gateway = _FakeGateway();
+    final controller = UserLibraryController(gateway);
+
+    final initial = controller.load();
+    gateway.complete(
+      0,
+      const UserLibraryResult(
+        playlists: [
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'favorite:initial',
+            title: 'Initial library',
+          ),
+        ],
+      ),
+    );
+    await initial;
+
+    final firstRefresh = controller.refresh();
+    final replacementRefresh = controller.refresh();
+    expect(gateway.operations[1].cancelCalls, 1);
+
+    gateway.complete(
+      2,
+      const UserLibraryResult(
+        playlists: [
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'favorite:replacement',
+            title: 'Replacement library',
+          ),
+        ],
+      ),
+    );
+    await replacementRefresh;
+    expect(controller.playlists.single.title, 'Replacement library');
+
+    gateway.complete(
+      1,
+      const UserLibraryResult(
+        playlists: [
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'favorite:late',
+            title: 'Late library',
+          ),
+        ],
+      ),
+    );
+    await firstRefresh;
+    expect(controller.playlists.single.title, 'Replacement library');
+
+    controller.dispose();
+  });
+
   test('dispose cancels and suppresses a late result', () async {
     final gateway = _FakeGateway();
     final controller = UserLibraryController(gateway);

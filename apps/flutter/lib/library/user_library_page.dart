@@ -110,10 +110,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         AnimatedBuilder(
           animation: _controller,
           builder: (context, _) => IconButton(
-            tooltip: 'Refresh playlists',
-            onPressed: _controller.stage == UserLibraryStage.loading
-                ? null
-                : _controller.load,
+            tooltip: _controller.isRefreshing
+                ? 'Refreshing playlists'
+                : 'Refresh playlists',
+            onPressed: _controller.isLoading ? null : _controller.refresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ),
@@ -129,11 +129,29 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     body: SafeArea(
       child: AnimatedBuilder(
         animation: _controller,
-        builder: (context, _) => AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          child: _body(context),
+        builder: (context, _) => Column(
+          children: [
+            if (_controller.isRefreshing)
+              const LinearProgressIndicator(
+                key: ValueKey('user-library-refresh-progress'),
+              ),
+            if (_controller.refreshFailure case final failure?)
+              _LibraryRefreshFailure(
+                key: const ValueKey('user-library-refresh-failure'),
+                failure: failure,
+                canRetry: _controller.canRetryRefresh,
+                onRetry: _controller.retryRefresh,
+                onDismiss: _controller.dismissRefreshFailure,
+              ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: _body(context),
+              ),
+            ),
+          ],
         ),
       ),
     ),
@@ -508,6 +526,45 @@ class _LibraryFailure extends StatelessWidget {
   }
 }
 
+class _LibraryRefreshFailure extends StatelessWidget {
+  const _LibraryRefreshFailure({
+    required this.failure,
+    required this.canRetry,
+    required this.onRetry,
+    required this.onDismiss,
+    super.key,
+  });
+
+  final UserLibraryFailure failure;
+  final bool canRetry;
+  final VoidCallback onRetry;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    liveRegion: true,
+    child: MaterialBanner(
+      content: Text(_refreshFailureCopy(failure)),
+      leading: const Icon(Icons.sync_problem_rounded),
+      actions: [
+        if (canRetry)
+          TextButton(
+            key: const ValueKey('user-library-refresh-retry'),
+            onPressed: onRetry,
+            child: const Text('Try again'),
+          ),
+        IconButton(
+          key: const ValueKey('user-library-refresh-dismiss'),
+          tooltip: 'Dismiss refresh message',
+          onPressed: onDismiss,
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ],
+    ),
+  );
+}
+
 class _CenteredLibraryMessage extends StatelessWidget {
   const _CenteredLibraryMessage({
     required this.icon,
@@ -616,6 +673,22 @@ class _CenteredLibraryMessage extends StatelessWidget {
     'Couldn’t load your playlists',
     'Try again or sign in with a fresh QQ Music session.',
   ),
+};
+
+String _refreshFailureCopy(UserLibraryFailure failure) => switch (failure) {
+  UserLibraryFailure.network =>
+    'Couldn’t refresh playlists. Check your connection; the previous results '
+        'are still shown.',
+  UserLibraryFailure.serviceUnavailable =>
+    'QQ Music couldn’t refresh playlists. The previous results are still '
+        'shown.',
+  UserLibraryFailure.invalidResponse =>
+    'QQ Music returned an incomplete refresh. The previous complete results '
+        'are still shown.',
+  UserLibraryFailure.coreUnavailable =>
+    'The music core couldn’t refresh playlists. The previous results are '
+        'still shown.',
+  _ => 'Couldn’t refresh playlists. The previous results are still shown.',
 };
 
 String _semanticLabel(UserPlaylistSummary playlist) {

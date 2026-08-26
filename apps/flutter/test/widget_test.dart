@@ -403,6 +403,69 @@ void main() {
     expect(find.text('No playlists yet'), findsOneWidget);
   });
 
+  testWidgets('failed refresh keeps the complete library visible and retries', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(
+            playlists: [
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'favorite:current',
+                title: 'Current library',
+              ),
+            ],
+          ),
+          const UserLibraryResult(failure: UserLibraryFailure.network),
+          const UserLibraryResult(
+            playlists: [
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'favorite:fresh',
+                title: 'Fresh library',
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Refresh playlists'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current library'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('user-library-refresh-failure')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('previous results'), findsOneWidget);
+    expect(find.text('Couldn’t reach QQ Music'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('user-library-refresh-retry')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fresh library'), findsOneWidget);
+    expect(find.text('Current library'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('user-library-refresh-failure')),
+      findsNothing,
+    );
+  });
+
   testWidgets('sign out requires confirmation and returns to QR login', (
     tester,
   ) async {
