@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "M4.4 Shared Discover content states"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -61,12 +61,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The finite Search content-state migration is complete. Autonomous execution returns to whole-project ranking before selecting another presentation task; Discover credential-aware states and the M4.5 playback/queue/lyrics discovery remain separate candidates.
+- The post-Search global ranking found no new correctness, playback, Provider, credential, platform, or debt-trigger task that outranks the remaining M4.4 state-family gap. A finite Discover-only state migration is selected with Radar recovery and New Album/Song selectors explicitly preserved.
 
 # Next Candidates
 
-1. Re-rank the separate Discover content-state family against the rest of the active Roadmap.
-2. Run a bounded M4.5 playback/queue/lyrics discovery before selecting visual or interaction work there.
+1. Implement and validate shared loading/empty/error presentation for the five Discover sections only.
+2. Run a bounded M4.5 playback/queue/lyrics discovery after the Discover state family closes.
 3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
 
 # Blockers
