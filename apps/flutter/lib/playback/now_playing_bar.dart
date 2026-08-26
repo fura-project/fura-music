@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_panel.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -9,6 +11,29 @@ import 'package:flutterustmusic/playback/playback_queue_panel.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+
+/// Presentation-only callbacks for opening already-validated catalog context
+/// from repeated now-playing bars. The authenticated page owns the actual
+/// retained overlays and return semantics.
+class NowPlayingCatalogNavigation extends InheritedWidget {
+  const NowPlayingCatalogNavigation({
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
+    required super.child,
+    super.key,
+  });
+
+  final ValueChanged<AlbumSummary> onOpenAlbum;
+  final ValueChanged<ArtistSummary> onOpenArtist;
+
+  static NowPlayingCatalogNavigation? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<NowPlayingCatalogNavigation>();
+
+  @override
+  bool updateShouldNotify(NowPlayingCatalogNavigation oldWidget) =>
+      onOpenAlbum != oldWidget.onOpenAlbum ||
+      onOpenArtist != oldWidget.onOpenArtist;
+}
 
 class NowPlayingBar extends StatelessWidget {
   const NowPlayingBar({
@@ -27,6 +52,22 @@ class NowPlayingBar extends StatelessWidget {
       builder: (context, _) {
         final track = controller.current;
         if (track == null) return const SizedBox.shrink();
+        final catalogNavigation = NowPlayingCatalogNavigation.maybeOf(context);
+        final catalogActions = catalogNavigation == null
+            ? const <_NowPlayingCatalogAction>[]
+            : _catalogActions(track);
+        final catalogLabel = catalogActions.isEmpty
+            ? null
+            : _catalogActionLabel(track, catalogActions);
+        final openCatalog = catalogActions.isEmpty
+            ? null
+            : () => _openCatalog(
+                context,
+                catalogNavigation!,
+                track,
+                controller.currentIndex,
+                catalogActions,
+              );
 
         final playback = controller.playback;
         final authenticationFailure = playback.requiresAuthentication;
@@ -57,7 +98,9 @@ class NowPlayingBar extends StatelessWidget {
                                 _NowPlayingArtwork(
                                   track: track,
                                   stage: playback.stage,
-                                  dimension: 44,
+                                  dimension: 48,
+                                  onOpenCatalog: openCatalog,
+                                  catalogLabel: catalogLabel,
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -92,6 +135,8 @@ class NowPlayingBar extends StatelessWidget {
                               track: track,
                               stage: playback.stage,
                               dimension: 52,
+                              onOpenCatalog: openCatalog,
+                              catalogLabel: catalogLabel,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -173,6 +218,180 @@ class NowPlayingBar extends StatelessWidget {
         ),
     ];
   }
+
+  Future<void> _openCatalog(
+    BuildContext context,
+    NowPlayingCatalogNavigation navigation,
+    PlaylistTrackSummary expectedTrack,
+    int? expectedIndex,
+    List<_NowPlayingCatalogAction> actions,
+  ) async {
+    if (!_isCurrentTrack(expectedTrack, expectedIndex)) return;
+    if (actions.length == 1) {
+      final action = actions.single;
+      if (_currentTrackHasAction(action)) {
+        _dispatchCatalogAction(navigation, action);
+      }
+      return;
+    }
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    final selected = compact
+        ? await showModalBottomSheet<_NowPlayingCatalogAction>(
+            context: context,
+            showDragHandle: true,
+            builder: (context) => PlaybackShortcuts(
+              controller: controller,
+              child: _NowPlayingCatalogSelection(
+                actions: actions,
+                compact: true,
+              ),
+            ),
+          )
+        : await showDialog<_NowPlayingCatalogAction>(
+            context: context,
+            builder: (context) => PlaybackShortcuts(
+              controller: controller,
+              child: AlertDialog(
+                title: const Text('Browse current Track'),
+                content: _NowPlayingCatalogSelection(
+                  actions: actions,
+                  compact: false,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ),
+          );
+    if (!context.mounted ||
+        selected == null ||
+        !_isCurrentTrack(expectedTrack, expectedIndex) ||
+        !_currentTrackHasAction(selected)) {
+      return;
+    }
+    _dispatchCatalogAction(navigation, selected);
+  }
+
+  bool _isCurrentTrack(PlaylistTrackSummary expectedTrack, int? expectedIndex) {
+    final current = controller.current;
+    return controller.currentIndex == expectedIndex &&
+        current?.providerId == expectedTrack.providerId &&
+        current?.opaqueId == expectedTrack.opaqueId;
+  }
+
+  bool _currentTrackHasAction(_NowPlayingCatalogAction expectedAction) {
+    final current = controller.current;
+    if (current == null) return false;
+    return _catalogActions(current).any(
+      (action) =>
+          action.album?.providerId == expectedAction.album?.providerId &&
+          action.album?.opaqueId == expectedAction.album?.opaqueId &&
+          action.artist?.providerId == expectedAction.artist?.providerId &&
+          action.artist?.opaqueId == expectedAction.artist?.opaqueId,
+    );
+  }
+}
+
+void _dispatchCatalogAction(
+  NowPlayingCatalogNavigation navigation,
+  _NowPlayingCatalogAction action,
+) {
+  final album = action.album;
+  if (album != null) {
+    navigation.onOpenAlbum(album);
+    return;
+  }
+  navigation.onOpenArtist(action.artist!);
+}
+
+List<_NowPlayingCatalogAction> _catalogActions(PlaylistTrackSummary track) {
+  final actions = <_NowPlayingCatalogAction>[];
+  final album = track.album;
+  if (album != null &&
+      album.providerId == track.providerId &&
+      album.opaqueId.trim().isNotEmpty &&
+      album.title.trim().isNotEmpty) {
+    actions.add(_NowPlayingCatalogAction.album(album));
+  }
+  final seenArtists = <String>{};
+  for (final artist in track.artists) {
+    if (artist.providerId != track.providerId ||
+        artist.opaqueId.trim().isEmpty ||
+        artist.name.trim().isEmpty ||
+        !seenArtists.add('${artist.providerId}\u0000${artist.opaqueId}')) {
+      continue;
+    }
+    actions.add(_NowPlayingCatalogAction.artist(artist));
+  }
+  return List.unmodifiable(actions);
+}
+
+String _catalogActionLabel(
+  PlaylistTrackSummary track,
+  List<_NowPlayingCatalogAction> actions,
+) {
+  if (actions.length == 1) {
+    return actions.single.album == null
+        ? 'Open credited Artist for ${track.title}'
+        : 'Open Album for ${track.title}';
+  }
+  final hasAlbum = actions.any((action) => action.album != null);
+  return hasAlbum
+      ? 'Browse Album and credited Artists for ${track.title}'
+      : 'Choose a credited Artist for ${track.title}';
+}
+
+class _NowPlayingCatalogAction {
+  const _NowPlayingCatalogAction.album(this.album) : artist = null;
+  const _NowPlayingCatalogAction.artist(this.artist) : album = null;
+
+  final AlbumSummary? album;
+  final ArtistSummary? artist;
+}
+
+class _NowPlayingCatalogSelection extends StatelessWidget {
+  const _NowPlayingCatalogSelection({
+    required this.actions,
+    required this.compact,
+  });
+
+  final List<_NowPlayingCatalogAction> actions;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(
+      maxWidth: compact ? double.infinity : 440,
+      maxHeight: 420,
+    ),
+    child: ListView.builder(
+      key: const ValueKey('now-playing-catalog-selection'),
+      shrinkWrap: true,
+      itemCount: actions.length,
+      itemBuilder: (context, index) {
+        final action = actions[index];
+        final album = action.album;
+        final title = album?.title ?? action.artist!.name;
+        final kind = album == null ? 'Artist' : 'Album';
+        return ListTile(
+          key: ValueKey(
+            album == null
+                ? 'now-playing-open-artist-$index'
+                : 'now-playing-open-album',
+          ),
+          leading: Icon(
+            album == null ? Icons.person_rounded : Icons.album_rounded,
+          ),
+          title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: Text(kind),
+          onTap: () => Navigator.pop(context, action),
+        );
+      },
+    ),
+  );
 }
 
 class _PlaybackProgress extends StatefulWidget {
@@ -496,11 +715,15 @@ class _NowPlayingArtwork extends StatelessWidget {
     required this.track,
     required this.stage,
     required this.dimension,
+    required this.onOpenCatalog,
+    required this.catalogLabel,
   });
 
   final PlaylistTrackSummary track;
   final TrackPlaybackStage stage;
   final double dimension;
+  final VoidCallback? onOpenCatalog;
+  final String? catalogLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -511,54 +734,73 @@ class _NowPlayingArtwork extends StatelessWidget {
     final error =
         stage == TrackPlaybackStage.resolutionError ||
         stage == TrackPlaybackStage.engineError;
-    return Semantics(
-      container: true,
-      image: true,
-      label: 'Artwork for ${track.title}',
-      child: SizedBox.square(
-        key: const ValueKey('now-playing-artwork'),
-        dimension: dimension,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              artworkUri == null
-                  ? const _NowPlayingArtworkPlaceholder()
-                  : Image.network(
-                      artworkUri,
-                      fit: BoxFit.cover,
-                      excludeFromSemantics: true,
-                      gaplessPlayback: true,
-                      loadingBuilder: (context, child, progress) =>
-                          progress == null
-                          ? child
-                          : const _NowPlayingArtworkPlaceholder(),
-                      errorBuilder: (context, error, stackTrace) =>
-                          const _NowPlayingArtworkPlaceholder(),
-                    ),
-              if (busy || error)
-                ColoredBox(
-                  key: const ValueKey('now-playing-artwork-state'),
-                  color: Colors.black.withValues(alpha: 0.44),
-                  child: Center(
-                    child: busy
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Icon(
-                            Icons.error_outline_rounded,
-                            color: Theme.of(context).colorScheme.errorContainer,
-                            size: 24,
-                          ),
+    final artwork = SizedBox.square(
+      key: const ValueKey('now-playing-artwork'),
+      dimension: dimension,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            artworkUri == null
+                ? const _NowPlayingArtworkPlaceholder()
+                : Image.network(
+                    artworkUri,
+                    fit: BoxFit.cover,
+                    excludeFromSemantics: true,
+                    gaplessPlayback: true,
+                    loadingBuilder: (context, child, progress) =>
+                        progress == null
+                        ? child
+                        : const _NowPlayingArtworkPlaceholder(),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const _NowPlayingArtworkPlaceholder(),
                   ),
+            if (busy || error)
+              ColoredBox(
+                key: const ValueKey('now-playing-artwork-state'),
+                color: Colors.black.withValues(alpha: 0.44),
+                child: Center(
+                  child: busy
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          Icons.error_outline_rounded,
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          size: 24,
+                        ),
                 ),
-            ],
-          ),
+              ),
+          ],
+        ),
+      ),
+    );
+    final onOpenCatalog = this.onOpenCatalog;
+    if (onOpenCatalog == null) {
+      return Semantics(
+        container: true,
+        image: true,
+        label: 'Artwork for ${track.title}',
+        child: artwork,
+      );
+    }
+    return Tooltip(
+      message: catalogLabel!,
+      child: Semantics(
+        button: true,
+        label: catalogLabel,
+        excludeSemantics: true,
+        onTap: onOpenCatalog,
+        child: InkWell(
+          key: const ValueKey('now-playing-catalog-action'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: onOpenCatalog,
+          child: artwork,
         ),
       ),
     );

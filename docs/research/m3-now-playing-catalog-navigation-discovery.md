@@ -35,3 +35,11 @@ All authenticated product pages are presentation-local descendants of `UserLibra
 ## Selection
 
 Now-playing catalog navigation ranks first because it closes a visible coherence gap using already-validated context and already-implemented routes. The ownership audit proves a finite presentation-only solution: one callback scope for eight real consumers and one topmost bounded overlay, rather than per-page state duplication or a new navigation system.
+
+## Outcome
+
+Implemented as the eighteenth finite M3 slice. One presentation-only inherited callback scope wraps every existing authenticated local page and routes its repeated now-playing bars into a topmost retained Artist/Album overlay. Validated single destinations open directly; Album plus Artists or collaborations use an adaptive bounded chooser. The new overlay is outside that callback scope, so it cannot recursively open another current-Track route. AppBar and platform back unwind nested Album → Artist → the exact underlying page without rebuilding its controller or replacing the shared queue/playback owner.
+
+The now-playing artwork remains a plain image when the current Track has no validated context. When actionable, its compact size is 48 px and it exposes one precise semantic label, keyboard focus, and pointer/touch activation. A chooser selection is accepted only if the queue still has the same current position and Track identity and the selected context still belongs to that current Track; media shortcuts can therefore change playback while the chooser is open without routing to stale catalog data.
+
+Validation on the current Linux host passed strict Dart formatting/analysis, all 276 Flutter tests, the Linux x64 Release build, and the packaged in-process Bridge integration. Rust was unchanged, and the existing 258-test offline workspace plus strict all-target/all-feature Clippy baseline was rerun successfully; four live QQ/WeChat tests remained explicitly gated and ignored. No real credential, QQ endpoint, media source, or account data was used.

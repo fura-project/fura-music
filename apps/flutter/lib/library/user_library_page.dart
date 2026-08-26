@@ -130,6 +130,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   ArtistSummary? _trackContextArtist;
   ArtistSummary? _albumContextArtist;
   AlbumSummary? _albumArtistContextAlbum;
+  ArtistSummary? _nowPlayingContextArtist;
+  AlbumSummary? _nowPlayingContextAlbum;
   ArtistSummary? _selectedArtist;
   UserPlaylistSummary? _selectedSearchPlaylist;
   RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
@@ -479,11 +481,62 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           ),
       ],
     );
+    final nowPlayingContextArtist = _nowPlayingContextArtist;
+    final nowPlayingContextAlbum = _nowPlayingContextAlbum;
+    final nowPlayingRoutedPage = IndexedStack(
+      index: nowPlayingContextAlbum != null
+          ? 2
+          : nowPlayingContextArtist != null
+          ? 1
+          : 0,
+      children: [
+        NowPlayingCatalogNavigation(
+          onOpenAlbum: _openNowPlayingAlbum,
+          onOpenArtist: _openNowPlayingArtist,
+          child: albumArtistRoutedPage,
+        ),
+        if (nowPlayingContextArtist == null)
+          const SizedBox.shrink()
+        else
+          ArtistPage(
+            key: ValueKey(
+              'now-playing-artist-${nowPlayingContextArtist.opaqueId}',
+            ),
+            artist: nowPlayingContextArtist,
+            gateway: _artistTrackGateway,
+            albumGateway: _artistAlbumGateway,
+            queuePlaybackController: _queuePlaybackController,
+            onBack: _returnFromNowPlayingArtist,
+            onOpenAlbum: _openNowPlayingArtistAlbum,
+            backTooltip: 'Back to previous page',
+            onSignInAgain: widget.onSignInAgain,
+          ),
+        if (nowPlayingContextAlbum == null)
+          const SizedBox.shrink()
+        else
+          AlbumPage(
+            key: ValueKey(
+              'now-playing-album-${nowPlayingContextAlbum.opaqueId}',
+            ),
+            album: nowPlayingContextAlbum,
+            gateway: _albumTrackGateway,
+            detailsGateway: _albumDetailsGateway,
+            queuePlaybackController: _queuePlaybackController,
+            onBack: _returnFromNowPlayingAlbum,
+            backTooltip: nowPlayingContextArtist == null
+                ? 'Back to previous page'
+                : 'Back to Artist',
+            onSignInAgain: widget.onSignInAgain,
+          ),
+      ],
+    );
     final playbackPage = PlaybackShortcuts(
       controller: _queuePlaybackController,
-      child: albumArtistRoutedPage,
+      child: nowPlayingRoutedPage,
     );
     final hasLocalPage =
+        nowPlayingContextAlbum != null ||
+        nowPlayingContextArtist != null ||
         selectedPlaylist != null ||
         trackContextAlbum != null ||
         trackContextArtist != null ||
@@ -536,7 +589,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _returnFromLocalPage() {
-    if (_albumArtistContextAlbum != null) {
+    if (_nowPlayingContextAlbum != null) {
+      _returnFromNowPlayingAlbum();
+    } else if (_nowPlayingContextArtist != null) {
+      _returnFromNowPlayingArtist();
+    } else if (_albumArtistContextAlbum != null) {
       _returnFromAlbumArtistContextAlbum();
     } else if (_albumContextArtist != null) {
       _returnFromAlbumContextArtist();
@@ -641,6 +698,42 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _returnFromAlbumArtistContextAlbum() {
     if (_albumArtistContextAlbum == null) return;
     setState(() => _albumArtistContextAlbum = null);
+  }
+
+  void _openNowPlayingAlbum(AlbumSummary album) {
+    if (_nowPlayingContextAlbum != null || _nowPlayingContextArtist != null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _nowPlayingContextAlbum = album);
+  }
+
+  void _openNowPlayingArtist(ArtistSummary artist) {
+    if (_nowPlayingContextAlbum != null || _nowPlayingContextArtist != null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _nowPlayingContextArtist = artist);
+  }
+
+  void _openNowPlayingArtistAlbum(AlbumSummary album) {
+    if (_nowPlayingContextArtist == null || _nowPlayingContextAlbum != null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _nowPlayingContextAlbum = album);
+  }
+
+  void _returnFromNowPlayingAlbum() {
+    if (_nowPlayingContextAlbum == null) return;
+    setState(() => _nowPlayingContextAlbum = null);
+  }
+
+  void _returnFromNowPlayingArtist() {
+    if (_nowPlayingContextArtist == null || _nowPlayingContextAlbum != null) {
+      return;
+    }
+    setState(() => _nowPlayingContextArtist = null);
   }
 
   void _closeFavoriteAlbums() {

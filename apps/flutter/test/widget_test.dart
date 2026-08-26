@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
         FilledButton,
+        FocusManager,
         GridView,
         IconButton,
         InkWell,
@@ -35,6 +36,7 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
@@ -1056,6 +1058,354 @@ void main() {
     );
     expect(search.requests, [('artist query', 1, 30)]);
   });
+
+  testWidgets(
+    'opens current Track catalog globally and restores the exact Search state',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const currentAlbum = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:currentAlbumMid',
+        title: 'Current Album',
+      );
+      const nestedAlbum = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43002:nestedAlbumMid',
+        title: 'Nested Album',
+      );
+      const firstArtist = ArtistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'artist:42001:firstArtistMid',
+        name: 'First credit',
+      );
+      const secondArtist = ArtistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'artist:42002:secondArtistMid',
+        name: 'Second credit',
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:currentTrackMid:-',
+        title: 'Current Track',
+        artistNames: ['First credit', 'Second credit'],
+        artists: [firstArtist, secondArtist],
+        albumTitle: 'Current Album',
+        album: currentAlbum,
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [
+            TrackSearchItem(
+              track: track,
+              artists: [firstArtist, secondArtist],
+              album: currentAlbum,
+            ),
+          ],
+        ),
+      );
+      final artistTracks = _WidgetArtistGateway(
+        const ArtistTrackPageResult(total: 1, tracks: [track]),
+      );
+      final artistAlbums = _WidgetArtistAlbumGateway(
+        const ArtistAlbumPageResult(total: 1, albums: [nestedAlbum]),
+      );
+      final albumTracks = _WidgetAlbumGateway(
+        const AlbumTrackPageResult(total: 1, tracks: [track]),
+      );
+      final queue = _WidgetPlaybackQueueGateway();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          searchGateway: search,
+          artistTrackGateway: artistTracks,
+          artistAlbumGateway: artistAlbums,
+          albumTrackGateway: albumTracks,
+          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'current context query',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
+      await tester.pumpAndSettle();
+      expect(queue.replacements.single.$1, [track]);
+
+      await tester.tap(
+        find.byKey(const ValueKey('now-playing-catalog-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('now-playing-catalog-selection')),
+        findsOneWidget,
+      );
+      expect(find.text('Current Album'), findsOneWidget);
+      expect(find.text('First credit'), findsWidgets);
+      expect(find.text('Second credit'), findsWidgets);
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-artist-2')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
+      expect(artistTracks.requests, [(secondArtist, 0, 30)]);
+      expect(
+        find.byKey(const ValueKey('now-playing-catalog-action')),
+        findsNothing,
+      );
+
+      await tester.tap(find.text('Albums'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('artist-album-0')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+      expect(albumTracks.requests.single.$1, nestedAlbum);
+
+      final albumBackHandled = await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(albumBackHandled, isTrue);
+      expect(
+        find.byKey(const ValueKey('artist-albums-content')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('artist-back')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('track-search-content')),
+        findsOneWidget,
+      );
+      expect(find.text('Current Track'), findsWidgets);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+            .controller
+            ?.text,
+        'current context query',
+      );
+      expect(search.requests, [('current context query', 1, 30)]);
+      expect(queue.replacements, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'opens the only current Track catalog destination without a chooser',
+    (tester) async {
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:onlyAlbumMid',
+        title: 'Only Album',
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:onlyTrackMid:-',
+        title: 'Only-context Track',
+        artistNames: ['Unidentified credit'],
+        albumTitle: 'Only Album',
+        album: album,
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: track, album: album)],
+        ),
+      );
+      final albumTracks = _WidgetAlbumGateway(
+        const AlbumTrackPageResult(total: 1, tracks: [track]),
+      );
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          searchGateway: search,
+          albumTrackGateway: albumTracks,
+          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
+          playbackQueueGateway: _WidgetPlaybackQueueGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'single destination query',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
+      await tester.pumpAndSettle();
+
+      final action = find.byKey(const ValueKey('now-playing-catalog-action'));
+      final semantics = tester.getSemantics(action);
+      expect(
+        semantics.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      var actionFocused = false;
+      for (var attempt = 0; attempt < 24; attempt += 1) {
+        final focusedContext = FocusManager.instance.primaryFocus?.context;
+        if (focusedContext != null &&
+            find
+                .ancestor(
+                  of: find.byElementPredicate(
+                    (element) => identical(element, focusedContext),
+                  ),
+                  matching: action,
+                )
+                .evaluate()
+                .isNotEmpty) {
+          actionFocused = true;
+          break;
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(actionFocused, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('now-playing-catalog-selection')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+      expect(albumTracks.requests.single.$1, album);
+      await tester.tap(find.byKey(const ValueKey('album-back')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('track-search-content')),
+        findsOneWidget,
+      );
+      expect(search.requests, [('single destination query', 1, 30)]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'does not open stale catalog context after the current Track changes',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:staleAlbumMid',
+        title: 'Stale Album',
+      );
+      const artist = ArtistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'artist:42001:staleArtistMid',
+        name: 'Stale Artist',
+      );
+      const firstTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:staleTrackMid:-',
+        title: 'Original Track',
+        artistNames: ['Stale Artist'],
+        artists: [artist],
+        albumTitle: 'Stale Album',
+        album: album,
+      );
+      const replacementTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41002:0:replacementTrackMid:-',
+        title: 'Replacement Track',
+        artistNames: ['Unidentified credit'],
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 2,
+          items: [
+            TrackSearchItem(track: firstTrack, artists: [artist], album: album),
+            TrackSearchItem(track: replacementTrack),
+          ],
+        ),
+      );
+      final queue = _WidgetPlaybackQueueGateway(mutatesOnAdvance: true);
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          searchGateway: search,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'stale context query',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('now-playing-catalog-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('now-playing-catalog-selection')),
+        findsOneWidget,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.mediaTrackNext);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-album')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('track-search-content')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('album-content')), findsNothing);
+      expect(find.byKey(const ValueKey('artist-content')), findsNothing);
+      expect(find.text('Replacement Track'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('now-playing-catalog-action')),
+        findsNothing,
+      );
+      expect(search.requests, [('stale context query', 1, 30)]);
+      expect(queue.replacements, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('opens a direct Artist result and preserves Artist Search', (
     tester,
@@ -2836,7 +3186,31 @@ class _WidgetLyricOperation implements LyricLoadOperation {
       const LyricLoadResult(failure: LyricFailure.unavailable);
 }
 
+class _UnavailableMediaGateway implements MediaResolutionGateway {
+  const _UnavailableMediaGateway();
+
+  @override
+  MediaResolutionOperation beginResolution({
+    required String providerId,
+    required String opaqueTrackId,
+  }) => const _UnavailableMediaOperation();
+}
+
+class _UnavailableMediaOperation implements MediaResolutionOperation {
+  const _UnavailableMediaOperation();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<MediaResolutionResult> run() async =>
+      const MediaResolutionResult(failure: MediaResolutionFailure.unavailable);
+}
+
 class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
+  _WidgetPlaybackQueueGateway({this.mutatesOnAdvance = false});
+
+  final bool mutatesOnAdvance;
   final List<PlaylistTrackSummary> pushed = [];
   final List<(List<PlaylistTrackSummary>, int?)> replacements = [];
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
@@ -2872,7 +3246,22 @@ class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
   }
 
   @override
-  PlaybackQueueResult advance() => PlaybackQueueResult(snapshot: _snapshot);
+  PlaybackQueueResult advance() {
+    final currentIndex = _snapshot.currentIndex;
+    if (!mutatesOnAdvance ||
+        currentIndex == null ||
+        currentIndex + 1 >= _snapshot.tracks.length) {
+      return PlaybackQueueResult(snapshot: _snapshot);
+    }
+    final nextIndex = currentIndex + 1;
+    _snapshot = PlaybackQueueSnapshot(
+      tracks: _snapshot.tracks,
+      currentIndex: nextIndex,
+      hasPrevious: true,
+      hasNext: nextIndex + 1 < _snapshot.tracks.length,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+  }
 
   @override
   PlaybackQueueResult clear() {

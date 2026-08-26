@@ -36,6 +36,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.bySemanticsLabel('Artwork for First track'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('now-playing-catalog-action')),
+      findsNothing,
+    );
     expect(find.textContaining('Playing'), findsOneWidget);
     expect(media.requests, [('qq-music', 'first')]);
     expect(queue.replacedTracks, hasLength(2));
