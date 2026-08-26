@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "Authenticated favorite Artists"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -49,11 +49,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. The explicit immersive now-playing core-experience gap is complete; the next step is a fresh global ranking across QQ core-product coverage, reliability, platform evidence, risks, and evidence-blocked candidates.
+- M3 remains active. A fresh Core/Provider-first ranking found current authenticated favorite-Artist request/model evidence and connected it to the repository's already-proven MID-only Artist route; the finite task is one paged favorite-Artist collection into the existing Artist Tracks/Albums/queue path. Track availability remains evidence-blocked.
 
 # Next Candidates
 
-1. Run a fresh M3 discovery/global ranking; Favorite Artists and Track availability remain candidates only after their documented protocol evidence gaps are resolved.
+1. Implement the bounded authenticated favorite-Artist collection selected in `docs/research/m3-favorite-artists-discovery.md`, without mutation, social metadata, stored-account probing, or a generic library/navigation framework.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
