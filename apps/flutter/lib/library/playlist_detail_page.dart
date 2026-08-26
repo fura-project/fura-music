@@ -125,7 +125,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           index,
         ),
       ),
-      onTrackQueued: (track) => unawaited(_addToQueue(track)),
+      onTrackQueued: _addToQueue,
       desktop: desktop,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
@@ -151,15 +151,19 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     ),
   };
 
-  Future<void> _addToQueue(PlaylistTrackSummary track) async {
-    await widget.queuePlaybackController.push(track);
-    if (!mounted) return;
+  void _addToQueue(PlaylistTrackSummary track) {
+    final playbackStart = widget.queuePlaybackController.push(track);
+    if (!mounted) {
+      unawaited(playbackStart);
+      return;
+    }
     final message = widget.queuePlaybackController.failure == null
         ? 'Added to queue'
         : 'Couldn’t update the queue';
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+    unawaited(playbackStart);
   }
 }
 

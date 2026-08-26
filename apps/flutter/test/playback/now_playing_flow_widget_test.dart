@@ -722,6 +722,41 @@ void main() {
     expect(find.text('Added to queue'), findsOneWidget);
   });
 
+  testWidgets('empty-queue add confirms before media resolution completes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final result = Completer<MediaResolutionResult>();
+    final pending = _PendingMediaOperation(result.future);
+    final queue = _WidgetQueueGateway();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([pending]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      queue: queue,
+    );
+
+    await tester.longPress(find.byKey(const ValueKey('playlist-track-row-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add to queue'));
+    await tester.pump();
+    await pending.started.future;
+    await tester.pump();
+
+    expect(queue._snapshot.currentIndex, 0);
+    expect(queue._snapshot.tracks.single.opaqueId, 'second');
+    expect(find.text('Added to queue'), findsOneWidget);
+    expect(_nowPlayingTitle(tester), 'Second track');
+
+    result.complete(_success('empty-queue-pending'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Playing'), findsOneWidget);
+  });
+
   testWidgets(
     'failed context queue action keeps playback and reports failure',
     (tester) async {
