@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "M4.3 Shared adaptive catalog header frame"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -57,12 +57,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The bounded catalog content-state slice is complete. A new whole-project ranking is required before more presentation work; core browsing headers remain the strongest documented M4 candidate, while selected/current Track presentation still lacks a safe non-frame-driven observation seam.
+- Whole-project ranking selected the three concretely duplicated Album/Artist/Ranking adaptive header frames. The finite slice standardizes only artwork/page-type/title layout; every page-specific metadata, action, controller, and section remains owned locally.
 
 # Next Candidates
 
-1. Re-rank core browsing header alignment against any newly reproduced correctness, playback, Provider, platform, or accessibility issue.
-2. Do not start current-playing row animation without a non-frame-driven listener, and do not spread the catalog state panel to semantically different pages without a new bounded audit.
+1. Implement and validate the shared adaptive header frame on Album, Artist, and Ranking only.
+2. Re-rank M4.4 Search/Discover hierarchy after the bounded core-browsing frame; do not start current-playing row animation without a non-frame-driven listener.
 3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers
