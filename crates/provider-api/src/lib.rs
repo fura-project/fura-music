@@ -6,8 +6,8 @@ use std::future::Future;
 use music_domain::{
     AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistSearchPage,
     ArtistTracksPage, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
-    ProviderId, RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage,
-    ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
+    ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingTracksPage,
+    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -68,6 +68,32 @@ pub enum RecommendationError {
     ServiceUnavailable,
     InvalidResponse,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RadarRecommendationError {
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+}
+
+impl fmt::Display for RadarRecommendationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "Radar recommendations require authentication",
+            Self::CredentialRejected => "QQ Music rejected the current credential",
+            Self::Network => "Radar recommendation network request failed",
+            Self::ServiceUnavailable => "Radar recommendations are unavailable",
+            Self::InvalidResponse => "Radar recommendations returned an invalid response",
+            Self::Replaced => "the authenticated account changed during Radar loading",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for RadarRecommendationError {}
 
 impl fmt::Display for RecommendationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -183,6 +209,17 @@ pub trait RecommendedPlaylistsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<RecommendedPlaylistsPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral page-numbered QQ-native Radar Track recommendations.
+/// Personalization inputs and service continuation stay with the Provider.
+pub trait RadarRecommendationsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn radar_tracks(
+        &self,
+        page: u32,
+    ) -> impl Future<Output = Result<RadarTrackPage, Self::Error>> + Send;
 }
 
 /// Provider-neutral current-ranking discovery and Track browsing. Historical

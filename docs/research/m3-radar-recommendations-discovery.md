@@ -36,3 +36,15 @@ Reference implementations remain research evidence only. Runtime requests will g
 ## Selection
 
 Authenticated QQ Radar ranks first because it is a QQ-native recommendation route with two current implementations, live structural/pagination evidence, and a finite handoff into the already proven Track queue owner. The one observed cross-page duplicate supplies a concrete correctness requirement. This slice does not authorize a recommendation engine, a generic Home schema, or new playback semantics.
+
+## Implementation outcome
+
+Completed on 2026-08-26 within the selected boundary:
+
+- Rust Domain and Provider API expose one page-numbered provider-neutral Radar Track page and a precise authenticated recommendation error contract.
+- `QQMusicClient` sends the evidenced credential-bearing request and Cookie directly to QQ Music, bounds the response and timeout, validates rejection/global/module/data/continuation/Track shape, and keeps credentials plus returned content out of diagnostics.
+- `QQMusicProvider` maps into existing opaque Track summaries, requires an authenticated credential, preserves it after transient/service/structural failures, clears it only after explicit rejection, and suppresses an old result after account replacement.
+- The typed Bridge exposes one single-use cancellable page handle. Flutter owns independent lazy Discover state, first/empty/error/retry/pagination/append-failure/cancel/stale/disposal behavior, provider/opaque cross-page deduplication, shared-vault cleanup after explicit rejection, narrow horizontally reachable selection, and existing play/queue handoff.
+- Strict Rust formatting and Clippy, 228 offline Rust tests, strict Dart formatting/analysis, 243 Flutter tests, Linux x64 Release, and the packaged Linux typed-Bridge integration pass. Four live QQ/WeChat tests remain gated and ignored.
+
+These results prove offline request/mapping/lifecycle behavior and packaged Bridge reachability. They do not prove authenticated recommendation personalization, recommendation quality, real-account Radar application compatibility, QQ CDN playback, or the still-pending M1 user-operated playback/queue/lyric observation.

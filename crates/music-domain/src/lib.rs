@@ -973,6 +973,53 @@ pub struct RecommendedPlaylistsPage {
     playlists: Vec<PlaylistSummary>,
 }
 
+/// One provider-neutral page of QQ-native Radar Track recommendations.
+/// Provider-specific personalization and continuation remain behind the
+/// Provider boundary.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RadarTrackPage {
+    page: u32,
+    has_more: bool,
+    tracks: Vec<TrackSummary>,
+}
+
+impl RadarTrackPage {
+    #[must_use]
+    pub const fn new(page: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+        Self {
+            page,
+            has_more,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn page(&self) -> u32 {
+        self.page
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+}
+
+impl fmt::Debug for RadarTrackPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RadarTrackPage")
+            .field("page", &self.page)
+            .field("has_more", &self.has_more)
+            .field("track_count", &self.tracks.len())
+            .finish()
+    }
+}
+
 /// One bounded page of the current Track list for a ranking. The owning
 /// Provider decides what "current" means and how the opaque ranking routes.
 #[derive(Clone, Eq, PartialEq)]
@@ -1565,9 +1612,9 @@ mod tests {
     use super::{
         AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSearchPage,
         ArtistSummary, AudioFormat, AudioQuality, PlaylistId, PlaylistSearchPage, PlaylistSummary,
-        PlaylistTracksPage, ProviderId, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
-        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage,
-        TrackSummary, TrackSummaryField,
+        PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
+        RankingTracksPage, ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem,
+        TrackSearchPage, TrackSummary, TrackSummaryField,
     };
 
     #[test]
@@ -1807,6 +1854,28 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn radar_page_preserves_continuation_and_redacts_track_content() {
+        let track = TrackSummary::new(
+            TrackId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "track:radar-private",
+            )
+            .expect("track ID"),
+            "must-not-leak",
+            vec!["private-artist".into()],
+        )
+        .expect("track");
+        let page = RadarTrackPage::new(2, true, vec![track]);
+
+        assert_eq!(page.page(), 2);
+        assert!(page.has_more());
+        assert_eq!(page.tracks()[0].title(), "must-not-leak");
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("must-not-leak"));
+        assert!(!debug.contains("radar:private"));
     }
 
     #[test]

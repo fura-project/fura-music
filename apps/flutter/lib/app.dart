@@ -8,6 +8,7 @@ import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -42,6 +43,7 @@ class MusicApp extends StatelessWidget {
     ArtistAlbumGateway? artistAlbumGateway,
     RecommendedPlaylistGateway? recommendedPlaylistGateway,
     RankingGateway? rankingGateway,
+    RadarGateway? radarGateway,
     ForegroundAudioEngine? audioEngine,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
@@ -51,7 +53,8 @@ class MusicApp extends StatelessWidget {
         libraryGateway == null ||
         playlistDetailGateway == null ||
         mediaResolutionGateway == null ||
-        lyricGateway == null) {
+        lyricGateway == null ||
+        radarGateway == null) {
       final fallbackCredentialVault = SerializedCredentialVault(
         PlatformCredentialVault(),
       );
@@ -68,6 +71,9 @@ class MusicApp extends StatelessWidget {
         credentialVault: fallbackCredentialVault,
       );
       lyricGateway ??= RustLyricGateway(
+        credentialVault: fallbackCredentialVault,
+      );
+      radarGateway ??= RustRadarGateway(
         credentialVault: fallbackCredentialVault,
       );
     }
@@ -91,6 +97,7 @@ class MusicApp extends StatelessWidget {
       recommendedPlaylistGateway:
           recommendedPlaylistGateway ?? const RustRecommendedPlaylistGateway(),
       rankingGateway: rankingGateway ?? const RustRankingGateway(),
+      radarGateway: radarGateway,
       audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
@@ -114,6 +121,7 @@ class MusicApp extends StatelessWidget {
     required this.artistAlbumGateway,
     required this.recommendedPlaylistGateway,
     required this.rankingGateway,
+    required this.radarGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -135,6 +143,7 @@ class MusicApp extends StatelessWidget {
   final ArtistAlbumGateway artistAlbumGateway;
   final RecommendedPlaylistGateway recommendedPlaylistGateway;
   final RankingGateway rankingGateway;
+  final RadarGateway radarGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -163,6 +172,7 @@ class MusicApp extends StatelessWidget {
         artistAlbumGateway: artistAlbumGateway,
         recommendedPlaylistGateway: recommendedPlaylistGateway,
         rankingGateway: rankingGateway,
+        radarGateway: radarGateway,
         audioEngine: audioEngine,
         initialCredentialRestore: initialCredentialRestore,
       ),
@@ -202,6 +212,7 @@ class LoginPage extends StatefulWidget {
     required this.artistAlbumGateway,
     required this.recommendedPlaylistGateway,
     required this.rankingGateway,
+    required this.radarGateway,
     required this.audioEngine,
     required this.initialCredentialRestore,
     super.key,
@@ -223,6 +234,7 @@ class LoginPage extends StatefulWidget {
   final ArtistAlbumGateway artistAlbumGateway;
   final RecommendedPlaylistGateway recommendedPlaylistGateway;
   final RankingGateway rankingGateway;
+  final RadarGateway radarGateway;
   final ForegroundAudioEngine audioEngine;
   final CredentialRestoreResult initialCredentialRestore;
 
@@ -274,6 +286,7 @@ class _LoginPageState extends State<LoginPage> {
             artistAlbumGateway: widget.artistAlbumGateway,
             recommendedPlaylistGateway: widget.recommendedPlaylistGateway,
             rankingGateway: widget.rankingGateway,
+            radarGateway: widget.radarGateway,
             audioEngine: widget.audioEngine,
             onSignInAgain: _controller.cancel,
             onSignOut: _controller.signOut,

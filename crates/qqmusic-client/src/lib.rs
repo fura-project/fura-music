@@ -18,6 +18,7 @@ mod owned_playlists;
 mod playlist_detail;
 mod playlist_search;
 mod qrc_cipher;
+mod radar_recommendations;
 mod rankings;
 mod recommendations;
 mod search;
@@ -60,6 +61,7 @@ pub use playlist_search::{
     PlaylistSearchField, QqMusicPlaylistSearchError, QqMusicPlaylistSearchPage,
     QqMusicPlaylistSearchSummary,
 };
+pub use radar_recommendations::{QqMusicRadarError, QqMusicRadarTrackPage, RadarTrackField};
 pub use rankings::{
     QqMusicRankingGroup, QqMusicRankingSummary, QqMusicRankingTrackPage, QqMusicRankingsError,
     RankingField, RankingGroupField, RankingTrackField,

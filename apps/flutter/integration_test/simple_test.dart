@@ -155,6 +155,14 @@ void main() {
       cancelledRecommendationLoad.failure,
       QqMusicRecommendedPlaylistPageLoadFailure.cancelled,
     );
+    final unusedRadarLoad = beginQqMusicRadarTrackPageLoad(page: 1);
+    expect(unusedRadarLoad.isActive, isTrue);
+    expect(unusedRadarLoad.cancel(), isTrue);
+    final cancelledRadarLoad = await unusedRadarLoad.run();
+    expect(
+      cancelledRadarLoad.failure,
+      QqMusicRadarTrackPageLoadFailure.cancelled,
+    );
     final unusedRankingGroupLoad = beginQqMusicRankingGroupLoad();
     expect(unusedRankingGroupLoad.isActive, isTrue);
     expect(unusedRankingGroupLoad.cancel(), isTrue);

@@ -1,11 +1,16 @@
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use provider_api::{RecommendationError, RecommendedPlaylistsProvider};
+use provider_api::{
+    RadarRecommendationError, RadarRecommendationsProvider, RecommendationError,
+    RecommendedPlaylistsProvider,
+};
 use tokio::sync::Notify;
 
 use super::authentication::native_qq_music_provider;
-use super::library::{LibraryPlaylistSummary, bridge_playlist_summary};
+use super::library::{
+    LibraryPlaylistSummary, LibraryTrackSummary, bridge_playlist_summary, bridge_track_summary,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicRecommendedPlaylistPageLoadFailure {
@@ -160,14 +165,169 @@ const fn map_error(error: RecommendationError) -> QqMusicRecommendedPlaylistPage
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicRadarTrackPageLoadFailure {
+    CoreUnavailable,
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+    Cancelled,
+    AlreadyRunning,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicRadarTrackPageLoad {
+    pub page: u32,
+    pub has_more: bool,
+    pub tracks: Vec<LibraryTrackSummary>,
+    pub failure: Option<QqMusicRadarTrackPageLoadFailure>,
+}
+
+impl fmt::Debug for QqMusicRadarTrackPageLoad {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRadarTrackPageLoad")
+            .field("page", &self.page)
+            .field("has_more", &self.has_more)
+            .field("track_count", &self.tracks.len())
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+/// One cancellable, single-use authenticated Radar Track page load. QQ
+/// request fields, credentials, and continuation rules remain in Rust Core.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicRadarTrackPageLoadHandle {
+    page: u32,
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl fmt::Debug for QqMusicRadarTrackPageLoadHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRadarTrackPageLoadHandle")
+            .field("page", &self.page)
+            .field("active", &self.is_active())
+            .field("running", &self.running.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl QqMusicRadarTrackPageLoadHandle {
+    pub async fn run(&self) -> QqMusicRadarTrackPageLoad {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_radar_load(QqMusicRadarTrackPageLoadFailure::Cancelled);
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_radar_load(QqMusicRadarTrackPageLoadFailure::AlreadyRunning);
+        }
+        let outcome = match native_qq_music_provider() {
+            Ok(provider) => {
+                tokio::select! {
+                    () = self.cancelled.notified() => {
+                        failed_radar_load(QqMusicRadarTrackPageLoadFailure::Cancelled)
+                    }
+                    result = provider.radar_tracks(self.page) => {
+                        if self.active.load(Ordering::SeqCst) {
+                            map_radar_load(result)
+                        } else {
+                            failed_radar_load(QqMusicRadarTrackPageLoadFailure::Cancelled)
+                        }
+                    }
+                }
+            }
+            Err(()) => failed_radar_load(QqMusicRadarTrackPageLoadFailure::CoreUnavailable),
+        };
+        self.running.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        outcome
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_qq_music_radar_track_page_load(page: u32) -> QqMusicRadarTrackPageLoadHandle {
+    QqMusicRadarTrackPageLoadHandle {
+        page,
+        active: AtomicBool::new(true),
+        running: AtomicBool::new(false),
+        cancelled: Notify::new(),
+    }
+}
+
+fn map_radar_load(
+    result: Result<music_domain::RadarTrackPage, RadarRecommendationError>,
+) -> QqMusicRadarTrackPageLoad {
+    match result {
+        Ok(page) => QqMusicRadarTrackPageLoad {
+            page: page.page(),
+            has_more: page.has_more(),
+            tracks: page.tracks().iter().map(bridge_track_summary).collect(),
+            failure: None,
+        },
+        Err(error) => failed_radar_load(map_radar_error(error)),
+    }
+}
+
+const fn failed_radar_load(failure: QqMusicRadarTrackPageLoadFailure) -> QqMusicRadarTrackPageLoad {
+    QqMusicRadarTrackPageLoad {
+        page: 0,
+        has_more: false,
+        tracks: Vec::new(),
+        failure: Some(failure),
+    }
+}
+
+const fn map_radar_error(error: RadarRecommendationError) -> QqMusicRadarTrackPageLoadFailure {
+    match error {
+        RadarRecommendationError::AuthenticationRequired => {
+            QqMusicRadarTrackPageLoadFailure::AuthenticationRequired
+        }
+        RadarRecommendationError::CredentialRejected => {
+            QqMusicRadarTrackPageLoadFailure::CredentialRejected
+        }
+        RadarRecommendationError::Network => QqMusicRadarTrackPageLoadFailure::Network,
+        RadarRecommendationError::ServiceUnavailable => {
+            QqMusicRadarTrackPageLoadFailure::ServiceUnavailable
+        }
+        RadarRecommendationError::InvalidResponse => {
+            QqMusicRadarTrackPageLoadFailure::InvalidResponse
+        }
+        RadarRecommendationError::Replaced => QqMusicRadarTrackPageLoadFailure::Replaced,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use music_domain::{PlaylistId, PlaylistSummary, ProviderId, RecommendedPlaylistsPage};
-    use provider_api::RecommendationError;
+    use music_domain::{
+        PlaylistId, PlaylistSummary, ProviderId, RadarTrackPage, RecommendedPlaylistsPage, TrackId,
+        TrackSummary,
+    };
+    use provider_api::{RadarRecommendationError, RecommendationError};
 
     use super::{
-        QqMusicRecommendedPlaylistPageLoadFailure, begin_qq_music_recommended_playlist_page_load,
-        map_error, map_load,
+        QqMusicRadarTrackPageLoadFailure, QqMusicRecommendedPlaylistPageLoadFailure,
+        begin_qq_music_radar_track_page_load, begin_qq_music_recommended_playlist_page_load,
+        map_error, map_load, map_radar_error, map_radar_load,
     };
 
     #[test]
@@ -207,6 +367,64 @@ mod tests {
             map_error(RecommendationError::InvalidResponse),
             QqMusicRecommendedPlaylistPageLoadFailure::InvalidResponse
         );
+
+        let cases = [
+            (
+                RadarRecommendationError::AuthenticationRequired,
+                QqMusicRadarTrackPageLoadFailure::AuthenticationRequired,
+            ),
+            (
+                RadarRecommendationError::CredentialRejected,
+                QqMusicRadarTrackPageLoadFailure::CredentialRejected,
+            ),
+            (
+                RadarRecommendationError::Network,
+                QqMusicRadarTrackPageLoadFailure::Network,
+            ),
+            (
+                RadarRecommendationError::ServiceUnavailable,
+                QqMusicRadarTrackPageLoadFailure::ServiceUnavailable,
+            ),
+            (
+                RadarRecommendationError::InvalidResponse,
+                QqMusicRadarTrackPageLoadFailure::InvalidResponse,
+            ),
+            (
+                RadarRecommendationError::Replaced,
+                QqMusicRadarTrackPageLoadFailure::Replaced,
+            ),
+        ];
+        for (source, expected) in cases {
+            assert_eq!(map_radar_error(source), expected);
+        }
+    }
+
+    #[test]
+    fn maps_radar_page_without_exposing_identity_or_content() {
+        let track = TrackSummary::new(
+            TrackId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "track:41001:0:private-mid:-",
+            )
+            .expect("Track ID"),
+            "must-not-leak-track",
+            vec!["private-artist".into()],
+        )
+        .expect("Track");
+        let mapped = map_radar_load(Ok(RadarTrackPage::new(2, true, vec![track])));
+
+        assert_eq!(mapped.page, 2);
+        assert!(mapped.has_more);
+        assert_eq!(mapped.tracks.len(), 1);
+        let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
+        for private in [
+            "must-not-leak-track",
+            "private-artist",
+            "private-mid",
+            "41001",
+        ] {
+            assert!(!debug.contains(private));
+        }
     }
 
     #[tokio::test]
@@ -219,6 +437,15 @@ mod tests {
         assert_eq!(
             result.failure,
             Some(QqMusicRecommendedPlaylistPageLoadFailure::Cancelled)
+        );
+
+        let radar = begin_qq_music_radar_track_page_load(2);
+        assert!(radar.is_active());
+        assert!(radar.cancel());
+        assert!(!radar.cancel());
+        assert_eq!(
+            radar.run().await.failure,
+            Some(QqMusicRadarTrackPageLoadFailure::Cancelled)
         );
     }
 }

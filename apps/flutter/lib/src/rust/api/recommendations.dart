@@ -8,8 +8,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_load`, `failed_radar_load`, `map_error`, `map_load`, `map_radar_error`, `map_radar_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicRecommendedPlaylistPageLoadHandle
 beginQqMusicRecommendedPlaylistPageLoad({
@@ -21,6 +21,20 @@ beginQqMusicRecommendedPlaylistPageLoad({
       size: size,
     );
 
+QqMusicRadarTrackPageLoadHandle beginQqMusicRadarTrackPageLoad({
+  required int page,
+}) => RustLib.instance.api
+    .crateApiRecommendationsBeginQqMusicRadarTrackPageLoad(page: page);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRadarTrackPageLoadHandle>>
+abstract class QqMusicRadarTrackPageLoadHandle implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicRadarTrackPageLoad> run();
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRecommendedPlaylistPageLoadHandle>>
 abstract class QqMusicRecommendedPlaylistPageLoadHandle
     implements RustOpaqueInterface {
@@ -29,6 +43,46 @@ abstract class QqMusicRecommendedPlaylistPageLoadHandle
   bool get isActive;
 
   Future<QqMusicRecommendedPlaylistPageLoad> run();
+}
+
+class QqMusicRadarTrackPageLoad {
+  final int page;
+  final bool hasMore;
+  final List<LibraryTrackSummary> tracks;
+  final QqMusicRadarTrackPageLoadFailure? failure;
+
+  const QqMusicRadarTrackPageLoad({
+    required this.page,
+    required this.hasMore,
+    required this.tracks,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      page.hashCode ^ hasMore.hashCode ^ tracks.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicRadarTrackPageLoad &&
+          runtimeType == other.runtimeType &&
+          page == other.page &&
+          hasMore == other.hasMore &&
+          tracks == other.tracks &&
+          failure == other.failure;
+}
+
+enum QqMusicRadarTrackPageLoadFailure {
+  coreUnavailable,
+  authenticationRequired,
+  credentialRejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  cancelled,
+  alreadyRunning,
 }
 
 class QqMusicRecommendedPlaylistPageLoad {

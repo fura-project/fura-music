@@ -23,9 +23,12 @@ import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
@@ -523,6 +526,76 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Synthetic ranking'), findsOneWidget);
       expect(rankings.groupLoads, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'loads Radar lazily and hands Tracks to the existing queue on narrow screens',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureRadarMid:-',
+        title: 'Radar Track',
+        artistNames: ['Radar artist'],
+      );
+      final radar = _WidgetRadarGateway(
+        const RadarTrackPageResult(page: 1, tracks: [track]),
+      );
+      final queue = _WidgetPlaybackQueueGateway();
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+            const RecommendedPlaylistPageResult(),
+          ),
+          radarGateway: radar,
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      expect(radar.pages, isEmpty);
+
+      final radarTab = find.text('Radar');
+      await tester.ensureVisible(radarTab);
+      await tester.pumpAndSettle();
+      await tester.tap(radarTab);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('radar-content')), findsOneWidget);
+      expect(find.text('Radar Track'), findsOneWidget);
+      expect(radar.pages, [1]);
+
+      await tester.tap(find.byKey(const ValueKey('radar-queue-0')));
+      await tester.pump();
+      expect(queue.pushed, [track]);
+
+      await tester.tap(find.byKey(const ValueKey('radar-track-0')));
+      await tester.pump();
+      expect(queue.replacements, hasLength(1));
+      expect(queue.replacements.single.$1, [track]);
+      expect(queue.replacements.single.$2, 0);
+
+      await tester.ensureVisible(find.text('Playlists'));
+      await tester.tap(find.text('Playlists'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(radarTab);
+      await tester.tap(radarTab);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('radar-track-0')), findsOneWidget);
+      expect(radar.pages, [1]);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2083,6 +2156,112 @@ class _WidgetRecommendedPlaylistOperation
 
   @override
   Future<RecommendedPlaylistPageResult> run() async => result;
+}
+
+class _WidgetRadarGateway implements RadarGateway {
+  _WidgetRadarGateway(this.result);
+
+  final RadarTrackPageResult result;
+  final List<int> pages = [];
+
+  @override
+  RadarTrackPageLoadOperation beginLoad({required int page}) {
+    pages.add(page);
+    return _WidgetRadarOperation(result);
+  }
+}
+
+class _WidgetRadarOperation implements RadarTrackPageLoadOperation {
+  const _WidgetRadarOperation(this.result);
+
+  final RadarTrackPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<RadarTrackPageResult> run() async => result;
+}
+
+class _WidgetLyricGateway implements LyricGateway {
+  const _WidgetLyricGateway();
+
+  @override
+  LyricLoadOperation beginLoad({
+    required String providerId,
+    required String opaqueTrackId,
+  }) => const _WidgetLyricOperation();
+}
+
+class _WidgetLyricOperation implements LyricLoadOperation {
+  const _WidgetLyricOperation();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<LyricLoadResult> run() async =>
+      const LyricLoadResult(failure: LyricFailure.unavailable);
+}
+
+class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
+  final List<PlaylistTrackSummary> pushed = [];
+  final List<(List<PlaylistTrackSummary>, int?)> replacements = [];
+  PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
+
+  @override
+  PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult push(PlaylistTrackSummary track) {
+    pushed.add(track);
+    _snapshot = PlaybackQueueSnapshot(
+      tracks: [..._snapshot.tracks, track],
+      currentIndex: _snapshot.currentIndex ?? 0,
+      hasPrevious: false,
+      hasNext: false,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot);
+  }
+
+  @override
+  PlaybackQueueResult replace({
+    required List<PlaylistTrackSummary> tracks,
+    required int? currentIndex,
+  }) {
+    replacements.add((List.of(tracks), currentIndex));
+    _snapshot = PlaybackQueueSnapshot(
+      tracks: tracks,
+      currentIndex: currentIndex,
+      hasPrevious: currentIndex != null && currentIndex > 0,
+      hasNext: currentIndex != null && currentIndex + 1 < tracks.length,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot);
+  }
+
+  @override
+  PlaybackQueueResult advance() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult clear() {
+    _snapshot = PlaybackQueueSnapshot.empty();
+    return PlaybackQueueResult(snapshot: _snapshot);
+  }
+
+  @override
+  PlaybackQueueResult completeCurrent() =>
+      PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult remove(int index) =>
+      PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult rewind() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult select(int index) =>
+      PlaybackQueueResult(snapshot: _snapshot);
 }
 
 class _WidgetRankingGateway implements RankingGateway {

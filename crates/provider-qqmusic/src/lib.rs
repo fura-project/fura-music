@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 use music_domain::{
     AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
     ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat, AudioQuality, PlaylistId,
-    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RankingGroup, RankingId,
-    RankingSummary, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem,
-    TrackSearchPage, TrackSummary,
+    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
+    RankingGroup, RankingId, RankingSummary, RankingTracksPage, RecommendedPlaylistsPage,
+    ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId,
+    TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider, ArtistSearchProvider,
@@ -18,9 +18,9 @@ use provider_api::{
     MediaResolutionError, MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider,
     PlaylistDetailsProvider, PlaylistSearchProvider, ProviderCapability, ProviderDescriptor,
     QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
-    QrAuthenticationSession, QrImageFormat, RankingsProvider, RecommendationError,
-    RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
-    UserPlaylistsProvider,
+    QrAuthenticationSession, QrImageFormat, RadarRecommendationError, RadarRecommendationsProvider,
+    RankingsProvider, RecommendationError, RecommendedPlaylistsProvider, SearchError,
+    TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
@@ -29,7 +29,7 @@ use qqmusic_client::{
     QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
     QqMusicMediaError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
     QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
-    QqMusicRankingSummary, QqMusicRankingsError, QqMusicRecommendedPlaylist,
+    QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError, QqMusicRecommendedPlaylist,
     QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackSummary, QrImageMediaType,
     WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
@@ -173,6 +173,37 @@ impl<T> QqMusicProvider<T> {
         if rejected {
             *state = QqMusicCredentialState::SignedOut;
             return Err(LyricsError::CredentialRejected);
+        }
+        Ok(())
+    }
+
+    fn authenticated_radar_credential(&self) -> Result<Credential, RadarRecommendationError> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => {
+                Err(RadarRecommendationError::AuthenticationRequired)
+            }
+        }
+    }
+
+    fn finish_radar_await(
+        &self,
+        candidate: &Credential,
+        rejected: bool,
+    ) -> Result<(), RadarRecommendationError> {
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == candidate
+        );
+        if !still_current {
+            return Err(RadarRecommendationError::Replaced);
+        }
+        if rejected {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(RadarRecommendationError::CredentialRejected);
         }
         Ok(())
     }
@@ -619,6 +650,30 @@ where
             page.has_more(),
             playlists,
         ))
+    }
+}
+
+impl<T> RadarRecommendationsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = RadarRecommendationError;
+
+    async fn radar_tracks(&self, page: u32) -> Result<RadarTrackPage, Self::Error> {
+        let candidate = self.authenticated_radar_credential()?;
+        let response = self.client().radar_tracks(&candidate, page).await;
+        self.finish_radar_await(
+            &candidate,
+            matches!(response, Err(QqMusicRadarError::Rejected { .. })),
+        )?;
+        let page = response.as_ref().map_err(map_radar_error)?;
+        let tracks = page
+            .tracks()
+            .iter()
+            .map(map_track_summary)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| RadarRecommendationError::InvalidResponse)?;
+        Ok(RadarTrackPage::new(page.page(), page.has_more(), tracks))
     }
 }
 
@@ -1713,6 +1768,28 @@ fn map_recommendations_error<E>(
     }
 }
 
+fn map_radar_error<E>(error: &QqMusicRadarError<E>) -> RadarRecommendationError {
+    match error {
+        QqMusicRadarError::Rejected { .. } => RadarRecommendationError::CredentialRejected,
+        QqMusicRadarError::Transport(_) => RadarRecommendationError::Network,
+        QqMusicRadarError::HttpStatus(_) | QqMusicRadarError::Upstream { .. } => {
+            RadarRecommendationError::ServiceUnavailable
+        }
+        QqMusicRadarError::InvalidPage { .. }
+        | QqMusicRadarError::Serialize
+        | QqMusicRadarError::InvalidJson
+        | QqMusicRadarError::MissingGlobalCode
+        | QqMusicRadarError::MissingResult
+        | QqMusicRadarError::MissingResultCode
+        | QqMusicRadarError::MissingData
+        | QqMusicRadarError::MissingTracks
+        | QqMusicRadarError::MissingHasMore
+        | QqMusicRadarError::InvalidPagination
+        | QqMusicRadarError::InvalidTrack { .. }
+        | QqMusicRadarError::InvalidArtist { .. } => RadarRecommendationError::InvalidResponse,
+    }
+}
+
 fn map_rankings_error<E>(error: &QqMusicRankingsError<E>) -> CatalogError {
     match error {
         QqMusicRankingsError::Transport(_) => CatalogError::Network,
@@ -1862,15 +1939,16 @@ mod tests {
         ArtistTracksProvider, CatalogError, LyricsError, LyricsProvider, MediaResolutionError,
         MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
         PlaylistSearchProvider, ProviderCapability, QrAuthenticationProgress,
-        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RankingsProvider,
-        RecommendationError, RecommendedPlaylistsProvider, SearchError, TrackSearchProvider,
-        UserLibraryError, UserPlaylistsProvider,
+        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
+        RadarRecommendationsProvider, RankingsProvider, RecommendationError,
+        RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
+        UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
         HttpResponse, HttpTransport, LoginType, QqMusicAlbumSearchError, QqMusicAlbumTracksError,
         QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
-        QqMusicClient, QqMusicPlaylistSearchError, QqMusicRankingsError,
+        QqMusicClient, QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
         QqMusicRecommendedPlaylistsError, QqMusicSearchError,
     };
     use serde_json::{Value, json};
@@ -2190,6 +2268,12 @@ mod tests {
         release_request: Arc<Notify>,
     }
 
+    #[derive(Clone)]
+    struct GatedRadarTransport {
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
     impl HttpTransport for GatedOwnedPlaylistsTransport {
         type Error = Infallible;
 
@@ -2268,6 +2352,19 @@ mod tests {
             Ok(HttpResponse::new(
                 200,
                 serde_json::to_vec(&lyrics_success_json()).expect("fixture JSON"),
+            ))
+        }
+    }
+
+    impl HttpTransport for GatedRadarTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.request_started.notify_one();
+            self.release_request.notified().await;
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&radar_response(0, false)).expect("fixture JSON"),
             ))
         }
     }
@@ -2834,6 +2931,110 @@ mod tests {
         assert!(!format!("{page:?}").contains("81001"));
     }
 
+    fn radar_response(code: i64, has_more: bool) -> Value {
+        json!({
+            "code": 0,
+            "radar": {
+                "code": code,
+                "data": {
+                    "VecSongs": [{"Track": {
+                        "id": 41001,
+                        "mid": "fixtureTrackMid1",
+                        "title": "Synthetic Radar track",
+                        "subtitle": "Synthetic subtitle",
+                        "type": 0,
+                        "interval": 245,
+                        "file": {"media_mid": "fixtureFileMid1"},
+                        "singer": [{
+                            "id": 42001,
+                            "mid": "fixtureArtistMid",
+                            "name": "Synthetic artist"
+                        }],
+                        "album": {
+                            "id": 43001,
+                            "mid": "fixtureAlbumMid",
+                            "name": "Synthetic album"
+                        }
+                    }}],
+                    "HasMore": has_more
+                }
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn authenticated_radar_maps_tracks_and_clears_only_explicit_rejection() {
+        let signed_out = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &radar_response(0, false),
+        )));
+        assert_eq!(
+            signed_out.radar_tracks(1).await,
+            Err(RadarRecommendationError::AuthenticationRequired)
+        );
+
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &radar_response(0, true),
+        )));
+        set_authenticated(&provider, "123456");
+        let page = provider.radar_tracks(2).await.expect("Radar Track page");
+        assert_eq!(page.page(), 2);
+        assert!(page.has_more());
+        assert_eq!(page.tracks().len(), 1);
+        assert_eq!(page.tracks()[0].id().provider().as_str(), "qq-music");
+        assert_eq!(
+            page.tracks()[0].id().opaque(),
+            "track:41001:0:fixtureTrackMid1:fixtureFileMid1"
+        );
+        assert_eq!(page.tracks()[0].title(), "Synthetic Radar track");
+        assert!(provider.has_authenticated_credential());
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("Synthetic Radar track"));
+        assert!(!debug.contains("41001"));
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "radar": {"code": 104_401}
+        }))));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.radar_tracks(1).await,
+            Err(RadarRecommendationError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &radar_response(50_006, false),
+        )));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream.radar_tracks(1).await,
+            Err(RadarRecommendationError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn late_radar_result_cannot_cross_account_replacement() {
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedRadarTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&provider, "123456");
+
+        let request = provider.radar_tracks(1);
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(RadarRecommendationError::Replaced));
+        assert!(provider.has_authenticated_credential());
+    }
+
     #[test]
     fn maps_recommendation_failures_coarsely() {
         assert_eq!(
@@ -2847,6 +3048,14 @@ mod tests {
                 &QqMusicRecommendedPlaylistsError::<Infallible>::InvalidPagination
             ),
             RecommendationError::InvalidResponse
+        );
+        assert_eq!(
+            super::map_radar_error(&QqMusicRadarError::<Infallible>::HttpStatus(503)),
+            RadarRecommendationError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_radar_error(&QqMusicRadarError::<Infallible>::InvalidPagination),
+            RadarRecommendationError::InvalidResponse
         );
     }
 

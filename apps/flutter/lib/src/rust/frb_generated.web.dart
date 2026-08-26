@@ -78,6 +78,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle;
 
   CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_QqMusicRadarTrackPageLoadHandlePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle;
+
+  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicRankingGroupLoadHandlePtr => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRankingGroupLoadHandle;
 
@@ -160,6 +164,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicQrLoginSessionHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicRadarTrackPageLoadHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
     dynamic raw,
   );
 
@@ -260,6 +270,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRadarTrackPageLoadHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicRankingGroupLoadHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRankingGroupLoadHandle(
     dynamic raw,
@@ -352,6 +368,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicQrLoginSessionHandle
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicRadarTrackPageLoadHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
     dynamic raw,
   );
 
@@ -492,6 +514,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QqMusicQrLoginState dco_decode_box_autoadd_qq_music_qr_login_state(
     dynamic raw,
   );
+
+  @protected
+  QqMusicRadarTrackPageLoadFailure
+  dco_decode_box_autoadd_qq_music_radar_track_page_load_failure(dynamic raw);
 
   @protected
   QqMusicRankingLoadFailure
@@ -707,6 +733,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRadarTrackPageLoadFailure?
+  dco_decode_opt_box_autoadd_qq_music_radar_track_page_load_failure(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicRankingLoadFailure?
   dco_decode_opt_box_autoadd_qq_music_ranking_load_failure(dynamic raw);
 
@@ -887,6 +919,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QqMusicQrLoginUpdate dco_decode_qq_music_qr_login_update(dynamic raw);
 
   @protected
+  QqMusicRadarTrackPageLoad dco_decode_qq_music_radar_track_page_load(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicRadarTrackPageLoadFailure
+  dco_decode_qq_music_radar_track_page_load_failure(dynamic raw);
+
+  @protected
   QqMusicRankingGroupLoad dco_decode_qq_music_ranking_group_load(dynamic raw);
 
   @protected
@@ -1024,6 +1065,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRadarTrackPageLoadHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicRankingGroupLoadHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRankingGroupLoadHandle(
     SseDeserializer deserializer,
@@ -1120,6 +1167,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRadarTrackPageLoadHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicRankingGroupLoadHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRankingGroupLoadHandle(
     SseDeserializer deserializer,
@@ -1212,6 +1265,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicQrLoginSessionHandle
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicRadarTrackPageLoadHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
     SseDeserializer deserializer,
   );
 
@@ -1380,6 +1439,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   QqMusicQrLoginState sse_decode_box_autoadd_qq_music_qr_login_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicRadarTrackPageLoadFailure
+  sse_decode_box_autoadd_qq_music_radar_track_page_load_failure(
     SseDeserializer deserializer,
   );
 
@@ -1635,6 +1700,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRadarTrackPageLoadFailure?
+  sse_decode_opt_box_autoadd_qq_music_radar_track_page_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicRankingLoadFailure?
   sse_decode_opt_box_autoadd_qq_music_ranking_load_failure(
     SseDeserializer deserializer,
@@ -1871,6 +1942,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRadarTrackPageLoad sse_decode_qq_music_radar_track_page_load(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicRadarTrackPageLoadFailure
+  sse_decode_qq_music_radar_track_page_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicRankingGroupLoad sse_decode_qq_music_ranking_group_load(
     SseDeserializer deserializer,
   );
@@ -2034,6 +2116,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    QqMusicRadarTrackPageLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRankingGroupLoadHandle(
     QqMusicRankingGroupLoadHandle self,
     SseSerializer serializer,
@@ -2146,6 +2235,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    QqMusicRadarTrackPageLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRankingGroupLoadHandle(
     QqMusicRankingGroupLoadHandle self,
     SseSerializer serializer,
@@ -2253,6 +2349,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     QqMusicQrLoginSessionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    QqMusicRadarTrackPageLoadHandle self,
     SseSerializer serializer,
   );
 
@@ -2439,6 +2542,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_qq_music_qr_login_state(
     QqMusicQrLoginState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_radar_track_page_load_failure(
+    QqMusicRadarTrackPageLoadFailure self,
     SseSerializer serializer,
   );
 
@@ -2720,6 +2829,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_qq_music_radar_track_page_load_failure(
+    QqMusicRadarTrackPageLoadFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_qq_music_ranking_load_failure(
     QqMusicRankingLoadFailure? self,
     SseSerializer serializer,
@@ -2990,6 +3105,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_qr_login_update(
     QqMusicQrLoginUpdate self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_radar_track_page_load(
+    QqMusicRadarTrackPageLoad self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_radar_track_page_load_failure(
+    QqMusicRadarTrackPageLoadFailure self,
     SseSerializer serializer,
   );
 
@@ -3272,6 +3399,22 @@ class RustLibWire implements BaseWire {
       );
 
   void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+        ptr,
+      );
+
+  void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRankingGroupLoadHandle(
     int ptr,
   ) => wasmModule
@@ -3465,6 +3608,16 @@ extension type RustLibWasmModule._(JSObject _) implements JSObject {
 
   external void
   rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRadarTrackPageLoadHandle(
     int ptr,
   );
 

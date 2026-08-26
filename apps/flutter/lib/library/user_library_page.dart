@@ -11,6 +11,7 @@ import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
+import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
@@ -53,6 +54,7 @@ class UserLibraryPage extends StatefulWidget {
     this.artistAlbumGateway,
     this.recommendedPlaylistGateway,
     this.rankingGateway,
+    this.radarGateway,
     super.key,
   });
 
@@ -73,6 +75,7 @@ class UserLibraryPage extends StatefulWidget {
   final ArtistAlbumGateway? artistAlbumGateway;
   final RecommendedPlaylistGateway? recommendedPlaylistGateway;
   final RankingGateway? rankingGateway;
+  final RadarGateway? radarGateway;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -90,6 +93,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final ArtistAlbumGateway _artistAlbumGateway;
   late final RecommendedPlaylistGateway _recommendedPlaylistGateway;
   late final RankingGateway _rankingGateway;
+  late final RadarGateway _radarGateway;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -133,6 +137,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         widget.recommendedPlaylistGateway ??
         const RustRecommendedPlaylistGateway();
     _rankingGateway = widget.rankingGateway ?? const RustRankingGateway();
+    _radarGateway = widget.radarGateway ?? RustRadarGateway();
     _queuePlaybackController = QueuePlaybackController(
       widget.playbackQueueGateway,
       TrackPlaybackController(
@@ -188,6 +193,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 key: const ValueKey('recommended-playlists-page'),
                 gateway: _recommendedPlaylistGateway,
                 rankingGateway: _rankingGateway,
+                radarGateway: _radarGateway,
                 queuePlaybackController: _queuePlaybackController,
                 onBack: _closeRecommendations,
                 onOpenPlaylist: _openRecommendedPlaylist,
