@@ -123,6 +123,7 @@ void main() {
   );
 
   testWidgets('shows loading then an honest unavailable state', (tester) async {
+    final semantics = tester.ensureSemantics();
     final pending = _PendingOperation();
     final controller = LyricController(_ScriptedGateway([pending]));
     final load = controller.load(_track);
@@ -135,13 +136,23 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('lyrics-unavailable')), findsOneWidget);
     expect(find.text('No synchronized lyrics'), findsOneWidget);
+    final unavailableSemantics = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('No synchronized lyrics')),
+    );
+    expect(unavailableSemantics.flagsCollection.isLiveRegion, isTrue);
+    expect(
+      unavailableSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
 
+    semantics.dispose();
     controller.dispose();
   });
 
   testWidgets('retries a transient failure through the same controller', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     final gateway = _ScriptedGateway([
       const _ImmediateOperation(LyricLoadResult(failure: LyricFailure.network)),
       _ImmediateOperation(_success()),
@@ -152,6 +163,14 @@ void main() {
     await _pumpPanel(tester, controller);
     expect(find.byKey(const ValueKey('lyrics-error')), findsOneWidget);
     expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
+    final failureSemantics = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('Couldn’t reach QQ Music')),
+    );
+    expect(failureSemantics.flagsCollection.isLiveRegion, isTrue);
+    expect(
+      failureSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
 
     await tester.tap(find.byKey(const ValueKey('lyrics-retry')));
     await tester.pumpAndSettle();
@@ -161,6 +180,7 @@ void main() {
       ('qq-music', 'track:fixture'),
     ]);
 
+    semantics.dispose();
     controller.dispose();
   });
 

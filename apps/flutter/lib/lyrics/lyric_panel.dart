@@ -155,12 +155,14 @@ class LyricPanel extends StatelessWidget {
       icon: Icons.lyrics_outlined,
       title: 'No synchronized lyrics',
       detail: 'QQ Music did not provide lyrics for this track.',
+      announce: true,
     ),
     LyricStage.error => _LyricMessage(
       key: const ValueKey('lyrics-error'),
       icon: Icons.cloud_off_rounded,
       title: _errorTitle(controller.failure),
       detail: _errorDetail(controller.failure),
+      announce: true,
       action: controller.canRetry
           ? FilledButton.tonal(
               key: const ValueKey('lyrics-retry'),
@@ -174,6 +176,7 @@ class LyricPanel extends StatelessWidget {
       icon: Icons.lock_outline_rounded,
       title: 'Sign in to load lyrics',
       detail: 'Your current session cannot request QQ Music lyrics.',
+      announce: true,
       action: TextButton(
         key: const ValueKey('lyrics-sign-in-again'),
         onPressed: onSignInAgain,
@@ -185,6 +188,7 @@ class LyricPanel extends StatelessWidget {
       icon: Icons.lock_reset_rounded,
       title: 'QQ Music session rejected',
       detail: 'Sign in again before requesting lyrics.',
+      announce: true,
       action: TextButton(
         key: const ValueKey('lyrics-sign-in-again'),
         onPressed: onSignInAgain,
@@ -540,6 +544,7 @@ class _LyricMessage extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.detail,
+    this.announce = false,
     this.action,
     super.key,
   });
@@ -547,11 +552,33 @@ class _LyricMessage extends StatelessWidget {
   final IconData icon;
   final String title;
   final String detail;
+  final bool announce;
   final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final copy = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          detail,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
@@ -562,22 +589,16 @@ class _LyricMessage extends StatelessWidget {
             children: [
               Icon(icon, size: 40, color: theme.colorScheme.primary),
               const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                detail,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
+              if (announce)
+                Semantics(
+                  container: true,
+                  liveRegion: true,
+                  label: '$title. $detail',
+                  excludeSemantics: true,
+                  child: copy,
+                )
+              else
+                copy,
               if (action case final action?) ...[
                 const SizedBox(height: 20),
                 action,
