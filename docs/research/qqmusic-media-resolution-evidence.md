@@ -1,6 +1,6 @@
 # QQ Music media-resolution evidence
 
-- **Status:** Protocol client, Provider mapping, and Bridge implemented; playback pending
+- **Status:** Protocol mapping corrected after real-account failure; authenticated playback retest pending
 - **Last checked:** 2026-08-26
 - **Scope:** One authenticated, standard-quality MP3 source for the M1 playback path.
 
@@ -28,16 +28,16 @@ The parameter boundary contains:
 uin: authenticated account ID as a string
 guid: request/device correlation value
 songmid: one or more QQ song MIDs
-songtype: one value per song
+songtype: one zero per song
 filename: one requested file per song
 ctx: 0
 ```
 
-Both default to standard MP3 through prefix `M500` and extension `.mp3`. When no separate file-media MID is available, both build `M500 + songmid + songmid + .mp3`. That is the only filename form selected for the first implementation.
+Both default to standard MP3 through prefix `M500` and extension `.mp3`. When no separate file-media MID is available, both build `M500 + songmid + songmid + .mp3`; the client retains that fallback.
 
-The implementations differ when a separate `file.media_mid` exists: L-1124 uses the file-media MID as the filename body, while yakult concatenates song MID plus media MID. The current playlist-detail protocol intentionally does not retain `file.media_mid`, and the first media slice must not guess between these forms. Standard resolution may later add that raw field only after a real differing fixture or repeatable integration establishes the correct behavior.
+The implementations differ when a separate `file.media_mid` exists: L-1124 uses the file-media MID as the filename body, while yakult concatenates song MID plus media MID; FeelUOwn independently corroborates the file-media-MID body on its legacy envelope. Two anonymous probes over documented public playlists found 61 rows where song MID and `file.media_mid` differed. Both filename forms produced identical vkey item outcomes, including 46 nonempty paths. The project therefore selects the file-media-MID body supported by two implementations, while retaining no path, vkey, response body, or content identifier.
 
-L-1124 accepts a per-track song type; yakult's current path sends zero. This project already preserves the playlist response's optional vkey-specific song type inside the QQ-owned opaque track identity. `QQMusicProvider` may use that value when present and fall back to zero, while every generic layer continues treating the identity as indivisible.
+L-1124's URL helper defaults an unspecified song type to zero, and yakult's current authenticated path always sends zero. A controlled 20-row public-playlist probe then falsified the project's earlier assumption that the playlist response's separate `songtype` field was vkey input: all observed rows carried `songtype: 13`; forwarding 13 produced 20 item results of `101404` and no paths, while zero or the primary type produced 11 nonempty paths. The client now always sends zero. The primary track type remains only for lyric requests.
 
 ## Response and CDN behavior
 
@@ -80,10 +80,11 @@ A separate no-account CDN-dispatch probe returned zero global, request, and disp
 
 After implementation, the opt-in `live_media_resolution` test ran the actual bounded Rust client path against the same non-account boundary. CDN dispatch parsed successfully and the vkey call produced an accepted non-account outcome without printing or retaining its body, URL, or vkey. This confirms the implemented comm/request schema on 2026-08-26; it still does not prove authenticated playback.
 
+The first authorized Linux product smoke restored the user's real account and loaded playlist/detail data, but every attempted ordinary or VIP track mapped to unavailable before reaching the audio engine. The anonymous batch probe above reproduced the exact all-`101404` behavior from the forwarded `songtype: 13`, establishing a protocol-mapping root cause without inspecting the user's credential, identifiers, source URLs, or response bodies. The correction has offline regressions and a passing anonymous live client probe; a fresh authorized product retest is still required before claiming playback success.
+
 ## Evidence still required
 
-1. A sanitized authenticated success or controlled account integration proving a standard source can be read by the selected Linux playback engine without exposing its URL.
-2. A track whose song MID and `file.media_mid` differ before adding separate-media-MID filename handling.
-3. Sanitized outcomes for unpaid, region-filtered, unavailable, and device-restricted tracks before exposing specific restriction reasons.
-4. Platform evidence for QQ Music's cleartext CDN bases. Do not globally enable Android cleartext traffic or silently rewrite the scheme without a narrow host policy and a real playback probe.
-5. Evidence for higher qualities and encrypted media before adding quality selection, download, decryption, or membership-specific behavior.
+1. A sanitized authenticated success proving the corrected standard source can be read by the selected Linux playback engine without exposing its URL.
+2. Sanitized outcomes for unpaid, region-filtered, unavailable, and device-restricted tracks before exposing specific restriction reasons.
+3. Platform evidence for QQ Music's cleartext CDN bases. Do not globally enable Android cleartext traffic or silently rewrite the scheme without a narrow host policy and a real playback probe.
+4. Evidence for higher qualities and encrypted media before adding quality selection, download, decryption, or membership-specific behavior.

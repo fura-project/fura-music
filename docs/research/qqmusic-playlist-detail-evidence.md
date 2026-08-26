@@ -28,12 +28,12 @@ The page offset and size are `song_begin` and `song_num`. Current implementation
 
 The minimum raw track boundary preserves:
 
-- numeric song ID, media MID, primary type, and the separate `songtype` value when present;
+- numeric song ID, song MID, primary type, and optional `file.media_mid`;
 - display title with `name` fallback, optional subtitle, and duration in seconds;
 - artist numeric ID, media MID, and name;
 - optional album numeric ID, media MID or picture MID, and name.
 
-These are QQ-specific protocol summaries. `QQMusicProvider` now maps them into provider-neutral track summaries and keeps QQ song ID, MID, and type behind a provider-owned opaque track identity for the future media slice. Album artwork uses the independently documented `photo_new/T002R300x300M000{mid}.jpg` form only when the MID is a safe URL component. File-quality, payment, action-bit, tracing, MV, and other raw response structures are intentionally excluded from this detail slice; media resolution will own the fields it can evidence and use.
+These are QQ-specific protocol summaries. `QQMusicProvider` maps them into provider-neutral track summaries and keeps QQ song ID, song MID, primary type, and optional file-media MID behind a provider-owned opaque identity for media and lyrics. The response's separate `songtype` field is deliberately not retained after a controlled probe disproved its use as the vkey song-type parameter. Album artwork uses the independently documented `photo_new/T002R300x300M000{mid}.jpg` form only when the MID is a safe URL component. File-quality, payment, action-bit, tracing, MV, and other raw response structures remain excluded.
 
 ## Ordinary playlist route
 

@@ -519,7 +519,7 @@ where
 
         let source_response = self
             .client()
-            .standard_mp3_source(&candidate, route.song_mid, route.song_type, dispatch)
+            .standard_mp3_source(&candidate, route.song_mid, route.file_media_mid, dispatch)
             .await;
         self.finish_media_await(
             &candidate,
@@ -742,7 +742,7 @@ enum QqMusicPlaylistRoute {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct QqMusicMediaTrack<'a> {
     song_mid: &'a str,
-    song_type: u32,
+    file_media_mid: Option<&'a str>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -754,8 +754,8 @@ struct QqMusicLyricTrack<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct QqMusicTrackIdentity<'a> {
     song_mid: &'a str,
+    file_media_mid: Option<&'a str>,
     primary_song_type: u32,
-    vkey_song_type: Option<u32>,
 }
 
 fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, ()> {
@@ -763,7 +763,7 @@ fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, 
         return Err(());
     }
     let mut parts = track_id.opaque().split(':');
-    let (prefix, raw_id, raw_primary_type, raw_vkey_type, song_mid, extra) = (
+    let (prefix, raw_id, raw_primary_type, raw_song_mid, raw_file_media_mid, extra) = (
         parts.next(),
         parts.next(),
         parts.next(),
@@ -781,23 +781,23 @@ fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, 
     let primary_song_type = raw_primary_type
         .and_then(|value| value.parse::<u32>().ok())
         .ok_or(())?;
-    let vkey_song_type = match raw_vkey_type {
-        Some("-") => None,
-        Some(value) => Some(value.parse::<u32>().map_err(|_| ())?),
-        None => return Err(()),
-    };
-    let song_mid = song_mid
-        .filter(|value| {
-            !value.is_empty()
-                && value.len() <= 64
-                && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
-        })
+    let song_mid = raw_song_mid
+        .filter(|value| is_safe_track_mid(value))
         .ok_or(())?;
+    let file_media_mid = match raw_file_media_mid {
+        Some("-") => None,
+        Some(value) if is_safe_track_mid(value) => Some(value),
+        _ => return Err(()),
+    };
     Ok(QqMusicTrackIdentity {
         song_mid,
+        file_media_mid,
         primary_song_type,
-        vkey_song_type,
     })
+}
+
+fn is_safe_track_mid(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
 fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaResolutionError> {
@@ -805,7 +805,7 @@ fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaR
         parse_track_identity(track_id).map_err(|()| MediaResolutionError::InvalidResponse)?;
     Ok(QqMusicMediaTrack {
         song_mid: identity.song_mid,
-        song_type: identity.vkey_song_type.unwrap_or(0),
+        file_media_mid: identity.file_media_mid,
     })
 }
 
@@ -849,17 +849,15 @@ fn parse_nonzero_u64(value: &str) -> Result<u64, UserLibraryError> {
 }
 
 fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, UserLibraryError> {
-    let vkey_song_type = track
-        .vkey_song_type()
-        .map_or_else(|| "-".into(), |value| value.to_string());
+    let file_media_mid = track.file_media_mid().unwrap_or("-");
     let id = TrackId::new(
         qq_music_provider_id(),
         format!(
             "track:{}:{}:{}:{}",
             track.track_id(),
             track.song_type(),
-            vkey_song_type,
-            track.media_mid()
+            track.song_mid(),
+            file_media_mid
         ),
     )
     .map_err(|_| UserLibraryError::InvalidResponse)?;
@@ -1039,6 +1037,7 @@ fn map_media_error<E>(error: &QqMusicMediaError<E>) -> MediaResolutionError {
             MediaResolutionError::CoreUnavailable
         }
         QqMusicMediaError::InvalidSongMid
+        | QqMusicMediaError::InvalidFileMediaMid
         | QqMusicMediaError::InvalidJson(_)
         | QqMusicMediaError::InvalidResponse { .. } => MediaResolutionError::InvalidResponse,
     }
@@ -1662,13 +1661,14 @@ mod tests {
     fn playlist_track_fixture() -> Value {
         json!([{
             "id": 41001,
-            "mid": "fixture-track-mid",
+            "mid": "fixtureTrackMid1",
             "name": "Fallback fixture title",
             "title": "Synthetic track",
             "subtitle": "Synthetic subtitle",
             "type": 0,
-            "songtype": 1,
+            "songtype": 13,
             "interval": 245,
+            "file": {"media_mid": "fixtureFileMid1"},
             "singer": [
                 {"id": 42001, "mid": "artist-one-mid", "name": "Artist one"},
                 {"id": 42002, "mid": "artist-two-mid", "name": "Artist two"}
@@ -1731,7 +1731,7 @@ mod tests {
                     "expiration": 7200,
                     "midurlinfo": [{
                         "songmid": "fixtureTrackMid1",
-                        "filename": "M500fixtureTrackMid1fixtureTrackMid1.mp3",
+                        "filename": "M500fixtureFileMid1.mp3",
                         "purl": path,
                         "result": result
                     }]
@@ -1975,10 +1975,16 @@ mod tests {
 
     #[tokio::test]
     async fn routes_playlist_identities_and_maps_provider_independent_tracks() {
+        let tracks = playlist_track_fixture();
+        let mut tracks_without_file_media_mid = tracks.clone();
+        tracks_without_file_media_mid[0]
+            .as_object_mut()
+            .expect("fixture track")
+            .remove("file");
         let provider = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
-            playlist_detail_page_json(&playlist_track_fixture(), 51, true),
-            playlist_detail_page_json(&playlist_track_fixture(), 1, false),
-            playlist_detail_page_json(&playlist_track_fixture(), 1, false),
+            playlist_detail_page_json(&tracks, 51, true),
+            playlist_detail_page_json(&tracks_without_file_media_mid, 1, false),
+            playlist_detail_page_json(&tracks, 1, false),
         ])));
         set_authenticated(&provider, "123456");
 
@@ -1991,7 +1997,10 @@ mod tests {
         assert!(page.has_more());
         let track = &page.tracks()[0];
         assert_eq!(track.id().provider().as_str(), "qq-music");
-        assert_eq!(track.id().opaque(), "track:41001:0:1:fixture-track-mid");
+        assert_eq!(
+            track.id().opaque(),
+            "track:41001:0:fixtureTrackMid1:fixtureFileMid1"
+        );
         assert_eq!(track.title(), "Synthetic track");
         assert_eq!(track.artist_names(), ["Artist one", "Artist two"]);
         assert_eq!(track.album_title(), Some("Synthetic album"));
@@ -2003,10 +2012,14 @@ mod tests {
         assert!(!format!("{page:?}").contains("Synthetic track"));
         assert!(super::album_artwork_uri("unsafe/path").is_none());
 
-        provider
+        let fallback_page = provider
             .playlist_tracks_page(qq_playlist_id("owned:7002:202"), 0, 100)
             .await
             .expect("ordinary owned playlist detail");
+        assert_eq!(
+            fallback_page.tracks()[0].id().opaque(),
+            "track:41001:0:fixtureTrackMid1:-"
+        );
         provider
             .playlist_tracks_page(qq_playlist_id("owned:7001:201"), 0, 100)
             .await
@@ -2130,13 +2143,10 @@ mod tests {
     async fn resolves_opaque_track_to_provider_independent_standard_media() {
         let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
             media_dispatch_json(),
-            media_vkey_json(
-                0,
-                "M500fixtureTrackMid1fixtureTrackMid1.mp3?vkey=private-source",
-            ),
+            media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=private-source"),
         ])));
         set_authenticated(&provider, "123456");
-        let track_id = qq_track_id("track:41001:0:1:fixtureTrackMid1");
+        let track_id = qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1");
 
         let source = provider
             .resolve_standard_media(track_id.clone())
@@ -2148,7 +2158,7 @@ mod tests {
         assert_eq!(source.valid_for_seconds(), 7_200);
         assert_eq!(
             source.uri(),
-            "http://audio.example.test/M500fixtureTrackMid1fixtureTrackMid1.mp3?vkey=private-source"
+            "http://audio.example.test/M500fixtureFileMid1.mp3?vkey=private-source"
         );
         assert!(!format!("{source:?}").contains("private-source"));
 
@@ -2157,10 +2167,14 @@ mod tests {
         let vkey: Value =
             serde_json::from_slice(requests[1].body_bytes().expect("vkey request body"))
                 .expect("vkey request JSON");
-        assert_eq!(vkey["req_0"]["param"]["songtype"], json!([1]));
+        assert_eq!(vkey["req_0"]["param"]["songtype"], json!([0]));
         assert_eq!(
             vkey["req_0"]["param"]["songmid"],
             json!(["fixtureTrackMid1"])
+        );
+        assert_eq!(
+            vkey["req_0"]["param"]["filename"],
+            json!(["M500fixtureFileMid1.mp3"])
         );
     }
 
@@ -2170,17 +2184,17 @@ mod tests {
         set_authenticated(&provider, "123456");
         let foreign = TrackId::new(
             ProviderId::new("local").expect("provider"),
-            "track:41001:0:1:fixtureTrackMid1",
+            "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
         )
         .expect("track ID");
         let invalid = [
             foreign,
-            qq_track_id("track:0:0:1:fixtureTrackMid1"),
-            qq_track_id("track:41001:not-a-type:1:fixtureTrackMid1"),
-            qq_track_id("track:41001:0:not-a-type:fixtureTrackMid1"),
-            qq_track_id("track:41001:0:1:unsafe-mid"),
-            qq_track_id("track:41001:0:1:fixtureTrackMid1:extra"),
-            qq_track_id("wrong:41001:0:1:fixtureTrackMid1"),
+            qq_track_id("track:0:0:fixtureTrackMid1:fixtureFileMid1"),
+            qq_track_id("track:41001:not-a-type:fixtureTrackMid1:fixtureFileMid1"),
+            qq_track_id("track:41001:0:unsafe-mid:fixtureFileMid1"),
+            qq_track_id("track:41001:0:fixtureTrackMid1:unsafe-file-mid"),
+            qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1:extra"),
+            qq_track_id("wrong:41001:0:fixtureTrackMid1:fixtureFileMid1"),
         ];
         for track_id in invalid {
             assert_eq!(
@@ -2190,10 +2204,11 @@ mod tests {
         }
         assert!(provider.client().transport().requests().is_empty());
 
-        let fallback_track = qq_track_id("track:41001:0:-:fixtureTrackMid1");
-        let fallback = super::parse_media_track(&fallback_track)
-            .expect("missing vkey type falls back to zero");
-        assert_eq!(fallback.song_type, 0);
+        let fallback_id = qq_track_id("track:41001:0:fixtureTrackMid1:-");
+        let fallback = super::parse_media_track(&fallback_id)
+            .expect("missing file-media MID keeps the documented fallback");
+        assert_eq!(fallback.song_mid, "fixtureTrackMid1");
+        assert_eq!(fallback.file_media_mid, None);
     }
 
     #[tokio::test]
@@ -2205,7 +2220,9 @@ mod tests {
         set_authenticated(&unavailable, "123456");
         assert_eq!(
             unavailable
-                .resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"))
+                .resolve_standard_media(qq_track_id(
+                    "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
+                ))
                 .await,
             Err(MediaResolutionError::Unavailable)
         );
@@ -2218,7 +2235,9 @@ mod tests {
         set_authenticated(&rejected, "123456");
         assert_eq!(
             rejected
-                .resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"))
+                .resolve_standard_media(qq_track_id(
+                    "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
+                ))
                 .await,
             Err(MediaResolutionError::CredentialRejected)
         );
@@ -2231,7 +2250,9 @@ mod tests {
         set_authenticated(&upstream, "123456");
         assert_eq!(
             upstream
-                .resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"))
+                .resolve_standard_media(qq_track_id(
+                    "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
+                ))
                 .await,
             Err(MediaResolutionError::ServiceUnavailable)
         );
@@ -2252,8 +2273,9 @@ mod tests {
             }));
             set_authenticated(&provider, "123456");
 
-            let request =
-                provider.resolve_standard_media(qq_track_id("track:41001:0:1:fixtureTrackMid1"));
+            let request = provider.resolve_standard_media(qq_track_id(
+                "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
+            ));
             let replacement = async {
                 request_started.notified().await;
                 set_authenticated(&provider, "654321");
@@ -2273,7 +2295,7 @@ mod tests {
             &lyrics_success_json(),
         )));
         set_authenticated(&provider, "123456");
-        let track_id = qq_track_id("track:41001:7:1:fixtureMID01");
+        let track_id = qq_track_id("track:41001:7:fixtureMID01:fixtureFileMID01");
 
         let lyrics = provider
             .lyrics(track_id.clone())
@@ -2329,24 +2351,24 @@ mod tests {
         )));
         assert_eq!(
             provider
-                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"))
                 .await,
             Err(LyricsError::AuthenticationRequired)
         );
         set_authenticated(&provider, "123456");
         let foreign = TrackId::new(
             ProviderId::new("local").expect("provider"),
-            "track:41001:0:1:fixtureMID01",
+            "track:41001:0:fixtureMID01:fixtureFileMID01",
         )
         .expect("track ID");
         let invalid = [
             foreign,
-            qq_track_id("track:0:0:1:fixtureMID01"),
-            qq_track_id("track:41001:not-a-type:1:fixtureMID01"),
-            qq_track_id("track:41001:0:not-a-type:fixtureMID01"),
-            qq_track_id("track:41001:0:1:unsafe-mid"),
-            qq_track_id("track:41001:0:1:fixtureMID01:extra"),
-            qq_track_id("wrong:41001:0:1:fixtureMID01"),
+            qq_track_id("track:0:0:fixtureMID01:fixtureFileMID01"),
+            qq_track_id("track:41001:not-a-type:fixtureMID01:fixtureFileMID01"),
+            qq_track_id("track:41001:0:unsafe-mid:fixtureFileMID01"),
+            qq_track_id("track:41001:0:fixtureMID01:unsafe-file-mid"),
+            qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01:extra"),
+            qq_track_id("wrong:41001:0:fixtureMID01:fixtureFileMID01"),
         ];
         for track_id in invalid {
             assert_eq!(
@@ -2366,7 +2388,7 @@ mod tests {
         set_authenticated(&unavailable, "123456");
         assert_eq!(
             unavailable
-                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"))
                 .await,
             Err(LyricsError::Unavailable)
         );
@@ -2379,7 +2401,7 @@ mod tests {
         set_authenticated(&rejected, "123456");
         assert_eq!(
             rejected
-                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"))
                 .await,
             Err(LyricsError::CredentialRejected)
         );
@@ -2392,7 +2414,7 @@ mod tests {
         set_authenticated(&upstream, "123456");
         assert_eq!(
             upstream
-                .lyrics(qq_track_id("track:41001:0:1:fixtureMID01"))
+                .lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"))
                 .await,
             Err(LyricsError::ServiceUnavailable)
         );
@@ -2409,7 +2431,7 @@ mod tests {
         }));
         set_authenticated(&provider, "123456");
 
-        let request = provider.lyrics(qq_track_id("track:41001:0:1:fixtureMID01"));
+        let request = provider.lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"));
         let replacement = async {
             request_started.notified().await;
             set_authenticated(&provider, "654321");

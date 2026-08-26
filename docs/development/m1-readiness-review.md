@@ -4,7 +4,7 @@
 
 M1 is **not checkpoint-ready**.
 
-The implementation now forms the intended in-process vertical slice from authentication through word-timed lyric presentation, and every unblocked offline/platform validation passes. Android ARM64 release provides the required mobile build evidence, while Android 16 x64 now provides bounded FFI, vault, and local-audio runtime evidence. On 2026-08-26 the user reported that an authorized WeChat scan signed in successfully and populated a post-login song list. That secret-safe observation is real-user evidence for the beginning of the slice, but the checkout has not completed the whole real-account flow.
+The implementation now forms the intended in-process vertical slice from authentication through word-timed lyric presentation, and every unblocked offline/platform validation passes. Android ARM64 release provides the required mobile build evidence, while Android 16 x64 provides bounded FFI, vault, and local-audio runtime evidence. On 2026-08-26 the user reported that an authorized WeChat scan signed in successfully, populated the library/detail surface, and restored after a full process restart. Every attempted ordinary and VIP track then failed before playback; an anonymous live probe reproduced the false vkey mapping, and the corrected implementation now awaits one authenticated retest. The checkout has therefore not completed the whole real-account flow.
 
 This document is a readiness review, not the M1 checkpoint.
 
@@ -13,7 +13,7 @@ This document is a readiness review, not the M1 checkpoint.
 Passed on the current Linux host:
 
 - `cargo fmt --all -- --check`;
-- `cargo test --workspace --all-targets`: 149 offline tests passed (`19 + 2 + 29 + 75 + 24`), while four explicitly gated live tests remained ignored;
+- `cargo test --workspace --all-targets`: 150 offline tests passed (`19 + 2 + 29 + 76 + 24`), while four explicitly gated live tests remained ignored;
 - `cargo clippy --workspace --all-targets -- -D warnings`;
 - `dart analyze --fatal-infos`;
 - `flutter test`: 103 tests;
@@ -32,15 +32,17 @@ The existing Android 16 x64 AVD then supplied real runtime evidence. After corre
 
 The actual application entrypoint also launched to the signed-out QQ Music surface at 1080 x 2400, initialized the Rust core, presented the expected sign-in action without visible clipping/overflow, and produced no Flutter/native fatal error. The first launch performed an empty legacy-algorithm migration after the secure-storage compatibility change; a force-stop and second launch did not repeat it. The smoke did not start QR authentication or touch credentials, account data, or remote media, and the test installation was removed. These results do not prove a physical device, QQ CDN playback, audio focus/interruption, or authenticated product flow.
 
+The later authorized Linux smoke passed QR sign-in, authenticated library/detail loading, and full-process credential restore. It also exposed that every attempted ordinary or VIP track mapped to unavailable before the audio engine. A content-free public probe reproduced 20/20 `101404` results when the code forwarded observed playlist `songtype: 13`; zero restored nonempty media outcomes. Public playlist evidence also established that `file.media_mid` is present and can differ from song MID. The fix now sends vkey `songtype: [0]`, retains optional file-media identity for the evidenced filename, and has offline plus anonymous-live coverage without retaining any account field, identifier, source URI, vkey, or response body.
+
 ## Roadmap acceptance matrix
 
 | Acceptance criterion | Status | Current evidence | Evidence still required |
 | --- | --- | --- | --- |
-| Sign in, restart, and regain the appropriate credential state | Partially demonstrated | Cross-validated protocol, offline lifecycle/rejection tests, live Linux vault round trip, and user-reported authorized QR success | Full process restart and upstream restore acceptance with the same real account |
-| Browse playlists, open one, play a track, and manage the queue | Post-login list retrieval demonstrated; detail/playback unverified | User-reported populated song list, Provider/Bridge fixtures, 103 Flutter tests, positional queue tests, and real Linux playback adapter integration | Real playlist/detail navigation, playable QQ source, and queue operations |
+| Sign in, restart, and regain the appropriate credential state | Pass | Cross-validated protocol, offline lifecycle/rejection tests, live Linux vault round trip, and user-reported authorized QR plus full-process restore success | Recheck only if later credential changes affect it |
+| Browse playlists, open one, play a track, and manage the queue | Library/detail pass; playback fix awaiting retest | User-reported real library/detail navigation, corrected vkey mapping, 103 Flutter tests, positional queue tests, and real Linux playback adapter integration | One playable QQ source and real queue operations after the fix |
 | Synchronized lyrics and basic word-level experience | Partially live-proven; full chain unverified | Anonymous live QQ request/decrypt/QRC parse, offline Provider/Bridge mapping, real position stream, and narrow/wide lyric widgets | Authenticated current-track lyric load and playback-synchronized observation in the real account flow |
 | Flutter and Rust stay in one process behind a thin typed boundary | Pass on Linux and Android x64; ARM64 package/load/start pass under AVD translation | Linux and Android packaged typed-FFI calls; native x64 and translated ARM64 signed-out startup; both APK paths contain the requested Rust bridge; source dependency review | Physical-device coverage remains a release-quality follow-up, not an M1 build blocker |
-| QQ protocol/mapping has offline regression coverage and live tests stay separate | Pass | 149 offline Rust tests; four live tests explicitly gated and ignored by default | Future protocol changes must retain this separation |
+| QQ protocol/mapping has offline regression coverage and live tests stay separate | Pass | 150 offline Rust tests; four live tests explicitly gated and ignored by default; corrected anonymous media probe passed separately | Future protocol changes must retain this separation |
 | Linux desktop and at least one mobile target build | Pass | Linux release/integrations and inspected Android ARM64 release APK | Recheck both at checkpoint; runtime is a separate criterion |
 | No runtime third-party QQ API server or unapproved Provider expansion | Pass | Source/dependency/scope scan; only QQ Music Provider is implemented | Recheck at checkpoint |
 
@@ -64,7 +66,7 @@ The implementation stays inside the M1 vertical slice. It adds no search, commen
 
 - **TD-001 — Open, current target triggers handled:** Linux x64 and Linux-host Android ARM64/x64 have narrow system-Cargo paths. The underlying generated Cargokit rustup assumption remains debt but does not block current M1 targets.
 - **TD-002 — Open, not triggered for distribution:** Android release remains debug-signed and no produced artifact may be distributed.
-- **TD-003 — Resolved:** restore requires upstream verification; real-account acceptance remains a validation gap, not a reason to weaken the rule.
+- **TD-003 — Resolved:** restore requires upstream verification, and the authorized Linux smoke has now exercised successful real-account restore without weakening that rule.
 - **TD-004 — In Progress globally; Android M1 instance resolved:** Linux and Android x64 vault runtimes pass. Apple and Windows remain unverified for their future distribution paths.
 - **TD-005 — Open, trigger not observed:** the 1,000-favorite bound remains explicit; no evidence justifies changing it.
 
@@ -72,5 +74,5 @@ No new technical debt or Human Decision was created. The Android result confirms
 
 ## Exact remaining M1 work
 
-1. Continue the authorized secret-safe smoke from the already successful QR sign-in and post-login list: fully close/relaunch for persistence and upstream restore verification, then exercise playlist/detail, media playback/queue, and synchronized word-timed lyrics. Do not retain raw responses, credentials, source URLs, identifiers, or lyric content.
+1. Relaunch the corrected Linux debug build and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it does not, retain only the coarse failure category and return to root-cause analysis. Do not retain raw responses, credentials, source URLs, identifiers, or lyric content.
 2. Rerun the checkpoint baseline, accurately retain or close debt, write the M1 checkpoint, then read M2. Do not start M2 merely because the implementation exists.

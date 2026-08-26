@@ -15,7 +15,8 @@ const LIKED_SONGS_DIRECTORY_ID: u64 = 201;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PlaylistDetailTrackField {
     TrackId,
-    MediaMid,
+    SongMid,
+    FileMediaMid,
     Title,
     SongType,
     Artists,
@@ -258,11 +259,11 @@ impl fmt::Debug for QqMusicAlbumSummary {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicTrackSummary {
     track_id: u64,
-    media_mid: String,
+    song_mid: String,
+    file_media_mid: Option<String>,
     title: String,
     subtitle: Option<String>,
     song_type: u32,
-    vkey_song_type: Option<u32>,
     duration_seconds: u32,
     artists: Vec<QqMusicArtistSummary>,
     album: Option<QqMusicAlbumSummary>,
@@ -275,8 +276,13 @@ impl QqMusicTrackSummary {
     }
 
     #[must_use]
-    pub fn media_mid(&self) -> &str {
-        &self.media_mid
+    pub fn song_mid(&self) -> &str {
+        &self.song_mid
+    }
+
+    #[must_use]
+    pub fn file_media_mid(&self) -> Option<&str> {
+        self.file_media_mid.as_deref()
     }
 
     #[must_use]
@@ -292,11 +298,6 @@ impl QqMusicTrackSummary {
     #[must_use]
     pub const fn song_type(&self) -> u32 {
         self.song_type
-    }
-
-    #[must_use]
-    pub const fn vkey_song_type(&self) -> Option<u32> {
-        self.vkey_song_type
     }
 
     #[must_use]
@@ -320,11 +321,11 @@ impl fmt::Debug for QqMusicTrackSummary {
         formatter
             .debug_struct("QqMusicTrackSummary")
             .field("track_id", &"[REDACTED]")
-            .field("media_mid", &"[REDACTED]")
+            .field("song_mid", &"[REDACTED]")
+            .field("has_file_media_mid", &self.file_media_mid.is_some())
             .field("title", &"[REDACTED]")
             .field("has_subtitle", &self.subtitle.is_some())
             .field("song_type", &self.song_type)
-            .field("has_vkey_song_type", &self.vkey_song_type.is_some())
             .field("duration_seconds", &self.duration_seconds)
             .field("artist_count", &self.artists.len())
             .field("has_album", &self.album.is_some())
@@ -634,10 +635,15 @@ struct RawTrack {
     subtitle: Option<String>,
     #[serde(rename = "type")]
     song_type: Option<u32>,
-    songtype: Option<u32>,
     interval: Option<u32>,
     singer: Option<Vec<RawArtist>>,
     album: Option<RawAlbum>,
+    file: Option<RawFile>,
+}
+
+#[derive(Deserialize)]
+struct RawFile {
+    media_mid: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -740,10 +746,21 @@ fn map_track<E>(
                 index,
                 field: PlaylistDetailTrackField::TrackId,
             })?;
-    let media_mid = nonblank(raw.mid).ok_or(QqMusicPlaylistDetailError::InvalidTrack {
+    let song_mid = safe_media_mid(raw.mid).ok_or(QqMusicPlaylistDetailError::InvalidTrack {
         index,
-        field: PlaylistDetailTrackField::MediaMid,
+        field: PlaylistDetailTrackField::SongMid,
     })?;
+    let raw_file_media_mid = raw.file.and_then(|file| file.media_mid);
+    let file_media_mid = match raw_file_media_mid {
+        Some(value) if value.trim().is_empty() => None,
+        Some(value) => Some(safe_media_mid(Some(value)).ok_or(
+            QqMusicPlaylistDetailError::InvalidTrack {
+                index,
+                field: PlaylistDetailTrackField::FileMediaMid,
+            },
+        )?),
+        None => None,
+    };
     let title = nonblank(raw.title).or_else(|| nonblank(raw.name)).ok_or(
         QqMusicPlaylistDetailError::InvalidTrack {
             index,
@@ -784,11 +801,11 @@ fn map_track<E>(
 
     Ok(QqMusicTrackSummary {
         track_id,
-        media_mid,
+        song_mid,
+        file_media_mid,
         title,
         subtitle: nonblank(raw.subtitle),
         song_type,
-        vkey_song_type: raw.songtype,
         duration_seconds: raw.interval.unwrap_or(0),
         artists,
         album,
@@ -797,6 +814,11 @@ fn map_track<E>(
 
 fn nonblank(value: Option<String>) -> Option<String> {
     value.filter(|value| !value.trim().is_empty())
+}
+
+fn safe_media_mid(value: Option<String>) -> Option<String> {
+    nonblank(value)
+        .filter(|value| value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric()))
 }
 
 #[cfg(test)]
@@ -878,13 +900,14 @@ mod tests {
                     "code": 0,
                     "songlist": [{
                         "id": 41001,
-                        "mid": "fixture-track-mid",
+                        "mid": "fixtureTrackMid1",
                         "name": "Fallback fixture title",
                         "title": "Fixture title",
                         "subtitle": "Fixture subtitle",
                         "type": 0,
-                        "songtype": 1,
+                        "songtype": 13,
                         "interval": 245,
+                        "file": {"media_mid": "fixtureFileMid1"},
                         "singer": [{
                             "id": 42001,
                             "mid": "fixture-artist-mid",
@@ -917,11 +940,11 @@ mod tests {
         assert!(page.has_more());
         let track = &page.tracks()[0];
         assert_eq!(track.track_id(), 41001);
-        assert_eq!(track.media_mid(), "fixture-track-mid");
+        assert_eq!(track.song_mid(), "fixtureTrackMid1");
+        assert_eq!(track.file_media_mid(), Some("fixtureFileMid1"));
         assert_eq!(track.title(), "Fixture title");
         assert_eq!(track.subtitle(), Some("Fixture subtitle"));
         assert_eq!(track.song_type(), 0);
-        assert_eq!(track.vkey_song_type(), Some(1));
         assert_eq!(track.duration_seconds(), 245);
         assert_eq!(track.artists()[0].artist_id(), Some(42001));
         assert_eq!(track.artists()[0].media_mid(), Some("fixture-artist-mid"));
@@ -960,7 +983,7 @@ mod tests {
         assert!(rpc["param"].get("enc_host_uin").is_none());
         assert!(!format!("{request:?}").contains("W_X_private-key"));
         assert!(!format!("{page:?}").contains("Fixture title"));
-        assert!(!format!("{track:?}").contains("fixture-track-mid"));
+        assert!(!format!("{track:?}").contains("fixtureTrackMid1"));
     }
 
     #[tokio::test]
@@ -1066,7 +1089,7 @@ mod tests {
                         "code": 0,
                         "songlist": [{
                             "id": 1,
-                            "mid": "must-not-leak-mid",
+                            "mid": "mustNotLeakMid",
                             "title": "must-not-leak-title",
                             "type": 0,
                             "singer": [{"name": ""}]

@@ -25,7 +25,7 @@ async fn resolves_dispatch_and_parses_a_non_account_vkey_outcome() {
     )
     .expect("synthetic non-account credential");
     match client
-        .standard_mp3_source(&non_account, "003w2xz20QlUZt", 0, &dispatch)
+        .standard_mp3_source(&non_account, "003w2xz20QlUZt", None, &dispatch)
         .await
     {
         Ok(source) => assert!(source.valid_for_seconds() > 0),
