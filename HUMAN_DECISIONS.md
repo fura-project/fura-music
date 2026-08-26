@@ -28,4 +28,12 @@
 
 **Current agent action:** Continue unrelated Roadmap work and keep generated or development-signed artifacts development-only.
 
+## HD-002 — Default Material baseline before theme personas
+
+**Status:** Accepted on 2026-08-27
+
+**Decision:** M4 first establishes a coherent official-Flutter Material 3 product baseline across desktop and compact/mobile. Quiet, Calm, Luminous, Temporal, artwork-derived global color, signature music motion, and other theme personas remain deferred until that baseline is stable. M4 does not introduce a third-party Material 3 Expressive library or a project-owned full M3 Expressive clone.
+
+**Consequences:** Theme, adaptive shell, page hierarchy, component consistency, interaction states, accessibility, and daily-use product cohesion are authorized M4 work. Theme-plugin infrastructure, speculative design-system frameworks, navigation/state-management replacement, and experimental identity effects are not authorized by this decision.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: EVIDENCE_GATED_LATER_DIRECTION
+  active_workstream: M4
   current_task: null
-  next_action: NO_LEGITIMATE_WORK
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2 and M3 are checkpointed, and later work is evidence-gated.
+M1's real-account playback observation remains open; M2 and M3 are checkpointed, and M4 Deliberate Material 3 Product Experience is active.
 
 # Completed Recently
 
@@ -48,17 +48,18 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Implemented the twenty-first M3 slice: the authenticated root no longer hides `Your music` to fit six independent actions at 360 px. Compact width groups only favorite Artists/Albums into a bounded typed menu while Search, Discover, refresh, and sign-out stay direct; wider layouts retain the two original collection icons. The menu supports semantic tap and Enter, exact collection selection, no-overflow rendering, retained collection/detail state, and focus restoration to the compact or wide entry actually mounted. No navigation framework, collection controller, protocol, Domain, Bridge, playback, dependency, or unrelated design change was introduced.
 - Revalidated the resulting baseline: Rust formatting, 267 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 287 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Artist/new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
 - Completed the M3 QQ Music core-product checkpoint against eight explicit Roadmap criteria. The review found no Provider/UI leakage, sidecar, generated-artifact drift, unapproved Provider, product-category expansion, or untracked debt trigger; it keeps Track availability/quality, overlapping personalized feeds, heterogeneous Home, offline/cache, unavailable platforms, and release claims explicitly evidence-gated.
+- Activated M4 from an explicit human product decision: establish a coherent official-Flutter Material 3 desktop/compact baseline before any deferred theme personas or signature visual experiments. M1's user-operated playback observation and HD-001 remain locally scoped rather than blocking this workstream.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- No implementation task is active. Whole-project ranking found no remaining unblocked candidate with sufficient provenance: “Guess you like” overlaps Radar, heterogeneous Home lacks a stable bounded Domain, availability/quality lacks sanitized behavior, offline/cache lacks a reproduced reliability gap, and additional platform validation lacks an available target environment.
+- M4 bounded discovery is active. It is auditing the current Theme, authenticated shell, major browsing/playback journeys, adaptive widths, light/dark behavior, and existing keyboard/pointer/touch/semantic regressions before selecting the first finite slice.
 
 # Next Candidates
 
-1. When the user chooses to exercise the existing acceptance request, rebuild/relaunch Linux debug and retest one ordinary track; preserve only coarse outcomes and never automate access to stored account material.
-2. Re-rank Track availability/quality, Home/personalized recommendations, or offline/cache only after sanitized behavior, a distinct product role, or a reproduced reliability gap supplies Task Provenance.
-3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
+1. Complete the bounded M4 UI inventory, rank at most three candidates, and select the highest-value finite Material product slice.
+2. Preserve the existing user-operated M1 acceptance request for a convenient later observation; never automate access to stored account material.
+3. Keep Track availability/quality, heterogeneous Home, offline/cache, and unavailable platform validation evidence-gated rather than folding them into M4.
 
 # Blockers
 
@@ -66,7 +67,7 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 
 # Pending Human Decisions
 
-- HD-001: final product/display name, platform application identifiers, and signing-key ownership/custody are required before external distribution. This does not block development-signed builds, M1 acceptance testing, or independent M3 work.
+- HD-001: final product/display name, platform application identifiers, and signing-key ownership/custody are required before external distribution. This does not block development-signed builds, M1 acceptance testing, or M4 product UI work.
 
 # Risks
 

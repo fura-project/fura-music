@@ -121,6 +121,49 @@ M3 begins with bounded discovery after the M2 checkpoint. Each slice requires di
 
 Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, deferred directions, and exact live/platform limits are recorded in `docs/development/m3-checkpoint-review.md`. Future M3-class regressions or newly evidenced QQ-native gaps remain valid bounded work; the checkpoint is not a claim of release readiness or live-service compatibility.
 
+## Active Workstream — M4 Deliberate Material 3 Product Experience
+
+### Goal
+
+Turn the implemented QQ Music journeys into one coherent, mature Material 3 music product across desktop and compact/mobile while preserving the existing Provider, Domain, Bridge, playback, accessibility, and retained-navigation boundaries.
+
+### Authorized themes
+
+- A lightweight official-Flutter Material 3 foundation: color, typography, shape, surface hierarchy, spacing, component themes, and consistent light/dark behavior.
+- An adaptive application shell with clear primary navigation, page-local actions, and utilities across compact, medium, and desktop widths.
+- Consistent music information hierarchy and action patterns across Library, Playlist, Album, Artist, Search, Discover, Now Playing, Queue, and Lyrics.
+- Desktop-appropriate density, keyboard/pointer/focus behavior, and compact reachability, touch targets, back behavior, and retained state.
+- Unified loading, empty, failure, retry, disabled, selected, and playing presentation without weakening existing semantics.
+
+### Progressive phases
+
+1. M4.1 — UI inventory and Material foundation.
+2. M4.2 — Adaptive application shell.
+3. M4.3 — Library and core browsing.
+4. M4.4 — Search and Discover.
+5. M4.5 — Playback, Queue, and Lyrics.
+6. M4.6 — Cross-platform polish.
+7. M4.7 — Checkpoint review.
+
+Each phase is elaborated only through bounded discovery and finite, evidence-backed slices. Existing retained local navigation must not be replaced merely because a different framework appears cleaner.
+
+### Exit criteria
+
+1. Major implemented journeys share a coherent Material 3 hierarchy, component language, state presentation, and predictable action patterns in light and dark modes.
+2. Desktop uses deliberate width, density, navigation, keyboard, pointer, and focus behavior rather than a stretched mobile layout.
+3. Compact/mobile keeps every primary destination and action reachable at 360 px with appropriate touch targets and no overflow or broken return behavior.
+4. Library, Search, Discover, Playlist, Album, Artist, Now Playing, Queue, and Lyrics preserve their existing controller ownership, retained state, and accessible loading/empty/error/retry/selected/playing behavior.
+5. Flutter remains presentation-only; QQ protocol, credentials, Provider mapping, opaque identity, queue semantics, and lyric timing remain in Rust behind the existing thin typed Bridge.
+6. Relevant focused regressions plus the repository's Dart/Flutter, Rust, Linux build, and packaged Bridge baselines pass, with live-service and unavailable-platform claims still explicitly bounded.
+7. A checkpoint review finds no untracked high-value Material product gap and confirms the default Material baseline is stable enough for a later separately authorized theme-persona phase.
+
+### Explicit non-goals
+
+- Quiet, Calm, Luminous, or Temporal theme personas; artwork-derived global palettes; glow, blur, shaders, visualizers, waveform branding, or signature motion systems.
+- A third-party Material 3 Expressive component library or a project-owned clone of the full M3 Expressive specification.
+- A theme plugin runtime, marketplace, DSL, broad design-system framework, new state-management or navigation framework, audio-engine replacement, Provider expansion, sidecar, or new product category.
+- Search history, suggestions, hot words, heterogeneous Home, comments, MV, downloads, social features, or other capability expansion under the name of visual completion.
+
 ## Evidence-Gated Later Direction
 
 After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.
