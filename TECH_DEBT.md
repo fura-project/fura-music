@@ -20,19 +20,19 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 ## TD-002 — Release identity and signing use generated defaults
 
-**Status:** Open
+**Status:** Triggered
 
 **Problem:** Platform shells still use Flutter-generated application branding and development signing defaults. Android release builds currently use the debug signing configuration.
 
-**Why accepted:** The current task proves the in-process architecture and does not distribute binaries. Inventing release identity, signing custody, and store metadata would expand scope and introduce credential risk.
+**Why accepted:** Development builds were needed to prove the in-process architecture and target packaging without distributing binaries. Inventing release identity, signing custody, and store metadata would expand scope and introduce credential risk.
 
 **Impact:** Locally built artifacts are development artifacts only and must not be published as releases.
 
 **Risk:** An accidental release build could look production-like while carrying development identity or debug signatures.
 
-**Suggested solution:** Define project-owned application icons, display names, identifiers, and a secret-safe per-platform signing workflow.
+**Suggested solution:** After HD-001 is decided, define project-owned application icons, display names, identifiers, and a secret-safe per-platform signing workflow.
 
-**Trigger condition:** Before any artifact is distributed outside development, or when M1 starts packaging work.
+**Trigger condition:** Triggered on 2026-08-26 when M1 packaging produced and inspected Android ARM64/x64 APKs and continued Linux release bundles. No artifact has been authorized for external distribution. Resolution is locally blocked on HD-001; unrelated development continues.
 
 ## TD-003 — Persisted credential restore lacked server verification
 

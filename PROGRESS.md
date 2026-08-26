@@ -111,6 +111,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Reproduced the same merged-status problem for in-panel queue command failures: the error previously shared one semantic label with the queue heading and count while focus stayed on the failed action. The existing coarse message is now its own live region; a failed removal retains both duplicate entries, and the next successful command still clears failure. The 123-test Flutter suite, strict analysis, and Linux release pass without queue or error-mapping changes.
 - Decoupled Track-context queue feedback from the slower first-Track media startup. Rust queue mutation and validation are synchronous, so the UI now confirms “Added to queue” or the coarse queue failure immediately after that result; an empty queue's selected Track continues resolving/playing through the same unawaited controller Future and reports its own later state. Pending-resolution, failed-push, nonempty duplicate, and no-restart regressions bring the Flutter suite to 124 tests; strict analysis and Linux release pass.
 - Verified the user-visible media-resolution retry path rather than changing already-correct lifecycle code. A network failure exposes “Try again”; activation resolves the same opaque Track a second time, preserves its queue position, and reaches playing on success. The full Flutter suite now passes 125 tests and strict analysis; product code and the previously passing Linux release bundle are unchanged by this test-only slice.
+- Re-ran the technical-debt lifecycle after Android/Linux packaging. TD-002 is now correctly Triggered, and HD-001 localizes the required human choice of release identity and signing custody to production distribution; independent development and local acceptance work remain unblocked.
 
 # In Progress
 
@@ -118,7 +119,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Next Candidates
 
-1. Recheck triggered technical-debt conditions after the completed Android/Linux packaging work, especially release identity/signing, and localize any required Human Decision without blocking unrelated M2 work.
+1. Select the next bounded M2 daily-use task from demonstrated adaptive, playback-resilience, accessibility, or packaging gaps without depending on HD-001.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 
@@ -128,7 +129,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Pending Human Decisions
 
-None.
+- HD-001: final product/display name, platform application identifiers, and signing-key ownership/custody are required before external distribution. This does not block development-signed builds, M1 acceptance testing, or independent M2 work.
 
 # Risks
 
@@ -149,3 +150,4 @@ None.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.
 - The Provider rejects a favorite collection that still has more data after 1,000 rows rather than looping without bound or silently truncating it (TD-005).
 - Cargokit 2.13.0 assumes rustup; Linux x64 and Linux-host Android ARM64/x64 use narrow direct system-Cargo paths tracked as TD-001, while other bridge targets remain unverified.
+- Release identity and signing defaults have reached their packaging trigger (TD-002). HD-001 must be decided before external distribution; current artifacts remain development-only.
