@@ -126,6 +126,17 @@ abstract final class MusicMaterialTheme {
         selectedColor: colors.onSecondaryContainer,
         selectedTileColor: colors.secondaryContainer,
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: colors.surfaceContainer,
+        indicatorColor: colors.secondaryContainer,
+        elevation: 0,
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: colors.surfaceContainerLow,
+        indicatorColor: colors.secondaryContainer,
+        elevation: 0,
+        useIndicator: true,
+      ),
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(shape: WidgetStatePropertyAll(controlShape)),
       ),

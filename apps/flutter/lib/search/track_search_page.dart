@@ -28,6 +28,7 @@ class TrackSearchPage extends StatefulWidget {
     this.artistGateway,
     this.albumGateway,
     this.playlistGateway,
+    this.embedded = false,
     super.key,
   });
 
@@ -41,6 +42,7 @@ class TrackSearchPage extends StatefulWidget {
   final ArtistSearchGateway? artistGateway;
   final AlbumSearchGateway? albumGateway;
   final PlaylistSearchGateway? playlistGateway;
+  final bool embedded;
 
   @override
   State<TrackSearchPage> createState() => _TrackSearchPageState();
@@ -92,17 +94,8 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: IconButton(
-        key: const ValueKey('track-search-back'),
-        tooltip: 'Back to your music',
-        onPressed: widget.onBack,
-        icon: const Icon(Icons.arrow_back_rounded),
-      ),
-      title: const Text('Search QQ Music'),
-    ),
-    body: SafeArea(
+  Widget build(BuildContext context) {
+    final body = SafeArea(
       child: AnimatedBuilder(
         animation: _controllers,
         builder: (context, _) => LayoutBuilder(
@@ -181,12 +174,25 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
           },
         ),
       ),
-    ),
-    bottomNavigationBar: NowPlayingBar(
-      controller: widget.queuePlaybackController,
-      onSignInAgain: widget.onSignInAgain,
-    ),
-  );
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          key: const ValueKey('track-search-back'),
+          tooltip: 'Back to your music',
+          onPressed: widget.onBack,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: const Text('Search QQ Music'),
+      ),
+      body: body,
+      bottomNavigationBar: NowPlayingBar(
+        controller: widget.queuePlaybackController,
+        onSignInAgain: widget.onSignInAgain,
+      ),
+    );
+  }
 
   bool get _isLoading => switch (_searchType) {
     _SearchType.tracks => _controller.stage == TrackSearchStage.loading,

@@ -15,6 +15,8 @@ import 'package:flutter/material.dart'
         IconButton,
         InkWell,
         ListView,
+        NavigationBar,
+        NavigationRail,
         Scrollable,
         ScrollableState,
         TextField,
@@ -436,7 +438,140 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('track-search-back')));
     await tester.pumpAndSettle();
     expect(find.text('No playlists yet'), findsOneWidget);
-    expect(tester.widget<IconButton>(searchEntry).focusNode?.hasFocus, isTrue);
+    expect(tester.widget<Focus>(searchEntry).focusNode?.hasFocus, isTrue);
+  });
+
+  testWidgets(
+    'adapts primary navigation and retains Search and Discover state',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureMid:-',
+        title: 'Retained search result',
+        artistNames: ['Artist'],
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: track)],
+        ),
+      );
+      final recommendations = _WidgetRecommendedPlaylistGateway(
+        const RecommendedPlaylistPageResult(
+          playlists: [
+            RecommendedPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'catalog:81001',
+              title: 'Retained discovery result',
+              trackCount: 1,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          searchGateway: search,
+          recommendedPlaylistGateway: recommendations,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'retained query',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text('Retained search result'), findsOneWidget);
+      expect(search.requests, [('retained query', 1, 30)]);
+      final searchState = tester.state(
+        find.byKey(const ValueKey('track-search-page')),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('primary-library-destination')),
+      );
+      await tester.pumpAndSettle();
+      final retainedSearchPage = find.byKey(
+        const ValueKey('track-search-page'),
+        skipOffstage: false,
+      );
+      expect(retainedSearchPage, findsOneWidget);
+      expect(tester.state(retainedSearchPage), same(searchState));
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+            .controller
+            ?.text,
+        'retained query',
+      );
+      expect(find.text('Retained search result'), findsOneWidget);
+      expect(search.requests, [('retained query', 1, 30)]);
+
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      expect(find.text('Retained discovery result'), findsOneWidget);
+      expect(recommendations.requests, [(0, 20)]);
+
+      tester.view.physicalSize = const Size(1100, 760);
+      await tester.pumpAndSettle();
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.text('Retained discovery result'), findsOneWidget);
+      expect(recommendations.requests, [(0, 20)]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('activates desktop primary navigation from the keyboard', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1100, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        searchGateway: const _UnusedSearchGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    final searchEntry = find.byKey(const ValueKey('open-track-search'));
+    tester.widget<Focus>(searchEntry).focusNode?.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search QQ Music'), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-search-field')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -524,10 +659,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('recommendations-back')));
       await tester.pumpAndSettle();
       expect(find.text('No playlists yet'), findsOneWidget);
-      expect(
-        tester.widget<IconButton>(discoverEntry).focusNode?.hasFocus,
-        isTrue,
-      );
+      expect(tester.widget<Focus>(discoverEntry).focusNode?.hasFocus, isTrue);
       expect(tester.takeException(), isNull);
     },
   );

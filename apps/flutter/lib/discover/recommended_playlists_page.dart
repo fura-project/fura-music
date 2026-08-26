@@ -30,6 +30,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
     required this.onOpenRanking,
     required this.onOpenAlbum,
     required this.onSignInAgain,
+    this.embedded = false,
     super.key,
   });
 
@@ -44,6 +45,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
   final ValueChanged<RankingSummary> onOpenRanking;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
+  final bool embedded;
 
   @override
   State<RecommendedPlaylistsPage> createState() =>
@@ -84,17 +86,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: IconButton(
-        key: const ValueKey('recommendations-back'),
-        tooltip: 'Back to your music',
-        onPressed: widget.onBack,
-        icon: const Icon(Icons.arrow_back_rounded),
-      ),
-      title: const Text('Discover'),
-    ),
-    body: SafeArea(
+  Widget build(BuildContext context) {
+    final body = SafeArea(
       child: AnimatedBuilder(
         animation: Listenable.merge([
           _controller,
@@ -162,12 +155,25 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
           ],
         ),
       ),
-    ),
-    bottomNavigationBar: NowPlayingBar(
-      controller: widget.queuePlaybackController,
-      onSignInAgain: widget.onSignInAgain,
-    ),
-  );
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          key: const ValueKey('recommendations-back'),
+          tooltip: 'Back to your music',
+          onPressed: widget.onBack,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: const Text('Discover'),
+      ),
+      body: body,
+      bottomNavigationBar: NowPlayingBar(
+        controller: widget.queuePlaybackController,
+        onSignInAgain: widget.onSignInAgain,
+      ),
+    );
+  }
 
   Widget _playlistBody() => switch (_controller.stage) {
     RecommendedPlaylistStage.loading => const Center(

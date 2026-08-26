@@ -28,6 +28,19 @@ void main() {
         colors.surfaceContainerHighest,
       );
       expect(theme.listTileTheme.selectedTileColor, colors.secondaryContainer);
+      expect(theme.navigationBarTheme.backgroundColor, colors.surfaceContainer);
+      expect(
+        theme.navigationBarTheme.indicatorColor,
+        colors.secondaryContainer,
+      );
+      expect(
+        theme.navigationRailTheme.backgroundColor,
+        colors.surfaceContainerLow,
+      );
+      expect(
+        theme.navigationRailTheme.indicatorColor,
+        colors.secondaryContainer,
+      );
       expect(theme.dividerTheme.color, colors.outlineVariant);
       expect(theme.progressIndicatorTheme.color, colors.primary);
     }

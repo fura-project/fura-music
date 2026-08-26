@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.2 Retained adaptive primary shell"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -50,16 +50,17 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Completed the M3 QQ Music core-product checkpoint against eight explicit Roadmap criteria. The review found no Provider/UI leakage, sidecar, generated-artifact drift, unapproved Provider, product-category expansion, or untracked debt trigger; it keeps Track availability/quality, overlapping personalized feeds, heterogeneous Home, offline/cache, unavailable platforms, and release claims explicitly evidence-gated.
 - Activated M4 from an explicit human product decision: establish a coherent official-Flutter Material 3 desktop/compact baseline before any deferred theme personas or signature visual experiments. M1's user-operated playback observation and HD-001 remain locally scoped rather than blocking this workstream.
 - Implemented the first M4 slice: one centralized official-Flutter light/dark Material theme now defines conservative typography, surface hierarchy, component defaults, and small spacing/shape/motion tokens. Authentication and Library are the only representative migrations. A new dark 360 px regression caught and fixed a page-margin/panel-padding mix-up; 290 Flutter tests, strict Dart checks, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Implemented the second M4 slice: the authenticated root now exposes Library, Discover, and Search as retained primary destinations through an official Material `NavigationRail` on wide layouts and `NavigationBar` at compact widths. Page-local saved collections/refresh and account sign-out remain classified actions; embedded Search/Discover preserve loaded state across destination changes and resize; focus, keyboard, platform/AppBar back, detail overlays, and the single shared playback owner remain intact. A regression found and fixed an outer shortcut-wrapper rebuild that previously disposed retained content. Strict Dart checks, all 292 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Whole-project ranking selected a retained adaptive primary shell over the shared Track-row and async-state candidates. The finite task adds official `NavigationRail`/`NavigationBar` presentation for Library, Search, and Discover while preserving the current controller owner, detail overlays, focus/back behavior, and one Now Playing bar.
+- M4.2 is complete. Whole-project ranking must now select the next bounded M4 slice from the shell-adjusted product surface.
 
 # Next Candidates
 
-1. Implement and validate the selected retained adaptive primary shell without changing the navigation/state-management architecture.
-2. Re-rank the shared dense Track row against a shared asynchronous state panel after the shell establishes final content widths.
+1. Re-rank the shared dense Track row against a shared asynchronous state panel now that the primary shell establishes final content widths.
+2. Select only a bounded representative M4.3/M4.4 slice; do not migrate every page at once.
 3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers

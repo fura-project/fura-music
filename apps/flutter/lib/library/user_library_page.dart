@@ -103,6 +103,8 @@ class UserLibraryPage extends StatefulWidget {
 
 enum _FavoriteCollection { artists, albums }
 
+enum _PrimaryDestination { library, discover, search }
+
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
@@ -159,6 +161,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   UserPlaylistSummary? _lastOpenedPlaylist;
   bool _searchOpen = false;
   bool _recommendationsOpen = false;
+  bool _searchVisited = false;
+  bool _recommendationsVisited = false;
   bool _favoriteAlbumsOpen = false;
   bool _favoriteArtistsOpen = false;
   bool _expandedNowPlayingOpen = false;
@@ -334,20 +338,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 ? 3
                 : 0,
             children: [
-              RecommendedPlaylistsPage(
-                key: const ValueKey('recommended-playlists-page'),
-                gateway: _recommendedPlaylistGateway,
-                newAlbumGateway: _newAlbumGateway,
-                newSongGateway: _newSongGateway,
-                rankingGateway: _rankingGateway,
-                radarGateway: _radarGateway,
-                queuePlaybackController: _queuePlaybackController,
-                onBack: _closeRecommendations,
-                onOpenPlaylist: _openRecommendedPlaylist,
-                onOpenRanking: _openRanking,
-                onOpenAlbum: _openRecommendedAlbum,
-                onSignInAgain: widget.onSignInAgain,
-              ),
+              _primaryScaffold(),
               if (selectedRecommendedPlaylist == null)
                 const SizedBox.shrink()
               else
@@ -401,19 +392,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 ? 3
                 : 0,
             children: [
-              TrackSearchPage(
-                key: const ValueKey('track-search-page'),
-                gateway: _searchGateway,
-                artistGateway: _artistSearchGateway,
-                albumGateway: _albumSearchGateway,
-                playlistGateway: _playlistSearchGateway,
-                queuePlaybackController: _queuePlaybackController,
-                onBack: _closeSearch,
-                onOpenAlbum: _openAlbum,
-                onOpenArtist: _openArtist,
-                onOpenPlaylist: _openSearchPlaylist,
-                onSignInAgain: widget.onSignInAgain,
-              ),
+              _primaryScaffold(),
               if (selectedAlbum == null)
                 const SizedBox.shrink()
               else
@@ -461,17 +440,23 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             ],
           )
         : selectedPlaylist != null
-        ? PlaylistDetailPage(
-            key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
-            playlist: selectedPlaylist,
-            gateway: widget.detailGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _returnToLibrary,
-            onOpenAlbum: _openTrackContextAlbum,
-            onOpenArtist: _openTrackContextArtist,
-            onSignInAgain: widget.onSignInAgain,
+        ? IndexedStack(
+            index: 1,
+            children: [
+              _primaryScaffold(),
+              PlaylistDetailPage(
+                key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
+                playlist: selectedPlaylist,
+                gateway: widget.detailGateway,
+                queuePlaybackController: _queuePlaybackController,
+                onBack: _returnToLibrary,
+                onOpenAlbum: _openTrackContextAlbum,
+                onOpenArtist: _openTrackContextArtist,
+                onSignInAgain: widget.onSignInAgain,
+              ),
+            ],
           )
-        : _libraryScaffold();
+        : IndexedStack(children: [_primaryScaffold()]);
     final trackContextAlbum = _trackContextAlbum;
     final trackContextArtist = _trackContextArtist;
     final routedPage = IndexedStack(
@@ -651,17 +636,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         selectedAlbum != null ||
         selectedArtist != null ||
         selectedSearchPlaylist != null;
-    final shortcutPage = !hasLocalPage
-        ? playbackPage
-        : CallbackShortcuts(
-            bindings: <ShortcutActivator, VoidCallback>{
+    final shortcutPage = CallbackShortcuts(
+      bindings: hasLocalPage
+          ? <ShortcutActivator, VoidCallback>{
               const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
                   _returnFromLocalPage,
               const SingleActivator(LogicalKeyboardKey.browserBack):
                   _returnFromLocalPage,
-            },
-            child: playbackPage,
-          );
+            }
+          : const <ShortcutActivator, VoidCallback>{},
+      child: playbackPage,
+    );
     return PageStorage(
       bucket: _pageStorageBucket,
       child: PopScope<void>(
@@ -735,26 +720,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     }
   }
 
-  void _openSearch() {
-    if (_searchOpen ||
-        _recommendationsOpen ||
-        _favoriteArtistsOpen ||
-        _favoriteAlbumsOpen ||
-        _selectedPlaylist != null) {
-      return;
-    }
-    setState(() => _searchOpen = true);
+  _PrimaryDestination get _primaryDestination {
+    if (_searchOpen) return _PrimaryDestination.search;
+    if (_recommendationsOpen) return _PrimaryDestination.discover;
+    return _PrimaryDestination.library;
   }
 
-  void _openRecommendations() {
-    if (_recommendationsOpen ||
-        _searchOpen ||
-        _favoriteArtistsOpen ||
-        _favoriteAlbumsOpen ||
-        _selectedPlaylist != null) {
-      return;
-    }
-    setState(() => _recommendationsOpen = true);
+  void _selectPrimaryDestination(_PrimaryDestination destination) {
+    if (_primaryDestination == destination) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _searchOpen = destination == _PrimaryDestination.search;
+      _recommendationsOpen = destination == _PrimaryDestination.discover;
+      _searchVisited |= destination == _PrimaryDestination.search;
+      _recommendationsVisited |= destination == _PrimaryDestination.discover;
+    });
   }
 
   void _openFavoriteAlbums() {
@@ -1077,143 +1057,323 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     });
   }
 
-  Widget _libraryScaffold() => Scaffold(
-    appBar: AppBar(
-      title: Text(
-        'Your music',
-        style: MediaQuery.sizeOf(context).width < 520
-            ? Theme.of(context).textTheme.titleMedium
-            : null,
-      ),
-      titleSpacing: MediaQuery.sizeOf(context).width < 520 ? 8 : 16,
-      actions: [
-        if (MediaQuery.sizeOf(context).width < 520)
-          Focus(
-            key: const ValueKey('open-favorite-collections'),
-            focusNode: _favoriteCollectionsReturnFocusNode,
-            onKeyEvent: (node, event) {
-              if (event is KeyDownEvent &&
-                  (event.logicalKey == LogicalKeyboardKey.enter ||
-                      event.logicalKey == LogicalKeyboardKey.space)) {
-                _favoriteCollectionsMenuKey.currentState?.showButtonMenu();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: PopupMenuButton<_FavoriteCollection>(
-              key: _favoriteCollectionsMenuKey,
-              tooltip: 'Open saved collections',
-              constraints: const BoxConstraints(minWidth: 200),
-              onSelected: (collection) => switch (collection) {
-                _FavoriteCollection.artists => _openFavoriteArtists(),
-                _FavoriteCollection.albums => _openFavoriteAlbums(),
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: _FavoriteCollection.artists,
-                  child: Row(
-                    children: [
-                      Icon(Icons.person_rounded),
-                      SizedBox(width: 12),
-                      Text('Favorite artists'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _FavoriteCollection.albums,
-                  child: Row(
-                    children: [
-                      Icon(Icons.album_rounded),
-                      SizedBox(width: 12),
-                      Text('Favorite albums'),
-                    ],
-                  ),
-                ),
-              ],
-              icon: const Icon(Icons.library_music_rounded),
+  Widget _primaryScaffold() => LayoutBuilder(
+    builder: (context, constraints) {
+      final destination = _primaryDestination;
+      final wide = constraints.maxWidth >= 840;
+      final compactActions = constraints.maxWidth < 520;
+      final primaryContent = IndexedStack(
+        index: destination.index,
+        children: [
+          _libraryBody(),
+          if (_recommendationsVisited)
+            RecommendedPlaylistsPage(
+              key: const ValueKey('recommended-playlists-page'),
+              gateway: _recommendedPlaylistGateway,
+              newAlbumGateway: _newAlbumGateway,
+              newSongGateway: _newSongGateway,
+              rankingGateway: _rankingGateway,
+              radarGateway: _radarGateway,
+              queuePlaybackController: _queuePlaybackController,
+              onBack: _closeRecommendations,
+              onOpenPlaylist: _openRecommendedPlaylist,
+              onOpenRanking: _openRanking,
+              onOpenAlbum: _openRecommendedAlbum,
+              onSignInAgain: widget.onSignInAgain,
+              embedded: true,
+            )
+          else
+            const SizedBox.shrink(),
+          if (_searchVisited)
+            TrackSearchPage(
+              key: const ValueKey('track-search-page'),
+              gateway: _searchGateway,
+              artistGateway: _artistSearchGateway,
+              albumGateway: _albumSearchGateway,
+              playlistGateway: _playlistSearchGateway,
+              queuePlaybackController: _queuePlaybackController,
+              onBack: _closeSearch,
+              onOpenAlbum: _openAlbum,
+              onOpenArtist: _openArtist,
+              onOpenPlaylist: _openSearchPlaylist,
+              onSignInAgain: widget.onSignInAgain,
+              embedded: true,
+            )
+          else
+            const SizedBox.shrink(),
+        ],
+      );
+      final body = Row(
+        children: [
+          if (wide)
+            NavigationRail(
+              selectedIndex: destination.index,
+              labelType: NavigationRailLabelType.all,
+              onDestinationSelected: _selectPrimaryDestinationByIndex,
+              destinations: _navigationRailDestinations(),
+            )
+          else
+            const SizedBox.shrink(),
+          if (wide)
+            const VerticalDivider(width: 1)
+          else
+            const SizedBox.shrink(),
+          Expanded(child: primaryContent),
+        ],
+      );
+      return Scaffold(
+        key: const ValueKey('authenticated-primary-shell'),
+        appBar: AppBar(
+          leading: switch (destination) {
+            _PrimaryDestination.library => null,
+            _PrimaryDestination.discover => IconButton(
+              key: const ValueKey('recommendations-back'),
+              tooltip: 'Back to your music',
+              onPressed: _closeRecommendations,
+              icon: const Icon(Icons.arrow_back_rounded),
             ),
+            _PrimaryDestination.search => IconButton(
+              key: const ValueKey('track-search-back'),
+              tooltip: 'Back to your music',
+              onPressed: _closeSearch,
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+          },
+          title: Text(
+            switch (destination) {
+              _PrimaryDestination.library => 'Your music',
+              _PrimaryDestination.discover => 'Discover',
+              _PrimaryDestination.search => 'Search QQ Music',
+            },
+            style: compactActions
+                ? Theme.of(context).textTheme.titleMedium
+                : null,
           ),
-        if (MediaQuery.sizeOf(context).width >= 520)
-          IconButton(
-            key: const ValueKey('open-favorite-artists'),
-            focusNode: _favoriteArtistsReturnFocusNode,
-            tooltip: 'Open favorite artists',
-            onPressed: _openFavoriteArtists,
-            icon: const Icon(Icons.person_rounded),
-          ),
-        if (MediaQuery.sizeOf(context).width >= 520)
-          IconButton(
-            key: const ValueKey('open-favorite-albums'),
-            focusNode: _favoriteAlbumsReturnFocusNode,
-            tooltip: 'Open favorite albums',
-            onPressed: _openFavoriteAlbums,
-            icon: const Icon(Icons.album_rounded),
-          ),
-        IconButton(
-          key: const ValueKey('open-recommendations'),
-          focusNode: _recommendationsReturnFocusNode,
-          tooltip: 'Discover QQ Music playlists',
-          onPressed: _openRecommendations,
-          icon: const Icon(Icons.explore_rounded),
-        ),
-        IconButton(
-          key: const ValueKey('open-track-search'),
-          focusNode: _searchReturnFocusNode,
-          tooltip: 'Search QQ Music',
-          onPressed: _openSearch,
-          icon: const Icon(Icons.search_rounded),
-        ),
-        AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) => IconButton(
-            tooltip: _controller.isRefreshing
-                ? 'Refreshing playlists'
-                : 'Refresh playlists',
-            onPressed: _controller.isLoading ? null : _controller.refresh,
-            icon: const Icon(Icons.refresh_rounded),
+          titleSpacing: compactActions ? 8 : 16,
+          actions: _primaryActions(
+            compactActions: compactActions,
+            destination: destination,
           ),
         ),
-        IconButton(
-          key: const ValueKey('sign-out'),
-          tooltip: 'Sign out',
-          onPressed: _signingOut ? null : _confirmSignOut,
-          icon: const Icon(Icons.logout_rounded),
-        ),
-        if (MediaQuery.sizeOf(context).width >= 520) const SizedBox(width: 8),
-      ],
+        body: body,
+        bottomNavigationBar: wide
+            ? NowPlayingBar(
+                controller: _queuePlaybackController,
+                onSignInAgain: widget.onSignInAgain,
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  NowPlayingBar(
+                    controller: _queuePlaybackController,
+                    onSignInAgain: widget.onSignInAgain,
+                  ),
+                  NavigationBar(
+                    selectedIndex: destination.index,
+                    onDestinationSelected: _selectPrimaryDestinationByIndex,
+                    destinations: _navigationBarDestinations(),
+                  ),
+                ],
+              ),
+      );
+    },
+  );
+
+  void _selectPrimaryDestinationByIndex(int index) {
+    _selectPrimaryDestination(_PrimaryDestination.values[index]);
+  }
+
+  List<NavigationRailDestination> _navigationRailDestinations() => [
+    const NavigationRailDestination(
+      icon: Icon(
+        Icons.library_music_outlined,
+        key: ValueKey('primary-library-destination'),
+      ),
+      selectedIcon: Icon(Icons.library_music_rounded),
+      label: Text('Library'),
     ),
-    body: SafeArea(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) => Column(
-          children: [
-            if (_controller.isRefreshing)
-              const LinearProgressIndicator(
-                key: ValueKey('user-library-refresh-progress'),
+    NavigationRailDestination(
+      icon: _destinationFocusIcon(
+        key: const ValueKey('open-recommendations'),
+        focusNode: _recommendationsReturnFocusNode,
+        destination: _PrimaryDestination.discover,
+        icon: Icons.explore_outlined,
+      ),
+      label: const Text('Discover'),
+    ),
+    NavigationRailDestination(
+      icon: _destinationFocusIcon(
+        key: const ValueKey('open-track-search'),
+        focusNode: _searchReturnFocusNode,
+        destination: _PrimaryDestination.search,
+        icon: Icons.search_rounded,
+      ),
+      label: const Text('Search'),
+    ),
+  ];
+
+  List<NavigationDestination> _navigationBarDestinations() => [
+    const NavigationDestination(
+      icon: Icon(
+        Icons.library_music_outlined,
+        key: ValueKey('primary-library-destination'),
+      ),
+      selectedIcon: Icon(Icons.library_music_rounded),
+      label: 'Library',
+    ),
+    NavigationDestination(
+      icon: _destinationFocusIcon(
+        key: const ValueKey('open-recommendations'),
+        focusNode: _recommendationsReturnFocusNode,
+        destination: _PrimaryDestination.discover,
+        icon: Icons.explore_outlined,
+      ),
+      label: 'Discover',
+    ),
+    NavigationDestination(
+      icon: _destinationFocusIcon(
+        key: const ValueKey('open-track-search'),
+        focusNode: _searchReturnFocusNode,
+        destination: _PrimaryDestination.search,
+        icon: Icons.search_rounded,
+      ),
+      label: 'Search',
+    ),
+  ];
+
+  Widget _destinationFocusIcon({
+    required Key key,
+    required FocusNode focusNode,
+    required _PrimaryDestination destination,
+    required IconData icon,
+  }) => Focus(
+    key: key,
+    focusNode: focusNode,
+    onKeyEvent: (_, event) {
+      if (event is KeyDownEvent &&
+          (event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.space)) {
+        _selectPrimaryDestination(destination);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    },
+    child: Icon(icon),
+  );
+
+  List<Widget> _primaryActions({
+    required bool compactActions,
+    required _PrimaryDestination destination,
+  }) => [
+    if (destination == _PrimaryDestination.library && compactActions)
+      Focus(
+        key: const ValueKey('open-favorite-collections'),
+        focusNode: _favoriteCollectionsReturnFocusNode,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.space)) {
+            _favoriteCollectionsMenuKey.currentState?.showButtonMenu();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: PopupMenuButton<_FavoriteCollection>(
+          key: _favoriteCollectionsMenuKey,
+          tooltip: 'Open saved collections',
+          constraints: const BoxConstraints(minWidth: 200),
+          onSelected: (collection) => switch (collection) {
+            _FavoriteCollection.artists => _openFavoriteArtists(),
+            _FavoriteCollection.albums => _openFavoriteAlbums(),
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: _FavoriteCollection.artists,
+              child: Row(
+                children: [
+                  Icon(Icons.person_rounded),
+                  SizedBox(width: 12),
+                  Text('Favorite artists'),
+                ],
               ),
-            if (_controller.refreshFailure case final failure?)
-              LibraryRefreshFailureBanner(
-                key: const ValueKey('user-library-refresh-failure'),
-                message: _refreshFailureCopy(failure),
-                canRetry: _controller.canRetryRefresh,
-                onRetry: _controller.retryRefresh,
-                onDismiss: _controller.dismissRefreshFailure,
-              ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: MusicMotion.stateChange,
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: _body(context),
+            ),
+            PopupMenuItem(
+              value: _FavoriteCollection.albums,
+              child: Row(
+                children: [
+                  Icon(Icons.album_rounded),
+                  SizedBox(width: 12),
+                  Text('Favorite albums'),
+                ],
               ),
             ),
           ],
+          icon: const Icon(Icons.library_music_rounded),
         ),
       ),
+    if (destination == _PrimaryDestination.library && !compactActions)
+      IconButton(
+        key: const ValueKey('open-favorite-artists'),
+        focusNode: _favoriteArtistsReturnFocusNode,
+        tooltip: 'Open favorite artists',
+        onPressed: _openFavoriteArtists,
+        icon: const Icon(Icons.person_rounded),
+      ),
+    if (destination == _PrimaryDestination.library && !compactActions)
+      IconButton(
+        key: const ValueKey('open-favorite-albums'),
+        focusNode: _favoriteAlbumsReturnFocusNode,
+        tooltip: 'Open favorite albums',
+        onPressed: _openFavoriteAlbums,
+        icon: const Icon(Icons.album_rounded),
+      ),
+    if (destination == _PrimaryDestination.library)
+      AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => IconButton(
+          tooltip: _controller.isRefreshing
+              ? 'Refreshing playlists'
+              : 'Refresh playlists',
+          onPressed: _controller.isLoading ? null : _controller.refresh,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ),
+    IconButton(
+      key: const ValueKey('sign-out'),
+      tooltip: 'Sign out',
+      onPressed: _signingOut ? null : _confirmSignOut,
+      icon: const Icon(Icons.logout_rounded),
     ),
-    bottomNavigationBar: NowPlayingBar(
-      controller: _queuePlaybackController,
-      onSignInAgain: widget.onSignInAgain,
+    if (!compactActions) const SizedBox(width: 8),
+  ];
+
+  Widget _libraryBody() => SafeArea(
+    child: AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => Column(
+        children: [
+          if (_controller.isRefreshing)
+            const LinearProgressIndicator(
+              key: ValueKey('user-library-refresh-progress'),
+            ),
+          if (_controller.refreshFailure case final failure?)
+            LibraryRefreshFailureBanner(
+              key: const ValueKey('user-library-refresh-failure'),
+              message: _refreshFailureCopy(failure),
+              canRetry: _controller.canRetryRefresh,
+              onRetry: _controller.retryRefresh,
+              onDismiss: _controller.dismissRefreshFailure,
+            ),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: MusicMotion.stateChange,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _body(context),
+            ),
+          ),
+        ],
+      ),
     ),
   );
 

@@ -351,7 +351,10 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.text('Fixture playlist').last);
+    final playlist = find.text('Fixture playlist').last;
+    await tester.ensureVisible(playlist);
+    await tester.pumpAndSettle();
+    await tester.tap(playlist);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-2')));
     await tester.pumpAndSettle();
@@ -480,7 +483,10 @@ void main() {
     await _sendControlShortcut(tester, LogicalKeyboardKey.arrowRight);
     expect(_nowPlayingTitle(tester), 'Second track');
 
-    await tester.tap(find.text('Fixture playlist').last);
+    final playlist = find.text('Fixture playlist').last;
+    await tester.ensureVisible(playlist);
+    await tester.pumpAndSettle();
+    await tester.tap(playlist);
     await tester.pumpAndSettle();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaTrackPrevious);

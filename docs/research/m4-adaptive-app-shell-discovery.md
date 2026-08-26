@@ -41,3 +41,9 @@
 ## Selection
 
 The retained adaptive primary shell ranks first because the toolbar conflict is already reproduced, the current presentation owner supplies the necessary shared lifecycles, and the completed Material foundation removes the need for local shell styling. The implementation must retain current primary controllers and overlay behavior rather than replacing navigation infrastructure.
+
+## Outcome
+
+Completed on 2026-08-27. Library, Discover, and Search now share one adaptive Material shell with a wide `NavigationRail`, compact `NavigationBar`, destination-specific AppBar actions, lazy retained primary content, and embedded Search/Discover presentation. The implementation kept the existing detail/favorite/catalog/expanded-now-playing overlays, controller owner, focus restoration, platform/AppBar return semantics, and Rust/Bridge boundaries.
+
+The focused regression pass exposed one existing structural retention hazard: changing between a direct `PlaybackShortcuts` child and a `CallbackShortcuts` wrapper disposed the entire local route tree when a primary destination closed. Keeping that wrapper structurally stable fixed the root cause. Search state now survives Library round-trips, Discover does not reload during compact-to-wide resize, desktop keyboard activation works, and only the existing playback controller owns transport. No dependency, navigation framework, state framework, protocol, Domain, Bridge, or Rust change was introduced.
