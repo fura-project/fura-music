@@ -110,6 +110,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Isolated the compact player's existing artist/status copy as a semantic live region. Playing/paused and coarse failure changes can now be announced without merging the surrounding playlist header, Track title, or elapsed/duration text into the update. A state-transition semantic regression brings the Flutter suite to 123 tests; strict analysis and Linux release pass with no visual or controller change.
 - Reproduced the same merged-status problem for in-panel queue command failures: the error previously shared one semantic label with the queue heading and count while focus stayed on the failed action. The existing coarse message is now its own live region; a failed removal retains both duplicate entries, and the next successful command still clears failure. The 123-test Flutter suite, strict analysis, and Linux release pass without queue or error-mapping changes.
 - Decoupled Track-context queue feedback from the slower first-Track media startup. Rust queue mutation and validation are synchronous, so the UI now confirms “Added to queue” or the coarse queue failure immediately after that result; an empty queue's selected Track continues resolving/playing through the same unawaited controller Future and reports its own later state. Pending-resolution, failed-push, nonempty duplicate, and no-restart regressions bring the Flutter suite to 124 tests; strict analysis and Linux release pass.
+- Verified the user-visible media-resolution retry path rather than changing already-correct lifecycle code. A network failure exposes “Try again”; activation resolves the same opaque Track a second time, preserves its queue position, and reaches playing on success. The full Flutter suite now passes 125 tests and strict analysis; product code and the previously passing Linux release bundle are unchanged by this test-only slice.
 
 # In Progress
 
@@ -117,7 +118,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Next Candidates
 
-1. Inspect source-resolution retry and pending-action cancellation for one reproducible playback-resilience gap; do not expand into background playback or speculative transport policy.
+1. Recheck triggered technical-debt conditions after the completed Android/Linux packaging work, especially release identity/signing, and localize any required Human Decision without blocking unrelated M2 work.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 

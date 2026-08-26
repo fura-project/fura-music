@@ -104,6 +104,36 @@ void main() {
     expect(find.text('Continue with WeChat'), findsNothing);
   });
 
+  testWidgets('retries media resolution for the same queue position', (
+    tester,
+  ) async {
+    final queue = _WidgetQueueGateway();
+    final media = _FakeMediaGateway([
+      const _ImmediateMediaOperation(
+        MediaResolutionResult(failure: MediaResolutionFailure.network),
+      ),
+      _ImmediateMediaOperation(_success('retry-success')),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      queue: queue,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Couldn’t reach QQ Music'), findsOneWidget);
+    expect(find.byTooltip('Try again'), findsOneWidget);
+    expect(queue._snapshot.currentIndex, 0);
+
+    await tester.tap(find.byTooltip('Try again'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Playing'), findsOneWidget);
+    expect(queue._snapshot.currentIndex, 0);
+    expect(media.requests, [('qq-music', 'first'), ('qq-music', 'first')]);
+  });
+
   testWidgets('shows exact progress and seeks once when a drag commits', (
     tester,
   ) async {
