@@ -1559,6 +1559,137 @@ impl fmt::Debug for ArtistAlbumsPage {
     }
 }
 
+/// Provider-neutral regions currently exposed by QQ Music's new-release
+/// catalog. Providers that cannot map these regions do not implement the
+/// corresponding capability.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum NewAlbumRegion {
+    MainlandChina,
+    HongKongTaiwan,
+    Western,
+    Korea,
+    Japan,
+    Other,
+}
+
+/// Minimum provider-neutral data for one newly released Album. Release dates
+/// remain display metadata rather than parsed calendar policy.
+#[derive(Clone, Eq, PartialEq)]
+pub struct NewAlbumRelease {
+    album: AlbumSummary,
+    artists: Vec<ArtistSummary>,
+    release_date: Option<String>,
+}
+
+impl NewAlbumRelease {
+    #[must_use]
+    pub fn new(
+        album: AlbumSummary,
+        artists: Vec<ArtistSummary>,
+        release_date: Option<String>,
+    ) -> Self {
+        Self {
+            album,
+            artists,
+            release_date: nonblank(release_date),
+        }
+    }
+
+    #[must_use]
+    pub const fn album(&self) -> &AlbumSummary {
+        &self.album
+    }
+
+    #[must_use]
+    pub fn artists(&self) -> &[ArtistSummary] {
+        &self.artists
+    }
+
+    #[must_use]
+    pub fn release_date(&self) -> Option<&str> {
+        self.release_date.as_deref()
+    }
+}
+
+impl fmt::Debug for NewAlbumRelease {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NewAlbumRelease")
+            .field("album", &self.album)
+            .field("artist_count", &self.artists.len())
+            .field("has_release_date", &self.release_date.is_some())
+            .finish()
+    }
+}
+
+/// One bounded offset page of regional new Album releases. Provider-specific
+/// area values and request pagination remain behind the Provider boundary.
+#[derive(Clone, Eq, PartialEq)]
+pub struct NewAlbumReleasesPage {
+    region: NewAlbumRegion,
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    releases: Vec<NewAlbumRelease>,
+}
+
+impl NewAlbumReleasesPage {
+    #[must_use]
+    pub const fn new(
+        region: NewAlbumRegion,
+        offset: u32,
+        total: u32,
+        has_more: bool,
+        releases: Vec<NewAlbumRelease>,
+    ) -> Self {
+        Self {
+            region,
+            offset,
+            total,
+            has_more,
+            releases,
+        }
+    }
+
+    #[must_use]
+    pub const fn region(&self) -> NewAlbumRegion {
+        self.region
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn releases(&self) -> &[NewAlbumRelease] {
+        &self.releases
+    }
+}
+
+impl fmt::Debug for NewAlbumReleasesPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NewAlbumReleasesPage")
+            .field("region", &self.region)
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("release_count", &self.releases.len())
+            .finish()
+    }
+}
+
 impl PlaylistTracksPage {
     #[must_use]
     pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
@@ -1611,10 +1742,11 @@ fn nonblank(value: Option<String>) -> Option<String> {
 mod tests {
     use super::{
         AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSearchPage,
-        ArtistSummary, AudioFormat, AudioQuality, PlaylistId, PlaylistSearchPage, PlaylistSummary,
-        PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
-        RankingTracksPage, ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem,
-        TrackSearchPage, TrackSummary, TrackSummaryField,
+        ArtistSummary, AudioFormat, AudioQuality, NewAlbumRegion, NewAlbumRelease,
+        NewAlbumReleasesPage, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
+        ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
+        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage,
+        TrackSummary, TrackSummaryField,
     };
 
     #[test]
@@ -1779,6 +1911,44 @@ mod tests {
         let debug = format!("{page:?}");
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("43001"));
+    }
+
+    #[test]
+    fn new_album_page_keeps_region_and_continuation_without_content_diagnostics() {
+        let provider = ProviderId::new("qq-music").expect("provider");
+        let album = AlbumSummary::new(
+            AlbumId::new(provider.clone(), "album:43001:fixture-album-mid").expect("album ID"),
+            "must-not-leak-album",
+        )
+        .expect("Album");
+        let artist = ArtistSummary::new(
+            ArtistId::new(provider, "artist:42001:fixture-artist-mid").expect("artist ID"),
+            "must-not-leak-artist",
+        )
+        .expect("Artist");
+        let page = NewAlbumReleasesPage::new(
+            NewAlbumRegion::Japan,
+            5,
+            11,
+            true,
+            vec![NewAlbumRelease::new(
+                album,
+                vec![artist],
+                Some("2026-08-26".into()),
+            )],
+        );
+
+        assert_eq!(page.region(), NewAlbumRegion::Japan);
+        assert_eq!(page.offset(), 5);
+        assert_eq!(page.total(), 11);
+        assert!(page.has_more());
+        assert_eq!(page.releases().len(), 1);
+        assert_eq!(page.releases()[0].artists().len(), 1);
+        assert_eq!(page.releases()[0].release_date(), Some("2026-08-26"));
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("must-not-leak"));
+        assert!(!debug.contains("43001"));
+        assert!(!debug.contains("2026-08-26"));
     }
 
     #[test]

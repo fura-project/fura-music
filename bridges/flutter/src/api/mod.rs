@@ -5,6 +5,7 @@ pub mod bootstrap;
 pub mod library;
 pub mod lyrics;
 pub mod media;
+pub mod new_albums;
 pub mod queue;
 pub mod rankings;
 pub mod recommendations;

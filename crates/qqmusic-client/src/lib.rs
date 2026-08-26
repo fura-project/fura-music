@@ -14,6 +14,7 @@ mod credential_verification;
 mod favorite_playlists;
 mod lyrics;
 mod media_resolution;
+mod new_albums;
 mod owned_playlists;
 mod playlist_detail;
 mod playlist_search;
@@ -49,6 +50,10 @@ pub use lyrics::{
 pub use media_resolution::{
     MediaProtocolPhase, MediaResponseField, QqMusicCdnDispatch, QqMusicMediaError,
     QqMusicStandardMediaSource,
+};
+pub use new_albums::{
+    NewAlbumField, QqMusicNewAlbumArea, QqMusicNewAlbumPage, QqMusicNewAlbumRelease,
+    QqMusicNewAlbumsError,
 };
 pub use owned_playlists::{
     OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,

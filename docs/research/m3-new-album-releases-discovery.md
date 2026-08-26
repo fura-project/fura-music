@@ -38,3 +38,9 @@ Reference code and its live tests remain research evidence only. Runtime request
 ## Selection
 
 Regional new album releases rank first because the current direct operation has exact implementation evidence, repeatable live-gated pagination tests, bounded anonymous evidence across every exposed region, and a finite transition into the existing Album/queue path. It adds a distinctly QQ-native discovery surface while avoiding both credential access and a speculative heterogeneous Home abstraction.
+
+## Implementation outcome
+
+The selected slice is implemented across the provider-neutral Domain and capability, direct anonymous QQ client, QQ Provider mapping, single-use cancellable Bridge, and a lazy fourth Discover state. Flutter owns typed region replacement, pagination, deduplication, cancellation/stale-result suppression, and adaptive list/grid presentation; opening an item reuses the existing Album Track and Rust-backed queue path, and return preserves the New Albums state.
+
+Validation on 2026-08-26 passed Rust formatting, strict all-target/all-feature Clippy, 236 offline Rust tests with four separate live-gated tests ignored, strict Dart formatting and analysis, all 250 Flutter tests, the Linux x64 Release build, and the packaged Linux typed-Bridge integration. These checks prove offline mapping/lifecycle/UI behavior and Linux packaging of the new Bridge surface; they do not prove current live application compatibility, content quality, or QQ CDN playback. No account credential or returned catalog content was used by the implementation tests or retained in the repository.

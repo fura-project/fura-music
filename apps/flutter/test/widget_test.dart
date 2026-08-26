@@ -22,6 +22,7 @@ import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
@@ -596,6 +597,99 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('radar-track-0')), findsOneWidget);
       expect(radar.pages, [1]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'loads new albums lazily and preserves them through Album playback return',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:fixtureNewAlbumMid',
+        title: 'Fresh Album',
+      );
+      const release = NewAlbumRelease(
+        album: album,
+        artists: [
+          ArtistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'artist:42001:fixtureArtistMid',
+            name: 'Fresh Artist',
+          ),
+        ],
+        releaseDate: '2026-08-26',
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureTrackMid:-',
+        title: 'Fresh Track',
+        artistNames: ['Fresh Artist'],
+      );
+      final newAlbums = _WidgetNewAlbumGateway(
+        const NewAlbumPageResult(
+          region: NewAlbumRegion.mainlandChina,
+          total: 1,
+          releases: [release],
+        ),
+      );
+      final albumTracks = _WidgetAlbumGateway(
+        const AlbumTrackPageResult(total: 1, tracks: [track]),
+      );
+      final queue = _WidgetPlaybackQueueGateway();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+            const RecommendedPlaylistPageResult(),
+          ),
+          newAlbumGateway: newAlbums,
+          albumTrackGateway: albumTracks,
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      expect(newAlbums.requests, isEmpty);
+
+      final newAlbumsTab = find.text('New albums');
+      await tester.ensureVisible(newAlbumsTab);
+      await tester.tap(newAlbumsTab);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('new-albums-content')), findsOneWidget);
+      expect(find.text('Fresh Album'), findsOneWidget);
+      expect(find.textContaining('Fresh Artist'), findsOneWidget);
+      expect(newAlbums.requests, [(NewAlbumRegion.mainlandChina, 0, 20)]);
+
+      await tester.tap(find.byKey(const ValueKey('new-album-0')));
+      await tester.pumpAndSettle();
+      expect(find.text('Fresh Track'), findsOneWidget);
+      expect(albumTracks.requests.single.$1, album);
+
+      await tester.tap(find.text('Fresh Track'));
+      await tester.pump();
+      expect(queue.replacements, hasLength(1));
+      expect(queue.replacements.single.$1, [track]);
+      expect(queue.replacements.single.$2, 0);
+
+      await tester.tap(find.byTooltip('Back to new albums'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('new-albums-content')), findsOneWidget);
+      expect(find.text('Fresh Album'), findsOneWidget);
+      expect(newAlbums.requests, [(NewAlbumRegion.mainlandChina, 0, 20)]);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2156,6 +2250,35 @@ class _WidgetRecommendedPlaylistOperation
 
   @override
   Future<RecommendedPlaylistPageResult> run() async => result;
+}
+
+class _WidgetNewAlbumGateway implements NewAlbumGateway {
+  _WidgetNewAlbumGateway(this.result);
+
+  final NewAlbumPageResult result;
+  final List<(NewAlbumRegion, int, int)> requests = [];
+
+  @override
+  NewAlbumPageLoadOperation beginLoad({
+    required NewAlbumRegion region,
+    required int offset,
+    required int size,
+  }) {
+    requests.add((region, offset, size));
+    return _WidgetNewAlbumOperation(result);
+  }
+}
+
+class _WidgetNewAlbumOperation implements NewAlbumPageLoadOperation {
+  const _WidgetNewAlbumOperation(this.result);
+
+  final NewAlbumPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<NewAlbumPageResult> run() async => result;
 }
 
 class _WidgetRadarGateway implements RadarGateway {

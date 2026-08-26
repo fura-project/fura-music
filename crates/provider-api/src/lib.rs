@@ -5,9 +5,10 @@ use std::future::Future;
 
 use music_domain::{
     AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistSearchPage,
-    ArtistTracksPage, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
-    ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingTracksPage,
-    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
+    ArtistTracksPage, NewAlbumRegion, NewAlbumReleasesPage, PlaylistId, PlaylistSearchPage,
+    PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId,
+    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackId,
+    TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -197,6 +198,19 @@ pub trait ArtistAlbumsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<ArtistAlbumsPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral offset-paged regional new Album releases. Editorial Home
+/// cards, notifications, and Album mutation are separate capabilities.
+pub trait NewAlbumReleasesProvider: MusicProvider + Sync {
+    type Error;
+
+    fn new_album_releases(
+        &self,
+        region: NewAlbumRegion,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<NewAlbumReleasesPage, Self::Error>> + Send;
 }
 
 /// Provider-neutral offset-paged playlist recommendations. Personalization,

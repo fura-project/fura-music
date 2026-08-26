@@ -7,6 +7,7 @@ import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
+import 'package:flutterustmusic/src/rust/api/new_albums.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/api/rankings.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart';
@@ -143,6 +144,19 @@ void main() {
     expect(
       cancelledArtistAlbumLoad.failure,
       QqMusicArtistAlbumPageLoadFailure.cancelled,
+    );
+    final unusedNewAlbumLoad = beginQqMusicNewAlbumPageLoad(
+      region: QqMusicNewAlbumRegion.western,
+      offset: 0,
+      size: 20,
+    );
+    expect(unusedNewAlbumLoad.isActive, isTrue);
+    expect(unusedNewAlbumLoad.cancel(), isTrue);
+    final cancelledNewAlbumLoad = await unusedNewAlbumLoad.run();
+    expect(cancelledNewAlbumLoad.region, QqMusicNewAlbumRegion.western);
+    expect(
+      cancelledNewAlbumLoad.failure,
+      QqMusicNewAlbumPageLoadFailure.cancelled,
     );
     final unusedRecommendationLoad = beginQqMusicRecommendedPlaylistPageLoad(
       offset: 0,

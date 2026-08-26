@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/discover/new_album_controller.dart';
+import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
@@ -15,23 +18,27 @@ import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 class RecommendedPlaylistsPage extends StatefulWidget {
   const RecommendedPlaylistsPage({
     required this.gateway,
+    required this.newAlbumGateway,
     required this.rankingGateway,
     required this.radarGateway,
     required this.queuePlaybackController,
     required this.onBack,
     required this.onOpenPlaylist,
     required this.onOpenRanking,
+    required this.onOpenAlbum,
     required this.onSignInAgain,
     super.key,
   });
 
   final RecommendedPlaylistGateway gateway;
+  final NewAlbumGateway newAlbumGateway;
   final RankingGateway rankingGateway;
   final RadarGateway radarGateway;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final ValueChanged<RecommendedPlaylistSummary> onOpenPlaylist;
   final ValueChanged<RankingSummary> onOpenRanking;
+  final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
 
   @override
@@ -41,16 +48,19 @@ class RecommendedPlaylistsPage extends StatefulWidget {
 
 class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   late final RecommendedPlaylistController _controller;
+  late final NewAlbumController _newAlbumController;
   late final RankingGroupController _rankingController;
   late final RadarController _radarController;
   _DiscoverType _type = _DiscoverType.playlists;
   bool _rankingsVisited = false;
   bool _radarVisited = false;
+  bool _newAlbumsVisited = false;
 
   @override
   void initState() {
     super.initState();
     _controller = RecommendedPlaylistController(widget.gateway);
+    _newAlbumController = NewAlbumController(widget.newAlbumGateway);
     _rankingController = RankingGroupController(widget.rankingGateway);
     _radarController = RadarController(widget.radarGateway);
     unawaited(_controller.load());
@@ -59,6 +69,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   @override
   void dispose() {
     _controller.dispose();
+    _newAlbumController.dispose();
     _rankingController.dispose();
     _radarController.dispose();
     super.dispose();
@@ -79,6 +90,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       child: AnimatedBuilder(
         animation: Listenable.merge([
           _controller,
+          _newAlbumController,
           _rankingController,
           _radarController,
         ]),
@@ -108,6 +120,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
                         icon: Icon(Icons.radar_rounded),
                         label: Text('Radar'),
                       ),
+                      ButtonSegment(
+                        value: _DiscoverType.newAlbums,
+                        icon: Icon(Icons.album_rounded),
+                        label: Text('New albums'),
+                      ),
                     ],
                     selected: {_type},
                     onSelectionChanged: (selection) =>
@@ -123,6 +140,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
                   _DiscoverType.playlists => _playlistBody(),
                   _DiscoverType.rankings => _rankingBody(),
                   _DiscoverType.radar => _radarBody(),
+                  _DiscoverType.newAlbums => _newAlbumBody(),
                 },
               ),
             ),
@@ -238,6 +256,54 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
     ),
   };
 
+  Widget _newAlbumBody() => switch (_newAlbumController.stage) {
+    NewAlbumStage.loading => _NewAlbumShell(
+      key: const ValueKey('new-albums-loading'),
+      region: _newAlbumController.region,
+      onRegionSelected: _newAlbumController.selectRegion,
+      child: const Center(child: CircularProgressIndicator()),
+    ),
+    NewAlbumStage.empty => _NewAlbumShell(
+      key: const ValueKey('new-albums-empty'),
+      region: _newAlbumController.region,
+      onRegionSelected: _newAlbumController.selectRegion,
+      child: const _RecommendationMessage(
+        icon: Icons.album_outlined,
+        title: 'No new albums right now',
+        detail: 'QQ Music returned an empty page for this region.',
+      ),
+    ),
+    NewAlbumStage.error => _NewAlbumShell(
+      key: const ValueKey('new-albums-error'),
+      region: _newAlbumController.region,
+      onRegionSelected: _newAlbumController.selectRegion,
+      child: _RecommendationMessage(
+        icon: Icons.cloud_off_rounded,
+        title: 'Couldn’t load new albums',
+        detail: newAlbumFailureCopy(_newAlbumController.failure),
+        liveRegion: true,
+        action: _newAlbumController.canRetry
+            ? FilledButton.tonal(
+                onPressed: _newAlbumController.retry,
+                child: const Text('Try again'),
+              )
+            : null,
+      ),
+    ),
+    NewAlbumStage.content => _NewAlbumCollection(
+      key: const ValueKey('new-albums-content'),
+      region: _newAlbumController.region,
+      releases: _newAlbumController.releases,
+      hasMore: _newAlbumController.hasMore,
+      isLoadingMore: _newAlbumController.isLoadingMore,
+      appendFailure: _newAlbumController.appendFailure,
+      onRegionSelected: _newAlbumController.selectRegion,
+      onLoadMore: _newAlbumController.loadMore,
+      onRetryMore: _newAlbumController.retryMore,
+      onSelected: (release) => widget.onOpenAlbum(release.album),
+    ),
+  };
+
   Widget? _radarFailureAction(RadarFailure? failure) {
     if (_radarRequiresSignIn(failure)) {
       return FilledButton.tonal(
@@ -295,10 +361,340 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       _radarVisited = true;
       unawaited(_radarController.load());
     }
+    if (type == _DiscoverType.newAlbums && !_newAlbumsVisited) {
+      _newAlbumsVisited = true;
+      unawaited(_newAlbumController.load());
+    }
   }
 }
 
-enum _DiscoverType { playlists, rankings, radar }
+enum _DiscoverType { playlists, rankings, radar, newAlbums }
+
+class _NewAlbumShell extends StatelessWidget {
+  const _NewAlbumShell({
+    required this.region,
+    required this.onRegionSelected,
+    required this.child,
+    super.key,
+  });
+
+  final NewAlbumRegion region;
+  final ValueChanged<NewAlbumRegion> onRegionSelected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      _NewAlbumRegionPicker(region: region, onSelected: onRegionSelected),
+      Expanded(child: child),
+    ],
+  );
+}
+
+class _NewAlbumCollection extends StatelessWidget {
+  const _NewAlbumCollection({
+    required this.region,
+    required this.releases,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.appendFailure,
+    required this.onRegionSelected,
+    required this.onLoadMore,
+    required this.onRetryMore,
+    required this.onSelected,
+    super.key,
+  });
+
+  final NewAlbumRegion region;
+  final List<NewAlbumRelease> releases;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final NewAlbumFailure? appendFailure;
+  final ValueChanged<NewAlbumRegion> onRegionSelected;
+  final VoidCallback onLoadMore;
+  final VoidCallback onRetryMore;
+  final ValueChanged<NewAlbumRelease> onSelected;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 760;
+      final footer = _NewAlbumFooter(
+        hasMore: hasMore,
+        isLoadingMore: isLoadingMore,
+        appendFailure: appendFailure,
+        onLoadMore: onLoadMore,
+        onRetryMore: onRetryMore,
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              desktop ? 48 : 20,
+              desktop ? 24 : 16,
+              desktop ? 48 : 20,
+              8,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'New albums',
+                  style:
+                      (desktop
+                              ? Theme.of(context).textTheme.headlineMedium
+                              : Theme.of(context).textTheme.headlineSmall)
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Fresh ${newAlbumRegionLabel(region)} releases from QQ Music',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _NewAlbumRegionPicker(region: region, onSelected: onRegionSelected),
+          Expanded(
+            child: desktop
+                ? GridView.builder(
+                    key: PageStorageKey<String>(
+                      'new-album-grid-${region.name}',
+                    ),
+                    padding: const EdgeInsets.fromLTRB(48, 8, 48, 24),
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 220,
+                          mainAxisExtent: 282,
+                          crossAxisSpacing: 24,
+                          mainAxisSpacing: 24,
+                        ),
+                    itemCount: releases.length + 1,
+                    itemBuilder: (context, index) => index == releases.length
+                        ? footer
+                        : _NewAlbumCard(
+                            key: ValueKey('new-album-$index'),
+                            release: releases[index],
+                            onTap: () => onSelected(releases[index]),
+                          ),
+                  )
+                : ListView.separated(
+                    key: PageStorageKey<String>(
+                      'new-album-list-${region.name}',
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: releases.length + 1,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) => index == releases.length
+                        ? footer
+                        : _NewAlbumTile(
+                            key: ValueKey('new-album-$index'),
+                            release: releases[index],
+                            onTap: () => onSelected(releases[index]),
+                          ),
+                  ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _NewAlbumRegionPicker extends StatelessWidget {
+  const _NewAlbumRegionPicker({required this.region, required this.onSelected});
+
+  final NewAlbumRegion region;
+  final ValueChanged<NewAlbumRegion> onSelected;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    key: const ValueKey('new-album-region-selector'),
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+    child: Row(
+      children: [
+        for (final value in NewAlbumRegion.values)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              key: ValueKey('new-album-region-${value.name}'),
+              label: Text(newAlbumRegionLabel(value)),
+              selected: region == value,
+              onSelected: (_) => onSelected(value),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _NewAlbumTile extends StatelessWidget {
+  const _NewAlbumTile({required this.release, required this.onTap, super.key});
+
+  final NewAlbumRelease release;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = _newAlbumDetails(release);
+    return Semantics(
+      button: true,
+      label: _newAlbumSemanticLabel(release),
+      excludeSemantics: true,
+      onTap: onTap,
+      child: ListTile(
+        minTileHeight: 82,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: SizedBox.square(
+          dimension: 60,
+          child: _NewAlbumArtwork(uri: release.album.artworkUri),
+        ),
+        title: Text(
+          release.album.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _NewAlbumCard extends StatelessWidget {
+  const _NewAlbumCard({required this.release, required this.onTap, super.key});
+
+  final NewAlbumRelease release;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: _newAlbumSemanticLabel(release),
+    excludeSemantics: true,
+    onTap: onTap,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _NewAlbumArtwork(uri: release.album.artworkUri)),
+            const SizedBox(height: 10),
+            Text(
+              release.album.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _newAlbumDetails(release),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _NewAlbumArtwork extends StatelessWidget {
+  const _NewAlbumArtwork({this.uri});
+
+  final String? uri;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [colors.secondaryContainer, colors.primaryContainer],
+        ),
+      ),
+      child: Icon(Icons.album_rounded, color: colors.onSecondaryContainer),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: uri == null
+          ? placeholder
+          : Image.network(
+              uri!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => placeholder,
+            ),
+    );
+  }
+}
+
+class _NewAlbumFooter extends StatelessWidget {
+  const _NewAlbumFooter({
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.appendFailure,
+    required this.onLoadMore,
+    required this.onRetryMore,
+  });
+
+  final bool hasMore;
+  final bool isLoadingMore;
+  final NewAlbumFailure? appendFailure;
+  final VoidCallback onLoadMore;
+  final VoidCallback onRetryMore;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    child: Center(
+      child: isLoadingMore
+          ? const SizedBox.square(
+              dimension: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            )
+          : appendFailure != null
+          ? FilledButton.tonal(
+              onPressed: onRetryMore,
+              child: const Text('Try loading more again'),
+            )
+          : hasMore
+          ? FilledButton.tonal(
+              key: const ValueKey('new-albums-load-more'),
+              onPressed: onLoadMore,
+              child: const Text('Load more'),
+            )
+          : Text(
+              'End of new albums',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+    ),
+  );
+}
+
+String _newAlbumDetails(NewAlbumRelease release) {
+  final details = <String>[
+    if (release.artists.isNotEmpty)
+      release.artists.map((artist) => artist.name).join(' · '),
+    ?release.releaseDate,
+  ];
+  return details.isEmpty ? 'Album' : details.join(' · ');
+}
+
+String _newAlbumSemanticLabel(NewAlbumRelease release) =>
+    '${release.album.title}, ${_newAlbumDetails(release)}';
 
 class _RankingCollection extends StatelessWidget {
   const _RankingCollection({
@@ -997,4 +1393,25 @@ String radarFailureCopy(RadarFailure? failure) => switch (failure) {
   RadarFailure.invalidResponse ||
   RadarFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected Radar response.',
+};
+
+String newAlbumRegionLabel(NewAlbumRegion region) => switch (region) {
+  NewAlbumRegion.mainlandChina => 'Mainland China',
+  NewAlbumRegion.hongKongTaiwan => 'Hong Kong / Taiwan',
+  NewAlbumRegion.western => 'Western',
+  NewAlbumRegion.korea => 'Korea',
+  NewAlbumRegion.japan => 'Japan',
+  NewAlbumRegion.other => 'Other',
+};
+
+String newAlbumFailureCopy(NewAlbumFailure? failure) => switch (failure) {
+  NewAlbumFailure.network => 'Check your connection and try again.',
+  NewAlbumFailure.serviceUnavailable =>
+    'QQ Music new albums are temporarily unavailable.',
+  NewAlbumFailure.cancelled => 'The new-album request was cancelled.',
+  NewAlbumFailure.coreUnavailable =>
+    'The local music core is unavailable. Restart the app and try again.',
+  NewAlbumFailure.invalidResponse ||
+  NewAlbumFailure.alreadyRunning ||
+  null => 'QQ Music returned an unexpected new-album response.',
 };
