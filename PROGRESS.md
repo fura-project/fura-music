@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "M3 direct Artist Search vertical slice"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -35,11 +35,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Artist albums are implemented and the next action is a bounded global product-completeness discovery pass; multi-type Search, ranking lists, and heterogeneous Home remain candidates requiring their own evidence and finite boundaries rather than automatic follow-up work.
+- M3 remains active. A bounded product-completeness audit selected direct Artist Search: the anonymous Desktop type-1 request returned exact first/terminal pages and every row carried the numeric ID, MID, and name already required by the existing Artist Tracks/Albums surface. Implementation is active; other result types remain separate future discoveries.
 
 # Next Candidates
 
-1. Run the next bounded M3 product-completeness discovery pass, rank at most three evidence-backed QQ-native candidates, and select one finite slice; adjacent multi-type Search, ranking, and heterogeneous Home work is not implicitly authorized without that ranking.
+1. Implement the selected direct Artist Search slice through Client, Domain/Provider, cancellable Bridge, and a bounded Tracks/Artists Flutter Search type control that preserves independent local state and reuses the existing Artist page.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -65,6 +65,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Artist-song behavior has two current independent implementation references, two bounded anonymous pagination probes, and offline end-to-end mapping/navigation coverage. The selected numeric-ID request honored the requested five-row page; no live product compatibility is claimed until the project implementation is separately exercised. The previously failing detail operation remains outside the songs-only slice.
 - Recommended-playlist behavior has two current independent implementation references, bounded anonymous exact-size/pagination probes, and offline client-to-presentation regression coverage. The nested playlist shape and raw-row offset behavior were observed without retaining content; live application compatibility is not yet claimed.
 - Artist-Album behavior has two current independent implementation references, bounded anonymous parameter/exact-size/pagination probes, and offline client-to-presentation regression coverage. Real service behavior selected `num` over the conflicting ignored `number` field; no Artist/Album content or identity was retained, and live application compatibility is not yet claimed.
+- Artist-search behavior has three current implementation/fixture references plus one bounded anonymous exact-size/terminal-page probe. The real response supplied the numeric ID, MID, and name required by existing Artist browsing without retaining query or result content; live application compatibility is not yet claimed.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
