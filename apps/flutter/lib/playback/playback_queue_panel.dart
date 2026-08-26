@@ -91,7 +91,13 @@ class PlaybackQueuePanel extends StatelessWidget {
                     if (tracks.isNotEmpty)
                       TextButton(
                         key: const ValueKey('queue-clear'),
-                        onPressed: () => unawaited(controller.clear()),
+                        onPressed: () => unawaited(
+                          _confirmAndClearQueue(
+                            context,
+                            controller,
+                            tracks.length,
+                          ),
+                        ),
                         child: const Text('Clear'),
                       ),
                     IconButton(
@@ -195,6 +201,39 @@ class PlaybackQueuePanel extends StatelessWidget {
       },
     );
   }
+}
+
+Future<void> _confirmAndClearQueue(
+  BuildContext context,
+  QueuePlaybackController controller,
+  int trackCount,
+) async {
+  final description = trackCount == 1
+      ? 'This will remove the queued track and stop playback.'
+      : 'This will remove all $trackCount tracks and stop playback.';
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => PlaybackShortcuts(
+      controller: controller,
+      child: AlertDialog(
+        title: const Text('Clear queue?'),
+        content: Text(description),
+        actions: [
+          TextButton(
+            key: const ValueKey('queue-clear-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('queue-clear-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (confirmed == true) await controller.clear();
 }
 
 class _QueueArtwork extends StatelessWidget {

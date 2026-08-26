@@ -919,6 +919,86 @@ void main() {
     expect(media.requests, hasLength(2));
   });
 
+  testWidgets('queue clear requires confirmation and keeps shortcuts active', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final queue = _WidgetQueueGateway();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('clear-confirmation')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      queue: queue,
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('queue-clear')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear queue?'), findsOneWidget);
+    expect(
+      find.text('This will remove all 2 tracks and stop playback.'),
+      findsOneWidget,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paused'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('queue-clear-cancel')));
+    await tester.pumpAndSettle();
+    expect(queue._snapshot.tracks, hasLength(2));
+    expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('queue-clear')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('queue-clear-confirm')));
+    await tester.pumpAndSettle();
+    expect(queue._snapshot.tracks, isEmpty);
+    expect(find.textContaining('The queue is empty'), findsOneWidget);
+    expect(find.byKey(const ValueKey('now-playing-title')), findsNothing);
+  });
+
+  testWidgets('failed confirmed clear retains the queue and reports failure', (
+    tester,
+  ) async {
+    final queue = _WidgetQueueGateway()
+      ..nextClearResult = const PlaybackQueueResult(
+        failure: PlaybackQueueFailure.coreUnavailable,
+      );
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('failed-clear')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      queue: queue,
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('queue-clear')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('queue-clear-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(queue._snapshot.tracks, hasLength(2));
+    expect(
+      find.text('The music core could not update the queue.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
+  });
+
   testWidgets('opens synchronized lyrics as a narrow bottom sheet', (
     tester,
   ) async {
@@ -1097,6 +1177,7 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
   int? replacedIndex;
   PlaybackQueueResult? nextPushResult;
   PlaybackQueueResult? nextRemoveResult;
+  PlaybackQueueResult? nextClearResult;
 
   @override
   PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
@@ -1149,6 +1230,9 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult clear() {
+    final override = nextClearResult;
+    nextClearResult = null;
+    if (override != null) return override;
     final changed = _snapshot.current != null;
     _snapshot = PlaybackQueueSnapshot.empty();
     return PlaybackQueueResult(snapshot: _snapshot, currentChanged: changed);
