@@ -33,3 +33,7 @@ Reference implementations remain research evidence only. Runtime requests go dir
 ## Selection
 
 Favorite Artists ranks first because the current upstream operation and its authenticated model are now concrete, while the previously blocking route identity can be satisfied by the repository's already-proven MID-only Artist request. The slice adds a high-value QQ-native account collection without guessing entitlement, expanding Providers, or accessing the user's account during development.
+
+## Outcome
+
+Implemented on 2026-08-27 as the twentieth finite M3 slice. The direct client validates the evidenced request and strict page shape; Provider and Bridge preserve exact credential generation, cancellation, coarse failure, and redacted-diagnostic boundaries; MID-only Artist identities reuse the existing Track/Album route; and Flutter retains the adaptive collection through nested Artist/Album navigation. Synthetic offline tests cover request mapping, malformed/rejected/upstream responses, account replacement, Bridge lifecycle, Dart mapping/vault cleanup, pagination/deduplication/stale suppression, compact pointer use, desktop keyboard use, semantics, and exact return. No stored credential or live account collection was accessed, so real-account favorite-Artist compatibility remains unclaimed.

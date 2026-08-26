@@ -7,19 +7,19 @@ use std::sync::{Arc, Mutex};
 use music_domain::{
     AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage,
     ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat, AudioQuality,
-    FavoriteAlbumsPage, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory,
-    NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
-    ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
-    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
-    TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    FavoriteAlbumsPage, FavoriteArtistsPage, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage,
+    NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
+    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
+    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
+    SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
     ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError,
-    FavoriteAlbumsProvider, LyricsError, LyricsProvider, MediaResolutionError,
-    MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider, NewSongsProvider,
-    OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider, ProviderCapability,
-    ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
+    FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError, LyricsProvider,
+    MediaResolutionError, MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider,
+    NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
+    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
     QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
     RadarRecommendationsProvider, RankingsProvider, RecommendationError,
     RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
@@ -29,15 +29,16 @@ use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
     HttpTransport, QqMusicAlbumDetailsError, QqMusicAlbumSearchError, QqMusicAlbumSummary,
     QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
-    QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError, QqMusicFavoritePlaylist,
-    QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError,
-    QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError,
-    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError,
-    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicRadarError,
-    QqMusicRankingSummary, QqMusicRankingsError, QqMusicRecommendedPlaylist,
-    QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackSummary, QrImageMediaType,
-    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError,
+    QqMusicFavoriteArtistsError, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
+    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicNewAlbumArea,
+    QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOwnedPlaylist,
+    QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError, QqMusicPlaylistSearchError,
+    QqMusicPlaylistSearchSummary, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+    QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -611,10 +612,18 @@ where
         size: u32,
     ) -> Result<ArtistTracksPage, Self::Error> {
         let (numeric_id, artist_mid) = parse_artist_identity(&requested_id)?;
-        let response = self
-            .client()
-            .artist_tracks(numeric_id, artist_mid, offset, size)
-            .await;
+        let response = match numeric_id {
+            Some(numeric_id) => {
+                self.client()
+                    .artist_tracks(numeric_id, artist_mid, offset, size)
+                    .await
+            }
+            None => {
+                self.client()
+                    .artist_tracks_by_mid(artist_mid, offset, size)
+                    .await
+            }
+        };
         let page = response.as_ref().map_err(map_artist_tracks_error)?;
         let tracks = page
             .tracks()
@@ -957,6 +966,42 @@ where
             page.total(),
             page.has_more(),
             albums,
+        ))
+    }
+}
+
+impl<T> FavoriteArtistsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = UserLibraryError;
+
+    async fn favorite_artists(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> Result<FavoriteArtistsPage, Self::Error> {
+        let candidate = self.authenticated_credential()?;
+        let response = self
+            .client()
+            .favorite_artists(&candidate, offset, size)
+            .await;
+        self.finish_library_await(
+            &candidate,
+            matches!(response, Err(QqMusicFavoriteArtistsError::Rejected { .. })),
+        )?;
+        let page = response.as_ref().map_err(map_favorite_artists_error)?;
+        let artists = page
+            .artists()
+            .iter()
+            .map(map_favorite_artist_summary)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| UserLibraryError::InvalidResponse)?;
+        Ok(FavoriteArtistsPage::new(
+            page.offset(),
+            page.total(),
+            page.has_more(),
+            artists,
         ))
     }
 }
@@ -1443,7 +1488,7 @@ fn parse_album_mid(requested_id: &AlbumId) -> Result<&str, CatalogError> {
         .ok_or(CatalogError::InvalidResponse)
 }
 
-fn parse_artist_identity(requested_id: &ArtistId) -> Result<(u64, &str), CatalogError> {
+fn parse_artist_identity(requested_id: &ArtistId) -> Result<(Option<u64>, &str), CatalogError> {
     if requested_id.provider() != &qq_music_provider_id() {
         return Err(CatalogError::InvalidResponse);
     }
@@ -1453,10 +1498,17 @@ fn parse_artist_identity(requested_id: &ArtistId) -> Result<(u64, &str), Catalog
     if prefix != Some("artist") || extra.is_some() {
         return Err(CatalogError::InvalidResponse);
     }
-    let numeric_id = numeric_id
-        .and_then(|value| value.parse::<u64>().ok())
-        .filter(|value| *value != 0)
-        .ok_or(CatalogError::InvalidResponse)?;
+    let numeric_id = match numeric_id {
+        Some("-") => None,
+        Some(value) => Some(
+            value
+                .parse::<u64>()
+                .ok()
+                .filter(|value| *value != 0)
+                .ok_or(CatalogError::InvalidResponse)?,
+        ),
+        None => return Err(CatalogError::InvalidResponse),
+    };
     let artist_mid = artist_mid
         .filter(|value| is_safe_track_mid(value))
         .ok_or(CatalogError::InvalidResponse)?;
@@ -1493,6 +1545,20 @@ fn map_artist_summary(artist: &qqmusic_client::QqMusicArtistSummary) -> Result<A
         .ok_or(())?;
     let id = ArtistId::new(qq_music_provider_id(), format!("artist:{numeric_id}:{mid}"))
         .map_err(|_| ())?;
+    ArtistSummary::new(id, artist.name()).map_err(|_| ())
+}
+
+fn map_favorite_artist_summary(
+    artist: &qqmusic_client::QqMusicArtistSummary,
+) -> Result<ArtistSummary, ()> {
+    if artist.artist_id().is_some() {
+        return Err(());
+    }
+    let mid = artist
+        .media_mid()
+        .filter(|value| is_safe_track_mid(value))
+        .ok_or(())?;
+    let id = ArtistId::new(qq_music_provider_id(), format!("artist:-:{mid}")).map_err(|_| ())?;
     ArtistSummary::new(id, artist.name()).map_err(|_| ())
 }
 
@@ -1714,6 +1780,29 @@ fn map_favorite_albums_error<E>(error: &QqMusicFavoriteAlbumsError<E>) -> UserLi
         | QqMusicFavoriteAlbumsError::InvalidHasMore
         | QqMusicFavoriteAlbumsError::InvalidPagination
         | QqMusicFavoriteAlbumsError::InvalidAlbum { .. } => UserLibraryError::InvalidResponse,
+    }
+}
+
+fn map_favorite_artists_error<E>(error: &QqMusicFavoriteArtistsError<E>) -> UserLibraryError {
+    match error {
+        QqMusicFavoriteArtistsError::Rejected { .. } => UserLibraryError::CredentialRejected,
+        QqMusicFavoriteArtistsError::Transport(_) => UserLibraryError::Network,
+        QqMusicFavoriteArtistsError::HttpStatus(_)
+        | QqMusicFavoriteArtistsError::Upstream { .. } => UserLibraryError::ServiceUnavailable,
+        QqMusicFavoriteArtistsError::MissingEncryptedUin
+        | QqMusicFavoriteArtistsError::InvalidPageSize { .. }
+        | QqMusicFavoriteArtistsError::Serialize
+        | QqMusicFavoriteArtistsError::InvalidJson
+        | QqMusicFavoriteArtistsError::MissingGlobalCode
+        | QqMusicFavoriteArtistsError::MissingResult
+        | QqMusicFavoriteArtistsError::MissingResultCode
+        | QqMusicFavoriteArtistsError::MissingData
+        | QqMusicFavoriteArtistsError::MissingArtists
+        | QqMusicFavoriteArtistsError::MissingTotal
+        | QqMusicFavoriteArtistsError::MissingHasMore
+        | QqMusicFavoriteArtistsError::InvalidHasMore
+        | QqMusicFavoriteArtistsError::InvalidPagination
+        | QqMusicFavoriteArtistsError::InvalidArtist { .. } => UserLibraryError::InvalidResponse,
     }
 }
 
@@ -2186,20 +2275,22 @@ mod tests {
     use provider_api::{
         AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
         ArtistSearchProvider, ArtistTracksProvider, CatalogError, FavoriteAlbumsProvider,
-        LyricsError, LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
-        NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
-        PlaylistDetailsProvider, PlaylistSearchProvider, ProviderCapability,
-        QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-        RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider,
-        RecommendationError, RecommendedPlaylistsProvider, SearchError, TrackSearchProvider,
-        UserLibraryError, UserPlaylistsProvider,
+        FavoriteArtistsProvider, LyricsError, LyricsProvider, MediaResolutionError,
+        MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider, NewSongsProvider,
+        OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
+        ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
+        QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
+        RadarRecommendationsProvider, RankingsProvider, RecommendationError,
+        RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
+        UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
         HttpResponse, HttpTransport, LoginType, QqMusicAlbumDetailsError, QqMusicAlbumSearchError,
         QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
-        QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError, QqMusicNewAlbumsError,
-        QqMusicNewSongsError, QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
+        QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError,
+        QqMusicFavoriteArtistsError, QqMusicNewAlbumsError, QqMusicNewSongsError,
+        QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
         QqMusicRecommendedPlaylistsError, QqMusicSearchError,
     };
     use serde_json::{Value, json};
@@ -2506,6 +2597,12 @@ mod tests {
     }
 
     #[derive(Clone)]
+    struct GatedFavoriteArtistsTransport {
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
+    #[derive(Clone)]
     struct GatedPlaylistDetailTransport {
         request_started: Arc<Notify>,
         release_request: Arc<Notify>,
@@ -2574,6 +2671,27 @@ mod tests {
                         "albumid": 43001,
                         "albummid": "fixtureAlbumMid",
                         "albumname": "Late favorite Album"
+                    }]),
+                    1,
+                    false,
+                ))
+                .expect("fixture JSON"),
+            ))
+        }
+    }
+
+    impl HttpTransport for GatedFavoriteArtistsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.request_started.notify_one();
+            self.release_request.notified().await;
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&favorite_artist_page_json(
+                    &json!([{
+                        "MID": "fixtureArtistMid",
+                        "Name": "Late favorite Artist"
                     }]),
                     1,
                     false,
@@ -3159,6 +3277,17 @@ mod tests {
         );
         assert!(!provider.has_authenticated_credential());
 
+        let mid_only_artist_id = ArtistId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "artist:-:fixtureArtistMid",
+        )
+        .expect("MID-only Artist ID");
+        let mid_only_page = provider
+            .artist_tracks(mid_only_artist_id, 0, 30)
+            .await
+            .expect("MID-only Artist Tracks");
+        assert_eq!(mid_only_page.tracks().len(), 1);
+
         let foreign = ArtistId::new(
             ProviderId::new("local").expect("provider"),
             "artist:42001:fixtureArtistMid",
@@ -3214,6 +3343,21 @@ mod tests {
         let debug = format!("{page:?} {:?}", page.albums()[0]);
         assert!(!debug.contains("Synthetic album"));
         assert!(!debug.contains("fixtureAlbumMid"));
+
+        let mid_only_artist_id = ArtistId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "artist:-:fixtureArtistMid",
+        )
+        .expect("MID-only Artist ID");
+        assert_eq!(
+            provider
+                .artist_albums(mid_only_artist_id, 0, 30)
+                .await
+                .expect("MID-only Artist Albums")
+                .albums()
+                .len(),
+            1
+        );
 
         let foreign = ArtistId::new(
             ProviderId::new("local").expect("provider"),
@@ -3709,6 +3853,20 @@ mod tests {
         })
     }
 
+    fn favorite_artist_page_json(artists: &Value, total: u32, has_more: bool) -> Value {
+        json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {
+                    "Total": total,
+                    "List": artists,
+                    "HasMore": has_more
+                }
+            }
+        })
+    }
+
     fn playlist_track_fixture() -> Value {
         json!([{
             "id": 41001,
@@ -4111,6 +4269,91 @@ mod tests {
         set_authenticated(&provider, "123456");
 
         let request = provider.favorite_albums(0, 20);
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(UserLibraryError::Replaced));
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn favorite_artists_map_mid_only_domain_and_clear_only_rejection() {
+        let signed_out = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &favorite_artist_page_json(&json!([]), 0, false),
+        )));
+        assert_eq!(
+            signed_out.favorite_artists(0, 20).await,
+            Err(UserLibraryError::AuthenticationRequired)
+        );
+
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &favorite_artist_page_json(
+                &json!([{"MID": "fixtureArtistMid", "Name": "Synthetic favorite Artist"}]),
+                21,
+                false,
+            ),
+        )));
+        set_authenticated(&provider, "123456");
+        let page = provider
+            .favorite_artists(20, 20)
+            .await
+            .expect("favorite Artists");
+        assert_eq!(page.offset(), 20);
+        assert_eq!(page.total(), 21);
+        assert!(!page.has_more());
+        assert_eq!(page.artists().len(), 1);
+        assert_eq!(page.artists()[0].id().opaque(), "artist:-:fixtureArtistMid");
+        assert_eq!(page.artists()[0].name(), "Synthetic favorite Artist");
+        assert!(provider.has_authenticated_credential());
+        let debug = format!("{page:?} {:?}", page.artists()[0]);
+        assert!(!debug.contains("Synthetic favorite Artist"));
+        assert!(!debug.contains("fixtureArtistMid"));
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "req_0": {"code": 104_401}
+        }))));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.favorite_artists(0, 20).await,
+            Err(UserLibraryError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "req_0": {"code": 50006}
+        }))));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream.favorite_artists(0, 20).await,
+            Err(UserLibraryError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+
+        assert_eq!(
+            super::map_favorite_artists_error(
+                &QqMusicFavoriteArtistsError::<Infallible>::InvalidPagination
+            ),
+            UserLibraryError::InvalidResponse
+        );
+    }
+
+    #[tokio::test]
+    async fn late_favorite_artist_page_cannot_cross_account_replacement() {
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedFavoriteArtistsTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&provider, "123456");
+
+        let request = provider.favorite_artists(0, 20);
         let replacement = async {
             request_started.notified().await;
             set_authenticated(&provider, "654321");

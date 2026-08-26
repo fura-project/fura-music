@@ -3,6 +3,7 @@ pub mod artist;
 pub mod authentication;
 pub mod bootstrap;
 pub mod favorite_albums;
+pub mod favorite_artists;
 pub mod library;
 pub mod lyrics;
 pub mod media;

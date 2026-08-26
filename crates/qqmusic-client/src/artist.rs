@@ -234,6 +234,44 @@ where
         }
         let body = serde_json::to_vec(&ArtistTracksRequest::new(artist_id, offset, size))
             .map_err(|_| QqMusicArtistTracksError::Serialize)?;
+        self.execute_artist_tracks(body, expected_mid, offset, size)
+            .await
+    }
+
+    /// Loads one public Artist Track page using only the validated Artist MID.
+    ///
+    /// This is the independently evidenced QQ route used when an account
+    /// collection does not expose the optional numeric Artist identity.
+    ///
+    /// # Errors
+    ///
+    /// Preserves the same validation and response mapping as
+    /// [`Self::artist_tracks`] without inventing a numeric identity.
+    pub async fn artist_tracks_by_mid(
+        &self,
+        expected_mid: &str,
+        offset: u32,
+        size: u32,
+    ) -> Result<QqMusicArtistTrackPage, QqMusicArtistTracksError<T::Error>> {
+        if !safe_mid(expected_mid) {
+            return Err(QqMusicArtistTracksError::InvalidArtistMid);
+        }
+        if !(1..=MAX_PAGE_SIZE).contains(&size) {
+            return Err(QqMusicArtistTracksError::InvalidPageSize { size });
+        }
+        let body = serde_json::to_vec(&MidArtistTracksRequest::new(expected_mid, offset, size))
+            .map_err(|_| QqMusicArtistTracksError::Serialize)?;
+        self.execute_artist_tracks(body, expected_mid, offset, size)
+            .await
+    }
+
+    async fn execute_artist_tracks(
+        &self,
+        body: Vec<u8>,
+        expected_mid: &str,
+        offset: u32,
+        size: u32,
+    ) -> Result<QqMusicArtistTrackPage, QqMusicArtistTracksError<T::Error>> {
         let response = self
             .transport()
             .execute(
@@ -330,6 +368,60 @@ struct ArtistTracksParam {
     order: u8,
     #[serde(rename = "newsong")]
     new_song: u8,
+}
+
+#[derive(Serialize)]
+struct MidArtistTracksRequest<'a> {
+    comm: ArtistComm,
+    #[serde(rename = "artistSongs")]
+    artist_songs: MidArtistTracksRpc<'a>,
+}
+
+impl<'a> MidArtistTracksRequest<'a> {
+    const fn new(artist_mid: &'a str, offset: u32, size: u32) -> Self {
+        Self {
+            comm: ArtistComm {
+                client_type: 20,
+                client_version: 1770,
+                token: 5381,
+                uin: "0",
+                format: "json",
+                input_charset: "utf-8",
+                output_charset: "utf-8",
+                platform: "wk_v17",
+                uid: "",
+                guid: "",
+            },
+            artist_songs: MidArtistTracksRpc {
+                module: "musichall.song_list_server",
+                method: "GetSingerSongList",
+                param: MidArtistTracksParam {
+                    artist_mid,
+                    offset,
+                    size,
+                    order: 1,
+                },
+            },
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct MidArtistTracksRpc<'a> {
+    module: &'static str,
+    method: &'static str,
+    param: MidArtistTracksParam<'a>,
+}
+
+#[derive(Serialize)]
+struct MidArtistTracksParam<'a> {
+    #[serde(rename = "singerMid")]
+    artist_mid: &'a str,
+    #[serde(rename = "begin")]
+    offset: u32,
+    #[serde(rename = "number")]
+    size: u32,
+    order: u8,
 }
 
 #[derive(Deserialize)]
@@ -638,6 +730,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn serializes_evidenced_mid_only_artist_page_without_fabricating_id() {
+        let client = QqMusicClient::new(ArtistTransport::new(&artist_page_json(
+            "fixtureArtistMid",
+            1,
+            &synthetic_tracks(),
+        )));
+        let page = client
+            .artist_tracks_by_mid("fixtureArtistMid", 0, 20)
+            .await
+            .expect("MID-only Artist page");
+
+        assert_eq!(page.tracks().len(), 1);
+        let requests = client.transport().requests();
+        assert_eq!(requests.len(), 1);
+        let body: Value = serde_json::from_slice(requests[0].body_bytes().expect("request body"))
+            .expect("request JSON");
+        assert_eq!(body["artistSongs"]["module"], "musichall.song_list_server");
+        assert_eq!(body["artistSongs"]["method"], "GetSingerSongList");
+        assert_eq!(
+            body["artistSongs"]["param"]["singerMid"],
+            "fixtureArtistMid"
+        );
+        assert_eq!(body["artistSongs"]["param"]["begin"], 0);
+        assert_eq!(body["artistSongs"]["param"]["number"], 20);
+        assert!(body["artistSongs"]["param"].get("singerid").is_none());
+    }
+
+    #[tokio::test]
     async fn rejects_invalid_input_and_pagination_without_transport_or_content_leak() {
         let client = QqMusicClient::new(ArtistTransport::new(&artist_page_json(
             "fixtureArtistMid",
@@ -655,6 +775,10 @@ mod tests {
         assert!(matches!(
             client.artist_tracks(42001, "safeMid", 0, 31).await,
             Err(QqMusicArtistTracksError::InvalidPageSize { size: 31 })
+        ));
+        assert!(matches!(
+            client.artist_tracks_by_mid("unsafe/mid", 0, 5).await,
+            Err(QqMusicArtistTracksError::InvalidArtistMid)
         ));
         assert!(client.transport().requests().is_empty());
 

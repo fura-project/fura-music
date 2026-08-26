@@ -1157,6 +1157,60 @@ pub struct FavoriteAlbumsPage {
     albums: Vec<AlbumSummary>,
 }
 
+/// One bounded page of Artists followed by the current account. The owning
+/// Provider keeps account identity and source-specific continuation private.
+#[derive(Clone, Eq, PartialEq)]
+pub struct FavoriteArtistsPage {
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    artists: Vec<ArtistSummary>,
+}
+
+impl FavoriteArtistsPage {
+    #[must_use]
+    pub const fn new(offset: u32, total: u32, has_more: bool, artists: Vec<ArtistSummary>) -> Self {
+        Self {
+            offset,
+            total,
+            has_more,
+            artists,
+        }
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn artists(&self) -> &[ArtistSummary] {
+        &self.artists
+    }
+}
+
+impl fmt::Debug for FavoriteArtistsPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FavoriteArtistsPage")
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("artist_count", &self.artists.len())
+            .finish()
+    }
+}
+
 impl FavoriteAlbumsPage {
     #[must_use]
     pub const fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {

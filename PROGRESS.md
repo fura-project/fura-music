@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Authenticated favorite Artists"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: GLOBAL_RANKING
 ---
 
 # Current Milestone
@@ -44,16 +44,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the seventeenth M3 slice: direct anonymous QQ new-song loading maps six exact service categories and one bounded whole-response Track collection through the shared provider-neutral Track boundary and a cancellable Bridge. Flutter keeps New Songs as a lazy fifth Discover state, replaces categories exactly, owns loading/empty/error/retry/cancel/stale/disposal behavior, keeps the category control reachable at 360px, and delegates play/add actions to the existing queue without inventing pagination. Heterogeneous Home/editorial shelves, personalization or quality claims, radio/autoplay, caching, new queue rules, and generic recommendation infrastructure remain excluded.
 - Implemented the eighteenth M3 slice: every existing now-playing bar can open the current queue Track's already-validated Album or credited Artists through one presentation-only callback scope and one topmost retained overlay. Single destinations open directly; collaborations use an adaptive chooser; platform/AppBar return restores the exact prior page and nested Artist → Album state without reloading its controller or replacing queue ownership. Context-free Tracks remain non-actionable, compact entry is 48 px, desktop Tab/Enter and compact pointer/touch paths have regressions, and a Track change while the chooser is open suppresses the stale destination. Recursive history, protocol/Domain/Bridge/queue changes, per-row expansion, and generic navigation infrastructure remain excluded.
 - Implemented the nineteenth M3 slice: every existing now-playing bar exposes one precise pointer/touch/keyboard entry to a retained immersive page when a current Track exists. Wide layout pairs large artwork with the existing synchronized lyric panel; 360 px layout stacks them; the existing bar remains the only transport/progress/queue/volume implementation. Track replacement updates in place, queue clearing shows an honest empty state, the expanded bar cannot recursively reopen itself, and AppBar/platform return restores the exact originating page and controller state. Palette extraction, gestures, background playback, mini-player/audio/queue rewrites, protocol/Domain/Bridge changes, and generic navigation infrastructure remain excluded.
-- Revalidated the resulting baseline: Rust formatting, 258 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 278 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
+- Implemented the twentieth M3 slice: direct credential-bearing favorite-Artist pages call the evidenced `music.concern.RelationList/GetFollowSingerList` operation with exact encrypted identity/offset/size, strict code/row/page bounds, redacted diagnostics, and Provider credential candidate/rejection/replacement rules. Rows become honest MID-only Artist identities; the existing Artist Track client now routes those identities through the already-evidenced MID request instead of fabricating a numeric ID. The cancellable Bridge and adaptive Flutter collection preserve raw-row pagination, stale/disposal cancellation, shared-vault rejection cleanup, compact pointer and desktop keyboard access, and retained collection → Artist → Album/queue return. Follow mutation, biography/social data, cache/automatic refresh, account probing, Track availability/quality, and generic library/navigation infrastructure remain excluded.
+- Revalidated the resulting baseline: Rust formatting, 267 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 287 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Artist/new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. A fresh Core/Provider-first ranking found current authenticated favorite-Artist request/model evidence and connected it to the repository's already-proven MID-only Artist route; the finite task is one paged favorite-Artist collection into the existing Artist Tracks/Albums/queue path. Track availability remains evidence-blocked.
+- M3 remains active. The authenticated favorite-Artist slice is complete locally; the next action is a fresh whole-project ranking from Roadmap, current evidence, risks, and blockers. Track availability remains evidence-blocked.
 
 # Next Candidates
 
-1. Implement the bounded authenticated favorite-Artist collection selected in `docs/research/m3-favorite-artists-discovery.md`, without mutation, social metadata, stored-account probing, or a generic library/navigation framework.
+1. Re-rank the remaining M3 directions from current protocol/product evidence before selecting another finite slice; do not turn Track availability into implementation without sanitized entitlement/quality evidence.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 

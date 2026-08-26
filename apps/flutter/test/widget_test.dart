@@ -32,6 +32,7 @@ import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
+import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
@@ -712,6 +713,148 @@ void main() {
       expect(find.text('Saved Album'), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
 
+      await tester.tap(find.byTooltip('Back to playlists'));
+      await tester.pumpAndSettle();
+      expect(find.text('No playlists yet'), findsOneWidget);
+      expect(tester.widget<IconButton>(entry).focusNode?.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'opens favorite Artists through compact pointer and desktop keyboard routes',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const artist = ArtistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'artist:-:fixtureFavoriteArtistMid',
+        name: 'Saved Artist',
+      );
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:fixtureArtistAlbumMid',
+        title: 'Saved Artist Album',
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureArtistTrackMid:-',
+        title: 'Saved Artist Track',
+        artistNames: ['Saved Artist'],
+      );
+      final favorites = _WidgetFavoriteArtistGateway(
+        const FavoriteArtistPageResult(total: 1, artists: [artist]),
+      );
+      final artistTracks = _WidgetArtistGateway(
+        const ArtistTrackPageResult(total: 1, tracks: [track]),
+      );
+      final artistAlbums = _WidgetArtistAlbumGateway(
+        const ArtistAlbumPageResult(total: 1, albums: [album]),
+      );
+      final albumTracks = _WidgetAlbumGateway(
+        const AlbumTrackPageResult(total: 1, tracks: [track]),
+      );
+      final entry = find.byKey(const ValueKey('open-favorite-artists'));
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          favoriteArtistGateway: favorites,
+          artistTrackGateway: artistTracks,
+          artistAlbumGateway: artistAlbums,
+          albumTrackGateway: albumTracks,
+          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
+          playbackQueueGateway: _WidgetPlaybackQueueGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(favorites.requests, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('favorite-artists-content')),
+        findsOneWidget,
+      );
+      expect(find.byType(GridView), findsNothing);
+      expect(favorites.requests, [(0, 20)]);
+
+      final artistAction = find.byKey(const ValueKey('favorite-artist-0'));
+      expect(
+        tester
+            .getSemantics(artistAction)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      await tester.tap(artistAction);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
+      expect(artistTracks.requests, [(artist, 0, 30)]);
+
+      await tester.tap(find.byTooltip('Back to favorite artists'));
+      await tester.pumpAndSettle();
+      expect(find.text('Saved Artist'), findsOneWidget);
+      expect(favorites.requests, [(0, 20)]);
+
+      tester.view.physicalSize = const Size(1000, 700);
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsOneWidget);
+      FocusManager.instance.primaryFocus?.unfocus();
+      var artistFocused = false;
+      for (var attempt = 0; attempt < 24; attempt += 1) {
+        final focusedContext = FocusManager.instance.primaryFocus?.context;
+        if (focusedContext != null &&
+            find
+                .ancestor(
+                  of: find.byElementPredicate(
+                    (element) => identical(element, focusedContext),
+                  ),
+                  matching: artistAction,
+                )
+                .evaluate()
+                .isNotEmpty) {
+          artistFocused = true;
+          break;
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(artistFocused, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
+      expect(artistTracks.requests, [(artist, 0, 30), (artist, 0, 30)]);
+
+      await tester.tap(find.text('Albums'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('artist-albums-content')),
+        findsOneWidget,
+      );
+      expect(artistAlbums.requests, [(artist, 0, 30)]);
+      await tester.tap(find.byKey(const ValueKey('artist-album-0')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+      expect(albumTracks.requests.single.$1, album);
+
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('artist-albums-content')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('Back to favorite artists'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Back to playlists'));
       await tester.pumpAndSettle();
       expect(find.text('No playlists yet'), findsOneWidget);
@@ -3366,6 +3509,35 @@ class _WidgetFavoriteAlbumOperation implements FavoriteAlbumPageLoadOperation {
 
   @override
   Future<FavoriteAlbumPageResult> run() async => result;
+}
+
+class _WidgetFavoriteArtistGateway implements FavoriteArtistGateway {
+  _WidgetFavoriteArtistGateway(this.result);
+
+  final FavoriteArtistPageResult result;
+  final List<(int, int)> requests = [];
+
+  @override
+  FavoriteArtistPageLoadOperation beginLoad({
+    required int offset,
+    required int size,
+  }) {
+    requests.add((offset, size));
+    return _WidgetFavoriteArtistOperation(result);
+  }
+}
+
+class _WidgetFavoriteArtistOperation
+    implements FavoriteArtistPageLoadOperation {
+  const _WidgetFavoriteArtistOperation(this.result);
+
+  final FavoriteArtistPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<FavoriteArtistPageResult> run() async => result;
 }
 
 class _WidgetRadarGateway implements RadarGateway {
