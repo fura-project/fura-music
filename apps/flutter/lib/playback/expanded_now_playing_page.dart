@@ -35,7 +35,7 @@ class ExpandedNowPlayingPage extends StatelessWidget {
       onBack: onBack,
       onSignInAgain: onSignInAgain,
     ),
-    bottomNavigationBar: NowPlayingBar(
+    bottomNavigationBar: NowPlayingBar.expanded(
       controller: controller,
       onSignInAgain: onSignInAgain,
     ),

@@ -47,3 +47,9 @@ The adaptive Queue information-hierarchy slice completed and `PROGRESS.md` retur
 ## Selection
 
 Expanded Now Playing control hierarchy is the highest-value bounded task. It removes a concrete duplicated information hierarchy on a high-frequency surface while retaining the exact playback owner, action callbacks, shortcuts, and Rust positional Queue boundary.
+
+## Outcome
+
+Completed on 2026-08-27. Expanded Now Playing uses a named presentation of the existing `NowPlayingBar`: the hero is now the only Track artwork/title/Artist/Album hierarchy, and the dedicated bottom surface retains status, progress, previous/primary/next/stop, authentication recovery, volume, and Queue actions without exposing the redundant modal Lyrics entry. The primary action uses the official filled Material variant at 56 px; compact and wide layouts keep their exact action keys and callbacks over the same controller.
+
+The two existing compact/wide end-to-end regressions now assert the single identity hierarchy, dedicated controls, prominent primary action, utility reachability, no recursive expansion, clear-to-empty behavior, retained Search return, keyboard transport, and no layout exception. Strict Dart formatting and analysis, all 308 Flutter tests, 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain gated and ignored, so this outcome does not close the user-operated M1 real-account playback, queue, or lyric observation.

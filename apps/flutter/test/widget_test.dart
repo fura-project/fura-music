@@ -2054,13 +2054,37 @@ void main() {
         find.byKey(const ValueKey('expanded-now-playing-compact-layout')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-controls')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-compact-controls')),
+        findsOneWidget,
+      );
       expect(find.text('Expanded First'), findsWidgets);
       expect(find.text('First Album'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-artwork')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('now-playing-artwork')), findsNothing);
+      expect(find.byKey(const ValueKey('now-playing-title')), findsNothing);
       expect(find.byTooltip('Close lyrics'), findsNothing);
+      expect(find.byTooltip('Show lyrics'), findsNothing);
+      expect(find.byTooltip('Volume'), findsOneWidget);
+      expect(find.byTooltip('Show queue'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('now-playing-open-expanded')),
         findsNothing,
       );
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('now-playing-primary-action')),
+        ),
+        const Size(56, 56),
+      );
+      expect(tester.takeException(), isNull);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
@@ -2192,15 +2216,35 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.byKey(const ValueKey('expanded-now-playing-controls')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-wide-controls')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const ValueKey('expanded-now-playing-artwork')),
         findsOneWidget,
       );
       expect(find.text('Expanded Desktop Track'), findsWidgets);
       expect(find.text('Desktop Album'), findsOneWidget);
+      expect(find.byKey(const ValueKey('now-playing-artwork')), findsNothing);
+      expect(find.byKey(const ValueKey('now-playing-title')), findsNothing);
+      expect(find.byTooltip('Show lyrics'), findsNothing);
+      expect(find.byTooltip('Volume'), findsOneWidget);
+      expect(find.byTooltip('Show queue'), findsOneWidget);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('now-playing-primary-action')),
+        ),
+        const Size(56, 56),
+      );
       expect(
         find.byKey(const ValueKey('now-playing-open-expanded')),
         findsNothing,
       );
+      expect(tester.takeException(), isNull);
 
       await tester.tap(find.byKey(const ValueKey('expanded-now-playing-back')));
       await tester.pumpAndSettle();

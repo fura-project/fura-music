@@ -41,10 +41,17 @@ class NowPlayingBar extends StatelessWidget {
     required this.controller,
     required this.onSignInAgain,
     super.key,
-  });
+  }) : _expanded = false;
+
+  const NowPlayingBar.expanded({
+    required this.controller,
+    required this.onSignInAgain,
+    super.key,
+  }) : _expanded = true;
 
   final QueuePlaybackController controller;
   final VoidCallback onSignInAgain;
+  final bool _expanded;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +60,16 @@ class NowPlayingBar extends StatelessWidget {
       builder: (context, _) {
         final track = controller.current;
         if (track == null) return const SizedBox.shrink();
+        final playback = controller.playback;
+        final authenticationFailure = playback.requiresAuthentication;
+        if (_expanded) {
+          return _ExpandedPlaybackControls(
+            controller: controller,
+            track: track,
+            authenticationFailure: authenticationFailure,
+            onSignInAgain: onSignInAgain,
+          );
+        }
         final catalogNavigation = NowPlayingCatalogNavigation.maybeOf(context);
         final expandedNavigation = ExpandedNowPlayingNavigation.maybeOf(
           context,
@@ -73,8 +90,6 @@ class NowPlayingBar extends StatelessWidget {
                 catalogActions,
               );
 
-        final playback = controller.playback;
-        final authenticationFailure = playback.requiresAuthentication;
         final error =
             controller.failure != null ||
             playback.stage == TrackPlaybackStage.resolutionError ||
@@ -129,6 +144,7 @@ class NowPlayingBar extends StatelessWidget {
                               children: _transportControls(
                                 controller,
                                 authenticationFailure,
+                                onSignInAgain,
                               ),
                             ),
                           ],
@@ -156,6 +172,7 @@ class NowPlayingBar extends StatelessWidget {
                             ..._transportControls(
                               controller,
                               authenticationFailure,
+                              onSignInAgain,
                             ),
                             if (controller.lyrics != null)
                               _LyricsButton(
@@ -176,53 +193,6 @@ class NowPlayingBar extends StatelessWidget {
         );
       },
     );
-  }
-
-  List<Widget> _transportControls(
-    QueuePlaybackController controller,
-    bool authenticationFailure,
-  ) {
-    final playback = controller.playback;
-    return [
-      IconButton(
-        key: const ValueKey('now-playing-previous'),
-        tooltip: 'Previous',
-        onPressed: !authenticationFailure && controller.hasPrevious
-            ? () => unawaited(controller.rewind())
-            : null,
-        icon: const Icon(Icons.skip_previous_rounded),
-      ),
-      if (authenticationFailure)
-        TextButton(
-          key: const ValueKey('now-playing-sign-in-again'),
-          onPressed: onSignInAgain,
-          child: const Text('Sign in again'),
-        )
-      else
-        IconButton(
-          key: const ValueKey('now-playing-primary-action'),
-          tooltip: _primaryTooltip(playback.stage),
-          onPressed: playback.canActivate
-              ? () => unawaited(playback.activate())
-              : null,
-          icon: Icon(_primaryIcon(playback.stage)),
-        ),
-      IconButton(
-        key: const ValueKey('now-playing-next'),
-        tooltip: 'Next',
-        onPressed: !authenticationFailure && controller.hasNext
-            ? () => unawaited(controller.advance())
-            : null,
-        icon: const Icon(Icons.skip_next_rounded),
-      ),
-      if (_canStop(playback.stage))
-        IconButton(
-          key: const ValueKey('now-playing-stop'),
-          tooltip: 'Stop',
-          onPressed: () => unawaited(playback.stop()),
-          icon: const Icon(Icons.stop_rounded),
-        ),
-    ];
   }
 
   Future<void> _openCatalog(
@@ -299,6 +269,172 @@ class NowPlayingBar extends StatelessWidget {
           action.artist?.opaqueId == expectedAction.artist?.opaqueId,
     );
   }
+}
+
+class _ExpandedPlaybackControls extends StatelessWidget {
+  const _ExpandedPlaybackControls({
+    required this.controller,
+    required this.track,
+    required this.authenticationFailure,
+    required this.onSignInAgain,
+  });
+
+  final QueuePlaybackController controller;
+  final PlaylistTrackSummary track;
+  final bool authenticationFailure;
+  final VoidCallback onSignInAgain;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final playback = controller.playback;
+    final status = _statusCopy(controller);
+    final error =
+        controller.failure != null ||
+        playback.stage == TrackPlaybackStage.resolutionError ||
+        playback.stage == TrackPlaybackStage.engineError;
+    return SafeArea(
+      top: false,
+      child: Material(
+        key: const ValueKey('expanded-now-playing-controls'),
+        color: theme.colorScheme.surfaceContainer,
+        elevation: 3,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 12, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                container: true,
+                liveRegion: true,
+                label: status,
+                excludeSemantics: true,
+                child: Text(
+                  status,
+                  key: const ValueKey('now-playing-status'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: error
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              _PlaybackProgress(controller: playback, track: track),
+              const SizedBox(height: 2),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final transport = _transportControls(
+                    controller,
+                    authenticationFailure,
+                    onSignInAgain,
+                    prominentPrimary: true,
+                  );
+                  final utilities = <Widget>[
+                    _VolumeButton(controller: controller),
+                    _QueueButton(controller: controller),
+                  ];
+                  if (constraints.maxWidth < 600) {
+                    return Row(
+                      key: const ValueKey(
+                        'expanded-now-playing-compact-controls',
+                      ),
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ...transport,
+                        const SizedBox(width: 8),
+                        ...utilities,
+                      ],
+                    );
+                  }
+                  return SizedBox(
+                    key: const ValueKey('expanded-now-playing-wide-controls'),
+                    height: 56,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: transport,
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: utilities,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+List<Widget> _transportControls(
+  QueuePlaybackController controller,
+  bool authenticationFailure,
+  VoidCallback onSignInAgain, {
+  bool prominentPrimary = false,
+}) {
+  final playback = controller.playback;
+  final primaryAction = authenticationFailure
+      ? TextButton(
+          key: const ValueKey('now-playing-sign-in-again'),
+          onPressed: onSignInAgain,
+          child: const Text('Sign in again'),
+        )
+      : prominentPrimary
+      ? IconButton.filled(
+          key: const ValueKey('now-playing-primary-action'),
+          tooltip: _primaryTooltip(playback.stage),
+          onPressed: playback.canActivate
+              ? () => unawaited(playback.activate())
+              : null,
+          style: IconButton.styleFrom(minimumSize: const Size.square(56)),
+          icon: Icon(_primaryIcon(playback.stage), size: 30),
+        )
+      : IconButton(
+          key: const ValueKey('now-playing-primary-action'),
+          tooltip: _primaryTooltip(playback.stage),
+          onPressed: playback.canActivate
+              ? () => unawaited(playback.activate())
+              : null,
+          icon: Icon(_primaryIcon(playback.stage)),
+        );
+  return [
+    IconButton(
+      key: const ValueKey('now-playing-previous'),
+      tooltip: 'Previous',
+      onPressed: !authenticationFailure && controller.hasPrevious
+          ? () => unawaited(controller.rewind())
+          : null,
+      icon: const Icon(Icons.skip_previous_rounded),
+    ),
+    primaryAction,
+    IconButton(
+      key: const ValueKey('now-playing-next'),
+      tooltip: 'Next',
+      onPressed: !authenticationFailure && controller.hasNext
+          ? () => unawaited(controller.advance())
+          : null,
+      icon: const Icon(Icons.skip_next_rounded),
+    ),
+    if (_canStop(playback.stage))
+      IconButton(
+        key: const ValueKey('now-playing-stop'),
+        tooltip: 'Stop',
+        onPressed: () => unawaited(playback.stop()),
+        icon: const Icon(Icons.stop_rounded),
+      ),
+  ];
 }
 
 void _dispatchCatalogAction(
