@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "M4.7 checkpoint review"
+  next_action: REVIEW
 ---
 
 # Current Milestone
@@ -65,12 +65,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The bounded M4.6 product audit's only directly reproduced cross-surface state gap is closed. Whole-project ranking now decides between a deliberately small exact shell-boundary regression and the M4.7 criterion-by-criterion checkpoint review; neither changes the locally pending M1 evidence claim.
+- Whole-project ranking selected the M4.7 criterion-by-criterion checkpoint review. Exact 520/840 shell-boundary tests remain evidence-triggered because representative compact/wide/resize retention passes and no threshold failure is reproduced; neither decision changes the locally pending M1 evidence claim.
 
 # Next Candidates
 
-1. Re-rank whether the product-critical 520/840 shell boundaries need one minimal regression without turning every breakpoint into a brittle matrix.
-2. Perform the M4.7 criterion-by-criterion checkpoint review if no higher-value reproduced product gap remains.
+1. Review all seven M4 exit criteria, architecture/scope drift, accessibility/adaptive evidence, debt triggers, and exact live/platform limits.
+2. Fix only a checkpoint-blocking discrepancy if the review reproduces one; otherwise record the bounded M4 checkpoint and re-read the Roadmap.
 3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
 
 # Blockers
