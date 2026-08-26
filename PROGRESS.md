@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "M4.3 Shared catalog content-state panels"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -56,12 +56,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M4.3's first bounded core-browsing slice is complete. Whole-project ranking must now compare the evidenced asynchronous-state and browsing-header gaps without expanding the Track component into contextual Playlist/Search behavior.
+- Global ranking found no new correctness, Provider, playback, debt-trigger, or platform task that outranks the active M4 state-consistency evidence. The selected finite slice shares loading/message presentation across Album, Artist Tracks/Albums, and Ranking while leaving typed copy, retry rules, and other pages untouched.
 
 # Next Candidates
 
-1. Re-rank the shared asynchronous state panel against core browsing header alignment after the Track grammar is proven.
-2. Select another bounded representative slice; do not generalize all pages or start current-playing row animation without evidence for a non-frame-driven listener.
+1. Implement and validate the selected catalog loading/message panels on Album, Artist Tracks/Albums, and Ranking only.
+2. Re-rank core browsing header alignment after the content-state grammar is proven; do not start current-playing row animation without a non-frame-driven listener.
 3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers
