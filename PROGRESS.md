@@ -6,7 +6,8 @@ execution:
   acceptance_milestone: M1
   active_workstream: M2
   current_task: null
-  next_action: SELECT_NEXT_TASK
+  work_availability: NO_LEGITIMATE_WORK
+  next_action: REEVALUATE_EVIDENCE
 ---
 
 # Current Milestone
@@ -25,16 +26,18 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Repaired reproduced presentation failures involving duplicate semantics, unreachable compact confirmations, async-state announcements, local detail back behavior, originating-row focus, and long-library scroll restoration. The latest code unit recorded strict Dart analysis, all 154 Flutter tests, formatting, and a Linux release build.
 - Made continuous autonomous execution explicit: task, commit, review, checkpoint, milestone, report, and green-test completion all return to global task selection while `global_stop` remains false. Human Decisions remain locally scoped, and the dated M1 readiness review points to current execution and scheduling authorities without rewriting its evidence.
 - Refreshed the current Android 16 x64 signed-out runtime after the recent M2 presentation changes. A direct logical-root Flutter invocation produced an x64-only Debug APK containing Flutter, Dart JNI, and Rust; clean install plus force-stop/relaunch both rendered the 1080×2400 sign-in surface without visible clipping, Flutter fatal errors, exceptions, or ANRs. The empty secure-storage algorithm migration ran only on first launch. The exact test package was uninstalled and the AVD stopped; no QR, account, QQ endpoint, or remote media was touched.
+- Revalidated the current offline baseline after the governance recovery: strict Dart analysis, all 154 Flutter tests, Rust formatting, all 152 offline Rust tests, and strict Clippy pass. Four live QQ/WeChat tests remain explicitly gated and ignored by the offline suite.
 
 # In Progress
 
-- M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop. Autonomous work continues on independent, bounded daily-use quality tasks from the M2 Roadmap without weakening or prematurely closing the M1 checkpoint.
+- M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
+- The 2026-08-26 global candidate audit found no remaining agent-executable task with sufficient provenance: the offline suites are green, the current Android x64 signed-out runtime is refreshed, the public issue list is empty, no technical-debt trigger opens an unblocked task, and further M2 slices require a demonstrated gap. Apple/Windows and physical-device evidence require environments unavailable on this Linux host. This is `NO_LEGITIMATE_WORK`, not `GLOBAL_STOP`; the project remains active and must rerun task ranking when evidence or execution environment changes.
 
 # Next Candidates
 
-1. Select the next bounded M2 daily-use task from demonstrated adaptive, playback-resilience, accessibility, or packaging gaps without depending on HD-001.
+1. On any new issue, failing test, user report, platform availability, or measured failure, rerun global task ranking and select the highest-value bounded task with concrete provenance.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
-3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
+3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
 # Blockers
 
