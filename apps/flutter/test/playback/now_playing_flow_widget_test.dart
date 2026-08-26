@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -419,6 +420,105 @@ void main() {
     ]);
   });
 
+  testWidgets('desktop context actions preserve positional queue intent', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final queue = _WidgetQueueGateway();
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('first-context')),
+      _ImmediateMediaOperation(_success('second-context')),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+      queue: queue,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('playlist-track-row-1')),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+    await tester.pumpAndSettle();
+    expect(find.text('Play from here'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+
+    final secondRow = find.byKey(const ValueKey('playlist-track-row-2'));
+    await tester.tap(
+      secondRow,
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Play from here'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
+    await tester.tap(find.text('Add to queue'));
+    await tester.pumpAndSettle();
+
+    expect(queue.pushedTracks, hasLength(1));
+    expect(queue.pushedTracks.single.opaqueId, 'second');
+    expect(queue._snapshot.tracks, hasLength(3));
+    expect(queue._snapshot.currentIndex, 0);
+    expect(media.requests, [('qq-music', 'first')]);
+    expect(find.text('Added to queue'), findsOneWidget);
+
+    await tester.tap(
+      secondRow,
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Play from here'));
+    await tester.pumpAndSettle();
+
+    expect(queue.replacedIndex, 1);
+    expect(queue._snapshot.tracks, hasLength(2));
+    expect(_nowPlayingTitle(tester), 'Second track');
+    expect(media.requests.last, ('qq-music', 'second'));
+  });
+
+  testWidgets('mobile long press exposes the same bounded track actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final queue = _WidgetQueueGateway();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('mobile-queue')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      queue: queue,
+    );
+
+    await tester.longPress(find.byKey(const ValueKey('playlist-track-row-2')));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(PopupMenuItem), findsNothing);
+    expect(find.text('Play from here'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
+
+    await tester.tap(find.text('Add to queue'));
+    await tester.pumpAndSettle();
+    expect(queue.pushedTracks.single.opaqueId, 'second');
+    expect(queue._snapshot.currentIndex, 0);
+    expect(_nowPlayingTitle(tester), 'Second track');
+    expect(find.text('Added to queue'), findsOneWidget);
+  });
+
   testWidgets('queue panel preserves and removes duplicate positions', (
     tester,
   ) async {
@@ -632,6 +732,7 @@ Future<void> _openDetail(
 class _WidgetQueueGateway implements PlaybackQueueGateway {
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
   List<PlaylistTrackSummary> replacedTracks = const [];
+  final List<PlaylistTrackSummary> pushedTracks = [];
   int? replacedIndex;
 
   @override
@@ -691,8 +792,17 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
   }
 
   @override
-  PlaybackQueueResult push(PlaylistTrackSummary track) =>
-      throw StateError('not used by this widget slice');
+  PlaybackQueueResult push(PlaylistTrackSummary track) {
+    pushedTracks.add(track);
+    final tracks = [..._snapshot.tracks, track];
+    final currentIndex = _snapshot.currentIndex ?? 0;
+    final currentChanged = _snapshot.currentIndex == null;
+    _snapshot = _makeSnapshot(tracks, currentIndex);
+    return PlaybackQueueResult(
+      snapshot: _snapshot,
+      currentChanged: currentChanged,
+    );
+  }
 
   @override
   PlaybackQueueResult remove(int index) {

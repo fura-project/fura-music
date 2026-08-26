@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -124,6 +125,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           index,
         ),
       ),
+      onTrackQueued: (track) => unawaited(_addToQueue(track)),
       desktop: desktop,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
@@ -148,6 +150,17 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       onSignInAgain: widget.onSignInAgain,
     ),
   };
+
+  Future<void> _addToQueue(PlaylistTrackSummary track) async {
+    await widget.queuePlaybackController.push(track);
+    if (!mounted) return;
+    final message = widget.queuePlaybackController.failure == null
+        ? 'Added to queue'
+        : 'Couldn’t update the queue';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 class _PlaylistHeader extends StatelessWidget {
@@ -230,6 +243,7 @@ class _TrackCollection extends StatelessWidget {
     required this.onLoadMore,
     required this.onRetryMore,
     required this.onTrackSelected,
+    required this.onTrackQueued,
     required this.desktop,
     super.key,
   });
@@ -242,6 +256,7 @@ class _TrackCollection extends StatelessWidget {
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final ValueChanged<int> onTrackSelected;
+  final ValueChanged<PlaylistTrackSummary> onTrackQueued;
   final bool desktop;
 
   @override
@@ -295,124 +310,250 @@ class _TrackCollection extends StatelessWidget {
           track: tracks[index],
           desktop: desktop,
           onTap: () => onTrackSelected(index),
+          onAddToQueue: () => onTrackQueued(tracks[index]),
         );
       },
     );
   }
 }
 
-class _TrackRow extends StatelessWidget {
+class _TrackRow extends StatefulWidget {
   const _TrackRow({
     required this.index,
     required this.track,
     required this.desktop,
     required this.onTap,
+    required this.onAddToQueue,
   });
 
   final int index;
   final PlaylistTrackSummary track;
   final bool desktop;
   final VoidCallback onTap;
+  final VoidCallback onAddToQueue;
+
+  @override
+  State<_TrackRow> createState() => _TrackRowState();
+}
+
+class _TrackRowState extends State<_TrackRow> {
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final artists = track.artistNames.isEmpty
+    final artists = widget.track.artistNames.isEmpty
         ? 'Unknown artist'
-        : track.artistNames.join(' · ');
-    final title = track.subtitle == null
-        ? track.title
-        : '${track.title} · ${track.subtitle}';
-    return Semantics(
-      label: '$title, $artists',
-      container: true,
-      button: true,
-      child: InkWell(
-        key: ValueKey('playlist-track-row-$index'),
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: desktop ? 8 : 4,
-            vertical: 8,
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: desktop ? 40 : 28,
-                child: Text(
-                  '$index',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox.square(
-                dimension: desktop ? 52 : 56,
-                child: _Artwork(uri: track.artworkUri),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      desktop || track.albumTitle == null
-                          ? artists
-                          : '$artists · ${track.albumTitle}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (desktop) ...[
-                const SizedBox(width: 24),
-                Expanded(
-                  flex: 2,
+        : widget.track.artistNames.join(' · ');
+    final title = widget.track.subtitle == null
+        ? widget.track.title
+        : '${widget.track.title} · ${widget.track.subtitle}';
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.contextMenu): () =>
+            _showKeyboardActions(context),
+        const SingleActivator(LogicalKeyboardKey.f10, shift: true): () =>
+            _showKeyboardActions(context),
+      },
+      child: Semantics(
+        label: '$title, $artists',
+        container: true,
+        button: true,
+        child: InkWell(
+          key: ValueKey('playlist-track-row-${widget.index}'),
+          focusNode: _focusNode,
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            _focusNode.requestFocus();
+            widget.onTap();
+          },
+          onSecondaryTapDown: widget.desktop
+              ? (details) {
+                  _focusNode.requestFocus();
+                  unawaited(
+                    _showDesktopActions(context, details.globalPosition),
+                  );
+                }
+              : null,
+          onLongPress: widget.desktop
+              ? null
+              : () => unawaited(_showMobileActions(context)),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.desktop ? 8 : 4,
+              vertical: 8,
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: widget.desktop ? 40 : 28,
                   child: Text(
-                    track.albumTitle ?? '—',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    '${widget.index}',
+                    textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
-              ],
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 48,
-                child: Text(
-                  _duration(track.durationSeconds),
-                  textAlign: TextAlign.end,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                const SizedBox(width: 8),
+                SizedBox.square(
+                  dimension: widget.desktop ? 52 : 56,
+                  child: _Artwork(uri: widget.track.artworkUri),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.desktop || widget.track.albumTitle == null
+                            ? artists
+                            : '$artists · ${widget.track.albumTitle}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                if (widget.desktop) ...[
+                  const SizedBox(width: 24),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      widget.track.albumTitle ?? '—',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 48,
+                  child: Text(
+                    _duration(widget.track.durationSeconds),
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  void _showKeyboardActions(BuildContext context) {
+    if (!widget.desktop) {
+      unawaited(_showMobileActions(context));
+      return;
+    }
+    final box = context.findRenderObject();
+    if (box is! RenderBox) return;
+    final position = box.localToGlobal(box.size.center(Offset.zero));
+    unawaited(_showDesktopActions(context, position));
+  }
+
+  Future<void> _showDesktopActions(
+    BuildContext context,
+    Offset globalPosition,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    final action = await showMenu<_TrackAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        overlay.size.width - globalPosition.dx,
+        overlay.size.height - globalPosition.dy,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: _TrackAction.playFromHere,
+          child: ListTile(
+            leading: Icon(Icons.play_arrow_rounded),
+            title: Text('Play from here'),
+          ),
+        ),
+        PopupMenuItem(
+          value: _TrackAction.addToQueue,
+          child: ListTile(
+            leading: Icon(Icons.playlist_add_rounded),
+            title: Text('Add to queue'),
+          ),
+        ),
+      ],
+    );
+    _runAction(action);
+  }
+
+  Future<void> _showMobileActions(BuildContext context) async {
+    final action = await showModalBottomSheet<_TrackAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.play_arrow_rounded),
+              title: const Text('Play from here'),
+              onTap: () => Navigator.pop(context, _TrackAction.playFromHere),
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: const Text('Add to queue'),
+              onTap: () => Navigator.pop(context, _TrackAction.addToQueue),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    _runAction(action);
+  }
+
+  void _runAction(_TrackAction? action) {
+    switch (action) {
+      case _TrackAction.playFromHere:
+        widget.onTap();
+        return;
+      case _TrackAction.addToQueue:
+        widget.onAddToQueue();
+        return;
+      case null:
+        return;
+    }
+  }
 }
+
+enum _TrackAction { playFromHere, addToQueue }
 
 class _Artwork extends StatelessWidget {
   const _Artwork({this.uri, this.playlist = false});

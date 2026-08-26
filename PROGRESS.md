@@ -102,6 +102,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added exact elapsed/duration progress and one-commit drag seeking for tracks with a positive known duration. The foreground session owns plugin seek, the controller accepts only the exact playing/paused session, clamps through Track duration, ignores position callbacks while seeking, suppresses stale/concurrent completions, and maps current seek failure coarsely without retaining the source. Unknown duration renders no progress. The Linux loopback fixture now serves valid byte ranges; local/loopback native playback, position, and seek pass alongside strict analysis, 109 Flutter tests, and a Linux release build.
 - Added a bounded foreground volume value owned by the existing Dart playback controller. It is applied before every fresh native session plays, survives queue track replacement within the authenticated surface, rejects non-finite/out-of-range values, converges after out-of-order updates, and isolates old-session failure. The adaptive control opens as a narrow bottom sheet or wide dialog and commits once on release; no persistence/settings abstraction was added. Strict analysis, 113 Flutter tests, Linux release, and native loopback volume/playback/seek pass.
 - Added current-track artwork to the compact now-playing surface using only the existing provider-neutral Track URI. Narrow/wide sizes remain bounded; resolving/loading and coarse playback errors overlay the image; absent or failed images use a local album placeholder; and an isolated image semantic label avoids merging the artwork into transport controls. Strict analysis, 114 Flutter tests, and Linux release pass without a cache dependency or Provider change.
+- Added the first adaptive Track context surface without expanding queue semantics: desktop right-click, the Context Menu key or Shift+F10, and mobile long press expose only “Play from here” and “Add to queue”. The former snapshots the exact loaded rows and index; the latter delegates unchanged Track data to the Rust-backed queue, preserves duplicate positions, and does not restart a nonempty queue's current track. Focus ownership, success/failure feedback, desktop/mobile presentation, empty-queue activation, and duplicate positional behavior are covered by the 116-test Flutter suite; strict analysis and Linux release pass.
 
 # In Progress
 
@@ -109,7 +110,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Next Candidates
 
-1. Add a desktop right-click and mobile long-press Track action surface for “Play from here” and “Add to queue”, delegating queue mutation to the existing Rust-backed controller and preserving duplicate positional intent.
+1. Inspect the authenticated queue and compact-player surfaces for one bounded, demonstrable keyboard/accessibility or failure-recovery gap before selecting the next M2 implementation; do not add queue semantics that the Domain does not already support.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 
