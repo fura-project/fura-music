@@ -98,19 +98,21 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Reproduced the blocker anonymously with 20 public rows: forwarding the playlist response's `songtype: 13` into `UrlGetVkey` yielded 20/20 item code `101404` and no paths, while `songtype: 0` or the primary type yielded 11 nonempty paths. A separate bounded public probe found `file.media_mid` on 20/20 rows and different from song MID on 9/20; two broader public batches produced matching vkey outcomes for both independently implemented filename forms. No content identifier, path, vkey, host, or response body was retained.
 - Corrected the QQ-only media identity to preserve optional `file.media_mid`, removed the false vkey interpretation of playlist `songtype`, fixed vkey requests at `songtype: [0]`, selected the two-implementation `M500 + file-media-mid + .mp3` filename when present, and retained the independently agreed doubled-song-MID fallback when absent. The opaque identity change remains entirely inside QQ Provider routing; Domain, Bridge, and Flutter still do not parse it.
 - Added cross-layer regressions with observed `songtype: 13`, differing file/song MIDs, missing-file fallback, malformed identity, exact filename, and fixed vkey parameter. Rust now passes 150 offline tests (`19 + 2 + 29 + 76 + 24`) plus strict Clippy/formatting and the anonymous live media probe; strict Dart analysis, 103 Flutter tests, Linux release, and packaged typed-FFI smoke pass.
+- Added authenticated-surface playback shortcuts without moving transport state into Rust: hardware play/pause, previous, next, and stop keys plus `Ctrl+Space`, `Ctrl+Left`, and `Ctrl+Right` now use the same Track/Queue controller actions as the visible controls across library/detail navigation. Authentication failures cannot be retried by a shortcut. Strict Dart analysis, all 104 Flutter tests, formatting, and a Linux release build pass.
 
 # In Progress
 
-- The root fix for the authenticated playback blocker is implemented and fully validated offline. A user-operated retest of one ordinary playable track is required before the real playback/queue/lyrics path can resume; no further autonomous protocol change is justified until that result exists.
+- M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop. Autonomous work continues on independent, bounded daily-use quality tasks from the M2 Roadmap without weakening or prematurely closing the M1 checkpoint.
 
 # Next Candidates
 
-1. Rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, report only the coarse UI state and stop before speculative changes.
-2. Complete the M1 checkpoint only after the Roadmap criteria and remaining evidence are actually satisfied.
+1. Add truthful foreground playback progress and bounded seeking using the already available Track duration and exact native-session position; preserve replacement/dispose lifecycle and source-URI redaction.
+2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
+3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 
 # Blockers
 
-- User-only real-account observation remains for the corrected QQ media source, queue, and synchronized lyrics. Sign-in, process-restart restore, library, and detail are now demonstrated, but the Roadmap remains unverified end to end until the playback fix is exercised.
+- User-only real-account observation remains for the corrected QQ media source, queue, and synchronized lyrics. Sign-in, process-restart restore, library, and detail are now demonstrated, but M1 remains unverified end to end until the playback fix is exercised. This blocks only the affected acceptance claim, not independent daily-use work.
 
 # Pending Human Decisions
 

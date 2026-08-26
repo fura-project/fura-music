@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -84,49 +85,94 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   @override
   Widget build(BuildContext context) {
     final selectedPlaylist = _selectedPlaylist;
-    if (selectedPlaylist != null) {
-      return PlaylistDetailPage(
-        key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
-        playlist: selectedPlaylist,
-        gateway: widget.detailGateway,
-        queuePlaybackController: _queuePlaybackController,
-        onBack: () => setState(() => _selectedPlaylist = null),
-        onSignInAgain: widget.onSignInAgain,
-      );
-    }
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Your music'),
-        actions: [
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) => IconButton(
-              tooltip: 'Refresh playlists',
-              onPressed: _controller.stage == UserLibraryStage.loading
-                  ? null
-                  : _controller.load,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SafeArea(
-        child: AnimatedBuilder(
+    final page = selectedPlaylist != null
+        ? PlaylistDetailPage(
+            key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
+            playlist: selectedPlaylist,
+            gateway: widget.detailGateway,
+            queuePlaybackController: _queuePlaybackController,
+            onBack: () => setState(() => _selectedPlaylist = null),
+            onSignInAgain: widget.onSignInAgain,
+          )
+        : _libraryScaffold();
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.mediaPlayPause):
+            _activatePlayback,
+        const SingleActivator(LogicalKeyboardKey.space, control: true):
+            _activatePlayback,
+        const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious):
+            _rewindPlayback,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true):
+            _rewindPlayback,
+        const SingleActivator(LogicalKeyboardKey.mediaTrackNext):
+            _advancePlayback,
+        const SingleActivator(LogicalKeyboardKey.arrowRight, control: true):
+            _advancePlayback,
+        const SingleActivator(LogicalKeyboardKey.mediaStop): _stopPlayback,
+      },
+      child: Focus(autofocus: true, child: page),
+    );
+  }
+
+  Widget _libraryScaffold() => Scaffold(
+    appBar: AppBar(
+      title: const Text('Your music'),
+      actions: [
+        AnimatedBuilder(
           animation: _controller,
-          builder: (context, _) => AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: _body(context),
+          builder: (context, _) => IconButton(
+            tooltip: 'Refresh playlists',
+            onPressed: _controller.stage == UserLibraryStage.loading
+                ? null
+                : _controller.load,
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ),
+        const SizedBox(width: 8),
+      ],
+    ),
+    body: SafeArea(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: _body(context),
+        ),
       ),
-      bottomNavigationBar: NowPlayingBar(
-        controller: _queuePlaybackController,
-        onSignInAgain: widget.onSignInAgain,
-      ),
-    );
+    ),
+    bottomNavigationBar: NowPlayingBar(
+      controller: _queuePlaybackController,
+      onSignInAgain: widget.onSignInAgain,
+    ),
+  );
+
+  void _activatePlayback() {
+    final playback = _queuePlaybackController.playback;
+    if (playback.canActivate) unawaited(playback.activate());
+  }
+
+  void _rewindPlayback() {
+    final playback = _queuePlaybackController.playback;
+    if (!playback.requiresAuthentication &&
+        _queuePlaybackController.hasPrevious) {
+      unawaited(_queuePlaybackController.rewind());
+    }
+  }
+
+  void _advancePlayback() {
+    final playback = _queuePlaybackController.playback;
+    if (!playback.requiresAuthentication && _queuePlaybackController.hasNext) {
+      unawaited(_queuePlaybackController.advance());
+    }
+  }
+
+  void _stopPlayback() {
+    if (_queuePlaybackController.current != null) {
+      unawaited(_queuePlaybackController.playback.stop());
+    }
   }
 
   Widget _body(BuildContext context) => switch (_controller.stage) {

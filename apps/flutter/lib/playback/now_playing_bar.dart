@@ -28,9 +28,7 @@ class NowPlayingBar extends StatelessWidget {
         if (track == null) return const SizedBox.shrink();
 
         final playback = controller.playback;
-        final authenticationFailure = _isAuthenticationFailure(
-          playback.resolutionFailure,
-        );
+        final authenticationFailure = playback.requiresAuthentication;
         final error =
             controller.failure != null ||
             playback.stage == TrackPlaybackStage.resolutionError ||
@@ -78,7 +76,6 @@ class NowPlayingBar extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: _transportControls(
                                 controller,
-                                track,
                                 authenticationFailure,
                               ),
                             ),
@@ -98,7 +95,6 @@ class NowPlayingBar extends StatelessWidget {
                             const SizedBox(width: 8),
                             ..._transportControls(
                               controller,
-                              track,
                               authenticationFailure,
                             ),
                             if (controller.lyrics != null)
@@ -120,7 +116,6 @@ class NowPlayingBar extends StatelessWidget {
 
   List<Widget> _transportControls(
     QueuePlaybackController controller,
-    PlaylistTrackSummary track,
     bool authenticationFailure,
   ) {
     final playback = controller.playback;
@@ -143,8 +138,8 @@ class NowPlayingBar extends StatelessWidget {
         IconButton(
           key: const ValueKey('now-playing-primary-action'),
           tooltip: _primaryTooltip(playback.stage),
-          onPressed: _canActivate(playback.stage)
-              ? () => _activate(playback, track)
+          onPressed: playback.canActivate
+              ? () => unawaited(playback.activate())
               : null,
           icon: Icon(_primaryIcon(playback.stage)),
         ),
@@ -271,33 +266,6 @@ class _StatusIcon extends StatelessWidget {
   }
 }
 
-void _activate(TrackPlaybackController controller, PlaylistTrackSummary track) {
-  switch (controller.stage) {
-    case TrackPlaybackStage.playing:
-      unawaited(controller.pause());
-      return;
-    case TrackPlaybackStage.paused:
-      unawaited(controller.resume());
-      return;
-    case TrackPlaybackStage.resolutionError:
-      controller.retry();
-      return;
-    case TrackPlaybackStage.stopped:
-    case TrackPlaybackStage.completed:
-    case TrackPlaybackStage.engineError:
-    case TrackPlaybackStage.idle:
-      unawaited(controller.playTrack(track));
-      return;
-    case TrackPlaybackStage.resolving:
-    case TrackPlaybackStage.loading:
-      return;
-  }
-}
-
-bool _canActivate(TrackPlaybackStage stage) =>
-    stage != TrackPlaybackStage.resolving &&
-    stage != TrackPlaybackStage.loading;
-
 bool _canStop(TrackPlaybackStage stage) => switch (stage) {
   TrackPlaybackStage.resolving ||
   TrackPlaybackStage.loading ||
@@ -371,14 +339,4 @@ String _resolutionFailureCopy(MediaResolutionFailure? failure) =>
       MediaResolutionFailure.alreadyRunning =>
         'Another media request is still running.',
       null => 'This track could not be resolved.',
-    };
-
-bool _isAuthenticationFailure(MediaResolutionFailure? failure) =>
-    switch (failure) {
-      MediaResolutionFailure.authenticationRequired ||
-      MediaResolutionFailure.credentialRejected ||
-      MediaResolutionFailure.credentialRejectedStorageCleanupFailed ||
-      MediaResolutionFailure.replaced ||
-      MediaResolutionFailure.cancelled => true,
-      _ => false,
     };

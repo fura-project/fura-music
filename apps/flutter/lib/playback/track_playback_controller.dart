@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -43,6 +41,42 @@ class TrackPlaybackController extends ChangeNotifier {
   int get positionMs => _playback.positionMs;
   bool get canPause => _stage == TrackPlaybackStage.playing;
   bool get canResume => _stage == TrackPlaybackStage.paused;
+  bool get requiresAuthentication => switch (_resolutionFailure) {
+    MediaResolutionFailure.authenticationRequired ||
+    MediaResolutionFailure.credentialRejected ||
+    MediaResolutionFailure.credentialRejectedStorageCleanupFailed ||
+    MediaResolutionFailure.replaced ||
+    MediaResolutionFailure.cancelled => true,
+    _ => false,
+  };
+  bool get canActivate =>
+      _track != null &&
+      !requiresAuthentication &&
+      _stage != TrackPlaybackStage.resolving &&
+      _stage != TrackPlaybackStage.loading;
+
+  Future<void> activate() async {
+    final current = _track;
+    if (current == null || !canActivate) return;
+    switch (_stage) {
+      case TrackPlaybackStage.playing:
+        await pause();
+        return;
+      case TrackPlaybackStage.paused:
+        await resume();
+        return;
+      case TrackPlaybackStage.idle:
+      case TrackPlaybackStage.stopped:
+      case TrackPlaybackStage.completed:
+      case TrackPlaybackStage.resolutionError:
+      case TrackPlaybackStage.engineError:
+        await playTrack(current);
+        return;
+      case TrackPlaybackStage.resolving:
+      case TrackPlaybackStage.loading:
+        return;
+    }
+  }
 
   Future<void> playTrack(PlaylistTrackSummary track) async {
     final generation = ++_generation;
@@ -93,13 +127,6 @@ class TrackPlaybackController extends ChangeNotifier {
     _engineFailure = null;
     _setStage(TrackPlaybackStage.stopped);
     await _playback.stop();
-  }
-
-  void retry() {
-    final current = _track;
-    if (current != null && _stage == TrackPlaybackStage.resolutionError) {
-      unawaited(playTrack(current));
-    }
   }
 
   void _onPlaybackChanged() {

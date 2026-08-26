@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -174,6 +175,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('must-not-appear'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+      await tester.pumpAndSettle();
+      expect(media.requests, hasLength(1));
+      expect(tester.takeException(), isNull);
       await tester.tap(find.byKey(const ValueKey('now-playing-sign-in-again')));
       await tester.pumpAndSettle();
       expect(find.text('Continue with WeChat'), findsOneWidget);
@@ -224,6 +229,58 @@ void main() {
       ('qq-music', 'second'),
       ('qq-music', 'first'),
       ('qq-music', 'second'),
+    ]);
+  });
+
+  testWidgets('desktop shortcuts control playback and positional navigation', (
+    tester,
+  ) async {
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('first')),
+      _ImmediateMediaOperation(_success('second')),
+      _ImmediateMediaOperation(_success('returned')),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([
+        _FakeAudioSession(),
+        _FakeAudioSession(),
+        _FakeAudioSession(),
+      ]),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your playlists'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paused'), findsOneWidget);
+
+    await _sendControlShortcut(tester, LogicalKeyboardKey.space);
+    expect(find.textContaining('Playing'), findsOneWidget);
+
+    await _sendControlShortcut(tester, LogicalKeyboardKey.arrowRight);
+    expect(_nowPlayingTitle(tester), 'Second track');
+
+    await tester.tap(find.text('Fixture playlist').last);
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaTrackPrevious);
+    await tester.pumpAndSettle();
+    expect(_nowPlayingTitle(tester), 'First track');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaStop);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Stopped'), findsOneWidget);
+    expect(media.requests, [
+      ('qq-music', 'first'),
+      ('qq-music', 'second'),
+      ('qq-music', 'first'),
     ]);
   });
 
@@ -379,6 +436,16 @@ void main() {
 
 String? _nowPlayingTitle(WidgetTester tester) =>
     tester.widget<Text>(find.byKey(const ValueKey('now-playing-title'))).data;
+
+Future<void> _sendControlShortcut(
+  WidgetTester tester,
+  LogicalKeyboardKey key,
+) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyEvent(key);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await tester.pumpAndSettle();
+}
 
 Future<void> _openDetail(
   WidgetTester tester, {
