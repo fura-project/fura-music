@@ -519,6 +519,42 @@ void main() {
     expect(find.text('Added to queue'), findsOneWidget);
   });
 
+  testWidgets(
+    'failed context queue action keeps playback and reports failure',
+    (tester) async {
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final queue = _WidgetQueueGateway()
+        ..nextPushResult = const PlaybackQueueResult(
+          failure: PlaybackQueueFailure.coreUnavailable,
+        );
+      final media = _FakeMediaGateway(const []);
+      await _openDetail(
+        tester,
+        media: media,
+        audio: _FakeAudioEngine(const []),
+        queue: queue,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-track-row-2')),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add to queue'));
+      await tester.pumpAndSettle();
+
+      expect(queue.pushedTracks, isEmpty);
+      expect(queue._snapshot.tracks, isEmpty);
+      expect(media.requests, isEmpty);
+      expect(find.text('Couldn’t update the queue'), findsOneWidget);
+    },
+  );
+
   testWidgets('queue panel preserves and removes duplicate positions', (
     tester,
   ) async {
@@ -734,6 +770,7 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
   List<PlaylistTrackSummary> replacedTracks = const [];
   final List<PlaylistTrackSummary> pushedTracks = [];
   int? replacedIndex;
+  PlaybackQueueResult? nextPushResult;
 
   @override
   PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
@@ -793,6 +830,9 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult push(PlaylistTrackSummary track) {
+    final override = nextPushResult;
+    nextPushResult = null;
+    if (override != null) return override;
     pushedTracks.add(track);
     final tracks = [..._snapshot.tracks, track];
     final currentIndex = _snapshot.currentIndex ?? 0;
