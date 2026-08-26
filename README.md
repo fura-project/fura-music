@@ -2,11 +2,11 @@
 
 `flutterustmusic` is a modern, open-source, cross-platform, QQ Music-first client built with Flutter and an in-process Rust core.
 
-The repository is at the beginning of its first vertical slice: sign in, restore credentials, browse the user's playlists, open a playlist, play tracks, manage the queue, and follow word-level lyrics.
+The first in-process vertical slice now implements sign-in, credential restore, user playlists and details, foreground playback and queue controls, and synchronized word-level lyrics. One user-operated real-account playback/queue/lyric observation remains before the M1 end-to-end acceptance claim; independent M2 reliability and daily-use work is active.
 
 ## Status
 
-The project is in M1 lyrics development after completing the first playback/queue implementation slice. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
+The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. It is not a release-readiness claim, and real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
 
 No release is available yet.
 

@@ -14,12 +14,15 @@ Before modifying code, read:
 6. `HUMAN_DECISIONS.md`
 7. `ARCHITECTURE.md`
 8. `ROADMAP.md`
+9. `docs/decisions/`
+10. `docs/development/`
+11. `docs/research/`
 
 Then inspect `git status`, recent commits, and the relevant implementation. Do not ask a human to repeat repository state already recorded here.
 
 ## Task loop
 
-For each finite task, define its goal, provenance, scope, acceptance criteria, expected modules, required tests, known risks, and explicit non-goals. Implement only the smallest coherent unit, test it, inspect the diff, review architecture/scope/debt, update persistent state, and commit the logical unit. Then select the next highest-value unblocked roadmap task.
+For each finite task, define its goal, provenance, scope, acceptance criteria, expected modules, required tests, known risks, and explicit non-goals. Implement only the smallest coherent unit, test it, inspect the diff, review architecture/scope/debt, update persistent state, and commit the logical unit. Then globally rank existing evidence; select the next highest-value unblocked roadmap task or enter a bounded discovery pass.
 
 After three materially similar failed attempts, stop repeating the approach. Record a blocker and the attempted evidence, then continue independent work.
 
@@ -37,18 +40,20 @@ report_generated != stop
 tests_green != stop
 
 global_stop == false
-    => SELECT_NEXT_TASK
+    => SELECT_OR_DISCOVER_NEXT_TASK
 ```
 
-Every finite task must exit through `TEST -> SELF_REVIEW -> UPDATE_STATE_IF_NEEDED -> CHECK_GLOBAL_STOP -> SELECT_NEXT_TASK`. `TASK_COMPLETE -> SUMMARY -> EXIT` is not a project lifecycle. Only `GLOBAL_STOP` can end autonomous project execution.
+Every finite task must exit through `TEST -> SELF_REVIEW -> UPDATE_STATE_IF_NEEDED -> CHECK_GLOBAL_STOP -> GLOBAL_RANKING -> SELECT_OR_DISCOVER_NEXT_TASK`. `TASK_COMPLETE -> SUMMARY -> EXIT` is not a project lifecycle. Only `GLOBAL_STOP` can end autonomous project execution.
 
 `GLOBAL_STOP` is valid only when the Roadmap contains no legitimate next objective; every remaining legitimate task is blocked by pending Human Decisions; continued work has no safe alternative to credential disclosure, account damage, data loss, or a security vulnerability; unresolved legal or platform risk makes work unsafe; the implemented architecture fundamentally conflicts with the product definition; or core build/test infrastructure remains globally blocked after three materially distinct, evidence-backed approaches. A forced session end is `SESSION_INTERRUPTED`, not project completion: preserve the active task, evidence, remaining work, and `next_action` while leaving project execution active for the next session.
 
-`NO_LEGITIMATE_WORK` is also distinct from `GLOBAL_STOP`. Before recording it, recheck the Roadmap, live risks and blockers, user-reported or reproduced bugs, necessary test and platform evidence, triggered debt, demonstrated adaptive/accessibility failures, stale misleading documentation, and measured performance issues. Do not invent work merely to keep producing commits.
+An empty existing-task list means `DISCOVERY_PASS`, not `NO_LEGITIMATE_WORK`. A bounded discovery pass audits the current Roadmap journey and its product completeness, reliability, Provider/Domain/Bridge boundaries, desktop/mobile flows, platform evidence, risks, and tests. Discovery may start with a hypothesis, but it must produce evidence through a bounded audit or reproduction before implementation. A missing or broken behavior inside an authorized Roadmap theme is a legitimate product gap, not scope creep merely because it was not already a named task.
+
+Discovery may rank at most three candidates. Each candidate records provenance, user value, problem, scope, acceptance criteria, effort, risk, and explicit non-goals. `NO_LEGITIMATE_WORK` is distinct from `GLOBAL_STOP` and is valid only after a complete discovery pass establishes that there is no Roadmap-derived product, UX, reliability, test, platform, or architecture-audit task and every remaining action is blocked or outside product scope. Do not invent features or speculative refactors merely to keep producing commits.
 
 ## Task provenance and global ranking
 
-A task needs concrete provenance: a Roadmap acceptance criterion, user-reported or reproduced problem, failing test, documented risk, triggered debt, required platform validation, reproducible accessibility/adaptive failure, or measured compatibility/performance problem. A nearby cleanup, speculative edge case, aesthetic preference, or hypothetical abstraction is not sufficient.
+A task needs concrete provenance: a Roadmap acceptance criterion, authorized product gap, Roadmap-derived work, product-completeness audit, UX-flow audit, architecture-boundary audit, user-reported or reproduced problem, failing test, documented risk, triggered debt, required platform validation, reproducible accessibility/adaptive failure, or measured compatibility/performance problem. A nearby cleanup, speculative edge case, aesthetic preference, or hypothetical abstraction is not sufficient.
 
 After each task, rank candidates across the whole project instead of continuing with the nearest file. After roughly three presentation-only focus, semantics, live-region, minor adaptive-layout, or affordance tasks, explicitly rerank playback reliability, Provider correctness, platform evidence, risks, blockers, and triggered debt before selecting another presentation task.
 

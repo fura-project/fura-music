@@ -29,10 +29,55 @@ Deliver the smallest coherent user journey from QQ Music sign-in through word-le
 - Verified QQ Music protocol behavior from real responses, repeatable integration tests, or cross-validation across independent active implementations.
 - A platform-safe credential storage approach before any public alpha.
 
-## Next Milestone — M2 Reliability and Daily-Use Quality
+## Active Workstream — M2 Reliability and Daily-Use Quality
 
-Scope is progressively elaborated only around current evidence. A remaining M1 acceptance observation does not globally block independent M2 work and does not become implicitly satisfied by that work. Expected themes are failure recovery, adaptive desktop/mobile polish, playback resilience, cache policy, accessibility, and packaging. The first bounded slice covered desktop transport ergonomics and compact now-playing polish: shared keyboard controls, truthful progress/seeking, session-local volume, and existing Track artwork. The second bounded interaction slice exposed only existing playback/queue capabilities through adaptive Track context actions, retained duplicate positional intent in the Rust queue, kept shared transport shortcuts active while queue, lyric, or volume modal routes own focus, made queue-result feedback independent from a first Track's slower media startup, and protected the destructive queue clear command with a confirmation boundary. A first authentication-hygiene slice added ordered local sign-out with explicit Core/vault failure semantics, immediate playback stop, single-flight cleanup retry, and explicit retry progress without inventing a remote logout protocol. Both destructive confirmations now use reachable bottom sheets below 600 logical pixels and dialogs on wider windows. A first accessibility slice removed reproduced duplicate screen-reader metadata from playlist and Track actions while preserving tap and mobile long press, removed the non-interactive shortcut focus node from traversal, isolated meaningful now-playing, queue-failure, full-screen library/detail failure, lyric failure, and QR progress/terminal authentication changes in live regions, and stopped the non-actionable current queue row from advertising a button/tap while preserving selection. A subsequent album-art-driven queue slice reused the same provider-neutral Track artwork, kept local loading/error fallbacks, and retained an unambiguous current-position overlay without changing queue semantics. The first daily lyric slice now follows active lines, yields to manual scrolling, restores follow explicitly, and seeks through exact line timing only while the existing playback controller allows it; no playback state moved into the lyric controller. The first library-reliability slice keeps the last complete collection and paged-detail snapshots visible through explicit refresh and retryable failure, while authentication loss still clears them; transient failures no longer offer account reset. This remains session-local presentation state rather than a new cache layer. The same adaptive pass restores platform, `Alt+Left`, and Browser Back from the locally composed detail, preserves desktop/narrow collection position, then restores focus to the originating playlist when it still exists, without replacing the existing library controller or adding a navigation framework. Further M2 slices remain progressively selected from demonstrated gaps. This is not authorization for new providers or unrelated product features.
+### Goal
+
+Make the implemented M1 chain reliable and coherent enough for daily use without expanding the product beyond QQ Music-first playback and library flows.
+
+### Authorized themes
+
+- Failure recovery and truthful unavailable/error states.
+- Playback, queue, lyric, and authentication resilience.
+- Adaptive desktop/mobile interaction quality and accessibility.
+- Packaging and runtime evidence for already intended platforms.
+- Cache policy only when a demonstrated reliability or daily-use gap requires it.
+- Bounded product-completeness, UX-flow, and architecture-boundary discovery inside these themes.
+
+Task selection may start from existing evidence or a bounded discovery pass. A remaining M1 acceptance observation does not globally block independent M2 work and does not become implicitly satisfied by it. This workstream does not authorize new Providers, Search, Comments, MV, Downloads, Social features, plugin infrastructure, or unrelated product expansion.
+
+### Progress
+
+Completed slices cover shared keyboard/media transport, truthful seek and volume, adaptive Track and queue actions, destructive confirmations, ordered local sign-out recovery, meaningful accessibility announcements, album-art queue presentation, synchronized lyric following/seeking, session-local library/detail refresh snapshots, local detail back behavior, collection-position restoration, and originating-row focus restoration. These changes reuse the existing controllers and Rust queue rules rather than introducing new navigation, cache, background-playback, or state-management systems.
+
+### Exit criteria
+
+1. The implemented sign-in, restore, library, detail, playback, queue, and lyric chain has explicit loading, empty, failure, retry, and cancellation behavior where applicable.
+2. Playback and queue controls remain coherent under repeated user actions, unavailable media, resolution failures, and stale asynchronous completion.
+3. Library/detail refresh and navigation preserve or clear visible state intentionally rather than through accidental rebuild behavior.
+4. Desktop and compact layouts keep their primary actions reachable with keyboard, pointer, and touch where applicable.
+5. Meaningful authentication, library, playback, queue, and lyric changes expose non-duplicated accessibility semantics.
+6. Offline Rust and Flutter suites cover the reusable rules and reproduced regressions; live QQ behavior remains separately gated.
+7. Linux and the available Android development targets retain bounded build/runtime evidence, with unsupported claims recorded explicitly.
+8. A checkpoint review finds no known high-value M2 correctness or daily-use gap left unaddressed or untracked, and M1 user-operated evidence remains represented truthfully.
+
+## Next Milestone — M3 QQ Music Core Product Coverage
+
+### Goal
+
+Expand from the first vertical slice into a coherent QQ Music client while preserving the accepted Provider, Domain, Bridge, and presentation boundaries.
+
+### Authorized direction
+
+- QQ Music catalog Search.
+- Evidence-backed QQ Music home and recommendation surfaces.
+- Album and Artist browsing.
+- Richer QQ Music library navigation.
+- Track availability and quality representation where protocol evidence exists.
+- Other QQ-native catalog flows discovered from real product use and bounded before implementation.
+
+M3 begins after the M2 checkpoint. Each slice requires discovery or protocol/product evidence, a finite acceptance boundary, and offline regression coverage where reusable mapping or rules are introduced. This is not authorization for external Providers, podcast/social features, a plugin marketplace, or a download platform.
 
 ## Later direction
 
-Only after the QQ Music experience is coherent should the project evaluate narrowly scoped local-library or media-fallback capabilities. Each expansion requires demonstrated user value and must preserve the QQ Music-first product identity.
+After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.

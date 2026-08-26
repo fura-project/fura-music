@@ -12,7 +12,7 @@ Flutter presentation
 Rust application/core API
         |
         +--> music domain
-        +--> provider API and registry
+        +--> provider API
         +--> QQMusicProvider
                   |
                   v
@@ -23,6 +23,8 @@ Rust application/core API
 ```
 
 There is no runtime HTTP sidecar between Flutter and the Rust core.
+
+There is currently no independent Provider Registry. Bootstrap composes the concrete `QQMusicProvider` through provider contracts; a registry should exist only after a real multi-provider selection or discovery requirement appears.
 
 ## Dependency direction
 

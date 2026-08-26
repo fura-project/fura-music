@@ -6,8 +6,7 @@ execution:
   acceptance_milestone: M1
   active_workstream: M2
   current_task: null
-  work_availability: NO_LEGITIMATE_WORK
-  next_action: REEVALUATE_EVIDENCE
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -31,11 +30,11 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The 2026-08-26 global candidate audit found no remaining agent-executable task with sufficient provenance: the offline suites are green, the current Android x64 signed-out runtime is refreshed, the public issue list is empty, no technical-debt trigger opens an unblocked task, and further M2 slices require a demonstrated gap. Apple/Windows and physical-device evidence require environments unavailable on this Linux host. This is `NO_LEGITIMATE_WORK`, not `GLOBAL_STOP`; the project remains active and must rerun task ranking when evidence or execution environment changes.
+- M2 bounded product-completeness discovery is active. It must derive evidence from the authorized reliability and daily-use themes, rank no more than three finite candidates, and select the highest-value unblocked task; a lack of prewritten tasks is not a stop condition.
 
 # Next Candidates
 
-1. On any new issue, failing test, user report, platform availability, or measured failure, rerun global task ranking and select the highest-value bounded task with concrete provenance.
+1. Run a bounded M2 product-completeness discovery pass and rank at most three evidence-backed candidates before implementing the highest-value finite task.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
