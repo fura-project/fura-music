@@ -762,6 +762,7 @@ void main() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
+    final queue = _WidgetQueueGateway();
     final media = _FakeMediaGateway([
       _ImmediateMediaOperation(_success('duplicate')),
       _ImmediateMediaOperation(_success('selected-duplicate')),
@@ -773,6 +774,7 @@ void main() {
       firstOpaqueId: 'duplicate',
       secondOpaqueId: 'duplicate',
       secondTitle: 'First track',
+      queue: queue,
     );
 
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
@@ -786,6 +788,24 @@ void main() {
     expect(
       tester.getSemantics(find.byKey(const ValueKey('queue-entry-0'))).label,
       'First track\nFixture artist',
+    );
+
+    queue.nextRemoveResult = const PlaybackQueueResult(
+      failure: PlaybackQueueFailure.coreUnavailable,
+    );
+    await tester.tap(find.byKey(const ValueKey('queue-remove-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 tracks'), findsOneWidget);
+    final failureSemantics = tester.getSemantics(
+      find.text('The music core could not update the queue.'),
+    );
+    expect(
+      failureSemantics.label,
+      'The music core could not update the queue.',
+    );
+    expect(
+      failureSemantics.getSemanticsData().flagsCollection.isLiveRegion,
+      isTrue,
     );
     semantics.dispose();
 
@@ -983,6 +1003,7 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
   final List<PlaylistTrackSummary> pushedTracks = [];
   int? replacedIndex;
   PlaybackQueueResult? nextPushResult;
+  PlaybackQueueResult? nextRemoveResult;
 
   @override
   PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
@@ -1058,6 +1079,9 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult remove(int index) {
+    final override = nextRemoveResult;
+    nextRemoveResult = null;
+    if (override != null) return override;
     if (index < 0 || index >= _snapshot.tracks.length) {
       return const PlaybackQueueResult(
         failure: PlaybackQueueFailure.invalidPosition,

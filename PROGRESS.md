@@ -108,6 +108,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Reproduced and removed duplicate action semantics from adaptive playlist cards and playlist-detail Track rows. Each now exposes one concise label and explicit semantic tap; narrow Track rows also retain semantic long press for the existing action sheet. Queue rows were audited and left unchanged because they already expose one natural title/artist label plus an independent remove control. Grid/list, Track, and queue semantic regressions bring the Flutter suite to 121 tests; strict analysis and Linux release pass.
 - Removed a reproduced invisible keyboard stop from the shared playback shortcut scope by marking its non-interactive autofocus node `skipTraversal`. The scope still receives media/Control shortcuts in modal routes, while Tab reaches consecutive Track rows and Shift+F10 opens the focused row's existing context actions. The focused Dialog property and keyboard-only Track path bring the Flutter suite to 122 tests; strict analysis and Linux release pass.
 - Isolated the compact player's existing artist/status copy as a semantic live region. Playing/paused and coarse failure changes can now be announced without merging the surrounding playlist header, Track title, or elapsed/duration text into the update. A state-transition semantic regression brings the Flutter suite to 123 tests; strict analysis and Linux release pass with no visual or controller change.
+- Reproduced the same merged-status problem for in-panel queue command failures: the error previously shared one semantic label with the queue heading and count while focus stayed on the failed action. The existing coarse message is now its own live region; a failed removal retains both duplicate entries, and the next successful command still clears failure. The 123-test Flutter suite, strict analysis, and Linux release pass without queue or error-mapping changes.
 
 # In Progress
 
@@ -115,7 +116,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Next Candidates
 
-1. Verify whether an in-panel queue command failure is announced when focus stays on the failed action; if the semantic status is not live, isolate only that existing coarse message.
+1. Reassess the next M2 slice from current evidence, prioritizing a bounded playback-resilience or daily-use gap over further speculative accessibility/visual churn.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 
