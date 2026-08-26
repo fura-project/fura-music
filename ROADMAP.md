@@ -121,7 +121,7 @@ M3 begins with bounded discovery after the M2 checkpoint. Each slice requires di
 
 Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, deferred directions, and exact live/platform limits are recorded in `docs/development/m3-checkpoint-review.md`. Future M3-class regressions or newly evidenced QQ-native gaps remain valid bounded work; the checkpoint is not a claim of release readiness or live-service compatibility.
 
-## Active Workstream — M4 Deliberate Material 3 Product Experience
+## Completed Checkpoint — M4 Deliberate Material 3 Product Experience
 
 ### Goal
 
@@ -163,6 +163,10 @@ Each phase is elaborated only through bounded discovery and finite, evidence-bac
 - A third-party Material 3 Expressive component library or a project-owned clone of the full M3 Expressive specification.
 - A theme plugin runtime, marketplace, DSL, broad design-system framework, new state-management or navigation framework, audio-engine replacement, Provider expansion, sidecar, or new product category.
 - Search history, suggestions, hot words, heterogeneous Home, comments, MV, downloads, social features, or other capability expansion under the name of visual completion.
+
+### Checkpoint
+
+Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, adaptive/accessibility limits, debt review, and exact live/platform boundaries are recorded in `docs/development/m4-checkpoint-review.md`. Future reproduced Material/adaptive regressions remain valid bounded work; theme personas and signature visual experiments still require separate Roadmap authorization. The checkpoint is not project completion, release readiness, or M1 acceptance.
 
 ## Evidence-Gated Later Direction
 

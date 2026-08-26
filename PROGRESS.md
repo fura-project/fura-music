@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: M4
-  current_task: "M4.7 checkpoint review"
-  next_action: REVIEW
+  active_workstream: EVIDENCE_GATED_LATER_DIRECTION
+  current_task: null
+  next_action: GLOBAL_RANKING
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2 and M3 are checkpointed, and M4 Deliberate Material 3 Product Experience is active.
+M1's real-account playback observation remains open; M2, M3, and M4 are checkpointed, and evidence-gated whole-project ranking is active.
 
 # Completed Recently
 
@@ -61,16 +61,17 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Implemented the tenth M4 slice: the existing Queue now presents one-based position, Album-aware metadata, and truthful duration from its provider-neutral Track snapshot. Compact sheets keep duration inline while desktop dialogs use a dedicated duration column; current selection, duplicate positions, positional removal, artwork, action keys, failure semantics, and the single Rust queue/playback/lyric owner remain unchanged. Direct 360 px and desktop regressions, strict Dart checks, all 308 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the eleventh M4 slice: Expanded Now Playing now uses a dedicated presentation mode of the existing `NowPlayingBar` implementation. The hero is the single Track identity hierarchy; a separate surface retains the exact status live region, progress, previous/primary/next/stop, sign-in recovery, volume, Queue, keys, enabled states, and shortcut callbacks while making the 56 px filled primary action prominent and omitting duplicated mini-player artwork/title and modal Lyrics entry. Compact and wide end-to-end regressions, strict Dart checks, all 308 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the twelfth M4 slice: Favorite Albums and Favorite Artists now use the shared bounded Material loading/content-state panels for their initial states. Loading is collection-labeled, empty copy is type-specific, retry remains limited to eligible service failures, rejected sessions retain their distinct cleanup-failure detail and sign-in-only recovery, and each asynchronous failure/account state owns one live region. Collection content, append footers, refresh, paging, retained navigation, controllers, and playback ownership remain unchanged. Direct 360 px loading/empty/retry/rejection regressions, strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Completed the M4 deliberate Material product checkpoint against all seven Roadmap exit criteria. The review found no Provider/UI leakage, duplicate player/navigation/state owner, sidecar, unapproved dependency/Provider/product expansion, accessibility/adaptive blocker, or changed debt trigger. The default Material baseline is stable within current automated Linux evidence; manual all-platform visual approval, live QQ compatibility, release readiness, deferred theme personas, and the M1 user observation are not claimed.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Whole-project ranking selected the M4.7 criterion-by-criterion checkpoint review. Exact 520/840 shell-boundary tests remain evidence-triggered because representative compact/wide/resize retention passes and no threshold failure is reproduced; neither decision changes the locally pending M1 evidence claim.
+- M4 is checkpointed. Continuous execution now re-reads the evidence-gated later direction and current repository evidence; it does not treat the checkpoint as project completion or infer authorization for deferred themes, offline/cache, another Provider, release work, or a new product category.
 
 # Next Candidates
 
-1. Review all seven M4 exit criteria, architecture/scope drift, accessibility/adaptive evidence, debt triggers, and exact live/platform limits.
-2. Fix only a checkpoint-blocking discrepancy if the review reproduces one; otherwise record the bounded M4 checkpoint and re-read the Roadmap.
+1. Re-rank the Roadmap's evidence-gated later direction against current user reports, risks, platform availability, and debt triggers.
+2. Select only work with fresh evidence and existing authorization; record `NO_LEGITIMATE_WORK` rather than inventing a feature if none exists.
 3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
 
 # Blockers
