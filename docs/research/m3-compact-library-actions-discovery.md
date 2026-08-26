@@ -31,3 +31,7 @@ Track availability/quality remains evidence-blocked, and unavailable platform va
 ## Selection
 
 The compact saved-collection menu is the smallest correction that preserves mobile identity and reachability after M3 expanded the real toolbar. It addresses an observed regression without turning the task into a navigation rewrite or inventing another recommendation product.
+
+## Outcome
+
+Implemented on 2026-08-27 as the twenty-first finite M3 slice. Below 520 px, one 200 px bounded popup exposes only favorite Artists and favorite Albums while compact title typography and spacing keep the existing page title plus four unrelated direct actions inside 360 px. The same Focus owner opens the menu with Enter and receives focus after either collection returns; wide layouts keep and restore their independent icons. Existing synthetic widget flows prove both destinations, retained collection/detail state, touch/pointer selection, semantic tap, keyboard activation, no overflow, and compact/wide return. No Provider, Domain, Bridge, controller, playback, dependency, or navigation-framework change was introduced.

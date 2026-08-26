@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Compact saved-collection actions"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: GLOBAL_RANKING
 ---
 
 # Current Milestone
@@ -45,16 +45,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the eighteenth M3 slice: every existing now-playing bar can open the current queue Track's already-validated Album or credited Artists through one presentation-only callback scope and one topmost retained overlay. Single destinations open directly; collaborations use an adaptive chooser; platform/AppBar return restores the exact prior page and nested Artist → Album state without reloading its controller or replacing queue ownership. Context-free Tracks remain non-actionable, compact entry is 48 px, desktop Tab/Enter and compact pointer/touch paths have regressions, and a Track change while the chooser is open suppresses the stale destination. Recursive history, protocol/Domain/Bridge/queue changes, per-row expansion, and generic navigation infrastructure remain excluded.
 - Implemented the nineteenth M3 slice: every existing now-playing bar exposes one precise pointer/touch/keyboard entry to a retained immersive page when a current Track exists. Wide layout pairs large artwork with the existing synchronized lyric panel; 360 px layout stacks them; the existing bar remains the only transport/progress/queue/volume implementation. Track replacement updates in place, queue clearing shows an honest empty state, the expanded bar cannot recursively reopen itself, and AppBar/platform return restores the exact originating page and controller state. Palette extraction, gestures, background playback, mini-player/audio/queue rewrites, protocol/Domain/Bridge changes, and generic navigation infrastructure remain excluded.
 - Implemented the twentieth M3 slice: direct credential-bearing favorite-Artist pages call the evidenced `music.concern.RelationList/GetFollowSingerList` operation with exact encrypted identity/offset/size, strict code/row/page bounds, redacted diagnostics, and Provider credential candidate/rejection/replacement rules. Rows become honest MID-only Artist identities; the existing Artist Track client now routes those identities through the already-evidenced MID request instead of fabricating a numeric ID. The cancellable Bridge and adaptive Flutter collection preserve raw-row pagination, stale/disposal cancellation, shared-vault rejection cleanup, compact pointer and desktop keyboard access, and retained collection → Artist → Album/queue return. Follow mutation, biography/social data, cache/automatic refresh, account probing, Track availability/quality, and generic library/navigation infrastructure remain excluded.
+- Implemented the twenty-first M3 slice: the authenticated root no longer hides `Your music` to fit six independent actions at 360 px. Compact width groups only favorite Artists/Albums into a bounded typed menu while Search, Discover, refresh, and sign-out stay direct; wider layouts retain the two original collection icons. The menu supports semantic tap and Enter, exact collection selection, no-overflow rendering, retained collection/detail state, and focus restoration to the compact or wide entry actually mounted. No navigation framework, collection controller, protocol, Domain, Bridge, playback, dependency, or unrelated design change was introduced.
 - Revalidated the resulting baseline: Rust formatting, 267 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 287 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Artist/new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Whole-project ranking selected the reproduced compact AppBar conflict introduced by the sixth authenticated action: retain the library title and group only the two saved-collection destinations at compact width while preserving wide direct actions and exact focus return. Track availability remains evidence-blocked.
+- M3 remains active. The compact authenticated-action regression is resolved and the next action is another whole-project ranking; “Guess you like” remains lower-value overlap with Radar, heterogeneous Home lacks a stable bounded Domain, and Track availability remains evidence-blocked.
 
 # Next Candidates
 
-1. Implement the bounded compact saved-collection action selected in `docs/research/m3-compact-library-actions-discovery.md`; do not expand it into a navigation-shell or design-system rewrite.
+1. Re-rank the remaining Roadmap-authorized directions after the compact regression fix; do not manufacture another presentation task or implement overlapping recommendation feeds without a distinct product role.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 

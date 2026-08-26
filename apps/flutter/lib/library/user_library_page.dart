@@ -100,6 +100,8 @@ class UserLibraryPage extends StatefulWidget {
   State<UserLibraryPage> createState() => _UserLibraryPageState();
 }
 
+enum _FavoriteCollection { artists, albums }
+
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
@@ -133,6 +135,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final FocusNode _favoriteArtistsReturnFocusNode = FocusNode(
     debugLabel: 'favorite artists entry',
   );
+  final FocusNode _favoriteCollectionsReturnFocusNode = FocusNode(
+    debugLabel: 'favorite collections entry',
+  );
+  final GlobalKey<PopupMenuButtonState<_FavoriteCollection>>
+  _favoriteCollectionsMenuKey = GlobalKey();
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
   AlbumSummary? _selectedAlbum;
@@ -221,6 +228,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _recommendationsReturnFocusNode.dispose();
     _favoriteAlbumsReturnFocusNode.dispose();
     _favoriteArtistsReturnFocusNode.dispose();
+    _favoriteCollectionsReturnFocusNode.dispose();
     super.dispose();
   }
 
@@ -870,13 +878,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _selectedFavoriteArtist = null;
       _favoriteArtistsOpen = false;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          !_favoriteArtistsOpen &&
-          _favoriteArtistsReturnFocusNode.context != null) {
-        _favoriteArtistsReturnFocusNode.requestFocus();
-      }
-    });
+    _restoreFavoriteCollectionFocus(_favoriteArtistsReturnFocusNode);
   }
 
   void _openFavoriteArtist(ArtistSummary artist) {
@@ -911,12 +913,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _selectedAlbum = null;
       _favoriteAlbumsOpen = false;
     });
+    _restoreFavoriteCollectionFocus(_favoriteAlbumsReturnFocusNode);
+  }
+
+  void _restoreFavoriteCollectionFocus(FocusNode wideFocusNode) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          !_favoriteAlbumsOpen &&
-          _favoriteAlbumsReturnFocusNode.context != null) {
-        _favoriteAlbumsReturnFocusNode.requestFocus();
-      }
+      if (!mounted || _favoriteAlbumsOpen || _favoriteArtistsOpen) return;
+      final target = wideFocusNode.context != null
+          ? wideFocusNode
+          : _favoriteCollectionsReturnFocusNode;
+      if (target.context != null) target.requestFocus();
     });
   }
 
@@ -1072,24 +1078,76 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   Widget _libraryScaffold() => Scaffold(
     appBar: AppBar(
-      title: MediaQuery.sizeOf(context).width >= 390
-          ? const Text('Your music')
-          : null,
+      title: Text(
+        'Your music',
+        style: MediaQuery.sizeOf(context).width < 520
+            ? Theme.of(context).textTheme.titleMedium
+            : null,
+      ),
+      titleSpacing: MediaQuery.sizeOf(context).width < 520 ? 8 : 16,
       actions: [
-        IconButton(
-          key: const ValueKey('open-favorite-artists'),
-          focusNode: _favoriteArtistsReturnFocusNode,
-          tooltip: 'Open favorite artists',
-          onPressed: _openFavoriteArtists,
-          icon: const Icon(Icons.person_rounded),
-        ),
-        IconButton(
-          key: const ValueKey('open-favorite-albums'),
-          focusNode: _favoriteAlbumsReturnFocusNode,
-          tooltip: 'Open favorite albums',
-          onPressed: _openFavoriteAlbums,
-          icon: const Icon(Icons.album_rounded),
-        ),
+        if (MediaQuery.sizeOf(context).width < 520)
+          Focus(
+            key: const ValueKey('open-favorite-collections'),
+            focusNode: _favoriteCollectionsReturnFocusNode,
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent &&
+                  (event.logicalKey == LogicalKeyboardKey.enter ||
+                      event.logicalKey == LogicalKeyboardKey.space)) {
+                _favoriteCollectionsMenuKey.currentState?.showButtonMenu();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: PopupMenuButton<_FavoriteCollection>(
+              key: _favoriteCollectionsMenuKey,
+              tooltip: 'Open saved collections',
+              constraints: const BoxConstraints(minWidth: 200),
+              onSelected: (collection) => switch (collection) {
+                _FavoriteCollection.artists => _openFavoriteArtists(),
+                _FavoriteCollection.albums => _openFavoriteAlbums(),
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _FavoriteCollection.artists,
+                  child: Row(
+                    children: [
+                      Icon(Icons.person_rounded),
+                      SizedBox(width: 12),
+                      Text('Favorite artists'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _FavoriteCollection.albums,
+                  child: Row(
+                    children: [
+                      Icon(Icons.album_rounded),
+                      SizedBox(width: 12),
+                      Text('Favorite albums'),
+                    ],
+                  ),
+                ),
+              ],
+              icon: const Icon(Icons.library_music_rounded),
+            ),
+          ),
+        if (MediaQuery.sizeOf(context).width >= 520)
+          IconButton(
+            key: const ValueKey('open-favorite-artists'),
+            focusNode: _favoriteArtistsReturnFocusNode,
+            tooltip: 'Open favorite artists',
+            onPressed: _openFavoriteArtists,
+            icon: const Icon(Icons.person_rounded),
+          ),
+        if (MediaQuery.sizeOf(context).width >= 520)
+          IconButton(
+            key: const ValueKey('open-favorite-albums'),
+            focusNode: _favoriteAlbumsReturnFocusNode,
+            tooltip: 'Open favorite albums',
+            onPressed: _openFavoriteAlbums,
+            icon: const Icon(Icons.album_rounded),
+          ),
         IconButton(
           key: const ValueKey('open-recommendations'),
           focusNode: _recommendationsReturnFocusNode,
@@ -1120,7 +1178,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           onPressed: _signingOut ? null : _confirmSignOut,
           icon: const Icon(Icons.logout_rounded),
         ),
-        const SizedBox(width: 8),
+        if (MediaQuery.sizeOf(context).width >= 520) const SizedBox(width: 8),
       ],
     ),
     body: SafeArea(

@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
         FilledButton,
+        Focus,
         FocusManager,
         GridView,
         IconButton,
@@ -667,11 +668,21 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final entry = find.byKey(const ValueKey('open-favorite-albums'));
+      final compactEntry = find.byKey(
+        const ValueKey('open-favorite-collections'),
+      );
+      final wideEntry = find.byKey(const ValueKey('open-favorite-albums'));
       expect(favorites.requests, isEmpty);
+      expect(find.text('Your music'), findsOneWidget);
+      expect(compactEntry, findsOneWidget);
+      expect(wideEntry, findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.tap(entry);
+      await tester.tap(find.byTooltip('Open saved collections'));
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Favorite albums'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
       expect(
         find.byKey(const ValueKey('favorite-albums-content')),
         findsOneWidget,
@@ -713,10 +724,14 @@ void main() {
       expect(find.text('Saved Album'), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
 
+      tester.view.physicalSize = const Size(360, 800);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
       await tester.tap(find.byTooltip('Back to playlists'));
       await tester.pumpAndSettle();
       expect(find.text('No playlists yet'), findsOneWidget);
-      expect(tester.widget<IconButton>(entry).focusNode?.hasFocus, isTrue);
+      expect(find.text('Your music'), findsOneWidget);
+      expect(tester.widget<Focus>(compactEntry).focusNode?.hasFocus, isTrue);
       expect(tester.takeException(), isNull);
     },
   );
@@ -756,7 +771,10 @@ void main() {
       final albumTracks = _WidgetAlbumGateway(
         const AlbumTrackPageResult(total: 1, tracks: [track]),
       );
-      final entry = find.byKey(const ValueKey('open-favorite-artists'));
+      final compactEntry = find.byKey(
+        const ValueKey('open-favorite-collections'),
+      );
+      final wideEntry = find.byKey(const ValueKey('open-favorite-artists'));
 
       await tester.pumpWidget(
         MusicApp(
@@ -778,8 +796,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(favorites.requests, isEmpty);
+      expect(find.text('Your music'), findsOneWidget);
+      expect(compactEntry, findsOneWidget);
+      expect(wideEntry, findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.tap(entry);
+      expect(
+        tester
+            .getSemantics(find.byTooltip('Open saved collections'))
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      tester.widget<Focus>(compactEntry).focusNode?.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('Favorite artists'), findsOneWidget);
+      await tester.tap(find.text('Favorite artists'));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('favorite-artists-content')),
@@ -858,7 +891,7 @@ void main() {
       await tester.tap(find.byTooltip('Back to playlists'));
       await tester.pumpAndSettle();
       expect(find.text('No playlists yet'), findsOneWidget);
-      expect(tester.widget<IconButton>(entry).focusNode?.hasFocus, isTrue);
+      expect(tester.widget<IconButton>(wideEntry).focusNode?.hasFocus, isTrue);
       expect(tester.takeException(), isNull);
     },
   );
