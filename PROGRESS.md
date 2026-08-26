@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "M4.2 Retained adaptive primary shell"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -54,13 +54,13 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The M4 Default Material foundation slice is complete and undergoing whole-project ranking. No implementation task is active between slices; App Shell and shared music content/state vocabulary remain bounded candidates rather than implicit refactors.
+- Whole-project ranking selected a retained adaptive primary shell over the shared Track-row and async-state candidates. The finite task adds official `NavigationRail`/`NavigationBar` presentation for Library, Search, and Discover while preserving the current controller owner, detail overlays, focus/back behavior, and one Now Playing bar.
 
 # Next Candidates
 
-1. Rank the adaptive authenticated App Shell against a smaller shared music content/state vocabulary slice using the completed theme foundation and existing retained-state regressions.
-2. Preserve the user-operated M1 acceptance request for a convenient later observation; never automate stored account material.
-3. Keep protocol, offline/cache, release, and unavailable-platform directions outside M4 evidence-gated.
+1. Implement and validate the selected retained adaptive primary shell without changing the navigation/state-management architecture.
+2. Re-rank the shared dense Track row against a shared asynchronous state panel after the shell establishes final content widths.
+3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers
 
