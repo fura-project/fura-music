@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Typed QQ new-song channels"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -46,11 +46,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Album metadata-to-credited-Artist navigation is complete; the next action is another repository-wide ranking across user-path value, protocol correctness, playback reliability, platform evidence, documented risks, and the remaining authorized M3 directions before selecting a finite task.
+- M3 remains active. After the required post-presentation global ranking, typed QQ new-song channels are selected: map the directly evidenced six-category whole response through the existing shared Track boundary, expose one cancellable operation and retained Discover section, and keep exact size/redaction/cancellation limits. Favorite Artists remain evidence-blocked and global now-playing navigation remains deferred.
 
 # Next Candidates
 
-1. Re-rank the active M3 workstream from repository evidence. Global now-playing catalog navigation and availability/quality remain candidates, but the former needs a separate ownership audit and the latter still lacks safe response evidence.
+1. Implement the selected typed QQ new-song slice with exact category/returned-type validation, bounded whole-response Track mapping, cancellable Bridge lifecycle, retained adaptive category replacement, existing queue actions, and full offline/package regressions.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
