@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: M2
+  active_workstream: M3
   current_task: null
   next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
 
-M1 — First QQ Music Vertical Slice, phase 5: lyrics.
+M1's real-account playback observation remains open; M2 is checkpointed and M3 QQ Music core-product discovery is active.
 
 # Completed Recently
 
@@ -26,15 +26,16 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Made continuous autonomous execution explicit: task, commit, review, checkpoint, milestone, report, and green-test completion all return to global task selection while `global_stop` remains false. Human Decisions remain locally scoped, and the dated M1 readiness review points to current execution and scheduling authorities without rewriting its evidence.
 - Refreshed the current Android 16 x64 signed-out runtime after the recent M2 presentation changes. A direct logical-root Flutter invocation produced an x64-only Debug APK containing Flutter, Dart JNI, and Rust; clean install plus force-stop/relaunch both rendered the 1080×2400 sign-in surface without visible clipping, Flutter fatal errors, exceptions, or ANRs. The empty secure-storage algorithm migration ran only on first launch. The exact test package was uninstalled and the AVD stopped; no QR, account, QQ endpoint, or remote media was touched.
 - Revalidated the current offline baseline after the governance recovery and repeated-activation fix: strict Dart analysis, all 156 Flutter tests, Rust formatting, all 152 offline Rust tests, and strict Clippy pass. Four live QQ/WeChat tests remain explicitly gated and ignored by the offline suite.
+- Completed the M2 reliability and daily-use checkpoint against all eight Roadmap exit criteria. The current Linux release bundle builds; the review preserves the exact Android, physical-device, live QQ, and unavailable-platform evidence limits instead of promoting them into broader claims.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M2 bounded discovery remains active. The first v4 pass reproduced and fixed repeated play/pause activation against an asynchronous audio session; the next pass must rerank the whole workstream rather than continue presentation-local polish by proximity.
+- M3 bounded discovery is active. It must rank at most three QQ Music core-product candidates from authorized product/protocol evidence before selecting one finite vertical slice; the M2 checkpoint is not a stop point.
 
 # Next Candidates
 
-1. Run a bounded M2 product-completeness discovery pass and rank at most three evidence-backed candidates before implementing the highest-value finite task.
+1. Run a bounded M3 QQ Music core-product discovery pass, record at most three evidence-backed candidates, and select the highest-value finite vertical slice.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 

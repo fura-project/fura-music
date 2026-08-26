@@ -29,7 +29,7 @@ Deliver the smallest coherent user journey from QQ Music sign-in through word-le
 - Verified QQ Music protocol behavior from real responses, repeatable integration tests, or cross-validation across independent active implementations.
 - A platform-safe credential storage approach before any public alpha.
 
-## Active Workstream — M2 Reliability and Daily-Use Quality
+## Completed Checkpoint — M2 Reliability and Daily-Use Quality
 
 ### Goal
 
@@ -61,7 +61,11 @@ Completed slices cover shared keyboard/media transport, truthful seek and volume
 7. Linux and the available Android development targets retain bounded build/runtime evidence, with unsupported claims recorded explicitly.
 8. A checkpoint review finds no known high-value M2 correctness or daily-use gap left unaddressed or untracked, and M1 user-operated evidence remains represented truthfully.
 
-## Next Milestone — M3 QQ Music Core Product Coverage
+### Checkpoint
+
+Completed on 2026-08-26. The criterion-by-criterion evidence and its explicit platform/live-service limits are recorded in `docs/development/m2-checkpoint-review.md`. Later M2-class regressions remain valid bug work; the checkpoint is not a prohibition on fixes.
+
+## Active Workstream — M3 QQ Music Core Product Coverage
 
 ### Goal
 
@@ -76,7 +80,7 @@ Expand from the first vertical slice into a coherent QQ Music client while prese
 - Track availability and quality representation where protocol evidence exists.
 - Other QQ-native catalog flows discovered from real product use and bounded before implementation.
 
-M3 begins after the M2 checkpoint. Each slice requires discovery or protocol/product evidence, a finite acceptance boundary, and offline regression coverage where reusable mapping or rules are introduced. This is not authorization for external Providers, podcast/social features, a plugin marketplace, or a download platform.
+M3 begins with bounded discovery after the M2 checkpoint. Each slice requires discovery or protocol/product evidence, a finite acceptance boundary, and offline regression coverage where reusable mapping or rules are introduced. This is not authorization for external Providers, podcast/social features, a plugin marketplace, or a download platform.
 
 ## Later direction
 
