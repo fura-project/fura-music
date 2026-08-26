@@ -13,6 +13,7 @@ void main() {
     opaqueId: 'track:41001:0:1:firstMid',
     title: 'First track',
     artistNames: ['Artist'],
+    durationSeconds: 120,
   );
   const secondTrack = PlaylistTrackSummary(
     providerId: 'qq-music',
@@ -43,13 +44,46 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(controller.positionMs, 375);
     expect(positionNotifications, 1);
+    expect(controller.durationMs, 120000);
+    expect(controller.canSeek, isTrue);
+    await controller.seekToMs(130000);
+    await Future<void>.delayed(Duration.zero);
+    expect(audioSession.seekPositions, [120000]);
+    expect(controller.positionMs, 120000);
     await controller.pause();
     expect(controller.stage, TrackPlaybackStage.paused);
+    await controller.seekToMs(-25);
+    await Future<void>.delayed(Duration.zero);
+    expect(audioSession.seekPositions, [120000, 0]);
+    expect(controller.positionMs, 0);
     await controller.resume();
     expect(controller.stage, TrackPlaybackStage.playing);
     audioSession.emitState(ForegroundAudioState.completed);
     await Future<void>.delayed(Duration.zero);
     expect(controller.stage, TrackPlaybackStage.completed);
+    controller.dispose();
+  });
+
+  test('unknown duration never enables or forwards seeking', () async {
+    const unknownDuration = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41003:0:1:unknownMid',
+      title: 'Unknown duration',
+      artistNames: ['Artist'],
+    );
+    final session = _FakeAudioSession();
+    final controller = TrackPlaybackController(
+      _FakeResolutionGateway([
+        _ImmediateResolution(_successfulResolution('unknown')),
+      ]),
+      ForegroundPlaybackController(_FakeAudioEngine([session])),
+    );
+
+    await controller.playTrack(unknownDuration);
+    expect(controller.durationMs, isNull);
+    expect(controller.canSeek, isFalse);
+    await controller.seekToMs(1000);
+    expect(session.seekPositions, isEmpty);
     controller.dispose();
   });
 
@@ -240,6 +274,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   final _states = StreamController<ForegroundAudioState>.broadcast();
   final _failures = StreamController<ForegroundAudioFailure>.broadcast();
   final _positions = StreamController<int>.broadcast();
+  final List<int> seekPositions = [];
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -255,6 +290,12 @@ class _FakeAudioSession implements ForegroundAudioSession {
 
   @override
   Future<void> play() async => emitState(ForegroundAudioState.playing);
+
+  @override
+  Future<void> seekToMs(int positionMs) async {
+    seekPositions.add(positionMs);
+    emitPosition(positionMs);
+  }
 
   @override
   Future<void> stop() async => emitState(ForegroundAudioState.stopped);

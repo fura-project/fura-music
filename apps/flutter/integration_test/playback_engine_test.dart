@@ -40,12 +40,9 @@ void main() {
   testWidgets('project adapter plays a loopback remote MP3', (tester) async {
     final fixture = base64Decode(_silentMp3Base64);
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final requests = server.listen((request) {
-      request.response.headers.contentType = ContentType('audio', 'mpeg');
-      request.response.contentLength = fixture.length;
-      request.response.add(fixture);
-      unawaited(request.response.close());
-    });
+    final requests = server.listen(
+      (request) => unawaited(_serveFixture(request, fixture)),
+    );
     final engine = AudioplayersForegroundAudioEngine();
     ForegroundAudioSession? session;
 
@@ -72,6 +69,15 @@ void main() {
         await progressed.timeout(const Duration(seconds: 5)),
         greaterThan(0),
       );
+      final sought = session.positionMs.firstWhere(
+        (positionMs) => positionMs >= 50 && positionMs <= 450,
+      );
+      await session.seekToMs(100);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(
+        await sought.timeout(const Duration(seconds: 5)),
+        inInclusiveRange(50, 450),
+      );
       await _expectStateAfter(
         session,
         ForegroundAudioState.paused,
@@ -93,6 +99,49 @@ void main() {
       await server.close(force: true);
     }
   }, skip: !Platform.isLinux);
+}
+
+Future<void> _serveFixture(HttpRequest request, List<int> fixture) async {
+  final response = request.response;
+  response.headers.contentType = ContentType('audio', 'mpeg');
+  response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+  final range = request.headers.value(HttpHeaders.rangeHeader);
+  if (range == null) {
+    response.contentLength = fixture.length;
+    response.add(fixture);
+    await response.close();
+    return;
+  }
+
+  final match = RegExp(r'^bytes=(\d+)-(\d*)$').firstMatch(range);
+  final start = match == null ? null : int.tryParse(match.group(1)!);
+  final requestedEnd = match == null || match.group(2)!.isEmpty
+      ? null
+      : int.tryParse(match.group(2)!);
+  if (start == null ||
+      start < 0 ||
+      start >= fixture.length ||
+      (requestedEnd != null && requestedEnd < start)) {
+    response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+    response.headers.set(
+      HttpHeaders.contentRangeHeader,
+      'bytes */${fixture.length}',
+    );
+    await response.close();
+    return;
+  }
+
+  final end = requestedEnd == null || requestedEnd >= fixture.length
+      ? fixture.length - 1
+      : requestedEnd;
+  response.statusCode = HttpStatus.partialContent;
+  response.headers.set(
+    HttpHeaders.contentRangeHeader,
+    'bytes $start-$end/${fixture.length}',
+  );
+  response.contentLength = end - start + 1;
+  response.add(fixture.sublist(start, end + 1));
+  await response.close();
 }
 
 Future<void> _expectStateAfter(

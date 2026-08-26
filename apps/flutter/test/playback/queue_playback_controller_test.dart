@@ -375,6 +375,9 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> pause() async => emit(ForegroundAudioState.paused);
 
   @override
+  Future<void> seekToMs(int positionMs) async {}
+
+  @override
   Future<void> stop() async => emit(ForegroundAudioState.stopped);
 
   @override

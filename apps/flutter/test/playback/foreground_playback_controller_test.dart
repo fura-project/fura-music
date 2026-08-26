@@ -32,6 +32,72 @@ void main() {
     },
   );
 
+  test('seek is bounded to the active playing or paused session', () async {
+    final session = _FakeSession();
+    final controller = ForegroundPlaybackController(
+      _FakeEngine.immediate(session),
+    );
+
+    await controller.seekToMs(10);
+    expect(session.seekPositions, isEmpty);
+
+    await controller.playRemote(Uri.parse('https://audio.example.test/seek'));
+    await controller.seekToMs(420);
+    expect(session.seekPositions, [420]);
+    expect(controller.positionMs, 420);
+
+    await controller.pause();
+    await controller.seekToMs(840);
+    expect(session.seekPositions, [420, 840]);
+    expect(controller.positionMs, 840);
+
+    await controller.seekToMs(-1);
+    expect(session.seekPositions, [420, 840]);
+    controller.dispose();
+  });
+
+  test(
+    'late old seek and current seek failure respect session ownership',
+    () async {
+      final oldSeek = Completer<void>();
+      final first = _FakeSession(seekResult: oldSeek.future);
+      final second = _FakeSession();
+      final controller = ForegroundPlaybackController(
+        _FakeEngine.queued([Future.value(first), Future.value(second)]),
+      );
+      await controller.playRemote(Uri.parse('https://audio.example.test/one'));
+      final pendingSeek = controller.seekToMs(500);
+      await Future<void>.delayed(Duration.zero);
+      first.emitPosition(300);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.positionMs, 0);
+
+      await controller.playRemote(Uri.parse('https://audio.example.test/two'));
+      oldSeek.completeError(
+        const ForegroundAudioException(ForegroundAudioFailure.playback),
+      );
+      await pendingSeek;
+      expect(controller.stage, ForegroundPlaybackStage.playing);
+      expect(controller.positionMs, 0);
+
+      final failing = _FakeSession(
+        seekFailure: ForegroundAudioFailure.playback,
+      );
+      final failedController = ForegroundPlaybackController(
+        _FakeEngine.immediate(failing),
+      );
+      await failedController.playRemote(
+        Uri.parse('https://audio.example.test/failing'),
+      );
+      await failedController.seekToMs(250);
+      expect(failedController.stage, ForegroundPlaybackStage.error);
+      expect(failedController.failure, ForegroundAudioFailure.playback);
+
+      controller.dispose();
+      failedController.dispose();
+    },
+  );
+
   test('source replacement suppresses every late old-session event', () async {
     final first = _FakeSession();
     final second = _FakeSession();
@@ -174,17 +240,25 @@ class _FakeEngine implements ForegroundAudioEngine {
 }
 
 class _FakeSession implements ForegroundAudioSession {
-  _FakeSession({this.throwOnStop = false, this.throwOnDispose = false});
+  _FakeSession({
+    this.throwOnStop = false,
+    this.throwOnDispose = false,
+    this.seekResult,
+    this.seekFailure,
+  });
 
   final _states = StreamController<ForegroundAudioState>.broadcast();
   final _failures = StreamController<ForegroundAudioFailure>.broadcast();
   final _positions = StreamController<int>.broadcast();
   final bool throwOnStop;
   final bool throwOnDispose;
+  final Future<void>? seekResult;
+  final ForegroundAudioFailure? seekFailure;
   int playCalls = 0;
   int pauseCalls = 0;
   int stopCalls = 0;
   int disposeCalls = 0;
+  final List<int> seekPositions = [];
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -205,6 +279,15 @@ class _FakeSession implements ForegroundAudioSession {
   Future<void> pause() async {
     pauseCalls += 1;
     emitState(ForegroundAudioState.paused);
+  }
+
+  @override
+  Future<void> seekToMs(int positionMs) async {
+    seekPositions.add(positionMs);
+    final failure = seekFailure;
+    if (failure != null) throw ForegroundAudioException(failure);
+    final result = seekResult;
+    if (result != null) await result;
   }
 
   @override

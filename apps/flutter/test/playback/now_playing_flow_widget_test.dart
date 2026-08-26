@@ -68,6 +68,66 @@ void main() {
     expect(find.text('Continue with WeChat'), findsNothing);
   });
 
+  testWidgets('shows exact progress and seeks once when a drag commits', (
+    tester,
+  ) async {
+    final session = _FakeAudioSession();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('seekable')),
+      ]),
+      audio: _FakeAudioEngine([session]),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    session.emitPosition(15000);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('now-playing-position')))
+          .data,
+      '0:15',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('now-playing-duration')))
+          .data,
+      '2:00',
+    );
+
+    final progress = find.byKey(const ValueKey('now-playing-progress'));
+    await tester.tapAt(tester.getCenter(progress));
+    await tester.pumpAndSettle();
+
+    expect(session.seekPositions, hasLength(1));
+    expect(session.seekPositions.single, closeTo(60000, 5000));
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('now-playing-position')))
+          .data,
+      '1:00',
+    );
+  });
+
+  testWidgets('does not invent progress when track duration is unknown', (
+    tester,
+  ) async {
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('unknown-duration')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      durationSeconds: null,
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('now-playing-progress')), findsNothing);
+  });
+
   for (final failure in [
     LyricFailure.credentialRejected,
     LyricFailure.credentialRejectedStorageCleanupFailed,
@@ -456,6 +516,7 @@ Future<void> _openDetail(
   String firstOpaqueId = 'first',
   String secondOpaqueId = 'second',
   String secondTitle = 'Second track',
+  int? durationSeconds = 120,
 }) async {
   await tester.pumpWidget(
     MusicApp(
@@ -466,6 +527,7 @@ Future<void> _openDetail(
         firstOpaqueId,
         secondOpaqueId,
         secondTitle,
+        durationSeconds,
       ),
       mediaResolutionGateway: media,
       lyricGateway:
@@ -646,18 +708,25 @@ class _DetailGateway implements PlaylistDetailGateway {
     this.firstOpaqueId,
     this.secondOpaqueId,
     this.secondTitle,
+    this.durationSeconds,
   );
 
   final String firstOpaqueId;
   final String secondOpaqueId;
   final String secondTitle;
+  final int? durationSeconds;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
     required UserPlaylistSummary playlist,
     required int offset,
     required int size,
-  }) => _DetailOperation(firstOpaqueId, secondOpaqueId, secondTitle);
+  }) => _DetailOperation(
+    firstOpaqueId,
+    secondOpaqueId,
+    secondTitle,
+    durationSeconds,
+  );
 }
 
 class _DetailOperation implements PlaylistTrackPageLoadOperation {
@@ -665,11 +734,13 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
     this.firstOpaqueId,
     this.secondOpaqueId,
     this.secondTitle,
+    this.durationSeconds,
   );
 
   final String firstOpaqueId;
   final String secondOpaqueId;
   final String secondTitle;
+  final int? durationSeconds;
 
   @override
   bool cancel() => true;
@@ -683,12 +754,14 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         opaqueId: firstOpaqueId,
         title: 'First track',
         artistNames: const ['Fixture artist'],
+        durationSeconds: durationSeconds,
       ),
       PlaylistTrackSummary(
         providerId: 'qq-music',
         opaqueId: secondOpaqueId,
         title: secondTitle,
         artistNames: const ['Fixture artist'],
+        durationSeconds: durationSeconds,
       ),
     ],
   );
@@ -811,6 +884,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   final StreamController<ForegroundAudioFailure> _failures =
       StreamController<ForegroundAudioFailure>.broadcast();
   final StreamController<int> _positions = StreamController<int>.broadcast();
+  final List<int> seekPositions = [];
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -826,6 +900,12 @@ class _FakeAudioSession implements ForegroundAudioSession {
 
   @override
   Future<void> pause() async => _states.add(ForegroundAudioState.paused);
+
+  @override
+  Future<void> seekToMs(int positionMs) async {
+    seekPositions.add(positionMs);
+    _positions.add(positionMs);
+  }
 
   @override
   Future<void> stop() async => _states.add(ForegroundAudioState.stopped);

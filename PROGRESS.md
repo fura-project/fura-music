@@ -99,6 +99,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Corrected the QQ-only media identity to preserve optional `file.media_mid`, removed the false vkey interpretation of playlist `songtype`, fixed vkey requests at `songtype: [0]`, selected the two-implementation `M500 + file-media-mid + .mp3` filename when present, and retained the independently agreed doubled-song-MID fallback when absent. The opaque identity change remains entirely inside QQ Provider routing; Domain, Bridge, and Flutter still do not parse it.
 - Added cross-layer regressions with observed `songtype: 13`, differing file/song MIDs, missing-file fallback, malformed identity, exact filename, and fixed vkey parameter. Rust now passes 150 offline tests (`19 + 2 + 29 + 76 + 24`) plus strict Clippy/formatting and the anonymous live media probe; strict Dart analysis, 103 Flutter tests, Linux release, and packaged typed-FFI smoke pass.
 - Added authenticated-surface playback shortcuts without moving transport state into Rust: hardware play/pause, previous, next, and stop keys plus `Ctrl+Space`, `Ctrl+Left`, and `Ctrl+Right` now use the same Track/Queue controller actions as the visible controls across library/detail navigation. Authentication failures cannot be retried by a shortcut. Strict Dart analysis, all 104 Flutter tests, formatting, and a Linux release build pass.
+- Added exact elapsed/duration progress and one-commit drag seeking for tracks with a positive known duration. The foreground session owns plugin seek, the controller accepts only the exact playing/paused session, clamps through Track duration, ignores position callbacks while seeking, suppresses stale/concurrent completions, and maps current seek failure coarsely without retaining the source. Unknown duration renders no progress. The Linux loopback fixture now serves valid byte ranges; local/loopback native playback, position, and seek pass alongside strict analysis, 109 Flutter tests, and a Linux release build.
 
 # In Progress
 
@@ -106,7 +107,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Next Candidates
 
-1. Add truthful foreground playback progress and bounded seeking using the already available Track duration and exact native-session position; preserve replacement/dispose lifecycle and source-URI redaction.
+1. Add a bounded desktop foreground volume control that is applied to each fresh native session without leaking plugin state into the queue or Rust; keep persistence out until a real product requirement exists.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 
@@ -131,6 +132,7 @@ None.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
 - `audioplayers` local MP3 lifecycle is proven on Linux and the Android x64 emulator. Android remote transport, audio focus/interruption, physical-device behavior, and Apple/Windows runtime paths remain unverified before release claims.
+- Linux loopback HTTP seek is verified against a project byte-range fixture; actual QQ CDN seek remains part of the pending authenticated playback observation and is not implied by that local result.
 - The corrected ARM64 application starts under the current x64 AVD's ARM64 translation layer, but this is not physical-device evidence and does not prove hardware-specific rendering, media, or lifecycle behavior.
 - A local credential timestamp cannot prove server validity; transport failures must not be mapped to signed-out or rejected state.
 - A generated bridge can grow into a second business layer unless its public surface stays coarse and typed.

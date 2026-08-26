@@ -26,6 +26,8 @@ class ForegroundPlaybackController extends ChangeNotifier {
   StreamSubscription<int>? _positionSubscription;
   int _positionMs = 0;
   int _generation = 0;
+  int _seekGeneration = 0;
+  int? _pendingSeekGeneration;
   bool _disposed = false;
 
   ForegroundPlaybackStage get stage => _stage;
@@ -119,6 +121,41 @@ class ForegroundPlaybackController extends ChangeNotifier {
     }
   }
 
+  Future<void> seekToMs(int positionMs) async {
+    final session = _session;
+    final generation = _generation;
+    if (session == null ||
+        positionMs < 0 ||
+        (_stage != ForegroundPlaybackStage.playing &&
+            _stage != ForegroundPlaybackStage.paused)) {
+      return;
+    }
+    final seekGeneration = ++_seekGeneration;
+    _pendingSeekGeneration = seekGeneration;
+    try {
+      await session.seekToMs(positionMs);
+      if (_isSessionCurrent(generation, session) &&
+          seekGeneration == _seekGeneration) {
+        _pendingSeekGeneration = null;
+        _setPosition(positionMs);
+      }
+    } on ForegroundAudioException catch (error) {
+      if (seekGeneration == _seekGeneration) {
+        _pendingSeekGeneration = null;
+        _failSession(generation, session, error.failure);
+      }
+    } on Object {
+      if (seekGeneration == _seekGeneration) {
+        _pendingSeekGeneration = null;
+        _failSession(
+          generation,
+          session,
+          ForegroundAudioFailure.coreUnavailable,
+        );
+      }
+    }
+  }
+
   Future<void> stop() async {
     ++_generation;
     final session = _detachSession();
@@ -157,7 +194,9 @@ class ForegroundPlaybackController extends ChangeNotifier {
     ForegroundAudioSession session,
     int positionMs,
   ) {
-    if (_isSessionCurrent(generation, session) && positionMs >= 0) {
+    if (_isSessionCurrent(generation, session) &&
+        _pendingSeekGeneration == null &&
+        positionMs >= 0) {
       _setPosition(positionMs);
     }
   }
@@ -182,6 +221,8 @@ class ForegroundPlaybackController extends ChangeNotifier {
   }
 
   ForegroundAudioSession? _detachSession() {
+    _seekGeneration += 1;
+    _pendingSeekGeneration = null;
     final session = _session;
     _session = null;
     unawaited(_stateSubscription?.cancel());

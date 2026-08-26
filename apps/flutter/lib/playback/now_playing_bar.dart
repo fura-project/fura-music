@@ -43,14 +43,12 @@ class NowPlayingBar extends StatelessWidget {
               builder: (context, constraints) {
                 final narrow = constraints.maxWidth < 520;
                 return Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    narrow ? 8 : 10,
-                    12,
-                    narrow ? 6 : 10,
-                  ),
-                  child: narrow
-                      ? Column(
+                  padding: EdgeInsets.fromLTRB(16, narrow ? 8 : 10, 12, 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (narrow)
+                        Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Row(
@@ -81,7 +79,8 @@ class NowPlayingBar extends StatelessWidget {
                             ),
                           ],
                         )
-                      : Row(
+                      else
+                        Row(
                           children: [
                             _StatusIcon(stage: playback.stage),
                             const SizedBox(width: 12),
@@ -105,6 +104,9 @@ class NowPlayingBar extends StatelessWidget {
                             _QueueButton(controller: controller),
                           ],
                         ),
+                      _PlaybackProgress(controller: playback, track: track),
+                    ],
+                  ),
                 );
               },
             ),
@@ -160,6 +162,106 @@ class NowPlayingBar extends StatelessWidget {
         ),
     ];
   }
+}
+
+class _PlaybackProgress extends StatefulWidget {
+  const _PlaybackProgress({required this.controller, required this.track});
+
+  final TrackPlaybackController controller;
+  final PlaylistTrackSummary track;
+
+  @override
+  State<_PlaybackProgress> createState() => _PlaybackProgressState();
+}
+
+class _PlaybackProgressState extends State<_PlaybackProgress> {
+  double? _previewMs;
+  int _seekAttempt = 0;
+
+  @override
+  void didUpdateWidget(covariant _PlaybackProgress oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track.providerId != widget.track.providerId ||
+        oldWidget.track.opaqueId != widget.track.opaqueId) {
+      _seekAttempt += 1;
+      _previewMs = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final durationMs = widget.controller.durationMs;
+    if (durationMs == null) return const SizedBox.shrink();
+    final rawPosition = _previewMs ?? widget.controller.positionMs.toDouble();
+    final position = rawPosition.clamp(0, durationMs.toDouble()).toDouble();
+    final colors = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: colors.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return Row(
+      children: [
+        SizedBox(
+          width: 42,
+          child: Text(
+            _playbackTime(position.round()),
+            key: const ValueKey('now-playing-position'),
+            style: textStyle,
+            textAlign: TextAlign.end,
+          ),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            ),
+            child: Slider(
+              key: const ValueKey('now-playing-progress'),
+              value: position,
+              max: durationMs.toDouble(),
+              semanticFormatterCallback: (value) =>
+                  '${_playbackTime(value.round())} of '
+                  '${_playbackTime(durationMs)}',
+              onChangeStart: widget.controller.canSeek
+                  ? (value) => setState(() => _previewMs = value)
+                  : null,
+              onChanged: widget.controller.canSeek
+                  ? (value) => setState(() => _previewMs = value)
+                  : null,
+              onChangeEnd: widget.controller.canSeek ? _commitSeek : null,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 42,
+          child: Text(
+            _playbackTime(durationMs),
+            key: const ValueKey('now-playing-duration'),
+            style: textStyle,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _commitSeek(double value) {
+    final attempt = ++_seekAttempt;
+    setState(() => _previewMs = value);
+    unawaited(() async {
+      await widget.controller.seekToMs(value.round());
+      if (!mounted || attempt != _seekAttempt) return;
+      setState(() => _previewMs = null);
+    }());
+  }
+}
+
+String _playbackTime(int milliseconds) {
+  final totalSeconds = milliseconds ~/ 1000;
+  final minutes = totalSeconds ~/ 60;
+  final seconds = totalSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
 }
 
 class _TrackInfo extends StatelessWidget {

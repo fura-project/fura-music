@@ -39,8 +39,19 @@ class TrackPlaybackController extends ChangeNotifier {
   MediaResolutionFailure? get resolutionFailure => _resolutionFailure;
   ForegroundAudioFailure? get engineFailure => _engineFailure;
   int get positionMs => _playback.positionMs;
+  int? get durationMs {
+    final durationSeconds = _track?.durationSeconds;
+    return durationSeconds == null || durationSeconds <= 0
+        ? null
+        : durationSeconds * 1000;
+  }
+
   bool get canPause => _stage == TrackPlaybackStage.playing;
   bool get canResume => _stage == TrackPlaybackStage.paused;
+  bool get canSeek =>
+      durationMs != null &&
+      (_stage == TrackPlaybackStage.playing ||
+          _stage == TrackPlaybackStage.paused);
   bool get requiresAuthentication => switch (_resolutionFailure) {
     MediaResolutionFailure.authenticationRequired ||
     MediaResolutionFailure.credentialRejected ||
@@ -117,6 +128,17 @@ class TrackPlaybackController extends ChangeNotifier {
   Future<void> pause() => canPause ? _playback.pause() : Future.value();
 
   Future<void> resume() => canResume ? _playback.resume() : Future.value();
+
+  Future<void> seekToMs(int positionMs) {
+    final duration = durationMs;
+    if (!canSeek || duration == null) return Future.value();
+    final boundedPosition = positionMs < 0
+        ? 0
+        : positionMs > duration
+        ? duration
+        : positionMs;
+    return _playback.seekToMs(boundedPosition);
+  }
 
   Future<void> stop() async {
     ++_generation;

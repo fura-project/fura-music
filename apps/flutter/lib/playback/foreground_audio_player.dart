@@ -26,6 +26,7 @@ abstract interface class ForegroundAudioSession {
 
   Future<void> play();
   Future<void> pause();
+  Future<void> seekToMs(int positionMs);
   Future<void> stop();
   Future<void> dispose();
 }
@@ -110,6 +111,17 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
   @override
   Future<void> pause() =>
       _invoke(_player.pause, ForegroundAudioFailure.playback);
+
+  @override
+  Future<void> seekToMs(int positionMs) async {
+    if (positionMs < 0) {
+      throw const ForegroundAudioException(ForegroundAudioFailure.playback);
+    }
+    await _invoke(
+      () => _player.seek(Duration(milliseconds: positionMs)),
+      ForegroundAudioFailure.playback,
+    );
+  }
 
   @override
   Future<void> stop() => _invoke(_player.stop, ForegroundAudioFailure.playback);
