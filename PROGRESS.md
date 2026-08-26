@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Adaptive immersive now playing"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: GLOBAL_RANKING
 ---
 
 # Current Milestone
@@ -43,16 +43,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the sixteenth M3 slice: canonical Album metadata credits are actionable from every pre-existing Album origin only after validated details load. One Artist opens directly and collaborations require bounded explicit selection; a separate retained Artist plus one nested Album overlay restores nested Album → Artist → the exact originating Album/collection while preserving its controller and the shared queue/playback owner. Pre-detail actions, recursive route history, global now-playing navigation, biography/follow, protocol changes, and generic navigation infrastructure remain excluded.
 - Implemented the seventeenth M3 slice: direct anonymous QQ new-song loading maps six exact service categories and one bounded whole-response Track collection through the shared provider-neutral Track boundary and a cancellable Bridge. Flutter keeps New Songs as a lazy fifth Discover state, replaces categories exactly, owns loading/empty/error/retry/cancel/stale/disposal behavior, keeps the category control reachable at 360px, and delegates play/add actions to the existing queue without inventing pagination. Heterogeneous Home/editorial shelves, personalization or quality claims, radio/autoplay, caching, new queue rules, and generic recommendation infrastructure remain excluded.
 - Implemented the eighteenth M3 slice: every existing now-playing bar can open the current queue Track's already-validated Album or credited Artists through one presentation-only callback scope and one topmost retained overlay. Single destinations open directly; collaborations use an adaptive chooser; platform/AppBar return restores the exact prior page and nested Artist → Album state without reloading its controller or replacing queue ownership. Context-free Tracks remain non-actionable, compact entry is 48 px, desktop Tab/Enter and compact pointer/touch paths have regressions, and a Track change while the chooser is open suppresses the stale destination. Recursive history, protocol/Domain/Bridge/queue changes, per-row expansion, and generic navigation infrastructure remain excluded.
-- Revalidated the resulting baseline: Rust formatting, 258 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 276 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
+- Implemented the nineteenth M3 slice: every existing now-playing bar exposes one precise pointer/touch/keyboard entry to a retained immersive page when a current Track exists. Wide layout pairs large artwork with the existing synchronized lyric panel; 360 px layout stacks them; the existing bar remains the only transport/progress/queue/volume implementation. Track replacement updates in place, queue clearing shows an honest empty state, the expanded bar cannot recursively reopen itself, and AppBar/platform return restores the exact originating page and controller state. Palette extraction, gestures, background playback, mini-player/audio/queue rewrites, protocol/Domain/Bridge changes, and generic navigation infrastructure remain excluded.
+- Revalidated the resulting baseline: Rust formatting, 258 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 278 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live new-song/favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. A global product-completeness audit selected the explicit `PROJECT.md` immersive now-playing requirement: the current app has a capable bottom bar and lyric modal but no retained full current-Track surface. The finite task is one presentation-only adaptive page over the existing queue/playback/lyric owner; Favorite Artists and Track availability remain evidence-blocked.
+- M3 remains active. The explicit immersive now-playing core-experience gap is complete; the next step is a fresh global ranking across QQ core-product coverage, reliability, platform evidence, risks, and evidence-blocked candidates.
 
 # Next Candidates
 
-1. Implement a retained adaptive immersive now-playing page over the existing shared queue/playback/lyric state, with exact return, Track replacement, empty-queue, compact, desktop, pointer/touch, and keyboard regressions.
+1. Run a fresh M3 discovery/global ranking; Favorite Artists and Track availability remain candidates only after their documented protocol evidence gaps are resolved.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 

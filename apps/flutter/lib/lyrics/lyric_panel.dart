@@ -69,6 +69,7 @@ class LyricPanel extends StatelessWidget {
     this.playbackState,
     this.canSeek,
     this.onSeek,
+    this.showCloseButton = true,
     super.key,
   });
 
@@ -78,6 +79,7 @@ class LyricPanel extends StatelessWidget {
   final Listenable? playbackState;
   final bool Function()? canSeek;
   final Future<void> Function(int positionMs)? onSeek;
+  final bool showCloseButton;
 
   @override
   Widget build(BuildContext context) {
@@ -120,11 +122,12 @@ class LyricPanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Close lyrics',
-                      onPressed: onClose,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
+                    if (showCloseButton)
+                      IconButton(
+                        tooltip: 'Close lyrics',
+                        onPressed: onClose,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
                   ],
                 ),
               ),

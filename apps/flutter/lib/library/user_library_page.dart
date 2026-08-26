@@ -28,6 +28,8 @@ import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
+import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
+import 'package:flutterustmusic/playback/expanded_now_playing_page.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -140,6 +142,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool _searchOpen = false;
   bool _recommendationsOpen = false;
   bool _favoriteAlbumsOpen = false;
+  bool _expandedNowPlayingOpen = false;
   bool _handledLyricCredentialRejection = false;
   bool _signingOut = false;
 
@@ -530,11 +533,30 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           ),
       ],
     );
+    final expandedNowPlayingOpen = _expandedNowPlayingOpen;
+    final expandedNowPlayingPage = IndexedStack(
+      index: expandedNowPlayingOpen ? 1 : 0,
+      children: [
+        ExpandedNowPlayingNavigation(
+          onOpen: _openExpandedNowPlaying,
+          child: nowPlayingRoutedPage,
+        ),
+        if (!expandedNowPlayingOpen)
+          const SizedBox.shrink()
+        else
+          ExpandedNowPlayingPage(
+            controller: _queuePlaybackController,
+            onBack: _closeExpandedNowPlaying,
+            onSignInAgain: widget.onSignInAgain,
+          ),
+      ],
+    );
     final playbackPage = PlaybackShortcuts(
       controller: _queuePlaybackController,
-      child: nowPlayingRoutedPage,
+      child: expandedNowPlayingPage,
     );
     final hasLocalPage =
+        expandedNowPlayingOpen ||
         nowPlayingContextAlbum != null ||
         nowPlayingContextArtist != null ||
         selectedPlaylist != null ||
@@ -589,7 +611,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _returnFromLocalPage() {
-    if (_nowPlayingContextAlbum != null) {
+    if (_expandedNowPlayingOpen) {
+      _closeExpandedNowPlaying();
+    } else if (_nowPlayingContextAlbum != null) {
       _returnFromNowPlayingAlbum();
     } else if (_nowPlayingContextArtist != null) {
       _returnFromNowPlayingArtist();
@@ -734,6 +758,19 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       return;
     }
     setState(() => _nowPlayingContextArtist = null);
+  }
+
+  void _openExpandedNowPlaying() {
+    if (_expandedNowPlayingOpen || _queuePlaybackController.current == null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _expandedNowPlayingOpen = true);
+  }
+
+  void _closeExpandedNowPlaying() {
+    if (!_expandedNowPlayingOpen) return;
+    setState(() => _expandedNowPlayingOpen = false);
   }
 
   void _closeFavoriteAlbums() {

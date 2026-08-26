@@ -25,6 +25,10 @@ void main() {
     final audio = _FakeAudioEngine([_FakeAudioSession()]);
     final queue = _WidgetQueueGateway();
     await _openDetail(tester, media: media, audio: audio, queue: queue);
+    expect(
+      find.byKey(const ValueKey('now-playing-open-expanded')),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
@@ -39,6 +43,10 @@ void main() {
     expect(
       find.byKey(const ValueKey('now-playing-catalog-action')),
       findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('now-playing-open-expanded')),
+      findsOneWidget,
     );
     expect(find.textContaining('Playing'), findsOneWidget);
     expect(media.requests, [('qq-music', 'first')]);

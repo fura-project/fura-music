@@ -1407,6 +1407,234 @@ void main() {
     },
   );
 
+  testWidgets(
+    'expands current Track on compact layout and preserves Search through clear',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const firstTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:51001:0:expandedFirstMid:-',
+        title: 'Expanded First',
+        artistNames: ['First Artist'],
+        albumTitle: 'First Album',
+      );
+      const replacementTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:51002:0:expandedSecondMid:-',
+        title: 'Expanded Replacement',
+        artistNames: ['Second Artist'],
+        albumTitle: 'Second Album',
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 2,
+          items: [
+            TrackSearchItem(track: firstTrack),
+            TrackSearchItem(track: replacementTrack),
+          ],
+        ),
+      );
+      final queue = _WidgetPlaybackQueueGateway(mutatesOnAdvance: true);
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          searchGateway: search,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'expanded compact query',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-page')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-compact-layout')),
+        findsOneWidget,
+      );
+      expect(find.text('Expanded First'), findsWidgets);
+      expect(find.text('First Album'), findsOneWidget);
+      expect(find.byTooltip('Close lyrics'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('now-playing-open-expanded')),
+        findsNothing,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(FocusManager.instance.primaryFocus, isNotNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.mediaTrackNext);
+      await tester.pumpAndSettle();
+      expect(find.text('Expanded Replacement'), findsWidgets);
+      expect(find.text('Second Album'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-show-queue')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('queue-clear')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('queue-clear-confirmation-sheet')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('queue-clear-confirm')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close queue'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-empty')),
+        findsOneWidget,
+      );
+      expect(find.text('Nothing is playing'), findsOneWidget);
+      expect(find.byKey(const ValueKey('now-playing-title')), findsNothing);
+
+      final backHandled = await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(backHandled, isTrue);
+      expect(
+        find.byKey(const ValueKey('track-search-content')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+            .controller
+            ?.text,
+        'expanded compact query',
+      );
+      expect(search.requests, [('expanded compact query', 1, 30)]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'opens immersive now playing with desktop keyboard and returns exactly',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:52001:0:expandedDesktopMid:-',
+        title: 'Expanded Desktop Track',
+        artistNames: ['Desktop Artist'],
+        albumTitle: 'Desktop Album',
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: track)],
+        ),
+      );
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          searchGateway: search,
+          playbackQueueGateway: _WidgetPlaybackQueueGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'expanded desktop query',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
+      await tester.pumpAndSettle();
+
+      final action = find.byKey(const ValueKey('now-playing-open-expanded'));
+      expect(
+        tester
+            .getSemantics(action)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      var actionFocused = false;
+      for (var attempt = 0; attempt < 24; attempt += 1) {
+        final focusedContext = FocusManager.instance.primaryFocus?.context;
+        if (focusedContext != null &&
+            find
+                .ancestor(
+                  of: find.byElementPredicate(
+                    (element) => identical(element, focusedContext),
+                  ),
+                  matching: action,
+                )
+                .evaluate()
+                .isNotEmpty) {
+          actionFocused = true;
+          break;
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(actionFocused, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-artwork')),
+        findsOneWidget,
+      );
+      expect(find.text('Expanded Desktop Track'), findsWidgets);
+      expect(find.text('Desktop Album'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('now-playing-open-expanded')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('expanded-now-playing-back')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('track-search-content')),
+        findsOneWidget,
+      );
+      expect(search.requests, [('expanded desktop query', 1, 30)]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('opens a direct Artist result and preserves Artist Search', (
     tester,
   ) async {

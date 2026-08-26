@@ -31,3 +31,11 @@ The existing authenticated presentation owner already retains one `QueuePlayback
 ## Selection
 
 Immersive now playing ranks first because it is an explicit core-experience requirement with a reproduced user-visible gap and a finite solution over already-validated state. It adds no external behavior and does not promote the recent catalog-navigation implementation into a generic routing system.
+
+## Outcome
+
+Implemented as the nineteenth finite M3 slice. A separate presentation-only inherited callback wraps every existing authenticated page, including retained catalog overlays, and opens one topmost expanded page. The expanded page sits outside its own callback scope, so its reused bottom bar cannot recursively reopen it. The originating page remains mounted in an `IndexedStack`; AppBar, platform, Browser Back, and `Alt+Left` all close only the expanded page first.
+
+The page listens only for queue-current object/position changes, avoiding full artwork/layout rebuilds on every playback-position tick. Wide layout pairs bounded large artwork with the existing synchronized `LyricPanel`; 360 px layout stacks a bounded artwork hero above the same panel. The existing bar remains the single transport/progress/queue/volume implementation. Visible-page media shortcuts can replace the current Track in place, and clearing the queue produces an explicit empty state without dismissing or fabricating playback data. The ordinary lyric modal retains its close action while inline use hides that duplicate control.
+
+Validation on the current Linux host passed strict Dart formatting/analysis, all 278 Flutter tests, the Linux x64 Release build, and the packaged in-process Bridge integration. Rust was unchanged, and the 258-test offline workspace plus strict all-target/all-feature Clippy baseline was rerun successfully; four live QQ/WeChat tests remained explicitly gated and ignored. No real credential, QQ endpoint, media source, or account data was used.

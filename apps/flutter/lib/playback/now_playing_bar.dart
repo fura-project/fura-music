@@ -5,6 +5,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_panel.dart';
+import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_panel.dart';
@@ -53,6 +54,9 @@ class NowPlayingBar extends StatelessWidget {
         final track = controller.current;
         if (track == null) return const SizedBox.shrink();
         final catalogNavigation = NowPlayingCatalogNavigation.maybeOf(context);
+        final expandedNavigation = ExpandedNowPlayingNavigation.maybeOf(
+          context,
+        );
         final catalogActions = catalogNavigation == null
             ? const <_NowPlayingCatalogAction>[]
             : _catalogActions(track);
@@ -108,6 +112,7 @@ class NowPlayingBar extends StatelessWidget {
                                     track: track,
                                     status: _statusCopy(controller),
                                     error: error,
+                                    onOpenExpanded: expandedNavigation?.onOpen,
                                   ),
                                 ),
                                 if (controller.lyrics != null)
@@ -144,6 +149,7 @@ class NowPlayingBar extends StatelessWidget {
                                 track: track,
                                 status: _statusCopy(controller),
                                 error: error,
+                                onOpenExpanded: expandedNavigation?.onOpen,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -499,11 +505,13 @@ class _TrackInfo extends StatelessWidget {
     required this.track,
     required this.status,
     required this.error,
+    this.onOpenExpanded,
   });
 
   final PlaylistTrackSummary track;
   final String status;
   final bool error;
+  final VoidCallback? onOpenExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -511,19 +519,16 @@ class _TrackInfo extends StatelessWidget {
     final artist = track.artistNames.isEmpty
         ? 'Unknown artist'
         : track.artistNames.join(' · ');
-    return Column(
+    final onOpenExpanded = this.onOpenExpanded;
+    final information = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          track.title,
-          key: const ValueKey('now-playing-title'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        if (onOpenExpanded == null)
+          _trackTitle(theme)
+        else
+          ExcludeSemantics(child: _trackTitle(theme)),
         const SizedBox(height: 2),
         Semantics(
           container: true,
@@ -544,7 +549,41 @@ class _TrackInfo extends StatelessWidget {
         ),
       ],
     );
+    if (onOpenExpanded == null) return information;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          information,
+          Positioned.fill(
+            child: Tooltip(
+              message: 'Open now playing',
+              child: Semantics(
+                button: true,
+                label: 'Open now playing for ${track.title}',
+                onTap: onOpenExpanded,
+                excludeSemantics: true,
+                child: InkWell(
+                  key: const ValueKey('now-playing-open-expanded'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: onOpenExpanded,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+
+  Widget _trackTitle(ThemeData theme) => Text(
+    track.title,
+    key: const ValueKey('now-playing-title'),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+  );
 }
 
 class _QueueButton extends StatelessWidget {
