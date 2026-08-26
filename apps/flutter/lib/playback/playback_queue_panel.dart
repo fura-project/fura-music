@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
@@ -211,29 +212,18 @@ Future<void> _confirmAndClearQueue(
   final description = trackCount == 1
       ? 'This will remove the queued track and stop playback.'
       : 'This will remove all $trackCount tracks and stop playback.';
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => PlaybackShortcuts(
-      controller: controller,
-      child: AlertDialog(
-        title: const Text('Clear queue?'),
-        content: Text(description),
-        actions: [
-          TextButton(
-            key: const ValueKey('queue-clear-cancel'),
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('queue-clear-confirm'),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
-    ),
+  final confirmed = await showAdaptiveConfirmation(
+    context,
+    title: 'Clear queue?',
+    message: description,
+    confirmLabel: 'Clear',
+    cancelKey: const ValueKey('queue-clear-cancel'),
+    confirmKey: const ValueKey('queue-clear-confirm'),
+    sheetKey: const ValueKey('queue-clear-confirmation-sheet'),
+    dialogKey: const ValueKey('queue-clear-confirmation-dialog'),
+    wrapper: (child) => PlaybackShortcuts(controller: controller, child: child),
   );
-  if (confirmed == true) await controller.clear();
+  if (confirmed) await controller.clear();
 }
 
 class _QueueArtwork extends StatelessWidget {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -143,32 +144,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   );
 
   Future<void> _confirmSignOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => PlaybackShortcuts(
-        controller: _queuePlaybackController,
-        child: AlertDialog(
-          title: const Text('Sign out on this device?'),
-          content: const Text(
-            'This will stop playback and remove the saved QQ Music session '
-            'from this device.',
-          ),
-          actions: [
-            TextButton(
-              key: const ValueKey('sign-out-cancel'),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              key: const ValueKey('sign-out-confirm'),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Sign out'),
-            ),
-          ],
-        ),
-      ),
+    final confirmed = await showAdaptiveConfirmation(
+      context,
+      title: 'Sign out on this device?',
+      message:
+          'This will stop playback and remove the saved QQ Music session '
+          'from this device.',
+      confirmLabel: 'Sign out',
+      cancelKey: const ValueKey('sign-out-cancel'),
+      confirmKey: const ValueKey('sign-out-confirm'),
+      sheetKey: const ValueKey('sign-out-confirmation-sheet'),
+      dialogKey: const ValueKey('sign-out-confirmation-dialog'),
+      wrapper: (child) =>
+          PlaybackShortcuts(controller: _queuePlaybackController, child: child),
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _signingOut = true);
     final signOut = widget.onSignOut();

@@ -985,6 +985,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Clear queue?'), findsOneWidget);
     expect(
+      find.byKey(const ValueKey('queue-clear-confirmation-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('queue-clear-confirmation-dialog')),
+      findsNothing,
+    );
+    expect(
       find.text('This will remove all 2 tracks and stop playback.'),
       findsOneWidget,
     );
@@ -999,6 +1007,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('queue-clear')));
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('queue-clear-confirmation-sheet')),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const ValueKey('queue-clear-confirm')));
     await tester.pumpAndSettle();
     expect(queue._snapshot.tracks, isEmpty);
@@ -1027,6 +1039,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('queue-clear')));
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('queue-clear-confirmation-dialog')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('queue-clear-confirmation-sheet')),
+      findsNothing,
+    );
     await tester.tap(find.byKey(const ValueKey('queue-clear-confirm')));
     await tester.pumpAndSettle();
 

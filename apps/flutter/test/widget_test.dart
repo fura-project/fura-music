@@ -405,6 +405,11 @@ void main() {
   testWidgets('sign out requires confirmation and returns to QR login', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final authentication = _WidgetGateway(
       _WaitingSession(),
       authenticated: true,
@@ -421,6 +426,14 @@ void main() {
     await tester.tap(find.byTooltip('Sign out'));
     await tester.pumpAndSettle();
     expect(find.text('Sign out on this device?'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('sign-out-confirmation-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('sign-out-confirmation-dialog')),
+      findsNothing,
+    );
     await tester.tap(find.byKey(const ValueKey('sign-out-cancel')));
     await tester.pumpAndSettle();
     expect(authentication.signOutCalls, 0);
