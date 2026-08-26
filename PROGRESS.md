@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "M3 Artist albums"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -34,11 +34,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Recommended playlists are implemented and the next action is a bounded global product-completeness discovery pass rather than automatic expansion of the neighboring Home-feed protocol.
+- M3 Artist albums are selected as the next finite slice. Two current implementations agree on the module/method and core paging shape; bounded anonymous probes establish that `num` (not the conflicting `number`) enforces exact page size and that consecutive offset pages retain total/Artist identity without Album overlap. Implementation is limited to a Provider-neutral paged Album-summary contract, direct QQ operation, cancellable Bridge, lazy adaptive Artist Albums presentation, and nested reuse of the existing Album/queue path.
 
 # Next Candidates
 
-1. Run the next bounded M3 product-completeness discovery pass, rank at most three evidence-backed QQ-native candidates, and select one finite slice; the volatile heterogeneous Home feed is not implicit follow-up work.
+1. Complete the selected M3 Artist-albums slice and its offline protocol-to-presentation regression coverage; Artist biography/follow, multi-type Search, rankings, and heterogeneous Home remain outside this task.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
