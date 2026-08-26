@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/queue.dart' as bridge_queue;
 
@@ -28,6 +30,10 @@ void main() {
     expect(result.snapshot?.tracks, hasLength(3));
     expect(result.snapshot?.tracks[0].opaqueId, 'same');
     expect(result.snapshot?.tracks[2].opaqueId, 'same');
+    expect(
+      result.snapshot?.tracks.first.album?.opaqueId,
+      'album:43001:private-mid',
+    );
     expect(result.snapshot?.currentIndex, 2);
     expect(result.toString(), isNot(contains('private-title')));
     expect(result.snapshot.toString(), isNot(contains('private-title')));
@@ -53,6 +59,11 @@ void main() {
       subtitle: 'Version',
       artistNames: ['Artist one', 'Artist two'],
       albumTitle: 'Album',
+      album: AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:fixtureAlbumMid',
+        title: 'Album',
+      ),
       artworkUri: 'https://images.example.test/one.jpg',
       durationSeconds: 123,
     );
@@ -68,6 +79,7 @@ void main() {
     expect(forwarded.artistNames, track.artistNames);
     expect(forwarded.subtitle, track.subtitle);
     expect(forwarded.albumTitle, track.albumTitle);
+    expect(forwarded.album?.opaqueId, track.album?.opaqueId);
     expect(forwarded.artworkUri, track.artworkUri);
     expect(forwarded.durationSeconds, track.durationSeconds);
   });
@@ -163,6 +175,11 @@ bridge_library.LibraryTrackSummary _bridgeTrack(String opaqueId) =>
       subtitle: 'private-subtitle',
       artistNames: const ['private-artist'],
       albumTitle: 'private-album',
+      album: const bridge_album.CatalogAlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:private-mid',
+        title: 'private-album',
+      ),
       artworkUri: 'https://images.example.test/private.jpg',
       durationSeconds: 120,
     );

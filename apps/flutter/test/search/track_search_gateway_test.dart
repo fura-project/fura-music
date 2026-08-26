@@ -20,6 +20,11 @@ void main() {
               title: 'Synthetic track',
               artistNames: ['Artist one'],
               albumTitle: 'Synthetic album',
+              album: bridge_album.CatalogAlbumSummary(
+                providerId: 'qq-music',
+                opaqueId: 'album:51001:fixtureAlbumMid',
+                title: 'Synthetic album',
+              ),
               durationSeconds: 245,
             ),
             album: bridge_album.CatalogAlbumSummary(
@@ -47,6 +52,10 @@ void main() {
     expect(result.items.single.track.title, 'Synthetic track');
     expect(result.items.single.track.artistNames, ['Artist one']);
     expect(result.items.single.album?.opaqueId, 'album:51001:fixtureAlbumMid');
+    expect(
+      result.items.single.track.album?.opaqueId,
+      'album:51001:fixtureAlbumMid',
+    );
     expect(result.items.single.artists.single.name, 'Artist one');
   });
 

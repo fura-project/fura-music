@@ -246,6 +246,11 @@ void main() {
       opaqueId: 'track:41001:0:1:fixtureTrackMid1',
       title: 'Synthetic queue track',
       artistNames: const ['Fixture artist'],
+      album: const CatalogAlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:fixtureAlbumMid',
+        title: 'Synthetic Album',
+      ),
     );
     final replacedQueue = queue.replace(
       tracks: [queueTrack, queueTrack],
@@ -253,6 +258,10 @@ void main() {
     );
     expect(replacedQueue.failure, isNull);
     expect(replacedQueue.snapshot?.tracks, hasLength(2));
+    expect(
+      replacedQueue.snapshot?.tracks.first.album?.opaqueId,
+      'album:43001:fixtureAlbumMid',
+    );
     expect(replacedQueue.snapshot?.currentIndex, 0);
     final advancedQueue = queue.advance();
     expect(advancedQueue.currentChanged, isTrue);

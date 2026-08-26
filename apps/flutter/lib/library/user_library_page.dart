@@ -122,6 +122,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
   AlbumSummary? _selectedAlbum;
+  AlbumSummary? _trackContextAlbum;
   ArtistSummary? _selectedArtist;
   UserPlaylistSummary? _selectedSearchPlaylist;
   RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
@@ -268,6 +269,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   gateway: widget.detailGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnToRecommendations,
+                  onOpenAlbum: _openTrackContextAlbum,
                   onSignInAgain: widget.onSignInAgain,
                 ),
               if (selectedRanking == null)
@@ -358,6 +360,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   gateway: widget.detailGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnToSearch,
+                  onOpenAlbum: _openTrackContextAlbum,
                   onSignInAgain: widget.onSignInAgain,
                 ),
             ],
@@ -369,15 +372,37 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             gateway: widget.detailGateway,
             queuePlaybackController: _queuePlaybackController,
             onBack: _returnToLibrary,
+            onOpenAlbum: _openTrackContextAlbum,
             onSignInAgain: widget.onSignInAgain,
           )
         : _libraryScaffold();
+    final trackContextAlbum = _trackContextAlbum;
+    final routedPage = IndexedStack(
+      index: trackContextAlbum == null ? 0 : 1,
+      children: [
+        page,
+        if (trackContextAlbum == null)
+          const SizedBox.shrink()
+        else
+          AlbumPage(
+            key: ValueKey('track-context-album-${trackContextAlbum.opaqueId}'),
+            album: trackContextAlbum,
+            gateway: _albumTrackGateway,
+            detailsGateway: _albumDetailsGateway,
+            queuePlaybackController: _queuePlaybackController,
+            onBack: _returnFromTrackContextAlbum,
+            backTooltip: 'Back to playlist',
+            onSignInAgain: widget.onSignInAgain,
+          ),
+      ],
+    );
     final playbackPage = PlaybackShortcuts(
       controller: _queuePlaybackController,
-      child: page,
+      child: routedPage,
     );
     final hasLocalPage =
         selectedPlaylist != null ||
+        trackContextAlbum != null ||
         _favoriteAlbumsOpen ||
         _recommendationsOpen ||
         selectedRecommendedPlaylist != null ||
@@ -425,7 +450,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _returnFromLocalPage() {
-    if (_favoriteAlbumsOpen && _selectedAlbum != null) {
+    if (_trackContextAlbum != null) {
+      _returnFromTrackContextAlbum();
+    } else if (_favoriteAlbumsOpen && _selectedAlbum != null) {
       _returnFromFavoriteAlbum();
     } else if (_favoriteAlbumsOpen) {
       _closeFavoriteAlbums();
@@ -478,6 +505,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       return;
     }
     setState(() => _favoriteAlbumsOpen = true);
+  }
+
+  void _openTrackContextAlbum(AlbumSummary album) {
+    if (_trackContextAlbum != null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _trackContextAlbum = album);
+  }
+
+  void _returnFromTrackContextAlbum() {
+    if (_trackContextAlbum == null) return;
+    setState(() => _trackContextAlbum = null);
   }
 
   void _closeFavoriteAlbums() {

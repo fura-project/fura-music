@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' show SemanticsAction, Size;
+import 'dart:ui' show PointerDeviceKind, SemanticsAction, Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
         FilledButton,
@@ -30,6 +31,7 @@ import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
@@ -435,6 +437,12 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('recommendations-item-0')));
       await tester.pumpAndSettle();
       expect(find.text('Recommended track'), findsOneWidget);
+      expect(
+        tester
+            .widget<PlaylistDetailPage>(find.byType(PlaylistDetailPage))
+            .onOpenAlbum,
+        isNotNull,
+      );
       expect(detail.requests.single.playlist.opaqueId, 'catalog:81001');
 
       await tester.tap(find.byTooltip('Back to playlists'));
@@ -1148,6 +1156,12 @@ void main() {
       );
       expect(playlistDetail.requests.single.playlist.opaqueId, 'catalog:81001');
       expect(find.text('Playlist Track'), findsOneWidget);
+      expect(
+        tester
+            .widget<PlaylistDetailPage>(find.byType(PlaylistDetailPage))
+            .onOpenAlbum,
+        isNotNull,
+      );
 
       await tester.tap(find.byKey(const ValueKey('playlist-detail-back')));
       await tester.pumpAndSettle();
@@ -1358,6 +1372,11 @@ void main() {
             subtitle: 'Fixture version',
             artistNames: ['Artist one', 'Artist two'],
             albumTitle: 'Synthetic album',
+            album: AlbumSummary(
+              providerId: 'qq-music',
+              opaqueId: 'album:43001:fixtureAlbumMid',
+              title: 'Synthetic album',
+            ),
             durationSeconds: 245,
           ),
         ],
@@ -1376,6 +1395,19 @@ void main() {
         ],
       ),
     ]);
+    final albumGateway = _WidgetAlbumGateway(
+      const AlbumTrackPageResult(
+        total: 1,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:album-context',
+            title: 'Album context track',
+            artistNames: ['Artist one'],
+          ),
+        ],
+      ),
+    );
 
     await tester.pumpWidget(
       MusicApp(
@@ -1397,6 +1429,8 @@ void main() {
           ),
         ]),
         playlistDetailGateway: detailGateway,
+        albumTrackGateway: albumGateway,
+        albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
       ),
     );
     await tester.pumpAndSettle();
@@ -1412,12 +1446,57 @@ void main() {
     expect(detailGateway.requests.single.offset, 0);
     expect(tester.takeException(), isNull);
 
+    await tester.longPress(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Open album'), findsOneWidget);
+    await tester.tap(find.text('Open album'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Back to playlist'), findsOneWidget);
+    expect(find.text('Album context track'), findsOneWidget);
+    expect(
+      albumGateway.requests.single.$1.opaqueId,
+      'album:43001:fixtureAlbumMid',
+    );
+    expect(detailGateway.requests, hasLength(1));
+
+    final handled = await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(handled, isTrue);
+    expect(find.textContaining('Synthetic track'), findsOneWidget);
+    expect(detailGateway.requests, hasLength(1));
+
     await tester.tap(find.text('Load more'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Second synthetic track'), findsOneWidget);
     expect(find.text('Showing 2 of 2 tracks'), findsOneWidget);
     expect(find.text('End of playlist'), findsOneWidget);
     expect(detailGateway.requests[1].offset, 1);
+
+    tester.view.physicalSize = const Size(1000, 700);
+    await tester.pumpAndSettle();
+    final firstRow = find.byKey(const ValueKey('playlist-track-row-1'));
+    tester.widget<InkWell>(firstRow).focusNode?.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+    await tester.pumpAndSettle();
+    expect(find.text('Open album'), findsOneWidget);
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      firstRow,
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Open album'), findsOneWidget);
+    await tester.tap(find.text('Open album'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Back to playlist'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back to playlist'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Second synthetic track'), findsOneWidget);
+    expect(detailGateway.requests, hasLength(2));
 
     await tester.tap(find.byTooltip('Back to playlists'));
     await tester.pumpAndSettle();

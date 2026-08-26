@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "Playlist Track-to-Album navigation"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current Milestone
@@ -38,16 +38,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the eleventh M3 slice: direct anonymous regional QQ new-Album releases map six typed regions and bounded raw-row offset pages into provider-neutral Album releases with credited Artists and optional date through a cancellable Bridge. Flutter keeps New Albums as a lazy fourth Discover state, replaces region requests exactly, owns retry/pagination/cancel/stale/disposal and adaptive list/grid presentation, and reuses the existing Album/queue route without reloading prior state. Heterogeneous Home/editorial/tracking cards, notifications/cache, Album mutation/detail expansion, Track context navigation, new queue rules, and generic catalog infrastructure remain excluded.
 - Implemented the twelfth M3 slice: direct anonymous canonical Album details map an exact existing Album MID into provider-neutral Album/Artist identity plus bounded subtitle/release/description/language/type/genre/company metadata through an independent cancellable Bridge handle. Flutter loads metadata beside—not ahead of—Tracks, keeps Track/queue actions available on failure, retries explicitly, and exposes the full description through compact/desktop adaptive surfaces for every existing Album origin. Favorites/mutation, booklet/wiki/video/rights/tracking fields, Artist navigation, Track identity propagation, cache, and generic detail/navigation infrastructure remain excluded.
 - Implemented the thirteenth M3 slice: direct credential-bearing favorite-Album pages use the evidenced legacy profile-asset CGI rather than the nonfunctional musicu operation, map both observed field casings into existing opaque Albums, and preserve exact Provider credential candidate/rejection/replacement rules through a cancellable Bridge. Flutter retains an adaptive paged collection while existing Album Tracks/details/queue navigation is open, suppresses stale results, clears private rows after account loss, and cleans the shared vault only for the directly evidenced global rejection code. Favorite mutation, favorite Artists, cache/automatic refresh, generic library unions, Track context navigation, and generic navigation infrastructure remain excluded.
-- Revalidated the resulting baseline: Rust formatting, 250 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 265 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
+- Implemented the fourteenth M3 slice: every QQ Track producer now preserves an optional validated provider-neutral Album identity through shared Domain mapping, the generated Bridge DTO, handwritten Dart adaptation, and the Rust positional queue round-trip. Playlist detail exposes the existing Album route only when that context exists through desktop secondary-click/keyboard menus and mobile long press; the Album overlays every playlist origin while retaining loaded rows, pagination, playback ownership, and local return state. Credited-Artist context, visible actions on other Track surfaces, global now-playing navigation, opaque-ID parsing, new queue rules, and a navigation framework remain excluded.
+- Revalidated the resulting baseline: Rust formatting, 250 offline Rust tests, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 266 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live favorite-Album/new-Album/Album-detail application compatibility, authenticated Radar personalization, recommendation quality, QQ CDN playback, or the pending real-account playback/queue/lyric observation.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Repository-wide Track mapping audit reproduced that every non-Search Track surface discards Album/Artist catalog identity already present in the common QQ protocol model. The selected finite slice preserves optional Album context through shared Domain/Bridge/queue values and exposes it from playlist-detail interactions through a retained existing Album route; Artist and global now-playing transitions remain deferred.
+- M3 remains active. Playlist Track-to-Album navigation is complete and the next finite slice must be selected by a fresh global ranking; the deferred credited-Artist and global now-playing transitions are candidates rather than implied follow-up work.
 
 # Next Candidates
 
-1. Implement the selected playlist Track-to-Album slice with shared identity preservation, exact queue round-trip, desktop/mobile context actions, retained return state, and full regression coverage.
+1. Re-rank M3 product gaps after the completed Track-to-Album slice; select at most one bounded, evidence-backed follow-up rather than automatically extending nearby context-menu work.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 

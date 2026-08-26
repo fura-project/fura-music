@@ -5309,6 +5309,8 @@ impl SseDecode for crate::api::library::LibraryTrackSummary {
         let mut var_subtitle = <Option<String>>::sse_decode(deserializer);
         let mut var_artistNames = <Vec<String>>::sse_decode(deserializer);
         let mut var_albumTitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_album =
+            <Option<crate::api::album::CatalogAlbumSummary>>::sse_decode(deserializer);
         let mut var_artworkUri = <Option<String>>::sse_decode(deserializer);
         let mut var_durationSeconds = <Option<u32>>::sse_decode(deserializer);
         return crate::api::library::LibraryTrackSummary {
@@ -5318,6 +5320,7 @@ impl SseDecode for crate::api::library::LibraryTrackSummary {
             subtitle: var_subtitle,
             artist_names: var_artistNames,
             album_title: var_albumTitle,
+            album: var_album,
             artwork_uri: var_artworkUri,
             duration_seconds: var_durationSeconds,
         };
@@ -7884,6 +7887,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::library::LibraryTrackSummary 
             self.subtitle.into_into_dart().into_dart(),
             self.artist_names.into_into_dart().into_dart(),
             self.album_title.into_into_dart().into_dart(),
+            self.album.into_into_dart().into_dart(),
             self.artwork_uri.into_into_dart().into_dart(),
             self.duration_seconds.into_into_dart().into_dart(),
         ]
@@ -10002,6 +10006,7 @@ impl SseEncode for crate::api::library::LibraryTrackSummary {
         <Option<String>>::sse_encode(self.subtitle, serializer);
         <Vec<String>>::sse_encode(self.artist_names, serializer);
         <Option<String>>::sse_encode(self.album_title, serializer);
+        <Option<crate::api::album::CatalogAlbumSummary>>::sse_encode(self.album, serializer);
         <Option<String>>::sse_encode(self.artwork_uri, serializer);
         <Option<u32>>::sse_encode(self.duration_seconds, serializer);
     }

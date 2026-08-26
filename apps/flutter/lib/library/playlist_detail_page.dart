@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
@@ -16,6 +17,7 @@ class PlaylistDetailPage extends StatefulWidget {
     required this.queuePlaybackController,
     required this.onBack,
     required this.onSignInAgain,
+    this.onOpenAlbum,
     super.key,
   });
 
@@ -24,6 +26,7 @@ class PlaylistDetailPage extends StatefulWidget {
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
 
   @override
   State<PlaylistDetailPage> createState() => _PlaylistDetailPageState();
@@ -139,6 +142,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ),
       ),
       onTrackQueued: _addToQueue,
+      onOpenAlbum: widget.onOpenAlbum,
       desktop: desktop,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
@@ -263,6 +267,7 @@ class _TrackCollection extends StatelessWidget {
     required this.onRetryMore,
     required this.onTrackSelected,
     required this.onTrackQueued,
+    required this.onOpenAlbum,
     required this.desktop,
     super.key,
   });
@@ -276,6 +281,7 @@ class _TrackCollection extends StatelessWidget {
   final VoidCallback onRetryMore;
   final ValueChanged<int> onTrackSelected;
   final ValueChanged<PlaylistTrackSummary> onTrackQueued;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
   final bool desktop;
 
   @override
@@ -330,6 +336,9 @@ class _TrackCollection extends StatelessWidget {
           desktop: desktop,
           onTap: () => onTrackSelected(index),
           onAddToQueue: () => onTrackQueued(tracks[index]),
+          onOpenAlbum: onOpenAlbum == null || tracks[index].album == null
+              ? null
+              : () => onOpenAlbum!(tracks[index].album!),
         );
       },
     );
@@ -343,6 +352,7 @@ class _TrackRow extends StatefulWidget {
     required this.desktop,
     required this.onTap,
     required this.onAddToQueue,
+    required this.onOpenAlbum,
   });
 
   final int index;
@@ -350,6 +360,7 @@ class _TrackRow extends StatefulWidget {
   final bool desktop;
   final VoidCallback onTap;
   final VoidCallback onAddToQueue;
+  final VoidCallback? onOpenAlbum;
 
   @override
   State<_TrackRow> createState() => _TrackRowState();
@@ -516,21 +527,30 @@ class _TrackRowState extends State<_TrackRow> {
         overlay.size.width - globalPosition.dx,
         overlay.size.height - globalPosition.dy,
       ),
-      items: const [
-        PopupMenuItem(
+      items: [
+        const PopupMenuItem(
           value: _TrackAction.playFromHere,
           child: ListTile(
             leading: Icon(Icons.play_arrow_rounded),
             title: Text('Play from here'),
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: _TrackAction.addToQueue,
           child: ListTile(
             leading: Icon(Icons.playlist_add_rounded),
             title: Text('Add to queue'),
           ),
         ),
+        if (widget.onOpenAlbum != null)
+          const PopupMenuItem(
+            key: ValueKey('playlist-track-open-album-action'),
+            value: _TrackAction.openAlbum,
+            child: ListTile(
+              leading: Icon(Icons.album_rounded),
+              title: Text('Open album'),
+            ),
+          ),
       ],
     );
     _runAction(action);
@@ -555,6 +575,13 @@ class _TrackRowState extends State<_TrackRow> {
               title: const Text('Add to queue'),
               onTap: () => Navigator.pop(context, _TrackAction.addToQueue),
             ),
+            if (widget.onOpenAlbum != null)
+              ListTile(
+                key: const ValueKey('playlist-track-open-album-action'),
+                leading: const Icon(Icons.album_rounded),
+                title: const Text('Open album'),
+                onTap: () => Navigator.pop(context, _TrackAction.openAlbum),
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -571,13 +598,16 @@ class _TrackRowState extends State<_TrackRow> {
       case _TrackAction.addToQueue:
         widget.onAddToQueue();
         return;
+      case _TrackAction.openAlbum:
+        widget.onOpenAlbum?.call();
+        return;
       case null:
         return;
     }
   }
 }
 
-enum _TrackAction { playFromHere, addToQueue }
+enum _TrackAction { playFromHere, addToQueue, openAlbum }
 
 class _Artwork extends StatelessWidget {
   const _Artwork({this.uri, this.playlist = false});

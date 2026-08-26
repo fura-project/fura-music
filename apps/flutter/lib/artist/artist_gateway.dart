@@ -1,18 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge;
 
-class ArtistSummary {
-  const ArtistSummary({
-    required this.providerId,
-    required this.opaqueId,
-    required this.name,
-  });
-
-  final String providerId;
-  final String opaqueId;
-  final String name;
-}
+export 'package:flutterustmusic/catalog/catalog_models.dart' show ArtistSummary;
 
 enum ArtistTrackFailure {
   coreUnavailable,
@@ -134,27 +125,13 @@ ArtistTrackPageResult mapBridgeArtistTrackPage(
   }
   final tracks = <PlaylistTrackSummary>[];
   for (final track in result.tracks) {
-    if (track.providerId.trim().isEmpty ||
-        track.opaqueId.trim().isEmpty ||
-        track.title.trim().isEmpty ||
-        track.artistNames.any((artist) => artist.trim().isEmpty) ||
-        (track.durationSeconds != null && track.durationSeconds! < 0)) {
+    final mapped = mapBridgeLibraryTrackSummary(track);
+    if (mapped == null) {
       return const ArtistTrackPageResult(
         failure: ArtistTrackFailure.invalidResponse,
       );
     }
-    tracks.add(
-      PlaylistTrackSummary(
-        providerId: track.providerId,
-        opaqueId: track.opaqueId,
-        title: track.title,
-        artistNames: List.unmodifiable(track.artistNames),
-        subtitle: track.subtitle,
-        albumTitle: track.albumTitle,
-        artworkUri: track.artworkUri,
-        durationSeconds: track.durationSeconds,
-      ),
-    );
+    tracks.add(mapped);
   }
   return ArtistTrackPageResult(
     offset: result.offset,

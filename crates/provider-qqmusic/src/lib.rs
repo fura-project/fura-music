@@ -1456,9 +1456,7 @@ fn parse_ranking_id(requested_id: &RankingId) -> Result<u64, CatalogError> {
 
 fn map_search_item(track: &QqMusicTrackSummary) -> Result<TrackSearchItem, ()> {
     let summary = map_track_summary(track)?;
-    let album = track
-        .album()
-        .and_then(|album| map_album_summary(album).ok());
+    let album = summary.album().cloned();
     let artists = track
         .artists()
         .iter()
@@ -1531,11 +1529,15 @@ fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
         .album()
         .and_then(qqmusic_client::QqMusicAlbumSummary::media_mid)
         .and_then(album_artwork_uri);
+    let album = track
+        .album()
+        .and_then(|album| map_album_summary(album).ok());
     TrackSummary::new(id, track.title(), artists)
         .map(|summary| {
             summary
                 .with_subtitle(track.subtitle().map(str::to_owned))
                 .with_album_title(album_title)
+                .with_album(album)
                 .with_artwork_uri(artwork_uri)
                 .with_duration_seconds(Some(track.duration_seconds()))
         })
@@ -2720,12 +2722,16 @@ mod tests {
         assert_eq!(track.title(), "Synthetic track");
         assert_eq!(track.artist_names(), ["Artist one", "Artist two"]);
         assert_eq!(track.album_title(), Some("Synthetic album"));
+        let album = track.album().expect("Album context");
+        assert_eq!(album.id().opaque(), "album:43001:fixtureAlbumMid");
+        assert_eq!(album.title(), "Synthetic album");
         assert_eq!(
             track.artwork_uri(),
             Some("https://y.gtimg.cn/music/photo_new/T002R300x300M000fixtureAlbumMid.jpg")
         );
         let album = item.album().expect("Album transition");
         assert_eq!(album.id().opaque(), "album:43001:fixtureAlbumMid");
+        assert_eq!(track.album(), Some(album));
         assert_eq!(album.title(), "Synthetic album");
         assert_eq!(item.artists().len(), 2);
         assert_eq!(item.artists()[0].id().opaque(), "artist:42001:artistOneMid");

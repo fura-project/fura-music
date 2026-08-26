@@ -35,3 +35,9 @@ This is a mapping loss, not missing upstream data. The common diagnostics-redact
 ## Selection
 
 Playlist Track to Album navigation is the smallest coherent user-visible slice. It fixes the shared data loss at its actual Rust/Bridge boundary, preserves the new value through the existing queue, and adds one bounded interaction to the demonstrated library journey. Artist and global now-playing transitions remain separately rankable work rather than being smuggled into this task.
+
+## Implementation outcome
+
+Completed on 2026-08-26. The shared Track value now retains an optional validated same-Provider Album summary from the existing QQ protocol model; generated Bridge and handwritten Dart mapping preserve it, and the Rust queue validates and returns it without changing positional semantics. Playlist detail exposes the existing Album page only when the context exists through secondary click, Context Menu/Shift+F10, or mobile long press. Album presentation overlays each current playlist origin in a retained `IndexedStack`, so platform/AppBar return restores the same loaded rows and pagination while the existing queue/playback owner remains mounted.
+
+The full offline Rust and Flutter suites, strict formatting/static checks, Linux x64 Release build, and packaged Bridge integration passed. This evidence proves local mapping, queue round-trip, interaction, retained-navigation, and packaging behavior; it does not prove live QQ catalog compatibility or the still-pending authenticated media/queue/lyric observation.

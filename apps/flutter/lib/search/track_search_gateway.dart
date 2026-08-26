@@ -129,25 +129,12 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
   final items = <TrackSearchItem>[];
   for (final item in result.items) {
     final track = item.track;
-    if (track.providerId.trim().isEmpty ||
-        track.opaqueId.trim().isEmpty ||
-        track.title.trim().isEmpty ||
-        track.artistNames.any((artist) => artist.trim().isEmpty) ||
-        (track.durationSeconds != null && track.durationSeconds! < 0)) {
+    final mappedTrack = mapBridgeLibraryTrackSummary(track);
+    if (mappedTrack == null) {
       return const TrackSearchPageResult(
         failure: TrackSearchFailure.invalidResponse,
       );
     }
-    final mappedTrack = PlaylistTrackSummary(
-      providerId: track.providerId,
-      opaqueId: track.opaqueId,
-      title: track.title,
-      artistNames: List.unmodifiable(track.artistNames),
-      subtitle: track.subtitle,
-      albumTitle: track.albumTitle,
-      artworkUri: track.artworkUri,
-      durationSeconds: track.durationSeconds,
-    );
     final album = item.album;
     AlbumSummary? mappedAlbum;
     if (album != null) {
@@ -164,6 +151,11 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
         opaqueId: album.opaqueId,
         title: album.title,
         artworkUri: album.artworkUri,
+      );
+    }
+    if (!_sameAlbum(mappedTrack.album, mappedAlbum)) {
+      return const TrackSearchPageResult(
+        failure: TrackSearchFailure.invalidResponse,
       );
     }
     final artists = <ArtistSummary>[];
@@ -198,6 +190,15 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     items: List.unmodifiable(items),
   );
 }
+
+bool _sameAlbum(AlbumSummary? first, AlbumSummary? second) =>
+    first == null && second == null ||
+    first != null &&
+        second != null &&
+        first.providerId == second.providerId &&
+        first.opaqueId == second.opaqueId &&
+        first.title == second.title &&
+        first.artworkUri == second.artworkUri;
 
 @visibleForTesting
 TrackSearchFailure mapBridgeTrackSearchFailure(

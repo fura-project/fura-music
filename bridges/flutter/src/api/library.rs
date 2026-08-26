@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use provider_api::{PlaylistDetailsProvider, UserLibraryError, UserPlaylistsProvider};
 use tokio::sync::Notify;
 
+use super::album::{CatalogAlbumSummary, bridge_album_summary};
 use super::authentication::native_qq_music_provider;
 
 #[derive(Clone, Eq, PartialEq)]
@@ -183,6 +184,7 @@ pub struct LibraryTrackSummary {
     pub subtitle: Option<String>,
     pub artist_names: Vec<String>,
     pub album_title: Option<String>,
+    pub album: Option<CatalogAlbumSummary>,
     pub artwork_uri: Option<String>,
     pub duration_seconds: Option<u32>,
 }
@@ -197,6 +199,7 @@ impl fmt::Debug for LibraryTrackSummary {
             .field("has_subtitle", &self.subtitle.is_some())
             .field("artist_count", &self.artist_names.len())
             .field("has_album_title", &self.album_title.is_some())
+            .field("has_album", &self.album.is_some())
             .field("has_artwork", &self.artwork_uri.is_some())
             .field("duration_seconds", &self.duration_seconds)
             .finish()
@@ -363,6 +366,7 @@ pub(super) fn bridge_track_summary(track: &music_domain::TrackSummary) -> Librar
         subtitle: track.subtitle().map(str::to_owned),
         artist_names: track.artist_names().to_vec(),
         album_title: track.album_title().map(str::to_owned),
+        album: track.album().map(bridge_album_summary),
         artwork_uri: track.artwork_uri().map(str::to_owned),
         duration_seconds: track.duration_seconds(),
     }
@@ -371,16 +375,32 @@ pub(super) fn bridge_track_summary(track: &music_domain::TrackSummary) -> Librar
 pub(super) fn domain_track_summary(
     track: LibraryTrackSummary,
 ) -> Result<music_domain::TrackSummary, ()> {
+    let album = track.album.map(domain_album_summary).transpose()?;
     let provider = music_domain::ProviderId::new(track.provider_id).map_err(|_| ())?;
+    if album
+        .as_ref()
+        .is_some_and(|album| album.id().provider() != &provider)
+    {
+        return Err(());
+    }
     let id = music_domain::TrackId::new(provider, track.opaque_id).map_err(|_| ())?;
     music_domain::TrackSummary::new(id, track.title, track.artist_names)
         .map(|summary| {
             summary
                 .with_subtitle(track.subtitle)
                 .with_album_title(track.album_title)
+                .with_album(album)
                 .with_artwork_uri(track.artwork_uri)
                 .with_duration_seconds(track.duration_seconds)
         })
+        .map_err(|_| ())
+}
+
+fn domain_album_summary(album: CatalogAlbumSummary) -> Result<music_domain::AlbumSummary, ()> {
+    let provider = music_domain::ProviderId::new(album.provider_id).map_err(|_| ())?;
+    let id = music_domain::AlbumId::new(provider, album.opaque_id).map_err(|_| ())?;
+    music_domain::AlbumSummary::new(id, album.title)
+        .map(|summary| summary.with_artwork_uri(album.artwork_uri))
         .map_err(|_| ())
 }
 
@@ -416,7 +436,8 @@ const fn map_track_page_error(error: UserLibraryError) -> QqMusicPlaylistTrackPa
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
+        AlbumId, AlbumSummary, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
+        TrackId, TrackSummary,
     };
     use provider_api::UserLibraryError;
 
@@ -497,6 +518,17 @@ mod tests {
         let track = TrackSummary::new(track_id, "must-not-leak", vec!["private-artist".into()])
             .expect("track summary")
             .with_album_title(Some("private-album".into()))
+            .with_album(Some(
+                AlbumSummary::new(
+                    AlbumId::new(
+                        ProviderId::new("qq-music").expect("provider"),
+                        "album:43001:private-mid",
+                    )
+                    .expect("Album ID"),
+                    "private-album",
+                )
+                .expect("Album"),
+            ))
             .with_duration_seconds(Some(245));
 
         let mapped = map_track_page_load(Ok(PlaylistTracksPage::new(100, 101, true, vec![track])));
@@ -509,10 +541,15 @@ mod tests {
         assert_eq!(mapped.tracks[0].opaque_id, "track:41001:0:1:opaque-mid");
         assert_eq!(mapped.tracks[0].title, "must-not-leak");
         assert_eq!(mapped.tracks[0].artist_names, ["private-artist"]);
+        assert_eq!(
+            mapped.tracks[0].album.as_ref().expect("Album").opaque_id,
+            "album:43001:private-mid"
+        );
         let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("41001"));
         assert!(!debug.contains("private-artist"));
+        assert!(!debug.contains("private-mid"));
     }
 
     #[test]

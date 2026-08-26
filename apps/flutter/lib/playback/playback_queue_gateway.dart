@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/queue.dart' as bridge_queue;
 
@@ -207,6 +208,14 @@ bridge_library.LibraryTrackSummary _bridgeTrack(PlaylistTrackSummary track) =>
       subtitle: track.subtitle,
       artistNames: track.artistNames,
       albumTitle: track.albumTitle,
+      album: track.album == null
+          ? null
+          : bridge_album.CatalogAlbumSummary(
+              providerId: track.album!.providerId,
+              opaqueId: track.album!.opaqueId,
+              title: track.album!.title,
+              artworkUri: track.album!.artworkUri,
+            ),
       artworkUri: track.artworkUri,
       durationSeconds: track.durationSeconds,
     );
@@ -271,36 +280,8 @@ PlaybackQueueResult mapBridgePlaybackQueueUpdate(
 }
 
 PlaylistTrackSummary? _mapTrack(bridge_library.LibraryTrackSummary track) {
-  final providerId = track.providerId;
-  final validProvider =
-      providerId.isNotEmpty &&
-      providerId.codeUnits.every(
-        (unit) =>
-            unit >= 97 && unit <= 122 || unit >= 48 && unit <= 57 || unit == 45,
-      );
-  if (!validProvider ||
-      track.opaqueId.trim().isEmpty ||
-      track.title.trim().isEmpty ||
-      track.artistNames.any((artist) => artist.trim().isEmpty) ||
-      _blank(track.subtitle) ||
-      _blank(track.albumTitle) ||
-      _blank(track.artworkUri) ||
-      (track.durationSeconds != null && track.durationSeconds! < 0)) {
-    return null;
-  }
-  return PlaylistTrackSummary(
-    providerId: providerId,
-    opaqueId: track.opaqueId,
-    title: track.title,
-    artistNames: List.unmodifiable(track.artistNames),
-    subtitle: track.subtitle,
-    albumTitle: track.albumTitle,
-    artworkUri: track.artworkUri,
-    durationSeconds: track.durationSeconds,
-  );
+  return mapBridgeLibraryTrackSummary(track);
 }
-
-bool _blank(String? value) => value != null && value.trim().isEmpty;
 
 PlaybackQueueFailure _mapFailure(bridge_queue.PlaybackQueueFailure failure) =>
     switch (failure) {

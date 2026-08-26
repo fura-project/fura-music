@@ -127,28 +127,11 @@ RadarTrackPageResult mapBridgeRadarTrackPage(
 
   final tracks = <PlaylistTrackSummary>[];
   for (final track in result.tracks) {
-    if (track.providerId.trim().isEmpty ||
-        track.opaqueId.trim().isEmpty ||
-        track.title.trim().isEmpty ||
-        track.artistNames.any((artist) => artist.trim().isEmpty) ||
-        (track.subtitle != null && track.subtitle!.trim().isEmpty) ||
-        (track.albumTitle != null && track.albumTitle!.trim().isEmpty) ||
-        (track.artworkUri != null && track.artworkUri!.trim().isEmpty) ||
-        (track.durationSeconds != null && track.durationSeconds! < 0)) {
+    final mapped = mapBridgeLibraryTrackSummary(track);
+    if (mapped == null) {
       return const RadarTrackPageResult(failure: RadarFailure.invalidResponse);
     }
-    tracks.add(
-      PlaylistTrackSummary(
-        providerId: track.providerId,
-        opaqueId: track.opaqueId,
-        title: track.title,
-        artistNames: List.unmodifiable(track.artistNames),
-        subtitle: track.subtitle,
-        albumTitle: track.albumTitle,
-        artworkUri: track.artworkUri,
-        durationSeconds: track.durationSeconds,
-      ),
-    );
+    tracks.add(mapped);
   }
   return RadarTrackPageResult(
     page: result.page,

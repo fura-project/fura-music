@@ -196,6 +196,7 @@ const fn map_position_error(_: InvalidPlaybackQueue) -> PlaybackQueueFailure {
 #[cfg(test)]
 mod tests {
     use super::{PlaybackQueueFailure, PlaybackQueueHandle, create_playback_queue};
+    use crate::api::album::CatalogAlbumSummary;
     use crate::api::library::LibraryTrackSummary;
 
     #[test]
@@ -207,6 +208,14 @@ mod tests {
         assert_eq!(snapshot.tracks.len(), 3);
         assert_eq!(snapshot.current_index, Some(2));
         assert_eq!(snapshot.tracks[0].opaque_id, snapshot.tracks[2].opaque_id);
+        assert_eq!(
+            snapshot.tracks[0]
+                .album
+                .as_ref()
+                .expect("Album context")
+                .opaque_id,
+            "album:43001:private-mid"
+        );
         assert!(!format!("{snapshot:?}").contains("private-title"));
         assert!(!format!("{queue:?}").contains("same"));
     }
@@ -249,9 +258,35 @@ mod tests {
             provider_id: "QQ Music".into(),
             ..track("invalid")
         };
+        let invalid_album = LibraryTrackSummary {
+            album: Some(CatalogAlbumSummary {
+                provider_id: "qq-music".into(),
+                opaque_id: String::new(),
+                title: "private-album".into(),
+                artwork_uri: None,
+            }),
+            ..track("invalid-album")
+        };
+        let foreign_album = LibraryTrackSummary {
+            album: Some(CatalogAlbumSummary {
+                provider_id: "local".into(),
+                opaque_id: "album:foreign".into(),
+                title: "private-album".into(),
+                artwork_uri: None,
+            }),
+            ..track("foreign-album")
+        };
 
         assert_eq!(
             queue.push(invalid_track).failure,
+            Some(PlaybackQueueFailure::InvalidTrack)
+        );
+        assert_eq!(
+            queue.push(invalid_album).failure,
+            Some(PlaybackQueueFailure::InvalidTrack)
+        );
+        assert_eq!(
+            queue.push(foreign_album).failure,
             Some(PlaybackQueueFailure::InvalidTrack)
         );
         assert_eq!(
@@ -293,6 +328,12 @@ mod tests {
             subtitle: Some("private-subtitle".into()),
             artist_names: vec!["private-artist".into()],
             album_title: Some("private-album".into()),
+            album: Some(CatalogAlbumSummary {
+                provider_id: "qq-music".into(),
+                opaque_id: "album:43001:private-mid".into(),
+                title: "private-album".into(),
+                artwork_uri: Some("https://images.example.test/album.jpg".into()),
+            }),
             artwork_uri: Some("https://images.example.test/private.jpg".into()),
             duration_seconds: Some(120),
         }
