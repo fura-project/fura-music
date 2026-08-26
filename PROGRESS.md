@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "M3 Artist albums"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -29,16 +29,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the second M3 slice: Track-search items retain an optional opaque Album identity, and a direct bounded QQ Music Album-song request maps paged Tracks through the provider-neutral Catalog contract and a cancellable typed Bridge. Flutter owns explicit page/retry/append/cancel/stale/disposal state, preserves Search while Album is open, and reuses the existing Rust-backed queue without treating Album as a playlist or adding a navigation framework.
 - Implemented the third M3 slice: Track-search items retain every validated credited Artist identity, including collaborations, and a direct bounded QQ Music Artist-song request maps offset-paged Tracks through the provider-neutral Catalog contract and a cancellable typed Bridge. Flutter presents explicit multi-Artist selection, owns retry/pagination/cancel/stale/disposal state, preserves Search on return, and reuses the existing queue without adding Artist detail metadata or a navigation framework.
 - Implemented the fourth M3 slice: a direct anonymous QQ recommended-playlist operation maps bounded offset pages through a small provider-neutral Recommendations contract and cancellable Bridge. Adaptive Flutter discovery owns initial/empty/error/retry/pagination/append-failure/cancel/stale/disposal state, preserves its page while existing authenticated playlist detail is open, and reuses the existing queue. Raw page length—not the observed `FromLimit` feed bound—advances pagination; heterogeneous Home cards, personalization, radio/rankings, mutation, and a generic recommendation runtime remain excluded.
-- Revalidated the resulting baseline: Rust formatting, 182 offline Rust tests, strict Clippy, strict Dart analysis, all 190 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live recommendation compatibility, real-account recommended-playlist detail, or search/discovery-to-CDN playback.
+- Implemented the fifth M3 slice: direct anonymous Artist-Album loading maps exact-size offset pages into existing provider-neutral `AlbumSummary` values through a small Catalog contract and cancellable Bridge. The real service proved `num` is the page-size field while the conflicting `number` reference was ignored. Flutter loads Albums lazily inside the existing Artist page, preserves both sections, adapts list/grid presentation, and nests the existing Album/queue path so back returns Album → Artist → Search without reloading prior state.
+- Revalidated the resulting baseline: Rust formatting, 187 offline Rust tests, strict Clippy, strict Dart analysis, all 199 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live Artist-discography compatibility, authenticated downstream Album playback, or search/discovery-to-CDN playback.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 Artist albums are selected as the next finite slice. Two current implementations agree on the module/method and core paging shape; bounded anonymous probes establish that `num` (not the conflicting `number`) enforces exact page size and that consecutive offset pages retain total/Artist identity without Album overlap. Implementation is limited to a Provider-neutral paged Album-summary contract, direct QQ operation, cancellable Bridge, lazy adaptive Artist Albums presentation, and nested reuse of the existing Album/queue path.
+- M3 remains active. Artist albums are implemented and the next action is a bounded global product-completeness discovery pass; multi-type Search, ranking lists, and heterogeneous Home remain candidates requiring their own evidence and finite boundaries rather than automatic follow-up work.
 
 # Next Candidates
 
-1. Complete the selected M3 Artist-albums slice and its offline protocol-to-presentation regression coverage; Artist biography/follow, multi-type Search, rankings, and heterogeneous Home remain outside this task.
+1. Run the next bounded M3 product-completeness discovery pass, rank at most three evidence-backed QQ-native candidates, and select one finite slice; adjacent multi-type Search, ranking, and heterogeneous Home work is not implicitly authorized without that ranking.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -63,6 +64,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Album-song request shape has current implementation evidence, one bounded anonymous coarse probe, and offline regression coverage. Live Album compatibility is not claimed.
 - Artist-song behavior has two current independent implementation references, two bounded anonymous pagination probes, and offline end-to-end mapping/navigation coverage. The selected numeric-ID request honored the requested five-row page; no live product compatibility is claimed until the project implementation is separately exercised. The previously failing detail operation remains outside the songs-only slice.
 - Recommended-playlist behavior has two current independent implementation references, bounded anonymous exact-size/pagination probes, and offline client-to-presentation regression coverage. The nested playlist shape and raw-row offset behavior were observed without retaining content; live application compatibility is not yet claimed.
+- Artist-Album behavior has two current independent implementation references, bounded anonymous parameter/exact-size/pagination probes, and offline client-to-presentation regression coverage. Real service behavior selected `num` over the conflicting ignored `number` field; no Artist/Album content or identity was retained, and live application compatibility is not yet claimed.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.

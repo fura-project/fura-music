@@ -14,6 +14,7 @@ class AlbumPage extends StatefulWidget {
     required this.queuePlaybackController,
     required this.onBack,
     required this.onSignInAgain,
+    this.backTooltip = 'Back to search results',
     super.key,
   });
 
@@ -22,6 +23,7 @@ class AlbumPage extends StatefulWidget {
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
+  final String backTooltip;
 
   @override
   State<AlbumPage> createState() => _AlbumPageState();
@@ -48,7 +50,7 @@ class _AlbumPageState extends State<AlbumPage> {
     appBar: AppBar(
       leading: IconButton(
         key: const ValueKey('album-back'),
-        tooltip: 'Back to search results',
+        tooltip: widget.backTooltip,
         onPressed: widget.onBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),

@@ -5,28 +5,30 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use music_domain::{
-    AlbumId, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSummary, ArtistTracksPage, AudioFormat,
-    AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
-    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
-    TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    AlbumId, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistSummary,
+    ArtistTracksPage, AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage,
+    ProviderId, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
+    SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
-    AlbumTracksProvider, ArtistTracksProvider, AuthenticationError, CatalogError, LyricsError,
-    LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
-    OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability, ProviderDescriptor,
-    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
-    QrAuthenticationSession, QrImageFormat, RecommendationError, RecommendedPlaylistsProvider,
-    SearchError, TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+    AlbumTracksProvider, ArtistAlbumsProvider, ArtistTracksProvider, AuthenticationError,
+    CatalogError, LyricsError, LyricsProvider, MediaResolutionError, MediaResolutionProvider,
+    MusicProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability,
+    ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RecommendationError,
+    RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
+    UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
-    HttpTransport, QqMusicAlbumTracksError, QqMusicArtistTracksError, QqMusicClient,
-    QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
-    QqMusicMediaError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QqMusicPlaylistDetailError, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
-    QqMusicSearchError, QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError,
-    WechatQrError, WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError,
-    WechatQrLoginProgress, WechatQrLoginSession,
+    HttpTransport, QqMusicAlbumSummary, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
+    QqMusicArtistTracksError, QqMusicClient, QqMusicFavoritePlaylist,
+    QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError,
+    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError,
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+    QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -461,6 +463,36 @@ where
             page.total(),
             page.has_more(),
             tracks,
+        ))
+    }
+}
+
+impl<T> ArtistAlbumsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = CatalogError;
+
+    async fn artist_albums(
+        &self,
+        requested_id: ArtistId,
+        offset: u32,
+        size: u32,
+    ) -> Result<ArtistAlbumsPage, Self::Error> {
+        let (_, artist_mid) = parse_artist_identity(&requested_id)?;
+        let response = self.client().artist_albums(artist_mid, offset, size).await;
+        let page = response.as_ref().map_err(map_artist_albums_error)?;
+        let albums = page
+            .albums()
+            .iter()
+            .map(map_album_summary)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| CatalogError::InvalidResponse)?;
+        Ok(ArtistAlbumsPage::new(
+            page.offset(),
+            page.total(),
+            page.has_more(),
+            albums,
         ))
     }
 }
@@ -1059,18 +1091,9 @@ fn parse_artist_identity(requested_id: &ArtistId) -> Result<(u64, &str), Catalog
 
 fn map_search_item(track: &QqMusicTrackSummary) -> Result<TrackSearchItem, ()> {
     let summary = map_track_summary(track)?;
-    let album = track.album().and_then(|album| {
-        let mid = album.media_mid().filter(|value| is_safe_track_mid(value))?;
-        let title = album.name()?;
-        let opaque = format!(
-            "album:{}:{mid}",
-            album.album_id().map_or("-".into(), |id| id.to_string())
-        );
-        let id = AlbumId::new(qq_music_provider_id(), opaque).ok()?;
-        AlbumSummary::new(id, title)
-            .ok()
-            .map(|summary| summary.with_artwork_uri(album_artwork_uri(mid)))
-    });
+    let album = track
+        .album()
+        .and_then(|album| map_album_summary(album).ok());
     let artists = track
         .artists()
         .iter()
@@ -1085,6 +1108,22 @@ fn map_search_item(track: &QqMusicTrackSummary) -> Result<TrackSearchItem, ()> {
         })
         .collect();
     Ok(TrackSearchItem::new(summary, album, artists))
+}
+
+fn map_album_summary(album: &QqMusicAlbumSummary) -> Result<AlbumSummary, ()> {
+    let mid = album
+        .media_mid()
+        .filter(|value| is_safe_track_mid(value))
+        .ok_or(())?;
+    let title = album.name().ok_or(())?;
+    let opaque = format!(
+        "album:{}:{mid}",
+        album.album_id().map_or("-".into(), |id| id.to_string())
+    );
+    let id = AlbumId::new(qq_music_provider_id(), opaque).map_err(|_| ())?;
+    AlbumSummary::new(id, title)
+        .map(|summary| summary.with_artwork_uri(album_artwork_uri(mid)))
+        .map_err(|_| ())
 }
 
 fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
@@ -1342,6 +1381,29 @@ fn map_artist_tracks_error<E>(error: &QqMusicArtistTracksError<E>) -> CatalogErr
     }
 }
 
+fn map_artist_albums_error<E>(error: &QqMusicArtistAlbumsError<E>) -> CatalogError {
+    match error {
+        QqMusicArtistAlbumsError::Transport(_) => CatalogError::Network,
+        QqMusicArtistAlbumsError::HttpStatus(_) | QqMusicArtistAlbumsError::Upstream { .. } => {
+            CatalogError::ServiceUnavailable
+        }
+        QqMusicArtistAlbumsError::InvalidArtistMid
+        | QqMusicArtistAlbumsError::InvalidPageSize { .. }
+        | QqMusicArtistAlbumsError::Serialize
+        | QqMusicArtistAlbumsError::InvalidJson
+        | QqMusicArtistAlbumsError::MissingGlobalCode
+        | QqMusicArtistAlbumsError::MissingResult
+        | QqMusicArtistAlbumsError::MissingResultCode
+        | QqMusicArtistAlbumsError::MissingData
+        | QqMusicArtistAlbumsError::MissingArtistMid
+        | QqMusicArtistAlbumsError::MismatchedArtistMid
+        | QqMusicArtistAlbumsError::MissingTotal
+        | QqMusicArtistAlbumsError::MissingAlbums
+        | QqMusicArtistAlbumsError::InvalidPagination
+        | QqMusicArtistAlbumsError::InvalidAlbum { .. } => CatalogError::InvalidResponse,
+    }
+}
+
 fn map_recommendations_error<E>(
     error: &QqMusicRecommendedPlaylistsError<E>,
 ) -> RecommendationError {
@@ -1486,17 +1548,18 @@ mod tests {
         AlbumId, ArtistId, AudioFormat, AudioQuality, PlaylistId, ProviderId, TrackId,
     };
     use provider_api::{
-        AlbumTracksProvider, ArtistTracksProvider, CatalogError, LyricsError, LyricsProvider,
-        MediaResolutionError, MediaResolutionProvider, MusicProvider, OwnedPlaylistsProvider,
-        PlaylistDetailsProvider, ProviderCapability, QrAuthenticationProgress,
-        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RecommendationError,
-        RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
-        UserPlaylistsProvider,
+        AlbumTracksProvider, ArtistAlbumsProvider, ArtistTracksProvider, CatalogError, LyricsError,
+        LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
+        OwnedPlaylistsProvider, PlaylistDetailsProvider, ProviderCapability,
+        QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+        RecommendationError, RecommendedPlaylistsProvider, SearchError, TrackSearchProvider,
+        UserLibraryError, UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
-        HttpResponse, HttpTransport, LoginType, QqMusicAlbumTracksError, QqMusicArtistTracksError,
-        QqMusicClient, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+        HttpResponse, HttpTransport, LoginType, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
+        QqMusicArtistTracksError, QqMusicClient, QqMusicRecommendedPlaylistsError,
+        QqMusicSearchError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -2179,6 +2242,62 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn maps_public_artist_albums_and_rejects_foreign_identity() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "artistAlbums": {
+                "code": 0,
+                "data": {
+                    "singerMid": "fixtureArtistMid",
+                    "total": 1,
+                    "albumList": [{
+                        "albumID": 43001,
+                        "albumMid": "fixtureAlbumMid",
+                        "albumName": "Synthetic album"
+                    }]
+                }
+            }
+        }))));
+        let artist_id = ArtistId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "artist:42001:fixtureArtistMid",
+        )
+        .expect("Artist ID");
+        let page = provider
+            .artist_albums(artist_id, 0, 30)
+            .await
+            .expect("Artist Albums");
+
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.total(), 1);
+        assert!(!page.has_more());
+        assert_eq!(page.albums().len(), 1);
+        assert_eq!(
+            page.albums()[0].id().opaque(),
+            "album:43001:fixtureAlbumMid"
+        );
+        assert_eq!(page.albums()[0].title(), "Synthetic album");
+        assert_eq!(
+            page.albums()[0].artwork_uri(),
+            Some("https://y.gtimg.cn/music/photo_new/T002R300x300M000fixtureAlbumMid.jpg")
+        );
+        assert!(!provider.has_authenticated_credential());
+        let debug = format!("{page:?} {:?}", page.albums()[0]);
+        assert!(!debug.contains("Synthetic album"));
+        assert!(!debug.contains("fixtureAlbumMid"));
+
+        let foreign = ArtistId::new(
+            ProviderId::new("local").expect("provider"),
+            "artist:42001:fixtureArtistMid",
+        )
+        .expect("foreign Artist ID");
+        assert_eq!(
+            provider.artist_albums(foreign, 0, 30).await,
+            Err(CatalogError::InvalidResponse)
+        );
+    }
+
     #[test]
     fn maps_artist_protocol_failures_coarsely() {
         assert_eq!(
@@ -2190,6 +2309,18 @@ mod tests {
         assert_eq!(
             super::map_artist_tracks_error(
                 &QqMusicArtistTracksError::<Infallible>::InvalidPagination
+            ),
+            CatalogError::InvalidResponse
+        );
+        assert_eq!(
+            super::map_artist_albums_error(&QqMusicArtistAlbumsError::<Infallible>::HttpStatus(
+                503
+            )),
+            CatalogError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_artist_albums_error(
+                &QqMusicArtistAlbumsError::<Infallible>::InvalidPagination
             ),
             CatalogError::InvalidResponse
         );

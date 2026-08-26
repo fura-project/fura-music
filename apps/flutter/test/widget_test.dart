@@ -19,6 +19,7 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
@@ -583,6 +584,112 @@ void main() {
       'artist query',
     );
     expect(search.requests, [('artist query', 1, 30)]);
+  });
+
+  testWidgets('nests Album navigation inside a preserved Artist and Search', (
+    tester,
+  ) async {
+    const artist = ArtistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'artist:61001:fixtureArtistMid',
+      name: 'Synthetic artist',
+    );
+    const album = AlbumSummary(
+      providerId: 'qq-music',
+      opaqueId: 'album:51001:fixtureAlbumMid',
+      title: 'Artist album',
+    );
+    const searchTrack = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41001:0:searchMid:-',
+      title: 'Search track',
+      artistNames: ['Synthetic artist'],
+    );
+    const albumTrack = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41002:0:albumMid:-',
+      title: 'Album track',
+      artistNames: ['Synthetic artist'],
+      albumTitle: 'Artist album',
+    );
+    final search = _WidgetSearchGateway(
+      const TrackSearchPageResult(
+        page: 1,
+        total: 1,
+        items: [
+          TrackSearchItem(track: searchTrack, artists: [artist]),
+        ],
+      ),
+    );
+    final artistTracks = _WidgetArtistGateway(
+      const ArtistTrackPageResult(offset: 0, total: 1, tracks: [searchTrack]),
+    );
+    final artistAlbums = _WidgetArtistAlbumGateway(
+      const ArtistAlbumPageResult(offset: 0, total: 1, albums: [album]),
+    );
+    final albumTracks = _WidgetAlbumGateway(
+      const AlbumTrackPageResult(offset: 0, total: 1, tracks: [albumTrack]),
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        searchGateway: search,
+        artistTrackGateway: artistTracks,
+        artistAlbumGateway: artistAlbums,
+        albumTrackGateway: albumTracks,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-track-search')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      'nested query',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('track-search-artist-0-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
+    expect(artistAlbums.requests, isEmpty);
+
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artist-albums-content')), findsOneWidget);
+    expect(artistAlbums.requests, [(artist, 0, 30)]);
+
+    await tester.tap(find.byKey(const ValueKey('artist-album-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+    expect(find.text('Album track'), findsOneWidget);
+    expect(albumTracks.requests, [(album, 0, 30)]);
+
+    await tester.tap(find.byTooltip('Back to Artist'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artist-albums-content')), findsOneWidget);
+    expect(find.text('Artist album'), findsOneWidget);
+    expect(artistAlbums.requests, [(artist, 0, 30)]);
+
+    await tester.tap(find.byKey(const ValueKey('artist-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('track-search-content')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+          .controller
+          ?.text,
+      'nested query',
+    );
+    expect(search.requests, [('nested query', 1, 30)]);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('routes verified startup restore into the library', (
@@ -1513,6 +1620,35 @@ class _WidgetArtistOperation implements ArtistTrackPageLoadOperation {
 
   @override
   Future<ArtistTrackPageResult> run() async => result;
+}
+
+class _WidgetArtistAlbumGateway implements ArtistAlbumGateway {
+  _WidgetArtistAlbumGateway(this.result);
+
+  final ArtistAlbumPageResult result;
+  final List<(ArtistSummary, int, int)> requests = [];
+
+  @override
+  ArtistAlbumPageLoadOperation beginLoad({
+    required ArtistSummary artist,
+    required int offset,
+    required int size,
+  }) {
+    requests.add((artist, offset, size));
+    return _WidgetArtistAlbumOperation(result);
+  }
+}
+
+class _WidgetArtistAlbumOperation implements ArtistAlbumPageLoadOperation {
+  const _WidgetArtistAlbumOperation(this.result);
+
+  final ArtistAlbumPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<ArtistAlbumPageResult> run() async => result;
 }
 
 class _WidgetRecommendedPlaylistGateway implements RecommendedPlaylistGateway {

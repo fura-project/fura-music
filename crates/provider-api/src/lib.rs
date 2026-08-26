@@ -4,8 +4,8 @@ use std::fmt;
 use std::future::Future;
 
 use music_domain::{
-    AlbumId, AlbumTracksPage, ArtistId, ArtistTracksPage, PlaylistId, PlaylistSummary,
-    PlaylistTracksPage, ProviderId, RecommendedPlaylistsPage, ResolvedMediaSource,
+    AlbumId, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistTracksPage, PlaylistId,
+    PlaylistSummary, PlaylistTracksPage, ProviderId, RecommendedPlaylistsPage, ResolvedMediaSource,
     SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
@@ -118,6 +118,19 @@ pub trait ArtistTracksProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<ArtistTracksPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral offset-paged Album browsing for one Artist. Artist
+/// biographies, follows, and Album mutation are separate capabilities.
+pub trait ArtistAlbumsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn artist_albums(
+        &self,
+        artist_id: ArtistId,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<ArtistAlbumsPage, Self::Error>> + Send;
 }
 
 /// Provider-neutral offset-paged playlist recommendations. Personalization,

@@ -4,12 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'album.dart';
 import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `artist_id`, `bridge_artist_summary`, `failed_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `artist_id`, `bridge_artist_summary`, `failed_album_load`, `failed_load`, `map_album_error`, `map_album_load`, `map_error`, `map_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicArtistTrackPageLoadHandle beginQqMusicArtistTrackPageLoad({
   required String providerId,
@@ -22,6 +23,27 @@ QqMusicArtistTrackPageLoadHandle beginQqMusicArtistTrackPageLoad({
   offset: offset,
   size: size,
 );
+
+QqMusicArtistAlbumPageLoadHandle beginQqMusicArtistAlbumPageLoad({
+  required String providerId,
+  required String opaqueArtistId,
+  required int offset,
+  required int size,
+}) => RustLib.instance.api.crateApiArtistBeginQqMusicArtistAlbumPageLoad(
+  providerId: providerId,
+  opaqueArtistId: opaqueArtistId,
+  offset: offset,
+  size: size,
+);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicArtistAlbumPageLoadHandle>>
+abstract class QqMusicArtistAlbumPageLoadHandle implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicArtistAlbumPageLoad> run();
+}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicArtistTrackPageLoadHandle>>
 abstract class QqMusicArtistTrackPageLoadHandle implements RustOpaqueInterface {
@@ -54,6 +76,50 @@ class CatalogArtistSummary {
           providerId == other.providerId &&
           opaqueId == other.opaqueId &&
           name == other.name;
+}
+
+class QqMusicArtistAlbumPageLoad {
+  final int offset;
+  final int total;
+  final bool hasMore;
+  final List<CatalogAlbumSummary> albums;
+  final QqMusicArtistAlbumPageLoadFailure? failure;
+
+  const QqMusicArtistAlbumPageLoad({
+    required this.offset,
+    required this.total,
+    required this.hasMore,
+    required this.albums,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      offset.hashCode ^
+      total.hashCode ^
+      hasMore.hashCode ^
+      albums.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicArtistAlbumPageLoad &&
+          runtimeType == other.runtimeType &&
+          offset == other.offset &&
+          total == other.total &&
+          hasMore == other.hasMore &&
+          albums == other.albums &&
+          failure == other.failure;
+}
+
+enum QqMusicArtistAlbumPageLoadFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  cancelled,
+  alreadyRunning,
 }
 
 class QqMusicArtistTrackPageLoad {

@@ -44,3 +44,9 @@ Reference implementations remain research evidence only. The runtime will call Q
 ## Selection
 
 Artist albums rank first because they close a visible gap inside an already implemented Artist → Album → playback journey, reuse the existing Album Domain and page, and have stronger live protocol evidence than rankings. They are smaller and more coherent than broadening Search across several heterogeneous result types. Multi-type Search and rankings remain discovery candidates, not implicit follow-up work.
+
+## Implementation outcome
+
+Implemented on 2026-08-26 as `QQMusicClient` direct anonymous loading → `ArtistAlbumsProvider` → provider-neutral `ArtistAlbumsPage` of existing `AlbumSummary` values → single-use cancellable Bridge → lazy adaptive Flutter Artist Albums section. The client sends only the real-service-validated `num` page-size field, validates Artist identity and exact offset/total/list bounds, and redacts Artist/Album content from diagnostics. Flutter preserves independent Track/Album controller state, renders a compact list or desktop grid, and reuses the existing Album Track/queue page with nested Album → Artist → Search return behavior.
+
+Validation passed with Rust formatting, 187 offline Rust tests, strict Clippy, strict Dart analysis, 199 Flutter tests, a Linux x64 Release build, and packaged Linux typed-Bridge cancellation integration. Four live QQ/WeChat tests remain separately gated and ignored. This evidence does not claim that every live Artist discography or downstream authenticated Album playback works for every account at this moment.

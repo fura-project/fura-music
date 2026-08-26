@@ -1019,6 +1019,60 @@ impl fmt::Debug for ArtistTracksPage {
     }
 }
 
+/// One bounded page of an Artist's Albums. QQ-specific pagination and Artist
+/// route rules remain in the owning Provider.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ArtistAlbumsPage {
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    albums: Vec<AlbumSummary>,
+}
+
+impl ArtistAlbumsPage {
+    #[must_use]
+    pub const fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
+        Self {
+            offset,
+            total,
+            has_more,
+            albums,
+        }
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn albums(&self) -> &[AlbumSummary] {
+        &self.albums
+    }
+}
+
+impl fmt::Debug for ArtistAlbumsPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ArtistAlbumsPage")
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("album_count", &self.albums.len())
+            .finish()
+    }
+}
+
 impl PlaylistTracksPage {
     #[must_use]
     pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {

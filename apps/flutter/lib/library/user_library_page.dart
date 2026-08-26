@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
+import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -41,6 +42,7 @@ class UserLibraryPage extends StatefulWidget {
     this.searchGateway,
     this.albumTrackGateway,
     this.artistTrackGateway,
+    this.artistAlbumGateway,
     this.recommendedPlaylistGateway,
     super.key,
   });
@@ -56,6 +58,7 @@ class UserLibraryPage extends StatefulWidget {
   final TrackSearchGateway? searchGateway;
   final AlbumTrackGateway? albumTrackGateway;
   final ArtistTrackGateway? artistTrackGateway;
+  final ArtistAlbumGateway? artistAlbumGateway;
   final RecommendedPlaylistGateway? recommendedPlaylistGateway;
 
   @override
@@ -68,6 +71,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final TrackSearchGateway _searchGateway;
   late final AlbumTrackGateway _albumTrackGateway;
   late final ArtistTrackGateway _artistTrackGateway;
+  late final ArtistAlbumGateway _artistAlbumGateway;
   late final RecommendedPlaylistGateway _recommendedPlaylistGateway;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
@@ -98,6 +102,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         widget.albumTrackGateway ?? const RustAlbumTrackGateway();
     _artistTrackGateway =
         widget.artistTrackGateway ?? const RustArtistTrackGateway();
+    _artistAlbumGateway =
+        widget.artistAlbumGateway ?? const RustArtistAlbumGateway();
     _recommendedPlaylistGateway =
         widget.recommendedPlaylistGateway ??
         const RustRecommendedPlaylistGateway();
@@ -195,7 +201,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   album: selectedAlbum,
                   gateway: _albumTrackGateway,
                   queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnToSearch,
+                  onBack: _returnFromAlbum,
+                  backTooltip: selectedArtist == null
+                      ? 'Back to search results'
+                      : 'Back to Artist',
                   onSignInAgain: widget.onSignInAgain,
                 ),
               if (selectedArtist == null)
@@ -205,8 +214,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   key: ValueKey('artist-page-${selectedArtist.opaqueId}'),
                   artist: selectedArtist,
                   gateway: _artistTrackGateway,
+                  albumGateway: _artistAlbumGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnToSearch,
+                  onOpenAlbum: _openAlbum,
                   onSignInAgain: widget.onSignInAgain,
                 ),
             ],
@@ -275,7 +286,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _returnToRecommendations();
     } else if (_recommendationsOpen) {
       _closeRecommendations();
-    } else if (_selectedAlbum != null || _selectedArtist != null) {
+    } else if (_selectedAlbum != null) {
+      _returnFromAlbum();
+    } else if (_selectedArtist != null) {
       _returnToSearch();
     } else if (_searchOpen) {
       _closeSearch();
@@ -339,11 +352,20 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openAlbum(AlbumSummary album) {
-    if (!_searchOpen || _selectedAlbum != null || _selectedArtist != null) {
+    if (!_searchOpen || _selectedAlbum != null) {
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _selectedAlbum = album);
+  }
+
+  void _returnFromAlbum() {
+    if (_selectedAlbum == null) return;
+    if (_selectedArtist != null) {
+      setState(() => _selectedAlbum = null);
+    } else {
+      _returnToSearch();
+    }
   }
 
   void _openArtist(ArtistSummary artist) {
