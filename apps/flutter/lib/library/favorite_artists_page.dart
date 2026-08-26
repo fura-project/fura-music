@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/favorite_artist_controller.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -82,12 +83,15 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
   );
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
-    FavoriteArtistStage.loading => const Center(
+    FavoriteArtistStage.loading => const MusicLoadingPanel(
       key: ValueKey('favorite-artists-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading Favorite Artists',
     ),
-    FavoriteArtistStage.empty => const _EmptyState(
+    FavoriteArtistStage.empty => const MusicContentStatePanel(
       key: ValueKey('favorite-artists-empty'),
+      icon: Icons.person_outline_rounded,
+      title: 'No favorite artists yet',
+      detail: 'Artists you follow in QQ Music will appear here.',
     ),
     FavoriteArtistStage.content => _ArtistCollection(
       key: const ValueKey('favorite-artists-content'),
@@ -101,27 +105,44 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
     ),
-    FavoriteArtistStage.error => _FailureState(
+    FavoriteArtistStage.error => MusicContentStatePanel(
       key: const ValueKey('favorite-artists-error'),
-      message: _failureCopy(_controller.failure),
-      actionLabel: _controller.canRetry ? 'Try again' : null,
-      onAction: _controller.canRetry ? _controller.retry : null,
+      icon: Icons.cloud_off_rounded,
+      title: 'Couldn’t load favorite artists',
+      detail: _failureCopy(_controller.failure),
+      action: _controller.canRetry
+          ? FilledButton.tonal(
+              onPressed: _controller.retry,
+              child: const Text('Try again'),
+            )
+          : null,
+      liveRegion: true,
     ),
-    FavoriteArtistStage.authenticationRequired => _FailureState(
+    FavoriteArtistStage.authenticationRequired => MusicContentStatePanel(
       key: const ValueKey('favorite-artists-authentication-required'),
-      message: 'Sign in again to load your favorite artists.',
-      actionLabel: 'Sign in again',
-      onAction: widget.onSignInAgain,
+      icon: Icons.lock_outline_rounded,
+      title: 'Sign in to see favorite artists',
+      detail: 'Sign in again to load your favorite artists.',
+      action: TextButton(
+        onPressed: widget.onSignInAgain,
+        child: const Text('Sign in again'),
+      ),
+      liveRegion: true,
     ),
-    FavoriteArtistStage.credentialRejected => _FailureState(
+    FavoriteArtistStage.credentialRejected => MusicContentStatePanel(
       key: const ValueKey('favorite-artists-credential-rejected'),
-      message:
+      icon: Icons.lock_reset_rounded,
+      title: 'QQ Music session rejected',
+      detail:
           _controller.failure ==
               FavoriteArtistFailure.credentialRejectedStorageCleanupFailed
           ? 'QQ Music rejected this session, and its saved copy could not be removed.'
           : 'QQ Music no longer accepts this saved session.',
-      actionLabel: 'Sign in again',
-      onAction: widget.onSignInAgain,
+      action: TextButton(
+        onPressed: widget.onSignInAgain,
+        child: const Text('Sign in again'),
+      ),
+      liveRegion: true,
     ),
   };
 }
@@ -400,57 +421,6 @@ class _CollectionFooter extends StatelessWidget {
     }
     return const SizedBox(height: 12);
   }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({super.key});
-
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.person_outline_rounded, size: 48),
-          SizedBox(height: 16),
-          Text('No favorite artists yet.'),
-        ],
-      ),
-    ),
-  );
-}
-
-class _FailureState extends StatelessWidget {
-  const _FailureState({
-    required this.message,
-    required this.actionLabel,
-    required this.onAction,
-    super.key,
-  });
-
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error_outline_rounded, size: 48),
-          const SizedBox(height: 16),
-          Text(message, textAlign: TextAlign.center),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onAction, child: Text(actionLabel!)),
-          ],
-        ],
-      ),
-    ),
-  );
 }
 
 String _failureCopy(FavoriteArtistFailure? failure) => switch (failure) {

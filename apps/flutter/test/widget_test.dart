@@ -1020,6 +1020,170 @@ void main() {
   );
 
   testWidgets(
+    'saved collections share labeled compact loading and empty states',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final albums = _ControlledWidgetFavoriteAlbumGateway();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          favoriteAlbumGateway: albums,
+          favoriteArtistGateway: _WidgetFavoriteArtistGateway(
+            const FavoriteArtistPageResult(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Open saved collections'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favorite albums'));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('favorite-albums-loading')),
+        findsOneWidget,
+      );
+      expect(find.byType(MusicLoadingPanel), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('favorite-albums-loading')),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics &&
+                widget.properties.label == 'Loading Favorite Albums',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      albums.complete(const FavoriteAlbumPageResult());
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('favorite-albums-empty')),
+        findsOneWidget,
+      );
+      expect(find.byType(MusicContentStatePanel), findsOneWidget);
+      expect(find.text('No favorite albums yet'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Back to playlists'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Open saved collections'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favorite artists'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('favorite-artists-empty')),
+        findsOneWidget,
+      );
+      expect(find.byType(MusicContentStatePanel), findsOneWidget);
+      expect(find.text('No favorite artists yet'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'saved collection failures keep one live region and exact recovery',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final albums = _ScriptedWidgetFavoriteAlbumGateway([
+        const FavoriteAlbumPageResult(failure: FavoriteAlbumFailure.network),
+        const FavoriteAlbumPageResult(),
+      ]);
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          favoriteAlbumGateway: albums,
+          favoriteArtistGateway: _WidgetFavoriteArtistGateway(
+            const FavoriteArtistPageResult(
+              failure: FavoriteArtistFailure.credentialRejected,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Open saved collections'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favorite albums'));
+      await tester.pumpAndSettle();
+
+      final albumError = find.byKey(const ValueKey('favorite-albums-error'));
+      expect(albumError, findsOneWidget);
+      expect(find.byType(MusicContentStatePanel), findsOneWidget);
+      expect(
+        find.descendant(
+          of: albumError,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics && widget.properties.liveRegion == true,
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.text('Sign in again'), findsNothing);
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('favorite-albums-empty')),
+        findsOneWidget,
+      );
+      expect(albums.requests, [(0, 20), (0, 20)]);
+
+      await tester.tap(find.byTooltip('Back to playlists'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Open saved collections'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favorite artists'));
+      await tester.pumpAndSettle();
+
+      final artistError = find.byKey(
+        const ValueKey('favorite-artists-credential-rejected'),
+      );
+      expect(artistError, findsOneWidget);
+      expect(find.byType(MusicContentStatePanel), findsOneWidget);
+      expect(
+        find.descendant(
+          of: artistError,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics && widget.properties.liveRegion == true,
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Try again'), findsNothing);
+      expect(find.text('Sign in again'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Sign in again'));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with WeChat'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'opens favorite Albums lazily and preserves the collection through playback return',
     (tester) async {
       tester.view.physicalSize = const Size(360, 800);
@@ -4008,6 +4172,48 @@ class _WidgetFavoriteAlbumOperation implements FavoriteAlbumPageLoadOperation {
 
   @override
   Future<FavoriteAlbumPageResult> run() async => result;
+}
+
+class _ControlledWidgetFavoriteAlbumGateway implements FavoriteAlbumGateway {
+  final Completer<FavoriteAlbumPageResult> _completer = Completer();
+
+  void complete(FavoriteAlbumPageResult result) => _completer.complete(result);
+
+  @override
+  FavoriteAlbumPageLoadOperation beginLoad({
+    required int offset,
+    required int size,
+  }) => _FutureWidgetFavoriteAlbumOperation(_completer.future);
+}
+
+class _FutureWidgetFavoriteAlbumOperation
+    implements FavoriteAlbumPageLoadOperation {
+  const _FutureWidgetFavoriteAlbumOperation(this.result);
+
+  final Future<FavoriteAlbumPageResult> result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<FavoriteAlbumPageResult> run() => result;
+}
+
+class _ScriptedWidgetFavoriteAlbumGateway implements FavoriteAlbumGateway {
+  _ScriptedWidgetFavoriteAlbumGateway(this.results);
+
+  final List<FavoriteAlbumPageResult> results;
+  final List<(int, int)> requests = [];
+  int _index = 0;
+
+  @override
+  FavoriteAlbumPageLoadOperation beginLoad({
+    required int offset,
+    required int size,
+  }) {
+    requests.add((offset, size));
+    return _WidgetFavoriteAlbumOperation(results[_index++]);
+  }
 }
 
 class _WidgetFavoriteArtistGateway implements FavoriteArtistGateway {

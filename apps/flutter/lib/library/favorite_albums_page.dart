@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -82,12 +83,15 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
   );
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
-    FavoriteAlbumStage.loading => const Center(
+    FavoriteAlbumStage.loading => const MusicLoadingPanel(
       key: ValueKey('favorite-albums-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading Favorite Albums',
     ),
-    FavoriteAlbumStage.empty => const _EmptyState(
+    FavoriteAlbumStage.empty => const MusicContentStatePanel(
       key: ValueKey('favorite-albums-empty'),
+      icon: Icons.album_outlined,
+      title: 'No favorite albums yet',
+      detail: 'Albums you save in QQ Music will appear here.',
     ),
     FavoriteAlbumStage.content => _AlbumCollection(
       key: const ValueKey('favorite-albums-content'),
@@ -101,27 +105,44 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
     ),
-    FavoriteAlbumStage.error => _FailureState(
+    FavoriteAlbumStage.error => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-error'),
-      message: _failureCopy(_controller.failure),
-      actionLabel: _controller.canRetry ? 'Try again' : null,
-      onAction: _controller.canRetry ? _controller.retry : null,
+      icon: Icons.cloud_off_rounded,
+      title: 'Couldn’t load favorite albums',
+      detail: _failureCopy(_controller.failure),
+      action: _controller.canRetry
+          ? FilledButton.tonal(
+              onPressed: _controller.retry,
+              child: const Text('Try again'),
+            )
+          : null,
+      liveRegion: true,
     ),
-    FavoriteAlbumStage.authenticationRequired => _FailureState(
+    FavoriteAlbumStage.authenticationRequired => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-authentication-required'),
-      message: 'Sign in again to load your favorite albums.',
-      actionLabel: 'Sign in again',
-      onAction: widget.onSignInAgain,
+      icon: Icons.lock_outline_rounded,
+      title: 'Sign in to see favorite albums',
+      detail: 'Sign in again to load your favorite albums.',
+      action: TextButton(
+        onPressed: widget.onSignInAgain,
+        child: const Text('Sign in again'),
+      ),
+      liveRegion: true,
     ),
-    FavoriteAlbumStage.credentialRejected => _FailureState(
+    FavoriteAlbumStage.credentialRejected => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-credential-rejected'),
-      message:
+      icon: Icons.lock_reset_rounded,
+      title: 'QQ Music session rejected',
+      detail:
           _controller.failure ==
               FavoriteAlbumFailure.credentialRejectedStorageCleanupFailed
           ? 'QQ Music rejected this session, and its saved copy could not be removed.'
           : 'QQ Music no longer accepts this saved session.',
-      actionLabel: 'Sign in again',
-      onAction: widget.onSignInAgain,
+      action: TextButton(
+        onPressed: widget.onSignInAgain,
+        child: const Text('Sign in again'),
+      ),
+      liveRegion: true,
     ),
   };
 }
@@ -406,57 +427,6 @@ class _CollectionFooter extends StatelessWidget {
     }
     return const SizedBox(height: 12);
   }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({super.key});
-
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.album_outlined, size: 48),
-          SizedBox(height: 16),
-          Text('No favorite albums yet.'),
-        ],
-      ),
-    ),
-  );
-}
-
-class _FailureState extends StatelessWidget {
-  const _FailureState({
-    required this.message,
-    required this.actionLabel,
-    required this.onAction,
-    super.key,
-  });
-
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error_outline_rounded, size: 48),
-          const SizedBox(height: 16),
-          Text(message, textAlign: TextAlign.center),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onAction, child: Text(actionLabel!)),
-          ],
-        ],
-      ),
-    ),
-  );
 }
 
 String _failureCopy(FavoriteAlbumFailure? failure) => switch (failure) {

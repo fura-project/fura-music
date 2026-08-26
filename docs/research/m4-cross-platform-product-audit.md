@@ -55,3 +55,9 @@ This bounded audit reviewed Theme, Authentication, the retained App Shell, Libra
 ## Selection
 
 Favorite collection state language is the highest-value finite task. It closes the one directly reproduced initial-state/accessibility inconsistency found across the integrated product while reusing an already accepted presentation component and leaving collection content, controllers, navigation, playback, and Rust boundaries untouched.
+
+## Outcome
+
+The selected slice is implemented. Favorite Albums and Favorite Artists now share the existing labeled Material loading and content-state panels while retaining their exact controller stages, failure distinctions, retry/sign-in eligibility, keys, append footers, paging, retained navigation, and playback owner. Each asynchronous initial error or account state exposes one live region; type-specific empty states do not announce themselves as failures.
+
+Two direct 360 px regressions cover labeled loading, both empty states, retryable Album failure and exact retry request, terminal Artist credential rejection, one-live-region semantics, and sign-in recovery. Strict Dart formatting and analysis, all 310 Flutter tests, Linux x64 Release, packaged Bridge integration, Rust formatting, 267 offline Rust tests, and strict Clippy pass. Four live QQ/WeChat tests remain separately ignored, so this outcome does not add live service, physical-device, or unavailable-platform evidence.
