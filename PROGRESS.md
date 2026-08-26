@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "M3 direct Album Search vertical slice"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -36,11 +36,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Direct Artist Search is implemented and verified offline through the existing Artist/Album/queue navigation. The next work item must come from a fresh bounded ranking of Roadmap-authorized gaps or reproduced problems; completion of this slice is not a stop condition.
+- M3 remains active. The bounded post-Artist-Search discovery selected Direct Album Search: an anonymous Desktop type-2 probe returned five exact five-row pages, stable total/continuation, terminal `nextpage: -1`, no cross-page identity overlap, and the ID/MID/title required by the existing Album route. Implementation is active; rankings remain a separate future discovery.
 
 # Next Candidates
 
-1. Run the next bounded M3 discovery/ranking pass. Direct Album Search and QQ ranking lists remain documented candidates, but neither is selected until current protocol/product evidence establishes a finite slice.
+1. Implement the selected Direct Album Search slice through Client, Domain/Provider, cancellable Bridge, and an Albums option in the bounded Search type control while preserving independent type state and reusing the existing Album page.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
