@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "M4.5 Expanded Now Playing control hierarchy"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -63,12 +63,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The adaptive Queue information hierarchy is complete. M4 remains active and the next action is a whole-project ranking before selecting another bounded slice.
+- Post-Queue global ranking selected one bounded Expanded Now Playing control hierarchy: reuse the existing bar's progress/actions in an expanded mode while removing duplicated mini-player identity. Playback/controller ownership does not change.
 
 # Next Candidates
 
-1. Re-rank the deferred Expanded Now Playing transport hierarchy and Lyrics state-language candidates against remaining M4 exit-criterion gaps.
-2. Prefer a bounded product-level gap over another presentation-only micro-polish task.
+1. Implement and validate the bounded Expanded Now Playing control mode without duplicating playback logic.
+2. Re-rank Lyrics state-language alignment against an M4.6 cross-platform product audit after this slice.
 3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
 
 # Blockers
