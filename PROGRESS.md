@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "Implement Artist browsing from Track search"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -32,11 +32,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 returns to bounded discovery after completing Track search and Album browsing. Artist and Home remain authorized spaces but retain the evidence gaps recorded in the Album discovery note; neither is an implementation commitment yet.
+- M3 discovery selected Artist browsing from Track search after two independent current implementations and anonymous bounded probes established forward pagination for both MID and numeric-ID request shapes. The finite slice retains credited Artist identities, uses the exact-size numeric-ID operation, preserves Search state, and reuses the existing queue; Artist details/albums/follows, Home, and quality work remain excluded.
 
 # Next Candidates
 
-1. Run one bounded M3 product-completeness discovery pass and rank at most three evidence-backed candidates after the completed Album slice.
+1. Implement and prove the selected Artist-browsing slice across Domain, client, Provider, cancellable Bridge, adaptive Flutter navigation, multi-Artist selection, and the existing queue.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -58,7 +58,8 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - The successful login shape supplied the encrypted identity needed for the combined library. Other future login shapes must still fail truthfully if QQ omits it rather than silently showing a partial collection.
 - Authenticated playlist/detail navigation has user-reported acceptance evidence, but no user-derived response or identifier is retained.
 - Track-search request shape has two current independent implementation references plus one bounded anonymous coarse probe; the full response and Track content were not retained, and no authenticated search-to-playback observation has been claimed.
-- Album-song request shape has current implementation evidence, one bounded anonymous coarse probe, and offline regression coverage. Live Album compatibility is not claimed. Artist discovery remains deferred because its bounded probe returned an unresolved detail code and ignored the requested song-row count.
+- Album-song request shape has current implementation evidence, one bounded anonymous coarse probe, and offline regression coverage. Live Album compatibility is not claimed.
+- Artist-song behavior now has two current independent implementation references and two bounded anonymous pagination probes. The selected numeric-ID request honored the requested five-row page; no live product compatibility is claimed until the project implementation is separately exercised. The previously failing detail operation is deliberately outside the selected songs-only slice.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
