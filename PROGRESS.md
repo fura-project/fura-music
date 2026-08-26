@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "Implement recommended playlists discovery"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -33,11 +33,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The Artist-browsing slice is complete and M3 returns to a bounded discovery pass. Artist details/albums/follows, Home, and quality work were not implicitly authorized by that slice.
+- M3 discovery selected recommended playlists after two current independent implementations and a bounded anonymous probe established an exact ten-row nested playlist page with typed continuation. The finite slice is public recommended playlists → existing authenticated playlist detail → existing queue; heterogeneous Home cards, personalization, mutation, radio, rankings, and quality remain excluded.
 
 # Next Candidates
 
-1. Run a bounded M3 discovery pass and rank at most three evidence-backed QQ Music core-product gaps before selecting another finite slice.
+1. Implement and prove the selected recommended-playlists slice across the client, Provider, cancellable Bridge, adaptive Flutter discovery navigation, existing playlist detail, and existing queue.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -61,6 +61,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Track-search request shape has two current independent implementation references plus one bounded anonymous coarse probe; the full response and Track content were not retained, and no authenticated search-to-playback observation has been claimed.
 - Album-song request shape has current implementation evidence, one bounded anonymous coarse probe, and offline regression coverage. Live Album compatibility is not claimed.
 - Artist-song behavior has two current independent implementation references, two bounded anonymous pagination probes, and offline end-to-end mapping/navigation coverage. The selected numeric-ID request honored the requested five-row page; no live product compatibility is claimed until the project implementation is separately exercised. The previously failing detail operation remains outside the songs-only slice.
+- Recommended-playlist behavior has two current independent implementation references and one bounded anonymous exact-size probe. The nested playlist shape and continuation types were observed without retaining content; live application compatibility is not yet claimed.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
