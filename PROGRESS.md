@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "Compact saved-collection actions"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -50,11 +50,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. The authenticated favorite-Artist slice is complete locally; the next action is a fresh whole-project ranking from Roadmap, current evidence, risks, and blockers. Track availability remains evidence-blocked.
+- M3 remains active. Whole-project ranking selected the reproduced compact AppBar conflict introduced by the sixth authenticated action: retain the library title and group only the two saved-collection destinations at compact width while preserving wide direct actions and exact focus return. Track availability remains evidence-blocked.
 
 # Next Candidates
 
-1. Re-rank the remaining M3 directions from current protocol/product evidence before selecting another finite slice; do not turn Track availability into implementation without sanitized entitlement/quality evidence.
+1. Implement the bounded compact saved-collection action selected in `docs/research/m3-compact-library-actions-discovery.md`; do not expand it into a navigation-shell or design-system rewrite.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
