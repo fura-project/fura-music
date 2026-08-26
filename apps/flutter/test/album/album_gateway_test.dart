@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge;
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 
 void main() {
@@ -22,6 +23,13 @@ void main() {
             opaqueId: 'track:41001:0:fixtureMid:-',
             title: 'Synthetic track',
             artistNames: ['Artist one'],
+            artists: [
+              bridge_artist.CatalogArtistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'artist:42001:fixtureArtistMid',
+                name: 'Artist one',
+              ),
+            ],
             albumTitle: 'Synthetic album',
             durationSeconds: 245,
           ),
@@ -35,6 +43,10 @@ void main() {
     expect(result.hasMore, isTrue);
     expect(result.tracks.single.title, 'Synthetic track');
     expect(result.tracks.single.artistNames, ['Artist one']);
+    expect(
+      result.tracks.single.artists.single.opaqueId,
+      'artist:42001:fixtureArtistMid',
+    );
   });
 
   test('maps failures and rejects success data beside a failure', () {

@@ -22,6 +22,13 @@ void main() {
             opaqueId: 'track:41001:0:fixtureMid:-',
             title: 'Synthetic track',
             artistNames: ['Artist one'],
+            artists: [
+              bridge.CatalogArtistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'artist:42001:fixtureArtistMid',
+                name: 'Artist one',
+              ),
+            ],
             albumTitle: 'Synthetic album',
             durationSeconds: 245,
           ),

@@ -957,6 +957,7 @@ pub struct TrackSummary {
     title: String,
     subtitle: Option<String>,
     artist_names: Vec<String>,
+    artists: Vec<ArtistSummary>,
     album_title: Option<String>,
     album: Option<AlbumSummary>,
     artwork_uri: Option<String>,
@@ -990,6 +991,7 @@ impl TrackSummary {
             title,
             subtitle: None,
             artist_names,
+            artists: Vec::new(),
             album_title: None,
             album: None,
             artwork_uri: None,
@@ -1006,6 +1008,12 @@ impl TrackSummary {
     #[must_use]
     pub fn with_album_title(mut self, album_title: Option<String>) -> Self {
         self.album_title = nonblank(album_title);
+        self
+    }
+
+    #[must_use]
+    pub fn with_artists(mut self, artists: Vec<ArtistSummary>) -> Self {
+        self.artists = artists;
         self
     }
 
@@ -1048,6 +1056,11 @@ impl TrackSummary {
     }
 
     #[must_use]
+    pub fn artists(&self) -> &[ArtistSummary] {
+        &self.artists
+    }
+
+    #[must_use]
     pub fn album_title(&self) -> Option<&str> {
         self.album_title.as_deref()
     }
@@ -1076,6 +1089,7 @@ impl fmt::Debug for TrackSummary {
             .field("title", &"[REDACTED]")
             .field("has_subtitle", &self.subtitle.is_some())
             .field("artist_count", &self.artist_names.len())
+            .field("artist_identity_count", &self.artists.len())
             .field("has_album_title", &self.album_title.is_some())
             .field("has_album", &self.album.is_some())
             .field("has_artwork", &self.artwork_uri.is_some())
@@ -2017,9 +2031,19 @@ mod tests {
             "Synthetic album",
         )
         .expect("album");
+        let artist = ArtistSummary::new(
+            ArtistId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "artist:42001:fixture-artist-mid",
+            )
+            .expect("artist ID"),
+            "Artist one",
+        )
+        .expect("artist");
         let summary = TrackSummary::new(id, "Synthetic track", vec!["Artist one".into()])
             .expect("track summary")
             .with_subtitle(Some("Synthetic subtitle".into()))
+            .with_artists(vec![artist])
             .with_album_title(Some("Synthetic album".into()))
             .with_album(Some(album))
             .with_artwork_uri(Some("https://example.invalid/album.jpg".into()))
@@ -2029,6 +2053,10 @@ mod tests {
         assert_eq!(summary.id().opaque(), "track:41001:0:1:fixture-mid");
         assert_eq!(summary.title(), "Synthetic track");
         assert_eq!(summary.artist_names(), ["Artist one"]);
+        assert_eq!(
+            summary.artists()[0].id().opaque(),
+            "artist:42001:fixture-artist-mid"
+        );
         assert_eq!(summary.album_title(), Some("Synthetic album"));
         assert_eq!(
             summary.album().expect("Album context").id().opaque(),
@@ -2038,6 +2066,7 @@ mod tests {
         let debug = format!("{summary:?}");
         assert!(!debug.contains("Synthetic track"));
         assert!(!debug.contains("41001"));
+        assert!(!debug.contains("42001"));
         assert!(!debug.contains("43001"));
     }
 

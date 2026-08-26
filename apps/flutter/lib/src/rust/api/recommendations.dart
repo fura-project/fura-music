@@ -5,6 +5,7 @@
 
 import '../frb_generated.dart';
 import 'album.dart';
+import 'artist.dart';
 import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';

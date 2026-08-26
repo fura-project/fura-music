@@ -1457,11 +1457,7 @@ fn parse_ranking_id(requested_id: &RankingId) -> Result<u64, CatalogError> {
 fn map_search_item(track: &QqMusicTrackSummary) -> Result<TrackSearchItem, ()> {
     let summary = map_track_summary(track)?;
     let album = summary.album().cloned();
-    let artists = track
-        .artists()
-        .iter()
-        .filter_map(|artist| map_artist_summary(artist).ok())
-        .collect();
+    let artists = summary.artists().to_vec();
     Ok(TrackSearchItem::new(summary, album, artists))
 }
 
@@ -1521,6 +1517,11 @@ fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
         .iter()
         .map(|artist| artist.name().to_owned())
         .collect();
+    let credited_artists = track
+        .artists()
+        .iter()
+        .filter_map(|artist| map_artist_summary(artist).ok())
+        .collect();
     let album_title = track
         .album()
         .and_then(qqmusic_client::QqMusicAlbumSummary::name)
@@ -1536,6 +1537,7 @@ fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
         .map(|summary| {
             summary
                 .with_subtitle(track.subtitle().map(str::to_owned))
+                .with_artists(credited_artists)
                 .with_album_title(album_title)
                 .with_album(album)
                 .with_artwork_uri(artwork_uri)
@@ -2721,6 +2723,15 @@ mod tests {
         );
         assert_eq!(track.title(), "Synthetic track");
         assert_eq!(track.artist_names(), ["Artist one", "Artist two"]);
+        assert_eq!(track.artists().len(), 2);
+        assert_eq!(
+            track.artists()[0].id().opaque(),
+            "artist:42001:artistOneMid"
+        );
+        assert_eq!(
+            track.artists()[1].id().opaque(),
+            "artist:42002:artistTwoMid"
+        );
         assert_eq!(track.album_title(), Some("Synthetic album"));
         let album = track.album().expect("Album context");
         assert_eq!(album.id().opaque(), "album:43001:fixtureAlbumMid");
@@ -2734,6 +2745,7 @@ mod tests {
         assert_eq!(track.album(), Some(album));
         assert_eq!(album.title(), "Synthetic album");
         assert_eq!(item.artists().len(), 2);
+        assert_eq!(track.artists(), item.artists());
         assert_eq!(item.artists()[0].id().opaque(), "artist:42001:artistOneMid");
         assert_eq!(item.artists()[0].name(), "Artist one");
         assert_eq!(item.artists()[1].id().opaque(), "artist:42002:artistTwoMid");

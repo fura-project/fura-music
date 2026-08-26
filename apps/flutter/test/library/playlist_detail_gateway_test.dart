@@ -5,6 +5,7 @@ import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge;
 
 void main() {
@@ -48,6 +49,13 @@ void main() {
         opaqueId: 'track:41001:0:fixtureTrackMid:-',
         title: 'Synthetic Track',
         artistNames: ['Synthetic Artist'],
+        artists: [
+          bridge_artist.CatalogArtistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'artist:42001:fixtureArtistMid',
+            name: 'Synthetic Artist',
+          ),
+        ],
         albumTitle: 'Synthetic Album',
         album: bridge_album.CatalogAlbumSummary(
           providerId: 'qq-music',
@@ -58,6 +66,7 @@ void main() {
     );
 
     expect(mapped?.album?.opaqueId, 'album:43001:fixtureAlbumMid');
+    expect(mapped?.artists.single.opaqueId, 'artist:42001:fixtureArtistMid');
     expect(
       mapBridgeLibraryTrackSummary(
         const bridge.LibraryTrackSummary(
@@ -65,6 +74,7 @@ void main() {
           opaqueId: 'track:41001:0:fixtureTrackMid:-',
           title: 'Synthetic Track',
           artistNames: ['Synthetic Artist'],
+          artists: [],
           album: bridge_album.CatalogAlbumSummary(
             providerId: 'qq-music',
             opaqueId: '',
@@ -81,11 +91,30 @@ void main() {
           opaqueId: 'track:41001:0:fixtureTrackMid:-',
           title: 'Synthetic Track',
           artistNames: ['Synthetic Artist'],
+          artists: [],
           album: bridge_album.CatalogAlbumSummary(
             providerId: 'local',
             opaqueId: 'album:foreign',
             title: 'Synthetic Album',
           ),
+        ),
+      ),
+      isNull,
+    );
+    expect(
+      mapBridgeLibraryTrackSummary(
+        const bridge.LibraryTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'track:41001:0:fixtureTrackMid:-',
+          title: 'Synthetic Track',
+          artistNames: ['Synthetic Artist'],
+          artists: [
+            bridge_artist.CatalogArtistSummary(
+              providerId: 'local',
+              opaqueId: 'artist:foreign',
+              name: 'Synthetic Artist',
+            ),
+          ],
         ),
       ),
       isNull,

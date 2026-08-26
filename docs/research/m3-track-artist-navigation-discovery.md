@@ -35,3 +35,9 @@ No QQ protocol change, real-account access, or new Provider is required. This is
 ## Selection
 
 Playlist Track to credited Artist navigation ranks first because it connects the existing Artist product slice to the demonstrated daily-use library path, fixes the data loss at its actual shared boundary, and can reuse the exact local-overlay behavior just validated for Album context. The visible action remains limited to playlist detail so this task does not automatically turn every Track surface into another presentation-polish project.
+
+## Implementation outcome — 2026-08-27
+
+The selected slice is complete. The shared QQ mapper now retains every valid credited Artist in `TrackSummary`; generated Bridge values, handwritten Dart adaptation, and Rust queue snapshots preserve the same ordered credits and reject malformed or cross-Provider context without partial mutation. Playlist detail exposes the action from existing desktop and compact context surfaces, opens a single credit directly, and requires an explicit bounded selection for collaborations.
+
+Every owned, recommended, and Search-origin playlist detail can retain an Artist page above the loaded playlist; Artist Albums reuse the existing nested Album presentation. AppBar and platform return therefore unwind Album → Artist → playlist while preserving playlist rows, pagination, queue/playback ownership, and local state. No protocol request, credential access, dependency, navigation framework, new queue rule, or action on another Track surface was added.

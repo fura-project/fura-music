@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/recommendations.dart' as bridge;
 
@@ -18,6 +19,13 @@ void main() {
             opaqueId: 'track:41001:0:fixture-mid:-',
             title: 'Synthetic Radar Track',
             artistNames: ['Synthetic artist'],
+            artists: [
+              bridge_artist.CatalogArtistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'artist:42001:fixtureArtistMid',
+                name: 'Synthetic artist',
+              ),
+            ],
             albumTitle: 'Synthetic album',
             durationSeconds: 245,
           ),
@@ -30,6 +38,10 @@ void main() {
     expect(result.hasMore, isTrue);
     expect(result.tracks.single.title, 'Synthetic Radar Track');
     expect(result.tracks.single.artistNames, ['Synthetic artist']);
+    expect(
+      result.tracks.single.artists.single.opaqueId,
+      'artist:42001:fixtureArtistMid',
+    );
     expect(() => result.tracks.clear(), throwsUnsupportedError);
     expect(
       () => result.tracks.single.artistNames.clear(),
@@ -69,6 +81,7 @@ void main() {
             opaqueId: 'opaque',
             title: 'must not coexist',
             artistNames: [],
+            artists: [],
           ),
         ],
         failure: bridge.QqMusicRadarTrackPageLoadFailure.network,
@@ -98,6 +111,7 @@ void main() {
             opaqueId: 'opaque',
             title: 'Synthetic',
             artistNames: [' '],
+            artists: [],
           ),
         ],
       ),

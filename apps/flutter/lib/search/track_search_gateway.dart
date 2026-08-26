@@ -175,6 +175,11 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
         ),
       );
     }
+    if (!_sameArtists(mappedTrack.artists, artists)) {
+      return const TrackSearchPageResult(
+        failure: TrackSearchFailure.invalidResponse,
+      );
+    }
     items.add(
       TrackSearchItem(
         track: mappedTrack,
@@ -199,6 +204,18 @@ bool _sameAlbum(AlbumSummary? first, AlbumSummary? second) =>
         first.opaqueId == second.opaqueId &&
         first.title == second.title &&
         first.artworkUri == second.artworkUri;
+
+bool _sameArtists(List<ArtistSummary> first, List<ArtistSummary> second) {
+  if (first.length != second.length) return false;
+  for (var index = 0; index < first.length; index++) {
+    if (first[index].providerId != second[index].providerId ||
+        first[index].opaqueId != second[index].opaqueId ||
+        first[index].name != second[index].name) {
+      return false;
+    }
+  }
+  return true;
+}
 
 @visibleForTesting
 TrackSearchFailure mapBridgeTrackSearchFailure(

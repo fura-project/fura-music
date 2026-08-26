@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/rankings.dart' as bridge;
 
@@ -85,6 +86,13 @@ void main() {
           opaqueId: 'track:41001:0:fixtureMid:-',
           title: 'Synthetic Track',
           artistNames: ['Artist'],
+          artists: [
+            bridge_artist.CatalogArtistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'artist:42001:fixtureArtistMid',
+              name: 'Artist',
+            ),
+          ],
         ),
       ],
     );

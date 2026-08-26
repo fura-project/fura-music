@@ -5,6 +5,7 @@ use provider_api::{PlaylistDetailsProvider, UserLibraryError, UserPlaylistsProvi
 use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
+use super::artist::{CatalogArtistSummary, bridge_artist_summary};
 use super::authentication::native_qq_music_provider;
 
 #[derive(Clone, Eq, PartialEq)]
@@ -183,6 +184,7 @@ pub struct LibraryTrackSummary {
     pub title: String,
     pub subtitle: Option<String>,
     pub artist_names: Vec<String>,
+    pub artists: Vec<CatalogArtistSummary>,
     pub album_title: Option<String>,
     pub album: Option<CatalogAlbumSummary>,
     pub artwork_uri: Option<String>,
@@ -198,6 +200,7 @@ impl fmt::Debug for LibraryTrackSummary {
             .field("title", &"[REDACTED]")
             .field("has_subtitle", &self.subtitle.is_some())
             .field("artist_count", &self.artist_names.len())
+            .field("artist_identity_count", &self.artists.len())
             .field("has_album_title", &self.album_title.is_some())
             .field("has_album", &self.album.is_some())
             .field("has_artwork", &self.artwork_uri.is_some())
@@ -365,6 +368,7 @@ pub(super) fn bridge_track_summary(track: &music_domain::TrackSummary) -> Librar
         title: track.title().to_owned(),
         subtitle: track.subtitle().map(str::to_owned),
         artist_names: track.artist_names().to_vec(),
+        artists: track.artists().iter().map(bridge_artist_summary).collect(),
         album_title: track.album_title().map(str::to_owned),
         album: track.album().map(bridge_album_summary),
         artwork_uri: track.artwork_uri().map(str::to_owned),
@@ -376,10 +380,21 @@ pub(super) fn domain_track_summary(
     track: LibraryTrackSummary,
 ) -> Result<music_domain::TrackSummary, ()> {
     let album = track.album.map(domain_album_summary).transpose()?;
+    let artists = track
+        .artists
+        .into_iter()
+        .map(domain_artist_summary)
+        .collect::<Result<Vec<_>, _>>()?;
     let provider = music_domain::ProviderId::new(track.provider_id).map_err(|_| ())?;
     if album
         .as_ref()
         .is_some_and(|album| album.id().provider() != &provider)
+    {
+        return Err(());
+    }
+    if artists
+        .iter()
+        .any(|artist| artist.id().provider() != &provider)
     {
         return Err(());
     }
@@ -388,12 +403,19 @@ pub(super) fn domain_track_summary(
         .map(|summary| {
             summary
                 .with_subtitle(track.subtitle)
+                .with_artists(artists)
                 .with_album_title(track.album_title)
                 .with_album(album)
                 .with_artwork_uri(track.artwork_uri)
                 .with_duration_seconds(track.duration_seconds)
         })
         .map_err(|_| ())
+}
+
+fn domain_artist_summary(artist: CatalogArtistSummary) -> Result<music_domain::ArtistSummary, ()> {
+    let provider = music_domain::ProviderId::new(artist.provider_id).map_err(|_| ())?;
+    let id = music_domain::ArtistId::new(provider, artist.opaque_id).map_err(|_| ())?;
+    music_domain::ArtistSummary::new(id, artist.name).map_err(|_| ())
 }
 
 fn domain_album_summary(album: CatalogAlbumSummary) -> Result<music_domain::AlbumSummary, ()> {
@@ -436,8 +458,8 @@ const fn map_track_page_error(error: UserLibraryError) -> QqMusicPlaylistTrackPa
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        AlbumId, AlbumSummary, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
-        TrackId, TrackSummary,
+        AlbumId, AlbumSummary, ArtistId, ArtistSummary, PlaylistId, PlaylistSummary,
+        PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
     };
     use provider_api::UserLibraryError;
 
@@ -517,6 +539,17 @@ mod tests {
         .expect("track ID");
         let track = TrackSummary::new(track_id, "must-not-leak", vec!["private-artist".into()])
             .expect("track summary")
+            .with_artists(vec![
+                ArtistSummary::new(
+                    ArtistId::new(
+                        ProviderId::new("qq-music").expect("provider"),
+                        "artist:42001:private-mid",
+                    )
+                    .expect("Artist ID"),
+                    "private-artist",
+                )
+                .expect("Artist"),
+            ])
             .with_album_title(Some("private-album".into()))
             .with_album(Some(
                 AlbumSummary::new(
@@ -541,6 +574,11 @@ mod tests {
         assert_eq!(mapped.tracks[0].opaque_id, "track:41001:0:1:opaque-mid");
         assert_eq!(mapped.tracks[0].title, "must-not-leak");
         assert_eq!(mapped.tracks[0].artist_names, ["private-artist"]);
+        assert_eq!(mapped.tracks[0].artists.len(), 1);
+        assert_eq!(
+            mapped.tracks[0].artists[0].opaque_id,
+            "artist:42001:private-mid"
+        );
         assert_eq!(
             mapped.tracks[0].album.as_ref().expect("Album").opaque_id,
             "album:43001:private-mid"
@@ -549,6 +587,7 @@ mod tests {
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("41001"));
         assert!(!debug.contains("private-artist"));
+        assert!(!debug.contains("42001"));
         assert!(!debug.contains("private-mid"));
     }
 

@@ -123,6 +123,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   UserPlaylistSummary? _selectedPlaylist;
   AlbumSummary? _selectedAlbum;
   AlbumSummary? _trackContextAlbum;
+  ArtistSummary? _trackContextArtist;
   ArtistSummary? _selectedArtist;
   UserPlaylistSummary? _selectedSearchPlaylist;
   RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
@@ -270,6 +271,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnToRecommendations,
                   onOpenAlbum: _openTrackContextAlbum,
+                  onOpenArtist: _openTrackContextArtist,
                   onSignInAgain: widget.onSignInAgain,
                 ),
               if (selectedRanking == null)
@@ -361,6 +363,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnToSearch,
                   onOpenAlbum: _openTrackContextAlbum,
+                  onOpenArtist: _openTrackContextArtist,
                   onSignInAgain: widget.onSignInAgain,
                 ),
             ],
@@ -373,14 +376,36 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             queuePlaybackController: _queuePlaybackController,
             onBack: _returnToLibrary,
             onOpenAlbum: _openTrackContextAlbum,
+            onOpenArtist: _openTrackContextArtist,
             onSignInAgain: widget.onSignInAgain,
           )
         : _libraryScaffold();
     final trackContextAlbum = _trackContextAlbum;
+    final trackContextArtist = _trackContextArtist;
     final routedPage = IndexedStack(
-      index: trackContextAlbum == null ? 0 : 1,
+      index: trackContextAlbum != null
+          ? 2
+          : trackContextArtist != null
+          ? 1
+          : 0,
       children: [
         page,
+        if (trackContextArtist == null)
+          const SizedBox.shrink()
+        else
+          ArtistPage(
+            key: ValueKey(
+              'track-context-artist-${trackContextArtist.opaqueId}',
+            ),
+            artist: trackContextArtist,
+            gateway: _artistTrackGateway,
+            albumGateway: _artistAlbumGateway,
+            queuePlaybackController: _queuePlaybackController,
+            onBack: _returnFromTrackContextArtist,
+            onOpenAlbum: _openTrackContextAlbum,
+            backTooltip: 'Back to playlist',
+            onSignInAgain: widget.onSignInAgain,
+          ),
         if (trackContextAlbum == null)
           const SizedBox.shrink()
         else
@@ -391,7 +416,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             detailsGateway: _albumDetailsGateway,
             queuePlaybackController: _queuePlaybackController,
             onBack: _returnFromTrackContextAlbum,
-            backTooltip: 'Back to playlist',
+            backTooltip: trackContextArtist == null
+                ? 'Back to playlist'
+                : 'Back to Artist',
             onSignInAgain: widget.onSignInAgain,
           ),
       ],
@@ -403,6 +430,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     final hasLocalPage =
         selectedPlaylist != null ||
         trackContextAlbum != null ||
+        trackContextArtist != null ||
         _favoriteAlbumsOpen ||
         _recommendationsOpen ||
         selectedRecommendedPlaylist != null ||
@@ -452,6 +480,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _returnFromLocalPage() {
     if (_trackContextAlbum != null) {
       _returnFromTrackContextAlbum();
+    } else if (_trackContextArtist != null) {
+      _returnFromTrackContextArtist();
     } else if (_favoriteAlbumsOpen && _selectedAlbum != null) {
       _returnFromFavoriteAlbum();
     } else if (_favoriteAlbumsOpen) {
@@ -511,6 +541,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (_trackContextAlbum != null) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _trackContextAlbum = album);
+  }
+
+  void _openTrackContextArtist(ArtistSummary artist) {
+    if (_trackContextAlbum != null || _trackContextArtist != null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _trackContextArtist = artist);
+  }
+
+  void _returnFromTrackContextArtist() {
+    if (_trackContextArtist == null) return;
+    setState(() => _trackContextArtist = null);
   }
 
   void _returnFromTrackContextAlbum() {

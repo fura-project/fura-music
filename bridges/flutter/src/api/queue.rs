@@ -197,6 +197,7 @@ const fn map_position_error(_: InvalidPlaybackQueue) -> PlaybackQueueFailure {
 mod tests {
     use super::{PlaybackQueueFailure, PlaybackQueueHandle, create_playback_queue};
     use crate::api::album::CatalogAlbumSummary;
+    use crate::api::artist::CatalogArtistSummary;
     use crate::api::library::LibraryTrackSummary;
 
     #[test]
@@ -208,6 +209,10 @@ mod tests {
         assert_eq!(snapshot.tracks.len(), 3);
         assert_eq!(snapshot.current_index, Some(2));
         assert_eq!(snapshot.tracks[0].opaque_id, snapshot.tracks[2].opaque_id);
+        assert_eq!(
+            snapshot.tracks[0].artists[0].opaque_id,
+            "artist:42001:private-mid"
+        );
         assert_eq!(
             snapshot.tracks[0]
                 .album
@@ -276,6 +281,14 @@ mod tests {
             }),
             ..track("foreign-album")
         };
+        let foreign_artist = LibraryTrackSummary {
+            artists: vec![CatalogArtistSummary {
+                provider_id: "local".into(),
+                opaque_id: "artist:foreign".into(),
+                name: "private-artist".into(),
+            }],
+            ..track("foreign-artist")
+        };
 
         assert_eq!(
             queue.push(invalid_track).failure,
@@ -287,6 +300,10 @@ mod tests {
         );
         assert_eq!(
             queue.push(foreign_album).failure,
+            Some(PlaybackQueueFailure::InvalidTrack)
+        );
+        assert_eq!(
+            queue.push(foreign_artist).failure,
             Some(PlaybackQueueFailure::InvalidTrack)
         );
         assert_eq!(
@@ -327,6 +344,11 @@ mod tests {
             title: "private-title".into(),
             subtitle: Some("private-subtitle".into()),
             artist_names: vec!["private-artist".into()],
+            artists: vec![CatalogArtistSummary {
+                provider_id: "qq-music".into(),
+                opaque_id: "artist:42001:private-mid".into(),
+                name: "private-artist".into(),
+            }],
             album_title: Some("private-album".into()),
             album: Some(CatalogAlbumSummary {
                 provider_id: "qq-music".into(),

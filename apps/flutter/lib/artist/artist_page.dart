@@ -19,6 +19,7 @@ class ArtistPage extends StatefulWidget {
     required this.onSignInAgain,
     this.albumGateway,
     this.onOpenAlbum,
+    this.backTooltip = 'Back',
     super.key,
   });
 
@@ -29,6 +30,7 @@ class ArtistPage extends StatefulWidget {
   final VoidCallback onSignInAgain;
   final ArtistAlbumGateway? albumGateway;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final String backTooltip;
 
   @override
   State<ArtistPage> createState() => _ArtistPageState();
@@ -66,7 +68,7 @@ class _ArtistPageState extends State<ArtistPage> {
     appBar: AppBar(
       leading: IconButton(
         key: const ValueKey('artist-back'),
-        tooltip: 'Back',
+        tooltip: widget.backTooltip,
         onPressed: widget.onBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),

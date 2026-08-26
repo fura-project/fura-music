@@ -2,6 +2,7 @@ import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge;
 
 class PlaylistTrackSummary {
@@ -10,6 +11,7 @@ class PlaylistTrackSummary {
     required this.opaqueId,
     required this.title,
     required this.artistNames,
+    this.artists = const [],
     this.subtitle,
     this.albumTitle,
     this.album,
@@ -21,6 +23,7 @@ class PlaylistTrackSummary {
   final String opaqueId;
   final String title;
   final List<String> artistNames;
+  final List<ArtistSummary> artists;
   final String? subtitle;
   final String? albumTitle;
   final AlbumSummary? album;
@@ -145,6 +148,17 @@ PlaylistTrackSummary? mapBridgeLibraryTrackSummary(
 ) {
   final providerId = track.providerId;
   final validProvider = _validProviderId(providerId);
+  final mappedArtists = <ArtistSummary>[];
+  for (final artist in track.artists) {
+    if (!_validBridgeArtist(artist, providerId)) return null;
+    mappedArtists.add(
+      ArtistSummary(
+        providerId: artist.providerId,
+        opaqueId: artist.opaqueId,
+        name: artist.name,
+      ),
+    );
+  }
   final album = track.album;
   AlbumSummary? mappedAlbum;
   if (album != null) {
@@ -171,6 +185,7 @@ PlaylistTrackSummary? mapBridgeLibraryTrackSummary(
     opaqueId: track.opaqueId,
     title: track.title,
     artistNames: List.unmodifiable(track.artistNames),
+    artists: List.unmodifiable(mappedArtists),
     subtitle: track.subtitle,
     albumTitle: track.albumTitle,
     album: mappedAlbum,
@@ -188,6 +203,15 @@ bool _validBridgeAlbum(
     album.opaqueId.trim().isNotEmpty &&
     album.title.trim().isNotEmpty &&
     !_blank(album.artworkUri);
+
+bool _validBridgeArtist(
+  bridge_artist.CatalogArtistSummary artist,
+  String trackProviderId,
+) =>
+    _validProviderId(artist.providerId) &&
+    artist.providerId == trackProviderId &&
+    artist.opaqueId.trim().isNotEmpty &&
+    artist.name.trim().isNotEmpty;
 
 bool _validProviderId(String value) =>
     value.isNotEmpty &&

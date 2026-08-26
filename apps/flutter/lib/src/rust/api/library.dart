@@ -5,10 +5,11 @@
 
 import '../frb_generated.dart';
 import 'album.dart';
+import 'artist.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bridge_playlist_summary`, `bridge_track_summary`, `domain_album_summary`, `domain_playlist_id`, `domain_track_summary`, `failed_load`, `failed_track_page`, `map_error`, `map_load`, `map_track_page_error`, `map_track_page_load`
+// These functions are ignored because they are not marked as `pub`: `bridge_playlist_summary`, `bridge_track_summary`, `domain_album_summary`, `domain_artist_summary`, `domain_playlist_id`, `domain_track_summary`, `failed_load`, `failed_track_page`, `map_error`, `map_load`, `map_track_page_error`, `map_track_page_load`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicUserPlaylistLoadHandle beginQqMusicUserPlaylistLoad() =>
@@ -86,6 +87,7 @@ class LibraryTrackSummary {
   final String title;
   final String? subtitle;
   final List<String> artistNames;
+  final List<CatalogArtistSummary> artists;
   final String? albumTitle;
   final CatalogAlbumSummary? album;
   final String? artworkUri;
@@ -97,6 +99,7 @@ class LibraryTrackSummary {
     required this.title,
     this.subtitle,
     required this.artistNames,
+    required this.artists,
     this.albumTitle,
     this.album,
     this.artworkUri,
@@ -110,6 +113,7 @@ class LibraryTrackSummary {
       title.hashCode ^
       subtitle.hashCode ^
       artistNames.hashCode ^
+      artists.hashCode ^
       albumTitle.hashCode ^
       album.hashCode ^
       artworkUri.hashCode ^
@@ -125,6 +129,7 @@ class LibraryTrackSummary {
           title == other.title &&
           subtitle == other.subtitle &&
           artistNames == other.artistNames &&
+          artists == other.artists &&
           albumTitle == other.albumTitle &&
           album == other.album &&
           artworkUri == other.artworkUri &&

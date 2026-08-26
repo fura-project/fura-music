@@ -19,6 +19,13 @@ void main() {
               opaqueId: 'track:41001:0:fixtureMid:-',
               title: 'Synthetic track',
               artistNames: ['Artist one'],
+              artists: [
+                bridge_artist.CatalogArtistSummary(
+                  providerId: 'qq-music',
+                  opaqueId: 'artist:61001:fixtureArtistMid',
+                  name: 'Artist one',
+                ),
+              ],
               albumTitle: 'Synthetic album',
               album: bridge_album.CatalogAlbumSummary(
                 providerId: 'qq-music',
@@ -57,6 +64,10 @@ void main() {
       'album:51001:fixtureAlbumMid',
     );
     expect(result.items.single.artists.single.name, 'Artist one');
+    expect(
+      result.items.single.track.artists.single.opaqueId,
+      'artist:61001:fixtureArtistMid',
+    );
   });
 
   test('maps every Bridge failure and rejects conflicting success data', () {

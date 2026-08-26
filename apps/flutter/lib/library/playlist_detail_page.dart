@@ -18,6 +18,7 @@ class PlaylistDetailPage extends StatefulWidget {
     required this.onBack,
     required this.onSignInAgain,
     this.onOpenAlbum,
+    this.onOpenArtist,
     super.key,
   });
 
@@ -27,6 +28,7 @@ class PlaylistDetailPage extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   State<PlaylistDetailPage> createState() => _PlaylistDetailPageState();
@@ -143,6 +145,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       ),
       onTrackQueued: _addToQueue,
       onOpenAlbum: widget.onOpenAlbum,
+      onOpenArtist: widget.onOpenArtist,
       desktop: desktop,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
@@ -268,6 +271,7 @@ class _TrackCollection extends StatelessWidget {
     required this.onTrackSelected,
     required this.onTrackQueued,
     required this.onOpenAlbum,
+    required this.onOpenArtist,
     required this.desktop,
     super.key,
   });
@@ -282,6 +286,7 @@ class _TrackCollection extends StatelessWidget {
   final ValueChanged<int> onTrackSelected;
   final ValueChanged<PlaylistTrackSummary> onTrackQueued;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
   final bool desktop;
 
   @override
@@ -339,6 +344,7 @@ class _TrackCollection extends StatelessWidget {
           onOpenAlbum: onOpenAlbum == null || tracks[index].album == null
               ? null
               : () => onOpenAlbum!(tracks[index].album!),
+          onOpenArtist: onOpenArtist,
         );
       },
     );
@@ -353,6 +359,7 @@ class _TrackRow extends StatefulWidget {
     required this.onTap,
     required this.onAddToQueue,
     required this.onOpenAlbum,
+    required this.onOpenArtist,
   });
 
   final int index;
@@ -361,6 +368,7 @@ class _TrackRow extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onAddToQueue;
   final VoidCallback? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   State<_TrackRow> createState() => _TrackRowState();
@@ -551,6 +559,15 @@ class _TrackRowState extends State<_TrackRow> {
               title: Text('Open album'),
             ),
           ),
+        if (widget.onOpenArtist != null && widget.track.artists.isNotEmpty)
+          const PopupMenuItem(
+            key: ValueKey('playlist-track-open-artist-action'),
+            value: _TrackAction.openArtist,
+            child: ListTile(
+              leading: Icon(Icons.person_rounded),
+              title: Text('Open artist'),
+            ),
+          ),
       ],
     );
     _runAction(action);
@@ -582,6 +599,13 @@ class _TrackRowState extends State<_TrackRow> {
                 title: const Text('Open album'),
                 onTap: () => Navigator.pop(context, _TrackAction.openAlbum),
               ),
+            if (widget.onOpenArtist != null && widget.track.artists.isNotEmpty)
+              ListTile(
+                key: const ValueKey('playlist-track-open-artist-action'),
+                leading: const Icon(Icons.person_rounded),
+                title: const Text('Open artist'),
+                onTap: () => Navigator.pop(context, _TrackAction.openArtist),
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -601,13 +625,91 @@ class _TrackRowState extends State<_TrackRow> {
       case _TrackAction.openAlbum:
         widget.onOpenAlbum?.call();
         return;
+      case _TrackAction.openArtist:
+        unawaited(_openArtist());
+        return;
       case null:
         return;
     }
   }
+
+  Future<void> _openArtist() async {
+    final onOpenArtist = widget.onOpenArtist;
+    final artists = widget.track.artists;
+    if (onOpenArtist == null || artists.isEmpty) return;
+    if (artists.length == 1) {
+      onOpenArtist(artists.single);
+      return;
+    }
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    final selected = compact
+        ? await showModalBottomSheet<ArtistSummary>(
+            context: context,
+            showDragHandle: true,
+            builder: (context) =>
+                _ArtistSelection(artists: artists, compact: true),
+          )
+        : await showDialog<ArtistSummary>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Choose an Artist'),
+              content: _ArtistSelection(artists: artists, compact: false),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          );
+    if (!mounted || selected == null) return;
+    onOpenArtist(selected);
+  }
 }
 
-enum _TrackAction { playFromHere, addToQueue, openAlbum }
+enum _TrackAction { playFromHere, addToQueue, openAlbum, openArtist }
+
+class _ArtistSelection extends StatelessWidget {
+  const _ArtistSelection({required this.artists, required this.compact});
+
+  final List<ArtistSummary> artists;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = ListView(
+      shrinkWrap: compact,
+      padding: EdgeInsets.fromLTRB(8, compact ? 0 : 4, 8, compact ? 16 : 4),
+      children: [
+        if (compact)
+          const ListTile(
+            title: Text('Choose an Artist'),
+            subtitle: Text('This Track credits more than one Artist.'),
+          ),
+        for (var index = 0; index < artists.length; index++)
+          ListTile(
+            key: ValueKey('playlist-track-artist-$index'),
+            leading: const Icon(Icons.person_rounded),
+            title: Text(artists[index].name),
+            onTap: () => Navigator.pop(context, artists[index]),
+          ),
+      ],
+    );
+    return SafeArea(
+      top: !compact,
+      child: compact
+          ? ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
+              child: list,
+            )
+          : SizedBox(
+              width: 360,
+              height: (artists.length * 56.0).clamp(56.0, 336.0),
+              child: list,
+            ),
+    );
+  }
+}
 
 class _Artwork extends StatelessWidget {
   const _Artwork({this.uri, this.playlist = false});

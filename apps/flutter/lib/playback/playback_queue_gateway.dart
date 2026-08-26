@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/queue.dart' as bridge_queue;
 
@@ -207,6 +208,15 @@ bridge_library.LibraryTrackSummary _bridgeTrack(PlaylistTrackSummary track) =>
       title: track.title,
       subtitle: track.subtitle,
       artistNames: track.artistNames,
+      artists: track.artists
+          .map(
+            (artist) => bridge_artist.CatalogArtistSummary(
+              providerId: artist.providerId,
+              opaqueId: artist.opaqueId,
+              name: artist.name,
+            ),
+          )
+          .toList(growable: false),
       albumTitle: track.albumTitle,
       album: track.album == null
           ? null

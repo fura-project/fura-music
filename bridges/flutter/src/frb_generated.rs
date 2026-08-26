@@ -5308,6 +5308,8 @@ impl SseDecode for crate::api::library::LibraryTrackSummary {
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_subtitle = <Option<String>>::sse_decode(deserializer);
         let mut var_artistNames = <Vec<String>>::sse_decode(deserializer);
+        let mut var_artists =
+            <Vec<crate::api::artist::CatalogArtistSummary>>::sse_decode(deserializer);
         let mut var_albumTitle = <Option<String>>::sse_decode(deserializer);
         let mut var_album =
             <Option<crate::api::album::CatalogAlbumSummary>>::sse_decode(deserializer);
@@ -5319,6 +5321,7 @@ impl SseDecode for crate::api::library::LibraryTrackSummary {
             title: var_title,
             subtitle: var_subtitle,
             artist_names: var_artistNames,
+            artists: var_artists,
             album_title: var_albumTitle,
             album: var_album,
             artwork_uri: var_artworkUri,
@@ -7886,6 +7889,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::library::LibraryTrackSummary 
             self.title.into_into_dart().into_dart(),
             self.subtitle.into_into_dart().into_dart(),
             self.artist_names.into_into_dart().into_dart(),
+            self.artists.into_into_dart().into_dart(),
             self.album_title.into_into_dart().into_dart(),
             self.album.into_into_dart().into_dart(),
             self.artwork_uri.into_into_dart().into_dart(),
@@ -10005,6 +10009,7 @@ impl SseEncode for crate::api::library::LibraryTrackSummary {
         <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.subtitle, serializer);
         <Vec<String>>::sse_encode(self.artist_names, serializer);
+        <Vec<crate::api::artist::CatalogArtistSummary>>::sse_encode(self.artists, serializer);
         <Option<String>>::sse_encode(self.album_title, serializer);
         <Option<crate::api::album::CatalogAlbumSummary>>::sse_encode(self.album, serializer);
         <Option<String>>::sse_encode(self.artwork_uri, serializer);

@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
+import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge_artist;
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/queue.dart' as bridge_queue;
 
@@ -34,6 +35,10 @@ void main() {
       result.snapshot?.tracks.first.album?.opaqueId,
       'album:43001:private-mid',
     );
+    expect(
+      result.snapshot?.tracks.first.artists.first.opaqueId,
+      'artist:42001:private-mid',
+    );
     expect(result.snapshot?.currentIndex, 2);
     expect(result.toString(), isNot(contains('private-title')));
     expect(result.snapshot.toString(), isNot(contains('private-title')));
@@ -58,6 +63,13 @@ void main() {
       title: 'Track one',
       subtitle: 'Version',
       artistNames: ['Artist one', 'Artist two'],
+      artists: [
+        ArtistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'artist:42001:fixtureArtistMid',
+          name: 'Artist one',
+        ),
+      ],
       albumTitle: 'Album',
       album: AlbumSummary(
         providerId: 'qq-music',
@@ -77,6 +89,7 @@ void main() {
     expect(forwarded.opaqueId, track.opaqueId);
     expect(forwarded.title, track.title);
     expect(forwarded.artistNames, track.artistNames);
+    expect(forwarded.artists.single.opaqueId, track.artists.single.opaqueId);
     expect(forwarded.subtitle, track.subtitle);
     expect(forwarded.albumTitle, track.albumTitle);
     expect(forwarded.album?.opaqueId, track.album?.opaqueId);
@@ -148,6 +161,7 @@ void main() {
               opaqueId: 'one',
               title: 'private-title',
               artistNames: const ['private-artist'],
+              artists: const [],
             ),
           ],
           currentIndex: 0,
@@ -174,6 +188,13 @@ bridge_library.LibraryTrackSummary _bridgeTrack(String opaqueId) =>
       title: 'private-title',
       subtitle: 'private-subtitle',
       artistNames: const ['private-artist'],
+      artists: const [
+        bridge_artist.CatalogArtistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'artist:42001:private-mid',
+          name: 'private-artist',
+        ),
+      ],
       albumTitle: 'private-album',
       album: const bridge_album.CatalogAlbumSummary(
         providerId: 'qq-music',

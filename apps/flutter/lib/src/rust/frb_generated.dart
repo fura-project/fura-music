@@ -5140,18 +5140,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LibraryTrackSummary dco_decode_library_track_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return LibraryTrackSummary(
       providerId: dco_decode_String(arr[0]),
       opaqueId: dco_decode_String(arr[1]),
       title: dco_decode_String(arr[2]),
       subtitle: dco_decode_opt_String(arr[3]),
       artistNames: dco_decode_list_String(arr[4]),
-      albumTitle: dco_decode_opt_String(arr[5]),
-      album: dco_decode_opt_box_autoadd_catalog_album_summary(arr[6]),
-      artworkUri: dco_decode_opt_String(arr[7]),
-      durationSeconds: dco_decode_opt_box_autoadd_u_32(arr[8]),
+      artists: dco_decode_list_catalog_artist_summary(arr[5]),
+      albumTitle: dco_decode_opt_String(arr[6]),
+      album: dco_decode_opt_box_autoadd_catalog_album_summary(arr[7]),
+      artworkUri: dco_decode_opt_String(arr[8]),
+      durationSeconds: dco_decode_opt_box_autoadd_u_32(arr[9]),
     );
   }
 
@@ -7557,6 +7558,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_title = sse_decode_String(deserializer);
     var var_subtitle = sse_decode_opt_String(deserializer);
     var var_artistNames = sse_decode_list_String(deserializer);
+    var var_artists = sse_decode_list_catalog_artist_summary(deserializer);
     var var_albumTitle = sse_decode_opt_String(deserializer);
     var var_album = sse_decode_opt_box_autoadd_catalog_album_summary(
       deserializer,
@@ -7569,6 +7571,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       title: var_title,
       subtitle: var_subtitle,
       artistNames: var_artistNames,
+      artists: var_artists,
       albumTitle: var_albumTitle,
       album: var_album,
       artworkUri: var_artworkUri,
@@ -10496,6 +10499,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.title, serializer);
     sse_encode_opt_String(self.subtitle, serializer);
     sse_encode_list_String(self.artistNames, serializer);
+    sse_encode_list_catalog_artist_summary(self.artists, serializer);
     sse_encode_opt_String(self.albumTitle, serializer);
     sse_encode_opt_box_autoadd_catalog_album_summary(self.album, serializer);
     sse_encode_opt_String(self.artworkUri, serializer);
