@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Playlist Track-to-credited-Artist navigation"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -44,11 +44,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Playlist Track-to-Album navigation is complete and the next finite slice must be selected by a fresh global ranking; the deferred credited-Artist and global now-playing transitions are candidates rather than implied follow-up work.
+- M3 remains active. A fresh global ranking selected playlist Track-to-credited-Artist navigation: preserve every validated credit through shared Domain/Bridge/queue values, expose explicit collaboration selection from existing playlist context surfaces, and retain the existing Artist plus nested Album route above every playlist origin. Album-metadata links, non-playlist Track actions, and global now-playing transitions remain deferred.
 
 # Next Candidates
 
-1. Re-rank M3 product gaps after the completed Track-to-Album slice; select at most one bounded, evidence-backed follow-up rather than automatically extending nearby context-menu work.
+1. Implement the selected playlist Track-to-credited-Artist slice with exact shared identity preservation, malformed/cross-Provider rejection, explicit multi-credit selection, retained Artist/Album return state, and full regression coverage.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
