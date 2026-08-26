@@ -10,6 +10,9 @@ Future<void> showLyrics(
   LyricController controller,
   VoidCallback onSignInAgain, {
   Widget Function(Widget child)? modalContentWrapper,
+  Listenable? playbackState,
+  bool Function()? canSeek,
+  Future<void> Function(int positionMs)? onSeek,
 }) {
   if (MediaQuery.sizeOf(context).width < 600) {
     return showModalBottomSheet<void>(
@@ -23,6 +26,9 @@ Future<void> showLyrics(
             controller: controller,
             onClose: () => Navigator.of(context).pop(),
             onSignInAgain: onSignInAgain,
+            playbackState: playbackState,
+            canSeek: canSeek,
+            onSeek: onSeek,
           ),
           modalContentWrapper,
         ),
@@ -39,6 +45,9 @@ Future<void> showLyrics(
             controller: controller,
             onClose: () => Navigator.of(context).pop(),
             onSignInAgain: onSignInAgain,
+            playbackState: playbackState,
+            canSeek: canSeek,
+            onSeek: onSeek,
           ),
           modalContentWrapper,
         ),
@@ -57,17 +66,26 @@ class LyricPanel extends StatelessWidget {
     required this.controller,
     required this.onClose,
     required this.onSignInAgain,
+    this.playbackState,
+    this.canSeek,
+    this.onSeek,
     super.key,
   });
 
   final LyricController controller;
   final VoidCallback onClose;
   final VoidCallback onSignInAgain;
+  final Listenable? playbackState;
+  final bool Function()? canSeek;
+  final Future<void> Function(int positionMs)? onSeek;
 
   @override
   Widget build(BuildContext context) {
+    final playbackState = this.playbackState;
     return AnimatedBuilder(
-      animation: controller,
+      animation: playbackState == null
+          ? controller
+          : Listenable.merge([controller, playbackState]),
       builder: (context, _) {
         final theme = Theme.of(context);
         final track = controller.track;
@@ -111,7 +129,7 @@ class LyricPanel extends StatelessWidget {
                 ),
               ),
               const Divider(height: 1),
-              Expanded(child: _body()),
+              Expanded(child: _body(canSeek?.call() ?? false)),
             ],
           ),
         );
@@ -119,7 +137,7 @@ class LyricPanel extends StatelessWidget {
     );
   }
 
-  Widget _body() => switch (controller.stage) {
+  Widget _body(bool seekEnabled) => switch (controller.stage) {
     LyricStage.idle => const _LyricMessage(
       key: ValueKey('lyrics-idle'),
       icon: Icons.lyrics_outlined,
@@ -130,6 +148,7 @@ class LyricPanel extends StatelessWidget {
     LyricStage.content => _LyricContent(
       key: const ValueKey('lyrics-content'),
       controller: controller,
+      onSeek: seekEnabled ? onSeek : null,
     ),
     LyricStage.unavailable => const _LyricMessage(
       key: ValueKey('lyrics-unavailable'),
@@ -176,9 +195,10 @@ class LyricPanel extends StatelessWidget {
 }
 
 class _LyricContent extends StatefulWidget {
-  const _LyricContent({required this.controller, super.key});
+  const _LyricContent({required this.controller, this.onSeek, super.key});
 
   final LyricController controller;
+  final Future<void> Function(int positionMs)? onSeek;
 
   @override
   State<_LyricContent> createState() => _LyricContentState();
@@ -229,6 +249,9 @@ class _LyricContentState extends State<_LyricContent> {
                 lineIndex: index,
                 active: index == activeLineIndex,
                 positionMs: widget.controller.positionMs,
+                onSeek: widget.onSeek == null
+                    ? null
+                    : () => unawaited(widget.onSeek!(lines[index].startMs)),
               );
               if (index != activeLineIndex) return line;
               return KeyedSubtree(key: _lineKey(index), child: line);
@@ -332,6 +355,7 @@ class _LyricLine extends StatelessWidget {
     required this.lineIndex,
     required this.active,
     required this.positionMs,
+    this.onSeek,
     super.key,
   });
 
@@ -339,6 +363,7 @@ class _LyricLine extends StatelessWidget {
   final int lineIndex;
   final bool active;
   final int positionMs;
+  final VoidCallback? onSeek;
 
   @override
   Widget build(BuildContext context) {
@@ -356,72 +381,89 @@ class _LyricLine extends StatelessWidget {
 
     return Semantics(
       selected: active,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: active
-              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.52)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (active && segmentsComposeLine)
-              Wrap(
-                spacing: 0,
-                runSpacing: 4,
-                children: [
-                  for (var index = 0; index < line.segments.length; index += 1)
-                    _TimedSegment(
-                      key: ValueKey('lyrics-word-$lineIndex-$index'),
-                      segment: line.segments[index],
-                      positionMs: positionMs,
-                      style: textStyle,
-                    ),
-                ],
-              )
-            else
-              Text(line.text, style: textStyle),
-            if (active && line.segments.isNotEmpty && !segmentsComposeLine) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 0,
-                runSpacing: 4,
-                children: [
-                  for (var index = 0; index < line.segments.length; index += 1)
-                    _TimedSegment(
-                      key: ValueKey('lyrics-word-$lineIndex-$index'),
-                      segment: line.segments[index],
-                      positionMs: positionMs,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                ],
-              ),
-            ],
-            if (line.translation case final translation?) ...[
-              const SizedBox(height: 6),
-              Text(
-                translation,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+      button: onSeek != null,
+      onTap: onSeek,
+      child: InkWell(
+        onTap: onSeek,
+        excludeFromSemantics: true,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: active
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.52)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (active && segmentsComposeLine)
+                Wrap(
+                  spacing: 0,
+                  runSpacing: 4,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < line.segments.length;
+                      index += 1
+                    )
+                      _TimedSegment(
+                        key: ValueKey('lyrics-word-$lineIndex-$index'),
+                        segment: line.segments[index],
+                        positionMs: positionMs,
+                        style: textStyle,
+                      ),
+                  ],
+                )
+              else
+                Text(line.text, style: textStyle),
+              if (active &&
+                  line.segments.isNotEmpty &&
+                  !segmentsComposeLine) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 0,
+                  runSpacing: 4,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < line.segments.length;
+                      index += 1
+                    )
+                      _TimedSegment(
+                        key: ValueKey('lyrics-word-$lineIndex-$index'),
+                        segment: line.segments[index],
+                        positionMs: positionMs,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                  ],
                 ),
-              ),
-            ],
-            if (line.romanization case final romanization?) ...[
-              const SizedBox(height: 4),
-              Text(
-                romanization,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
+              ],
+              if (line.translation case final translation?) ...[
+                const SizedBox(height: 6),
+                Text(
+                  translation,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
+              ],
+              if (line.romanization case final romanization?) ...[
+                const SizedBox(height: 4),
+                Text(
+                  romanization,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

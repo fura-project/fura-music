@@ -481,6 +481,9 @@ class _LyricsButton extends StatelessWidget {
       context,
       controller.lyrics!,
       onSignInAgain,
+      playbackState: controller.playback,
+      canSeek: () => controller.playback.canSeek,
+      onSeek: controller.playback.seekToMs,
       modalContentWrapper: (child) =>
           PlaybackShortcuts(controller: controller, child: child),
     ),

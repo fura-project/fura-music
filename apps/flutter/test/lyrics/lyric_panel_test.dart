@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,13 +12,20 @@ void main() {
   testWidgets('renders canonical content and real word progress', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
+    int? seekPosition;
     final controller = LyricController(
       _ScriptedGateway([_ImmediateOperation(_success())]),
     );
     await controller.load(_track);
     controller.updatePositionMs(1250);
 
-    await _pumpPanel(tester, controller);
+    await _pumpPanel(
+      tester,
+      controller,
+      canSeek: () => true,
+      onSeek: (positionMs) async => seekPosition = positionMs,
+    );
 
     expect(find.byKey(const ValueKey('lyrics-content')), findsOneWidget);
     expect(find.text('timed '), findsOneWidget);
@@ -28,6 +36,17 @@ void main() {
       tester.getSemantics(find.byKey(const ValueKey('lyrics-word-0-0'))).value,
       '50% complete',
     );
+    final line = find.byKey(const ValueKey('lyrics-line-0'));
+    expect(
+      tester
+          .getSemantics(line)
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    await tester.tap(line);
+    expect(seekPosition, 1000);
+    semantics.dispose();
     controller.dispose();
   });
 
@@ -179,6 +198,8 @@ Future<void> _pumpPanel(
   WidgetTester tester,
   LyricController controller, {
   VoidCallback? onSignInAgain,
+  bool Function()? canSeek,
+  Future<void> Function(int positionMs)? onSeek,
 }) => tester.pumpWidget(
   MaterialApp(
     home: Scaffold(
@@ -186,6 +207,8 @@ Future<void> _pumpPanel(
         controller: controller,
         onClose: () {},
         onSignInAgain: onSignInAgain ?? () {},
+        canSeek: canSeek,
+        onSeek: onSeek,
       ),
     ),
   ),

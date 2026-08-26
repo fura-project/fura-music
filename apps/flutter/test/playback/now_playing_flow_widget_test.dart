@@ -1084,6 +1084,7 @@ void main() {
   testWidgets('opens synchronized lyrics as a narrow bottom sheet', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -1108,7 +1109,29 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     expect(find.text('Narrow synchronized line'), findsOneWidget);
     expect(find.text('First track'), findsWidgets);
+    final lyricLine = find.byKey(const ValueKey('lyrics-line-0'));
+    expect(
+      tester
+          .getSemantics(lyricLine)
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    await tester.tap(lyricLine);
+    await tester.pumpAndSettle();
+    expect(session.seekPositions, [1000]);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaStop);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getSemantics(lyricLine)
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isFalse,
+    );
     expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 
   testWidgets('wide lyric dialog follows completion to the next track', (
