@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_artist_load`, `failed_load`, `map_artist_error`, `map_artist_load`, `map_error`, `map_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicTrackSearchPageLoadHandle beginQqMusicTrackSearchPageLoad({
   required String query,
@@ -23,6 +23,26 @@ QqMusicTrackSearchPageLoadHandle beginQqMusicTrackSearchPageLoad({
   size: size,
 );
 
+QqMusicArtistSearchPageLoadHandle beginQqMusicArtistSearchPageLoad({
+  required String query,
+  required int page,
+  required int size,
+}) => RustLib.instance.api.crateApiSearchBeginQqMusicArtistSearchPageLoad(
+  query: query,
+  page: page,
+  size: size,
+);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicArtistSearchPageLoadHandle>>
+abstract class QqMusicArtistSearchPageLoadHandle
+    implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicArtistSearchPageLoad> run();
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicTrackSearchPageLoadHandle>>
 abstract class QqMusicTrackSearchPageLoadHandle implements RustOpaqueInterface {
   bool cancel();
@@ -30,6 +50,50 @@ abstract class QqMusicTrackSearchPageLoadHandle implements RustOpaqueInterface {
   bool get isActive;
 
   Future<QqMusicTrackSearchPageLoad> run();
+}
+
+class QqMusicArtistSearchPageLoad {
+  final int page;
+  final int total;
+  final bool hasMore;
+  final List<CatalogArtistSummary> artists;
+  final QqMusicArtistSearchPageLoadFailure? failure;
+
+  const QqMusicArtistSearchPageLoad({
+    required this.page,
+    required this.total,
+    required this.hasMore,
+    required this.artists,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      page.hashCode ^
+      total.hashCode ^
+      hasMore.hashCode ^
+      artists.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicArtistSearchPageLoad &&
+          runtimeType == other.runtimeType &&
+          page == other.page &&
+          total == other.total &&
+          hasMore == other.hasMore &&
+          artists == other.artists &&
+          failure == other.failure;
+}
+
+enum QqMusicArtistSearchPageLoadFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  cancelled,
+  alreadyRunning,
 }
 
 class QqMusicTrackSearchItem {

@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: "M3 direct Artist Search vertical slice"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -30,16 +30,17 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - Implemented the third M3 slice: Track-search items retain every validated credited Artist identity, including collaborations, and a direct bounded QQ Music Artist-song request maps offset-paged Tracks through the provider-neutral Catalog contract and a cancellable typed Bridge. Flutter presents explicit multi-Artist selection, owns retry/pagination/cancel/stale/disposal state, preserves Search on return, and reuses the existing queue without adding Artist detail metadata or a navigation framework.
 - Implemented the fourth M3 slice: a direct anonymous QQ recommended-playlist operation maps bounded offset pages through a small provider-neutral Recommendations contract and cancellable Bridge. Adaptive Flutter discovery owns initial/empty/error/retry/pagination/append-failure/cancel/stale/disposal state, preserves its page while existing authenticated playlist detail is open, and reuses the existing queue. Raw page length—not the observed `FromLimit` feed bound—advances pagination; heterogeneous Home cards, personalization, radio/rankings, mutation, and a generic recommendation runtime remain excluded.
 - Implemented the fifth M3 slice: direct anonymous Artist-Album loading maps exact-size offset pages into existing provider-neutral `AlbumSummary` values through a small Catalog contract and cancellable Bridge. The real service proved `num` is the page-size field while the conflicting `number` reference was ignored. Flutter loads Albums lazily inside the existing Artist page, preserves both sections, adapts list/grid presentation, and nests the existing Album/queue path so back returns Album → Artist → Search without reloading prior state.
-- Revalidated the resulting baseline: Rust formatting, 187 offline Rust tests, strict Clippy, strict Dart analysis, all 199 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live Artist-discography compatibility, authenticated downstream Album playback, or search/discovery-to-CDN playback.
+- Implemented the sixth M3 slice: a separate direct anonymous Artist Search operation maps exact Desktop type-1 pages into existing provider-neutral `ArtistSummary` values through a cancellable typed Bridge. Flutter preserves independent Tracks/Artists query, results, pagination, cancellation, and stale-result state; direct results open the existing Artist Tracks/Albums and nested Album/queue path without reloading Search. Mixed Search, other result types, suggestions/history/hot words, Artist biography/follow, and a generic Search runtime remain excluded.
+- Revalidated the resulting baseline: Rust formatting, 195 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 208 Flutter tests, the Linux x64 Release bundle, and the packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain separately gated and ignored; these results do not prove live Artist Search/application compatibility, authenticated downstream playback, or search/discovery-to-CDN playback.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. A bounded product-completeness audit selected direct Artist Search: the anonymous Desktop type-1 request returned exact first/terminal pages and every row carried the numeric ID, MID, and name already required by the existing Artist Tracks/Albums surface. Implementation is active; other result types remain separate future discoveries.
+- M3 remains active. Direct Artist Search is implemented and verified offline through the existing Artist/Album/queue navigation. The next work item must come from a fresh bounded ranking of Roadmap-authorized gaps or reproduced problems; completion of this slice is not a stop condition.
 
 # Next Candidates
 
-1. Implement the selected direct Artist Search slice through Client, Domain/Provider, cancellable Bridge, and a bounded Tracks/Artists Flutter Search type control that preserves independent local state and reuses the existing Artist page.
+1. Run the next bounded M3 discovery/ranking pass. Direct Album Search and QQ ranking lists remain documented candidates, but neither is selected until current protocol/product evidence establishes a finite slice.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 

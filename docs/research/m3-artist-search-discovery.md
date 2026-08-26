@@ -48,3 +48,7 @@ Reference implementations remain research evidence only. The runtime will call Q
 ## Selection
 
 Direct Artist Search ranks first because the real anonymous response supplies the exact numeric-ID/MID identity already required by both existing Artist operations, the requested page size and terminal continuation were honored, and the resulting user path is finite: Search → Artist Tracks/Albums → existing Album/queue. Rankings require a separate list/detail/period audit, while Album Search should reuse the interaction boundary proven by this smaller one-type expansion.
+
+## Implementation outcome
+
+Implemented on 2026-08-26 as the sixth finite M3 slice. The client uses the exact typed Desktop request and rejects invalid pagination or Artist identity before Domain mapping; Provider, Domain, and Bridge keep Artist identity opaque and diagnostics redacted. Flutter keeps Tracks and Artists in independent controllers, carries the current text only on a type's first visit, suppresses replacement and disposal races, and restores the selected Artist Search state after existing Artist and nested Album navigation. Rust formatting, 195 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 208 Flutter tests, the Linux x64 Release bundle, and packaged typed-Bridge integration pass. The four live QQ/WeChat tests remain gated, and no live application compatibility or authenticated downstream playback claim is made.

@@ -4,9 +4,9 @@ use std::fmt;
 use std::future::Future;
 
 use music_domain::{
-    AlbumId, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistTracksPage, PlaylistId,
-    PlaylistSummary, PlaylistTracksPage, ProviderId, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyrics, TrackId, TrackSearchPage,
+    AlbumId, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistSearchPage, ArtistTracksPage,
+    PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId, RecommendedPlaylistsPage,
+    ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -92,6 +92,19 @@ pub trait TrackSearchProvider: MusicProvider + Sync {
         page: u32,
         size: u32,
     ) -> impl Future<Output = Result<TrackSearchPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral Artist search. Query ranking and page conversion remain
+/// owned by the concrete Provider.
+pub trait ArtistSearchProvider: MusicProvider + Sync {
+    type Error;
+
+    fn search_artists(
+        &self,
+        query: String,
+        page: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<ArtistSearchPage, Self::Error>> + Send;
 }
 
 /// Provider-neutral offset-paged Album Track browsing. Album metadata and

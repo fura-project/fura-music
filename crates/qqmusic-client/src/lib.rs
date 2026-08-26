@@ -7,6 +7,7 @@
 mod album;
 mod artist;
 mod artist_albums;
+mod artist_search;
 mod credential;
 mod credential_verification;
 mod favorite_playlists;
@@ -25,6 +26,7 @@ mod wechat_qr;
 pub use album::{AlbumTrackField, QqMusicAlbumTrackPage, QqMusicAlbumTracksError};
 pub use artist::{ArtistTrackField, QqMusicArtistTrackPage, QqMusicArtistTracksError};
 pub use artist_albums::{ArtistAlbumField, QqMusicArtistAlbumPage, QqMusicArtistAlbumsError};
+pub use artist_search::{ArtistSearchField, QqMusicArtistSearchError, QqMusicArtistSearchPage};
 pub use credential::{
     Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
     CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,

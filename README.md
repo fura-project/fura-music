@@ -2,11 +2,11 @@
 
 `flutterustmusic` is a modern, open-source, cross-platform, QQ Music-first client built with Flutter and an in-process Rust core.
 
-The first in-process vertical slice implements sign-in, credential restore, user playlists and details, foreground playback and queue controls, and synchronized word-level lyrics. M3 now also includes direct QQ Music Track search, Album and Artist browsing, Artist discography navigation, and public recommended-playlist discovery feeding the existing detail and playback path. One user-operated real-account playback/queue/lyric observation remains before the M1 end-to-end acceptance claim; it does not block the active M3 QQ Music core-product workstream.
+The first in-process vertical slice implements sign-in, credential restore, user playlists and details, foreground playback and queue controls, and synchronized word-level lyrics. M3 now also includes direct QQ Music Track and Artist search, Album and Artist browsing, Artist discography navigation, and public recommended-playlist discovery feeding the existing detail and playback path. One user-operated real-account playback/queue/lyric observation remains before the M1 end-to-end acceptance claim; it does not block the active M3 QQ Music core-product workstream.
 
 ## Status
 
-The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 reliability and daily-use quality is checkpointed; bounded M3 Search, Album, Artist Tracks/Albums, and recommended-playlist slices are implemented. This is not a release-readiness or live catalog claim, and real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
+The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 reliability and daily-use quality is checkpointed; bounded M3 Track/Artist Search, Album, Artist Tracks/Albums, and recommended-playlist slices are implemented. This is not a release-readiness or live catalog claim, and real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
 
 No release is available yet.
 

@@ -6,6 +6,8 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/search/artist_search_controller.dart';
+import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_controller.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 
@@ -17,6 +19,7 @@ class TrackSearchPage extends StatefulWidget {
     required this.onOpenAlbum,
     required this.onOpenArtist,
     required this.onSignInAgain,
+    this.artistGateway,
     super.key,
   });
 
@@ -26,25 +29,37 @@ class TrackSearchPage extends StatefulWidget {
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final ValueChanged<ArtistSummary> onOpenArtist;
   final VoidCallback onSignInAgain;
+  final ArtistSearchGateway? artistGateway;
 
   @override
   State<TrackSearchPage> createState() => _TrackSearchPageState();
 }
 
+enum _SearchType { tracks, artists }
+
 class _TrackSearchPageState extends State<TrackSearchPage> {
   late final TrackSearchController _controller;
+  late final ArtistSearchController _artistController;
+  late final Listenable _controllers;
   final TextEditingController _queryController = TextEditingController();
   final FocusNode _queryFocusNode = FocusNode(debugLabel: 'track search');
+  final Set<_SearchType> _visitedTypes = {_SearchType.tracks};
+  _SearchType _searchType = _SearchType.tracks;
 
   @override
   void initState() {
     super.initState();
     _controller = TrackSearchController(widget.gateway);
+    _artistController = ArtistSearchController(
+      widget.artistGateway ?? const RustArtistSearchGateway(),
+    );
+    _controllers = Listenable.merge([_controller, _artistController]);
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _artistController.dispose();
     _queryController.dispose();
     _queryFocusNode.dispose();
     super.dispose();
@@ -63,7 +78,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     ),
     body: SafeArea(
       child: AnimatedBuilder(
-        animation: _controller,
+        animation: _controllers,
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {
             final desktop = constraints.maxWidth >= 820;
@@ -73,14 +88,44 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
                   controller: _queryController,
                   focusNode: _queryFocusNode,
                   desktop: desktop,
-                  loading: _controller.stage == TrackSearchStage.loading,
-                  onSubmitted: _controller.submit,
+                  loading: _isLoading,
+                  hintText: _searchType == _SearchType.tracks
+                      ? 'Song, Artist, or Album name'
+                      : 'Artist name',
+                  onSubmitted: _submit,
                   onClear: _clear,
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    desktop ? 48 : 20,
+                    0,
+                    desktop ? 48 : 20,
+                    14,
+                  ),
+                  child: SegmentedButton<_SearchType>(
+                    key: const ValueKey('search-types'),
+                    segments: const [
+                      ButtonSegment(
+                        value: _SearchType.tracks,
+                        icon: Icon(Icons.music_note_rounded),
+                        label: Text('Tracks'),
+                      ),
+                      ButtonSegment(
+                        value: _SearchType.artists,
+                        icon: Icon(Icons.person_rounded),
+                        label: Text('Artists'),
+                      ),
+                    ],
+                    selected: {_searchType},
+                    onSelectionChanged: _selectSearchType,
+                  ),
                 ),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
-                    child: _body(desktop),
+                    child: _searchType == _SearchType.tracks
+                        ? _trackBody(desktop)
+                        : _artistBody(desktop),
                   ),
                 ),
               ],
@@ -95,12 +140,17 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     ),
   );
 
-  Widget _body(bool desktop) => switch (_controller.stage) {
+  bool get _isLoading => switch (_searchType) {
+    _SearchType.tracks => _controller.stage == TrackSearchStage.loading,
+    _SearchType.artists => _artistController.stage == ArtistSearchStage.loading,
+  };
+
+  Widget _trackBody(bool desktop) => switch (_controller.stage) {
     TrackSearchStage.idle => const _SearchMessage(
       key: ValueKey('track-search-idle'),
       icon: Icons.search_rounded,
-      title: 'Find music on QQ Music',
-      detail: 'Search by song, artist, or album name.',
+      title: 'Find Tracks on QQ Music',
+      detail: 'Search by song, Artist, or Album name.',
     ),
     TrackSearchStage.loading => const Center(
       key: ValueKey('track-search-loading'),
@@ -118,7 +168,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     ),
     TrackSearchStage.error => _SearchFailure(
       key: const ValueKey('track-search-error'),
-      failure: _controller.failure,
+      detail: _trackFailureCopy(_controller.failure),
       canRetry: _controller.canRetry,
       onRetry: _controller.retry,
       onEdit: _focusQuery,
@@ -141,9 +191,97 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     ),
   };
 
+  Widget _artistBody(bool desktop) => switch (_artistController.stage) {
+    ArtistSearchStage.idle => const _SearchMessage(
+      key: ValueKey('artist-search-idle'),
+      icon: Icons.person_search_rounded,
+      title: 'Find Artists on QQ Music',
+      detail: 'Search by an Artist or group name.',
+    ),
+    ArtistSearchStage.loading => const Center(
+      key: ValueKey('artist-search-loading'),
+      child: CircularProgressIndicator(),
+    ),
+    ArtistSearchStage.empty => _SearchMessage(
+      key: const ValueKey('artist-search-empty'),
+      icon: Icons.person_off_outlined,
+      title: 'No Artists found',
+      detail: 'Try a different spelling or a broader search.',
+      action: TextButton(
+        onPressed: _focusQuery,
+        child: const Text('Edit search'),
+      ),
+    ),
+    ArtistSearchStage.error => _SearchFailure(
+      key: const ValueKey('artist-search-error'),
+      detail: _artistFailureCopy(_artistController.failure),
+      canRetry: _artistController.canRetry,
+      onRetry: _artistController.retry,
+      onEdit: _focusQuery,
+    ),
+    ArtistSearchStage.content => _ArtistSearchResults(
+      key: const ValueKey('artist-search-content'),
+      query: _artistController.query,
+      artists: _artistController.artists,
+      total: _artistController.total,
+      hasMore: _artistController.hasMore,
+      isLoadingMore: _artistController.isLoadingMore,
+      appendFailure: _artistController.appendFailure != null,
+      onLoadMore: _artistController.loadMore,
+      onRetryMore: _artistController.retryMore,
+      onOpenArtist: widget.onOpenArtist,
+      desktop: desktop,
+    ),
+  };
+
+  void _submit(String query) {
+    switch (_searchType) {
+      case _SearchType.tracks:
+        unawaited(_controller.submit(query));
+        break;
+      case _SearchType.artists:
+        unawaited(_artistController.submit(query));
+        break;
+    }
+  }
+
+  void _selectSearchType(Set<_SearchType> selection) {
+    final next = selection.single;
+    if (_searchType == next) return;
+    final firstVisit = !_visitedTypes.contains(next);
+    final currentText = _queryController.text.trim();
+    setState(() {
+      _searchType = next;
+      _visitedTypes.add(next);
+    });
+    if (firstVisit) {
+      _replaceQueryText(currentText);
+      if (currentText.isNotEmpty) _submit(currentText);
+      return;
+    }
+    _replaceQueryText(switch (next) {
+      _SearchType.tracks => _controller.query,
+      _SearchType.artists => _artistController.query,
+    });
+  }
+
+  void _replaceQueryText(String value) {
+    _queryController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
   void _clear() {
     _queryController.clear();
-    _controller.clear();
+    switch (_searchType) {
+      case _SearchType.tracks:
+        _controller.clear();
+        break;
+      case _SearchType.artists:
+        _artistController.clear();
+        break;
+    }
     _focusQuery();
   }
 
@@ -182,6 +320,7 @@ class _SearchField extends StatelessWidget {
     required this.focusNode,
     required this.desktop,
     required this.loading,
+    required this.hintText,
     required this.onSubmitted,
     required this.onClear,
   });
@@ -190,6 +329,7 @@ class _SearchField extends StatelessWidget {
   final FocusNode focusNode;
   final bool desktop;
   final bool loading;
+  final String hintText;
   final ValueChanged<String> onSubmitted;
   final VoidCallback onClear;
 
@@ -214,7 +354,7 @@ class _SearchField extends StatelessWidget {
             textInputAction: TextInputAction.search,
             onSubmitted: loading ? null : onSubmitted,
             decoration: InputDecoration(
-              hintText: 'Songs, artists, or albums',
+              hintText: hintText,
               prefixIcon: const Icon(Icons.search_rounded),
               suffixIcon: value.text.isEmpty
                   ? null
@@ -301,7 +441,7 @@ class _SearchResults extends StatelessWidget {
             return _SearchFooter(
               hasMore: hasMore,
               isLoadingMore: isLoadingMore,
-              appendFailure: appendFailure,
+              appendFailure: appendFailure != null,
               onLoadMore: onLoadMore,
               onRetryMore: onRetryMore,
             );
@@ -320,6 +460,101 @@ class _SearchResults extends StatelessWidget {
                 ? null
                 : () => onOpenAlbum(item.album!),
             onOpenArtist: onOpenArtist,
+          );
+        },
+      ),
+    ),
+  );
+}
+
+class _ArtistSearchResults extends StatelessWidget {
+  const _ArtistSearchResults({
+    required this.query,
+    required this.artists,
+    required this.total,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.appendFailure,
+    required this.onLoadMore,
+    required this.onRetryMore,
+    required this.onOpenArtist,
+    required this.desktop,
+    super.key,
+  });
+
+  final String query;
+  final List<ArtistSummary> artists;
+  final int total;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final bool appendFailure;
+  final VoidCallback onLoadMore;
+  final VoidCallback onRetryMore;
+  final ValueChanged<ArtistSummary> onOpenArtist;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 920),
+      child: ListView.builder(
+        key: const PageStorageKey('artist-search-results'),
+        padding: EdgeInsets.fromLTRB(
+          desktop ? 40 : 12,
+          0,
+          desktop ? 40 : 12,
+          24,
+        ),
+        itemCount: artists.length + 2,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  '$total ${total == 1 ? 'Artist' : 'Artists'} for “$query”',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            );
+          }
+          if (index == artists.length + 1) {
+            return _SearchFooter(
+              hasMore: hasMore,
+              isLoadingMore: isLoadingMore,
+              appendFailure: appendFailure,
+              onLoadMore: onLoadMore,
+              onRetryMore: onRetryMore,
+            );
+          }
+          final artistIndex = index - 1;
+          final artist = artists[artistIndex];
+          final colors = Theme.of(context).colorScheme;
+          return ListTile(
+            key: ValueKey('artist-search-result-$artistIndex'),
+            minTileHeight: desktop ? 68 : 72,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            leading: CircleAvatar(
+              backgroundColor: colors.secondaryContainer,
+              foregroundColor: colors.onSecondaryContainer,
+              child: const Icon(Icons.person_rounded),
+            ),
+            title: Text(
+              artist.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text('Artist'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => onOpenArtist(artist),
           );
         },
       ),
@@ -461,7 +696,7 @@ class _SearchFooter extends StatelessWidget {
 
   final bool hasMore;
   final bool isLoadingMore;
-  final TrackSearchFailure? appendFailure;
+  final bool appendFailure;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
 
@@ -474,7 +709,7 @@ class _SearchFooter extends StatelessWidget {
               dimension: 28,
               child: CircularProgressIndicator(strokeWidth: 2.5),
             )
-          : appendFailure != null
+          : appendFailure
           ? FilledButton.tonal(
               onPressed: onRetryMore,
               child: const Text('Try loading more again'),
@@ -497,14 +732,14 @@ class _SearchFooter extends StatelessWidget {
 
 class _SearchFailure extends StatelessWidget {
   const _SearchFailure({
-    required this.failure,
+    required this.detail,
     required this.canRetry,
     required this.onRetry,
     required this.onEdit,
     super.key,
   });
 
-  final TrackSearchFailure? failure;
+  final String detail;
   final bool canRetry;
   final VoidCallback onRetry;
   final VoidCallback onEdit;
@@ -513,7 +748,7 @@ class _SearchFailure extends StatelessWidget {
   Widget build(BuildContext context) => _SearchMessage(
     icon: Icons.cloud_off_rounded,
     title: 'Couldn’t search QQ Music',
-    detail: _failureCopy(failure),
+    detail: detail,
     liveRegion: true,
     action: Wrap(
       spacing: 8,
@@ -580,7 +815,7 @@ class _SearchMessage extends StatelessWidget {
   );
 }
 
-String _failureCopy(TrackSearchFailure? failure) => switch (failure) {
+String _trackFailureCopy(TrackSearchFailure? failure) => switch (failure) {
   TrackSearchFailure.network => 'Check your connection and try again.',
   TrackSearchFailure.serviceUnavailable =>
     'QQ Music search is temporarily unavailable.',
@@ -590,4 +825,16 @@ String _failureCopy(TrackSearchFailure? failure) => switch (failure) {
   TrackSearchFailure.invalidResponse ||
   TrackSearchFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected search response.',
+};
+
+String _artistFailureCopy(ArtistSearchFailure? failure) => switch (failure) {
+  ArtistSearchFailure.network => 'Check your connection and try again.',
+  ArtistSearchFailure.serviceUnavailable =>
+    'QQ Music Artist search is temporarily unavailable.',
+  ArtistSearchFailure.cancelled => 'The Artist search was cancelled.',
+  ArtistSearchFailure.coreUnavailable =>
+    'The local music core is unavailable. Restart the app and try again.',
+  ArtistSearchFailure.invalidResponse ||
+  ArtistSearchFailure.alreadyRunning ||
+  null => 'QQ Music returned an unexpected Artist search response.',
 };

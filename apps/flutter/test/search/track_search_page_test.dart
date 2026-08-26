@@ -8,6 +8,7 @@ import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
 
@@ -79,6 +80,89 @@ void main() {
     expect(queue.replacedIndex, 0);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Tracks and Artists preserve independent Search state and open Artist',
+    (tester) async {
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:searchMid:-',
+        title: 'Track result',
+        artistNames: ['Track credit'],
+      );
+      final trackSearch = _SearchGateway(track);
+      final artistSearch = _ArtistSearchGateway();
+      final playback = QueuePlaybackController(
+        _QueueGateway(),
+        TrackPlaybackController(
+          const _UnavailableMediaGateway(),
+          ForegroundPlaybackController(const _NeverAudioEngine()),
+        ),
+      );
+      addTearDown(playback.dispose);
+      ArtistSummary? openedArtist;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TrackSearchPage(
+            gateway: trackSearch,
+            artistGateway: artistSearch,
+            queuePlaybackController: playback,
+            onBack: () {},
+            onOpenAlbum: (_) {},
+            onOpenArtist: (artist) => openedArtist = artist,
+            onSignInAgain: () {},
+          ),
+        ),
+      );
+
+      final field = find.byKey(const ValueKey('track-search-field'));
+      await tester.enterText(field, 'track query');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text('Track result'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('search-types')),
+          matching: find.text('Artists'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(artistSearch.requests, [('track query', 1, 30)]);
+      expect(find.text('Artist for track query'), findsOneWidget);
+
+      await tester.enterText(field, 'artist query');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(artistSearch.requests.last, ('artist query', 1, 30));
+      expect(find.text('Artist for artist query'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('search-types')),
+          matching: find.text('Tracks'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller?.text, 'track query');
+      expect(find.text('Track result'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('search-types')),
+          matching: find.text('Artists'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller?.text, 'artist query');
+      expect(artistSearch.requests.length, 2);
+      await tester.tap(find.byKey(const ValueKey('artist-search-result-0')));
+      await tester.pumpAndSettle();
+      expect(openedArtist?.name, 'Artist for artist query');
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _SearchGateway implements TrackSearchGateway {
@@ -130,6 +214,44 @@ class _SearchOperation implements TrackSearchPageLoadOperation {
 
   @override
   Future<TrackSearchPageResult> run() async => result;
+}
+
+class _ArtistSearchGateway implements ArtistSearchGateway {
+  final List<(String, int, int)> requests = [];
+
+  @override
+  ArtistSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) {
+    requests.add((query, page, size));
+    return _ArtistSearchOperation(
+      ArtistSearchPageResult(
+        page: page,
+        total: 1,
+        artists: [
+          ArtistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'artist:61001:fixtureArtistMid',
+            name: 'Artist for $query',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArtistSearchOperation implements ArtistSearchPageLoadOperation {
+  const _ArtistSearchOperation(this.result);
+
+  final ArtistSearchPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<ArtistSearchPageResult> run() async => result;
 }
 
 class _QueueGateway implements PlaybackQueueGateway {
