@@ -26,6 +26,7 @@ import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
+import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
@@ -538,7 +539,9 @@ void main() {
       expect(find.byKey(const ValueKey('rankings-content')), findsOneWidget);
       expect(rankings.groupLoads, 1);
 
-      await tester.tap(find.text('Playlists'));
+      final playlistsTab = find.text('Playlists');
+      await tester.ensureVisible(playlistsTab);
+      await tester.tap(playlistsTab);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Rankings'));
       await tester.pumpAndSettle();
@@ -809,6 +812,103 @@ void main() {
       expect(find.byKey(const ValueKey('new-albums-content')), findsOneWidget);
       expect(find.text('Fresh Album'), findsOneWidget);
       expect(newAlbums.requests, [(NewAlbumRegion.mainlandChina, 0, 20)]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'loads typed new songs lazily and uses the existing queue on narrow screens',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const latestTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureLatestMid:-',
+        title: 'Latest Track',
+        artistNames: ['Latest Artist'],
+      );
+      const japanTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41002:0:fixtureJapanMid:-',
+        title: 'Japan Track',
+        artistNames: ['Japan Artist'],
+      );
+      final newSongs = _WidgetNewSongGateway({
+        NewSongCategory.latest: const NewSongResult(
+          category: NewSongCategory.latest,
+          tracks: [latestTrack],
+        ),
+        NewSongCategory.japan: const NewSongResult(
+          category: NewSongCategory.japan,
+          tracks: [japanTrack],
+        ),
+      });
+      final queue = _WidgetPlaybackQueueGateway();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+            const RecommendedPlaylistPageResult(),
+          ),
+          newSongGateway: newSongs,
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      expect(newSongs.requests, isEmpty);
+
+      final newSongsTab = find.text('New songs');
+      await tester.ensureVisible(newSongsTab);
+      await tester.tap(newSongsTab);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('new-songs-content')), findsOneWidget);
+      expect(find.text('Latest Track'), findsOneWidget);
+      expect(newSongs.requests, [NewSongCategory.latest]);
+
+      await tester.tap(find.byKey(const ValueKey('new-song-queue-0')));
+      await tester.pump();
+      expect(queue.pushed, [latestTrack]);
+      await tester.tap(find.byKey(const ValueKey('new-song-track-0')));
+      await tester.pump();
+      expect(queue.replacements.single.$1, [latestTrack]);
+      expect(queue.replacements.single.$2, 0);
+
+      final japanCategory = find.byKey(
+        const ValueKey('new-song-category-japan'),
+      );
+      await tester.ensureVisible(japanCategory);
+      await tester.tap(japanCategory);
+      await tester.pumpAndSettle();
+      expect(find.text('Japan Track'), findsOneWidget);
+      expect(newSongs.requests, [
+        NewSongCategory.latest,
+        NewSongCategory.japan,
+      ]);
+
+      final playlistsTab = find.text('Playlists');
+      await tester.ensureVisible(playlistsTab);
+      await tester.tap(playlistsTab);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(newSongsTab);
+      await tester.tap(newSongsTab);
+      await tester.pumpAndSettle();
+      expect(find.text('Japan Track'), findsOneWidget);
+      expect(newSongs.requests, [
+        NewSongCategory.latest,
+        NewSongCategory.japan,
+      ]);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2635,6 +2735,31 @@ class _WidgetNewAlbumOperation implements NewAlbumPageLoadOperation {
 
   @override
   Future<NewAlbumPageResult> run() async => result;
+}
+
+class _WidgetNewSongGateway implements NewSongGateway {
+  _WidgetNewSongGateway(this.results);
+
+  final Map<NewSongCategory, NewSongResult> results;
+  final List<NewSongCategory> requests = [];
+
+  @override
+  NewSongLoadOperation beginLoad({required NewSongCategory category}) {
+    requests.add(category);
+    return _WidgetNewSongOperation(results[category]!);
+  }
+}
+
+class _WidgetNewSongOperation implements NewSongLoadOperation {
+  const _WidgetNewSongOperation(this.result);
+
+  final NewSongResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<NewSongResult> run() async => result;
 }
 
 class _WidgetFavoriteAlbumGateway implements FavoriteAlbumGateway {

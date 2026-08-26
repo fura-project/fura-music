@@ -35,3 +35,9 @@ Reference implementations remain research evidence only. Runtime requests will g
 ## Selection
 
 Typed new-song channels rank first because they add a core QQ-native discovery capability with two current independent implementations, a successful content-free live shape, a finite whole-response boundary, and direct reuse of the existing shared Track mapper and queue. This rebalances work toward protocol/Provider correctness after three presentation-heavy catalog tasks without expanding into a heterogeneous Home runtime.
+
+## Outcome
+
+Implemented on 2026-08-27 as direct anonymous `QQMusicClient` loading → `NewSongsProvider` → provider-neutral typed whole-response Track collection → single-use cancellable Bridge → lazy retained Flutter Discover state. The client enforces the exact requested/returned category, 2 MiB response, 30-second request, and 200-row bounds; the shared Provider mapper retains opaque Track, Album, and credited-Artist context while diagnostics expose only category/count/failure metadata. Flutter owns loading/empty/error/retry/category replacement/cancellation/stale/disposal state, keeps the six-category selector reachable on a 360px surface, and reuses the existing queue for play/add actions without inventing pagination.
+
+Validation passed Rust formatting, 258 offline Rust tests with four separately gated live tests ignored, strict all-target/all-feature Clippy, strict Dart formatting/analysis, all 273 Flutter tests, the Linux x64 Release bundle, and packaged Linux typed-Bridge cancellation integration. These checks prove the bounded request/mapping/lifecycle/adaptive UI and Linux packaging path. They do not prove current live application compatibility, editorial or recommendation quality, Track availability, or authenticated QQ CDN playback. No account credential or returned catalog content was used by implementation tests or retained in the repository.

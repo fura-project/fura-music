@@ -6,9 +6,9 @@ use std::future::Future;
 use music_domain::{
     AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
     ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, NewAlbumRegion, NewAlbumReleasesPage,
-    PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId,
-    RadarTrackPage, RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage,
-    ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
+    NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
+    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingTracksPage,
+    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -222,6 +222,17 @@ pub trait NewAlbumReleasesProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<NewAlbumReleasesPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral bounded whole-response new-song categories. Editorial
+/// Home shelves, personalization, radio, and invented pagination are separate.
+pub trait NewSongsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn new_songs(
+        &self,
+        category: NewSongCategory,
+    ) -> impl Future<Output = Result<NewSongCollection, Self::Error>> + Send;
 }
 
 /// Provider-neutral offset-paged playlist recommendations. Personalization,

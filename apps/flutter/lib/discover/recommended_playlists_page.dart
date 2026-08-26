@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
+import 'package:flutterustmusic/discover/new_song_controller.dart';
+import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
@@ -19,6 +21,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
   const RecommendedPlaylistsPage({
     required this.gateway,
     required this.newAlbumGateway,
+    required this.newSongGateway,
     required this.rankingGateway,
     required this.radarGateway,
     required this.queuePlaybackController,
@@ -32,6 +35,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
 
   final RecommendedPlaylistGateway gateway;
   final NewAlbumGateway newAlbumGateway;
+  final NewSongGateway newSongGateway;
   final RankingGateway rankingGateway;
   final RadarGateway radarGateway;
   final QueuePlaybackController queuePlaybackController;
@@ -49,18 +53,21 @@ class RecommendedPlaylistsPage extends StatefulWidget {
 class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   late final RecommendedPlaylistController _controller;
   late final NewAlbumController _newAlbumController;
+  late final NewSongController _newSongController;
   late final RankingGroupController _rankingController;
   late final RadarController _radarController;
   _DiscoverType _type = _DiscoverType.playlists;
   bool _rankingsVisited = false;
   bool _radarVisited = false;
   bool _newAlbumsVisited = false;
+  bool _newSongsVisited = false;
 
   @override
   void initState() {
     super.initState();
     _controller = RecommendedPlaylistController(widget.gateway);
     _newAlbumController = NewAlbumController(widget.newAlbumGateway);
+    _newSongController = NewSongController(widget.newSongGateway);
     _rankingController = RankingGroupController(widget.rankingGateway);
     _radarController = RadarController(widget.radarGateway);
     unawaited(_controller.load());
@@ -70,6 +77,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   void dispose() {
     _controller.dispose();
     _newAlbumController.dispose();
+    _newSongController.dispose();
     _rankingController.dispose();
     _radarController.dispose();
     super.dispose();
@@ -91,6 +99,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
         animation: Listenable.merge([
           _controller,
           _newAlbumController,
+          _newSongController,
           _rankingController,
           _radarController,
         ]),
@@ -125,6 +134,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
                         icon: Icon(Icons.album_rounded),
                         label: Text('New albums'),
                       ),
+                      ButtonSegment(
+                        value: _DiscoverType.newSongs,
+                        icon: Icon(Icons.new_releases_rounded),
+                        label: Text('New songs'),
+                      ),
                     ],
                     selected: {_type},
                     onSelectionChanged: (selection) =>
@@ -141,6 +155,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
                   _DiscoverType.rankings => _rankingBody(),
                   _DiscoverType.radar => _radarBody(),
                   _DiscoverType.newAlbums => _newAlbumBody(),
+                  _DiscoverType.newSongs => _newSongBody(),
                 },
               ),
             ),
@@ -304,6 +319,50 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
     ),
   };
 
+  Widget _newSongBody() => switch (_newSongController.stage) {
+    NewSongStage.loading => _NewSongShell(
+      key: const ValueKey('new-songs-loading'),
+      category: _newSongController.category,
+      onCategorySelected: _newSongController.selectCategory,
+      child: const Center(child: CircularProgressIndicator()),
+    ),
+    NewSongStage.empty => _NewSongShell(
+      key: const ValueKey('new-songs-empty'),
+      category: _newSongController.category,
+      onCategorySelected: _newSongController.selectCategory,
+      child: const _RecommendationMessage(
+        icon: Icons.music_off_rounded,
+        title: 'No new songs right now',
+        detail: 'QQ Music returned no Tracks for this category.',
+      ),
+    ),
+    NewSongStage.error => _NewSongShell(
+      key: const ValueKey('new-songs-error'),
+      category: _newSongController.category,
+      onCategorySelected: _newSongController.selectCategory,
+      child: _RecommendationMessage(
+        icon: Icons.cloud_off_rounded,
+        title: 'Couldn’t load new songs',
+        detail: newSongFailureCopy(_newSongController.failure),
+        liveRegion: true,
+        action: _newSongController.canRetry
+            ? FilledButton.tonal(
+                onPressed: _newSongController.retry,
+                child: const Text('Try again'),
+              )
+            : null,
+      ),
+    ),
+    NewSongStage.content => _NewSongCollection(
+      key: const ValueKey('new-songs-content'),
+      category: _newSongController.category,
+      tracks: _newSongController.tracks,
+      onCategorySelected: _newSongController.selectCategory,
+      onPlay: _playNewSong,
+      onQueue: _queueNewSong,
+    ),
+  };
+
   Widget? _radarFailureAction(RadarFailure? failure) {
     if (_radarRequiresSignIn(failure)) {
       return FilledButton.tonal(
@@ -336,6 +395,23 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   }
 
   void _queueRadar(PlaylistTrackSummary track) {
+    _queueTrack(track);
+  }
+
+  void _playNewSong(int index) {
+    unawaited(
+      widget.queuePlaybackController.replaceAndPlay(
+        _newSongController.tracks,
+        index,
+      ),
+    );
+  }
+
+  void _queueNewSong(PlaylistTrackSummary track) {
+    _queueTrack(track);
+  }
+
+  void _queueTrack(PlaylistTrackSummary track) {
     final playbackStart = widget.queuePlaybackController.push(track);
     if (!mounted) {
       unawaited(playbackStart);
@@ -365,10 +441,212 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       _newAlbumsVisited = true;
       unawaited(_newAlbumController.load());
     }
+    if (type == _DiscoverType.newSongs && !_newSongsVisited) {
+      _newSongsVisited = true;
+      unawaited(_newSongController.load());
+    }
   }
 }
 
-enum _DiscoverType { playlists, rankings, radar, newAlbums }
+enum _DiscoverType { playlists, rankings, radar, newAlbums, newSongs }
+
+class _NewSongShell extends StatelessWidget {
+  const _NewSongShell({
+    required this.category,
+    required this.onCategorySelected,
+    required this.child,
+    super.key,
+  });
+
+  final NewSongCategory category;
+  final ValueChanged<NewSongCategory> onCategorySelected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      _NewSongCategoryPicker(
+        category: category,
+        onSelected: onCategorySelected,
+      ),
+      Expanded(child: child),
+    ],
+  );
+}
+
+class _NewSongCollection extends StatelessWidget {
+  const _NewSongCollection({
+    required this.category,
+    required this.tracks,
+    required this.onCategorySelected,
+    required this.onPlay,
+    required this.onQueue,
+    super.key,
+  });
+
+  final NewSongCategory category;
+  final List<PlaylistTrackSummary> tracks;
+  final ValueChanged<NewSongCategory> onCategorySelected;
+  final ValueChanged<int> onPlay;
+  final ValueChanged<PlaylistTrackSummary> onQueue;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 760;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              desktop ? 48 : 20,
+              desktop ? 24 : 16,
+              desktop ? 48 : 20,
+              8,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'New songs',
+                  style:
+                      (desktop
+                              ? Theme.of(context).textTheme.headlineMedium
+                              : Theme.of(context).textTheme.headlineSmall)
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${newSongCategoryLabel(category)} releases from QQ Music',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _NewSongCategoryPicker(
+            category: category,
+            onSelected: onCategorySelected,
+          ),
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1040),
+                child: ListView.builder(
+                  key: PageStorageKey<String>('new-song-list-${category.name}'),
+                  padding: EdgeInsets.fromLTRB(
+                    desktop ? 40 : 12,
+                    8,
+                    desktop ? 40 : 12,
+                    28,
+                  ),
+                  itemCount: tracks.length,
+                  itemBuilder: (context, index) {
+                    final track = tracks[index];
+                    final artists = track.artistNames.isEmpty
+                        ? 'Unknown artist'
+                        : track.artistNames.join(' · ');
+                    return ListTile(
+                      key: ValueKey('new-song-track-$index'),
+                      minTileHeight: desktop ? 64 : 72,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      leading: SizedBox.square(
+                        dimension: 48,
+                        child: _NewSongArtwork(uri: track.artworkUri),
+                      ),
+                      title: Text(
+                        track.subtitle == null
+                            ? track.title
+                            : '${track.title} · ${track.subtitle}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        artists,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => onPlay(index),
+                      trailing: IconButton(
+                        key: ValueKey('new-song-queue-$index'),
+                        tooltip: 'Add ${track.title} to queue',
+                        onPressed: () => onQueue(track),
+                        icon: const Icon(Icons.playlist_add_rounded),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _NewSongCategoryPicker extends StatelessWidget {
+  const _NewSongCategoryPicker({
+    required this.category,
+    required this.onSelected,
+  });
+
+  final NewSongCategory category;
+  final ValueChanged<NewSongCategory> onSelected;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    key: const ValueKey('new-song-category-selector'),
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+    child: Row(
+      children: [
+        for (final value in NewSongCategory.values)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              key: ValueKey('new-song-category-${value.name}'),
+              label: Text(newSongCategoryLabel(value)),
+              selected: category == value,
+              onSelected: (_) => onSelected(value),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _NewSongArtwork extends StatelessWidget {
+  const _NewSongArtwork({this.uri});
+
+  final String? uri;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [colors.tertiaryContainer, colors.primaryContainer],
+        ),
+      ),
+      child: Icon(Icons.music_note_rounded, color: colors.onTertiaryContainer),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: uri == null
+          ? placeholder
+          : Image.network(
+              uri!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => placeholder,
+            ),
+    );
+  }
+}
 
 class _NewAlbumShell extends StatelessWidget {
   const _NewAlbumShell({
@@ -1414,4 +1692,25 @@ String newAlbumFailureCopy(NewAlbumFailure? failure) => switch (failure) {
   NewAlbumFailure.invalidResponse ||
   NewAlbumFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected new-album response.',
+};
+
+String newSongCategoryLabel(NewSongCategory category) => switch (category) {
+  NewSongCategory.latest => 'Latest',
+  NewSongCategory.mainlandChina => 'Mainland China',
+  NewSongCategory.hongKongTaiwan => 'Hong Kong / Taiwan',
+  NewSongCategory.western => 'Western',
+  NewSongCategory.korea => 'Korea',
+  NewSongCategory.japan => 'Japan',
+};
+
+String newSongFailureCopy(NewSongFailure? failure) => switch (failure) {
+  NewSongFailure.network => 'Check your connection and try again.',
+  NewSongFailure.serviceUnavailable =>
+    'QQ Music new songs are temporarily unavailable.',
+  NewSongFailure.cancelled => 'The new-song request was cancelled.',
+  NewSongFailure.coreUnavailable =>
+    'The local music core is unavailable. Restart the app and try again.',
+  NewSongFailure.invalidResponse ||
+  NewSongFailure.alreadyRunning ||
+  null => 'QQ Music returned an unexpected new-song response.',
 };

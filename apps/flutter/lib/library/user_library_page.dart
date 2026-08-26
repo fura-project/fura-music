@@ -13,6 +13,7 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
+import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
@@ -59,6 +60,7 @@ class UserLibraryPage extends StatefulWidget {
     this.artistAlbumGateway,
     this.recommendedPlaylistGateway,
     this.newAlbumGateway,
+    this.newSongGateway,
     this.rankingGateway,
     this.radarGateway,
     this.favoriteAlbumGateway,
@@ -83,6 +85,7 @@ class UserLibraryPage extends StatefulWidget {
   final ArtistAlbumGateway? artistAlbumGateway;
   final RecommendedPlaylistGateway? recommendedPlaylistGateway;
   final NewAlbumGateway? newAlbumGateway;
+  final NewSongGateway? newSongGateway;
   final RankingGateway? rankingGateway;
   final RadarGateway? radarGateway;
   final FavoriteAlbumGateway? favoriteAlbumGateway;
@@ -104,6 +107,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final ArtistAlbumGateway _artistAlbumGateway;
   late final RecommendedPlaylistGateway _recommendedPlaylistGateway;
   late final NewAlbumGateway _newAlbumGateway;
+  late final NewSongGateway _newSongGateway;
   late final RankingGateway _rankingGateway;
   late final RadarGateway _radarGateway;
   late final FavoriteAlbumGateway _favoriteAlbumGateway;
@@ -160,6 +164,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         widget.recommendedPlaylistGateway ??
         const RustRecommendedPlaylistGateway();
     _newAlbumGateway = widget.newAlbumGateway ?? const RustNewAlbumGateway();
+    _newSongGateway = widget.newSongGateway ?? const RustNewSongGateway();
     _rankingGateway = widget.rankingGateway ?? const RustRankingGateway();
     _radarGateway = widget.radarGateway ?? RustRadarGateway();
     _favoriteAlbumGateway =
@@ -252,6 +257,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 key: const ValueKey('recommended-playlists-page'),
                 gateway: _recommendedPlaylistGateway,
                 newAlbumGateway: _newAlbumGateway,
+                newSongGateway: _newSongGateway,
                 rankingGateway: _rankingGateway,
                 radarGateway: _radarGateway,
                 queuePlaybackController: _queuePlaybackController,

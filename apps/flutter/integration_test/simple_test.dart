@@ -9,6 +9,7 @@ import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/api/new_albums.dart';
+import 'package:flutterustmusic/src/rust/api/new_songs.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/api/rankings.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart';
@@ -170,6 +171,14 @@ void main() {
       cancelledNewAlbumLoad.failure,
       QqMusicNewAlbumPageLoadFailure.cancelled,
     );
+    final unusedNewSongsLoad = beginQqMusicNewSongsLoad(
+      category: QqMusicNewSongCategory.latest,
+    );
+    expect(unusedNewSongsLoad.isActive, isTrue);
+    expect(unusedNewSongsLoad.cancel(), isTrue);
+    final cancelledNewSongsLoad = await unusedNewSongsLoad.run();
+    expect(cancelledNewSongsLoad.category, QqMusicNewSongCategory.latest);
+    expect(cancelledNewSongsLoad.failure, QqMusicNewSongsLoadFailure.cancelled);
     final unusedFavoriteAlbumLoad = beginQqMusicFavoriteAlbumPageLoad(
       offset: 0,
       size: 20,

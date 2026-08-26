@@ -1790,6 +1790,54 @@ pub enum NewAlbumRegion {
     Other,
 }
 
+/// Provider-neutral categories exposed by QQ Music's bounded new-song
+/// collection. Providers that cannot map these categories do not implement
+/// the corresponding capability.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum NewSongCategory {
+    MainlandChina,
+    Western,
+    Japan,
+    Korea,
+    Latest,
+    HongKongTaiwan,
+}
+
+/// One bounded whole-response new-song collection. The external operation has
+/// no pagination input, so Domain deliberately exposes no invented cursor.
+#[derive(Clone, Eq, PartialEq)]
+pub struct NewSongCollection {
+    category: NewSongCategory,
+    tracks: Vec<TrackSummary>,
+}
+
+impl NewSongCollection {
+    #[must_use]
+    pub const fn new(category: NewSongCategory, tracks: Vec<TrackSummary>) -> Self {
+        Self { category, tracks }
+    }
+
+    #[must_use]
+    pub const fn category(&self) -> NewSongCategory {
+        self.category
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+}
+
+impl fmt::Debug for NewSongCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NewSongCollection")
+            .field("category", &self.category)
+            .field("track_count", &self.tracks.len())
+            .finish()
+    }
+}
+
 /// Minimum provider-neutral data for one newly released Album. Release dates
 /// remain display metadata rather than parsed calendar policy.
 #[derive(Clone, Eq, PartialEq)]
@@ -1961,10 +2009,11 @@ mod tests {
     use super::{
         AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId,
         ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, NewAlbumRegion,
-        NewAlbumRelease, NewAlbumReleasesPage, PlaylistId, PlaylistSearchPage, PlaylistSummary,
-        PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
-        RankingTracksPage, ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem,
-        TrackSearchPage, TrackSummary, TrackSummaryField,
+        NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId,
+        PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
+        RankingGroup, RankingId, RankingSummary, RankingTracksPage, ResolvedMediaSource,
+        ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+        TrackSummaryField,
     };
 
     #[test]
@@ -2233,6 +2282,28 @@ mod tests {
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("43001"));
         assert!(!debug.contains("2026-08-26"));
+    }
+
+    #[test]
+    fn new_song_collection_has_no_invented_pagination_or_content_diagnostics() {
+        let track = TrackSummary::new(
+            TrackId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "track:41001:0:fixture-mid:-",
+            )
+            .expect("Track ID"),
+            "must-not-leak",
+            vec!["private-artist".into()],
+        )
+        .expect("Track");
+        let collection = NewSongCollection::new(NewSongCategory::Latest, vec![track]);
+
+        assert_eq!(collection.category(), NewSongCategory::Latest);
+        assert_eq!(collection.tracks().len(), 1);
+        let debug = format!("{collection:?}");
+        assert!(!debug.contains("must-not-leak"));
+        assert!(!debug.contains("41001"));
+        assert!(!debug.contains("private-artist"));
     }
 
     #[test]

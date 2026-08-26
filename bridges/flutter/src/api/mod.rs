@@ -7,6 +7,7 @@ pub mod library;
 pub mod lyrics;
 pub mod media;
 pub mod new_albums;
+pub mod new_songs;
 pub mod queue;
 pub mod rankings;
 pub mod recommendations;

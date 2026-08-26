@@ -17,6 +17,7 @@ mod favorite_playlists;
 mod lyrics;
 mod media_resolution;
 mod new_albums;
+mod new_songs;
 mod owned_playlists;
 mod playlist_detail;
 mod playlist_search;
@@ -60,6 +61,9 @@ pub use media_resolution::{
 pub use new_albums::{
     NewAlbumField, QqMusicNewAlbumArea, QqMusicNewAlbumPage, QqMusicNewAlbumRelease,
     QqMusicNewAlbumsError,
+};
+pub use new_songs::{
+    NewSongTrackField, QqMusicNewSongCategory, QqMusicNewSongCollection, QqMusicNewSongsError,
 };
 pub use owned_playlists::{
     OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,

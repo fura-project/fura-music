@@ -10,6 +10,7 @@ import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
+import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
@@ -47,6 +48,7 @@ class MusicApp extends StatelessWidget {
     ArtistAlbumGateway? artistAlbumGateway,
     RecommendedPlaylistGateway? recommendedPlaylistGateway,
     NewAlbumGateway? newAlbumGateway,
+    NewSongGateway? newSongGateway,
     RankingGateway? rankingGateway,
     RadarGateway? radarGateway,
     FavoriteAlbumGateway? favoriteAlbumGateway,
@@ -109,6 +111,7 @@ class MusicApp extends StatelessWidget {
       recommendedPlaylistGateway:
           recommendedPlaylistGateway ?? const RustRecommendedPlaylistGateway(),
       newAlbumGateway: newAlbumGateway ?? const RustNewAlbumGateway(),
+      newSongGateway: newSongGateway ?? const RustNewSongGateway(),
       rankingGateway: rankingGateway ?? const RustRankingGateway(),
       radarGateway: radarGateway,
       favoriteAlbumGateway: favoriteAlbumGateway,
@@ -136,6 +139,7 @@ class MusicApp extends StatelessWidget {
     required this.artistAlbumGateway,
     required this.recommendedPlaylistGateway,
     required this.newAlbumGateway,
+    required this.newSongGateway,
     required this.rankingGateway,
     required this.radarGateway,
     required this.favoriteAlbumGateway,
@@ -161,6 +165,7 @@ class MusicApp extends StatelessWidget {
   final ArtistAlbumGateway artistAlbumGateway;
   final RecommendedPlaylistGateway recommendedPlaylistGateway;
   final NewAlbumGateway newAlbumGateway;
+  final NewSongGateway newSongGateway;
   final RankingGateway rankingGateway;
   final RadarGateway radarGateway;
   final FavoriteAlbumGateway favoriteAlbumGateway;
@@ -193,6 +198,7 @@ class MusicApp extends StatelessWidget {
         artistAlbumGateway: artistAlbumGateway,
         recommendedPlaylistGateway: recommendedPlaylistGateway,
         newAlbumGateway: newAlbumGateway,
+        newSongGateway: newSongGateway,
         rankingGateway: rankingGateway,
         radarGateway: radarGateway,
         favoriteAlbumGateway: favoriteAlbumGateway,
@@ -236,6 +242,7 @@ class LoginPage extends StatefulWidget {
     required this.artistAlbumGateway,
     required this.recommendedPlaylistGateway,
     required this.newAlbumGateway,
+    required this.newSongGateway,
     required this.rankingGateway,
     required this.radarGateway,
     required this.favoriteAlbumGateway,
@@ -261,6 +268,7 @@ class LoginPage extends StatefulWidget {
   final ArtistAlbumGateway artistAlbumGateway;
   final RecommendedPlaylistGateway recommendedPlaylistGateway;
   final NewAlbumGateway newAlbumGateway;
+  final NewSongGateway newSongGateway;
   final RankingGateway rankingGateway;
   final RadarGateway radarGateway;
   final FavoriteAlbumGateway favoriteAlbumGateway;
@@ -316,6 +324,7 @@ class _LoginPageState extends State<LoginPage> {
             artistAlbumGateway: widget.artistAlbumGateway,
             recommendedPlaylistGateway: widget.recommendedPlaylistGateway,
             newAlbumGateway: widget.newAlbumGateway,
+            newSongGateway: widget.newSongGateway,
             rankingGateway: widget.rankingGateway,
             radarGateway: widget.radarGateway,
             favoriteAlbumGateway: widget.favoriteAlbumGateway,
