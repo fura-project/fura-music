@@ -31,6 +31,78 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets(
+    'follows active lines until manual scrolling and resets per track',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 560);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final controller = LyricController(
+        _ScriptedGateway([
+          _ImmediateOperation(_longLyrics()),
+          _ImmediateOperation(_longLyrics(prefix: 'replacement')),
+        ]),
+      );
+      await controller.load(_track);
+      controller.updatePositionMs(250);
+      await _pumpPanel(tester, controller);
+      await tester.pumpAndSettle();
+
+      controller.updatePositionMs(8250);
+      await tester.pumpAndSettle();
+      final list = find.byKey(const ValueKey('lyrics-line-list'));
+      final lineEight = find.byKey(const ValueKey('lyrics-line-8'));
+      expect(lineEight, findsOneWidget);
+      expect(tester.getRect(lineEight).overlaps(tester.getRect(list)), isTrue);
+      expect(_scrollOffset(tester, list), greaterThan(0));
+
+      await tester.drag(list, const Offset(0, 180));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('lyrics-resume-following')),
+        findsOneWidget,
+      );
+      final pausedOffset = _scrollOffset(tester, list);
+
+      controller.updatePositionMs(9250);
+      await tester.pumpAndSettle();
+      expect(_scrollOffset(tester, list), closeTo(pausedOffset, 0.1));
+
+      await tester.tap(find.byKey(const ValueKey('lyrics-resume-following')));
+      await tester.pumpAndSettle();
+      final lineNine = find.byKey(const ValueKey('lyrics-line-9'));
+      expect(lineNine, findsOneWidget);
+      expect(tester.getRect(lineNine).overlaps(tester.getRect(list)), isTrue);
+      expect(
+        find.byKey(const ValueKey('lyrics-resume-following')),
+        findsNothing,
+      );
+
+      await tester.drag(list, const Offset(0, 180));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('lyrics-resume-following')),
+        findsOneWidget,
+      );
+      await controller.load(_replacementTrack);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('lyrics-resume-following')),
+        findsNothing,
+      );
+      final firstReplacementLine = find.byKey(const ValueKey('lyrics-line-0'));
+      expect(firstReplacementLine, findsOneWidget);
+      expect(
+        tester.getRect(firstReplacementLine).overlaps(tester.getRect(list)),
+        isTrue,
+      );
+
+      controller.dispose();
+    },
+  );
+
   testWidgets('shows loading then an honest unavailable state', (tester) async {
     final pending = _PendingOperation();
     final controller = LyricController(_ScriptedGateway([pending]));
@@ -126,6 +198,20 @@ const _track = PlaylistTrackSummary(
   artistNames: ['Fixture artist'],
 );
 
+const _replacementTrack = PlaylistTrackSummary(
+  providerId: 'qq-music',
+  opaqueId: 'track:replacement',
+  title: 'Replacement fixture track',
+  artistNames: ['Fixture artist'],
+);
+
+double _scrollOffset(WidgetTester tester, Finder list) => tester
+    .state<ScrollableState>(
+      find.descendant(of: list, matching: find.byType(Scrollable)),
+    )
+    .position
+    .pixels;
+
 LyricLoadResult _success() => LyricLoadResult(
   lyrics: SynchronizedLyrics([
     SynchronizedLyricLine(
@@ -139,6 +225,18 @@ LyricLoadResult _success() => LyricLoadResult(
         TimedLyricSegment(text: 'line', startMs: 1500, durationMs: 500),
       ],
     ),
+  ]),
+);
+
+LyricLoadResult _longLyrics({String prefix = 'line'}) => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    for (var index = 0; index < 12; index += 1)
+      SynchronizedLyricLine(
+        text: '$prefix $index',
+        startMs: index * 1000,
+        durationMs: 1000,
+        segments: const [],
+      ),
   ]),
 );
 

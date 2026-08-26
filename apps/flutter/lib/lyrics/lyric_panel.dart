@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 
@@ -172,27 +175,154 @@ class LyricPanel extends StatelessWidget {
   };
 }
 
-class _LyricContent extends StatelessWidget {
+class _LyricContent extends StatefulWidget {
   const _LyricContent({required this.controller, super.key});
 
   final LyricController controller;
 
   @override
+  State<_LyricContent> createState() => _LyricContentState();
+}
+
+class _LyricContentState extends State<_LyricContent> {
+  final ScrollController _scrollController = ScrollController();
+  SynchronizedLyrics? _lastLyrics;
+  int? _lineKeyIndex;
+  GlobalKey? _activeLineKey;
+  int? _lastActiveLineIndex;
+  int _followAttempt = 0;
+  bool _following = true;
+
+  @override
   Widget build(BuildContext context) {
-    final lines = controller.lyrics!.lines;
-    final activeLineIndex = controller.activeSelection?.lineIndex;
-    return ListView.builder(
-      key: const ValueKey('lyrics-line-list'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      itemCount: lines.length,
-      itemBuilder: (context, index) => _LyricLine(
-        key: ValueKey('lyrics-line-$index'),
-        line: lines[index],
-        lineIndex: index,
-        active: index == activeLineIndex,
-        positionMs: controller.positionMs,
-      ),
+    final lyrics = widget.controller.lyrics!;
+    final lines = lyrics.lines;
+    final activeLineIndex = widget.controller.activeSelection?.lineIndex;
+    if (!identical(lyrics, _lastLyrics)) {
+      _lastLyrics = lyrics;
+      _lineKeyIndex = null;
+      _activeLineKey = null;
+      _lastActiveLineIndex = null;
+      _followAttempt += 1;
+      _following = true;
+    }
+    if (activeLineIndex != _lastActiveLineIndex) {
+      _lastActiveLineIndex = activeLineIndex;
+      if (_following && activeLineIndex != null) {
+        _scheduleFollow(activeLineIndex, lines.length);
+      }
+    }
+
+    return Stack(
+      children: [
+        NotificationListener<UserScrollNotification>(
+          onNotification: _onUserScroll,
+          child: ListView.builder(
+            key: const ValueKey('lyrics-line-list'),
+            controller: _scrollController,
+            padding: EdgeInsets.fromLTRB(16, 20, 16, _following ? 20 : 88),
+            itemCount: lines.length,
+            itemBuilder: (context, index) {
+              final line = _LyricLine(
+                key: ValueKey('lyrics-line-$index'),
+                line: lines[index],
+                lineIndex: index,
+                active: index == activeLineIndex,
+                positionMs: widget.controller.positionMs,
+              );
+              if (index != activeLineIndex) return line;
+              return KeyedSubtree(key: _lineKey(index), child: line);
+            },
+          ),
+        ),
+        if (!_following)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 16,
+            child: Center(
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('lyrics-resume-following'),
+                onPressed: _resumeFollowing,
+                icon: const Icon(Icons.my_location_rounded),
+                label: const Text('Follow current line'),
+              ),
+            ),
+          ),
+      ],
     );
+  }
+
+  GlobalKey _lineKey(int index) {
+    if (_lineKeyIndex != index) {
+      _lineKeyIndex = index;
+      _activeLineKey = GlobalKey(debugLabel: 'line-$index');
+    }
+    return _activeLineKey!;
+  }
+
+  bool _onUserScroll(UserScrollNotification notification) {
+    if (_following && notification.direction != ScrollDirection.idle) {
+      _followAttempt += 1;
+      setState(() => _following = false);
+    }
+    return false;
+  }
+
+  void _resumeFollowing() {
+    final activeLineIndex = widget.controller.activeSelection?.lineIndex;
+    setState(() => _following = true);
+    if (activeLineIndex != null) {
+      _scheduleFollow(activeLineIndex, widget.controller.lyrics!.lines.length);
+    }
+  }
+
+  void _scheduleFollow(int lineIndex, int lineCount) {
+    final attempt = ++_followAttempt;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_following || attempt != _followAttempt) return;
+      unawaited(_followLine(lineIndex, lineCount, attempt));
+    });
+  }
+
+  Future<void> _followLine(int lineIndex, int lineCount, int attempt) async {
+    var targetContext = _lineKey(lineIndex).currentContext;
+    if (targetContext == null && _scrollController.hasClients) {
+      final position = _scrollController.position;
+      final fraction = lineCount <= 1 ? 0.0 : lineIndex / (lineCount - 1);
+      final estimatedOffset = (position.maxScrollExtent * fraction).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      await _scrollController.animateTo(
+        estimatedOffset,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+      if (!mounted || !_following || attempt != _followAttempt) return;
+      await WidgetsBinding.instance.endOfFrame;
+      targetContext = _lineKey(lineIndex).currentContext;
+    }
+    if (targetContext == null ||
+        !targetContext.mounted ||
+        !mounted ||
+        !_following ||
+        attempt != _followAttempt) {
+      return;
+    }
+    await Scrollable.ensureVisible(
+      targetContext,
+      alignment: 0.45,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _followAttempt += 1;
+    _scrollController.dispose();
+    super.dispose();
   }
 }
 
