@@ -4,7 +4,7 @@
 
 M1 is **not checkpoint-ready**.
 
-The implementation now forms the intended in-process vertical slice from authentication through word-timed lyric presentation, and every unblocked offline/platform validation passes. Android ARM64 release provides the required mobile build evidence, while Android 16 x64 now provides bounded FFI, vault, and local-audio runtime evidence. The review does not promote those smokes or fixture/widget evidence into a real-user claim: this checkout has not completed an authorized real-account flow across the whole slice.
+The implementation now forms the intended in-process vertical slice from authentication through word-timed lyric presentation, and every unblocked offline/platform validation passes. Android ARM64 release provides the required mobile build evidence, while Android 16 x64 now provides bounded FFI, vault, and local-audio runtime evidence. On 2026-08-26 the user reported that an authorized WeChat scan signed in successfully and populated a post-login song list. That secret-safe observation is real-user evidence for the beginning of the slice, but the checkout has not completed the whole real-account flow.
 
 This document is a readiness review, not the M1 checkpoint.
 
@@ -36,8 +36,8 @@ The actual application entrypoint also launched to the signed-out QQ Music surfa
 
 | Acceptance criterion | Status | Current evidence | Evidence still required |
 | --- | --- | --- | --- |
-| Sign in, restart, and regain the appropriate credential state | Implemented; not demonstrated end to end | Cross-validated protocol, offline lifecycle/rejection tests, and live Linux vault round trip | Authorized QR success, persisted credential, process restart, and upstream restore acceptance with a real account |
-| Browse playlists, open one, play a track, and manage the queue | Implemented; not demonstrated against a real account | Provider/Bridge fixtures, 103 Flutter tests, positional queue tests, and real Linux playback adapter integration | One authorized account path through real library/detail/media responses and playable QQ source |
+| Sign in, restart, and regain the appropriate credential state | Partially demonstrated | Cross-validated protocol, offline lifecycle/rejection tests, live Linux vault round trip, and user-reported authorized QR success | Full process restart and upstream restore acceptance with the same real account |
+| Browse playlists, open one, play a track, and manage the queue | Post-login list retrieval demonstrated; detail/playback unverified | User-reported populated song list, Provider/Bridge fixtures, 103 Flutter tests, positional queue tests, and real Linux playback adapter integration | Real playlist/detail navigation, playable QQ source, and queue operations |
 | Synchronized lyrics and basic word-level experience | Partially live-proven; full chain unverified | Anonymous live QQ request/decrypt/QRC parse, offline Provider/Bridge mapping, real position stream, and narrow/wide lyric widgets | Authenticated current-track lyric load and playback-synchronized observation in the real account flow |
 | Flutter and Rust stay in one process behind a thin typed boundary | Pass on Linux and Android x64; ARM64 package/load/start pass under AVD translation | Linux and Android packaged typed-FFI calls; native x64 and translated ARM64 signed-out startup; both APK paths contain the requested Rust bridge; source dependency review | Physical-device coverage remains a release-quality follow-up, not an M1 build blocker |
 | QQ protocol/mapping has offline regression coverage and live tests stay separate | Pass | 149 offline Rust tests; four live tests explicitly gated and ignored by default | Future protocol changes must retain this separation |
@@ -72,5 +72,5 @@ No new technical debt or Human Decision was created. The Android result confirms
 
 ## Exact remaining M1 work
 
-1. With explicit account authorization, perform a secret-safe smoke from QR sign-in through persistence/restart verification, playlists, detail, media playback/queue, and synchronized word-timed lyrics. Do not retain raw responses, credentials, source URLs, identifiers, or lyric content.
+1. Continue the authorized secret-safe smoke from the already successful QR sign-in and post-login list: fully close/relaunch for persistence and upstream restore verification, then exercise playlist/detail, media playback/queue, and synchronized word-timed lyrics. Do not retain raw responses, credentials, source URLs, identifiers, or lyric content.
 2. Rerun the checkpoint baseline, accurately retain or close debt, write the M1 checkpoint, then read M2. Do not start M2 merely because the implementation exists.

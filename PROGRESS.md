@@ -5,7 +5,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 # Completed Recently
 
 - Bootstrapped the governance documents, cross-platform Flutter shell, Rust workspace, generated in-process typed bridge, QQ Music client seam, provider boundary, offline tests, and Linux release/integration path from the original license-only repository.
-- Cross-validated and implemented the WeChat QR bootstrap, polling, OAuth-code exchange, bounded transport, one 180-second lifecycle, exact cancellation, stale-result suppression, and provider-neutral authentication contract. Live no-account probes proved QR waiting and invalid-code rejection only; successful real-account login remains unverified.
+- Cross-validated and implemented the WeChat QR bootstrap, polling, OAuth-code exchange, bounded transport, one 180-second lifecycle, exact cancellation, stale-result suppression, and provider-neutral authentication contract. Live no-account probes proved QR waiting and invalid-code rejection; on 2026-08-26 the user separately reported a successful authorized WeChat scan and populated post-login song list without sharing account material.
 - Built an adaptive Material 3 login experience and Dart controller with truthful waiting, scanned, reconnecting, terminal, persistence, retry, cancellation, and narrow-layout states.
 - Added Rust-owned versioned credential serialization and validation, one opaque Bridge handoff, `flutter_secure_storage` platform adapters, Android backup protection, Apple Keychain entitlements, and explicit storage-failure presentation.
 - Implemented startup vault restore plus server verification using the cross-validated user-info RPC. Only explicit rejection clears the current credential and vault; transient failures retain a retryable candidate, and exact attempt IDs prevent stale promotion.
@@ -93,19 +93,20 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - APK inspection exposed two latent ARM64 packaging defects. A transitive JNI plugin contributed isolated x64/ARMv7 libraries, causing Android to select x64 and crash on the AArch64 Flutter engine; the Rust bridge also retained an unresolved `__aarch64_cas4_acq_rel`. Both were reproduced on the AVD before repair.
 - Aligned Gradle ABI filters with Flutter's explicit target platform, linked the NDK AArch64 compiler-runtime archive, and added a build failure gate for unresolved `__aarch64_*` symbols. The clean 23.0 MB release APK now contains the complete four-library ARM64 set only, has no unresolved compiler-runtime symbol, retains four 0x4000-aligned Rust LOAD segments, and passes APK v2 plus `zipalign -P 16` verification.
 - Installed the corrected ARM64 APK on the Android 16 AVD's ARM64 translation path. Android selected `arm64-v8a`; Flutter, JNI, and Rust loaded, and the real signed-out QQ Music surface rendered. A native x64 debug rebuild then contained only x64 libraries and rendered the same entrypoint. These smokes prove both packaging paths on this AVD, not physical ARM64 behavior, account flow, remote media, or audio focus.
+- Began the secret-safe real-account acceptance smoke through user-operated Linux UI actions. The user reported that WeChat QR sign-in succeeded and that the application correctly fetched and rendered a song list. No credential, account identifier, response body, source URI, or song content was supplied to or retained by the project. This is user-reported acceptance evidence for successful QR exchange and post-login data retrieval, not evidence for restart restore, playlist-detail navigation, playback/queue, or synchronized lyrics.
 
 # In Progress
 
-- **Idle — no legitimate work available.** Every M1 implementation, offline/platform validation, architecture review, scope review, and currently available Android build/runtime check that can run without account authority is complete. The checkpoint needs an explicitly authorized, secret-safe real-account vertical-slice smoke; credentials and user actions must not be inferred from autonomous scope. Resume when that authorization and a user able to scan the short-lived QR code are available.
+- The authorized, secret-safe real-account smoke is partially complete through QR success and post-login list retrieval. The remaining acceptance observations require user-operated account UI actions; no autonomous code or protocol change is justified by the successful result so far.
 
 # Next Candidates
 
-1. Run an authorized, secret-safe real-account vertical-slice smoke from QR sign-in through restore, library, playback/queue, and synchronized lyrics.
+1. Continue the same secret-safe smoke: fully close and relaunch the application to verify upstream credential restore, open a playlist/detail, start a track, exercise queue navigation, and observe synchronized word-timed lyrics.
 2. Complete the M1 checkpoint only after the Roadmap criteria and remaining evidence are actually satisfied.
 
 # Blockers
 
-- The code and fixture/widget evidence cover the complete user journey, but this checkout has not completed an authorized real QQ Music account flow from QR exchange through restored library, media playback, and synchronized lyrics. The Roadmap's user-facing criteria therefore remain unverified end to end.
+- User-only real-account actions remain for process-restart restore, playlist detail, QQ media playback/queue, and synchronized lyrics. The Roadmap's user-facing criteria therefore remain unverified end to end even though QR exchange and post-login list retrieval have succeeded.
 
 # Pending Human Decisions
 
@@ -115,9 +116,9 @@ None.
 
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
 - Credential handling can create account and privacy risk; real-account probes and user-derived fixtures require deliberate, secret-safe execution.
-- Startup server verification is cross-validated and fixture-tested but has not accepted a real account credential in this checkout; the live-success evidence gap remains separate from TD-003's completed implementation.
+- Startup server verification is cross-validated and fixture-tested but has not yet been observed after a full process restart with the authorized real account; this evidence gap remains separate from TD-003's completed implementation.
 - Linux and Android x64 runtime write/read/delete are verified with cleanup; Apple and Windows paths remain unbuilt and runtime-unverified here (TD-004).
-- A successful credential exchange is cross-validated and fixture-tested but has not been exercised against a real authorized account in this checkout.
+- Successful credential exchange now has user-reported real-account acceptance evidence, but no secret-bearing trace or independently retained response exists by design.
 - The complete playlist collection requires `encryptUin`; credentials missing it fail before library transport instead of showing only created playlists. Real successful-login coverage has not yet proven this field on every login shape.
 - Ordinary detail passed a current public no-account probe, but authenticated ordinary and liked-songs success remain cross-validated/fixture-tested rather than proven with this checkout's real account.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
