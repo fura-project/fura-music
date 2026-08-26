@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "Adaptive immersive now playing"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -48,11 +48,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Current Track catalog navigation is complete; the next step is a fresh global ranking across QQ core-product coverage, reliability, platform evidence, risks, and evidence-blocked candidates.
+- M3 remains active. A global product-completeness audit selected the explicit `PROJECT.md` immersive now-playing requirement: the current app has a capable bottom bar and lyric modal but no retained full current-Track surface. The finite task is one presentation-only adaptive page over the existing queue/playback/lyric owner; Favorite Artists and Track availability remain evidence-blocked.
 
 # Next Candidates
 
-1. Run a fresh M3 discovery/global ranking; Favorite Artists and Track availability remain candidates only after their documented protocol evidence gaps are resolved.
+1. Implement a retained adaptive immersive now-playing page over the existing shared queue/playback/lyric state, with exact return, Track replacement, empty-queue, compact, desktop, pointer/touch, and keyboard regressions.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
