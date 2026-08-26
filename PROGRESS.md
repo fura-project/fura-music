@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "M4.5 Adaptive Queue information hierarchy"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -62,12 +62,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The bounded M4.4 Search/Discover state-language work is complete. M4.5 playback/queue/lyrics now requires a fresh evidence-led discovery before selecting a finite product task; the existing single owner and real-account evidence boundary remain fixed.
+- The bounded M4.5 discovery found the highest-value finite gap in Queue rows: position, Album, and duration already exist in the provider-neutral Track but are not presented, and compact/desktop density is identical. The adaptive Queue information hierarchy is selected without changing the single queue/playback/lyric owner.
 
 # Next Candidates
 
-1. Run a bounded M4.5 playback/queue/lyrics product-surface discovery and rank at most three evidence-backed candidates.
-2. Select and implement the highest-value finite M4.5 slice without changing queue/playback/lyric ownership.
+1. Implement and validate adaptive Queue position, metadata, duration, selected/current, and remove presentation only.
+2. Re-rank the deferred Expanded Now Playing transport hierarchy and Lyrics state-language candidates after the Queue slice.
 3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
 
 # Blockers
