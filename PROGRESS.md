@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: "M4.4 Shared Discover content states"
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -57,16 +57,17 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 - Implemented the sixth M4 slice: authenticated Radar and typed New songs now reuse the established dense Material Track tile, adding predictable one-based position, artwork semantics/fallback, Album metadata, truthful duration, and compact/desktop density while retaining exact play/queue keys, callbacks, pagination/category state, and the single queue owner. Direct 360 px user-path regressions, strict Dart checks, all 299 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the seventh M4 slice: Search and Discover now share one official-Material adaptive secondary selector. Below 680 px a single labeled, keyboard-openable menu exposes every typed destination without horizontal discovery or overflow; medium/desktop keeps efficient visible segmentation. Exact query/controller state, lazy loading, return state, keys, app-shell navigation, and playback ownership remain unchanged. A direct regression caught and fixed an initially nested compact-button Row overflow; strict Dart checks, all 301 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the eighth M4 slice: Track, Artist, Album, and Playlist Search now reuse the shared bounded Material loading and content-state panels while retaining exact type-specific copy, keys, edit/retry eligibility, controller/query/result/pagination state, and one explicit error live region. Loading has a type-specific assistive label, and 360 px regressions cover all idle types plus Track loading, empty, and error transitions. Strict Dart checks, all 304 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
+- Implemented the ninth M4 slice: recommended Playlists, ranking groups, authenticated Radar, regional New Albums, and typed New Songs now reuse the shared bounded Material loading/content-state panels while preserving exact keys, copy, retry/sign-in/reload actions, Radar credential distinctions, and the New Album/Song context selectors. Loading labels identify the active section; errors retain one live region. Direct 360 px regressions cover loading, all five empty states, contextual selector reachability, and Radar rejection recovery. Strict Dart checks, all 307 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The post-Search global ranking found no new correctness, playback, Provider, credential, platform, or debt-trigger task that outranks the remaining M4.4 state-family gap. A finite Discover-only state migration is selected with Radar recovery and New Album/Song selectors explicitly preserved.
+- The bounded M4.4 Search/Discover state-language work is complete. M4.5 playback/queue/lyrics now requires a fresh evidence-led discovery before selecting a finite product task; the existing single owner and real-account evidence boundary remain fixed.
 
 # Next Candidates
 
-1. Implement and validate shared loading/empty/error presentation for the five Discover sections only.
-2. Run a bounded M4.5 playback/queue/lyrics discovery after the Discover state family closes.
+1. Run a bounded M4.5 playback/queue/lyrics product-surface discovery and rank at most three evidence-backed candidates.
+2. Select and implement the highest-value finite M4.5 slice without changing queue/playback/lyric ownership.
 3. Preserve the user-operated M1 evidence gap without automating access to stored credentials.
 
 # Blockers

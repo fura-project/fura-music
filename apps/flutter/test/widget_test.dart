@@ -19,6 +19,7 @@ import 'package:flutter/material.dart'
         NavigationRail,
         Scrollable,
         ScrollableState,
+        Semantics,
         TextField,
         TextInputAction,
         Theme;
@@ -31,6 +32,7 @@ import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
@@ -556,6 +558,178 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('labels the compact Discover loading state', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final recommendations = _ControlledWidgetRecommendedPlaylistGateway();
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        recommendedPlaylistGateway: recommendations,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('recommendations-loading')),
+      findsOneWidget,
+    );
+    expect(find.byType(MusicLoadingPanel), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('recommendations-loading')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label == 'Loading Recommended Playlists',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    recommendations.complete(const RecommendedPlaylistPageResult());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('recommendations-empty')), findsOneWidget);
+  });
+
+  testWidgets('all compact Discover sections use shared empty states', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(),
+        ),
+        rankingGateway: _WidgetRankingGateway(
+          const RankingGroupResult(),
+          const RankingTrackPageResult(),
+        ),
+        radarGateway: _WidgetRadarGateway(const RadarTrackPageResult(page: 1)),
+        newAlbumGateway: _WidgetNewAlbumGateway(
+          const NewAlbumPageResult(region: NewAlbumRegion.mainlandChina),
+        ),
+        newSongGateway: _WidgetNewSongGateway({
+          NewSongCategory.latest: const NewSongResult(
+            category: NewSongCategory.latest,
+          ),
+        }),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+    await tester.pumpAndSettle();
+
+    for (final (type, stateKey) in [
+      ('playlists', 'recommendations-empty'),
+      ('rankings', 'rankings-empty'),
+      ('radar', 'radar-empty'),
+      ('new-albums', 'new-albums-empty'),
+      ('new-songs', 'new-songs-empty'),
+    ]) {
+      if (type != 'playlists') {
+        await _selectAdaptiveSection(
+          tester,
+          control: 'discover-type-selector',
+          item: 'discover-type-$type',
+        );
+      }
+      expect(find.byKey(ValueKey(stateKey)), findsOneWidget);
+      expect(find.byType(MusicContentStatePanel), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+
+    expect(
+      find.byKey(const ValueKey('new-song-category-selector')),
+      findsOneWidget,
+    );
+    await _selectAdaptiveSection(
+      tester,
+      control: 'discover-type-selector',
+      item: 'discover-type-new-albums',
+    );
+    expect(
+      find.byKey(const ValueKey('new-album-region-selector')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Radar rejection keeps one live region and sign-in recovery', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(),
+        ),
+        radarGateway: _WidgetRadarGateway(
+          const RadarTrackPageResult(failure: RadarFailure.credentialRejected),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+    await tester.pumpAndSettle();
+    await _selectAdaptiveSection(
+      tester,
+      control: 'discover-type-selector',
+      item: 'discover-type-radar',
+    );
+
+    expect(find.byKey(const ValueKey('radar-error')), findsOneWidget);
+    expect(find.byType(MusicContentStatePanel), findsOneWidget);
+    expect(find.text('Sign in again'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('radar-error')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics && widget.properties.liveRegion == true,
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Sign in again'));
+    await tester.pumpAndSettle();
+    expect(find.text('Continue with WeChat'), findsOneWidget);
+  });
 
   testWidgets('activates desktop primary navigation from the keyboard', (
     tester,
@@ -3681,6 +3855,33 @@ class _WidgetRecommendedPlaylistOperation
 
   @override
   Future<RecommendedPlaylistPageResult> run() async => result;
+}
+
+class _ControlledWidgetRecommendedPlaylistGateway
+    implements RecommendedPlaylistGateway {
+  final Completer<RecommendedPlaylistPageResult> _completer = Completer();
+
+  void complete(RecommendedPlaylistPageResult result) =>
+      _completer.complete(result);
+
+  @override
+  RecommendedPlaylistPageLoadOperation beginLoad({
+    required int offset,
+    required int size,
+  }) => _FutureWidgetRecommendedPlaylistOperation(_completer.future);
+}
+
+class _FutureWidgetRecommendedPlaylistOperation
+    implements RecommendedPlaylistPageLoadOperation {
+  const _FutureWidgetRecommendedPlaylistOperation(this.result);
+
+  final Future<RecommendedPlaylistPageResult> result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<RecommendedPlaylistPageResult> run() => result;
 }
 
 class _WidgetNewAlbumGateway implements NewAlbumGateway {

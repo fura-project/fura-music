@@ -38,3 +38,9 @@ The finite Search content-state migration completed and `PROGRESS.md` returned a
 ## Selection
 
 Shared Discover content states are the highest-value legal task. The slice completes the explicit Search/Discover state-language family using existing presentation components, while preserving every credential-aware and contextual action at the page boundary.
+
+## Outcome
+
+Completed as a Discover-only presentation slice. Recommended Playlists, ranking groups, Radar, New Albums, and New Songs now reuse `MusicLoadingPanel` and `MusicContentStatePanel`; exact keys, copy, retry/sign-in/reload actions, Radar credential distinctions, controllers, and lazy retained state remain page-owned. The New Album region and New Song category selectors continue to wrap loading, empty, error, and content states.
+
+Regressions cover the labeled compact recommendation loading state, all five 360 px empty states, both contextual selectors, and Radar credential rejection with exactly one live region plus the existing sign-in recovery. Strict Dart formatting/analysis, all 307 Flutter tests, Rust formatting, 267 offline Rust tests, strict all-target Clippy, Linux x64 Release, and packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain gated and ignored; no stored credential or live service was accessed, so this does not close the M1 real-account playback evidence gap.

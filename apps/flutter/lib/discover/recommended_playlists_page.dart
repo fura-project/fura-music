@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -183,17 +184,17 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   }
 
   Widget _playlistBody() => switch (_controller.stage) {
-    RecommendedPlaylistStage.loading => const Center(
+    RecommendedPlaylistStage.loading => const MusicLoadingPanel(
       key: ValueKey('recommendations-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading Recommended Playlists',
     ),
-    RecommendedPlaylistStage.empty => const _RecommendationMessage(
+    RecommendedPlaylistStage.empty => const MusicContentStatePanel(
       key: ValueKey('recommendations-empty'),
       icon: Icons.explore_off_outlined,
       title: 'No recommendations right now',
       detail: 'QQ Music returned an empty recommended-playlist page.',
     ),
-    RecommendedPlaylistStage.error => _RecommendationMessage(
+    RecommendedPlaylistStage.error => MusicContentStatePanel(
       key: const ValueKey('recommendations-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load recommendations',
@@ -219,17 +220,17 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   };
 
   Widget _rankingBody() => switch (_rankingController.stage) {
-    RankingGroupStage.loading => const Center(
+    RankingGroupStage.loading => const MusicLoadingPanel(
       key: ValueKey('rankings-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading QQ Music Rankings',
     ),
-    RankingGroupStage.empty => const _RecommendationMessage(
+    RankingGroupStage.empty => const MusicContentStatePanel(
       key: ValueKey('rankings-empty'),
       icon: Icons.leaderboard_outlined,
       title: 'No rankings right now',
       detail: 'QQ Music returned no current ranking groups.',
     ),
-    RankingGroupStage.error => _RecommendationMessage(
+    RankingGroupStage.error => MusicContentStatePanel(
       key: const ValueKey('rankings-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load rankings',
@@ -250,17 +251,17 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   };
 
   Widget _radarBody() => switch (_radarController.stage) {
-    RadarStage.loading => const Center(
+    RadarStage.loading => const MusicLoadingPanel(
       key: ValueKey('radar-loading'),
-      child: CircularProgressIndicator(),
+      label: 'Loading QQ Music Radar',
     ),
-    RadarStage.empty => const _RecommendationMessage(
+    RadarStage.empty => const MusicContentStatePanel(
       key: ValueKey('radar-empty'),
       icon: Icons.radar_rounded,
       title: 'No Radar Tracks right now',
       detail: 'QQ Music returned an empty Radar Track page.',
     ),
-    RadarStage.error => _RecommendationMessage(
+    RadarStage.error => MusicContentStatePanel(
       key: const ValueKey('radar-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load Radar',
@@ -289,13 +290,13 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       key: const ValueKey('new-albums-loading'),
       region: _newAlbumController.region,
       onRegionSelected: _newAlbumController.selectRegion,
-      child: const Center(child: CircularProgressIndicator()),
+      child: const MusicLoadingPanel(label: 'Loading New Albums'),
     ),
     NewAlbumStage.empty => _NewAlbumShell(
       key: const ValueKey('new-albums-empty'),
       region: _newAlbumController.region,
       onRegionSelected: _newAlbumController.selectRegion,
-      child: const _RecommendationMessage(
+      child: const MusicContentStatePanel(
         icon: Icons.album_outlined,
         title: 'No new albums right now',
         detail: 'QQ Music returned an empty page for this region.',
@@ -305,7 +306,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       key: const ValueKey('new-albums-error'),
       region: _newAlbumController.region,
       onRegionSelected: _newAlbumController.selectRegion,
-      child: _RecommendationMessage(
+      child: MusicContentStatePanel(
         icon: Icons.cloud_off_rounded,
         title: 'Couldn’t load new albums',
         detail: newAlbumFailureCopy(_newAlbumController.failure),
@@ -337,13 +338,13 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       key: const ValueKey('new-songs-loading'),
       category: _newSongController.category,
       onCategorySelected: _newSongController.selectCategory,
-      child: const Center(child: CircularProgressIndicator()),
+      child: const MusicLoadingPanel(label: 'Loading New Songs'),
     ),
     NewSongStage.empty => _NewSongShell(
       key: const ValueKey('new-songs-empty'),
       category: _newSongController.category,
       onCategorySelected: _newSongController.selectCategory,
-      child: const _RecommendationMessage(
+      child: const MusicContentStatePanel(
         icon: Icons.music_off_rounded,
         title: 'No new songs right now',
         detail: 'QQ Music returned no Tracks for this category.',
@@ -353,7 +354,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       key: const ValueKey('new-songs-error'),
       category: _newSongController.category,
       onCategorySelected: _newSongController.selectCategory,
-      child: _RecommendationMessage(
+      child: MusicContentStatePanel(
         icon: Icons.cloud_off_rounded,
         title: 'Couldn’t load new songs',
         detail: newSongFailureCopy(_newSongController.failure),
@@ -1488,50 +1489,6 @@ class _RecommendationFooter extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-    ),
-  );
-}
-
-class _RecommendationMessage extends StatelessWidget {
-  const _RecommendationMessage({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    this.action,
-    this.liveRegion = false,
-    super.key,
-  });
-
-  final IconData icon;
-  final String title;
-  final String detail;
-  final Widget? action;
-  final bool liveRegion;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Semantics(
-      container: true,
-      liveRegion: liveRegion,
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(detail, textAlign: TextAlign.center),
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
-        ),
-      ),
     ),
   );
 }
