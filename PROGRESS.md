@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: GLOBAL_RANKING
+  current_task: "M4.4 Shared Search content states"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -60,13 +60,13 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Three consecutive bounded presentation slices are complete (catalog header, Discover Track rows, and adaptive secondary selection). The required whole-project ranking must now compare the remaining M4 content-state gap against playback reliability, platform evidence, blockers, risks, and triggered debt before another presentation task begins.
+- The required whole-project ranking found no new correctness, playback, Provider, credential, platform, or debt-trigger task that outranks the remaining explicit M4.4 state gap. A finite Search-only state migration is selected; Discover credential-aware states remain separate.
 
 # Next Candidates
 
-1. Perform the required whole-project ranking across Roadmap, Risks, Blockers, TECH_DEBT triggers, playback reliability, and platform evidence.
-2. Keep the bounded shared Search/Discover content-state migration as the remaining M4.4 candidate if it still ranks first on evidence.
-3. Keep selected/current Track presentation deferred until a non-frame-driven listener exists, and preserve the locally blocked M1 acceptance evidence.
+1. Implement and validate shared idle/loading/empty/error presentation for all four Search types only.
+2. Re-rank the separate Discover content-state family after Search completes.
+3. Preserve the user-operated M1 evidence gap and keep M4.5 playback/queue/lyrics work discovery-led rather than speculative.
 
 # Blockers
 
