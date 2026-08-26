@@ -85,7 +85,7 @@ M3 begins with bounded discovery after the M2 checkpoint. Each slice requires di
 ### Progress
 
 - **Track search:** implemented as the first finite M3 slice on 2026-08-26. Direct anonymous QQ Music protocol mapping returns provider-neutral paged Tracks through a cancellable typed Bridge. The adaptive Flutter surface owns query replacement, empty/error/retry/pagination state and hands results to the existing queue/playback path. Offline protocol, Provider, Bridge, controller, navigation, and primary UI-flow tests pass; this is not a real-account CDN playback claim.
-- **Next selection:** return to bounded discovery and rank one finite Album, Artist, Home/recommendation, richer-library, or availability slice using current evidence. Completion of Search does not automatically authorize implementing all result types or a broad catalog abstraction.
+- **Album browsing:** selected as the next finite slice after current implementation evidence and a bounded anonymous Album detail/song probe. Its boundary is Search-result Album identity → paged Album Tracks → existing queue, not full Album metadata, mutation, Artist browsing, multi-type Search, or a broad catalog abstraction.
 
 ## Later direction
 

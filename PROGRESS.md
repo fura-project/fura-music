@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "Implement Album browsing from Track search"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -31,11 +31,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active after the Track-search slice. The next task must be selected by a bounded discovery pass across the remaining authorized QQ-native directions; Album/Artist browsing and Home/recommendations remain candidates rather than implied commitments.
+- M3 discovery selected Album browsing from Track search. The finite slice preserves an optional provider-neutral Album identity on Search results, loads bounded Album-song pages directly from QQ Music, returns locally to preserved Search state, and hands Tracks to the existing queue. Album metadata expansion/mutation, Album-type search, Artist, Home, and navigation-framework work are excluded.
 
 # Next Candidates
 
-1. Run a bounded M3 discovery pass to rank the next finite QQ-native slice, starting with Album versus Artist browsing evidence and retaining Home/recommendations only if it has stronger current provenance.
+1. Implement and prove the selected Album-browsing slice across Domain, client, Provider, cancellable Bridge, adaptive Flutter state/navigation, and the existing queue.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
@@ -57,6 +57,7 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 - The successful login shape supplied the encrypted identity needed for the combined library. Other future login shapes must still fail truthfully if QQ omits it rather than silently showing a partial collection.
 - Authenticated playlist/detail navigation has user-reported acceptance evidence, but no user-derived response or identifier is retained.
 - Track-search request shape has two current independent implementation references plus one bounded anonymous coarse probe; the full response and Track content were not retained, and no authenticated search-to-playback observation has been claimed.
+- Album detail/song request shape has current implementation evidence and one bounded anonymous coarse probe. Artist discovery remains deferred because its bounded probe returned an unresolved detail code and ignored the requested song-row count.
 - The playback protocol correction has strong anonymous and offline regression evidence but is not yet an authenticated playable-source claim.
 - Unavailable, region-filtered, or otherwise greyed QQ song rows do not yet have sanitized evidence; their long-term Domain/playback representation must not be guessed during the happy-path detail mapping.
 - Current CDN dispatch returned only cleartext HTTP bases in a bounded no-account probe. Mobile playback must not globally enable cleartext traffic or silently rewrite QQ URLs before narrow platform evidence exists.
