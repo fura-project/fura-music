@@ -420,6 +420,36 @@ void main() {
     ]);
   });
 
+  testWidgets('desktop shortcuts remain active while queue dialog has focus', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('first-modal-shortcut')),
+      _ImmediateMediaOperation(_success('second-modal-shortcut')),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    await _sendControlShortcut(tester, LogicalKeyboardKey.arrowRight);
+    expect(_nowPlayingTitle(tester), 'Second track');
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paused'), findsOneWidget);
+  });
+
   testWidgets('desktop context actions preserve positional queue intent', (
     tester,
   ) async {
@@ -709,6 +739,9 @@ void main() {
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
     expect(find.text('Queue'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paused'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

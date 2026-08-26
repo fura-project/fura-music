@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 
 Future<void> showPlaybackQueue(
@@ -15,9 +16,12 @@ Future<void> showPlaybackQueue(
       showDragHandle: true,
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.72,
-        child: PlaybackQueuePanel(
+        child: PlaybackShortcuts(
           controller: controller,
-          onClose: () => Navigator.of(context).pop(),
+          child: PlaybackQueuePanel(
+            controller: controller,
+            onClose: () => Navigator.of(context).pop(),
+          ),
         ),
       ),
     );
@@ -27,9 +31,12 @@ Future<void> showPlaybackQueue(
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
-        child: PlaybackQueuePanel(
+        child: PlaybackShortcuts(
           controller: controller,
-          onClose: () => Navigator.of(context).pop(),
+          child: PlaybackQueuePanel(
+            controller: controller,
+            onClose: () => Navigator.of(context).pop(),
+          ),
         ),
       ),
     ),

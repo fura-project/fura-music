@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -13,6 +12,7 @@ import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
@@ -95,24 +95,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             onSignInAgain: widget.onSignInAgain,
           )
         : _libraryScaffold();
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.mediaPlayPause):
-            _activatePlayback,
-        const SingleActivator(LogicalKeyboardKey.space, control: true):
-            _activatePlayback,
-        const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious):
-            _rewindPlayback,
-        const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true):
-            _rewindPlayback,
-        const SingleActivator(LogicalKeyboardKey.mediaTrackNext):
-            _advancePlayback,
-        const SingleActivator(LogicalKeyboardKey.arrowRight, control: true):
-            _advancePlayback,
-        const SingleActivator(LogicalKeyboardKey.mediaStop): _stopPlayback,
-      },
-      child: Focus(autofocus: true, child: page),
-    );
+    return PlaybackShortcuts(controller: _queuePlaybackController, child: page);
   }
 
   Widget _libraryScaffold() => Scaffold(
@@ -148,32 +131,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       onSignInAgain: widget.onSignInAgain,
     ),
   );
-
-  void _activatePlayback() {
-    final playback = _queuePlaybackController.playback;
-    if (playback.canActivate) unawaited(playback.activate());
-  }
-
-  void _rewindPlayback() {
-    final playback = _queuePlaybackController.playback;
-    if (!playback.requiresAuthentication &&
-        _queuePlaybackController.hasPrevious) {
-      unawaited(_queuePlaybackController.rewind());
-    }
-  }
-
-  void _advancePlayback() {
-    final playback = _queuePlaybackController.playback;
-    if (!playback.requiresAuthentication && _queuePlaybackController.hasNext) {
-      unawaited(_queuePlaybackController.advance());
-    }
-  }
-
-  void _stopPlayback() {
-    if (_queuePlaybackController.current != null) {
-      unawaited(_queuePlaybackController.playback.stop());
-    }
-  }
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
     UserLibraryStage.loading => const _LibraryLoading(

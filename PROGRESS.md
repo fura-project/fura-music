@@ -103,6 +103,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Added a bounded foreground volume value owned by the existing Dart playback controller. It is applied before every fresh native session plays, survives queue track replacement within the authenticated surface, rejects non-finite/out-of-range values, converges after out-of-order updates, and isolates old-session failure. The adaptive control opens as a narrow bottom sheet or wide dialog and commits once on release; no persistence/settings abstraction was added. Strict analysis, 113 Flutter tests, Linux release, and native loopback volume/playback/seek pass.
 - Added current-track artwork to the compact now-playing surface using only the existing provider-neutral Track URI. Narrow/wide sizes remain bounded; resolving/loading and coarse playback errors overlay the image; absent or failed images use a local album placeholder; and an isolated image semantic label avoids merging the artwork into transport controls. Strict analysis, 114 Flutter tests, and Linux release pass without a cache dependency or Provider change.
 - Added the first adaptive Track context surface without expanding queue semantics: desktop right-click, the Context Menu key or Shift+F10, and mobile long press expose only “Play from here” and “Add to queue”. The former snapshots the exact loaded rows and index; the latter delegates unchanged Track data to the Rust-backed queue, preserves duplicate positions, and does not restart a nonempty queue's current track. Focus ownership, success/failure feedback, desktop/mobile presentation, empty-queue activation, and duplicate positional behavior are covered by the 117-test Flutter suite; strict analysis and Linux release pass.
+- Fixed transport shortcuts disappearing when an adaptive queue Dialog or BottomSheet took focus. The existing mappings and authentication guards now live in one reusable Flutter shortcut scope shared by the authenticated page and both queue routes; no global keyboard listener or duplicate playback state was added. Wide modal navigation/play-pause and narrow modal play-pause regressions bring the Flutter suite to 118 tests; strict analysis and Linux release pass.
 
 # In Progress
 
@@ -110,7 +111,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 
 # Next Candidates
 
-1. Inspect the authenticated queue and compact-player surfaces for one bounded, demonstrable keyboard/accessibility or failure-recovery gap before selecting the next M2 implementation; do not add queue semantics that the Domain does not already support.
+1. Verify whether the same proven modal-focus shortcut gap affects the existing lyric and volume routes; if reproduced, compose the shared shortcut scope around those routes without coupling lyric/volume state to queue ownership.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Complete the M1 checkpoint only after its Roadmap criteria and remaining evidence are actually satisfied; independent M2 work does not make that evidence implicit.
 
