@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: "M4.1 Default Material foundation"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -53,13 +53,14 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M4 bounded discovery is active. It is auditing the current Theme, authenticated shell, major browsing/playback journeys, adaptive widths, light/dark behavior, and existing keyboard/pointer/touch/semantic regressions before selecting the first finite slice.
+- M4 bounded discovery audited Theme, authenticated shell, major browsing/playback journeys, adaptive widths, light/dark behavior, and existing keyboard/pointer/touch/semantic regressions. It selected a finite Default Material foundation before the higher-risk adaptive App Shell.
+- Current finite task: centralize the official-Flutter Material theme and a small set of repeated tokens, establish conservative component defaults, and migrate only Authentication plus the Library collection as representative consumers. App Shell, wholesale row/state migration, theme personas, and framework changes are explicit non-goals.
 
 # Next Candidates
 
-1. Complete the bounded M4 UI inventory, rank at most three candidates, and select the highest-value finite Material product slice.
-2. Preserve the existing user-operated M1 acceptance request for a convenient later observation; never automate access to stored account material.
-3. Keep Track availability/quality, heterogeneous Home, offline/cache, and unavailable platform validation evidence-gated rather than folding them into M4.
+1. Implement and validate the selected M4.1 Default Material foundation without broad page rewrites.
+2. After that slice, globally rerank the adaptive authenticated App Shell against the shared music content/state vocabulary using current regressions and retained-state risk.
+3. Preserve the user-operated M1 acceptance request for a convenient later observation, and keep protocol/platform directions outside M4 evidence-gated.
 
 # Blockers
 
