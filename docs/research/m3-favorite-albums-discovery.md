@@ -40,3 +40,7 @@ Reference implementations remain research evidence only. Runtime requests will g
 ## Selection
 
 Authenticated favorite Albums rank first because the user value is direct, the existing Album route keeps the product slice bounded, and two current implementations agree on a working authenticated CGI while one records why the more obvious musicu method is incorrect. The task preserves exact credential lifecycle semantics and requires no automatic account access.
+
+## Implementation outcome
+
+Implemented as the thirteenth M3 slice on 2026-08-26. The direct client, provider-neutral page and capability, exact credential lifecycle, cancellable Bridge, serialized-vault cleanup, adaptive retained Flutter collection, and existing Album/queue handoff all have offline regressions. Strict Rust/Dart checks, 250 offline Rust tests, 265 Flutter tests, Linux x64 Release, and the packaged Linux Bridge integration pass. The four live QQ/WeChat tests remain gated, and no stored credential was read; therefore this proves the bounded implementation and local runtime path, not real-account favorite-Album compatibility.

@@ -5,10 +5,10 @@ use std::future::Future;
 
 use music_domain::{
     AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
-    ArtistSearchPage, ArtistTracksPage, NewAlbumRegion, NewAlbumReleasesPage, PlaylistId,
-    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
-    RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyrics, TrackId, TrackSearchPage,
+    ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, NewAlbumRegion, NewAlbumReleasesPage,
+    PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId,
+    RadarTrackPage, RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage,
+    ResolvedMediaSource, SynchronizedLyrics, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -436,6 +436,18 @@ pub trait UserPlaylistsProvider: MusicProvider + Sync {
     fn user_playlists(
         &self,
     ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
+}
+
+/// Provider-neutral paged favorite-Album collection for the current account.
+/// The Provider owns authentication and source-specific pagination semantics.
+pub trait FavoriteAlbumsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn favorite_albums(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<FavoriteAlbumsPage, Self::Error>> + Send;
 }
 
 /// Provider-neutral paged playlist-detail capability. The owning provider

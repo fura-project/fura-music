@@ -12,6 +12,7 @@ mod artist_albums;
 mod artist_search;
 mod credential;
 mod credential_verification;
+mod favorite_albums;
 mod favorite_playlists;
 mod lyrics;
 mod media_resolution;
@@ -41,6 +42,9 @@ pub use credential::{
     LocalCredentialValidity, LoginType,
 };
 pub use credential_verification::CredentialVerificationError;
+pub use favorite_albums::{
+    FavoriteAlbumField, QqMusicFavoriteAlbumsError, QqMusicFavoriteAlbumsPage,
+};
 pub use favorite_playlists::{
     FavoritePlaylistField, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
     QqMusicFavoritePlaylistsPage,

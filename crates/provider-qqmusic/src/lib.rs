@@ -7,28 +7,28 @@ use std::sync::{Arc, Mutex};
 use music_domain::{
     AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage,
     ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat, AudioQuality,
-    NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, PlaylistId, PlaylistSearchPage,
-    PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId,
-    RankingSummary, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem,
-    TrackSearchPage, TrackSummary,
+    FavoriteAlbumsPage, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, PlaylistId,
+    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
+    RankingGroup, RankingId, RankingSummary, RankingTracksPage, RecommendedPlaylistsPage,
+    ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackId,
+    TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
-    ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, LyricsError,
-    LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
-    NewAlbumReleasesProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
-    PlaylistSearchProvider, ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge,
-    QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-    RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-    RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
-    UserPlaylistsProvider,
+    ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError,
+    FavoriteAlbumsProvider, LyricsError, LyricsProvider, MediaResolutionError,
+    MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider, OwnedPlaylistsProvider,
+    PlaylistDetailsProvider, PlaylistSearchProvider, ProviderCapability, ProviderDescriptor,
+    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
+    QrAuthenticationSession, QrImageFormat, RadarRecommendationError, RadarRecommendationsProvider,
+    RankingsProvider, RecommendationError, RecommendedPlaylistsProvider, SearchError,
+    TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
     HttpTransport, QqMusicAlbumDetailsError, QqMusicAlbumSearchError, QqMusicAlbumSummary,
     QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
-    QqMusicArtistTracksError, QqMusicClient, QqMusicFavoritePlaylist,
+    QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError, QqMusicFavoritePlaylist,
     QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError,
     QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
     QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
@@ -901,6 +901,42 @@ where
     }
 }
 
+impl<T> FavoriteAlbumsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = UserLibraryError;
+
+    async fn favorite_albums(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> Result<FavoriteAlbumsPage, Self::Error> {
+        let candidate = self.authenticated_credential()?;
+        let response = self
+            .client()
+            .favorite_albums(&candidate, offset, size)
+            .await;
+        self.finish_library_await(
+            &candidate,
+            matches!(response, Err(QqMusicFavoriteAlbumsError::Rejected { .. })),
+        )?;
+        let page = response.as_ref().map_err(map_favorite_albums_error)?;
+        let albums = page
+            .albums()
+            .iter()
+            .map(map_album_summary)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| UserLibraryError::InvalidResponse)?;
+        Ok(FavoriteAlbumsPage::new(
+            page.offset(),
+            page.total(),
+            page.has_more(),
+            albums,
+        ))
+    }
+}
+
 impl<T> PlaylistDetailsProvider for QqMusicProvider<T>
 where
     T: HttpTransport + 'static,
@@ -1621,6 +1657,27 @@ fn map_favorite_playlists_error<E>(error: &QqMusicFavoritePlaylistsError<E>) -> 
     }
 }
 
+fn map_favorite_albums_error<E>(error: &QqMusicFavoriteAlbumsError<E>) -> UserLibraryError {
+    match error {
+        QqMusicFavoriteAlbumsError::Rejected { .. } => UserLibraryError::CredentialRejected,
+        QqMusicFavoriteAlbumsError::Transport(_) => UserLibraryError::Network,
+        QqMusicFavoriteAlbumsError::HttpStatus(_) | QqMusicFavoriteAlbumsError::Upstream { .. } => {
+            UserLibraryError::ServiceUnavailable
+        }
+        QqMusicFavoriteAlbumsError::InvalidPageSize { .. }
+        | QqMusicFavoriteAlbumsError::InvalidRange
+        | QqMusicFavoriteAlbumsError::InvalidJson
+        | QqMusicFavoriteAlbumsError::MissingGlobalCode
+        | QqMusicFavoriteAlbumsError::MissingData
+        | QqMusicFavoriteAlbumsError::MissingAlbums
+        | QqMusicFavoriteAlbumsError::MissingTotal
+        | QqMusicFavoriteAlbumsError::MissingHasMore
+        | QqMusicFavoriteAlbumsError::InvalidHasMore
+        | QqMusicFavoriteAlbumsError::InvalidPagination
+        | QqMusicFavoriteAlbumsError::InvalidAlbum { .. } => UserLibraryError::InvalidResponse,
+    }
+}
+
 fn map_playlist_detail_error<E>(error: &QqMusicPlaylistDetailError<E>) -> UserLibraryError {
     match error {
         QqMusicPlaylistDetailError::Transport(_) => UserLibraryError::Network,
@@ -2068,11 +2125,11 @@ mod tests {
     };
     use provider_api::{
         AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
-        ArtistSearchProvider, ArtistTracksProvider, CatalogError, LyricsError, LyricsProvider,
-        MediaResolutionError, MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider,
-        OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
-        ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
-        QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
+        ArtistSearchProvider, ArtistTracksProvider, CatalogError, FavoriteAlbumsProvider,
+        LyricsError, LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
+        NewAlbumReleasesProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
+        PlaylistSearchProvider, ProviderCapability, QrAuthenticationProgress,
+        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
         RadarRecommendationsProvider, RankingsProvider, RecommendationError,
         RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
         UserPlaylistsProvider,
@@ -2081,9 +2138,9 @@ mod tests {
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
         HttpResponse, HttpTransport, LoginType, QqMusicAlbumDetailsError, QqMusicAlbumSearchError,
         QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
-        QqMusicArtistTracksError, QqMusicClient, QqMusicNewAlbumsError, QqMusicPlaylistSearchError,
-        QqMusicRadarError, QqMusicRankingsError, QqMusicRecommendedPlaylistsError,
-        QqMusicSearchError,
+        QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError, QqMusicNewAlbumsError,
+        QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
+        QqMusicRecommendedPlaylistsError, QqMusicSearchError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -2383,6 +2440,12 @@ mod tests {
     }
 
     #[derive(Clone)]
+    struct GatedFavoriteAlbumsTransport {
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
+    #[derive(Clone)]
     struct GatedPlaylistDetailTransport {
         request_started: Arc<Notify>,
         release_request: Arc<Notify>,
@@ -2435,6 +2498,28 @@ mod tests {
                 ));
             }
             Ok(OwnedPlaylistsTransport::new(0).response)
+        }
+    }
+
+    impl HttpTransport for GatedFavoriteAlbumsTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.request_started.notify_one();
+            self.release_request.notified().await;
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&favorite_album_page_json(
+                    &json!([{
+                        "albumid": 43001,
+                        "albummid": "fixtureAlbumMid",
+                        "albumname": "Late favorite Album"
+                    }]),
+                    1,
+                    false,
+                ))
+                .expect("fixture JSON"),
+            ))
         }
     }
 
@@ -3473,6 +3558,18 @@ mod tests {
         })
     }
 
+    fn favorite_album_page_json(albums: &Value, total: u32, has_more: bool) -> Value {
+        json!({
+            "code": 0,
+            "subcode": 0,
+            "data": {
+                "albumlist": albums,
+                "totalalbum": total,
+                "has_more": has_more
+            }
+        })
+    }
+
     fn playlist_track_fixture() -> Value {
         json!([{
             "id": 41001,
@@ -3781,6 +3878,104 @@ mod tests {
             favorite_started.notified().await;
             set_authenticated(&provider, "654321");
             release_favorite.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(UserLibraryError::Replaced));
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn favorite_albums_map_existing_domain_and_clear_only_evidenced_rejection() {
+        let signed_out = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &favorite_album_page_json(&json!([]), 0, false),
+        )));
+        assert_eq!(
+            signed_out.favorite_albums(0, 20).await,
+            Err(UserLibraryError::AuthenticationRequired)
+        );
+
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &favorite_album_page_json(
+                &json!([{
+                    "albumid": 43001,
+                    "albummid": "fixtureAlbumMid",
+                    "albumname": "Synthetic favorite Album"
+                }]),
+                21,
+                false,
+            ),
+        )));
+        set_authenticated(&provider, "123456");
+        let page = provider
+            .favorite_albums(20, 20)
+            .await
+            .expect("favorite Albums");
+        assert_eq!(page.offset(), 20);
+        assert_eq!(page.total(), 21);
+        assert!(!page.has_more());
+        assert_eq!(page.albums().len(), 1);
+        assert_eq!(
+            page.albums()[0].id().opaque(),
+            "album:43001:fixtureAlbumMid"
+        );
+        assert_eq!(page.albums()[0].title(), "Synthetic favorite Album");
+        assert_eq!(
+            page.albums()[0].artwork_uri(),
+            Some("https://y.gtimg.cn/music/photo_new/T002R300x300M000fixtureAlbumMid.jpg")
+        );
+        assert!(provider.has_authenticated_credential());
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("Synthetic favorite Album"));
+        assert!(!debug.contains("fixtureAlbumMid"));
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 4000,
+            "subcode": 4000,
+            "data": {}
+        }))));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.favorite_albums(0, 20).await,
+            Err(UserLibraryError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": -1,
+            "subcode": -2,
+            "data": {}
+        }))));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream.favorite_albums(0, 20).await,
+            Err(UserLibraryError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+
+        assert_eq!(
+            super::map_favorite_albums_error(
+                &QqMusicFavoriteAlbumsError::<Infallible>::InvalidPagination
+            ),
+            UserLibraryError::InvalidResponse
+        );
+    }
+
+    #[tokio::test]
+    async fn late_favorite_album_page_cannot_cross_account_replacement() {
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedFavoriteAlbumsTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&provider, "123456");
+
+        let request = provider.favorite_albums(0, 20);
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_request.notify_one();
         };
         let (result, ()) = tokio::join!(request, replacement);
 

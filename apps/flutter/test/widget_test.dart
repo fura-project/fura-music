@@ -27,6 +27,7 @@ import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
+import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -598,6 +599,99 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('radar-track-0')), findsOneWidget);
       expect(radar.pages, [1]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'opens favorite Albums lazily and preserves the collection through playback return',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:fixtureFavoriteAlbumMid',
+        title: 'Saved Album',
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41001:0:fixtureTrackMid:-',
+        title: 'Saved Album Track',
+        artistNames: ['Saved Artist'],
+      );
+      final favorites = _WidgetFavoriteAlbumGateway(
+        const FavoriteAlbumPageResult(total: 1, albums: [album]),
+      );
+      final albumTracks = _WidgetAlbumGateway(
+        const AlbumTrackPageResult(total: 1, tracks: [track]),
+      );
+      final queue = _WidgetPlaybackQueueGateway();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          favoriteAlbumGateway: favorites,
+          albumTrackGateway: albumTracks,
+          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final entry = find.byKey(const ValueKey('open-favorite-albums'));
+      expect(favorites.requests, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('favorite-albums-content')),
+        findsOneWidget,
+      );
+      expect(find.text('Saved Album'), findsOneWidget);
+      expect(favorites.requests, [(0, 20)]);
+      expect(find.byType(GridView), findsNothing);
+
+      tester.view.physicalSize = const Size(1000, 700);
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsOneWidget);
+      expect(favorites.requests, [(0, 20)]);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('favorite-album-album:43001:fixtureFavoriteAlbumMid'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Saved Album Track'), findsOneWidget);
+      expect(albumTracks.requests.single.$1, album);
+
+      await tester.tap(find.text('Saved Album Track'));
+      await tester.pump();
+      expect(queue.replacements, hasLength(1));
+      expect(queue.replacements.single.$1, [track]);
+      expect(queue.replacements.single.$2, 0);
+
+      await tester.tap(find.byTooltip('Back to favorite albums'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('favorite-albums-content')),
+        findsOneWidget,
+      );
+      expect(find.text('Saved Album'), findsOneWidget);
+      expect(favorites.requests, [(0, 20)]);
+
+      await tester.tap(find.byTooltip('Back to playlists'));
+      await tester.pumpAndSettle();
+      expect(find.text('No playlists yet'), findsOneWidget);
+      expect(tester.widget<IconButton>(entry).focusNode?.hasFocus, isTrue);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2308,6 +2402,34 @@ class _WidgetNewAlbumOperation implements NewAlbumPageLoadOperation {
 
   @override
   Future<NewAlbumPageResult> run() async => result;
+}
+
+class _WidgetFavoriteAlbumGateway implements FavoriteAlbumGateway {
+  _WidgetFavoriteAlbumGateway(this.result);
+
+  final FavoriteAlbumPageResult result;
+  final List<(int, int)> requests = [];
+
+  @override
+  FavoriteAlbumPageLoadOperation beginLoad({
+    required int offset,
+    required int size,
+  }) {
+    requests.add((offset, size));
+    return _WidgetFavoriteAlbumOperation(result);
+  }
+}
+
+class _WidgetFavoriteAlbumOperation implements FavoriteAlbumPageLoadOperation {
+  const _WidgetFavoriteAlbumOperation(this.result);
+
+  final FavoriteAlbumPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<FavoriteAlbumPageResult> run() async => result;
 }
 
 class _WidgetRadarGateway implements RadarGateway {

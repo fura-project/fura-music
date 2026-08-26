@@ -4,6 +4,7 @@ import 'package:flutterustmusic/src/rust/api/artist.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
+import 'package:flutterustmusic/src/rust/api/favorite_albums.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
@@ -168,6 +169,17 @@ void main() {
     expect(
       cancelledNewAlbumLoad.failure,
       QqMusicNewAlbumPageLoadFailure.cancelled,
+    );
+    final unusedFavoriteAlbumLoad = beginQqMusicFavoriteAlbumPageLoad(
+      offset: 0,
+      size: 20,
+    );
+    expect(unusedFavoriteAlbumLoad.isActive, isTrue);
+    expect(unusedFavoriteAlbumLoad.cancel(), isTrue);
+    final cancelledFavoriteAlbumLoad = await unusedFavoriteAlbumLoad.run();
+    expect(
+      cancelledFavoriteAlbumLoad.failure,
+      QqMusicFavoriteAlbumPageLoadFailure.cancelled,
     );
     final unusedRecommendationLoad = beginQqMusicRecommendedPlaylistPageLoad(
       offset: 0,

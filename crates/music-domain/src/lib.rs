@@ -1119,6 +1119,60 @@ pub struct RadarTrackPage {
     tracks: Vec<TrackSummary>,
 }
 
+/// One bounded page of Albums favorited by the current account. The owning
+/// Provider keeps account identity and source-specific continuation private.
+#[derive(Clone, Eq, PartialEq)]
+pub struct FavoriteAlbumsPage {
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    albums: Vec<AlbumSummary>,
+}
+
+impl FavoriteAlbumsPage {
+    #[must_use]
+    pub const fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
+        Self {
+            offset,
+            total,
+            has_more,
+            albums,
+        }
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn albums(&self) -> &[AlbumSummary] {
+        &self.albums
+    }
+}
+
+impl fmt::Debug for FavoriteAlbumsPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FavoriteAlbumsPage")
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("album_count", &self.albums.len())
+            .finish()
+    }
+}
+
 impl RadarTrackPage {
     #[must_use]
     pub const fn new(page: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
