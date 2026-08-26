@@ -8,6 +8,10 @@ The implementation now forms the intended in-process vertical slice from authent
 
 This document is a readiness review, not the M1 checkpoint.
 
+## Execution status note
+
+This dated readiness review records the evidence and scheduling judgment at the time it was written. Current autonomous execution semantics are governed by `AGENTS.md`, while current Roadmap scheduling is governed by `ROADMAP.md` and `PROGRESS.md`. A remaining M1 user-operated acceptance observation does not globally block independently authorized M2 work. This review is evidence, not a terminal execution instruction.
+
 ## Validation baseline
 
 Passed on the current Linux host:

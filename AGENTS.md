@@ -19,9 +19,40 @@ Then inspect `git status`, recent commits, and the relevant implementation. Do n
 
 ## Task loop
 
-For each finite task, define its goal, scope, acceptance criteria, expected modules, tests, and risks. Implement only the smallest coherent unit, test it, inspect the diff, review architecture/scope/debt, update persistent state, and commit the logical unit. Then select the next highest-value unblocked roadmap task.
+For each finite task, define its goal, provenance, scope, acceptance criteria, expected modules, required tests, known risks, and explicit non-goals. Implement only the smallest coherent unit, test it, inspect the diff, review architecture/scope/debt, update persistent state, and commit the logical unit. Then select the next highest-value unblocked roadmap task.
 
 After three materially similar failed attempts, stop repeating the approach. Record a blocker and the attempted evidence, then continue independent work.
+
+## Continuous execution state machine
+
+The repository remains in continuous autonomous execution while `PROGRESS.md` records `global_stop: false`.
+
+```text
+task_complete != stop
+commit_complete != stop
+review_complete != stop
+checkpoint != stop
+milestone_complete != stop
+report_generated != stop
+tests_green != stop
+
+global_stop == false
+    => SELECT_NEXT_TASK
+```
+
+Every finite task must exit through `TEST -> SELF_REVIEW -> UPDATE_STATE_IF_NEEDED -> CHECK_GLOBAL_STOP -> SELECT_NEXT_TASK`. `TASK_COMPLETE -> SUMMARY -> EXIT` is not a project lifecycle. Only `GLOBAL_STOP` can end autonomous project execution.
+
+`GLOBAL_STOP` is valid only when the Roadmap contains no legitimate next objective; every remaining legitimate task is blocked by pending Human Decisions; continued work has no safe alternative to credential disclosure, account damage, data loss, or a security vulnerability; unresolved legal or platform risk makes work unsafe; the implemented architecture fundamentally conflicts with the product definition; or core build/test infrastructure remains globally blocked after three materially distinct, evidence-backed approaches. A forced session end is `SESSION_INTERRUPTED`, not project completion: preserve the active task, evidence, remaining work, and `next_action` while leaving project execution active for the next session.
+
+`NO_LEGITIMATE_WORK` is also distinct from `GLOBAL_STOP`. Before recording it, recheck the Roadmap, live risks and blockers, user-reported or reproduced bugs, necessary test and platform evidence, triggered debt, demonstrated adaptive/accessibility failures, stale misleading documentation, and measured performance issues. Do not invent work merely to keep producing commits.
+
+## Task provenance and global ranking
+
+A task needs concrete provenance: a Roadmap acceptance criterion, user-reported or reproduced problem, failing test, documented risk, triggered debt, required platform validation, reproducible accessibility/adaptive failure, or measured compatibility/performance problem. A nearby cleanup, speculative edge case, aesthetic preference, or hypothetical abstraction is not sufficient.
+
+After each task, rank candidates across the whole project instead of continuing with the nearest file. After roughly three presentation-only focus, semantics, live-region, minor adaptive-layout, or affordance tasks, explicitly rerank playback reliability, Provider correctness, platform evidence, risks, blockers, and triggered debt before selecting another presentation task.
+
+Pending Human Decisions block only their explicitly recorded scope. Historical reviews under `docs/development/` preserve dated evidence and do not override current autonomous execution. Product authority comes from `PROJECT.md` and accepted Human Decisions; architecture authority from `ARCHITECTURE.md` and accepted ADRs; execution semantics from this file; authorized direction from `ROADMAP.md`; and live scheduling state from `PROGRESS.md`.
 
 ## Priority
 

@@ -1,3 +1,14 @@
+---
+execution:
+  mode: CONTINUOUS_AUTONOMOUS
+  state: ACTIVE
+  global_stop: false
+  acceptance_milestone: M1
+  active_workstream: M2
+  current_task: null
+  next_action: SELECT_NEXT_TASK
+---
+
 # Current Milestone
 
 M1 — First QQ Music Vertical Slice, phase 5: lyrics.
@@ -131,6 +142,7 @@ M1 — First QQ Music Vertical Slice, phase 5: lyrics.
 - Restored desktop keyboard continuity across the locally composed playlist-detail boundary. The page owns one focus node only for the last opened provider/opaque playlist identity; system back, `Alt+Left`, and Browser Back reattach it when that row still exists, so Enter immediately reopens detail without reloading the library. The existing 152-test Flutter suite, strict analysis, formatting, and Linux release pass without adding navigation or collection state.
 - Made asynchronous lyric unavailable, retryable/terminal error, and account-state messages isolated semantic live regions while leaving the idle prompt unannounced. Title/explanation never absorb the existing retry or sign-in action, and successful retry still reaches synchronized content. The unchanged 152-test Flutter suite, strict analysis, formatting, and Linux release pass without controller, protocol, or lyric-model changes.
 - Reproduced long-library detail return resetting a desktop grid from offset 1852 to zero, which also prevented the offscreen originating row from regaining focus. Stable, layout-specific Flutter `PageStorageKey`s in a page-owned bucket now preserve desktop-grid and narrow-list positions across the existing local detail replacement, then disappear with the authenticated page; no response cache or custom scroll owner was added. Both adaptive regressions bring the Flutter suite to 154 passing tests; strict analysis, formatting, and Linux release pass.
+- Made continuous autonomous execution explicit: task, commit, review, checkpoint, milestone, report, and green-test completion all return to global task selection while `global_stop` remains false. The live execution state is machine-readable here, Human Decisions remain locally scoped, and the dated M1 readiness review now points to current execution and scheduling authorities without rewriting its evidence.
 
 # In Progress
 
