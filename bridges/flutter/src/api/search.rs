@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use provider_api::{ArtistSearchProvider, SearchError, TrackSearchProvider};
+use provider_api::{AlbumSearchProvider, ArtistSearchProvider, SearchError, TrackSearchProvider};
 use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
@@ -341,18 +341,173 @@ const fn map_artist_error(error: SearchError) -> QqMusicArtistSearchPageLoadFail
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicAlbumSearchPageLoadFailure {
+    CoreUnavailable,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Cancelled,
+    AlreadyRunning,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicAlbumSearchPageLoad {
+    pub page: u32,
+    pub total: u32,
+    pub has_more: bool,
+    pub albums: Vec<CatalogAlbumSummary>,
+    pub failure: Option<QqMusicAlbumSearchPageLoadFailure>,
+}
+
+impl fmt::Debug for QqMusicAlbumSearchPageLoad {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicAlbumSearchPageLoad")
+            .field("page", &self.page)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("album_count", &self.albums.len())
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+/// One cancellable, single-use Album search page. The query remains inside
+/// this opaque handle and is always redacted from diagnostics.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicAlbumSearchPageLoadHandle {
+    query: String,
+    page: u32,
+    size: u32,
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl fmt::Debug for QqMusicAlbumSearchPageLoadHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicAlbumSearchPageLoadHandle")
+            .field("query", &"[REDACTED]")
+            .field("page", &self.page)
+            .field("size", &self.size)
+            .field("active", &self.is_active())
+            .field("running", &self.running.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl QqMusicAlbumSearchPageLoadHandle {
+    pub async fn run(&self) -> QqMusicAlbumSearchPageLoad {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled);
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_album_load(QqMusicAlbumSearchPageLoadFailure::AlreadyRunning);
+        }
+
+        let outcome = match native_qq_music_provider() {
+            Ok(provider) => {
+                tokio::select! {
+                    () = self.cancelled.notified() => {
+                        failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled)
+                    }
+                    result = provider.search_albums(self.query.clone(), self.page, self.size) => {
+                        if self.active.load(Ordering::SeqCst) {
+                            map_album_load(result)
+                        } else {
+                            failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled)
+                        }
+                    }
+                }
+            }
+            Err(()) => failed_album_load(QqMusicAlbumSearchPageLoadFailure::CoreUnavailable),
+        };
+        self.running.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        outcome
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_qq_music_album_search_page_load(
+    query: String,
+    page: u32,
+    size: u32,
+) -> QqMusicAlbumSearchPageLoadHandle {
+    QqMusicAlbumSearchPageLoadHandle {
+        query,
+        page,
+        size,
+        active: AtomicBool::new(true),
+        running: AtomicBool::new(false),
+        cancelled: Notify::new(),
+    }
+}
+
+fn map_album_load(
+    result: Result<music_domain::AlbumSearchPage, SearchError>,
+) -> QqMusicAlbumSearchPageLoad {
+    match result {
+        Ok(page) => QqMusicAlbumSearchPageLoad {
+            page: page.page(),
+            total: page.total(),
+            has_more: page.has_more(),
+            albums: page.albums().iter().map(bridge_album_summary).collect(),
+            failure: None,
+        },
+        Err(error) => failed_album_load(map_album_error(error)),
+    }
+}
+
+const fn failed_album_load(
+    failure: QqMusicAlbumSearchPageLoadFailure,
+) -> QqMusicAlbumSearchPageLoad {
+    QqMusicAlbumSearchPageLoad {
+        page: 0,
+        total: 0,
+        has_more: false,
+        albums: Vec::new(),
+        failure: Some(failure),
+    }
+}
+
+const fn map_album_error(error: SearchError) -> QqMusicAlbumSearchPageLoadFailure {
+    match error {
+        SearchError::Network => QqMusicAlbumSearchPageLoadFailure::Network,
+        SearchError::ServiceUnavailable => QqMusicAlbumSearchPageLoadFailure::ServiceUnavailable,
+        SearchError::InvalidResponse => QqMusicAlbumSearchPageLoadFailure::InvalidResponse,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        AlbumId, AlbumSummary, ArtistId, ArtistSearchPage, ArtistSummary, ProviderId, TrackId,
-        TrackSearchItem, TrackSearchPage, TrackSummary,
+        AlbumId, AlbumSearchPage, AlbumSummary, ArtistId, ArtistSearchPage, ArtistSummary,
+        ProviderId, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
     };
     use provider_api::SearchError;
 
     use super::{
-        QqMusicArtistSearchPageLoadFailure, QqMusicTrackSearchPageLoadFailure,
+        QqMusicAlbumSearchPageLoadFailure, QqMusicArtistSearchPageLoadFailure,
+        QqMusicTrackSearchPageLoadFailure, begin_qq_music_album_search_page_load,
         begin_qq_music_artist_search_page_load, begin_qq_music_track_search_page_load,
-        map_artist_error, map_artist_load, map_error, map_load,
+        map_album_error, map_album_load, map_artist_error, map_artist_load, map_error, map_load,
     };
 
     #[test]
@@ -434,6 +589,18 @@ mod tests {
             map_artist_error(SearchError::InvalidResponse),
             QqMusicArtistSearchPageLoadFailure::InvalidResponse
         );
+        assert_eq!(
+            map_album_error(SearchError::Network),
+            QqMusicAlbumSearchPageLoadFailure::Network
+        );
+        assert_eq!(
+            map_album_error(SearchError::ServiceUnavailable),
+            QqMusicAlbumSearchPageLoadFailure::ServiceUnavailable
+        );
+        assert_eq!(
+            map_album_error(SearchError::InvalidResponse),
+            QqMusicAlbumSearchPageLoadFailure::InvalidResponse
+        );
     }
 
     #[test]
@@ -458,6 +625,30 @@ mod tests {
         let debug = format!("{mapped:?} {:?}", mapped.artists[0]);
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("42001"));
+    }
+
+    #[test]
+    fn maps_album_search_page_without_exposing_content() {
+        let album = AlbumSummary::new(
+            AlbumId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "album:43001:fixtureAlbumMid",
+            )
+            .expect("Album ID"),
+            "must-not-leak",
+        )
+        .expect("Album summary");
+        let mapped = map_album_load(Ok(AlbumSearchPage::new(1, 25, true, vec![album])));
+
+        assert_eq!(mapped.page, 1);
+        assert_eq!(mapped.total, 25);
+        assert!(mapped.has_more);
+        assert_eq!(mapped.albums.len(), 1);
+        assert_eq!(mapped.albums[0].provider_id, "qq-music");
+        assert_eq!(mapped.albums[0].title, "must-not-leak");
+        let debug = format!("{mapped:?} {:?}", mapped.albums[0]);
+        assert!(!debug.contains("must-not-leak"));
+        assert!(!debug.contains("43001"));
     }
 
     #[tokio::test]
@@ -486,6 +677,21 @@ mod tests {
         assert_eq!(
             result.failure,
             Some(QqMusicArtistSearchPageLoadFailure::Cancelled)
+        );
+        assert!(!format!("{handle:?}").contains("private search query"));
+    }
+
+    #[tokio::test]
+    async fn album_cancellation_is_exact_terminal_and_query_is_redacted() {
+        let handle = begin_qq_music_album_search_page_load("private search query".into(), 1, 30);
+
+        assert!(handle.is_active());
+        assert!(handle.cancel());
+        assert!(!handle.cancel());
+        let result = handle.run().await;
+        assert_eq!(
+            result.failure,
+            Some(QqMusicAlbumSearchPageLoadFailure::Cancelled)
         );
         assert!(!format!("{handle:?}").contains("private search query"));
     }

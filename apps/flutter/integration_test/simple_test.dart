@@ -80,6 +80,18 @@ void main() {
       cancelledArtistSearchLoad.failure,
       QqMusicArtistSearchPageLoadFailure.cancelled,
     );
+    final unusedAlbumSearchLoad = beginQqMusicAlbumSearchPageLoad(
+      query: 'synthetic query',
+      page: 1,
+      size: 30,
+    );
+    expect(unusedAlbumSearchLoad.isActive, isTrue);
+    expect(unusedAlbumSearchLoad.cancel(), isTrue);
+    final cancelledAlbumSearchLoad = await unusedAlbumSearchLoad.run();
+    expect(
+      cancelledAlbumSearchLoad.failure,
+      QqMusicAlbumSearchPageLoadFailure.cancelled,
+    );
     final unusedAlbumLoad = beginQqMusicAlbumTrackPageLoad(
       providerId: 'qq-music',
       opaqueAlbumId: 'album:43001:fixtureAlbumMid',

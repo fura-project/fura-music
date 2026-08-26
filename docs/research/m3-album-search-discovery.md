@@ -35,3 +35,7 @@ Reference implementations remain research evidence only. The runtime will call Q
 ## Selection
 
 Direct Album Search ranks first because its real Desktop response honors exact typed pagination, supplies the existing Album route's identity, and closes a visible user path with no new destination or navigation architecture. Rankings remain authorized, but their list/detail/period contract needs a separate discovery before implementation.
+
+## Implementation outcome
+
+Implemented on 2026-08-26 as the seventh finite M3 slice. The client sends the exact Desktop type-2 request and rejects invalid pagination or Album identity before Domain mapping; Provider, Domain, and Bridge reuse opaque `AlbumSummary` and keep query/Album content out of diagnostics. Flutter adds an independent Albums controller to the existing type control, suppresses replacement/disposal races, preserves all three Search types, and returns from the existing Album Tracks page without reloading Album Search. Rust formatting, 203 offline Rust tests, strict Clippy, strict Dart formatting/analysis, all 216 Flutter tests, a 360px three-type adaptive regression, the Linux x64 Release bundle, and packaged typed-Bridge integration pass. Four live QQ/WeChat tests remain gated, and no live application compatibility or authenticated downstream playback claim is made.

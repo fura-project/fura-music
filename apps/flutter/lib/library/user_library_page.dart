@@ -26,6 +26,7 @@ import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
@@ -42,6 +43,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.onSignOut,
     this.searchGateway,
     this.artistSearchGateway,
+    this.albumSearchGateway,
     this.albumTrackGateway,
     this.artistTrackGateway,
     this.artistAlbumGateway,
@@ -59,6 +61,7 @@ class UserLibraryPage extends StatefulWidget {
   final Future<CredentialSignOutResult> Function() onSignOut;
   final TrackSearchGateway? searchGateway;
   final ArtistSearchGateway? artistSearchGateway;
+  final AlbumSearchGateway? albumSearchGateway;
   final AlbumTrackGateway? albumTrackGateway;
   final ArtistTrackGateway? artistTrackGateway;
   final ArtistAlbumGateway? artistAlbumGateway;
@@ -73,6 +76,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final QueuePlaybackController _queuePlaybackController;
   late final TrackSearchGateway _searchGateway;
   late final ArtistSearchGateway _artistSearchGateway;
+  late final AlbumSearchGateway _albumSearchGateway;
   late final AlbumTrackGateway _albumTrackGateway;
   late final ArtistTrackGateway _artistTrackGateway;
   late final ArtistAlbumGateway _artistAlbumGateway;
@@ -104,6 +108,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _searchGateway = widget.searchGateway ?? const RustTrackSearchGateway();
     _artistSearchGateway =
         widget.artistSearchGateway ?? const RustArtistSearchGateway();
+    _albumSearchGateway =
+        widget.albumSearchGateway ?? const RustAlbumSearchGateway();
     _albumTrackGateway =
         widget.albumTrackGateway ?? const RustAlbumTrackGateway();
     _artistTrackGateway =
@@ -194,6 +200,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 key: const ValueKey('track-search-page'),
                 gateway: _searchGateway,
                 artistGateway: _artistSearchGateway,
+                albumGateway: _albumSearchGateway,
                 queuePlaybackController: _queuePlaybackController,
                 onBack: _closeSearch,
                 onOpenAlbum: _openAlbum,

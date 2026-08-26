@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_artist_load`, `failed_load`, `map_artist_error`, `map_artist_load`, `map_error`, `map_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_album_load`, `failed_artist_load`, `failed_load`, `map_album_error`, `map_album_load`, `map_artist_error`, `map_artist_load`, `map_error`, `map_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicTrackSearchPageLoadHandle beginQqMusicTrackSearchPageLoad({
   required String query,
@@ -33,6 +33,25 @@ QqMusicArtistSearchPageLoadHandle beginQqMusicArtistSearchPageLoad({
   size: size,
 );
 
+QqMusicAlbumSearchPageLoadHandle beginQqMusicAlbumSearchPageLoad({
+  required String query,
+  required int page,
+  required int size,
+}) => RustLib.instance.api.crateApiSearchBeginQqMusicAlbumSearchPageLoad(
+  query: query,
+  page: page,
+  size: size,
+);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumSearchPageLoadHandle>>
+abstract class QqMusicAlbumSearchPageLoadHandle implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicAlbumSearchPageLoad> run();
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicArtistSearchPageLoadHandle>>
 abstract class QqMusicArtistSearchPageLoadHandle
     implements RustOpaqueInterface {
@@ -50,6 +69,50 @@ abstract class QqMusicTrackSearchPageLoadHandle implements RustOpaqueInterface {
   bool get isActive;
 
   Future<QqMusicTrackSearchPageLoad> run();
+}
+
+class QqMusicAlbumSearchPageLoad {
+  final int page;
+  final int total;
+  final bool hasMore;
+  final List<CatalogAlbumSummary> albums;
+  final QqMusicAlbumSearchPageLoadFailure? failure;
+
+  const QqMusicAlbumSearchPageLoad({
+    required this.page,
+    required this.total,
+    required this.hasMore,
+    required this.albums,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      page.hashCode ^
+      total.hashCode ^
+      hasMore.hashCode ^
+      albums.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicAlbumSearchPageLoad &&
+          runtimeType == other.runtimeType &&
+          page == other.page &&
+          total == other.total &&
+          hasMore == other.hasMore &&
+          albums == other.albums &&
+          failure == other.failure;
+}
+
+enum QqMusicAlbumSearchPageLoadFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  cancelled,
+  alreadyRunning,
 }
 
 class QqMusicArtistSearchPageLoad {

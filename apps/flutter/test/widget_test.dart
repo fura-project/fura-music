@@ -25,6 +25,7 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
@@ -656,6 +657,77 @@ void main() {
       'direct Artist query',
     );
     expect(artistSearch.requests, [('direct Artist query', 1, 30)]);
+  });
+
+  testWidgets('opens a direct Album result and preserves Album Search', (
+    tester,
+  ) async {
+    const album = AlbumSummary(
+      providerId: 'qq-music',
+      opaqueId: 'album:43001:fixtureAlbumMid',
+      title: 'Direct Album',
+    );
+    const track = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:41001:0:fixtureMid:-',
+      title: 'Album Track',
+      artistNames: ['Album Artist'],
+    );
+    final albumSearch = _WidgetAlbumSearchGateway(
+      const AlbumSearchPageResult(page: 1, total: 1, albums: [album]),
+    );
+    final albumTracks = _WidgetAlbumGateway(
+      const AlbumTrackPageResult(offset: 0, total: 1, tracks: [track]),
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        searchGateway: const _UnusedSearchGateway(),
+        albumSearchGateway: albumSearch,
+        albumTrackGateway: albumTracks,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-track-search')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('search-types')),
+        matching: find.text('Albums'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      'direct Album query',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(albumSearch.requests, [('direct Album query', 1, 30)]);
+    await tester.tap(find.byKey(const ValueKey('album-search-result-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+    expect(albumTracks.requests, [(album, 0, 30)]);
+
+    await tester.tap(find.byKey(const ValueKey('album-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('album-search-content')), findsOneWidget);
+    expect(find.text('Direct Album'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+          .controller
+          ?.text,
+      'direct Album query',
+    );
+    expect(albumSearch.requests, [('direct Album query', 1, 30)]);
   });
 
   testWidgets('nests Album navigation inside a preserved Artist and Search', (
@@ -1680,6 +1752,35 @@ class _WidgetArtistSearchOperation implements ArtistSearchPageLoadOperation {
 
   @override
   Future<ArtistSearchPageResult> run() async => result;
+}
+
+class _WidgetAlbumSearchGateway implements AlbumSearchGateway {
+  _WidgetAlbumSearchGateway(this.result);
+
+  final AlbumSearchPageResult result;
+  final List<(String, int, int)> requests = [];
+
+  @override
+  AlbumSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) {
+    requests.add((query, page, size));
+    return _WidgetAlbumSearchOperation(result);
+  }
+}
+
+class _WidgetAlbumSearchOperation implements AlbumSearchPageLoadOperation {
+  const _WidgetAlbumSearchOperation(this.result);
+
+  final AlbumSearchPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<AlbumSearchPageResult> run() async => result;
 }
 
 class _WidgetAlbumOperation implements AlbumTrackPageLoadOperation {

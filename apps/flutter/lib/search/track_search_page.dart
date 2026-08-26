@@ -6,6 +6,8 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/search/album_search_controller.dart';
+import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_controller.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_controller.dart';
@@ -20,6 +22,7 @@ class TrackSearchPage extends StatefulWidget {
     required this.onOpenArtist,
     required this.onSignInAgain,
     this.artistGateway,
+    this.albumGateway,
     super.key,
   });
 
@@ -30,16 +33,18 @@ class TrackSearchPage extends StatefulWidget {
   final ValueChanged<ArtistSummary> onOpenArtist;
   final VoidCallback onSignInAgain;
   final ArtistSearchGateway? artistGateway;
+  final AlbumSearchGateway? albumGateway;
 
   @override
   State<TrackSearchPage> createState() => _TrackSearchPageState();
 }
 
-enum _SearchType { tracks, artists }
+enum _SearchType { tracks, artists, albums }
 
 class _TrackSearchPageState extends State<TrackSearchPage> {
   late final TrackSearchController _controller;
   late final ArtistSearchController _artistController;
+  late final AlbumSearchController _albumController;
   late final Listenable _controllers;
   final TextEditingController _queryController = TextEditingController();
   final FocusNode _queryFocusNode = FocusNode(debugLabel: 'track search');
@@ -53,13 +58,21 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     _artistController = ArtistSearchController(
       widget.artistGateway ?? const RustArtistSearchGateway(),
     );
-    _controllers = Listenable.merge([_controller, _artistController]);
+    _albumController = AlbumSearchController(
+      widget.albumGateway ?? const RustAlbumSearchGateway(),
+    );
+    _controllers = Listenable.merge([
+      _controller,
+      _artistController,
+      _albumController,
+    ]);
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _artistController.dispose();
+    _albumController.dispose();
     _queryController.dispose();
     _queryFocusNode.dispose();
     super.dispose();
@@ -91,7 +104,9 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
                   loading: _isLoading,
                   hintText: _searchType == _SearchType.tracks
                       ? 'Song, Artist, or Album name'
-                      : 'Artist name',
+                      : _searchType == _SearchType.artists
+                      ? 'Artist name'
+                      : 'Album name',
                   onSubmitted: _submit,
                   onClear: _clear,
                 ),
@@ -115,6 +130,11 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
                         icon: Icon(Icons.person_rounded),
                         label: Text('Artists'),
                       ),
+                      ButtonSegment(
+                        value: _SearchType.albums,
+                        icon: Icon(Icons.album_rounded),
+                        label: Text('Albums'),
+                      ),
                     ],
                     selected: {_searchType},
                     onSelectionChanged: _selectSearchType,
@@ -125,7 +145,9 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
                     duration: const Duration(milliseconds: 220),
                     child: _searchType == _SearchType.tracks
                         ? _trackBody(desktop)
-                        : _artistBody(desktop),
+                        : _searchType == _SearchType.artists
+                        ? _artistBody(desktop)
+                        : _albumBody(desktop),
                   ),
                 ),
               ],
@@ -143,6 +165,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
   bool get _isLoading => switch (_searchType) {
     _SearchType.tracks => _controller.stage == TrackSearchStage.loading,
     _SearchType.artists => _artistController.stage == ArtistSearchStage.loading,
+    _SearchType.albums => _albumController.stage == AlbumSearchStage.loading,
   };
 
   Widget _trackBody(bool desktop) => switch (_controller.stage) {
@@ -234,6 +257,49 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     ),
   };
 
+  Widget _albumBody(bool desktop) => switch (_albumController.stage) {
+    AlbumSearchStage.idle => const _SearchMessage(
+      key: ValueKey('album-search-idle'),
+      icon: Icons.album_rounded,
+      title: 'Find Albums on QQ Music',
+      detail: 'Search by an Album name.',
+    ),
+    AlbumSearchStage.loading => const Center(
+      key: ValueKey('album-search-loading'),
+      child: CircularProgressIndicator(),
+    ),
+    AlbumSearchStage.empty => _SearchMessage(
+      key: const ValueKey('album-search-empty'),
+      icon: Icons.album_outlined,
+      title: 'No Albums found',
+      detail: 'Try a different spelling or a broader search.',
+      action: TextButton(
+        onPressed: _focusQuery,
+        child: const Text('Edit search'),
+      ),
+    ),
+    AlbumSearchStage.error => _SearchFailure(
+      key: const ValueKey('album-search-error'),
+      detail: _albumFailureCopy(_albumController.failure),
+      canRetry: _albumController.canRetry,
+      onRetry: _albumController.retry,
+      onEdit: _focusQuery,
+    ),
+    AlbumSearchStage.content => _AlbumSearchResults(
+      key: const ValueKey('album-search-content'),
+      query: _albumController.query,
+      albums: _albumController.albums,
+      total: _albumController.total,
+      hasMore: _albumController.hasMore,
+      isLoadingMore: _albumController.isLoadingMore,
+      appendFailure: _albumController.appendFailure != null,
+      onLoadMore: _albumController.loadMore,
+      onRetryMore: _albumController.retryMore,
+      onOpenAlbum: widget.onOpenAlbum,
+      desktop: desktop,
+    ),
+  };
+
   void _submit(String query) {
     switch (_searchType) {
       case _SearchType.tracks:
@@ -241,6 +307,9 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         break;
       case _SearchType.artists:
         unawaited(_artistController.submit(query));
+        break;
+      case _SearchType.albums:
+        unawaited(_albumController.submit(query));
         break;
     }
   }
@@ -262,6 +331,7 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
     _replaceQueryText(switch (next) {
       _SearchType.tracks => _controller.query,
       _SearchType.artists => _artistController.query,
+      _SearchType.albums => _albumController.query,
     });
   }
 
@@ -280,6 +350,9 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
         break;
       case _SearchType.artists:
         _artistController.clear();
+        break;
+      case _SearchType.albums:
+        _albumController.clear();
         break;
     }
     _focusQuery();
@@ -562,6 +635,99 @@ class _ArtistSearchResults extends StatelessWidget {
   );
 }
 
+class _AlbumSearchResults extends StatelessWidget {
+  const _AlbumSearchResults({
+    required this.query,
+    required this.albums,
+    required this.total,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.appendFailure,
+    required this.onLoadMore,
+    required this.onRetryMore,
+    required this.onOpenAlbum,
+    required this.desktop,
+    super.key,
+  });
+
+  final String query;
+  final List<AlbumSummary> albums;
+  final int total;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final bool appendFailure;
+  final VoidCallback onLoadMore;
+  final VoidCallback onRetryMore;
+  final ValueChanged<AlbumSummary> onOpenAlbum;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 920),
+      child: ListView.builder(
+        key: const PageStorageKey('album-search-results'),
+        padding: EdgeInsets.fromLTRB(
+          desktop ? 40 : 12,
+          0,
+          desktop ? 40 : 12,
+          24,
+        ),
+        itemCount: albums.length + 2,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  '$total ${total == 1 ? 'Album' : 'Albums'} for “$query”',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            );
+          }
+          if (index == albums.length + 1) {
+            return _SearchFooter(
+              hasMore: hasMore,
+              isLoadingMore: isLoadingMore,
+              appendFailure: appendFailure,
+              onLoadMore: onLoadMore,
+              onRetryMore: onRetryMore,
+            );
+          }
+          final albumIndex = index - 1;
+          final album = albums[albumIndex];
+          return ListTile(
+            key: ValueKey('album-search-result-$albumIndex'),
+            minTileHeight: desktop ? 68 : 72,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            leading: SizedBox.square(
+              dimension: desktop ? 48 : 52,
+              child: _TrackArtwork(uri: album.artworkUri),
+            ),
+            title: Text(
+              album.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text('Album'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => onOpenAlbum(album),
+          );
+        },
+      ),
+    ),
+  );
+}
+
 class _SearchTrackRow extends StatelessWidget {
   const _SearchTrackRow({
     required this.track,
@@ -837,4 +1003,16 @@ String _artistFailureCopy(ArtistSearchFailure? failure) => switch (failure) {
   ArtistSearchFailure.invalidResponse ||
   ArtistSearchFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected Artist search response.',
+};
+
+String _albumFailureCopy(AlbumSearchFailure? failure) => switch (failure) {
+  AlbumSearchFailure.network => 'Check your connection and try again.',
+  AlbumSearchFailure.serviceUnavailable =>
+    'QQ Music Album search is temporarily unavailable.',
+  AlbumSearchFailure.cancelled => 'The Album search was cancelled.',
+  AlbumSearchFailure.coreUnavailable =>
+    'The local music core is unavailable. Restart the app and try again.',
+  AlbumSearchFailure.invalidResponse ||
+  AlbumSearchFailure.alreadyRunning ||
+  null => 'QQ Music returned an unexpected Album search response.',
 };

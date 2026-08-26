@@ -965,6 +965,60 @@ impl fmt::Debug for ArtistSearchPage {
     }
 }
 
+/// One provider-neutral page of Album search results. Source-specific query,
+/// ranking, and continuation rules remain behind the Provider boundary.
+#[derive(Clone, Eq, PartialEq)]
+pub struct AlbumSearchPage {
+    page: u32,
+    total: u32,
+    has_more: bool,
+    albums: Vec<AlbumSummary>,
+}
+
+impl AlbumSearchPage {
+    #[must_use]
+    pub const fn new(page: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
+        Self {
+            page,
+            total,
+            has_more,
+            albums,
+        }
+    }
+
+    #[must_use]
+    pub const fn page(&self) -> u32 {
+        self.page
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn albums(&self) -> &[AlbumSummary] {
+        &self.albums
+    }
+}
+
+impl fmt::Debug for AlbumSearchPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AlbumSearchPage")
+            .field("page", &self.page)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("album_count", &self.albums.len())
+            .finish()
+    }
+}
+
 /// One bounded page of Album Tracks. QQ-specific pagination and Album route
 /// rules remain in the owning Provider.
 #[derive(Clone, Eq, PartialEq)]
@@ -1178,10 +1232,10 @@ fn nonblank(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlbumId, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSearchPage, ArtistSummary,
-        AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage, ProviderId,
-        ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage,
-        TrackSummary, TrackSummaryField,
+        AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId, ArtistSearchPage,
+        ArtistSummary, AudioFormat, AudioQuality, PlaylistId, PlaylistSummary, PlaylistTracksPage,
+        ProviderId, ResolvedMediaSource, ResolvedMediaSourceField, TrackId, TrackSearchItem,
+        TrackSearchPage, TrackSummary, TrackSummaryField,
     };
 
     #[test]
@@ -1324,6 +1378,28 @@ mod tests {
         let debug = format!("{page:?}");
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("42001"));
+    }
+
+    #[test]
+    fn album_search_page_keeps_query_and_content_out_of_diagnostics() {
+        let album = AlbumSummary::new(
+            AlbumId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "album:43001:fixture-album-mid",
+            )
+            .expect("album ID"),
+            "must-not-leak",
+        )
+        .expect("album summary");
+        let page = AlbumSearchPage::new(2, 25, true, vec![album]);
+
+        assert_eq!(page.page(), 2);
+        assert_eq!(page.total(), 25);
+        assert!(page.has_more());
+        assert_eq!(page.albums()[0].title(), "must-not-leak");
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("must-not-leak"));
+        assert!(!debug.contains("43001"));
     }
 
     #[test]
