@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M4
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "M4.3 Shared dense catalog Track tile"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -55,12 +55,12 @@ M1's real-account playback observation remains open; M2 and M3 are checkpointed,
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M4.2 is complete. Whole-project ranking must now select the next bounded M4 slice from the shell-adjusted product surface.
+- Whole-project ranking selected one shared dense catalog Track tile for the three concretely duplicated Album, Artist Track, and Ranking rows. Playlist/Search contextual rows, current-playing animation, headers, and async-state consolidation remain outside this finite slice.
 
 # Next Candidates
 
-1. Re-rank the shared dense Track row against a shared asynchronous state panel now that the primary shell establishes final content widths.
-2. Select only a bounded representative M4.3/M4.4 slice; do not migrate every page at once.
+1. Implement and validate the selected shared catalog Track tile on Album, Artist Tracks, and Ranking only.
+2. Re-rank the shared asynchronous state panel against core browsing header alignment after the Track grammar is proven.
 3. Preserve the user-operated M1 acceptance request and keep protocol, release, cache, and unavailable-platform work outside M4 evidence-gated.
 
 # Blockers
