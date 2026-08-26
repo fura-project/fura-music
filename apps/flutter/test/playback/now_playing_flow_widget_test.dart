@@ -28,6 +28,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('now-playing-artwork')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('now-playing-artwork-placeholder')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('Artwork for First track'), findsOneWidget);
     expect(find.textContaining('Playing'), findsOneWidget);
     expect(media.requests, [('qq-music', 'first')]);
     expect(queue.replacedTracks, hasLength(2));
@@ -126,6 +132,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('now-playing-progress')), findsNothing);
+  });
+
+  testWidgets('artwork load failure keeps a local now-playing placeholder', (
+    tester,
+  ) async {
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('artwork-fallback')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      artworkUri: 'https://images.example.test/missing.jpg',
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('now-playing-artwork')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('now-playing-artwork-placeholder')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('volume commits once and applies to replacement sessions', (
@@ -227,6 +255,10 @@ void main() {
     await first.started.future;
     await tester.pump();
     expect(find.textContaining('Finding a playable source'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('now-playing-artwork-state')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byTooltip('Back to playlists'));
     await tester.pump(const Duration(milliseconds: 300));
@@ -236,6 +268,10 @@ void main() {
     firstResult.complete(_success('first'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Playing'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('now-playing-artwork-state')),
+      findsNothing,
+    );
 
     await tester.tap(find.text('Fixture playlist').last);
     await tester.pumpAndSettle();
@@ -564,6 +600,7 @@ Future<void> _openDetail(
   String secondOpaqueId = 'second',
   String secondTitle = 'Second track',
   int? durationSeconds = 120,
+  String? artworkUri,
 }) async {
   await tester.pumpWidget(
     MusicApp(
@@ -575,6 +612,7 @@ Future<void> _openDetail(
         secondOpaqueId,
         secondTitle,
         durationSeconds,
+        artworkUri,
       ),
       mediaResolutionGateway: media,
       lyricGateway:
@@ -756,12 +794,14 @@ class _DetailGateway implements PlaylistDetailGateway {
     this.secondOpaqueId,
     this.secondTitle,
     this.durationSeconds,
+    this.artworkUri,
   );
 
   final String firstOpaqueId;
   final String secondOpaqueId;
   final String secondTitle;
   final int? durationSeconds;
+  final String? artworkUri;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
@@ -773,6 +813,7 @@ class _DetailGateway implements PlaylistDetailGateway {
     secondOpaqueId,
     secondTitle,
     durationSeconds,
+    artworkUri,
   );
 }
 
@@ -782,12 +823,14 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
     this.secondOpaqueId,
     this.secondTitle,
     this.durationSeconds,
+    this.artworkUri,
   );
 
   final String firstOpaqueId;
   final String secondOpaqueId;
   final String secondTitle;
   final int? durationSeconds;
+  final String? artworkUri;
 
   @override
   bool cancel() => true;
@@ -802,6 +845,7 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         title: 'First track',
         artistNames: const ['Fixture artist'],
         durationSeconds: durationSeconds,
+        artworkUri: artworkUri,
       ),
       PlaylistTrackSummary(
         providerId: 'qq-music',
@@ -809,6 +853,7 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         title: secondTitle,
         artistNames: const ['Fixture artist'],
         durationSeconds: durationSeconds,
+        artworkUri: artworkUri,
       ),
     ],
   );

@@ -53,7 +53,11 @@ class NowPlayingBar extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                _StatusIcon(stage: playback.stage),
+                                _NowPlayingArtwork(
+                                  track: track,
+                                  stage: playback.stage,
+                                  dimension: 44,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: _TrackInfo(
@@ -83,7 +87,11 @@ class NowPlayingBar extends StatelessWidget {
                       else
                         Row(
                           children: [
-                            _StatusIcon(stage: playback.stage),
+                            _NowPlayingArtwork(
+                              track: track,
+                              stage: playback.stage,
+                              dimension: 52,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: _TrackInfo(
@@ -461,30 +469,100 @@ class _LyricsButton extends StatelessWidget {
   );
 }
 
-class _StatusIcon extends StatelessWidget {
-  const _StatusIcon({required this.stage});
+class _NowPlayingArtwork extends StatelessWidget {
+  const _NowPlayingArtwork({
+    required this.track,
+    required this.stage,
+    required this.dimension,
+  });
 
+  final PlaylistTrackSummary track;
   final TrackPlaybackStage stage;
+  final double dimension;
 
   @override
   Widget build(BuildContext context) {
-    if (stage == TrackPlaybackStage.resolving ||
-        stage == TrackPlaybackStage.loading) {
-      return const SizedBox.square(
-        dimension: 24,
-        child: CircularProgressIndicator(strokeWidth: 2.5),
-      );
-    }
-    return Icon(
-      stage == TrackPlaybackStage.resolutionError ||
-              stage == TrackPlaybackStage.engineError
-          ? Icons.error_outline_rounded
-          : Icons.graphic_eq_rounded,
-      color:
-          stage == TrackPlaybackStage.resolutionError ||
-              stage == TrackPlaybackStage.engineError
-          ? Theme.of(context).colorScheme.error
-          : Theme.of(context).colorScheme.primary,
+    final artworkUri = track.artworkUri;
+    final busy =
+        stage == TrackPlaybackStage.resolving ||
+        stage == TrackPlaybackStage.loading;
+    final error =
+        stage == TrackPlaybackStage.resolutionError ||
+        stage == TrackPlaybackStage.engineError;
+    return Semantics(
+      container: true,
+      image: true,
+      label: 'Artwork for ${track.title}',
+      child: SizedBox.square(
+        key: const ValueKey('now-playing-artwork'),
+        dimension: dimension,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              artworkUri == null
+                  ? const _NowPlayingArtworkPlaceholder()
+                  : Image.network(
+                      artworkUri,
+                      fit: BoxFit.cover,
+                      excludeFromSemantics: true,
+                      gaplessPlayback: true,
+                      loadingBuilder: (context, child, progress) =>
+                          progress == null
+                          ? child
+                          : const _NowPlayingArtworkPlaceholder(),
+                      errorBuilder: (context, error, stackTrace) =>
+                          const _NowPlayingArtworkPlaceholder(),
+                    ),
+              if (busy || error)
+                ColoredBox(
+                  key: const ValueKey('now-playing-artwork-state'),
+                  color: Colors.black.withValues(alpha: 0.44),
+                  child: Center(
+                    child: busy
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(
+                            Icons.error_outline_rounded,
+                            color: Theme.of(context).colorScheme.errorContainer,
+                            size: 24,
+                          ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NowPlayingArtworkPlaceholder extends StatelessWidget {
+  const _NowPlayingArtworkPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      key: const ValueKey('now-playing-artwork-placeholder'),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [colors.primaryContainer, colors.tertiaryContainer],
+        ),
+      ),
+      child: Icon(
+        Icons.album_rounded,
+        color: colors.onPrimaryContainer,
+        size: 28,
+      ),
     );
   }
 }
