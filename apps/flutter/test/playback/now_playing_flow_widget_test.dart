@@ -55,6 +55,34 @@ void main() {
     expect(find.textContaining('Stopped'), findsOneWidget);
   });
 
+  testWidgets('now-playing status announces meaningful state changes', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([_ImmediateMediaOperation(_success('status'))]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    var status = tester.getSemantics(
+      find.byKey(const ValueKey('now-playing-status')),
+    );
+    expect(status.label, 'Fixture artist · Playing');
+    expect(status.getSemanticsData().flagsCollection.isLiveRegion, isTrue);
+
+    await tester.tap(find.byTooltip('Pause'));
+    await tester.pumpAndSettle();
+    status = tester.getSemantics(
+      find.byKey(const ValueKey('now-playing-status')),
+    );
+    expect(status.label, 'Fixture artist · Paused');
+    expect(status.getSemanticsData().flagsCollection.isLiveRegion, isTrue);
+    semantics.dispose();
+  });
+
   testWidgets('loads lyrics for the exact selected provider identity', (
     tester,
   ) async {

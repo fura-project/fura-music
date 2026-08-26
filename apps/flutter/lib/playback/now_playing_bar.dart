@@ -306,15 +306,21 @@ class _TrackInfo extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          '$artist · $status',
-          key: const ValueKey('now-playing-status'),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: error
-                ? theme.colorScheme.error
-                : theme.colorScheme.onSurfaceVariant,
+        Semantics(
+          container: true,
+          liveRegion: true,
+          label: '$artist · $status',
+          excludeSemantics: true,
+          child: Text(
+            '$artist · $status',
+            key: const ValueKey('now-playing-status'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: error
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ],
