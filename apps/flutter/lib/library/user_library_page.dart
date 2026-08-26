@@ -5,6 +5,7 @@ import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
@@ -136,9 +137,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 key: ValueKey('user-library-refresh-progress'),
               ),
             if (_controller.refreshFailure case final failure?)
-              _LibraryRefreshFailure(
+              LibraryRefreshFailureBanner(
                 key: const ValueKey('user-library-refresh-failure'),
-                failure: failure,
+                message: _refreshFailureCopy(failure),
                 canRetry: _controller.canRetryRefresh,
                 onRetry: _controller.retryRefresh,
                 onDismiss: _controller.dismissRefreshFailure,
@@ -524,45 +525,6 @@ class _LibraryFailure extends StatelessWidget {
       ],
     );
   }
-}
-
-class _LibraryRefreshFailure extends StatelessWidget {
-  const _LibraryRefreshFailure({
-    required this.failure,
-    required this.canRetry,
-    required this.onRetry,
-    required this.onDismiss,
-    super.key,
-  });
-
-  final UserLibraryFailure failure;
-  final bool canRetry;
-  final VoidCallback onRetry;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    liveRegion: true,
-    child: MaterialBanner(
-      content: Text(_refreshFailureCopy(failure)),
-      leading: const Icon(Icons.sync_problem_rounded),
-      actions: [
-        if (canRetry)
-          TextButton(
-            key: const ValueKey('user-library-refresh-retry'),
-            onPressed: onRetry,
-            child: const Text('Try again'),
-          ),
-        IconButton(
-          key: const ValueKey('user-library-refresh-dismiss'),
-          tooltip: 'Dismiss refresh message',
-          onPressed: onDismiss,
-          icon: const Icon(Icons.close_rounded),
-        ),
-      ],
-    ),
-  );
 }
 
 class _CenteredLibraryMessage extends StatelessWidget {

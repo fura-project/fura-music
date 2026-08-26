@@ -28,7 +28,9 @@ class PlaylistDetailController extends ChangeNotifier {
   bool _hasMore = false;
   int _nextOffset = 0;
   bool _isLoadingMore = false;
+  bool _isRefreshing = false;
   UserLibraryFailure? _appendFailure;
+  UserLibraryFailure? _refreshFailure;
   PlaylistTrackPageLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
@@ -39,23 +41,31 @@ class PlaylistDetailController extends ChangeNotifier {
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
+  bool get isLoading => _operation != null;
+  bool get isRefreshing => _isRefreshing;
   UserLibraryFailure? get appendFailure => _appendFailure;
+  UserLibraryFailure? get refreshFailure => _refreshFailure;
   bool get canLoadMore =>
-      _stage == PlaylistDetailStage.content && _hasMore && !_isLoadingMore;
-  bool get canRetryMore =>
-      _appendFailure == UserLibraryFailure.network ||
-      _appendFailure == UserLibraryFailure.serviceUnavailable ||
-      _appendFailure == UserLibraryFailure.invalidResponse ||
-      _appendFailure == UserLibraryFailure.coreUnavailable;
+      _stage == PlaylistDetailStage.content &&
+      _hasMore &&
+      !_isLoadingMore &&
+      !_isRefreshing;
+  bool get canRetryMore => !_isRefreshing && _isRetryable(_appendFailure);
 
   bool get canRetry =>
-      _stage == PlaylistDetailStage.error &&
-      (_failure == UserLibraryFailure.network ||
-          _failure == UserLibraryFailure.serviceUnavailable ||
-          _failure == UserLibraryFailure.invalidResponse ||
-          _failure == UserLibraryFailure.coreUnavailable);
+      _stage == PlaylistDetailStage.error && _isRetryable(_failure);
 
-  Future<void> load() async {
+  bool get canRetryRefresh => _isRetryable(_refreshFailure);
+
+  Future<void> load() => _load(preserveSnapshot: false);
+
+  Future<void> refresh() => _load(
+    preserveSnapshot:
+        _stage == PlaylistDetailStage.content ||
+        _stage == PlaylistDetailStage.empty,
+  );
+
+  Future<void> _load({required bool preserveSnapshot}) async {
     final generation = ++_generation;
     _operation?.cancel();
     final operation = _gateway.beginLoad(
@@ -64,36 +74,50 @@ class PlaylistDetailController extends ChangeNotifier {
       size: pageSize,
     );
     _operation = operation;
-    _tracks = const [];
     _failure = null;
-    _total = 0;
-    _hasMore = false;
-    _nextOffset = 0;
     _isLoadingMore = false;
+    _isRefreshing = preserveSnapshot;
     _appendFailure = null;
-    _stage = PlaylistDetailStage.loading;
+    _refreshFailure = null;
+    if (!preserveSnapshot) {
+      _tracks = const [];
+      _total = 0;
+      _hasMore = false;
+      _nextOffset = 0;
+      _stage = PlaylistDetailStage.loading;
+    }
     _notify();
 
     final result = await operation.run();
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
-    _failure = result.failure;
-    if (result.failure == null &&
+    _isRefreshing = false;
+    final validSuccess =
+        result.failure == null &&
         result.offset == 0 &&
-        (!result.hasMore || result.tracks.isNotEmpty)) {
+        (!result.hasMore || result.tracks.isNotEmpty);
+    if (validSuccess) {
       _tracks = List.unmodifiable(result.tracks);
       _total = result.total;
       _hasMore = result.hasMore;
       _nextOffset = result.tracks.length;
+      _failure = null;
       _stage = _tracks.isEmpty
           ? PlaylistDetailStage.empty
           : PlaylistDetailStage.content;
+    } else if (preserveSnapshot &&
+        _canRetainSnapshot(
+          result.failure ?? UserLibraryFailure.invalidResponse,
+        )) {
+      _failure = null;
+      _refreshFailure = result.failure ?? UserLibraryFailure.invalidResponse;
     } else {
       _tracks = const [];
       _total = 0;
       _hasMore = false;
-      _failure ??= UserLibraryFailure.invalidResponse;
+      _nextOffset = 0;
+      _failure = result.failure ?? UserLibraryFailure.invalidResponse;
       _stage = switch (_failure!) {
         UserLibraryFailure.authenticationRequired ||
         UserLibraryFailure.replaced ||
@@ -178,6 +202,25 @@ class PlaylistDetailController extends ChangeNotifier {
     if (canRetryMore) unawaited(loadMore());
   }
 
+  void retryRefresh() {
+    if (canRetryRefresh) unawaited(refresh());
+  }
+
+  void dismissRefreshFailure() {
+    if (_refreshFailure == null) return;
+    _refreshFailure = null;
+    _notify();
+  }
+
+  bool _isRetryable(UserLibraryFailure? failure) =>
+      failure == UserLibraryFailure.network ||
+      failure == UserLibraryFailure.serviceUnavailable ||
+      failure == UserLibraryFailure.invalidResponse ||
+      failure == UserLibraryFailure.coreUnavailable;
+
+  bool _canRetainSnapshot(UserLibraryFailure? failure) =>
+      _isRetryable(failure) || failure == UserLibraryFailure.alreadyRunning;
+
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
   void _notify() {
@@ -190,6 +233,7 @@ class PlaylistDetailController extends ChangeNotifier {
     ++_generation;
     _operation?.cancel();
     _operation = null;
+    _isRefreshing = false;
     super.dispose();
   }
 }

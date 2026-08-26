@@ -381,6 +381,99 @@ void main() {
     expect(find.text('Your playlists'), findsOneWidget);
   });
 
+  testWidgets('failed detail refresh keeps tracks visible and retries', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final detailGateway = _WidgetDetailGateway([
+      const PlaylistTrackPageResult(
+        total: 1,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:current',
+            title: 'Current track',
+            artistNames: ['Current artist'],
+          ),
+        ],
+      ),
+      const PlaylistTrackPageResult(failure: UserLibraryFailure.network),
+      const PlaylistTrackPageResult(
+        total: 1,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:fresh',
+            title: 'Fresh track',
+            artistNames: ['Fresh artist'],
+          ),
+        ],
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(
+            playlists: [
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'favorite:refresh',
+                title: 'Refresh me',
+              ),
+            ],
+          ),
+        ]),
+        playlistDetailGateway: detailGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Refresh me').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Refresh playlist'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current track'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('playlist-detail-refresh-failure')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(const ValueKey('playlist-detail-refresh-failure')),
+          )
+          .getSemanticsData()
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+    semantics.dispose();
+    expect(find.textContaining('previous tracks'), findsOneWidget);
+    expect(find.text('Couldn’t reach QQ Music'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('library-refresh-retry')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fresh track'), findsOneWidget);
+    expect(find.text('Current track'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('playlist-detail-refresh-failure')),
+      findsNothing,
+    );
+  });
+
   testWidgets('retries a transient library failure', (tester) async {
     await tester.pumpWidget(
       MusicApp(
@@ -455,7 +548,7 @@ void main() {
     expect(find.text('Couldn’t reach QQ Music'), findsNothing);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const ValueKey('user-library-refresh-retry')));
+    await tester.tap(find.byKey(const ValueKey('library-refresh-retry')));
     await tester.pumpAndSettle();
 
     expect(find.text('Fresh library'), findsOneWidget);

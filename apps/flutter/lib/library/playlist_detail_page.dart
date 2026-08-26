@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -59,10 +60,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           AnimatedBuilder(
             animation: _controller,
             builder: (context, _) => IconButton(
-              tooltip: 'Refresh playlist',
-              onPressed: _controller.stage == PlaylistDetailStage.loading
-                  ? null
-                  : _controller.load,
+              tooltip: _controller.isRefreshing
+                  ? 'Refreshing playlist'
+                  : 'Refresh playlist',
+              onPressed: _controller.isLoading ? null : _controller.refresh,
               icon: const Icon(Icons.refresh_rounded),
             ),
           ),
@@ -86,6 +87,18 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                         : widget.playlist.trackCount,
                     desktop: desktop,
                   ),
+                  if (_controller.isRefreshing)
+                    const LinearProgressIndicator(
+                      key: ValueKey('playlist-detail-refresh-progress'),
+                    ),
+                  if (_controller.refreshFailure case final failure?)
+                    LibraryRefreshFailureBanner(
+                      key: const ValueKey('playlist-detail-refresh-failure'),
+                      message: _refreshFailureCopy(failure),
+                      canRetry: _controller.canRetryRefresh,
+                      onRetry: _controller.retryRefresh,
+                      onDismiss: _controller.dismissRefreshFailure,
+                    ),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 240),
@@ -706,6 +719,22 @@ class _DetailMessage extends StatelessWidget {
     'Wait for it to finish, then try again.',
   ),
   null => ('Couldn’t load this playlist', 'Try again or sign in again.'),
+};
+
+String _refreshFailureCopy(UserLibraryFailure failure) => switch (failure) {
+  UserLibraryFailure.network =>
+    'Couldn’t refresh this playlist. Check your connection; the previous '
+        'tracks are still shown.',
+  UserLibraryFailure.serviceUnavailable =>
+    'QQ Music couldn’t refresh this playlist. The previous tracks are still '
+        'shown.',
+  UserLibraryFailure.invalidResponse =>
+    'QQ Music returned an incomplete refresh. The previous complete tracks '
+        'are still shown.',
+  UserLibraryFailure.coreUnavailable =>
+    'The music core couldn’t refresh this playlist. The previous tracks are '
+        'still shown.',
+  _ => 'Couldn’t refresh this playlist. The previous tracks are still shown.',
 };
 
 String _duration(int? seconds) {

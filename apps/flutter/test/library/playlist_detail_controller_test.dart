@@ -167,6 +167,165 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'refresh retains the complete paged snapshot after transient failure',
+    () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(playlist, gateway);
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        const PlaylistTrackPageResult(
+          total: 3,
+          hasMore: true,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'track:current',
+              title: 'Current track',
+              artistNames: [],
+            ),
+          ],
+        ),
+      );
+      await initial;
+
+      final refresh = controller.refresh();
+      expect(controller.stage, PlaylistDetailStage.content);
+      expect(controller.tracks.single.title, 'Current track');
+      expect(controller.total, 3);
+      expect(controller.hasMore, isTrue);
+      expect(controller.isRefreshing, isTrue);
+      expect(controller.isLoading, isTrue);
+      expect(controller.canLoadMore, isFalse);
+
+      gateway.complete(
+        1,
+        const PlaylistTrackPageResult(failure: UserLibraryFailure.network),
+      );
+      await refresh;
+
+      expect(controller.stage, PlaylistDetailStage.content);
+      expect(controller.tracks.single.title, 'Current track');
+      expect(controller.total, 3);
+      expect(controller.hasMore, isTrue);
+      expect(controller.refreshFailure, UserLibraryFailure.network);
+      expect(controller.canRetryRefresh, isTrue);
+      expect(controller.canLoadMore, isTrue);
+
+      final retry = controller.refresh();
+      gateway.complete(
+        2,
+        const PlaylistTrackPageResult(
+          total: 1,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'track:fresh',
+              title: 'Fresh track',
+              artistNames: [],
+            ),
+          ],
+        ),
+      );
+      await retry;
+
+      expect(controller.tracks.single.title, 'Fresh track');
+      expect(controller.total, 1);
+      expect(controller.hasMore, isFalse);
+      expect(controller.refreshFailure, isNull);
+
+      controller.dispose();
+    },
+  );
+
+  test('refresh clears loaded tracks after credential rejection', () async {
+    final gateway = _FakeDetailGateway();
+    final controller = PlaylistDetailController(playlist, gateway);
+    final initial = controller.load();
+    gateway.complete(
+      0,
+      const PlaylistTrackPageResult(
+        total: 1,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:private',
+            title: 'Private track',
+            artistNames: [],
+          ),
+        ],
+      ),
+    );
+    await initial;
+
+    final refresh = controller.refresh();
+    gateway.complete(
+      1,
+      const PlaylistTrackPageResult(
+        failure: UserLibraryFailure.credentialRejected,
+      ),
+    );
+    await refresh;
+
+    expect(controller.stage, PlaylistDetailStage.credentialRejected);
+    expect(controller.tracks, isEmpty);
+    expect(controller.total, 0);
+    expect(controller.refreshFailure, isNull);
+
+    controller.dispose();
+  });
+
+  test(
+    'replacement detail refresh cancels and suppresses its late result',
+    () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(playlist, gateway);
+      final initial = controller.load();
+      gateway.complete(0, const PlaylistTrackPageResult());
+      await initial;
+
+      final firstRefresh = controller.refresh();
+      final replacementRefresh = controller.refresh();
+      expect(gateway.operations[1].cancelCalls, 1);
+
+      gateway.complete(
+        2,
+        const PlaylistTrackPageResult(
+          total: 1,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'track:replacement',
+              title: 'Replacement track',
+              artistNames: [],
+            ),
+          ],
+        ),
+      );
+      await replacementRefresh;
+
+      gateway.complete(
+        1,
+        const PlaylistTrackPageResult(
+          total: 1,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'track:late',
+              title: 'Late track',
+              artistNames: [],
+            ),
+          ],
+        ),
+      );
+      await firstRefresh;
+
+      expect(controller.tracks.single.title, 'Replacement track');
+      controller.dispose();
+    },
+  );
+
   test('restart and dispose cancel and suppress late results', () async {
     final gateway = _FakeDetailGateway();
     final controller = PlaylistDetailController(playlist, gateway);
