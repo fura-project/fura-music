@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M3
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: "Album metadata-to-credited-Artist navigation"
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -45,11 +45,11 @@ M1's real-account playback observation remains open; M2 is checkpointed and M3 Q
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M3 remains active. Playlist Track-to-credited-Artist navigation is complete; the next action is a fresh repository-wide ranking against Roadmap value, documented risks, protocol correctness, platform evidence, and reproduced user-path gaps before another finite slice is selected.
+- M3 remains active. A fresh global ranking selected Album metadata-to-credited-Artist navigation: expose only validated canonical credits, require explicit collaboration selection, retain a bounded Artist plus nested Album route above every existing Album origin, and restore the exact originating Album/collection and shared playback owner on return. Global now-playing navigation and availability/quality semantics remain deferred.
 
 # Next Candidates
 
-1. Re-rank the active M3 workstream from repository evidence; bounded candidates include Album-metadata-to-Artist coherence and global now-playing catalog navigation, but neither is selected merely because it is adjacent to the completed playlist UI work.
+1. Implement the selected Album metadata-to-credited-Artist slice with bounded single/multi-credit actions, callback coverage for every Album origin, retained nested return state, and focused plus full regression coverage.
 2. When convenient, rebuild/relaunch Linux debug and retest one ordinary track. If it plays, exercise queue navigation and synchronized word-timed lyrics; if it still fails, retain only the coarse UI state and stop speculative protocol changes.
 3. Validate Apple/Windows vault/runtime paths and a physical Android device only when those target environments become available; do not infer them from the current host or emulator.
 
