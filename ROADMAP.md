@@ -1,314 +1,81 @@
 # Roadmap
 
-## Current Milestone — M1 First QQ Music Vertical Slice
+The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
-### Goal
+## Acceptance Milestone — M1 First QQ Music Vertical Slice
 
-Deliver the smallest coherent user journey from QQ Music sign-in through word-level lyrics while proving the in-process Flutter/Rust architecture.
+**Goal:** sign in and restore credentials, browse the user's playlists and details, play a Track through the Rust-backed positional Queue, and follow synchronized/word-timed lyrics.
 
-### Progressive phases
+**Implemented and automated-verified:** authentication/restore, user playlists/details, media resolution, foreground playback composition, Rust Queue, synchronized lyrics, word timing, retained presentation, Linux local-media integration, and bounded Linux/Android development packaging.
 
-1. **Executable foundation** — governance, Flutter/Rust workspaces, thin typed bridge, minimum domain/provider boundaries, QQ Music client seam, and offline tests.
-2. **Authentication** — login flow, credential state, safe persistence boundary, and restore behavior.
-3. **User library** — user playlists and playlist details backed by real QQ Music behavior and sanitized fixtures or repeatable integration evidence.
-4. **Playback** — media resolution, playback, and queue behavior.
-5. **Lyrics** — lyric loading, QRC parsing, and basic word-level presentation.
+**Acceptance gap:** one maintainer-operated, secret-safe observation of corrected authenticated QQ playback → Queue navigation → synchronized lyrics → word timing. Offline, anonymous, local-file, or Fixture tests cannot close this user-facing claim.
 
-### Acceptance criteria
-
-- A user can complete sign-in, restart the app, and regain the appropriate credential state.
-- The user can browse their playlists, open one, start a playable track, and manage the queue.
-- Synchronized lyrics and a basic word-level lyric experience work for supported tracks.
-- Flutter and Rust remain in one process with a thin typed boundary.
-- QQ Music protocol and mapping behavior has offline regression coverage; live integration tests are separate.
-- Linux desktop and at least one mobile target build successfully before the milestone checkpoint.
-- No runtime third-party QQ Music API server or unapproved provider expansion exists.
-
-### Dependencies
-
-- Verified QQ Music protocol behavior from real responses, repeatable integration tests, or cross-validation across independent active implementations.
-- A platform-safe credential storage approach before any public alpha.
+This local evidence gap does not block independently authorized maintenance. No agent may read or persist the maintainer's stored credentials to automate it.
 
 ## Completed Checkpoint — M2 Reliability and Daily-Use Quality
 
-### Goal
-
-Make the implemented M1 chain reliable and coherent enough for daily use without expanding the product beyond QQ Music-first playback and library flows.
-
-### Authorized themes
-
-- Failure recovery and truthful unavailable/error states.
-- Playback, queue, lyric, and authentication resilience.
-- Adaptive desktop/mobile interaction quality and accessibility.
-- Packaging and runtime evidence for already intended platforms.
-- Cache policy only when a demonstrated reliability or daily-use gap requires it.
-- Bounded product-completeness, UX-flow, and architecture-boundary discovery inside these themes.
-
-Task selection may start from existing evidence or a bounded discovery pass. A remaining M1 acceptance observation does not globally block independent M2 work and does not become implicitly satisfied by it. This workstream does not authorize new Providers, Search, Comments, MV, Downloads, Social features, plugin infrastructure, or unrelated product expansion.
-
-### Progress
-
-Completed slices cover shared keyboard/media transport, truthful seek and volume, adaptive Track and queue actions, destructive confirmations, ordered local sign-out recovery, meaningful accessibility announcements, album-art queue presentation, synchronized lyric following/seeking, session-local library/detail refresh snapshots, local detail back behavior, collection-position restoration, and originating-row focus restoration. These changes reuse the existing controllers and Rust queue rules rather than introducing new navigation, cache, background-playback, or state-management systems.
-
-### Exit criteria
-
-1. The implemented sign-in, restore, library, detail, playback, queue, and lyric chain has explicit loading, empty, failure, retry, and cancellation behavior where applicable.
-2. Playback and queue controls remain coherent under repeated user actions, unavailable media, resolution failures, and stale asynchronous completion.
-3. Library/detail refresh and navigation preserve or clear visible state intentionally rather than through accidental rebuild behavior.
-4. Desktop and compact layouts keep their primary actions reachable with keyboard, pointer, and touch where applicable.
-5. Meaningful authentication, library, playback, queue, and lyric changes expose non-duplicated accessibility semantics.
-6. Offline Rust and Flutter suites cover the reusable rules and reproduced regressions; live QQ behavior remains separately gated.
-7. Linux and the available Android development targets retain bounded build/runtime evidence, with unsupported claims recorded explicitly.
-8. A checkpoint review finds no known high-value M2 correctness or daily-use gap left unaddressed or untracked, and M1 user-operated evidence remains represented truthfully.
-
-### Checkpoint
-
-Completed on 2026-08-26. The criterion-by-criterion evidence and its explicit platform/live-service limits are recorded in `docs/development/m2-checkpoint-review.md`. Later M2-class regressions remain valid bug work; the checkpoint is not a prohibition on fixes.
+- **Goal:** make the first vertical slice recoverable and usable under repeated actions, failures, refresh, adaptive layouts, keyboard/pointer/touch, and accessibility semantics.
+- **Outcome:** shared transport/Queue behavior, failure recovery, retained refresh, sign-out ordering, adaptive access, and bounded Linux/Android development evidence were implemented without a new state/navigation framework or background-playback architecture.
+- **Checkpoint:** 2026-08-26 — [M2 review](docs/development/m2-checkpoint-review.md).
 
 ## Completed Checkpoint — M3 QQ Music Core Product Coverage
 
-### Goal
-
-Expand from the first vertical slice into a coherent QQ Music client while preserving the accepted Provider, Domain, Bridge, and presentation boundaries.
-
-### Authorized direction
-
-- QQ Music catalog Search.
-- Evidence-backed QQ Music home and recommendation surfaces.
-- Album and Artist browsing.
-- Richer QQ Music library navigation.
-- Track availability and quality representation where protocol evidence exists.
-- Other QQ-native catalog flows discovered from real product use and bounded before implementation.
-
-M3 begins with bounded discovery after the M2 checkpoint. Each slice requires discovery or protocol/product evidence, a finite acceptance boundary, and offline regression coverage where reusable mapping or rules are introduced. This is not authorization for external Providers, podcast/social features, a plugin marketplace, or a download platform.
-
-### Exit criteria
-
-1. QQ Music Track, Artist, Album, and Playlist Search route through provider-neutral results into existing browsing and queue paths.
-2. Album and Artist browsing preserve opaque identity boundaries and support coherent retained return from every implemented origin.
-3. Discovery includes several evidence-backed QQ-native catalog/recommendation surfaces without exposing raw heterogeneous cards to Flutter.
-4. Richer authenticated library navigation covers the existing playlist, favorite-Album, and favorite-Artist collections with exact account replacement/rejection handling.
-5. Current Track and now-playing surfaces remain adaptive and reuse one queue/playback/lyric owner.
-6. Offline tests and available platform checks cover introduced reusable rules and reproduced adaptive/navigation failures while live-service claims remain separately bounded.
-7. Architecture/scope review finds no Provider/UI leakage, sidecar, speculative infrastructure, unapproved Provider, or product-category expansion.
-8. Unsupported availability/quality, Home, offline/cache, platform, and release claims remain explicitly deferred rather than guessed.
-
-### Progress
-
-- **Track search:** implemented as the first finite M3 slice on 2026-08-26. Direct anonymous QQ Music protocol mapping returns provider-neutral paged Tracks through a cancellable typed Bridge. The adaptive Flutter surface owns query replacement, empty/error/retry/pagination state and hands results to the existing queue/playback path. Offline protocol, Provider, Bridge, controller, navigation, and primary UI-flow tests pass; this is not a real-account CDN playback claim.
-- **Album browsing:** implemented as the second finite M3 slice on 2026-08-26 after current implementation evidence and a bounded anonymous Album detail/song probe. Search items retain an optional provider-neutral Album identity; a direct bounded QQ operation returns paged Album Tracks through a cancellable Bridge; and adaptive Flutter navigation preserves Search state while reusing the existing queue. Full Album metadata, mutation, mixed-result Search, and a broad catalog abstraction remain out of scope.
-- **Artist browsing:** implemented as the third finite M3 slice on 2026-08-26 after two current independent request shapes and bounded anonymous pagination probes. Search items retain all validated provider-neutral credited Artist identities; a direct exact-size QQ operation returns offset-paged Artist Tracks through a cancellable Bridge; explicit multi-Artist selection preserves collaborations; and adaptive Flutter navigation preserves Search state while reusing the existing queue. Artist biography/artwork/details, follows, Home, quality selection, and a broad catalog abstraction remain out of scope; Albums were added by the later fifth slice.
-- **Recommended playlists:** implemented as the fourth finite M3 slice on 2026-08-26 after two current independent implementations and bounded anonymous exact-size/pagination probes. A direct public QQ operation maps offset-paged `PlaylistSummary` rows through a small Recommendations contract and cancellable Bridge; adaptive Flutter discovery preserves state while opening the existing authenticated playlist-detail and queue path. Pagination advances by raw page length rather than treating the observed `FromLimit` bound as a cursor. Heterogeneous Home cards, personalization claims, radio/daily recommendations, rankings, mutation, and a generic recommendation runtime remain out of scope.
-- **Artist albums:** implemented as the fifth finite M3 slice on 2026-08-26 after two current independent implementations and bounded anonymous parameter/pagination probes. A direct public Artist-Album operation maps exact-size offset pages into existing `AlbumSummary` values through a small Catalog contract and cancellable Bridge; the existing Artist page loads an adaptive Albums section lazily, preserves both sections, and nests the existing Album/queue path. The request uses the real-service `num` page-size field rather than the conflicting ignored `number` reference. Biography/artwork/follow, discography filters, mixed-result Search, rankings, and a generic catalog runtime remain out of scope.
-- **Direct Artist Search:** implemented as the sixth finite M3 slice on 2026-08-26 after three current implementation/fixture references and a bounded anonymous exact-size/terminal-page probe. A separate provider-neutral Artist-search page maps the Desktop type-1 operation into existing opaque `ArtistSummary` values through a cancellable Bridge. Flutter preserves independent Tracks/Artists query and result state, hands direct results to the existing Artist Tracks/Albums and nested Album/queue path, and does not introduce a mixed Search union or navigation framework. MV/user Search, suggestions/history/hot words, biography/follow, and generic Search infrastructure remain out of scope; Album and Playlist Search were added by the later seventh and ninth slices.
-- **Direct Album Search:** implemented as the seventh finite M3 slice on 2026-08-26 after two current independent implementations and a bounded anonymous five-page exact-size/terminal probe. A separate provider-neutral Album-search page maps the Desktop type-2 operation into existing opaque `AlbumSummary` values through a cancellable Bridge. Flutter preserves independent Tracks/Artists/Albums query and result state, hands direct Album results to the existing Album Tracks/queue path, and keeps the 360px control usable without adding a mixed Search union or navigation framework. MV/user Search, suggestions/history/hot words, Album metadata expansion/mutation, and generic Search infrastructure remain out of scope; Playlist Search was added by the later ninth slice.
-- **Current QQ ranking lists:** implemented as the eighth finite M3 slice on 2026-08-26 after two independent current implementations and bounded anonymous list/two-page detail probes. Direct anonymous QQ list/detail operations map grouped summaries and paged Tracks through a small provider-neutral Rankings contract and cancellable Bridge. Flutter preserves independent Playlists/Rankings discovery state, opens the current ranking, and reuses the existing queue. Period remains optional display metadata and `topId` always resolves the service's current period; history selection, subscriptions, third-party charts, heterogeneous Home cards, and generic recommendation/catalog infrastructure remain out of scope.
-- **Direct Playlist Search:** implemented as the ninth finite M3 slice on 2026-08-26 after two current source/fixture references and a bounded anonymous three-page Desktop probe. A separate provider-neutral Playlist-search page maps the Desktop type-3 operation into existing opaque `PlaylistSummary` values through a cancellable Bridge. Flutter preserves independent Tracks/Artists/Albums/Playlists state, keeps the compact four-type control horizontally reachable, and opens the existing public playlist-detail/queue path without reloading Search. Service `nextpage`, not returned row count, owns continuation because one observed nonterminal five-row request returned four rows. Mixed Search, creator profiles, history/suggestions/hot words, playlist mutation, and generic Search/navigation infrastructure remain out of scope.
-- **Authenticated QQ Radar recommendations:** implemented as the tenth finite M3 slice on 2026-08-26 after two current independent implementations and a bounded anonymous two-page structural probe. A direct credential-bearing Radar operation maps `VecSongs[*].Track` into provider-neutral page-numbered Tracks through a cancellable Bridge. Service `Page`/`HasMore` owns continuation, while Flutter preserves independent Playlists/Rankings/Radar state, deduplicates the observed provider/opaque identity overlap, cleans the shared vault only after explicit credential rejection, and delegates play/add actions to the existing queue. Anonymous evidence does not establish personalization or recommendation quality; endless autoplay, feedback, heterogeneous Home shelves, daily-song aggregation, new queue semantics, and generic recommendation infrastructure remain out of scope.
-- **Regional new album releases:** implemented as the eleventh finite M3 slice on 2026-08-26 after a current direct implementation, its live-gated pagination tests, and bounded anonymous two-page plus six-region structural probes. A direct public operation maps typed region/offset pages into provider-neutral Album releases with credited Artists and optional release date through a cancellable Bridge. Flutter keeps New Albums as a fourth lazy retained Discover state, replaces region requests exactly, adapts list/grid presentation, and opens the existing Album/Track/queue route without reloading prior state. Heterogeneous Home shelves, editorial/tracking cards, notifications/cache, Album mutation or detail expansion, Track context navigation, and generic recommendation/catalog infrastructure remain out of scope.
-- **Existing Album-page metadata:** implemented as the twelfth finite M3 slice on 2026-08-26 after a current direct implementation/live-gated test, bounded anonymous exact-request and field-shape probes, and an independent legacy product path. A direct public operation maps exact Album MID into provider-neutral canonical Album/Artist identity plus bounded optional display metadata through a cancellable Bridge. Flutter loads it independently beside Tracks, keeps Track/queue use available on detail failure, retries explicitly, and presents the complete description through adaptive compact/desktop surfaces for every existing Album origin. Album favorites/mutation, booklet/wiki/video/rights/tracking fields, Artist navigation, Track identity propagation, cache, and generic catalog/navigation infrastructure remain out of scope.
-- **Authenticated favorite Albums:** implemented as the thirteenth finite M3 slice on 2026-08-26 after two current independent implementations, a real-account failure record for the tempting musicu route, and a bounded no-Cookie authentication-shape probe. A direct legacy profile-asset request maps strict offset pages into existing opaque `AlbumSummary` values through exact Provider credential candidate/rejection/replacement rules and a cancellable Bridge. Flutter retains an adaptive collection while the existing Album Tracks/details/queue path is open, paginates and retries explicitly, and cleans the shared vault only for the evidenced global rejection code. Favorite mutation, favorite Artists, cache/automatic refresh, a generic library union, Track context navigation, and generic navigation infrastructure remain out of scope.
-- **Playlist Track-to-Album navigation:** implemented as the fourteenth finite M3 slice on 2026-08-26 after a repository-wide mapping audit proved that the common QQ Track response already carried valid Album identity which non-Search surfaces discarded. Shared Domain, Bridge, Dart, and Rust queue values now preserve optional same-Provider Album context without parsing opaque Track identity. Existing playlist-detail origins expose the existing Album route through bounded desktop keyboard/mouse and mobile long-press actions, while retained local presentation preserves loaded playlist and playback state on return. Credited-Artist context, actions on other Track surfaces, global now-playing catalog navigation, new queue semantics, and generic navigation infrastructure remain out of scope.
-- **Playlist Track-to-Artist navigation:** implemented as the fifteenth finite M3 slice on 2026-08-27 after the shared Track audit proved that every QQ Track response already carried credited Artist identities which the common Provider mapper discarded. Shared Domain, Bridge, Dart, and Rust queue values now preserve every validated same-Provider credit; playlist-detail context surfaces open one credit directly or require explicit collaboration selection. The retained Artist route can nest the existing Album route and returns Album → Artist → playlist without reloading the originating playlist or replacing playback ownership. Album-metadata links, actions on other Track surfaces, global now-playing navigation, biography/follow, new queue semantics, and generic navigation infrastructure remain out of scope.
-- **Album metadata-to-Artist navigation:** implemented as the sixteenth finite M3 slice on 2026-08-27 from canonical Album details that already supplied validated credited Artists. Every pre-existing Album origin exposes one credit directly or requires explicit bounded collaboration selection, then retains an Artist and one nested Album above the exact originating Album/collection. Platform and AppBar return unwind nested Album → Artist → originating Album without reloading underlying state or replacing the shared playback owner. Pre-detail actions, recursive route history, global now-playing navigation, biography/follow, protocol changes, and generic navigation infrastructure remain out of scope.
-- **Typed QQ new-song channels:** implemented as the seventeenth finite M3 slice on 2026-08-27 after two current independent direct implementations and a bounded anonymous category/field-shape probe. A direct public `newsong.NewSongServer/get_new_song_info` operation maps six exact service categories and one bounded whole-response Track collection through a small provider-neutral Catalog contract and cancellable Bridge. Flutter keeps New Songs as a fifth lazy retained Discover state, replaces categories exactly, keeps all categories reachable at 360px, and delegates play/add actions to the existing queue. No pagination is invented; heterogeneous Home shelves, editorial tags, personalization or quality claims, radio/autoplay, cache, new queue semantics, and generic recommendation infrastructure remain out of scope.
-- **Current Track catalog navigation:** implemented as the eighteenth finite M3 slice on 2026-08-27 from the already-validated Album and credited-Artist context retained by every queue Track. One presentation-only callback scope connects every existing now-playing bar to a topmost retained Artist/Album overlay; single destinations open directly, collaborations use an adaptive bounded chooser, and platform/AppBar return restores the exact originating page and controller state. A modal selection is discarded when playback moves to a different queue position or context. Recursive route history, protocol/Domain/Bridge/queue changes, per-row expansion, and generic navigation infrastructure remain out of scope.
-- **Adaptive immersive now playing:** implemented as the nineteenth finite M3 slice on 2026-08-27 from the explicit `PROJECT.md` core-experience requirement and a reproduced missing full current-Track surface. One presentation-only callback opens a retained topmost page from every existing bar; wide layout pairs large artwork with the existing synchronized lyric panel, compact layout stacks them, and the unchanged bar preserves transport/queue/volume behavior. Queue replacement updates in place, queue clearing is explicit, and AppBar/platform return restores the exact origin. Palette extraction, gestures, background playback, mini-player/audio/queue rewrites, protocol/Domain/Bridge changes, and navigation infrastructure remain out of scope.
-- **Authenticated favorite Artists:** implemented as the twentieth finite M3 slice on 2026-08-27 after two independent current implementations, one current login-gated integration route, and the repository's prior bounded proof that Artist browsing accepts MID without numeric ID. A direct credential-bearing `music.concern.RelationList/GetFollowSingerList` page maps required MID/name rows into honest `artist:-:<mid>` summaries through exact credential candidate/rejection/replacement rules and a cancellable Bridge. Flutter retains an adaptive collection through Artist Tracks/Albums and nested Album/queue navigation, advances by raw rows, suppresses stale work, and cleans the shared vault only after explicit rejection. Follow/unfollow mutation, biography/social fields, cache/automatic refresh, stored-account probing, numeric-ID fabrication, generic library unions, and navigation infrastructure remain out of scope.
-- **Compact saved-collection actions:** implemented as the twenty-first finite M3 slice on 2026-08-27 from a reproduced 360 px conflict after the authenticated root reached six toolbar actions. The `Your music` title remains visible; compact width groups only favorite Artists/Albums into one bounded typed menu while Search, Discover, refresh, and sign-out remain direct, and wider layouts keep the two original collection icons. Touch/pointer, semantics, Enter activation, no-overflow, exact destination, retained state, and compact/wide focus-return regressions pass without adding a navigation framework or changing collection controllers.
-
-### Checkpoint
-
-Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, deferred directions, and exact live/platform limits are recorded in `docs/development/m3-checkpoint-review.md`. Future M3-class regressions or newly evidenced QQ-native gaps remain valid bounded work; the checkpoint is not a claim of release readiness or live-service compatibility.
+- **Goal:** expand the vertical slice into a coherent QQ Music-first catalog and personal-library client while preserving Provider, Domain, Bridge, and Flutter ownership.
+- **Outcome:** Track/Artist/Album/Playlist Search; Album/Artist browsing and metadata; recommended Playlists, rankings, Radar, new Albums/Songs; favorite Albums/Artists; and retained Track-to-catalog/Now Playing journeys were implemented. Only QQ Music exists as a Provider.
+- **Checkpoint:** 2026-08-27 — [M3 review](docs/development/m3-checkpoint-review.md).
 
 ## Completed Checkpoint — M4 Deliberate Material 3 Product Experience
 
-### Goal
+- **Goal:** establish one official-Flutter Material 3 baseline across desktop and compact/mobile without replacing the retained presentation or music architecture.
+- **Outcome:** centralized light/dark Material foundations, adaptive shell/content hierarchy, shared Track/catalog state vocabulary, Queue/Now Playing/Lyrics hierarchy, 360 px reachability, and accessibility/focus regressions were implemented.
+- **Deferred:** theme personas, artwork-derived global color, expressive visual systems, and speculative design-system infrastructure.
+- **Checkpoint:** 2026-08-27 — [M4 review](docs/development/m4-checkpoint-review.md).
 
-Turn the implemented QQ Music journeys into one coherent, mature Material 3 music product across desktop and compact/mobile while preserving the existing Provider, Domain, Bridge, playback, accessibility, and retained-navigation boundaries.
+## Completed Checkpoint — M5 Mainstream QQ Music Product Experience
 
-### Authorized themes
-
-- A lightweight official-Flutter Material 3 foundation: color, typography, shape, surface hierarchy, spacing, component themes, and consistent light/dark behavior.
-- An adaptive application shell with clear primary navigation, page-local actions, and utilities across compact, medium, and desktop widths.
-- Consistent music information hierarchy and action patterns across Library, Playlist, Album, Artist, Search, Discover, Now Playing, Queue, and Lyrics.
-- Desktop-appropriate density, keyboard/pointer/focus behavior, and compact reachability, touch targets, back behavior, and retained state.
-- Unified loading, empty, failure, retry, disabled, selected, and playing presentation without weakening existing semantics.
-
-### Progressive phases
-
-1. M4.1 — UI inventory and Material foundation.
-2. M4.2 — Adaptive application shell.
-3. M4.3 — Library and core browsing.
-4. M4.4 — Search and Discover.
-5. M4.5 — Playback, Queue, and Lyrics.
-6. M4.6 — Cross-platform polish.
-7. M4.7 — Checkpoint review.
-
-Each phase is elaborated only through bounded discovery and finite, evidence-backed slices. Existing retained local navigation must not be replaced merely because a different framework appears cleaner.
-
-### Exit criteria
-
-1. Major implemented journeys share a coherent Material 3 hierarchy, component language, state presentation, and predictable action patterns in light and dark modes.
-2. Desktop uses deliberate width, density, navigation, keyboard, pointer, and focus behavior rather than a stretched mobile layout.
-3. Compact/mobile keeps every primary destination and action reachable at 360 px with appropriate touch targets and no overflow or broken return behavior.
-4. Library, Search, Discover, Playlist, Album, Artist, Now Playing, Queue, and Lyrics preserve their existing controller ownership, retained state, and accessible loading/empty/error/retry/selected/playing behavior.
-5. Flutter remains presentation-only; QQ protocol, credentials, Provider mapping, opaque identity, queue semantics, and lyric timing remain in Rust behind the existing thin typed Bridge.
-6. Relevant focused regressions plus the repository's Dart/Flutter, Rust, Linux build, and packaged Bridge baselines pass, with live-service and unavailable-platform claims still explicitly bounded.
-7. A checkpoint review finds no untracked high-value Material product gap and confirms the default Material baseline is stable enough for a later separately authorized theme-persona phase.
-
-### Explicit non-goals
-
-- Quiet, Calm, Luminous, or Temporal theme personas; artwork-derived global palettes; glow, blur, shaders, visualizers, waveform branding, or signature motion systems.
-- A third-party Material 3 Expressive component library or a project-owned clone of the full M3 Expressive specification.
-- A theme plugin runtime, marketplace, DSL, broad design-system framework, new state-management or navigation framework, audio-engine replacement, Provider expansion, sidecar, or new product category.
-- Search history, suggestions, hot words, heterogeneous Home, comments, MV, downloads, social features, or other capability expansion under the name of visual completion.
-
-### Checkpoint
-
-Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, adaptive/accessibility limits, debt review, and exact live/platform boundaries are recorded in `docs/development/m4-checkpoint-review.md`. Future reproduced Material/adaptive regressions remain valid bounded work; theme personas and signature visual experiments still require separate Roadmap authorization. The checkpoint is not project completion, release readiness, or M1 acceptance.
-
-## Completed Checkpoint — M5 Mainstream QQ Music Product Experience & Core Feature Completion
-
-### Goal
-
-Turn the checkpointed Material client into a familiar, complete first-release QQ Music product: Home is the authenticated default, Discover, Search, and Library remain distinct first-class destinations, Now Playing remains persistent context, and the most important bounded gaps in playback and QQ-native track context are completed without changing the accepted architecture.
-
-### Authorized direction
-
-- A small, truthful Home composed from stable existing Library, catalog, recommendation, Search, and playback capabilities; no raw heterogeneous feed or unsupported personalization claim.
-- A coherent Library whose Playlists, favorite Albums, and favorite Artists are obvious sections rather than toolbar utilities, while preserving independent loading, error, pagination, retained state, and detail navigation.
-- Common playback modes: sequential, repeat all, repeat one, and shuffle. Rust owns authoritative queue-mode semantics; Flutter owns presentation and interaction.
-- A bounded Track context audit, provider-neutral read-only song comments, and initial QQ MV support after protocol/product discovery supplies current evidence.
-- A final product-completeness audit that classifies remaining gaps as agent-authorized, evidence-blocked, environment-blocked, human-decision work, or out of scope.
-
-### Progressive phases
-
-1. M5.1 — Mainstream adaptive shell and bounded useful Home.
-2. M5.2 — Coherent Library sections and retained navigation.
-3. M5.3 — Authoritative queue playback modes.
-4. M5.4 — Track context and read-only comments.
-5. M5.5 — Bounded QQ Music MV experience.
-6. M5.6 — Product-completeness audit and classified remaining gaps.
-7. M5.7 — Checkpoint review.
-
-Each phase begins with bounded discovery and a finite slice. Protocol-facing comments and MV work require current evidence before implementation. The user-operated M1 playback/Queue/Lyrics observation remains the highest-priority acceptance evidence when the maintainer supplies a coarse secret-safe result, but it does not block independent M5 work.
-
-M5.1 through M5.7 are implemented. The checkpoint review evaluates the completed slices against the milestone exit criteria and preserved evidence boundaries rather than assuming another feature is required.
-
-### Exit criteria
-
-1. Home is the authenticated default and provides useful, truthful entry points from stable capabilities rather than an empty destination or speculative feed.
-2. Home, Discover, Search, and Library are distinct, predictable primary destinations on desktop and compact layouts, with Now Playing remaining persistent context.
-3. Library exposes Playlists, favorite Albums, and favorite Artists as obvious user-facing sections while preserving their independent controller, paging, failure, scroll, focus, and detail-return behavior.
-4. Sequential, repeat-all, repeat-one, and shuffle behavior has one authoritative Rust queue owner, provider-neutral tests, and accessible Flutter controls.
-5. Read-only song comments map through a bounded provider-neutral Domain/Provider/Bridge contract with pagination, cancellation, truthful states, and no social mutation.
-6. Initial QQ MV support follows a bounded discovery decision, starts from a coherent Track-to-MV journey, and does not become a generic video platform.
-7. Existing Search, Discover, browsing, playback, Queue, synchronized/word-timed Lyrics, adaptive behavior, accessibility, and retained state do not regress.
-8. Flutter remains presentation-only; QQ protocol, credentials, Provider mapping, opaque identity, queue semantics, comments mapping, and MV protocol remain in Rust behind the thin typed Bridge.
-9. No additional Provider, sidecar, download platform, social mutation, playlist/favorite mutation, background-playback architecture, state/navigation framework, speculative theme system, or deferred Focus experience is introduced.
-10. Relevant focused regressions and the repository validation baseline pass; live QQ, unavailable platform, release, and M1 user-operated evidence limits remain explicit.
-11. The completeness audit records every material remaining first-release gap in exactly one actionable evidence/authority class and finds no untracked high-value authorized gap before checkpoint.
-
-### Explicit non-goals
-
-- Other Providers, aggregation, podcasts, downloads, local/fallback Provider work, or a generic video/social platform.
-- Comment, follow, playlist, favorite, or other remote mutations.
-- Background-playback lifecycle, persistent recent-history semantics, or release identity/signing without a separate accepted Human Decision.
-- Quiet, Focus, Luminous, Temporal, theme personas, signature motion, or infrastructure built in anticipation of them.
-- Replacing the existing state-management, navigation, audio, Provider, or Bridge architecture without a concrete blocker and separate authority.
-
-### Checkpoint
-
-Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope/adaptive review, technical-debt status, completeness classification, and exact live/platform/release boundaries are recorded in `docs/development/m5-checkpoint-review.md`. Future reproduced M5-class regressions remain valid bounded work. The checkpoint is not project completion, release readiness, live QQ compatibility approval, or M1 acceptance.
+- **Goal:** establish a truthful Home-first mainstream product with distinct retained Home, Discover, Search, Library, and persistent Now Playing responsibilities.
+- **Outcome:** bounded Home, coherent Library sections, Rust-authoritative sequential/shuffle and repeat modes, shared Track context, read-only comments, and one Track-associated MV journey were implemented.
+- **Boundaries:** no remote mutation, downloads, background-playback architecture, additional Provider, generic social/video platform, or state/navigation replacement.
+- **Checkpoint:** 2026-08-27 — [M5 review](docs/development/m5-checkpoint-review.md) and [product-completeness audit](docs/development/m5-product-completeness-audit.md).
 
 ## Completed Checkpoint — M6 Core Compatibility Evidence
 
-### Goal
+- **Goal:** validate the newly introduced anonymous comments and Track-associated MV protocol paths without account material or new product capability.
+- **Outcome:** default-ignored live gates pass. Evidence corrected comment identity to bounded opaque text and filters only the observed blank deleted-row shape while preserving raw-row pagination.
+- **Evidence boundary:** this is selected direct-client compatibility, not full-application behavior, authenticated playback, remote MV playback, broad catalog quality, or release readiness.
+- **Checkpoint:** 2026-08-27 — [M6 review](docs/development/m6-checkpoint-review.md).
 
-Reduce the highest current risk that newly completed, core QQ Music read capabilities are structurally correct offline but incompatible with the live anonymous service. M6 validates only the bounded comments and Track-associated MV protocol paths that M5 introduced without a direct live application observation; it adds no product feature and uses no account credential.
+## Paused Workstream — M7 QQ Music-familiar Material 3 Product UI
 
-### Authorized direction
+**Authorized goal:** make the existing product read more clearly as a mature QQ Music-familiar Material 3 client, using only existing truthful capabilities and no copied branding, proprietary assets, fake personalization, or new framework.
 
-- Opt-in ignored live tests over public catalog identity and direct `QQMusicClient` operations.
-- Coarse structural assertions that retain or print no comment content, author identity, MV identity, artwork, source URI, response body, or request identifier.
-- Minimal protocol corrections only when a repeatable live discrepancy supplies new evidence, always with offline regression coverage.
-- Default Rust and Flutter suites remain fully offline.
-- Resume the M1 real-account playback/Queue/Lyrics observation immediately when the maintainer supplies a coarse result; M6 does not substitute for it.
+**Implemented before pause:** a deliberate desktop sidebar/top Search shell; a real-data Home using existing Library/recommendation state; shared Library framing and dense desktop Playlists; and clearer desktop persistent-player grouping. Search and Discover were audited but not changed without a bounded failure.
 
-### Progressive phases
+**Why paused:** HD-005 froze visual redesign and feature expansion. The maintenance pass is complete, but M7 is not checkpointed and automated layout tests do not establish product-complete visual results.
 
-1. M6.1 — Anonymous read-compatibility gates for one comments page and one Track-associated MV flow.
-2. M6.2 — Evidence reconciliation and bounded regression/fix only if a live gate proves a discrepancy.
-3. M6.3 — Checkpoint review and whole-project reranking.
+**Resume condition:** an explicit post-maintenance product decision plus representative running-app evidence. Resumption must preserve retained state, accessibility, and the existing Flutter/Rust/music ownership boundaries.
 
-### Exit criteria
+## Completed Maintenance Pass — Complexity Paydown
 
-1. Comments and Track-associated MV each have an explicit environment-gated, default-ignored live test using only public catalog identity.
-2. A successful comments probe validates pagination/count invariants without logging or retaining user-generated content or author identity.
-3. A successful MV probe validates exact Track association plus a supported HTTPS MP4 result without logging or retaining Track/MV identity, metadata, artwork, or source URI.
-4. Live-test diagnostics and failure output remain coarse and redacted.
-5. No stored credential, Cookie, account endpoint, personal fixture, or platform vault entry is read or changed.
-6. The offline Rust/Flutter baseline remains independent of the live service and passes after any evidence-backed correction.
-7. Unsupported live outcomes are recorded truthfully; three failures without materially new evidence become a local blocker rather than speculative endpoint iteration.
+**Goal:** reduce accumulated implementation and governance complexity while preserving every existing user-visible behavior, retained state, test, supported flow, and architecture boundary.
 
-### Explicit non-goals
+### Outcome
 
-- New Home, Search, Discover, comments, MV, social, playback, cache, download, or Provider capabilities.
-- Comment or favorite mutation, related-video discovery, MV Search, fullscreen/PiP, quality selection UI, or generic video infrastructure.
-- Authenticated probing, reading stored credentials, downloading or playing the returned remote MV source, or retaining service content as a fixture.
-- Release identity/signing/notices, unavailable-platform emulation, or physical-device claims.
+- Authenticated destination, Library subsection, local-detail, and Back state are explicit while retained widgets, focus, playback, Queue, and lyrics ownership remain unchanged.
+- Post-authentication dependencies are grouped by responsibility while constructor injection and granular test overrides remain explicit.
+- Identical Search failure/retry semantics and repeated catalog Queue test setup are shared without generic controller, Bridge, navigation, or state frameworks.
+- Governance records durable evidence/current scheduling instead of microtask ceremony or implementation diaries.
 
-M6.1 through M6.3 are implemented. Live evidence required two minimal comment-parser corrections: comment identity is bounded provider-opaque text rather than necessarily numeric, and a present-but-blank newest row is an evidenced deleted/non-displayable row that does not alter raw-row pagination. The selected anonymous comments and Track-associated MV gates pass without credential or retained returned content/source.
+### Preserved boundaries
 
-### Checkpoint
+- No new QQ Music endpoint, Provider, product capability, Search type, recommendation surface, mutation, download, background-playback architecture, local/fallback Provider, Home content, theme, visual redesign, state framework, or navigation framework.
+- Do not flatten QQ protocol → Provider → Domain → Bridge → Dart presentation boundaries solely to reduce file count.
+- Do not delete regressions or evidence documents merely to reduce totals.
 
-Completed on 2026-08-27. Criterion-by-criterion evidence, exact redaction boundaries, the two evidence-backed comment corrections, validation results, and remaining live/platform limits are recorded in `docs/development/m6-checkpoint-review.md`. This proves selected direct-client protocol compatibility only; it is not full-application compatibility, remote MV playback, broad catalog quality, M1 acceptance, release readiness, or authorization for a new feature milestone.
+**Verified on 2026-08-27:** all full Rust, Dart/Flutter, Linux release-build, and required Linux integration gates passed. The audit, outcomes, claim limits, and final self-review are recorded in [the complexity-paydown review](docs/development/complexity-paydown-review.md).
 
-## Later Direction — Evidence-Gated Work
+## Later Evidence-Gated Direction
 
-After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.
+The next highest-value evidence is a maintainer-operated authenticated compact/desktop running-product review. M7 remains paused until that evidence and a subsequent whole-product ranking establish product authority; automated tests do not establish visual product completion.
 
-## Active Workstream — M7 QQ Music-familiar Material 3 Product UI
-
-### Goal
-
-Make the existing application immediately read as a mature, cross-platform QQ Music client rather than a collection of correctly wired Flutter surfaces. M7 reorganizes presentation only: familiar music-product hierarchy, stronger first-view identity, deliberate desktop/compact composition, and consistent artwork-led content density over capabilities already present.
-
-### Authorized direction
-
-- A deliberate wide desktop sidebar, top Search affordance, content canvas, and persistent bottom playback context inspired by current QQ Music conventions while remaining official Flutter Material 3.
-- A compact/mobile counterpart with reachable bottom primary navigation, touch-sized actions, and the same product model rather than a compressed desktop shell.
-- A green-accented light/dark baseline, restrained surface hierarchy, artwork-led browsing, and music-appropriate dense Track presentation.
-- A truthful Home made only from existing Discover, Search, Library, and playback capabilities; no invented personalization or promotional catalog content.
-- Manual visual evidence at representative compact and desktop sizes in addition to widget/accessibility regressions.
-- A temporary freeze on horizontal QQ capability expansion while obvious product-integration gaps remain; backend work requires a proven blocker in an existing journey.
-
-### Progressive phases
-
-1. M7.1 — Authenticated Shell and truthful Home first impression.
-2. M7.2 — Library and core browsing hierarchy/density.
-3. M7.3 — Search and Discover visual organization.
-4. M7.4 — Now Playing, Queue, and Lyrics product presentation.
-5. M7.5 — Compact/desktop, light/dark, accessibility, and manual checkpoint review.
-
-Each phase is elaborated through a bounded discovery and finite slice. Existing retained state, controller ownership, playback ownership, and Flutter/Rust boundaries remain constraints rather than refactor targets.
-
-M7.1 is implemented under automated evidence: the wide shell has an extended labeled sidebar and top Search affordance, while Home presents bounded real recommended and personal-playlist content through existing controllers and detail routes. The earlier decorative launcher Hero was explicitly rejected and removed. Compact/desktop widget regressions plus Linux Release pass; representative authenticated visual approval remains open while independent consolidation continues.
-
-### Exit criteria
-
-1. A cold authenticated launch has a coherent music-product first impression on desktop and compact layouts, with Home, Discover, Search, Library, and current playback immediately understandable.
-2. Desktop uses a deliberate sidebar/content/player composition and compact uses reachable bottom navigation without hidden primary actions at 360 px.
-3. Home is useful and visually intentional using only existing truthful destinations and state; it is neither an empty launcher nor a fabricated personalized feed.
-4. Library, catalog, Search, Discover, Now Playing, Queue, and Lyrics share predictable typography, spacing, artwork, state, and action patterns with music-appropriate density.
-5. Light/dark, keyboard, pointer, touch, semantics, retained state, back behavior, and existing loading/empty/error/retry paths do not regress.
-6. No QQ protocol, credential, Provider, Domain, Bridge, queue, lyric-timing, or native-media ownership moves into presentation work.
-7. Relevant automated suites pass, and manual compact/desktop screenshots are reviewed before checkpointing user-visible completion.
-
-### Explicit non-goals
-
-- Copying QQ Music logos, proprietary imagery, promotions, exact layouts, or a private visual asset set.
-- New recommendation/feed APIs, fake personalized content, Search suggestions/history/hot words, remote mutation, downloads, social expansion, or another Provider.
-- Quiet/Luminous/Temporal personas, artwork-derived global palettes, shaders, glass/blur systems, or a theme-plugin framework.
-- Replacing the existing navigation, state-management, Bridge, music engine, or MV engine architecture.
+Offline/cache behavior, a narrow local-library capability, or media fallback require demonstrated user value and separate Roadmap authority. They must not turn the product into a multi-service aggregator. Release identity/signing and external distribution remain governed by HD-001 and the linked technical debt.

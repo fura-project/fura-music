@@ -6,10 +6,7 @@ void main() {
   test('starts at Home and has no local Back target', () {
     final navigation = AuthenticatedNavigationState();
 
-    expect(
-      navigation.primaryDestination,
-      AuthenticatedPrimaryDestination.home,
-    );
+    expect(navigation.primaryDestination, AuthenticatedPrimaryDestination.home);
     expect(navigation.librarySection, LibrarySection.playlists);
     expect(navigation.routes, isEmpty);
     expect(navigation.canGoBack, isFalse);
@@ -37,10 +34,7 @@ void main() {
       isTrue,
     );
     expect(navigation.selectLibrarySection(LibrarySection.albums), isTrue);
-    expect(
-      navigation.visitedLibrarySection(LibrarySection.albums),
-      isTrue,
-    );
+    expect(navigation.visitedLibrarySection(LibrarySection.albums), isTrue);
 
     expect(
       navigation.goBack().target,

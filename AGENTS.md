@@ -1,80 +1,68 @@
 # Repository Agent Guide
 
-This repository uses continuous autonomous maintenance within the boundaries in `PROJECT.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and accepted decisions.
+This repository uses continuous autonomous maintenance inside the product, architecture, Roadmap, and accepted Human Decision boundaries.
 
 ## Session startup
 
-Before modifying code, read:
+Before modifying code, read `PROJECT.md`, this file, `PROGRESS.md`, `MEMORY.md`, `TECH_DEBT.md`, `HUMAN_DECISIONS.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and relevant files under `docs/decisions/`, `docs/development/`, and `docs/research/`. Then inspect `git status`, recent commits, and the relevant implementation. The working tree and local history are the first source of truth; never discard unrecognized work.
 
-1. `PROJECT.md`
-2. `AGENTS.md`
-3. `PROGRESS.md`
-4. `MEMORY.md`
-5. `TECH_DEBT.md`
-6. `HUMAN_DECISIONS.md`
-7. `ARCHITECTURE.md`
-8. `ROADMAP.md`
-9. `docs/decisions/`
-10. `docs/development/`
-11. `docs/research/`
+## Ordinary finite work
 
-Then inspect `git status`, recent commits, and the relevant implementation. Do not ask a human to repeat repository state already recorded here.
-
-## Task loop
-
-For each finite task, define its goal, provenance, scope, acceptance criteria, expected modules, required tests, known risks, and explicit non-goals. Implement only the smallest coherent unit, test it, inspect the diff, review architecture/scope/debt, update persistent state, and commit the logical unit. Then globally rank existing evidence; select the next highest-value unblocked roadmap task or enter a bounded discovery pass.
-
-After three materially similar failed attempts, stop repeating the approach. Record a blocker and the attempted evidence, then continue independent work.
-
-## Continuous execution state machine
-
-The repository remains in continuous autonomous execution while `PROGRESS.md` records `global_stop: false`.
+Normal work is:
 
 ```text
-task_complete != stop
-commit_complete != stop
-review_complete != stop
-checkpoint != stop
-milestone_complete != stop
-report_generated != stop
-tests_green != stop
-
-global_stop == false
-    => SELECT_OR_DISCOVER_NEXT_TASK
+inspect → define a bounded task → implement → test → inspect the diff
+→ review boundaries/debt → commit → rank current evidence
 ```
 
-Every finite task must exit through `TEST -> SELF_REVIEW -> UPDATE_STATE_IF_NEEDED -> CHECK_GLOBAL_STOP -> GLOBAL_RANKING -> SELECT_OR_DISCOVER_NEXT_TASK`. `TASK_COMPLETE -> SUMMARY -> EXIT` is not a project lifecycle. Only `GLOBAL_STOP` can end autonomous project execution.
+A task needs concrete provenance: an authorized Roadmap or maintenance criterion, user-reported/reproduced defect, failing test, documented risk, triggered debt, required target validation, or measured compatibility/accessibility/performance problem. Define its goal, scope, acceptance criteria, affected modules, tests, risk, and explicit non-goals. Nearby cleanup, aesthetics, hypothetical abstraction, or the desire to keep producing commits is not enough.
 
-`GLOBAL_STOP` is valid only when the Roadmap contains no legitimate next objective; every remaining legitimate task is blocked by pending Human Decisions; continued work has no safe alternative to credential disclosure, account damage, data loss, or a security vulnerability; unresolved legal or platform risk makes work unsafe; the implemented architecture fundamentally conflicts with the product definition; or core build/test infrastructure remains globally blocked after three materially distinct, evidence-backed approaches. A forced session end is `SESSION_INTERRUPTED`, not project completion: preserve the active task, evidence, remaining work, and `next_action` while leaving project execution active for the next session.
+Ordinary tasks do not require separate selection, review, checkpoint, or ranking documents. Update persistent Markdown only when scheduling materially changes or the work creates durable product, architecture, evidence, risk, debt, or operational knowledge that Git and tests cannot communicate adequately.
 
-An empty existing-task list means `DISCOVERY_PASS`, not `NO_LEGITIMATE_WORK`. A bounded discovery pass audits the current Roadmap journey and its product completeness, reliability, Provider/Domain/Bridge boundaries, desktop/mobile flows, platform evidence, risks, and tests. Discovery may start with a hypothesis, but it must produce evidence through a bounded audit or reproduction before implementation. A missing or broken behavior inside an authorized Roadmap theme is a legitimate product gap, not scope creep merely because it was not already a named task.
+After three materially similar failed attempts, record the blocker and evidence, stop repeating the approach, and continue independent work.
 
-Discovery may rank at most three candidates. Each candidate records provenance, user value, problem, scope, acceptance criteria, effort, risk, and explicit non-goals. `NO_LEGITIMATE_WORK` is distinct from `GLOBAL_STOP` and is valid only after a complete discovery pass establishes that there is no Roadmap-derived product, UX, reliability, test, platform, or architecture-audit task and every remaining action is blocked or outside product scope. Do not invent features or speculative refactors merely to keep producing commits.
+## Completion and continuation
 
-## Task provenance and global ranking
+- **Implemented:** the code path exists.
+- **Verified:** named tests, integration, protocol, platform, or user evidence supports a bounded claim.
+- **Product-complete:** the running user journey is discoverable, coherent, and usable; tests alone do not establish this.
 
-A task needs concrete provenance: a Roadmap acceptance criterion, authorized product gap, Roadmap-derived work, product-completeness audit, UX-flow audit, architecture-boundary audit, user-reported or reproduced problem, failing test, documented risk, triggered debt, required platform validation, reproducible accessibility/adaptive failure, or measured compatibility/performance problem. A nearby cleanup, speculative edge case, aesthetic preference, or hypothetical abstraction is not sufficient.
+Task, commit, review, checkpoint, milestone, report, and green-test completion are not project stop conditions. While `PROGRESS.md` records `global_stop: false`, rank current evidence and select the next legitimate task or bounded discovery. Do not create a numbered milestone, compatibility probe, refactor, or document merely to keep execution moving.
 
-After each task, rank candidates across the whole project instead of continuing with the nearest file. After roughly three presentation-only focus, semantics, live-region, minor adaptive-layout, or affordance tasks, explicitly rerank playback reliability, Provider correctness, platform evidence, risks, blockers, and triggered debt before selecting another presentation task.
+`NO_LEGITIMATE_WORK` is a valid current scheduling result only after a bounded whole-project audit finds no executable authorized product, correctness, reliability, test, platform, or triggered-debt work. It is not project completion or permission to invent scope.
 
-Pending Human Decisions block only their explicitly recorded scope. Historical reviews under `docs/development/` preserve dated evidence and do not override current autonomous execution. Product authority comes from `PROJECT.md` and accepted Human Decisions; architecture authority from `ARCHITECTURE.md` and accepted ADRs; execution semantics from this file; authorized direction from `ROADMAP.md`; and live scheduling state from `PROGRESS.md`.
+`GLOBAL_STOP` is valid only when the Roadmap has no legitimate objective; every legitimate task is blocked by Human Decisions; work has no safe alternative to credential disclosure, account damage, data loss, or a security vulnerability; unresolved legal/platform risk makes continuation unsafe; implementation fundamentally conflicts with the product definition; or core build/test infrastructure remains globally blocked after three materially distinct evidence-backed approaches. A forced environment end is `SESSION_INTERRUPTED`, not project completion; preserve current state and next action.
 
-## Priority
+## Authority and boundaries
 
-Current milestone user value comes first, followed by blockers, bugs, correctness, reliability, necessary test gaps, triggered debt, stale documentation, and measured performance. Refactoring without one of those drivers is not a task.
+- `PROJECT.md` and accepted Human Decisions define the product; `ARCHITECTURE.md` and accepted ADRs define ownership; `ROADMAP.md` authorizes direction; `PROGRESS.md` records current scheduling.
+- Pending Human Decisions block only their recorded scope. Historical reviews record dated evidence and do not control current execution.
+- Keep QQ Music first-class. Do not add Providers or product categories without product authority.
+- Keep Flutter presentation concerns out of Rust and QQ Music protocol behavior out of Dart. Providers remain UI-free; the typed in-process Bridge stays coarse, cancellable, provider-neutral, and free of product business rules.
+- Do not introduce a localhost/hosted sidecar, raw JSON boundary, service locator, new state/navigation framework, or speculative plugin/runtime abstraction.
+- Refactor only from concrete duplication, blocked changeability/testability, a broken boundary, triggered debt, or measured performance—not file size or architectural aesthetics alone.
 
-## Required boundaries
+## Security and external evidence
 
-- Keep QQ Music first-class and do not add providers or product categories without roadmap authority.
-- Keep Flutter presentation concerns out of Rust and QQ Music protocol behavior out of Dart.
-- Keep providers UI-free and return project domain models.
-- Keep live QQ Music tests separate from the offline default suite.
-- Do not commit secrets, credentials, cookies, raw personal responses, build output, or unrelated generated artifacts.
-- Do not describe skeletons, placeholders, or infrastructure as completed user-facing features.
+- Never commit or print credentials, cookies, tokens, QIMEI values, personal responses, expiring media URLs, user content, build output, or unrelated generated artifacts.
+- Do not automate stored-account access. Real-account acceptance remains maintainer operated and records only the minimum coarse result.
+- Keep default tests offline. Live QQ tests are explicit, ignored by default, redacted, and bounded by the failure budget.
+- Preserve exact claim boundaries: local tests do not prove live QQ, emulator/translation does not prove physical hardware, and one target does not prove another.
+
+## Documentation responsibilities
+
+- `PROJECT.md`: durable product definition and non-goals.
+- `ARCHITECTURE.md`: current ownership, dependency direction, and invariants.
+- `ROADMAP.md`: current/next meaningful direction and concise completed checkpoints.
+- `PROGRESS.md`: current work, blockers, next candidates, decisions, and evidence gaps—not a changelog.
+- `MEMORY.md`: short, durable operational knowledge likely to prevent repeated mistakes.
+- `TECH_DEBT.md`: real debt with impact, trigger, status, and resolution condition.
+- `HUMAN_DECISIONS.md`: product/release decisions that genuinely require or record human authority.
+- `docs/development/` and `docs/research/`: milestone evidence and unusual durable investigation, not routine task ceremony.
 
 ## Validation
 
-Run the checks relevant to each changed layer:
+Run checks relevant to each changed layer. Before a maintenance or milestone checkpoint, run:
 
 ```bash
 cargo fmt --all -- --check
@@ -89,8 +77,9 @@ flutter build linux
 flutter test integration_test/simple_test.dart -d linux
 flutter test integration_test/secure_storage_test.dart -d linux
 flutter test integration_test/playback_engine_test.dart -d linux
+flutter test integration_test/music_video_engine_test.dart -d linux
 ```
 
-On the current local SDK, use `dart analyze` because the `flutter analyze` LSP process fails under this checkout's non-ASCII path; see `MEMORY.md`. Report exactly what each test proves: local unit tests do not prove live QQ Music behavior or every platform build, while the Linux integration test does prove the packaged in-process bridge call on this host.
+Use `dart analyze` on the current local SDK because `flutter analyze` fails under this checkout's non-ASCII path; see `MEMORY.md`. The secure-storage integration uses one randomized non-account key and cleans it in `finally`.
 
-After changing public Rust files under `bridges/flutter/src/api`, run the pinned `flutter_rust_bridge_codegen` 2.13.0 generator from `apps/flutter`, then search for orphaned generated API files. The generator does not remove files for renamed modules automatically.
+After changing public Rust files under `bridges/flutter/src/api`, run pinned `flutter_rust_bridge_codegen` 2.13.0 from `apps/flutter`, then search for orphaned generated API files; the generator does not remove renamed modules automatically.

@@ -56,4 +56,12 @@
 
 **Consequences:** The agent may autonomously execute bounded presentation slices over existing capabilities, beginning with the authenticated Shell and truthful Home, then Library/catalog, Search/Discover, and Now Playing/Lyrics. This decision does not authorize new QQ protocol operations, a heterogeneous personalized feed, fake recommendation data, theme personas, a new navigation/state framework, additional Providers, or a product category expansion. Manual screenshots and product-level review are required evidence for the eventual M7 checkpoint; widget tests alone are insufficient.
 
+## HD-005 — Complexity paydown before further product expansion
+
+**Status:** Accepted on 2026-08-27
+
+**Decision:** Freeze new QQ Music capabilities and visual redesign while the repository completes a bounded complexity-paydown pass. Preserve existing behavior, retained state, tests, and Flutter/Rust ownership while simplifying authenticated presentation coordination, repeated dependency propagation, proven-identical mechanics, test setup, and governance ceremony. This is maintenance authority, not permission for a navigation/state framework migration, architecture rewrite, test reduction, or documentation purge.
+
+**Consequences:** M7 remains authorized but paused and not checkpointed. The maintenance pass may autonomously perform evidence-backed refactors and governance compression within its Roadmap exit criteria. After full regression and complexity review, whole-project ranking must inspect the running product and available evidence; it must not automatically invent another milestone or resume visual work without current product authority.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.
