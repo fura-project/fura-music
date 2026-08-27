@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: FIRST_RELEASE_CORE_CAPABILITY_COMPLETION
-  current_task: OWNED_PLAYLIST_TRACK_MUTATION
-  next_action: IMPLEMENT
+  current_task: PLAYLIST_CONTAINER_MUTATION_DISCOVERY
+  next_action: DISCOVER
 ---
 
 # Current State
@@ -26,7 +26,8 @@ execution:
 - The signed-in account-summary foundation now maps only a bounded display name and optional avatar through Domain, Provider, a cancellable Bridge, and a Dart gateway. It remains presentation-deferred and is not claimed as maintainer-account live evidence.
 - Standard/High MP3 preference now flows from the versioned local Settings document through a typed cancellable Bridge into Rust-owned negotiation. High retries Standard only after an unavailable item, and the returned source reports actual quality; FLAC, encrypted media, and VIP inference remain out of scope.
 - Liked/not-liked Track is now a bounded typed remote-mutation foundation from Client through Dart gateway. It uses current independently evidenced playlist-write semantics, rejects invalid identity before transport, and never turns network/response/cancellation/replacement uncertainty into a false confirmed result. No real account was changed.
-- Extend the same evidence to one Track add/remove operation for a validated owned playlist target; reject favorite and public catalog targets before transport and keep UI/real-account acceptance deferred.
+- One Track add/remove operation now accepts only a structurally validated owned playlist target through Client, Provider, cancellable Bridge, and Dart gateway. Favorite, public catalog, foreign, and malformed targets fail before transport; unknown outcomes remain unconfirmed. No real account was changed.
+- Discover the smallest safe playlist-container mutation from current independent evidence; do not bundle create, rename, and destructive delete or execute the maintainer's account.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
 - Do not automate stored-account access or real-account mutation acceptance.
 
@@ -38,7 +39,7 @@ execution:
 
 # Next Candidates
 
-1. Add/remove one Track from a validated owned playlist without autonomously changing the maintainer's account.
+1. Discover one bounded playlist-container mutation without autonomously changing the maintainer's account.
 2. Discover truthful Home recommendation semantics without substituting unrelated existing data.
 
 # Pending Human Decisions
@@ -54,3 +55,4 @@ execution:
 - Signed-in account-summary mapping is supported by two current independent implementations and synthetic offline coverage; this checkout has not retained or observed the maintainer's live account profile response.
 - The credential-free media gate accepts both M500 and M800 request schemas, but this does not prove the maintainer account's high-quality entitlement, actual playback, or the specific reason for any unavailable result.
 - Liked-Track mutation request semantics have current independent and external authenticated-roundtrip evidence, but this repository has only offline fixtures. Cancellation, malformed response, network failure, or account replacement can leave the remote outcome unknown; later UI must refresh rather than guess.
+- Owned-playlist Track membership reuses that independently evidenced request with a Provider-validated owned target, but this repository still has only offline evidence and no post-write UI refresh path.

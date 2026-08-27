@@ -582,6 +582,20 @@ pub trait TrackLikeMutationProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
+/// Provider-neutral desired membership of one Track in one owned playlist.
+/// The Provider validates its opaque playlist and Track identities and owns
+/// source-specific write semantics.
+pub trait PlaylistTrackMutationProvider: MusicProvider + Sync {
+    type Error;
+
+    fn set_playlist_track_membership(
+        &self,
+        playlist_id: PlaylistId,
+        track_id: TrackId,
+        present: bool,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
 /// Narrow first user-library capability. Favorited playlists deliberately use
 /// a separate future operation instead of being implied by this owned list.
 pub trait OwnedPlaylistsProvider: MusicProvider + Sync {

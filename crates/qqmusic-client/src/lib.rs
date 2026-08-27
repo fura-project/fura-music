@@ -101,7 +101,10 @@ pub use recommendations::{
     RecommendedPlaylistField,
 };
 pub use search::{QqMusicSearchError, QqMusicTrackSearchPage, SearchTrackField};
-pub use track_likes::{QqMusicTrackLikeError, QqMusicTrackLikeState};
+pub use track_likes::{
+    QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicTrackLikeError,
+    QqMusicTrackLikeState,
+};
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
 };

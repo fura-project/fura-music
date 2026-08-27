@@ -1,8 +1,8 @@
 # QQ Music personal-library mutation evidence
 
-- **Status:** Liked-Track desired-state foundation implemented; maintainer-operated acceptance pending
+- **Status:** Liked and owned-playlist Track desired-state foundations implemented; maintainer-operated acceptance pending
 - **Last checked:** 2026-08-27
-- **Scope:** One reversible single-Track like/unlike operation. Arbitrary playlist and catalog-entity mutations remain separate work.
+- **Scope:** One reversible single-Track like/unlike operation and one Track add/remove operation for a structurally validated owned playlist. Playlist-container and catalog-entity mutations remain separate work.
 
 This note is the durable evidence base for bounded personal-library writes. No
 stored project credential was read, no request was sent with a real account,
@@ -14,7 +14,7 @@ and no account content or identifier was retained.
 2. [feeluown/feeluown-qqmusic at `241a967`](https://github.com/feeluown/feeluown-qqmusic/tree/241a9678bcd26e88d19e08e5da8048018f06e330), especially [`fuo_qqmusic/api.py`](https://github.com/feeluown/feeluown-qqmusic/blob/241a9678bcd26e88d19e08e5da8048018f06e330/fuo_qqmusic/api.py) and [`fuo_qqmusic/provider.py`](https://github.com/feeluown/feeluown-qqmusic/blob/241a9678bcd26e88d19e08e5da8048018f06e330/fuo_qqmusic/provider.py). It independently uses the same playlist-detail write module and Add/Del methods and invalidates its cached playlist songs after writes.
 3. [ylw1997/qqmusic-api at `5f87b07`](https://github.com/ylw1997/qqmusic-api/tree/5f87b07b85923f8862d7b57f9d558ce0314ba1a7), especially its add/remove playlist documentation and opt-in dry-run/execute harness. It independently emits the same minimal `dirId` plus `v_songInfo` request and refuses to execute without a separate explicit flag.
 
-## Selected narrow contract
+## Selected narrow contracts
 
 The first slice requests one desired state rather than exposing an unbounded
 batch write:
@@ -39,6 +39,13 @@ are omitted because the two other current implementations use the smaller
 shape. The request uses the project's existing authenticated musicu envelope
 and cookie boundary.
 
+The same request accepts a nonzero directory ID parsed only inside
+`QQMusicProvider` from its own `owned:<playlist-id>:<directory-id>` opaque
+identity. Both opaque components must be nonzero and structurally exact. The
+Provider rejects public `catalog:`, externally favorited `favorite:`, foreign,
+and malformed targets before transport. Presentation and Bridge code never
+parse those source-specific forms.
+
 Success requires zero global, named-request, and `data.retCode` values. An
 explicit nonzero service or mutation code is a service failure. Credential
 rejection keeps the existing exact sign-out rule. Invalid opaque input is
@@ -60,7 +67,6 @@ protocol evidence, not acceptance evidence for this repository or account.
 
 ## Explicit non-goals of this slice
 
-- arbitrary playlist add/remove;
 - playlist create, rename, or delete;
 - Album/Artist favorite mutation;
 - optimistic UI or final verification controls;

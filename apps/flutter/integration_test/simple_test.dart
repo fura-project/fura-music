@@ -12,6 +12,7 @@ import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/api/music_video.dart';
 import 'package:flutterustmusic/src/rust/api/new_albums.dart';
 import 'package:flutterustmusic/src/rust/api/new_songs.dart';
+import 'package:flutterustmusic/src/rust/api/playlist_tracks.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/api/rankings.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart';
@@ -259,6 +260,19 @@ void main() {
     expect(
       cancelledTrackLike.failure,
       QqMusicTrackLikeMutationFailure.cancelledOutcomeUnknown,
+    );
+    final unusedPlaylistTrack = beginQqMusicPlaylistTrackMutation(
+      providerId: 'qq-music',
+      opaquePlaylistId: 'owned:7002:902',
+      opaqueTrackId: 'track:41001:0:fixtureTrackMid:fixtureFileMid',
+      desiredState: QqMusicPlaylistTrackState.present,
+    );
+    expect(unusedPlaylistTrack.isActive, isTrue);
+    expect(unusedPlaylistTrack.cancel(), isTrue);
+    final cancelledPlaylistTrack = await unusedPlaylistTrack.run();
+    expect(
+      cancelledPlaylistTrack.failure,
+      QqMusicPlaylistTrackMutationFailure.cancelledOutcomeUnknown,
     );
     final unusedLyricLoad = beginQqMusicLyricLoad(
       providerId: 'qq-music',

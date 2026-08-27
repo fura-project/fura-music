@@ -9,7 +9,22 @@ use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-const LIKED_SONGS_DIRECTORY_ID: u32 = 201;
+const LIKED_SONGS_DIRECTORY_ID: u64 = 201;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicPlaylistTrackState {
+    Present,
+    Absent,
+}
+
+impl QqMusicPlaylistTrackState {
+    const fn method(self) -> &'static str {
+        match self {
+            Self::Present => "AddSonglist",
+            Self::Absent => "DelSonglist",
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicTrackLikeState {
@@ -17,17 +32,18 @@ pub enum QqMusicTrackLikeState {
     NotLiked,
 }
 
-impl QqMusicTrackLikeState {
-    const fn method(self) -> &'static str {
-        match self {
-            Self::Liked => "AddSonglist",
-            Self::NotLiked => "DelSonglist",
+impl From<QqMusicTrackLikeState> for QqMusicPlaylistTrackState {
+    fn from(value: QqMusicTrackLikeState) -> Self {
+        match value {
+            QqMusicTrackLikeState::Liked => Self::Present,
+            QqMusicTrackLikeState::NotLiked => Self::Absent,
         }
     }
 }
 
 #[derive(PartialEq)]
-pub enum QqMusicTrackLikeError<E> {
+pub enum QqMusicPlaylistTrackError<E> {
+    InvalidDirectoryId,
     InvalidSongId,
     Serialize,
     Transport(E),
@@ -50,9 +66,12 @@ pub enum QqMusicTrackLikeError<E> {
     },
 }
 
-impl<E> fmt::Debug for QqMusicTrackLikeError<E> {
+pub type QqMusicTrackLikeError<E> = QqMusicPlaylistTrackError<E>;
+
+impl<E> fmt::Debug for QqMusicPlaylistTrackError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidDirectoryId => formatter.write_str("InvalidDirectoryId"),
             Self::InvalidSongId => formatter.write_str("InvalidSongId"),
             Self::Serialize => formatter.write_str("Serialize"),
             Self::Transport(_) => formatter.write_str("Transport([REDACTED])"),
@@ -83,21 +102,22 @@ impl<E> fmt::Debug for QqMusicTrackLikeError<E> {
     }
 }
 
-impl<E> fmt::Display for QqMusicTrackLikeError<E> {
+impl<E> fmt::Display for QqMusicPlaylistTrackError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidSongId => formatter.write_str("track-like song ID is invalid"),
-            Self::Serialize => formatter.write_str("could not serialize track-like request"),
-            Self::Transport(_) => formatter.write_str("QQ Music track-like request failed"),
+            Self::InvalidDirectoryId => formatter.write_str("playlist directory ID is invalid"),
+            Self::InvalidSongId => formatter.write_str("playlist Track song ID is invalid"),
+            Self::Serialize => formatter.write_str("could not serialize playlist Track request"),
+            Self::Transport(_) => formatter.write_str("QQ Music playlist Track request failed"),
             Self::HttpStatus(status) => {
-                write!(formatter, "track-like request returned HTTP {status}")
+                write!(formatter, "playlist Track request returned HTTP {status}")
             }
-            Self::InvalidJson => formatter.write_str("track-like response was not valid JSON"),
+            Self::InvalidJson => formatter.write_str("playlist Track response was not valid JSON"),
             Self::MissingGlobalCode => {
-                formatter.write_str("track-like response has no global code")
+                formatter.write_str("playlist Track response has no global code")
             }
-            Self::MissingResult => formatter.write_str("track-like result is missing"),
-            Self::MissingResultCode => formatter.write_str("track-like result has no code"),
+            Self::MissingResult => formatter.write_str("playlist Track result is missing"),
+            Self::MissingResultCode => formatter.write_str("playlist Track result has no code"),
             Self::Rejected { code } => {
                 write!(
                     formatter,
@@ -109,23 +129,23 @@ impl<E> fmt::Display for QqMusicTrackLikeError<E> {
                 result_code,
             } => write!(
                 formatter,
-                "track-like request failed with global code {global_code} and result code {result_code:?}"
+                "playlist Track request failed with global code {global_code} and result code {result_code:?}"
             ),
-            Self::MissingData => formatter.write_str("track-like result data is missing"),
+            Self::MissingData => formatter.write_str("playlist Track result data is missing"),
             Self::MissingMutationCode => {
-                formatter.write_str("track-like mutation result has no code")
+                formatter.write_str("playlist Track mutation result has no code")
             }
             Self::MutationRejected { code } => {
                 write!(
                     formatter,
-                    "track-like mutation was rejected with code {code}"
+                    "playlist Track mutation was rejected with code {code}"
                 )
             }
         }
     }
 }
 
-impl<E> std::error::Error for QqMusicTrackLikeError<E>
+impl<E> std::error::Error for QqMusicPlaylistTrackError<E>
 where
     E: std::error::Error + 'static,
 {
@@ -157,13 +177,49 @@ where
         song_type: u32,
         state: QqMusicTrackLikeState,
     ) -> Result<(), QqMusicTrackLikeError<T::Error>> {
-        if song_id == 0 {
-            return Err(QqMusicTrackLikeError::InvalidSongId);
+        self.set_playlist_track_membership(
+            credential,
+            LIKED_SONGS_DIRECTORY_ID,
+            song_id,
+            song_type,
+            state.into(),
+        )
+        .await
+    }
+
+    /// Requests one exact Track membership state in one playlist directory.
+    /// The caller must obtain the nonzero directory ID from an owned playlist.
+    /// Cancellation or transport failure cannot prove that the remote write did
+    /// not happen.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid IDs before transport and keeps credential rejection,
+    /// service rejection, transport uncertainty, and malformed responses
+    /// distinct without retaining account, playlist, or Track content in
+    /// diagnostics.
+    pub async fn set_playlist_track_membership(
+        &self,
+        credential: &Credential,
+        directory_id: u64,
+        song_id: u64,
+        song_type: u32,
+        state: QqMusicPlaylistTrackState,
+    ) -> Result<(), QqMusicPlaylistTrackError<T::Error>> {
+        if directory_id == 0 {
+            return Err(QqMusicPlaylistTrackError::InvalidDirectoryId);
         }
-        let body = serde_json::to_vec(&TrackLikeRequest::new(
-            credential, song_id, song_type, state,
+        if song_id == 0 {
+            return Err(QqMusicPlaylistTrackError::InvalidSongId);
+        }
+        let body = serde_json::to_vec(&PlaylistTrackRequest::new(
+            credential,
+            directory_id,
+            song_id,
+            song_type,
+            state,
         ))
-        .map_err(|_| QqMusicTrackLikeError::Serialize)?;
+        .map_err(|_| QqMusicPlaylistTrackError::Serialize)?;
         let response = self
             .transport()
             .execute(
@@ -177,32 +233,33 @@ where
                     .timeout(REQUEST_TIMEOUT),
             )
             .await
-            .map_err(QqMusicTrackLikeError::Transport)?;
+            .map_err(QqMusicPlaylistTrackError::Transport)?;
         if !(200..300).contains(&response.status()) {
-            return Err(QqMusicTrackLikeError::HttpStatus(response.status()));
+            return Err(QqMusicPlaylistTrackError::HttpStatus(response.status()));
         }
-        let envelope: TrackLikeResponse = serde_json::from_slice(response.body())
-            .map_err(|_| QqMusicTrackLikeError::InvalidJson)?;
+        let envelope: PlaylistTrackResponse = serde_json::from_slice(response.body())
+            .map_err(|_| QqMusicPlaylistTrackError::InvalidJson)?;
         map_response(envelope)
     }
 }
 
 #[derive(Serialize)]
-struct TrackLikeRequest<'a> {
-    comm: TrackLikeComm<'a>,
+struct PlaylistTrackRequest<'a> {
+    comm: PlaylistTrackComm<'a>,
     #[serde(rename = "req_0")]
-    request: TrackLikeRpc,
+    request: PlaylistTrackRpc,
 }
 
-impl<'a> TrackLikeRequest<'a> {
+impl<'a> PlaylistTrackRequest<'a> {
     fn new(
         credential: &'a Credential,
+        directory_id: u64,
         song_id: u64,
         song_type: u32,
-        state: QqMusicTrackLikeState,
+        state: QqMusicPlaylistTrackState,
     ) -> Self {
         Self {
-            comm: TrackLikeComm {
+            comm: PlaylistTrackComm {
                 client_version: 4_747_474,
                 client_type: 24,
                 format: "json",
@@ -210,12 +267,12 @@ impl<'a> TrackLikeRequest<'a> {
                 auth_key: credential.music_key(),
                 login_type: credential.login_type().value(),
             },
-            request: TrackLikeRpc {
+            request: PlaylistTrackRpc {
                 module: "music.musicasset.PlaylistDetailWrite",
                 method: state.method(),
-                param: TrackLikeParam {
-                    directory_id: LIKED_SONGS_DIRECTORY_ID,
-                    songs: [TrackLikeSong { song_id, song_type }],
+                param: PlaylistTrackParam {
+                    directory_id,
+                    songs: [PlaylistTrackSong { song_id, song_type }],
                 },
             },
         }
@@ -223,7 +280,7 @@ impl<'a> TrackLikeRequest<'a> {
 }
 
 #[derive(Serialize)]
-struct TrackLikeComm<'a> {
+struct PlaylistTrackComm<'a> {
     #[serde(rename = "cv")]
     client_version: u32,
     #[serde(rename = "ct")]
@@ -238,22 +295,22 @@ struct TrackLikeComm<'a> {
 }
 
 #[derive(Serialize)]
-struct TrackLikeRpc {
+struct PlaylistTrackRpc {
     module: &'static str,
     method: &'static str,
-    param: TrackLikeParam,
+    param: PlaylistTrackParam,
 }
 
 #[derive(Serialize)]
-struct TrackLikeParam {
+struct PlaylistTrackParam {
     #[serde(rename = "dirId")]
-    directory_id: u32,
+    directory_id: u64,
     #[serde(rename = "v_songInfo")]
-    songs: [TrackLikeSong; 1],
+    songs: [PlaylistTrackSong; 1],
 }
 
 #[derive(Serialize)]
-struct TrackLikeSong {
+struct PlaylistTrackSong {
     #[serde(rename = "songId")]
     song_id: u64,
     #[serde(rename = "songType")]
@@ -261,54 +318,54 @@ struct TrackLikeSong {
 }
 
 #[derive(Deserialize)]
-struct TrackLikeResponse {
+struct PlaylistTrackResponse {
     code: Option<i64>,
     #[serde(rename = "req_0")]
-    result: Option<TrackLikeResult>,
+    result: Option<PlaylistTrackResult>,
 }
 
 #[derive(Deserialize)]
-struct TrackLikeResult {
+struct PlaylistTrackResult {
     code: Option<i64>,
-    data: Option<TrackLikeData>,
+    data: Option<PlaylistTrackData>,
 }
 
 #[derive(Deserialize)]
-struct TrackLikeData {
+struct PlaylistTrackData {
     #[serde(rename = "retCode")]
     mutation_code: Option<i64>,
 }
 
-fn map_response<E>(envelope: TrackLikeResponse) -> Result<(), QqMusicTrackLikeError<E>> {
+fn map_response<E>(envelope: PlaylistTrackResponse) -> Result<(), QqMusicPlaylistTrackError<E>> {
     let global_code = envelope
         .code
-        .ok_or(QqMusicTrackLikeError::MissingGlobalCode)?;
+        .ok_or(QqMusicPlaylistTrackError::MissingGlobalCode)?;
     let result_code = envelope.result.as_ref().and_then(|result| result.code);
     if let Some(code) = [Some(global_code), result_code]
         .into_iter()
         .flatten()
         .find(|code| is_credential_rejection_code(*code))
     {
-        return Err(QqMusicTrackLikeError::Rejected { code });
+        return Err(QqMusicPlaylistTrackError::Rejected { code });
     }
     if global_code != 0 || result_code.is_some_and(|code| code != 0) {
-        return Err(QqMusicTrackLikeError::Upstream {
+        return Err(QqMusicPlaylistTrackError::Upstream {
             global_code,
             result_code,
         });
     }
     let result = envelope
         .result
-        .ok_or(QqMusicTrackLikeError::MissingResult)?;
+        .ok_or(QqMusicPlaylistTrackError::MissingResult)?;
     result
         .code
-        .ok_or(QqMusicTrackLikeError::MissingResultCode)?;
-    let data = result.data.ok_or(QqMusicTrackLikeError::MissingData)?;
+        .ok_or(QqMusicPlaylistTrackError::MissingResultCode)?;
+    let data = result.data.ok_or(QqMusicPlaylistTrackError::MissingData)?;
     let mutation_code = data
         .mutation_code
-        .ok_or(QqMusicTrackLikeError::MissingMutationCode)?;
+        .ok_or(QqMusicPlaylistTrackError::MissingMutationCode)?;
     if mutation_code != 0 {
-        return Err(QqMusicTrackLikeError::MutationRejected {
+        return Err(QqMusicPlaylistTrackError::MutationRejected {
             code: mutation_code,
         });
     }
@@ -322,7 +379,10 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{QqMusicTrackLikeError, QqMusicTrackLikeState};
+    use super::{
+        QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicTrackLikeError,
+        QqMusicTrackLikeState,
+    };
     use crate::{
         Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
@@ -413,8 +473,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sends_exact_owned_playlist_membership_requests() {
+        for (state, method) in [
+            (QqMusicPlaylistTrackState::Present, "AddSonglist"),
+            (QqMusicPlaylistTrackState::Absent, "DelSonglist"),
+        ] {
+            let client = QqMusicClient::new(FakeTransport::new(&success()));
+
+            client
+                .set_playlist_track_membership(&credential(), 902, 41_001, 7, state)
+                .await
+                .expect("confirmed playlist membership");
+
+            let requests = client.transport().requests();
+            assert_eq!(requests.len(), 1);
+            let body: Value =
+                serde_json::from_slice(requests[0].body_bytes().expect("playlist mutation body"))
+                    .expect("playlist mutation JSON");
+            assert_eq!(body["req_0"]["method"], method);
+            assert_eq!(body["req_0"]["param"]["dirId"], 902);
+            assert_eq!(
+                body["req_0"]["param"]["v_songInfo"],
+                json!([{"songId": 41_001, "songType": 7}])
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn rejects_invalid_identity_before_transport() {
         let client = QqMusicClient::new(FakeTransport::new(&success()));
+
+        assert_eq!(
+            client
+                .set_playlist_track_membership(
+                    &credential(),
+                    0,
+                    41_001,
+                    0,
+                    QqMusicPlaylistTrackState::Present,
+                )
+                .await,
+            Err(QqMusicPlaylistTrackError::InvalidDirectoryId)
+        );
 
         assert_eq!(
             client

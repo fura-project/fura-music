@@ -98,4 +98,20 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Schedule together with TD-002 after HD-001 is resolved and before the first external MV-capable artifact is distributed; reassess immediately if the media packages or native build flavor change.
 
+## TD-007 — Remote library mutations duplicate single-use lifecycle adapters
+
+**Status:** Open
+
+**Problem:** Liked-Track and owned-playlist Track membership deliberately use two explicit Bridge handles and Dart gateways with nearly identical single-use cancellation, typed unknown-outcome, and credential-cleanup mechanics.
+
+**Why accepted:** Two concrete operations established the real common lifecycle while keeping their desired-state types and Provider contracts clear. A generic remote-mutation framework before that evidence would have been speculative and harder to audit for account safety.
+
+**Impact:** Failure mapping and cancellation rules currently need parallel updates in two narrow files.
+
+**Risk:** A third copied mutation path could drift by reporting an uncertain remote write as a definitive failure, retrying it, or clearing credentials for a non-rejection.
+
+**Suggested solution:** When a third distinct remote library mutation is selected, extract only the proven single-use lifecycle and credential-cleanup mechanics while preserving operation-specific typed inputs/results and Provider-owned identity parsing.
+
+**Trigger condition:** The third distinct remote library mutation enters implementation.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.
