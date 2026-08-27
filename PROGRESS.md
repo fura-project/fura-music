@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.6_PRODUCT_COMPLETENESS_AUDIT
-  next_action: DISCOVERY_PASS
+  current_task: M5.6_SHARED_TRACK_CONTEXT_ACTIONS
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -72,11 +72,11 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M5.6 is performing the Roadmap-authorized product-completeness audit. It must classify every material remaining first-release gap exactly once as agent-authorized, evidence-blocked, environment-blocked, human-decision work, or out of scope; it is not permission to invent features or restart deferred work.
+- M5.6 classified material first-release gaps without turning deferred features into requirements. One authorized inconsistency is selected: Album, Artist, Ranking, Radar, and New Song rows already carry validated provider-neutral Album/Artist context but the shared Track tile exposes only play/Queue, unlike Playlist, Search, and current-Track paths. The bounded task adds an optional shared Material context menu, preserves existing actions and retained routing, and changes no protocol, Domain, Queue, or navigation owner. The complete classification and acceptance boundary are in `docs/development/m5-product-completeness-audit.md`.
 
 # Next Candidates
 
-1. Complete M5.6 as a bounded repository-wide product audit, reconcile each material first-release gap with existing evidence and authority, and select only a genuinely authorized finite fix if the audit finds one.
+1. Complete the selected shared Track-context action slice, then rerun and finalize M5.6 before M5.7 checkpoint review.
 2. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
