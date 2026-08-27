@@ -5,13 +5,13 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.7_CHECKPOINT_REVIEW
-  next_action: REVIEW
+  current_task: POST_M5_GLOBAL_RANKING
+  next_action: RANK
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2, M3, and M4 are checkpointed; M5 Mainstream QQ Music Product Experience & Core Feature Completion is active.
+M1's real-account playback observation remains open; M2, M3, M4, and M5 are checkpointed. Post-M5 whole-project ranking is active and must not promote blocked or deferred work into implementation.
 
 # Completed Recently
 
@@ -69,15 +69,16 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 - Implemented M5.4 bounded read-only Track comments: two current independent clients cross-validate the selected anonymous legacy operation and first-page hot/newest fields. QQ protocol and numeric song identity stay in Rust; a small provider-neutral Domain/Provider capability, cancellable typed Bridge, and Flutter gateway/controller present bounded plain-text comments from expanded Now Playing without changing the existing Queue/playback/lyric owner. Fixed page-number continuation advances by the requested page size even when QQ returns a short page, while zero-row pages terminate and append failures retry independently. Initial/loading/empty/error/retry, cancellation/stale/disposal, redacted diagnostics, immutable mapping, deduplication, compact bottom sheet, desktop dialog, playback-context preservation, and packaged Bridge cancellation have regressions. Strict Dart checks, all 325 Flutter tests, 285 offline Rust tests, four explicitly ignored live tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without account or live QQ access.
 - Implemented M5.5 bounded Track-associated MV: current independent QQ implementations support the selected exact Track-detail → optional VID → combined metadata/source flow, which now maps through provider-neutral Domain/Provider contracts and one cancellable typed Bridge operation without exposing QQ identity grammar or raw protocol models to Flutter. Expanded Now Playing opens one adaptive MV surface backed by a disposable project-owned `media_kit` session and Material controls. Music remains the authoritative Queue owner: MV play/resume yields foreground audio, later music or Track replacement interrupts MV, and close/failure never auto-resumes music. Optional/no-MV, source-unavailable, retry, stale/cancel/disposal, exact correlation, HTTPS/MP4 quality selection, URI-redacted diagnostics, 360 px/desktop presentation, and audio/video ownership races have regressions. Strict Dart analysis, all 336 Flutter tests, 297 offline Rust tests with four live tests ignored, strict Clippy, Linux x64 Release, packaged Bridge cancellation, packaged synthetic local-MP4 decode/control, and an x86_64-only Android Debug APK pass without credentials or live QQ access. This does not prove live QQ MV availability, remote-source playback, physical-device decode, hardware acceleration, or Apple/Windows runtime behavior.
 - Completed M5.6 product-completeness classification and resolved its only evidenced in-scope implementation gap: Album, Artist, Ranking, Radar, and New Song rows now expose only the validated provider-neutral Album/Artist destinations applicable to each retained context through one optional shared Material menu. Missing context stays absent, collaborations stay explicit, and direct play/Queue behavior is unchanged. Focused 360 px and exact-selection tests, a retained Radar → Album → Radar regression, strict Dart analysis, all 336 Flutter tests, and Linux x64 Release pass; Rust, Bridge, protocol, Domain, Queue, dependencies, and navigation ownership were unchanged.
+- Completed the M5 checkpoint against all eleven Roadmap exit criteria. The current checkout passes 297 offline Rust tests with four live tests gated, strict Rust/Dart checks, all 336 Flutter tests, Linux x64 Release, packaged typed Bridge, disposable non-account vault, local/loopback MP3, and synthetic local-H.264 MV integrations. The review preserves the M1 user observation, live comments/MV, physical/unavailable-platform, release identity/notices, and evidence-gated later-direction limits rather than converting them into passing claims.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M5.7 checkpoint review is active. It must evaluate all M5 exit criteria, architecture/scope/debt consistency, regression evidence, and exact live/platform/release limits without converting the remaining M1 observation or other blocked classes into passing claims.
+- Post-M5 whole-project ranking is active. It must re-read the evidence-gated Later Direction, current blockers/risks, debt triggers, available environments, and accepted Human Decisions before deciding whether any finite task remains legitimate.
 
 # Next Candidates
 
-1. Complete the M5.7 criterion-by-criterion checkpoint review, then rerank only the legitimate work authorized by the current Roadmap and evidence.
+1. Finish the post-M5 global ranking without manufacturing a feature, refactor, platform claim, or protocol change.
 2. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
