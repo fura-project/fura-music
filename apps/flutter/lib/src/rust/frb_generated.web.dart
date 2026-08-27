@@ -21,6 +21,7 @@ import 'api/music_video.dart';
 import 'api/new_albums.dart';
 import 'api/new_songs.dart';
 import 'api/playlist_creation.dart';
+import 'api/playlist_deletion.dart';
 import 'api/playlist_tracks.dart';
 import 'api/queue.dart';
 import 'api/rankings.dart';
@@ -110,6 +111,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicPlaylistCreationHandlePtr => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_QqMusicPlaylistDeletionHandlePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle;
 
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicPlaylistSearchPageLoadHandlePtr =>
@@ -262,6 +267,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPlaylistCreationHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicPlaylistDeletionHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
     dynamic raw,
   );
 
@@ -446,6 +457,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicPlaylistDeletionHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicPlaylistSearchPageLoadHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistSearchPageLoadHandle(
     dynamic raw,
@@ -622,6 +639,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPlaylistCreationHandle
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicPlaylistDeletionHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
     dynamic raw,
   );
 
@@ -844,6 +867,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPlaylistCreationFailure
   dco_decode_box_autoadd_qq_music_playlist_creation_failure(dynamic raw);
+
+  @protected
+  QqMusicPlaylistDeletionFailure
+  dco_decode_box_autoadd_qq_music_playlist_deletion_failure(dynamic raw);
 
   @protected
   QqMusicPlaylistSearchPageLoadFailure
@@ -1166,6 +1193,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_box_autoadd_qq_music_playlist_creation_failure(dynamic raw);
 
   @protected
+  QqMusicPlaylistDeletionFailure?
+  dco_decode_opt_box_autoadd_qq_music_playlist_deletion_failure(dynamic raw);
+
+  @protected
   QqMusicPlaylistSearchPageLoadFailure?
   dco_decode_opt_box_autoadd_qq_music_playlist_search_page_load_failure(
     dynamic raw,
@@ -1480,6 +1511,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicPlaylistDeletionFailure dco_decode_qq_music_playlist_deletion_failure(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicPlaylistDeletionResult dco_decode_qq_music_playlist_deletion_result(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicPlaylistSearchPageLoad dco_decode_qq_music_playlist_search_page_load(
     dynamic raw,
   );
@@ -1749,6 +1790,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicPlaylistDeletionHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicPlaylistSearchPageLoadHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistSearchPageLoadHandle(
     SseDeserializer deserializer,
@@ -1929,6 +1976,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicPlaylistDeletionHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicPlaylistSearchPageLoadHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistSearchPageLoadHandle(
     SseDeserializer deserializer,
@@ -2105,6 +2158,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPlaylistCreationHandle
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicPlaylistDeletionHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
     SseDeserializer deserializer,
   );
 
@@ -2369,6 +2428,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPlaylistCreationFailure
   sse_decode_box_autoadd_qq_music_playlist_creation_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicPlaylistDeletionFailure
+  sse_decode_box_autoadd_qq_music_playlist_deletion_failure(
     SseDeserializer deserializer,
   );
 
@@ -2765,6 +2830,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicPlaylistDeletionFailure?
+  sse_decode_opt_box_autoadd_qq_music_playlist_deletion_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicPlaylistSearchPageLoadFailure?
   sse_decode_opt_box_autoadd_qq_music_playlist_search_page_load_failure(
     SseDeserializer deserializer,
@@ -3149,6 +3220,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicPlaylistDeletionFailure sse_decode_qq_music_playlist_deletion_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicPlaylistDeletionResult sse_decode_qq_music_playlist_deletion_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicPlaylistSearchPageLoad sse_decode_qq_music_playlist_search_page_load(
     SseDeserializer deserializer,
   );
@@ -3484,6 +3565,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    QqMusicPlaylistDeletionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistSearchPageLoadHandle(
     QqMusicPlaylistSearchPageLoadHandle self,
     SseSerializer serializer,
@@ -3694,6 +3782,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    QqMusicPlaylistDeletionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistSearchPageLoadHandle(
     QqMusicPlaylistSearchPageLoadHandle self,
     SseSerializer serializer,
@@ -3899,6 +3994,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
     QqMusicPlaylistCreationHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    QqMusicPlaylistDeletionHandle self,
     SseSerializer serializer,
   );
 
@@ -4189,6 +4291,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_qq_music_playlist_creation_failure(
     QqMusicPlaylistCreationFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_playlist_deletion_failure(
+    QqMusicPlaylistDeletionFailure self,
     SseSerializer serializer,
   );
 
@@ -4616,6 +4724,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_qq_music_playlist_creation_failure(
     QqMusicPlaylistCreationFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_playlist_deletion_failure(
+    QqMusicPlaylistDeletionFailure? self,
     SseSerializer serializer,
   );
 
@@ -5055,6 +5169,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_playlist_creation_result(
     QqMusicPlaylistCreationResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_playlist_deletion_failure(
+    QqMusicPlaylistDeletionFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_playlist_deletion_result(
+    QqMusicPlaylistDeletionResult self,
     SseSerializer serializer,
   );
 
@@ -5583,6 +5709,22 @@ class RustLibWire implements BaseWire {
       );
 
   void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+        ptr,
+      );
+
+  void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistSearchPageLoadHandle(
     int ptr,
   ) => wasmModule
@@ -5964,6 +6106,16 @@ extension type RustLibWasmModule._(JSObject _) implements JSObject {
 
   external void
   rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistDeletionHandle(
     int ptr,
   );
 

@@ -93,6 +93,33 @@ Bridge, generated bindings, Dart gateway, credential rejection cleanup, account
 replacement, and packaged-Bridge cancellation are covered; live acceptance
 remains explicitly maintainer-operated.
 
+## Playlist-container deletion
+
+The implemented destructive foundation sends exactly one request:
+
+```text
+music.musicasset.PlaylistBaseWrite / DelPlaylist
+param: { dirId: nonzero owned directory ID }
+```
+
+Current [L-1124/QQMusicApi at `108617f`](https://github.com/L-1124/QQMusicApi/blob/108617ffe80abefec6358717b9f4d3677550db10/qqmusic_api/modules/songlist.py)
+and [tlyanyu/multiPlatformMusicApi at `0fd583b`](https://github.com/tlyanyu/multiPlatformMusicApi/blob/0fd583b384f5d6477067ff3d29ccedd97fc3a317/platforms/qqmusic/module/playlist_delete.js)
+independently agree on the module, method, and directory-ID input. Both read
+the returned `result.dirId`; L-1124 records that deleting a nonexistent target
+returns zero. The Client therefore confirms success only when global,
+named-request, and `retCode` values are zero and the returned nonzero `dirId`
+exactly equals the requested directory. Missing, zero, or mismatched identity
+is an unknown response outcome rather than a confirmed deletion.
+
+Only a Provider-owned `owned:<playlist-id>:<directory-id>` target with both
+numeric components nonzero may reach transport. Public catalog, externally
+favorited, built-in liked, foreign, and malformed identities fail locally. The
+typed Client, Provider, single-use cancellable Bridge, generated binding, Dart
+gateway, explicit-rejection vault cleanup, exact account-replacement check,
+and packaged-Bridge cancellation are covered offline. No real account write
+was issued. Later presentation must add explicit confirmation and refresh the
+owned collection after any unknown outcome; it must not retry deletion.
+
 ### Playlist rename evidence boundary
 
 A bounded 2026-08-28 rescan did not establish a second independent rename

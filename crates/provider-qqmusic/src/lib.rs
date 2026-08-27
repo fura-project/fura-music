@@ -23,12 +23,13 @@ use provider_api::{
     FavoriteArtistsProvider, LibraryMutationError, LyricsError, LyricsProvider,
     MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
     NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PlaylistCreationProvider,
-    PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
-    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
-    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-    RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-    RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackLikeMutationProvider,
-    TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+    PlaylistDeletionProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
+    PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
+    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
+    QrAuthenticationSession, QrImageFormat, RadarRecommendationError, RadarRecommendationsProvider,
+    RankingsProvider, RecommendationError, RecommendedPlaylistsProvider, SearchError,
+    TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider,
+    UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
@@ -36,15 +37,16 @@ use qqmusic_client::{
     QqMusicAlbumSearchError, QqMusicAlbumSummary, QqMusicAlbumTracksError,
     QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
     QqMusicAudioQuality, QqMusicClient, QqMusicCreatePlaylistError, QqMusicDailyRecommendation,
-    QqMusicDailyRecommendationError, QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError,
-    QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
-    QqMusicMediaError, QqMusicMusicVideoQuality, QqMusicNewAlbumArea, QqMusicNewAlbumsError,
-    QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
-    QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
-    QqMusicRankingsError, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
-    QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
-    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QrImageMediaType,
+    QqMusicDailyRecommendationError, QqMusicDeletePlaylistError, QqMusicFavoriteAlbumsError,
+    QqMusicFavoriteArtistsError, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
+    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMusicVideoQuality,
+    QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError,
+    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError,
+    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError,
+    QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
+    QqMusicTrackMusicVideoError, QqMusicTrackSummary, QrImageMediaType,
     WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
@@ -1291,6 +1293,34 @@ where
     }
 }
 
+impl<T> PlaylistDeletionProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = LibraryMutationError;
+
+    async fn delete_playlist(&self, playlist_id: PlaylistId) -> Result<(), Self::Error> {
+        let directory_id = parse_owned_playlist_mutation_target(&playlist_id)
+            .map_err(|()| LibraryMutationError::InvalidRequest)?;
+        let candidate = self
+            .authenticated_credential()
+            .map_err(map_library_state_to_mutation_error)?;
+        let response = self
+            .client()
+            .delete_playlist(&candidate, directory_id)
+            .await;
+        self.finish_library_await(
+            &candidate,
+            matches!(response, Err(QqMusicDeletePlaylistError::Rejected { .. })),
+        )
+        .map_err(map_library_state_to_mutation_error)?;
+        response
+            .as_ref()
+            .map_err(map_delete_playlist_error)
+            .copied()
+    }
+}
+
 impl<T> MediaResolutionProvider for QqMusicProvider<T>
 where
     T: HttpTransport + 'static,
@@ -2333,6 +2363,32 @@ fn map_create_playlist_error<E>(error: &QqMusicCreatePlaylistError<E>) -> Librar
     }
 }
 
+fn map_delete_playlist_error<E>(error: &QqMusicDeletePlaylistError<E>) -> LibraryMutationError {
+    match error {
+        QqMusicDeletePlaylistError::Transport(_) => LibraryMutationError::NetworkOutcomeUnknown,
+        QqMusicDeletePlaylistError::Rejected { .. } => LibraryMutationError::CredentialRejected,
+        QqMusicDeletePlaylistError::HttpStatus(_)
+        | QqMusicDeletePlaylistError::Upstream { .. }
+        | QqMusicDeletePlaylistError::MutationRejected { .. } => {
+            LibraryMutationError::ServiceUnavailable
+        }
+        QqMusicDeletePlaylistError::InvalidDirectoryId | QqMusicDeletePlaylistError::Serialize => {
+            LibraryMutationError::InvalidRequest
+        }
+        QqMusicDeletePlaylistError::InvalidJson
+        | QqMusicDeletePlaylistError::MissingGlobalCode
+        | QqMusicDeletePlaylistError::MissingResult
+        | QqMusicDeletePlaylistError::MissingResultCode
+        | QqMusicDeletePlaylistError::MissingData
+        | QqMusicDeletePlaylistError::MissingMutationCode
+        | QqMusicDeletePlaylistError::MissingDeletedResult
+        | QqMusicDeletePlaylistError::MissingDirectoryId
+        | QqMusicDeletePlaylistError::MismatchedDirectoryId => {
+            LibraryMutationError::InvalidResponseOutcomeUnknown
+        }
+    }
+}
+
 fn map_album_favorite_error<E>(error: &QqMusicAlbumFavoriteError<E>) -> LibraryMutationError {
     match error {
         QqMusicAlbumFavoriteError::Transport(_) => LibraryMutationError::NetworkOutcomeUnknown,
@@ -2881,11 +2937,11 @@ mod tests {
         FavoriteAlbumsProvider, FavoriteArtistsProvider, LibraryMutationError, LyricsError,
         LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
         MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
-        PlaylistCreationProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
-        PlaylistTrackMutationProvider, ProviderCapability, QrAuthenticationProgress,
-        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-        RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-        RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider,
+        PlaylistCreationProvider, PlaylistDeletionProvider, PlaylistDetailsProvider,
+        PlaylistSearchProvider, PlaylistTrackMutationProvider, ProviderCapability,
+        QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+        RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider,
+        RecommendationError, RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider,
         TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError,
         UserPlaylistsProvider,
     };
@@ -5756,6 +5812,99 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn deletes_only_confirmed_owned_playlist_target() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {
+                    "retCode": 0,
+                    "result": {"tid": 7002, "dirId": 902}
+                }
+            }
+        }))));
+        set_authenticated(&provider, "123456");
+
+        provider
+            .delete_playlist(qq_playlist_id("owned:7002:902"))
+            .await
+            .expect("confirmed playlist deletion");
+
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 1);
+        let body: Value = serde_json::from_slice(
+            requests[0]
+                .body_bytes()
+                .expect("delete-playlist request body"),
+        )
+        .expect("delete-playlist request JSON");
+        assert_eq!(body["req_0"]["method"], "DelPlaylist");
+        assert_eq!(body["req_0"]["param"], json!({"dirId": 902}));
+    }
+
+    #[tokio::test]
+    async fn delete_playlist_rejects_non_owned_targets_before_transport() {
+        for playlist_id in [
+            PlaylistId::new(
+                ProviderId::new("local").expect("provider"),
+                "owned:7002:902",
+            )
+            .expect("structural playlist ID"),
+            qq_playlist_id("catalog:7002"),
+            qq_playlist_id("favorite:7002"),
+            qq_playlist_id("liked:7002:201"),
+            qq_playlist_id("owned:7002:0"),
+            qq_playlist_id("owned:0:902"),
+            qq_playlist_id("owned:not-a-number:902"),
+            qq_playlist_id("owned:7002:902:extra"),
+        ] {
+            let provider = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(
+                &json!({"code": 0}),
+            )));
+            set_authenticated(&provider, "123456");
+            assert_eq!(
+                provider.delete_playlist(playlist_id).await,
+                Err(LibraryMutationError::InvalidRequest)
+            );
+            assert!(provider.client().transport().requests().is_empty());
+            assert!(provider.has_authenticated_credential());
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_playlist_clears_only_explicitly_rejected_credential() {
+        let rejected = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
+            "code": 0,
+            "req_0": {"code": 104_401}
+        }))));
+        set_authenticated(&rejected, "123456");
+
+        assert_eq!(
+            rejected
+                .delete_playlist(qq_playlist_id("owned:7002:902"))
+                .await,
+            Err(LibraryMutationError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let unknown = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {"retCode": 0, "result": {"dirId": 0}}
+            }
+        }))));
+        set_authenticated(&unknown, "123456");
+        assert_eq!(
+            unknown
+                .delete_playlist(qq_playlist_id("owned:7002:902"))
+                .await,
+            Err(LibraryMutationError::InvalidResponseOutcomeUnknown)
+        );
+        assert!(unknown.has_authenticated_credential());
+    }
+
+    #[tokio::test]
     async fn like_mutation_rejects_invalid_identity_and_clears_only_rejected_credential() {
         let invalid = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
             "code": 0,
@@ -5894,6 +6043,28 @@ mod tests {
         set_authenticated(&provider, "123456");
 
         let request = provider.create_playlist("Requested playlist".into());
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(LibraryMutationError::Replaced));
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn late_delete_playlist_cannot_cross_account_replacement() {
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedTrackLikeTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&provider, "123456");
+
+        let request = provider.delete_playlist(qq_playlist_id("owned:7002:902"));
         let replacement = async {
             request_started.notified().await;
             set_authenticated(&provider, "654321");

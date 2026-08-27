@@ -658,6 +658,17 @@ pub trait PlaylistCreationProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<PlaylistSummary, Self::Error>> + Send;
 }
 
+/// Provider-neutral deletion of exactly one owned playlist. The Provider owns
+/// source-specific opaque identity validation and destructive write semantics.
+pub trait PlaylistDeletionProvider: MusicProvider + Sync {
+    type Error;
+
+    fn delete_playlist(
+        &self,
+        playlist_id: PlaylistId,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
 /// Narrow first user-library capability. Favorited playlists deliberately use
 /// a separate future operation instead of being implied by this owned list.
 pub trait OwnedPlaylistsProvider: MusicProvider + Sync {

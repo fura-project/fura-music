@@ -14,6 +14,7 @@ import 'package:flutterustmusic/src/rust/api/music_video.dart';
 import 'package:flutterustmusic/src/rust/api/new_albums.dart';
 import 'package:flutterustmusic/src/rust/api/new_songs.dart';
 import 'package:flutterustmusic/src/rust/api/playlist_creation.dart';
+import 'package:flutterustmusic/src/rust/api/playlist_deletion.dart';
 import 'package:flutterustmusic/src/rust/api/playlist_tracks.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/api/rankings.dart';
@@ -294,6 +295,18 @@ void main() {
     expect(
       cancelledPlaylistCreation.failure,
       QqMusicPlaylistCreationFailure.cancelledOutcomeUnknown,
+    );
+    final unusedPlaylistDeletion = beginQqMusicPlaylistDeletion(
+      providerId: 'qq-music',
+      opaquePlaylistId: 'owned:7002:902',
+    );
+    expect(unusedPlaylistDeletion.isActive, isTrue);
+    expect(unusedPlaylistDeletion.cancel(), isTrue);
+    final cancelledPlaylistDeletion = await unusedPlaylistDeletion.run();
+    expect(cancelledPlaylistDeletion.deleted, isFalse);
+    expect(
+      cancelledPlaylistDeletion.failure,
+      QqMusicPlaylistDeletionFailure.cancelledOutcomeUnknown,
     );
     final unusedAlbumFavorite = beginQqMusicAlbumFavoriteMutation(
       providerId: 'qq-music',

@@ -75,6 +75,107 @@ pub enum QqMusicCreatePlaylistError<E> {
     InvalidReturnedName,
 }
 
+#[derive(PartialEq)]
+pub enum QqMusicDeletePlaylistError<E> {
+    InvalidDirectoryId,
+    Serialize,
+    Transport(E),
+    HttpStatus(u16),
+    InvalidJson,
+    MissingGlobalCode,
+    MissingResult,
+    MissingResultCode,
+    Rejected {
+        code: i64,
+    },
+    Upstream {
+        global_code: i64,
+        result_code: Option<i64>,
+    },
+    MissingData,
+    MissingMutationCode,
+    MutationRejected {
+        code: i64,
+    },
+    MissingDeletedResult,
+    MissingDirectoryId,
+    MismatchedDirectoryId,
+}
+
+impl<E> fmt::Debug for QqMusicDeletePlaylistError<E> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidDirectoryId => formatter.write_str("InvalidDirectoryId([REDACTED])"),
+            Self::Serialize => formatter.write_str("Serialize"),
+            Self::Transport(_) => formatter.write_str("Transport([REDACTED])"),
+            Self::HttpStatus(status) => formatter.debug_tuple("HttpStatus").field(status).finish(),
+            Self::InvalidJson => formatter.write_str("InvalidJson([REDACTED])"),
+            Self::MissingGlobalCode => formatter.write_str("MissingGlobalCode"),
+            Self::MissingResult => formatter.write_str("MissingResult"),
+            Self::MissingResultCode => formatter.write_str("MissingResultCode"),
+            Self::Rejected { code } => formatter
+                .debug_struct("Rejected")
+                .field("code", code)
+                .finish(),
+            Self::Upstream {
+                global_code,
+                result_code,
+            } => formatter
+                .debug_struct("Upstream")
+                .field("global_code", global_code)
+                .field("result_code", result_code)
+                .finish(),
+            Self::MissingData => formatter.write_str("MissingData"),
+            Self::MissingMutationCode => formatter.write_str("MissingMutationCode"),
+            Self::MutationRejected { code } => formatter
+                .debug_struct("MutationRejected")
+                .field("code", code)
+                .finish(),
+            Self::MissingDeletedResult => formatter.write_str("MissingDeletedResult"),
+            Self::MissingDirectoryId => formatter.write_str("MissingDirectoryId"),
+            Self::MismatchedDirectoryId => formatter.write_str("MismatchedDirectoryId([REDACTED])"),
+        }
+    }
+}
+
+impl<E> fmt::Display for QqMusicDeletePlaylistError<E> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::InvalidDirectoryId => "playlist directory ID is invalid",
+            Self::Serialize => "could not serialize delete-playlist request",
+            Self::Transport(_) => "QQ Music delete-playlist request failed",
+            Self::HttpStatus(_) => "delete-playlist request returned an HTTP error",
+            Self::InvalidJson => "delete-playlist response was not valid JSON",
+            Self::MissingGlobalCode => "delete-playlist response has no global code",
+            Self::MissingResult => "delete-playlist result is missing",
+            Self::MissingResultCode => "delete-playlist result has no code",
+            Self::Rejected { .. } => "QQ Music rejected the delete-playlist credential",
+            Self::Upstream { .. } => "QQ Music rejected the delete-playlist request",
+            Self::MissingData => "delete-playlist data is missing",
+            Self::MissingMutationCode => "delete-playlist mutation result has no code",
+            Self::MutationRejected { .. } => "delete-playlist mutation was rejected",
+            Self::MissingDeletedResult => "deleted-playlist result is missing",
+            Self::MissingDirectoryId => "deleted-playlist result has no directory ID",
+            Self::MismatchedDirectoryId => {
+                "deleted-playlist result does not confirm the requested directory"
+            }
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl<E> std::error::Error for QqMusicDeletePlaylistError<E>
+where
+    E: std::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Transport(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl<E> fmt::Debug for QqMusicCreatePlaylistError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -195,6 +296,47 @@ where
             .map_err(|_| QqMusicCreatePlaylistError::InvalidJson)?;
         map_response(envelope)
     }
+
+    /// Deletes exactly one owned playlist directory and returns only after the
+    /// response confirms the same nonzero directory ID. Transport or malformed
+    /// response failures cannot prove that the remote write did not happen.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a zero directory ID before transport and keeps credential
+    /// rejection, service rejection, transport uncertainty, and malformed or
+    /// mismatched confirmation distinct without retaining playlist identity.
+    pub async fn delete_playlist(
+        &self,
+        credential: &Credential,
+        directory_id: u64,
+    ) -> Result<(), QqMusicDeletePlaylistError<T::Error>> {
+        if directory_id == 0 {
+            return Err(QqMusicDeletePlaylistError::InvalidDirectoryId);
+        }
+        let body = serde_json::to_vec(&DeletePlaylistRequest::new(credential, directory_id))
+            .map_err(|_| QqMusicDeletePlaylistError::Serialize)?;
+        let response = self
+            .transport()
+            .execute(
+                HttpRequest::post(MUSICU_URL)
+                    .header("Content-Type", "application/json")
+                    .header("Origin", "https://y.qq.com")
+                    .header("Referer", "https://y.qq.com/")
+                    .header("Cookie", credential.musicu_cookie_header())
+                    .body(body)
+                    .response_body_limit(MAX_RESPONSE_BYTES)
+                    .timeout(REQUEST_TIMEOUT),
+            )
+            .await
+            .map_err(QqMusicDeletePlaylistError::Transport)?;
+        if !(200..300).contains(&response.status()) {
+            return Err(QqMusicDeletePlaylistError::HttpStatus(response.status()));
+        }
+        let envelope: CreatePlaylistResponse = serde_json::from_slice(response.body())
+            .map_err(|_| QqMusicDeletePlaylistError::InvalidJson)?;
+        map_delete_response(envelope, directory_id)
+    }
 }
 
 fn is_valid_playlist_name(name: &str) -> bool {
@@ -205,7 +347,7 @@ fn is_valid_playlist_name(name: &str) -> bool {
 
 #[derive(Serialize)]
 struct CreatePlaylistRequest<'a> {
-    comm: CreatePlaylistComm<'a>,
+    comm: PlaylistWriteComm<'a>,
     #[serde(rename = "req_0")]
     request: CreatePlaylistRpc<'a>,
 }
@@ -213,7 +355,7 @@ struct CreatePlaylistRequest<'a> {
 impl<'a> CreatePlaylistRequest<'a> {
     fn new(credential: &'a Credential, name: &'a str) -> Self {
         Self {
-            comm: CreatePlaylistComm {
+            comm: PlaylistWriteComm {
                 client_version: 4_747_474,
                 client_type: 24,
                 format: "json",
@@ -231,7 +373,7 @@ impl<'a> CreatePlaylistRequest<'a> {
 }
 
 #[derive(Serialize)]
-struct CreatePlaylistComm<'a> {
+struct PlaylistWriteComm<'a> {
     #[serde(rename = "cv")]
     client_version: u32,
     #[serde(rename = "ct")]
@@ -256,6 +398,46 @@ struct CreatePlaylistRpc<'a> {
 struct CreatePlaylistParam<'a> {
     #[serde(rename = "dirName")]
     name: &'a str,
+}
+
+#[derive(Serialize)]
+struct DeletePlaylistRequest<'a> {
+    comm: PlaylistWriteComm<'a>,
+    #[serde(rename = "req_0")]
+    request: DeletePlaylistRpc,
+}
+
+impl<'a> DeletePlaylistRequest<'a> {
+    fn new(credential: &'a Credential, directory_id: u64) -> Self {
+        Self {
+            comm: PlaylistWriteComm {
+                client_version: 4_747_474,
+                client_type: 24,
+                format: "json",
+                account_id: credential.music_id(),
+                auth_key: credential.music_key(),
+                login_type: credential.login_type().value(),
+            },
+            request: DeletePlaylistRpc {
+                module: "music.musicasset.PlaylistBaseWrite",
+                method: "DelPlaylist",
+                param: DeletePlaylistParam { directory_id },
+            },
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct DeletePlaylistRpc {
+    module: &'static str,
+    method: &'static str,
+    param: DeletePlaylistParam,
+}
+
+#[derive(Serialize)]
+struct DeletePlaylistParam {
+    #[serde(rename = "dirId")]
+    directory_id: u64,
 }
 
 #[derive(Deserialize)]
@@ -350,6 +532,54 @@ fn map_response<E>(
     })
 }
 
+fn map_delete_response<E>(
+    envelope: CreatePlaylistResponse,
+    requested_directory_id: u64,
+) -> Result<(), QqMusicDeletePlaylistError<E>> {
+    let global_code = envelope
+        .code
+        .ok_or(QqMusicDeletePlaylistError::MissingGlobalCode)?;
+    let result_code = envelope.result.as_ref().and_then(|result| result.code);
+    if let Some(code) = [Some(global_code), result_code]
+        .into_iter()
+        .flatten()
+        .find(|code| is_credential_rejection_code(*code))
+    {
+        return Err(QqMusicDeletePlaylistError::Rejected { code });
+    }
+    if global_code != 0 || result_code.is_some_and(|code| code != 0) {
+        return Err(QqMusicDeletePlaylistError::Upstream {
+            global_code,
+            result_code,
+        });
+    }
+    let result = envelope
+        .result
+        .ok_or(QqMusicDeletePlaylistError::MissingResult)?;
+    result
+        .code
+        .ok_or(QqMusicDeletePlaylistError::MissingResultCode)?;
+    let data = result.data.ok_or(QqMusicDeletePlaylistError::MissingData)?;
+    let mutation_code = data
+        .mutation_code
+        .ok_or(QqMusicDeletePlaylistError::MissingMutationCode)?;
+    if mutation_code != 0 {
+        return Err(QqMusicDeletePlaylistError::MutationRejected {
+            code: mutation_code,
+        });
+    }
+    let deleted = data
+        .result
+        .ok_or(QqMusicDeletePlaylistError::MissingDeletedResult)?;
+    let returned_directory_id = deleted
+        .directory_id
+        .ok_or(QqMusicDeletePlaylistError::MissingDirectoryId)?;
+    if returned_directory_id != requested_directory_id {
+        return Err(QqMusicDeletePlaylistError::MismatchedDirectoryId);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::convert::Infallible;
@@ -357,7 +587,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{QqMusicCreatePlaylistError, QqMusicCreatedPlaylist};
+    use super::{QqMusicCreatePlaylistError, QqMusicCreatedPlaylist, QqMusicDeletePlaylistError};
     use crate::{
         Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
@@ -540,5 +770,105 @@ mod tests {
                 Err(expected)
             );
         }
+    }
+
+    #[tokio::test]
+    async fn sends_exact_delete_request_and_requires_matching_directory() {
+        let client = QqMusicClient::new(FakeTransport::new(&success(&json!({
+            "tid": 7002,
+            "dirId": 902,
+            "dirName": "Deleted playlist"
+        }))));
+
+        client
+            .delete_playlist(&credential(), 902)
+            .await
+            .expect("confirmed playlist deletion");
+
+        let requests = client.transport().requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].method(), HttpMethod::Post);
+        assert_eq!(requests[0].max_response_body_bytes(), 256 * 1024);
+        assert_eq!(
+            requests[0].request_timeout(),
+            Some(std::time::Duration::from_secs(30))
+        );
+        let debug = format!("{:?}", requests[0]);
+        assert!(!debug.contains("W_X_fixture-key"));
+        assert!(!debug.contains("902"));
+        let body: Value = serde_json::from_slice(
+            requests[0]
+                .body_bytes()
+                .expect("delete-playlist request body"),
+        )
+        .expect("request JSON");
+        assert_eq!(
+            body["req_0"]["module"],
+            "music.musicasset.PlaylistBaseWrite"
+        );
+        assert_eq!(body["req_0"]["method"], "DelPlaylist");
+        assert_eq!(body["req_0"]["param"], json!({"dirId": 902}));
+    }
+
+    #[tokio::test]
+    async fn delete_rejects_invalid_directory_before_transport() {
+        let client = QqMusicClient::new(FakeTransport::new(&success(&json!({
+            "dirId": 902
+        }))));
+
+        assert_eq!(
+            client.delete_playlist(&credential(), 0).await,
+            Err(QqMusicDeletePlaylistError::InvalidDirectoryId)
+        );
+        assert!(client.transport().requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn delete_preserves_rejection_and_unknown_confirmation_semantics() {
+        let cases = [
+            (
+                json!({"code": 0, "req_0": {"code": 104_401}}),
+                QqMusicDeletePlaylistError::Rejected { code: 104_401 },
+            ),
+            (
+                json!({"code": 0, "req_0": {"code": 8}}),
+                QqMusicDeletePlaylistError::Upstream {
+                    global_code: 0,
+                    result_code: Some(8),
+                },
+            ),
+            (
+                json!({"code": 0, "req_0": {"code": 0, "data": {"retCode": 9}}}),
+                QqMusicDeletePlaylistError::MutationRejected { code: 9 },
+            ),
+            (
+                success(&json!({})),
+                QqMusicDeletePlaylistError::MissingDirectoryId,
+            ),
+            (
+                success(&json!({"dirId": 0})),
+                QqMusicDeletePlaylistError::MismatchedDirectoryId,
+            ),
+            (
+                success(&json!({"dirId": 903})),
+                QqMusicDeletePlaylistError::MismatchedDirectoryId,
+            ),
+        ];
+        for (fixture, expected) in cases {
+            let client = QqMusicClient::new(FakeTransport::new(&fixture));
+            assert_eq!(
+                client.delete_playlist(&credential(), 902).await,
+                Err(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn delete_error_debug_redacts_identity() {
+        let debug = format!(
+            "{:?}",
+            QqMusicDeletePlaylistError::<Infallible>::MismatchedDirectoryId
+        );
+        assert!(!debug.contains("902"));
     }
 }

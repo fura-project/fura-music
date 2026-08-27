@@ -13,6 +13,7 @@ pub mod music_video;
 pub mod new_albums;
 pub mod new_songs;
 pub mod playlist_creation;
+pub mod playlist_deletion;
 pub mod playlist_tracks;
 pub mod queue;
 pub mod rankings;

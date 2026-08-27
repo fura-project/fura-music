@@ -30,7 +30,8 @@ execution:
 - Bounded owned-playlist creation now runs through Client, Provider, cancellable Bridge, generated binding, and Dart gateway. It accepts the independently observed nonzero `result.tid` or `result.id` forms, also requires `dirId` and the server-returned name, rejects invalid names before transport, and preserves unknown-outcome semantics. No real account was changed.
 - TD-007 was resolved before the third remote write: Rust now shares only single-use run/cancel state, Dart shares only explicit-rejection vault cleanup, and every operation keeps typed results plus Provider-owned identity rules.
 - Favorite/not-favorite Album is now a bounded typed foundation from Client through Dart gateway. It accepts only a QQ Album opaque identity carrying a nonzero numeric ID, sends the independently evidenced numeric-ID form exactly once, requires an empty failed-ID list for success, and never retries with the alternate MID form after an unknown outcome. Offline Client, Provider, cancellable Bridge, generated binding, Dart-gateway, credential-cleanup, account-replacement, and packaged-Bridge coverage passes; no real account was changed.
-- Playlist rename remains `EVIDENCE_BLOCKED`: a bounded current-source rescan found only one detailed `EditPlaylist` contract, whose own implementation says description editing is ineffective. No Client request will be inferred from that single source. Delete remains a separate, independently cross-validated capability.
+- Playlist rename remains `EVIDENCE_BLOCKED`: a bounded current-source rescan found only one detailed `EditPlaylist` contract, whose own implementation says description editing is ineffective. No Client request will be inferred from that single source.
+- Owned-playlist deletion now runs through Client, Provider, a cancellable generated Bridge, and an independent Dart gateway without UI wiring. Only an exact Provider-owned target may reach one request, and success requires the same returned directory ID; missing/zero/mismatched responses and cancellation/replacement remain unknown outcomes. Offline Rust/Dart coverage and the packaged Linux Bridge smoke pass; no real account was changed.
 - Daily 30 now has a truthful authenticated read foundation from direct Client request through a cancellable generated Bridge and Dart gateway. Three simultaneous semantic markers select zero or one existing catalog playlist; absence is not failure, ambiguity is rejected, and no heterogeneous feed data or presentation work crossed the boundary. Two current sources, one public real-response fixture, offline lifecycle coverage, and an anonymous structure-only probe support the contract; authenticated availability remains unclaimed.
 - Artist mutation remains evidence-blocked; do not infer its write contract from the existing follow-list read.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
@@ -44,9 +45,9 @@ execution:
 
 # Next Candidates
 
-1. Implement the independently evidenced playlist-delete foundation without UI, stored-account access, or real execution.
-2. Discover whether a stable QQ collection truthfully matches the accepted Treasure Playlist Library section.
-3. Discover a truthful listening-based Track recommendation contract without relabeling Radar or duplicating Daily 30 semantics.
+1. Discover whether a stable QQ collection truthfully matches the accepted Treasure Playlist Library section.
+2. Discover a truthful listening-based Track recommendation contract without relabeling Radar or duplicating Daily 30 semantics.
+3. After those bounded discoveries, run the whole capability convergence review without inventing another feature.
 
 # Pending Human Decisions
 
@@ -64,5 +65,5 @@ execution:
 - Owned-playlist Track membership reuses that independently evidenced request with a Provider-validated owned target, but this repository still has only offline evidence and no post-write UI refresh path.
 - Playlist creation has exact offline request/result/lifecycle coverage, including the independently observed `tid`/`id` response variation, but no repository or maintainer-account live roundtrip and no post-write UI refresh path.
 - Album favorite writes have current method-level cross-validation, exact offline cross-layer coverage, and an external authenticated reversible test for the numeric-ID form, but this repository has not retained a real response fixture or executed the maintainer account. Artist write semantics remain evidence-blocked.
-- Playlist rename remains evidence-blocked on one detailed current implementation; its mask, optional-field, and success semantics must not be guessed. Playlist delete has two request sources but remains unimplemented and destructive.
+- Playlist rename remains evidence-blocked on one detailed current implementation; its mask, optional-field, and success semantics must not be guessed. Playlist deletion has only offline cross-layer validation; later UI must explicitly confirm it, refresh after unknown outcomes, and leave live acceptance to the maintainer.
 - Daily 30 has exact offline request/selection/lifecycle coverage and packaged Bridge cancellation, but no authenticated maintainer-account observation. The credential-free probe returned no Daily match, as expected, and proves only endpoint structure.
