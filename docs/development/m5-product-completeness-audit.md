@@ -1,6 +1,6 @@
 # M5.6 Product-Completeness Audit
 
-**Status:** In Progress — one authorized Track-context inconsistency is selected for a bounded fix before final classification and M5.7 review.
+**Status:** Completed — the one authorized Track-context inconsistency is resolved; no further material M5 implementation gap is established before M5.7 review.
 
 ## Scope and authority
 
@@ -20,7 +20,7 @@ The current Home is therefore not classified as a gap merely because other strea
 
 ## 1. Agent-authorized
 
-### A-1 — Shared Track rows omit already-validated Album/Artist context
+### A-1 — Shared Track rows expose already-validated Album/Artist context (Resolved)
 
 **Evidence:** Playlist detail and Search Track rows expose their validated Album and credited-Artist context, and current Track context is globally reachable. The shared `MusicTrackTile` used by Album Tracks, Artist Tracks, rankings, Radar, and New Songs receives the same provider-neutral `PlaylistTrackSummary`, including optional Album and credited Artists, but exposes only play and add-to-Queue. Existing retained routing callbacks can open those destinations without protocol, Domain, Queue, state-management, or navigation changes.
 
@@ -28,7 +28,7 @@ The current Home is therefore not classified as a gap merely because other strea
 
 **Authority:** HD-003 explicitly authorizes a bounded Track-context audit, and M5 exit criteria 2, 7, 8, and 9 permit this presentation completion while forbidding broader infrastructure.
 
-**Selected finite scope:** Add one optional, labeled Material context menu to the shared Track tile only when validated context and callbacks exist. Preserve tap-to-play and the direct Queue action. Album pages expose the Track's credited Artists; Artist pages expose the Track's Album; ranking, Radar, and New Song surfaces expose both through the existing topmost retained context routes. Missing context remains absent, collaborations remain explicit choices, and return restores the exact originating page.
+**Implemented finite scope:** One optional, labeled Material context menu now appears on the shared Track tile only when validated context and a usable retained-route callback exist. Tap-to-play and the direct Queue action are unchanged. Album pages expose credited Artists; Artist pages expose Albums; ranking, Radar, and New Song surfaces expose both through the existing topmost retained context routes. Missing context remains absent, collaborations remain explicit choices, and return restores the exact originating page.
 
 **Acceptance criteria:**
 
@@ -43,9 +43,11 @@ The current Home is therefore not classified as a gap merely because other strea
 
 **Explicit non-goals:** Play-next, Queue insertion/reorder, Track details pages, MV/comment row actions, favorite/playlist mutation, new protocol fields, new navigation/state framework, or exposing context from raw QQ data.
 
+**Resolution evidence:** Focused shared-tile tests prove 360 px reachability, menu omission without usable context, exact Album selection, exact multi-Artist selection, and unchanged play/Queue callbacks. The retained Radar regression proves Radar → Album → Radar returns without reloading Radar or replacing queue behavior. `dart analyze`, all 336 Flutter tests, `git diff --check`, and Linux x64 Release build pass. Rust, Bridge, dependencies, protocol, Domain, Queue, and navigation ownership were unchanged, so no live QQ or credential access was performed.
+
 ### A-2 — M5 checkpoint review
 
-After A-1 is resolved and this audit is finalized, M5.7 remains an authorized governance/review task. It may close the milestone only against the existing exit criteria and evidence boundaries; it may not convert pending live, platform, release, or out-of-scope work into passing claims.
+With A-1 resolved and this audit finalized, M5.7 is the next authorized governance/review task. It may close the milestone only against the existing exit criteria and evidence boundaries; it may not convert pending live, platform, release, or out-of-scope work into passing claims.
 
 ## 2. Evidence-blocked
 
@@ -78,4 +80,4 @@ These may be reasonable future ideas, but they are not incomplete M5 implementat
 
 ## Current conclusion
 
-A-1 is the only material, currently evidenced implementation gap found inside existing M5 authority. It is selected ahead of M5.7 because it completes a cross-surface core user expectation using data and retained routes already present. No other code task is authorized merely by this audit. After A-1, the audit must be rerun against the diff, tests, risks, debt triggers, and all M5 exit criteria before checkpoint.
+A-1 was the only material, evidenced implementation gap found inside existing M5 authority and is now resolved using data and retained routes already present. Re-review of the diff, tests, architecture boundary, scope, debt triggers, and evidence classes found no additional authorized code task. M5.7 checkpoint review is therefore next; evidence-blocked, environment-blocked, human-decision, and out-of-scope items remain open in exactly those classes rather than being promoted into autonomous implementation work.
