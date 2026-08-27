@@ -33,6 +33,7 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/navigation/authenticated_navigation_state.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
@@ -108,8 +109,6 @@ class UserLibraryPage extends StatefulWidget {
   State<UserLibraryPage> createState() => _UserLibraryPageState();
 }
 
-enum _PrimaryDestination { home, discover, search, library }
-
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
@@ -151,31 +150,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     debugLabel: 'authenticated back shortcut fallback',
   );
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
-  UserPlaylistSummary? _selectedPlaylist;
-  AlbumSummary? _selectedAlbum;
-  AlbumSummary? _trackContextAlbum;
-  ArtistSummary? _trackContextArtist;
-  ArtistSummary? _albumContextArtist;
-  AlbumSummary? _albumArtistContextAlbum;
-  ArtistSummary? _nowPlayingContextArtist;
-  AlbumSummary? _nowPlayingContextAlbum;
-  ArtistSummary? _selectedArtist;
-  ArtistSummary? _selectedFavoriteArtist;
-  AlbumSummary? _favoriteArtistAlbum;
-  UserPlaylistSummary? _selectedSearchPlaylist;
-  RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
-  RankingSummary? _selectedRanking;
+  final AuthenticatedNavigationState _navigation =
+      AuthenticatedNavigationState();
   UserPlaylistSummary? _lastOpenedPlaylist;
   UserPlaylistSummary? _lastOpenedHomePlaylist;
   RecommendedPlaylistSummary? _lastOpenedHomeRecommendation;
-  _PrimaryDestination _selectedPrimaryDestination = _PrimaryDestination.home;
-  bool _searchVisited = false;
-  bool _recommendationsVisited = false;
-  bool _favoriteAlbumsOpen = false;
-  bool _favoriteArtistsOpen = false;
-  bool _favoriteAlbumsVisited = false;
-  bool _favoriteArtistsVisited = false;
-  bool _expandedNowPlayingOpen = false;
   bool _handledLyricCredentialRejection = false;
   bool _signingOut = false;
   bool _overlayPageActive = false;
@@ -256,345 +235,45 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedPlaylist = _selectedPlaylist;
-    final selectedAlbum = _selectedAlbum;
-    final selectedArtist = _selectedArtist;
-    final selectedSearchPlaylist = _selectedSearchPlaylist;
-    final selectedRecommendedPlaylist = _selectedRecommendedPlaylist;
-    final selectedRanking = _selectedRanking;
-    final selectedFavoriteArtist = _selectedFavoriteArtist;
-    final favoriteArtistAlbum = _favoriteArtistAlbum;
-    final page = _favoriteArtistsOpen && selectedFavoriteArtist != null
-        ? IndexedStack(
-            index: favoriteArtistAlbum != null ? 2 : 1,
-            children: [
-              _primaryScaffold(),
-              ArtistPage(
-                key: ValueKey(
-                  'favorite-artist-detail-${selectedFavoriteArtist.opaqueId}',
-                ),
-                artist: selectedFavoriteArtist,
-                gateway: _artistTrackGateway,
-                albumGateway: _artistAlbumGateway,
-                queuePlaybackController: _queuePlaybackController,
-                onBack: _returnFromFavoriteArtist,
-                onOpenAlbum: _openFavoriteArtistAlbum,
-                backTooltip: 'Back to favorite artists',
-                onSignInAgain: widget.onSignInAgain,
-              ),
-              if (favoriteArtistAlbum == null)
-                const SizedBox.shrink()
-              else
-                AlbumPage(
-                  key: ValueKey(
-                    'favorite-artist-album-${favoriteArtistAlbum.opaqueId}',
-                  ),
-                  album: favoriteArtistAlbum,
-                  gateway: _albumTrackGateway,
-                  detailsGateway: _albumDetailsGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnFromFavoriteArtistAlbum,
-                  onOpenArtist: _openAlbumContextArtist,
-                  backTooltip: 'Back to Artist',
-                  onSignInAgain: widget.onSignInAgain,
-                ),
-            ],
-          )
-        : _favoriteAlbumsOpen && selectedAlbum != null
-        ? IndexedStack(
-            index: 1,
-            children: [
-              _primaryScaffold(),
-              AlbumPage(
-                key: ValueKey(
-                  'favorite-album-detail-${selectedAlbum.opaqueId}',
-                ),
-                album: selectedAlbum,
-                gateway: _albumTrackGateway,
-                detailsGateway: _albumDetailsGateway,
-                queuePlaybackController: _queuePlaybackController,
-                onBack: _returnFromFavoriteAlbum,
-                onOpenArtist: _openAlbumContextArtist,
-                backTooltip: 'Back to favorite albums',
-                onSignInAgain: widget.onSignInAgain,
-              ),
-            ],
-          )
-        : _recommendationsOpen || selectedRecommendedPlaylist != null
-        ? IndexedStack(
-            index: selectedRecommendedPlaylist != null
-                ? 1
-                : selectedRanking != null
-                ? 2
-                : selectedAlbum != null
-                ? 3
-                : 0,
-            children: [
-              _primaryScaffold(),
-              if (selectedRecommendedPlaylist == null)
-                const SizedBox.shrink()
-              else
-                PlaylistDetailPage(
-                  key: ValueKey(
-                    'recommended-playlist-detail-'
-                    '${selectedRecommendedPlaylist.opaqueId}',
-                  ),
-                  playlist: selectedRecommendedPlaylist.toPlaylistSummary(),
-                  gateway: widget.detailGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnToRecommendations,
-                  onOpenAlbum: _openTrackContextAlbum,
-                  onOpenArtist: _openTrackContextArtist,
-                  onSignInAgain: widget.onSignInAgain,
-                ),
-              if (selectedRanking == null)
-                const SizedBox.shrink()
-              else
-                RankingPage(
-                  key: ValueKey('ranking-detail-${selectedRanking.opaqueId}'),
-                  ranking: selectedRanking,
-                  gateway: _rankingGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnFromRanking,
-                  onOpenAlbum: _openTrackContextAlbum,
-                  onOpenArtist: _openTrackContextArtist,
-                  onSignInAgain: widget.onSignInAgain,
-                ),
-              if (selectedAlbum == null)
-                const SizedBox.shrink()
-              else
-                AlbumPage(
-                  key: ValueKey('new-album-detail-${selectedAlbum.opaqueId}'),
-                  album: selectedAlbum,
-                  gateway: _albumTrackGateway,
-                  detailsGateway: _albumDetailsGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnFromRecommendedAlbum,
-                  onOpenArtist: _openAlbumContextArtist,
-                  backTooltip: 'Back to new albums',
-                  onSignInAgain: widget.onSignInAgain,
-                ),
-            ],
-          )
-        : _searchOpen
-        ? IndexedStack(
-            index: selectedAlbum != null
-                ? 1
-                : selectedArtist != null
-                ? 2
-                : selectedSearchPlaylist != null
-                ? 3
-                : 0,
-            children: [
-              _primaryScaffold(),
-              if (selectedAlbum == null)
-                const SizedBox.shrink()
-              else
-                AlbumPage(
-                  key: ValueKey('album-page-${selectedAlbum.opaqueId}'),
-                  album: selectedAlbum,
-                  gateway: _albumTrackGateway,
-                  detailsGateway: _albumDetailsGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnFromAlbum,
-                  onOpenArtist: _openAlbumContextArtist,
-                  backTooltip: selectedArtist == null
-                      ? 'Back to search results'
-                      : 'Back to Artist',
-                  onSignInAgain: widget.onSignInAgain,
-                ),
-              if (selectedArtist == null)
-                const SizedBox.shrink()
-              else
-                ArtistPage(
-                  key: ValueKey('artist-page-${selectedArtist.opaqueId}'),
-                  artist: selectedArtist,
-                  gateway: _artistTrackGateway,
-                  albumGateway: _artistAlbumGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnToSearch,
-                  onOpenAlbum: _openAlbum,
-                  onSignInAgain: widget.onSignInAgain,
-                ),
-              if (selectedSearchPlaylist == null)
-                const SizedBox.shrink()
-              else
-                PlaylistDetailPage(
-                  key: ValueKey(
-                    'search-playlist-detail-${selectedSearchPlaylist.opaqueId}',
-                  ),
-                  playlist: selectedSearchPlaylist,
-                  gateway: widget.detailGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnToSearch,
-                  onOpenAlbum: _openTrackContextAlbum,
-                  onOpenArtist: _openTrackContextArtist,
-                  onSignInAgain: widget.onSignInAgain,
-                ),
-            ],
-          )
-        : selectedPlaylist != null
-        ? IndexedStack(
-            index: 1,
-            children: [
-              _primaryScaffold(),
-              PlaylistDetailPage(
-                key: ValueKey('playlist-detail-${selectedPlaylist.opaqueId}'),
-                playlist: selectedPlaylist,
-                gateway: widget.detailGateway,
-                queuePlaybackController: _queuePlaybackController,
-                onBack: _returnToLibrary,
-                onOpenAlbum: _openTrackContextAlbum,
-                onOpenArtist: _openTrackContextArtist,
-                onSignInAgain: widget.onSignInAgain,
-              ),
-            ],
-          )
-        : IndexedStack(children: [_primaryScaffold()]);
-    final trackContextAlbum = _trackContextAlbum;
-    final trackContextArtist = _trackContextArtist;
-    final routedPage = IndexedStack(
-      index: trackContextAlbum != null
-          ? 2
-          : trackContextArtist != null
-          ? 1
-          : 0,
-      children: [
-        page,
-        if (trackContextArtist == null)
-          const SizedBox.shrink()
-        else
-          ArtistPage(
-            key: ValueKey(
-              'track-context-artist-${trackContextArtist.opaqueId}',
-            ),
-            artist: trackContextArtist,
-            gateway: _artistTrackGateway,
-            albumGateway: _artistAlbumGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _returnFromTrackContextArtist,
-            onOpenAlbum: _openTrackContextAlbum,
-            backTooltip: 'Back to playlist',
-            onSignInAgain: widget.onSignInAgain,
-          ),
-        if (trackContextAlbum == null)
-          const SizedBox.shrink()
-        else
-          AlbumPage(
-            key: ValueKey('track-context-album-${trackContextAlbum.opaqueId}'),
-            album: trackContextAlbum,
-            gateway: _albumTrackGateway,
-            detailsGateway: _albumDetailsGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _returnFromTrackContextAlbum,
-            onOpenArtist: _openAlbumContextArtist,
-            backTooltip: trackContextArtist == null
-                ? 'Back to playlist'
-                : 'Back to Artist',
-            onSignInAgain: widget.onSignInAgain,
-          ),
-      ],
+    final routes = _navigation.routes;
+    final expandedNowPlayingOpen =
+        routes.isNotEmpty && routes.last is ExpandedNowPlayingLocalRoute;
+    final retainedRoutes = expandedNowPlayingOpen
+        ? routes.sublist(0, routes.length - 1)
+        : routes;
+    final nowPlayingRouteIndex = retainedRoutes.indexWhere(_isNowPlayingRoute);
+    final catalogRoutes = nowPlayingRouteIndex < 0
+        ? retainedRoutes
+        : retainedRoutes.sublist(0, nowPlayingRouteIndex);
+    final nowPlayingRoutes = nowPlayingRouteIndex < 0
+        ? const <AuthenticatedLocalRoute>[]
+        : retainedRoutes.sublist(nowPlayingRouteIndex);
+    final catalogPages = <Widget>[
+      _primaryScaffold(),
+      ...catalogRoutes.map(_buildLocalRoute),
+    ];
+    final catalogRoutePage = IndexedStack(
+      index: catalogPages.length - 1,
+      children: catalogPages,
     );
-    final albumContextArtist = _albumContextArtist;
-    final albumArtistContextAlbum = _albumArtistContextAlbum;
-    final albumArtistRoutedPage = IndexedStack(
-      index: albumArtistContextAlbum != null
-          ? 2
-          : albumContextArtist != null
-          ? 1
-          : 0,
-      children: [
-        routedPage,
-        if (albumContextArtist == null)
-          const SizedBox.shrink()
-        else
-          ArtistPage(
-            key: ValueKey(
-              'album-context-artist-${albumContextArtist.opaqueId}',
-            ),
-            artist: albumContextArtist,
-            gateway: _artistTrackGateway,
-            albumGateway: _artistAlbumGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _returnFromAlbumContextArtist,
-            onOpenAlbum: _openAlbumArtistContextAlbum,
-            backTooltip: 'Back to Album',
-            onSignInAgain: widget.onSignInAgain,
-          ),
-        if (albumArtistContextAlbum == null)
-          const SizedBox.shrink()
-        else
-          AlbumPage(
-            key: ValueKey(
-              'album-artist-context-album-'
-              '${albumArtistContextAlbum.opaqueId}',
-            ),
-            album: albumArtistContextAlbum,
-            gateway: _albumTrackGateway,
-            detailsGateway: _albumDetailsGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _returnFromAlbumArtistContextAlbum,
-            backTooltip: 'Back to Artist',
-            onSignInAgain: widget.onSignInAgain,
-          ),
-      ],
+    final nowPlayingPages = <Widget>[
+      NowPlayingCatalogNavigation(
+        onOpenAlbum: _openNowPlayingAlbum,
+        onOpenArtist: _openNowPlayingArtist,
+        child: catalogRoutePage,
+      ),
+      ...nowPlayingRoutes.map(_buildLocalRoute),
+    ];
+    final retainedRoutePage = IndexedStack(
+      index: nowPlayingPages.length - 1,
+      children: nowPlayingPages,
     );
-    final nowPlayingContextArtist = _nowPlayingContextArtist;
-    final nowPlayingContextAlbum = _nowPlayingContextAlbum;
-    final nowPlayingRoutedPage = IndexedStack(
-      index: nowPlayingContextAlbum != null
-          ? 2
-          : nowPlayingContextArtist != null
-          ? 1
-          : 0,
-      children: [
-        NowPlayingCatalogNavigation(
-          onOpenAlbum: _openNowPlayingAlbum,
-          onOpenArtist: _openNowPlayingArtist,
-          child: albumArtistRoutedPage,
-        ),
-        if (nowPlayingContextArtist == null)
-          const SizedBox.shrink()
-        else
-          ArtistPage(
-            key: ValueKey(
-              'now-playing-artist-${nowPlayingContextArtist.opaqueId}',
-            ),
-            artist: nowPlayingContextArtist,
-            gateway: _artistTrackGateway,
-            albumGateway: _artistAlbumGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _returnFromNowPlayingArtist,
-            onOpenAlbum: _openNowPlayingArtistAlbum,
-            backTooltip: 'Back to previous page',
-            onSignInAgain: widget.onSignInAgain,
-          ),
-        if (nowPlayingContextAlbum == null)
-          const SizedBox.shrink()
-        else
-          AlbumPage(
-            key: ValueKey(
-              'now-playing-album-${nowPlayingContextAlbum.opaqueId}',
-            ),
-            album: nowPlayingContextAlbum,
-            gateway: _albumTrackGateway,
-            detailsGateway: _albumDetailsGateway,
-            queuePlaybackController: _queuePlaybackController,
-            onBack: _returnFromNowPlayingAlbum,
-            backTooltip: nowPlayingContextArtist == null
-                ? 'Back to previous page'
-                : 'Back to Artist',
-            onSignInAgain: widget.onSignInAgain,
-          ),
-      ],
-    );
-    final expandedNowPlayingOpen = _expandedNowPlayingOpen;
     final expandedNowPlayingPage = IndexedStack(
       index: expandedNowPlayingOpen ? 1 : 0,
       children: [
         ExpandedNowPlayingNavigation(
           onOpen: _openExpandedNowPlaying,
-          child: nowPlayingRoutedPage,
+          child: retainedRoutePage,
         ),
         if (!expandedNowPlayingOpen)
           const SizedBox.shrink()
@@ -609,7 +288,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     final hasOverlayPage = _hasOverlayPage;
     final hasLibrarySubsection = _hasLibrarySubsection;
-    final hasPrimaryPeer = _primaryDestination != _PrimaryDestination.home;
+    final hasPrimaryPeer =
+        _primaryDestination != AuthenticatedPrimaryDestination.home;
     final hasLocalPage =
         hasOverlayPage || hasLibrarySubsection || hasPrimaryPeer;
     if (hasOverlayPage && !_overlayPageActive) {
@@ -641,89 +321,187 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
   }
 
-  void _returnToLibrary() {
-    if (_selectedPlaylist == null) return;
-    final returnToHome = _primaryDestination == _PrimaryDestination.home;
-    setState(() => _selectedPlaylist = null);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _selectedPlaylist != null) {
-        return;
-      }
-      final focusNode = returnToHome
-          ? _homePlaylistReturnFocusNode
-          : _playlistReturnFocusNode;
-      if (focusNode.context != null) focusNode.requestFocus();
-    });
-  }
+  Widget _buildLocalRoute(AuthenticatedLocalRoute route) => switch (route) {
+    PlaylistLocalRoute() => PlaylistDetailPage(
+      key: ValueKey(_playlistRouteKey(route)),
+      playlist: route.playlist,
+      gateway: widget.detailGateway,
+      queuePlaybackController: _queuePlaybackController,
+      onBack: _returnFromTopRoute,
+      onOpenAlbum: _openTrackContextAlbum,
+      onOpenArtist: _openTrackContextArtist,
+      onSignInAgain: widget.onSignInAgain,
+    ),
+    RankingLocalRoute() => RankingPage(
+      key: ValueKey('ranking-detail-${route.ranking.opaqueId}'),
+      ranking: route.ranking,
+      gateway: _rankingGateway,
+      queuePlaybackController: _queuePlaybackController,
+      onBack: _returnFromTopRoute,
+      onOpenAlbum: _openTrackContextAlbum,
+      onOpenArtist: _openTrackContextArtist,
+      onSignInAgain: widget.onSignInAgain,
+    ),
+    ArtistLocalRoute() => ArtistPage(
+      key: ValueKey(_artistRouteKey(route)),
+      artist: route.artist,
+      gateway: _artistTrackGateway,
+      albumGateway: _artistAlbumGateway,
+      queuePlaybackController: _queuePlaybackController,
+      onBack: _returnFromTopRoute,
+      onOpenAlbum: (album) => _openAlbumFromArtist(route.origin, album),
+      backTooltip: _artistBackTooltip(route.origin),
+      onSignInAgain: widget.onSignInAgain,
+    ),
+    AlbumLocalRoute() => AlbumPage(
+      key: ValueKey(_albumRouteKey(route)),
+      album: route.album,
+      gateway: _albumTrackGateway,
+      detailsGateway: _albumDetailsGateway,
+      queuePlaybackController: _queuePlaybackController,
+      onBack: _returnFromTopRoute,
+      onOpenArtist: _albumCanOpenArtist(route.origin)
+          ? _openAlbumContextArtist
+          : null,
+      backTooltip: _albumBackTooltip(route.origin),
+      onSignInAgain: widget.onSignInAgain,
+    ),
+    ExpandedNowPlayingLocalRoute() => const SizedBox.shrink(),
+  };
+
+  bool _isNowPlayingRoute(AuthenticatedLocalRoute route) => switch (route) {
+    ArtistLocalRoute(origin: ArtistRouteOrigin.nowPlaying) => true,
+    AlbumLocalRoute(
+      origin: AlbumRouteOrigin.nowPlaying || AlbumRouteOrigin.nowPlayingArtist,
+    ) =>
+      true,
+    _ => false,
+  };
+
+  String _playlistRouteKey(PlaylistLocalRoute route) => switch (route.origin) {
+    PlaylistRouteOrigin.search =>
+      'search-playlist-detail-${route.playlist.opaqueId}',
+    PlaylistRouteOrigin.discover || PlaylistRouteOrigin.homeRecommendation =>
+      'recommended-playlist-detail-${route.playlist.opaqueId}',
+    PlaylistRouteOrigin.library || PlaylistRouteOrigin.homeLibrary =>
+      'playlist-detail-${route.playlist.opaqueId}',
+  };
+
+  String _artistRouteKey(ArtistLocalRoute route) => switch (route.origin) {
+    ArtistRouteOrigin.search => 'artist-page-${route.artist.opaqueId}',
+    ArtistRouteOrigin.favoriteArtists =>
+      'favorite-artist-detail-${route.artist.opaqueId}',
+    ArtistRouteOrigin.trackContext =>
+      'track-context-artist-${route.artist.opaqueId}',
+    ArtistRouteOrigin.album => 'album-context-artist-${route.artist.opaqueId}',
+    ArtistRouteOrigin.nowPlaying =>
+      'now-playing-artist-${route.artist.opaqueId}',
+  };
+
+  String _artistBackTooltip(ArtistRouteOrigin origin) => switch (origin) {
+    ArtistRouteOrigin.search => 'Back',
+    ArtistRouteOrigin.favoriteArtists => 'Back to favorite artists',
+    ArtistRouteOrigin.trackContext => 'Back to playlist',
+    ArtistRouteOrigin.album => 'Back to Album',
+    ArtistRouteOrigin.nowPlaying => 'Back to previous page',
+  };
+
+  String _albumRouteKey(AlbumLocalRoute route) => switch (route.origin) {
+    AlbumRouteOrigin.search ||
+    AlbumRouteOrigin.searchArtist => 'album-page-${route.album.opaqueId}',
+    AlbumRouteOrigin.discover => 'new-album-detail-${route.album.opaqueId}',
+    AlbumRouteOrigin.favoriteAlbums =>
+      'favorite-album-detail-${route.album.opaqueId}',
+    AlbumRouteOrigin.favoriteArtist =>
+      'favorite-artist-album-${route.album.opaqueId}',
+    AlbumRouteOrigin.trackContext || AlbumRouteOrigin.trackContextArtist =>
+      'track-context-album-${route.album.opaqueId}',
+    AlbumRouteOrigin.albumArtist =>
+      'album-artist-context-album-${route.album.opaqueId}',
+    AlbumRouteOrigin.nowPlaying || AlbumRouteOrigin.nowPlayingArtist =>
+      'now-playing-album-${route.album.opaqueId}',
+  };
+
+  String _albumBackTooltip(AlbumRouteOrigin origin) => switch (origin) {
+    AlbumRouteOrigin.search => 'Back to search results',
+    AlbumRouteOrigin.searchArtist ||
+    AlbumRouteOrigin.favoriteArtist ||
+    AlbumRouteOrigin.trackContextArtist ||
+    AlbumRouteOrigin.albumArtist ||
+    AlbumRouteOrigin.nowPlayingArtist => 'Back to Artist',
+    AlbumRouteOrigin.discover => 'Back to new albums',
+    AlbumRouteOrigin.favoriteAlbums => 'Back to favorite albums',
+    AlbumRouteOrigin.trackContext => 'Back to playlist',
+    AlbumRouteOrigin.nowPlaying => 'Back to previous page',
+  };
+
+  bool _albumCanOpenArtist(AlbumRouteOrigin origin) =>
+      origin != AlbumRouteOrigin.albumArtist &&
+      origin != AlbumRouteOrigin.nowPlaying &&
+      origin != AlbumRouteOrigin.nowPlayingArtist;
 
   void _returnFromLocalPage() {
-    if (_expandedNowPlayingOpen) {
-      _closeExpandedNowPlaying();
-    } else if (_nowPlayingContextAlbum != null) {
-      _returnFromNowPlayingAlbum();
-    } else if (_nowPlayingContextArtist != null) {
-      _returnFromNowPlayingArtist();
-    } else if (_albumArtistContextAlbum != null) {
-      _returnFromAlbumArtistContextAlbum();
-    } else if (_albumContextArtist != null) {
-      _returnFromAlbumContextArtist();
-    } else if (_trackContextAlbum != null) {
-      _returnFromTrackContextAlbum();
-    } else if (_trackContextArtist != null) {
-      _returnFromTrackContextArtist();
-    } else if (_favoriteArtistAlbum != null) {
-      _returnFromFavoriteArtistAlbum();
-    } else if (_selectedFavoriteArtist != null) {
-      _returnFromFavoriteArtist();
-    } else if (_favoriteArtistsOpen) {
-      _closeFavoriteArtists();
-    } else if (_favoriteAlbumsOpen && _selectedAlbum != null) {
-      _returnFromFavoriteAlbum();
-    } else if (_favoriteAlbumsOpen) {
-      _closeFavoriteAlbums();
-    } else if (_selectedRecommendedPlaylist != null) {
-      _returnToRecommendations();
-    } else if (_selectedRanking != null) {
-      _returnFromRanking();
-    } else if (_recommendationsOpen && _selectedAlbum != null) {
-      _returnFromRecommendedAlbum();
-    } else if (_recommendationsOpen) {
-      _closeRecommendations();
-    } else if (_selectedSearchPlaylist != null) {
-      _returnToSearch();
-    } else if (_selectedAlbum != null) {
-      _returnFromAlbum();
-    } else if (_selectedArtist != null) {
-      _returnToSearch();
-    } else if (_searchOpen) {
-      _closeSearch();
-    } else if (_selectedPlaylist != null) {
-      _returnToLibrary();
-    } else if (_primaryDestination != _PrimaryDestination.home) {
-      _selectPrimaryDestination(_PrimaryDestination.home);
+    if (!_navigation.canGoBack) return;
+    final previousPrimary = _primaryDestination;
+    late final AuthenticatedBackResult result;
+    setState(() => result = _navigation.goBack());
+    _restoreFocusAfterBack(result, previousPrimary: previousPrimary);
+  }
+
+  void _returnFromTopRoute() {
+    if (!_navigation.hasLocalRoute) return;
+    final previousPrimary = _primaryDestination;
+    late final AuthenticatedLocalRoute route;
+    setState(() => route = _navigation.popRoute()!);
+    _restoreFocusAfterBack(
+      AuthenticatedBackResult.localRoute(route),
+      previousPrimary: previousPrimary,
+    );
+  }
+
+  void _restoreFocusAfterBack(
+    AuthenticatedBackResult result, {
+    required AuthenticatedPrimaryDestination previousPrimary,
+  }) {
+    switch (result.target) {
+      case AuthenticatedBackTarget.none:
+        return;
+      case AuthenticatedBackTarget.libraryPlaylists:
+        _restoreLibrarySectionFocus();
+        return;
+      case AuthenticatedBackTarget.home:
+        final focusNode = switch (previousPrimary) {
+          AuthenticatedPrimaryDestination.search => _searchReturnFocusNode,
+          AuthenticatedPrimaryDestination.discover =>
+            _recommendationsReturnFocusNode,
+          _ => null,
+        };
+        if (focusNode != null) _restoreFocusNode(focusNode);
+        return;
+      case AuthenticatedBackTarget.localRoute:
+        final focusNode = switch (result.route) {
+          PlaylistLocalRoute(origin: PlaylistRouteOrigin.library) =>
+            _playlistReturnFocusNode,
+          PlaylistLocalRoute(origin: PlaylistRouteOrigin.homeLibrary) =>
+            _homePlaylistReturnFocusNode,
+          PlaylistLocalRoute(origin: PlaylistRouteOrigin.homeRecommendation) =>
+            _homeRecommendationReturnFocusNode,
+          _ => null,
+        };
+        if (focusNode != null) _restoreFocusNode(focusNode);
+        return;
     }
   }
 
-  bool get _hasOverlayPage =>
-      _expandedNowPlayingOpen ||
-      _nowPlayingContextAlbum != null ||
-      _nowPlayingContextArtist != null ||
-      _selectedPlaylist != null ||
-      _trackContextAlbum != null ||
-      _trackContextArtist != null ||
-      _albumContextArtist != null ||
-      _albumArtistContextAlbum != null ||
-      _selectedFavoriteArtist != null ||
-      _favoriteArtistAlbum != null ||
-      _selectedRecommendedPlaylist != null ||
-      _selectedRanking != null ||
-      _selectedAlbum != null ||
-      _selectedArtist != null ||
-      _selectedSearchPlaylist != null;
+  void _restoreFocusNode(FocusNode focusNode) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && focusNode.context != null) focusNode.requestFocus();
+    });
+  }
 
-  bool get _hasLibrarySubsection =>
-      _primaryDestination == _PrimaryDestination.library &&
-      (_favoriteAlbumsOpen || _favoriteArtistsOpen);
+  bool get _hasOverlayPage => _navigation.hasLocalRoute;
+
+  bool get _hasLibrarySubsection => _navigation.hasLibrarySubsection;
 
   void _restoreBackShortcutFallbackFocus(Duration _) {
     if (!mounted ||
@@ -754,48 +532,38 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _selectLibrarySection(LibrarySection.playlists);
       return KeyEventResult.handled;
     }
-    if (_primaryDestination != _PrimaryDestination.home) {
-      _selectPrimaryDestination(_PrimaryDestination.home);
+    if (_primaryDestination != AuthenticatedPrimaryDestination.home) {
+      _selectPrimaryDestination(AuthenticatedPrimaryDestination.home);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
 
-  _PrimaryDestination get _primaryDestination => _selectedPrimaryDestination;
+  AuthenticatedPrimaryDestination get _primaryDestination =>
+      _navigation.primaryDestination;
 
-  bool get _searchOpen => _primaryDestination == _PrimaryDestination.search;
+  bool get _searchOpen =>
+      _primaryDestination == AuthenticatedPrimaryDestination.search;
 
   bool get _recommendationsOpen =>
-      _primaryDestination == _PrimaryDestination.discover;
+      _primaryDestination == AuthenticatedPrimaryDestination.discover;
 
-  void _selectPrimaryDestination(_PrimaryDestination destination) {
-    if (_primaryDestination == destination) return;
+  void _selectPrimaryDestination(AuthenticatedPrimaryDestination destination) {
+    if (_navigation.hasLocalRoute || _primaryDestination == destination) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      _selectedPrimaryDestination = destination;
-      _searchVisited |= destination == _PrimaryDestination.search;
-      _recommendationsVisited |= destination == _PrimaryDestination.discover;
-    });
+    setState(() => _navigation.selectPrimaryDestination(destination));
   }
 
-  LibrarySection get _librarySection => _favoriteAlbumsOpen
-      ? LibrarySection.albums
-      : _favoriteArtistsOpen
-      ? LibrarySection.artists
-      : LibrarySection.playlists;
+  LibrarySection get _librarySection => _navigation.librarySection;
 
   void _selectLibrarySection(LibrarySection section) {
-    if (_primaryDestination != _PrimaryDestination.library ||
+    if (_navigation.hasLocalRoute ||
+        _primaryDestination != AuthenticatedPrimaryDestination.library ||
         _librarySection == section) {
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      _favoriteAlbumsOpen = section == LibrarySection.albums;
-      _favoriteArtistsOpen = section == LibrarySection.artists;
-      _favoriteAlbumsVisited |= section == LibrarySection.albums;
-      _favoriteArtistsVisited |= section == LibrarySection.artists;
-    });
+    setState(() => _navigation.selectLibrarySection(section));
     if (section == LibrarySection.playlists) {
       _restoreLibrarySectionFocus();
     }
@@ -804,7 +572,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _restoreLibrarySectionFocus() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
-          _primaryDestination != _PrimaryDestination.library ||
+          _primaryDestination != AuthenticatedPrimaryDestination.library ||
           _librarySection != LibrarySection.playlists) {
         return;
       }
@@ -818,325 +586,182 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openTrackContextAlbum(AlbumSummary album) {
-    if (_trackContextAlbum != null) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _trackContextAlbum = album);
+    final topRoute = _navigation.topRoute;
+    final origin =
+        topRoute is ArtistLocalRoute &&
+            topRoute.origin == ArtistRouteOrigin.trackContext
+        ? AlbumRouteOrigin.trackContextArtist
+        : AlbumRouteOrigin.trackContext;
+    _pushLocalRoute(AlbumLocalRoute(album: album, origin: origin));
   }
 
   void _openTrackContextArtist(ArtistSummary artist) {
-    if (_trackContextAlbum != null || _trackContextArtist != null) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _trackContextArtist = artist);
-  }
-
-  void _returnFromTrackContextArtist() {
-    if (_trackContextArtist == null) return;
-    setState(() => _trackContextArtist = null);
-  }
-
-  void _returnFromTrackContextAlbum() {
-    if (_trackContextAlbum == null) return;
-    setState(() => _trackContextAlbum = null);
+    _pushLocalRoute(
+      ArtistLocalRoute(artist: artist, origin: ArtistRouteOrigin.trackContext),
+    );
   }
 
   void _openAlbumContextArtist(ArtistSummary artist) {
-    if (_albumContextArtist != null || _albumArtistContextAlbum != null) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _albumContextArtist = artist);
+    _pushLocalRoute(
+      ArtistLocalRoute(artist: artist, origin: ArtistRouteOrigin.album),
+    );
   }
 
-  void _returnFromAlbumContextArtist() {
-    if (_albumContextArtist == null || _albumArtistContextAlbum != null) return;
-    setState(() => _albumContextArtist = null);
-  }
-
-  void _openAlbumArtistContextAlbum(AlbumSummary album) {
-    if (_albumContextArtist == null || _albumArtistContextAlbum != null) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _albumArtistContextAlbum = album);
-  }
-
-  void _returnFromAlbumArtistContextAlbum() {
-    if (_albumArtistContextAlbum == null) return;
-    setState(() => _albumArtistContextAlbum = null);
+  void _openAlbumFromArtist(
+    ArtistRouteOrigin artistOrigin,
+    AlbumSummary album,
+  ) {
+    final albumOrigin = switch (artistOrigin) {
+      ArtistRouteOrigin.search => AlbumRouteOrigin.searchArtist,
+      ArtistRouteOrigin.favoriteArtists => AlbumRouteOrigin.favoriteArtist,
+      ArtistRouteOrigin.trackContext => AlbumRouteOrigin.trackContextArtist,
+      ArtistRouteOrigin.album => AlbumRouteOrigin.albumArtist,
+      ArtistRouteOrigin.nowPlaying => AlbumRouteOrigin.nowPlayingArtist,
+    };
+    _pushLocalRoute(AlbumLocalRoute(album: album, origin: albumOrigin));
   }
 
   void _openNowPlayingAlbum(AlbumSummary album) {
-    if (_nowPlayingContextAlbum != null || _nowPlayingContextArtist != null) {
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _nowPlayingContextAlbum = album);
+    _pushLocalRoute(
+      AlbumLocalRoute(album: album, origin: AlbumRouteOrigin.nowPlaying),
+    );
   }
 
   void _openNowPlayingArtist(ArtistSummary artist) {
-    if (_nowPlayingContextAlbum != null || _nowPlayingContextArtist != null) {
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _nowPlayingContextArtist = artist);
-  }
-
-  void _openNowPlayingArtistAlbum(AlbumSummary album) {
-    if (_nowPlayingContextArtist == null || _nowPlayingContextAlbum != null) {
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _nowPlayingContextAlbum = album);
-  }
-
-  void _returnFromNowPlayingAlbum() {
-    if (_nowPlayingContextAlbum == null) return;
-    setState(() => _nowPlayingContextAlbum = null);
-  }
-
-  void _returnFromNowPlayingArtist() {
-    if (_nowPlayingContextArtist == null || _nowPlayingContextAlbum != null) {
-      return;
-    }
-    setState(() => _nowPlayingContextArtist = null);
+    _pushLocalRoute(
+      ArtistLocalRoute(artist: artist, origin: ArtistRouteOrigin.nowPlaying),
+    );
   }
 
   void _openExpandedNowPlaying() {
-    if (_expandedNowPlayingOpen || _queuePlaybackController.current == null) {
+    if (_navigation.topRoute is ExpandedNowPlayingLocalRoute ||
+        _queuePlaybackController.current == null) {
       return;
     }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _expandedNowPlayingOpen = true);
+    _pushLocalRoute(const ExpandedNowPlayingLocalRoute());
   }
 
   void _closeExpandedNowPlaying() {
-    if (!_expandedNowPlayingOpen) return;
-    setState(() => _expandedNowPlayingOpen = false);
-  }
-
-  void _closeFavoriteArtists() {
-    if (!_favoriteArtistsOpen) return;
-    setState(() {
-      _favoriteArtistAlbum = null;
-      _selectedFavoriteArtist = null;
-      _favoriteArtistsOpen = false;
-    });
-    _restoreLibrarySectionFocus();
+    if (_navigation.topRoute is! ExpandedNowPlayingLocalRoute) return;
+    _returnFromTopRoute();
   }
 
   void _openFavoriteArtist(ArtistSummary artist) {
-    if (!_favoriteArtistsOpen || _selectedFavoriteArtist != null) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedFavoriteArtist = artist);
-  }
-
-  void _returnFromFavoriteArtist() {
-    if (!_favoriteArtistsOpen || _selectedFavoriteArtist == null) return;
-    setState(() => _selectedFavoriteArtist = null);
-  }
-
-  void _openFavoriteArtistAlbum(AlbumSummary album) {
-    if (!_favoriteArtistsOpen ||
-        _selectedFavoriteArtist == null ||
-        _favoriteArtistAlbum != null) {
+    if (_librarySection != LibrarySection.artists ||
+        _navigation.hasLocalRoute) {
       return;
     }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _favoriteArtistAlbum = album);
-  }
-
-  void _returnFromFavoriteArtistAlbum() {
-    if (!_favoriteArtistsOpen || _favoriteArtistAlbum == null) return;
-    setState(() => _favoriteArtistAlbum = null);
-  }
-
-  void _closeFavoriteAlbums() {
-    if (!_favoriteAlbumsOpen) return;
-    setState(() {
-      _selectedAlbum = null;
-      _favoriteAlbumsOpen = false;
-    });
-    _restoreLibrarySectionFocus();
+    _pushLocalRoute(
+      ArtistLocalRoute(
+        artist: artist,
+        origin: ArtistRouteOrigin.favoriteArtists,
+      ),
+    );
   }
 
   void _openFavoriteAlbum(AlbumSummary album) {
-    if (!_favoriteAlbumsOpen || _selectedAlbum != null) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedAlbum = album);
-  }
-
-  void _returnFromFavoriteAlbum() {
-    if (!_favoriteAlbumsOpen || _selectedAlbum == null) return;
-    setState(() => _selectedAlbum = null);
-  }
-
-  void _closeRecommendations() {
-    if (!_recommendationsOpen) return;
-    setState(() {
-      _selectedRecommendedPlaylist = null;
-      _selectedRanking = null;
-      _selectedAlbum = null;
-      _selectedPrimaryDestination = _PrimaryDestination.home;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          !_recommendationsOpen &&
-          _recommendationsReturnFocusNode.context != null) {
-        _recommendationsReturnFocusNode.requestFocus();
-      }
-    });
+    if (_librarySection != LibrarySection.albums || _navigation.hasLocalRoute) {
+      return;
+    }
+    _pushLocalRoute(
+      AlbumLocalRoute(album: album, origin: AlbumRouteOrigin.favoriteAlbums),
+    );
   }
 
   void _openRecommendedPlaylist(RecommendedPlaylistSummary playlist) {
-    if (!_recommendationsOpen ||
-        _selectedRecommendedPlaylist != null ||
-        _selectedRanking != null) {
+    if (!_recommendationsOpen || _navigation.hasLocalRoute) {
       return;
     }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedRecommendedPlaylist = playlist);
-  }
-
-  void _returnToRecommendations() {
-    if (_selectedRecommendedPlaylist == null) return;
-    final returnToHome = _primaryDestination == _PrimaryDestination.home;
-    setState(() => _selectedRecommendedPlaylist = null);
-    if (returnToHome) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted &&
-            _selectedRecommendedPlaylist == null &&
-            _homeRecommendationReturnFocusNode.context != null) {
-          _homeRecommendationReturnFocusNode.requestFocus();
-        }
-      });
-    }
+    _pushLocalRoute(
+      PlaylistLocalRoute(
+        playlist: playlist.toPlaylistSummary(),
+        origin: PlaylistRouteOrigin.discover,
+      ),
+    );
   }
 
   void _openRanking(RankingSummary ranking) {
-    if (!_recommendationsOpen ||
-        _selectedRecommendedPlaylist != null ||
-        _selectedRanking != null) {
+    if (!_recommendationsOpen || _navigation.hasLocalRoute) {
       return;
     }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedRanking = ranking);
-  }
-
-  void _returnFromRanking() {
-    if (_selectedRanking == null) return;
-    setState(() => _selectedRanking = null);
+    _pushLocalRoute(RankingLocalRoute(ranking));
   }
 
   void _openRecommendedAlbum(AlbumSummary album) {
-    if (!_recommendationsOpen ||
-        _selectedRecommendedPlaylist != null ||
-        _selectedRanking != null ||
-        _selectedAlbum != null) {
+    if (!_recommendationsOpen || _navigation.hasLocalRoute) {
       return;
     }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedAlbum = album);
-  }
-
-  void _returnFromRecommendedAlbum() {
-    if (!_recommendationsOpen || _selectedAlbum == null) return;
-    setState(() => _selectedAlbum = null);
-  }
-
-  void _closeSearch() {
-    if (!_searchOpen) return;
-    setState(() {
-      _selectedAlbum = null;
-      _selectedArtist = null;
-      _selectedSearchPlaylist = null;
-      _selectedPrimaryDestination = _PrimaryDestination.home;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_searchOpen && _searchReturnFocusNode.context != null) {
-        _searchReturnFocusNode.requestFocus();
-      }
-    });
+    _pushLocalRoute(
+      AlbumLocalRoute(album: album, origin: AlbumRouteOrigin.discover),
+    );
   }
 
   void _openAlbum(AlbumSummary album) {
-    if (!_searchOpen ||
-        _selectedAlbum != null ||
-        _selectedSearchPlaylist != null) {
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedAlbum = album);
-  }
-
-  void _returnFromAlbum() {
-    if (_selectedAlbum == null) return;
-    if (_selectedArtist != null) {
-      setState(() => _selectedAlbum = null);
-    } else {
-      _returnToSearch();
-    }
+    if (!_searchOpen || _navigation.hasLocalRoute) return;
+    _pushLocalRoute(
+      AlbumLocalRoute(album: album, origin: AlbumRouteOrigin.search),
+    );
   }
 
   void _openArtist(ArtistSummary artist) {
-    if (!_searchOpen ||
-        _selectedAlbum != null ||
-        _selectedArtist != null ||
-        _selectedSearchPlaylist != null) {
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedArtist = artist);
-  }
-
-  void _returnToSearch() {
-    if (_selectedAlbum == null &&
-        _selectedArtist == null &&
-        _selectedSearchPlaylist == null) {
-      return;
-    }
-    setState(() {
-      _selectedAlbum = null;
-      _selectedArtist = null;
-      _selectedSearchPlaylist = null;
-    });
+    if (!_searchOpen || _navigation.hasLocalRoute) return;
+    _pushLocalRoute(
+      ArtistLocalRoute(artist: artist, origin: ArtistRouteOrigin.search),
+    );
   }
 
   void _openSearchPlaylist(UserPlaylistSummary playlist) {
-    if (!_searchOpen ||
-        _selectedAlbum != null ||
-        _selectedArtist != null ||
-        _selectedSearchPlaylist != null) {
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _selectedSearchPlaylist = playlist);
+    if (!_searchOpen || _navigation.hasLocalRoute) return;
+    _pushLocalRoute(
+      PlaylistLocalRoute(
+        playlist: playlist,
+        origin: PlaylistRouteOrigin.search,
+      ),
+    );
   }
 
   void _openPlaylist(UserPlaylistSummary playlist) {
-    setState(() {
-      _lastOpenedPlaylist = playlist;
-      _selectedPlaylist = playlist;
-    });
+    if (_navigation.hasLocalRoute) return;
+    _lastOpenedPlaylist = playlist;
+    _pushLocalRoute(
+      PlaylistLocalRoute(
+        playlist: playlist,
+        origin: PlaylistRouteOrigin.library,
+      ),
+    );
   }
 
   void _openHomePlaylist(UserPlaylistSummary playlist) {
-    if (_primaryDestination != _PrimaryDestination.home ||
-        _selectedPlaylist != null) {
+    if (_primaryDestination != AuthenticatedPrimaryDestination.home ||
+        _navigation.hasLocalRoute) {
       return;
     }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      _lastOpenedHomePlaylist = playlist;
-      _selectedPlaylist = playlist;
-    });
+    _lastOpenedHomePlaylist = playlist;
+    _pushLocalRoute(
+      PlaylistLocalRoute(
+        playlist: playlist,
+        origin: PlaylistRouteOrigin.homeLibrary,
+      ),
+    );
   }
 
   void _openHomeRecommendation(RecommendedPlaylistSummary playlist) {
-    if (_primaryDestination != _PrimaryDestination.home ||
-        _selectedRecommendedPlaylist != null) {
+    if (_primaryDestination != AuthenticatedPrimaryDestination.home ||
+        _navigation.hasLocalRoute) {
       return;
     }
+    _lastOpenedHomeRecommendation = playlist;
+    _pushLocalRoute(
+      PlaylistLocalRoute(
+        playlist: playlist.toPlaylistSummary(),
+        origin: PlaylistRouteOrigin.homeRecommendation,
+      ),
+    );
+  }
+
+  void _pushLocalRoute(AuthenticatedLocalRoute route) {
     FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      _lastOpenedHomeRecommendation = playlist;
-      _selectedRecommendedPlaylist = playlist;
-    });
+    setState(() => _navigation.push(route));
   }
 
   Widget _libraryDestinationBody() => Column(
@@ -1171,24 +796,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           index: _librarySection.index,
           children: [
             _libraryBody(),
-            if (_favoriteAlbumsVisited)
+            if (_navigation.visitedLibrarySection(LibrarySection.albums))
               FavoriteAlbumsPage(
                 key: const ValueKey('favorite-albums-page'),
                 gateway: _favoriteAlbumGateway,
                 queuePlaybackController: _queuePlaybackController,
-                onBack: _closeFavoriteAlbums,
+                onBack: _returnFromLocalPage,
                 onOpenAlbum: _openFavoriteAlbum,
                 onSignInAgain: widget.onSignInAgain,
                 embedded: true,
               )
             else
               const SizedBox.shrink(),
-            if (_favoriteArtistsVisited)
+            if (_navigation.visitedLibrarySection(LibrarySection.artists))
               FavoriteArtistsPage(
                 key: const ValueKey('favorite-artists-page'),
                 gateway: _favoriteArtistGateway,
                 queuePlaybackController: _queuePlaybackController,
-                onBack: _closeFavoriteArtists,
+                onBack: _returnFromLocalPage,
                 onOpenArtist: _openFavoriteArtist,
                 onSignInAgain: widget.onSignInAgain,
                 embedded: true,
@@ -1214,12 +839,15 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             key: const ValueKey('home-page'),
             libraryController: _controller,
             recommendationController: _recommendedPlaylistController,
-            onOpenDiscover: () =>
-                _selectPrimaryDestination(_PrimaryDestination.discover),
-            onOpenSearch: () =>
-                _selectPrimaryDestination(_PrimaryDestination.search),
-            onOpenLibrary: () =>
-                _selectPrimaryDestination(_PrimaryDestination.library),
+            onOpenDiscover: () => _selectPrimaryDestination(
+              AuthenticatedPrimaryDestination.discover,
+            ),
+            onOpenSearch: () => _selectPrimaryDestination(
+              AuthenticatedPrimaryDestination.search,
+            ),
+            onOpenLibrary: () => _selectPrimaryDestination(
+              AuthenticatedPrimaryDestination.library,
+            ),
             onOpenPlaylist: _openHomePlaylist,
             onOpenRecommendation: _openHomeRecommendation,
             lastOpenedPlaylist: _lastOpenedHomePlaylist,
@@ -1227,7 +855,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             lastOpenedRecommendation: _lastOpenedHomeRecommendation,
             recommendationReturnFocusNode: _homeRecommendationReturnFocusNode,
           ),
-          if (_recommendationsVisited)
+          if (_navigation.visitedDestination(
+            AuthenticatedPrimaryDestination.discover,
+          ))
             RecommendedPlaylistsPage(
               key: const ValueKey('recommended-playlists-page'),
               gateway: _recommendedPlaylistGateway,
@@ -1237,7 +867,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               rankingGateway: _rankingGateway,
               radarGateway: _radarGateway,
               queuePlaybackController: _queuePlaybackController,
-              onBack: _closeRecommendations,
+              onBack: _returnFromLocalPage,
               onOpenPlaylist: _openRecommendedPlaylist,
               onOpenRanking: _openRanking,
               onOpenAlbum: _openRecommendedAlbum,
@@ -1248,7 +878,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             )
           else
             const SizedBox.shrink(),
-          if (_searchVisited)
+          if (_navigation.visitedDestination(
+            AuthenticatedPrimaryDestination.search,
+          ))
             TrackSearchPage(
               key: const ValueKey('track-search-page'),
               gateway: _searchGateway,
@@ -1256,7 +888,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               albumGateway: _albumSearchGateway,
               playlistGateway: _playlistSearchGateway,
               queuePlaybackController: _queuePlaybackController,
-              onBack: _closeSearch,
+              onBack: _returnFromLocalPage,
               onOpenAlbum: _openAlbum,
               onOpenArtist: _openArtist,
               onOpenPlaylist: _openSearchPlaylist,
@@ -1306,16 +938,18 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         appBar: AppBar(
           title: _PrimaryShellTitle(
             title: switch (destination) {
-              _PrimaryDestination.home => 'Home',
-              _PrimaryDestination.discover => 'Discover',
-              _PrimaryDestination.search => 'Search QQ Music',
-              _PrimaryDestination.library => 'Your music',
+              AuthenticatedPrimaryDestination.home => 'Home',
+              AuthenticatedPrimaryDestination.discover => 'Discover',
+              AuthenticatedPrimaryDestination.search => 'Search QQ Music',
+              AuthenticatedPrimaryDestination.library => 'Your music',
             },
             compact: compactActions,
             showSearchShortcut:
-                extendedSidebar && destination != _PrimaryDestination.search,
-            onOpenSearch: () =>
-                _selectPrimaryDestination(_PrimaryDestination.search),
+                extendedSidebar &&
+                destination != AuthenticatedPrimaryDestination.search,
+            onOpenSearch: () => _selectPrimaryDestination(
+              AuthenticatedPrimaryDestination.search,
+            ),
           ),
           titleSpacing: compactActions ? 8 : 16,
           actions: _primaryActions(compactActions: compactActions),
@@ -1345,7 +979,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   );
 
   void _selectPrimaryDestinationByIndex(int index) {
-    _selectPrimaryDestination(_PrimaryDestination.values[index]);
+    _selectPrimaryDestination(AuthenticatedPrimaryDestination.values[index]);
   }
 
   List<NavigationRailDestination> _navigationRailDestinations() => [
@@ -1361,7 +995,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       icon: _destinationFocusIcon(
         key: const ValueKey('open-recommendations'),
         focusNode: _recommendationsReturnFocusNode,
-        destination: _PrimaryDestination.discover,
+        destination: AuthenticatedPrimaryDestination.discover,
         icon: Icons.explore_outlined,
       ),
       label: const Text('Discover'),
@@ -1370,7 +1004,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       icon: _destinationFocusIcon(
         key: const ValueKey('open-track-search'),
         focusNode: _searchReturnFocusNode,
-        destination: _PrimaryDestination.search,
+        destination: AuthenticatedPrimaryDestination.search,
         icon: Icons.search_rounded,
       ),
       label: const Text('Search'),
@@ -1398,7 +1032,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       icon: _destinationFocusIcon(
         key: const ValueKey('open-recommendations'),
         focusNode: _recommendationsReturnFocusNode,
-        destination: _PrimaryDestination.discover,
+        destination: AuthenticatedPrimaryDestination.discover,
         icon: Icons.explore_outlined,
       ),
       label: 'Discover',
@@ -1407,7 +1041,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       icon: _destinationFocusIcon(
         key: const ValueKey('open-track-search'),
         focusNode: _searchReturnFocusNode,
-        destination: _PrimaryDestination.search,
+        destination: AuthenticatedPrimaryDestination.search,
         icon: Icons.search_rounded,
       ),
       label: 'Search',
@@ -1425,7 +1059,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   Widget _destinationFocusIcon({
     required Key key,
     required FocusNode focusNode,
-    required _PrimaryDestination destination,
+    required AuthenticatedPrimaryDestination destination,
     required IconData icon,
   }) => Focus(
     key: key,
