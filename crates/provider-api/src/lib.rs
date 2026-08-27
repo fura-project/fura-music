@@ -582,6 +582,18 @@ pub trait TrackLikeMutationProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
+/// Provider-neutral desired favorite state for one Album. The Provider owns
+/// source-specific opaque identity parsing and write semantics.
+pub trait AlbumFavoriteMutationProvider: MusicProvider + Sync {
+    type Error;
+
+    fn set_album_favorite(
+        &self,
+        album_id: AlbumId,
+        favorite: bool,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
 /// Provider-neutral desired membership of one Track in one owned playlist.
 /// The Provider validates its opaque playlist and Track identities and owns
 /// source-specific write semantics.

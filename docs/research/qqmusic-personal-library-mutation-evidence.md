@@ -1,8 +1,8 @@
 # QQ Music personal-library mutation evidence
 
-- **Status:** Liked Track, owned-playlist Track, and playlist-creation foundations implemented; maintainer-operated acceptance pending
+- **Status:** Liked Track, owned-playlist Track, playlist-creation, and Album-favorite foundations implemented; maintainer-operated acceptance pending
 - **Last checked:** 2026-08-28
-- **Scope:** One reversible single-Track like/unlike operation, one Track add/remove operation for a structurally validated owned playlist, and one bounded owned-playlist creation. Rename/delete and catalog-entity mutations remain separate work.
+- **Scope:** One reversible single-Track like/unlike operation, one Track add/remove operation for a structurally validated owned playlist, one bounded owned-playlist creation, and one desired Album favorite state. Rename/delete and Artist mutation remain separate work.
 
 This note is the durable evidence base for bounded personal-library writes. No
 stored project credential was read, no request was sent with a real account,
@@ -122,12 +122,17 @@ without a nonzero numeric ID must be rejected before transport rather than
 falling back after an uncertain write.
 
 No sanitized response is available in this checkout and no real account write
-will be issued. Offline success must require zero global, named-request, and
-mutation `result` values plus a present empty failed-ID list. A missing,
-nonempty, or malformed failed list is an unknown response outcome, not
-confirmed success. Artist follow/unfollow remains `EVIDENCE_BLOCKED`: current
-sources agree on reading `GetFollowSingerList`, but this discovery found no two
-current detailed write contracts or authenticated reversible test.
+was issued. The implemented Client requires zero global, named-request, and
+mutation `result` values plus a present empty failed-ID list. A list containing
+the one requested numeric ID is an explicit failed mutation; a missing or
+structurally contradictory list is an unknown response outcome. Provider-owned
+identity parsing, exact credential replacement, the shared single-use Bridge
+lifecycle, Dart rejection cleanup, generated bindings, and packaged-Bridge
+cancellation are covered offline. No fallback to the independently observed
+MID request form is attempted. Artist follow/unfollow remains
+`EVIDENCE_BLOCKED`: current sources agree on reading `GetFollowSingerList`, but
+this discovery found no two current detailed write contracts or authenticated
+reversible test.
 
 ## Explicit non-goals of this slice
 

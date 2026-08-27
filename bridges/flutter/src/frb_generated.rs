@@ -28,6 +28,7 @@
 // Section: imports
 
 use crate::api::album::*;
+use crate::api::album_favorites::*;
 use crate::api::artist::*;
 use crate::api::authentication::*;
 use crate::api::comments::*;
@@ -58,7 +59,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 109664074;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1242799678;
 
 // Section: executor
 
@@ -929,6 +930,172 @@ fn wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_run_impl(
                         let output_ok = Ok::<_, ()>(
                             crate::api::album::QqMusicAlbumDetailsLoadHandle::run(&*api_that_guard)
                                 .await,
+                        )?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_cancel_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "QqMusicAlbumFavoriteMutationHandle_cancel",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                    QqMusicAlbumFavoriteMutationHandle,
+                >,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>(
+                    crate::api::album_favorites::QqMusicAlbumFavoriteMutationHandle::cancel(
+                        &*api_that_guard,
+                    ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_is_active_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "QqMusicAlbumFavoriteMutationHandle_is_active",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                    QqMusicAlbumFavoriteMutationHandle,
+                >,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>(
+                    crate::api::album_favorites::QqMusicAlbumFavoriteMutationHandle::is_active(
+                        &*api_that_guard,
+                    ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_run_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "QqMusicAlbumFavoriteMutationHandle_run",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                    QqMusicAlbumFavoriteMutationHandle,
+                >,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = Ok::<_, ()>(
+                            crate::api::album_favorites::QqMusicAlbumFavoriteMutationHandle::run(
+                                &*api_that_guard,
+                            )
+                            .await,
                         )?;
                         std::result::Result::Ok(output_ok)
                     })()
@@ -5021,6 +5188,47 @@ fn wire__crate__api__album__begin_qq_music_album_details_load_impl(
         },
     )
 }
+fn wire__crate__api__album_favorites__begin_qq_music_album_favorite_mutation_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "begin_qq_music_album_favorite_mutation",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_provider_id = <String>::sse_decode(&mut deserializer);
+            let api_opaque_album_id = <String>::sse_decode(&mut deserializer);
+            let api_desired_state =
+                <crate::api::album_favorites::QqMusicAlbumFavoriteState>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(
+                    crate::api::album_favorites::begin_qq_music_album_favorite_mutation(
+                        api_provider_id,
+                        api_opaque_album_id,
+                        api_desired_state,
+                    ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__search__begin_qq_music_album_search_page_load_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6326,6 +6534,9 @@ flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumDetailsLoadHandle>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumFavoriteMutationHandle>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumSearchPageLoadHandle>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
@@ -6432,6 +6643,18 @@ impl SseDecode for QqMusicAlbumDetailsLoadHandle {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <RustOpaqueMoi<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumDetailsLoadHandle>,
+        >>::sse_decode(deserializer);
+        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+    }
+}
+
+impl SseDecode for QqMusicAlbumFavoriteMutationHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicAlbumFavoriteMutationHandle,
+            >,
         >>::sse_decode(deserializer);
         return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
     }
@@ -6742,6 +6965,18 @@ impl SseDecode
 impl SseDecode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumDetailsLoadHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <usize>::sse_decode(deserializer);
+        return decode_rust_opaque_moi(inner);
+    }
+}
+
+impl SseDecode
+    for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumFavoriteMutationHandle>,
     >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -7559,6 +7794,34 @@ impl SseDecode for Option<crate::api::album::QqMusicAlbumDetailsLoadFailure> {
     }
 }
 
+impl SseDecode for Option<crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure>::sse_decode(
+                    deserializer,
+                ),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::album_favorites::QqMusicAlbumFavoriteState> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::album_favorites::QqMusicAlbumFavoriteState>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::search::QqMusicAlbumSearchPageLoadFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8243,6 +8506,55 @@ impl SseDecode for crate::api::album::QqMusicAlbumDetailsLoadFailure {
                 "Invalid variant for QqMusicAlbumDetailsLoadFailure: {}",
                 inner
             ),
+        };
+    }
+}
+
+impl SseDecode for crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::CoreUnavailable,
+1 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::AuthenticationRequired,
+2 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::CredentialRejected,
+3 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::NetworkOutcomeUnknown,
+4 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::ServiceUnavailable,
+5 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::InvalidRequest,
+6 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::InvalidResponseOutcomeUnknown,
+7 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::ReplacedOutcomeUnknown,
+8 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::CancelledOutcomeUnknown,
+9 => crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::AlreadyRunning,
+            _ => unreachable!("Invalid variant for QqMusicAlbumFavoriteMutationFailure: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_confirmedState =
+            <Option<crate::api::album_favorites::QqMusicAlbumFavoriteState>>::sse_decode(
+                deserializer,
+            );
+        let mut var_failure = <Option<
+            crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure,
+        >>::sse_decode(deserializer);
+        return crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult {
+            confirmed_state: var_confirmedState,
+            failure: var_failure,
+        };
+    }
+}
+
+impl SseDecode for crate::api::album_favorites::QqMusicAlbumFavoriteState {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::album_favorites::QqMusicAlbumFavoriteState::Favorite,
+            1 => crate::api::album_favorites::QqMusicAlbumFavoriteState::NotFavorite,
+            _ => unreachable!("Invalid variant for QqMusicAlbumFavoriteState: {}", inner),
         };
     }
 }
@@ -9648,164 +9960,170 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_run_impl(
+        20 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_run_impl(
+        23 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_run_impl(
+        26 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_run_impl(
+        29 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_run_impl(
+        32 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_run_impl(
+        35 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_run_impl(
+        38 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_run_impl(
+        41 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__media__QqMusicMediaResolutionHandle_run_impl(
+        44 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_run_impl(
+        47 => wire__crate__api__media__QqMusicMediaResolutionHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__new_songs__QqMusicNewSongsLoadHandle_run_impl(
+        50 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__playlist_creation__QqMusicPlaylistCreationHandle_run_impl(
+        53 => wire__crate__api__new_songs__QqMusicNewSongsLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__search__QqMusicPlaylistSearchPageLoadHandle_run_impl(
+        56 => wire__crate__api__playlist_creation__QqMusicPlaylistCreationHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__playlist_tracks__QqMusicPlaylistTrackMutationHandle_run_impl(
+        59 => wire__crate__api__search__QqMusicPlaylistSearchPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__library__QqMusicPlaylistTrackPageLoadHandle_run_impl(
+        62 => wire__crate__api__playlist_tracks__QqMusicPlaylistTrackMutationHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__authentication__QqMusicQrLoginSessionHandle_advance_impl(
+        65 => wire__crate__api__library__QqMusicPlaylistTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__recommendations__QqMusicRadarTrackPageLoadHandle_run_impl(
+        66 => wire__crate__api__authentication__QqMusicQrLoginSessionHandle_advance_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        71 => wire__crate__api__rankings__QqMusicRankingGroupLoadHandle_run_impl(
+        71 => wire__crate__api__recommendations__QqMusicRadarTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_run_impl(
+        74 => wire__crate__api__rankings__QqMusicRankingGroupLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_run_impl(
+        77 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_run_impl(
+        80 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_run_impl(
+        83 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        86 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_run_impl(
+        86 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_run_impl(
+        89 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_run_impl(
+        92 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        124 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
-        130 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
+        95 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        131 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(
+        128 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
+        134 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        135 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(
             port,
             ptr,
             rust_vec_len,
@@ -9838,92 +10156,95 @@ fn pde_ffi_dispatcher_sync_impl(
 13 => wire__crate__api__authentication__QqMusicAccountSummaryLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
 15 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
 16 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-18 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-19 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-21 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-22 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-24 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-25 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-27 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-28 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-30 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-31 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-33 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-34 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-36 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-37 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-39 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-40 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-42 => wire__crate__api__media__QqMusicMediaResolutionHandle_cancel_impl(ptr, rust_vec_len, data_len),
-43 => wire__crate__api__media__QqMusicMediaResolutionHandle_is_active_impl(ptr, rust_vec_len, data_len),
-45 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-46 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-48 => wire__crate__api__new_songs__QqMusicNewSongsLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-49 => wire__crate__api__new_songs__QqMusicNewSongsLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-51 => wire__crate__api__playlist_creation__QqMusicPlaylistCreationHandle_cancel_impl(ptr, rust_vec_len, data_len),
-52 => wire__crate__api__playlist_creation__QqMusicPlaylistCreationHandle_is_active_impl(ptr, rust_vec_len, data_len),
-54 => wire__crate__api__search__QqMusicPlaylistSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-55 => wire__crate__api__search__QqMusicPlaylistSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-57 => wire__crate__api__playlist_tracks__QqMusicPlaylistTrackMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
-58 => wire__crate__api__playlist_tracks__QqMusicPlaylistTrackMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
-60 => wire__crate__api__library__QqMusicPlaylistTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-61 => wire__crate__api__library__QqMusicPlaylistTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-64 => wire__crate__api__authentication__QqMusicQrLoginSessionHandle_cancel_impl(ptr, rust_vec_len, data_len),
-65 => wire__crate__api__authentication__QqMusicQrLoginSessionHandle_is_active_impl(ptr, rust_vec_len, data_len),
-66 => wire__crate__api__recommendations__QqMusicRadarTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-67 => wire__crate__api__recommendations__QqMusicRadarTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-69 => wire__crate__api__rankings__QqMusicRankingGroupLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-70 => wire__crate__api__rankings__QqMusicRankingGroupLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-72 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-73 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-75 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-76 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-78 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-79 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-81 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
-82 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
-84 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-85 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-87 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-88 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-90 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-91 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-93 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
-94 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
-95 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
-96 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
-97 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
-98 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
-99 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
-100 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
-101 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
-102 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
-103 => wire__crate__api__media__begin_qq_music_media_resolution_impl(ptr, rust_vec_len, data_len),
-104 => wire__crate__api__new_albums__begin_qq_music_new_album_page_load_impl(ptr, rust_vec_len, data_len),
-105 => wire__crate__api__new_songs__begin_qq_music_new_songs_load_impl(ptr, rust_vec_len, data_len),
-106 => wire__crate__api__playlist_creation__begin_qq_music_playlist_creation_impl(ptr, rust_vec_len, data_len),
-107 => wire__crate__api__search__begin_qq_music_playlist_search_page_load_impl(ptr, rust_vec_len, data_len),
-108 => wire__crate__api__playlist_tracks__begin_qq_music_playlist_track_mutation_impl(ptr, rust_vec_len, data_len),
-109 => wire__crate__api__library__begin_qq_music_playlist_track_page_load_impl(ptr, rust_vec_len, data_len),
-110 => wire__crate__api__recommendations__begin_qq_music_radar_track_page_load_impl(ptr, rust_vec_len, data_len),
-111 => wire__crate__api__rankings__begin_qq_music_ranking_group_load_impl(ptr, rust_vec_len, data_len),
-112 => wire__crate__api__rankings__begin_qq_music_ranking_track_page_load_impl(ptr, rust_vec_len, data_len),
-113 => wire__crate__api__recommendations__begin_qq_music_recommended_playlist_page_load_impl(ptr, rust_vec_len, data_len),
-114 => wire__crate__api__comments__begin_qq_music_track_comment_page_load_impl(ptr, rust_vec_len, data_len),
-115 => wire__crate__api__track_likes__begin_qq_music_track_like_mutation_impl(ptr, rust_vec_len, data_len),
-116 => wire__crate__api__search__begin_qq_music_track_search_page_load_impl(ptr, rust_vec_len, data_len),
-117 => wire__crate__api__library__begin_qq_music_user_playlist_load_impl(ptr, rust_vec_len, data_len),
-118 => wire__crate__api__music_video__begin_track_music_video_load_impl(ptr, rust_vec_len, data_len),
-119 => wire__crate__api__bootstrap__bootstrap_status_impl(ptr, rust_vec_len, data_len),
-120 => wire__crate__api__authentication__cancel_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
-121 => wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
-122 => wire__crate__api__queue__create_playback_queue_impl(ptr, rust_vec_len, data_len),
-123 => wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
-125 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
-126 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
-127 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
-128 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
-129 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
+18 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
+19 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
+21 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+22 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+24 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+25 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+27 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+28 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+30 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+31 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+33 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+34 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+36 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+37 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+39 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+40 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+42 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+43 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+45 => wire__crate__api__media__QqMusicMediaResolutionHandle_cancel_impl(ptr, rust_vec_len, data_len),
+46 => wire__crate__api__media__QqMusicMediaResolutionHandle_is_active_impl(ptr, rust_vec_len, data_len),
+48 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+49 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+51 => wire__crate__api__new_songs__QqMusicNewSongsLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+52 => wire__crate__api__new_songs__QqMusicNewSongsLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+54 => wire__crate__api__playlist_creation__QqMusicPlaylistCreationHandle_cancel_impl(ptr, rust_vec_len, data_len),
+55 => wire__crate__api__playlist_creation__QqMusicPlaylistCreationHandle_is_active_impl(ptr, rust_vec_len, data_len),
+57 => wire__crate__api__search__QqMusicPlaylistSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+58 => wire__crate__api__search__QqMusicPlaylistSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+60 => wire__crate__api__playlist_tracks__QqMusicPlaylistTrackMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
+61 => wire__crate__api__playlist_tracks__QqMusicPlaylistTrackMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
+63 => wire__crate__api__library__QqMusicPlaylistTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+64 => wire__crate__api__library__QqMusicPlaylistTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+67 => wire__crate__api__authentication__QqMusicQrLoginSessionHandle_cancel_impl(ptr, rust_vec_len, data_len),
+68 => wire__crate__api__authentication__QqMusicQrLoginSessionHandle_is_active_impl(ptr, rust_vec_len, data_len),
+69 => wire__crate__api__recommendations__QqMusicRadarTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+70 => wire__crate__api__recommendations__QqMusicRadarTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+72 => wire__crate__api__rankings__QqMusicRankingGroupLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+73 => wire__crate__api__rankings__QqMusicRankingGroupLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+75 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+76 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+78 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+79 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+81 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+82 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+84 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
+85 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
+87 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+88 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+90 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+91 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+93 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+94 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+96 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
+97 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
+98 => wire__crate__api__album_favorites__begin_qq_music_album_favorite_mutation_impl(ptr, rust_vec_len, data_len),
+99 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
+100 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
+101 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
+102 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
+103 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
+104 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
+105 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
+106 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
+107 => wire__crate__api__media__begin_qq_music_media_resolution_impl(ptr, rust_vec_len, data_len),
+108 => wire__crate__api__new_albums__begin_qq_music_new_album_page_load_impl(ptr, rust_vec_len, data_len),
+109 => wire__crate__api__new_songs__begin_qq_music_new_songs_load_impl(ptr, rust_vec_len, data_len),
+110 => wire__crate__api__playlist_creation__begin_qq_music_playlist_creation_impl(ptr, rust_vec_len, data_len),
+111 => wire__crate__api__search__begin_qq_music_playlist_search_page_load_impl(ptr, rust_vec_len, data_len),
+112 => wire__crate__api__playlist_tracks__begin_qq_music_playlist_track_mutation_impl(ptr, rust_vec_len, data_len),
+113 => wire__crate__api__library__begin_qq_music_playlist_track_page_load_impl(ptr, rust_vec_len, data_len),
+114 => wire__crate__api__recommendations__begin_qq_music_radar_track_page_load_impl(ptr, rust_vec_len, data_len),
+115 => wire__crate__api__rankings__begin_qq_music_ranking_group_load_impl(ptr, rust_vec_len, data_len),
+116 => wire__crate__api__rankings__begin_qq_music_ranking_track_page_load_impl(ptr, rust_vec_len, data_len),
+117 => wire__crate__api__recommendations__begin_qq_music_recommended_playlist_page_load_impl(ptr, rust_vec_len, data_len),
+118 => wire__crate__api__comments__begin_qq_music_track_comment_page_load_impl(ptr, rust_vec_len, data_len),
+119 => wire__crate__api__track_likes__begin_qq_music_track_like_mutation_impl(ptr, rust_vec_len, data_len),
+120 => wire__crate__api__search__begin_qq_music_track_search_page_load_impl(ptr, rust_vec_len, data_len),
+121 => wire__crate__api__library__begin_qq_music_user_playlist_load_impl(ptr, rust_vec_len, data_len),
+122 => wire__crate__api__music_video__begin_track_music_video_load_impl(ptr, rust_vec_len, data_len),
+123 => wire__crate__api__bootstrap__bootstrap_status_impl(ptr, rust_vec_len, data_len),
+124 => wire__crate__api__authentication__cancel_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
+125 => wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
+126 => wire__crate__api__queue__create_playback_queue_impl(ptr, rust_vec_len, data_len),
+127 => wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
+129 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
+130 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
+131 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
+132 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
+133 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -9984,6 +10305,26 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<QqMusicAlbumDetailsLoadHandle>
     for QqMusicAlbumDetailsLoadHandle
 {
     fn into_into_dart(self) -> FrbWrapper<QqMusicAlbumDetailsLoadHandle> {
+        self.into()
+    }
+}
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<QqMusicAlbumFavoriteMutationHandle> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
+            .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<QqMusicAlbumFavoriteMutationHandle>
+{
+}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<QqMusicAlbumFavoriteMutationHandle>>
+    for QqMusicAlbumFavoriteMutationHandle
+{
+    fn into_into_dart(self) -> FrbWrapper<QqMusicAlbumFavoriteMutationHandle> {
         self.into()
     }
 }
@@ -10950,6 +11291,85 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::album::QqMusicAlbumDetailsLoa
     for crate::api::album::QqMusicAlbumDetailsLoadFailure
 {
     fn into_into_dart(self) -> crate::api::album::QqMusicAlbumDetailsLoadFailure {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::CoreUnavailable => 0.into_dart(),
+            Self::AuthenticationRequired => 1.into_dart(),
+            Self::CredentialRejected => 2.into_dart(),
+            Self::NetworkOutcomeUnknown => 3.into_dart(),
+            Self::ServiceUnavailable => 4.into_dart(),
+            Self::InvalidRequest => 5.into_dart(),
+            Self::InvalidResponseOutcomeUnknown => 6.into_dart(),
+            Self::ReplacedOutcomeUnknown => 7.into_dart(),
+            Self::CancelledOutcomeUnknown => 8.into_dart(),
+            Self::AlreadyRunning => 9.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure,
+    > for crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure
+{
+    fn into_into_dart(self) -> crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.confirmed_state.into_into_dart().into_dart(),
+            self.failure.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult,
+    > for crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult
+{
+    fn into_into_dart(self) -> crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::album_favorites::QqMusicAlbumFavoriteState {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Favorite => 0.into_dart(),
+            Self::NotFavorite => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::album_favorites::QqMusicAlbumFavoriteState
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::album_favorites::QqMusicAlbumFavoriteState>
+    for crate::api::album_favorites::QqMusicAlbumFavoriteState
+{
+    fn into_into_dart(self) -> crate::api::album_favorites::QqMusicAlbumFavoriteState {
         self
     }
 }
@@ -12846,6 +13266,20 @@ impl SseEncode for QqMusicAlbumDetailsLoadHandle {
     }
 }
 
+impl SseEncode for QqMusicAlbumFavoriteMutationHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicAlbumFavoriteMutationHandle,
+            >,
+        >>::sse_encode(
+            flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for QqMusicAlbumSearchPageLoadHandle {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13203,6 +13637,19 @@ impl SseEncode
 impl SseEncode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumDetailsLoadHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        let (ptr, size) = self.sse_encode_raw();
+        <usize>::sse_encode(ptr, serializer);
+        <i32>::sse_encode(size, serializer);
+    }
+}
+
+impl SseEncode
+    for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumFavoriteMutationHandle>,
     >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -13905,6 +14352,28 @@ impl SseEncode for Option<crate::api::album::QqMusicAlbumDetailsLoadFailure> {
     }
 }
 
+impl SseEncode for Option<crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure>::sse_encode(
+                value, serializer,
+            );
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::album_favorites::QqMusicAlbumFavoriteState> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::album_favorites::QqMusicAlbumFavoriteState>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::search::QqMusicAlbumSearchPageLoadFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14455,6 +14924,53 @@ impl SseEncode for crate::api::album::QqMusicAlbumDetailsLoadFailure {
                 crate::api::album::QqMusicAlbumDetailsLoadFailure::InvalidResponse => 3,
                 crate::api::album::QqMusicAlbumDetailsLoadFailure::Cancelled => 4,
                 crate::api::album::QqMusicAlbumDetailsLoadFailure::AlreadyRunning => 5,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::CoreUnavailable => { 0 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::AuthenticationRequired => { 1 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::CredentialRejected => { 2 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::NetworkOutcomeUnknown => { 3 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::ServiceUnavailable => { 4 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::InvalidRequest => { 5 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::InvalidResponseOutcomeUnknown => { 6 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::ReplacedOutcomeUnknown => { 7 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::CancelledOutcomeUnknown => { 8 }
+crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure::AlreadyRunning => { 9 }
+ _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
+impl SseEncode for crate::api::album_favorites::QqMusicAlbumFavoriteMutationResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<crate::api::album_favorites::QqMusicAlbumFavoriteState>>::sse_encode(
+            self.confirmed_state,
+            serializer,
+        );
+        <Option<crate::api::album_favorites::QqMusicAlbumFavoriteMutationFailure>>::sse_encode(
+            self.failure,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::album_favorites::QqMusicAlbumFavoriteState {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::album_favorites::QqMusicAlbumFavoriteState::Favorite => 0,
+                crate::api::album_favorites::QqMusicAlbumFavoriteState::NotFavorite => 1,
                 _ => {
                     unimplemented!("");
                 }
@@ -15697,6 +16213,7 @@ mod io {
 
     use super::*;
     use crate::api::album::*;
+    use crate::api::album_favorites::*;
     use crate::api::artist::*;
     use crate::api::authentication::*;
     use crate::api::comments::*;
@@ -15776,6 +16293,28 @@ mod io {
     ) {
         MoiArc::<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumDetailsLoadHandle>,
+        >::decrement_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicAlbumFavoriteMutationHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicAlbumFavoriteMutationHandle,
+            >,
+        >::increment_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicAlbumFavoriteMutationHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicAlbumFavoriteMutationHandle,
+            >,
         >::decrement_strong_count(ptr as _);
     }
 
@@ -16290,6 +16829,7 @@ mod web {
 
     use super::*;
     use crate::api::album::*;
+    use crate::api::album_favorites::*;
     use crate::api::artist::*;
     use crate::api::authentication::*;
     use crate::api::comments::*;
@@ -16371,6 +16911,28 @@ mod web {
     ) {
         MoiArc::<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumDetailsLoadHandle>,
+        >::decrement_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicAlbumFavoriteMutationHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicAlbumFavoriteMutationHandle,
+            >,
+        >::increment_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicAlbumFavoriteMutationHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicAlbumFavoriteMutationHandle,
+            >,
         >::decrement_strong_count(ptr as _);
     }
 

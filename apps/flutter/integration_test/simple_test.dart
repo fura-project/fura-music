@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart';
+import 'package:flutterustmusic/src/rust/api/album_favorites.dart';
 import 'package:flutterustmusic/src/rust/api/artist.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
@@ -284,6 +285,18 @@ void main() {
     expect(
       cancelledPlaylistCreation.failure,
       QqMusicPlaylistCreationFailure.cancelledOutcomeUnknown,
+    );
+    final unusedAlbumFavorite = beginQqMusicAlbumFavoriteMutation(
+      providerId: 'qq-music',
+      opaqueAlbumId: 'album:43001:fixtureAlbumMid',
+      desiredState: QqMusicAlbumFavoriteState.favorite,
+    );
+    expect(unusedAlbumFavorite.isActive, isTrue);
+    expect(unusedAlbumFavorite.cancel(), isTrue);
+    final cancelledAlbumFavorite = await unusedAlbumFavorite.run();
+    expect(
+      cancelledAlbumFavorite.failure,
+      QqMusicAlbumFavoriteMutationFailure.cancelledOutcomeUnknown,
     );
     final unusedLyricLoad = beginQqMusicLyricLoad(
       providerId: 'qq-music',

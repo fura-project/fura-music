@@ -1,4 +1,5 @@
 pub mod album;
+pub mod album_favorites;
 pub mod artist;
 pub mod authentication;
 pub mod bootstrap;
@@ -31,4 +32,9 @@ fn domain_playlist_id(
 ) -> Result<music_domain::PlaylistId, ()> {
     let provider = music_domain::ProviderId::new(provider_id).map_err(|_| ())?;
     music_domain::PlaylistId::new(provider, opaque_playlist_id).map_err(|_| ())
+}
+
+fn domain_album_id(provider_id: &str, opaque_album_id: &str) -> Result<music_domain::AlbumId, ()> {
+    let provider = music_domain::ProviderId::new(provider_id).map_err(|_| ())?;
+    music_domain::AlbumId::new(provider, opaque_album_id).map_err(|_| ())
 }
