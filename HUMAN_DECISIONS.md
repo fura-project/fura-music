@@ -46,4 +46,14 @@
 
 **Consequences:** The agent may autonomously execute bounded Home/shell, Library-coherence, queue-mode, read-only comment, Track-context, and QQ MV slices within `PROJECT.md`, `ROADMAP.md`, and the accepted architecture. This decision does not authorize other Providers, aggregation, podcasts, downloads, social or collection mutations, background-playback lifecycle, persistent recent-history semantics, new state/navigation frameworks, or release identity/signing. A later Focus/quiet experience may reuse the mature product baseline, but it is neither implemented nor anticipated with infrastructure during M5.
 
+## HD-004 — QQ Music-familiar Material 3 product UI
+
+**Status:** Accepted on 2026-08-27
+
+**Context:** The M4 foundation and M5 feature coverage are structurally complete, but manual inspection found that their user-visible effect is too subtle relative to the implementation complexity. The generic Material defaults, launcher-like Home, and narrow default desktop rail do not yet communicate a mature QQ Music client at first glance.
+
+**Decision:** M7 may reorganize the existing product into a broadly QQ Music-familiar Material 3 experience: green-accented light/dark surfaces, deliberate desktop sidebar and top search affordance, artwork-led content hierarchy, dense music lists, compact bottom navigation, and persistent playback context. It may use current QQ Music layout conventions as product reference without copying logos, proprietary artwork, promotional content, or exact trade dress.
+
+**Consequences:** The agent may autonomously execute bounded presentation slices over existing capabilities, beginning with the authenticated Shell and truthful Home, then Library/catalog, Search/Discover, and Now Playing/Lyrics. This decision does not authorize new QQ protocol operations, a heterogeneous personalized feed, fake recommendation data, theme personas, a new navigation/state framework, additional Providers, or a product category expansion. Manual screenshots and product-level review are required evidence for the eventual M7 checkpoint; widget tests alone are insufficient.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

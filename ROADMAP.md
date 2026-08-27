@@ -268,3 +268,44 @@ Completed on 2026-08-27. Criterion-by-criterion evidence, exact redaction bounda
 ## Later Direction — Evidence-Gated Work
 
 After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.
+
+## Active Workstream — M7 QQ Music-familiar Material 3 Product UI
+
+### Goal
+
+Make the existing application immediately read as a mature, cross-platform QQ Music client rather than a collection of correctly wired Flutter surfaces. M7 reorganizes presentation only: familiar music-product hierarchy, stronger first-view identity, deliberate desktop/compact composition, and consistent artwork-led content density over capabilities already present.
+
+### Authorized direction
+
+- A deliberate wide desktop sidebar, top Search affordance, content canvas, and persistent bottom playback context inspired by current QQ Music conventions while remaining official Flutter Material 3.
+- A compact/mobile counterpart with reachable bottom primary navigation, touch-sized actions, and the same product model rather than a compressed desktop shell.
+- A green-accented light/dark baseline, restrained surface hierarchy, artwork-led browsing, and music-appropriate dense Track presentation.
+- A truthful Home made only from existing Discover, Search, Library, and playback capabilities; no invented personalization or promotional catalog content.
+- Manual visual evidence at representative compact and desktop sizes in addition to widget/accessibility regressions.
+
+### Progressive phases
+
+1. M7.1 — Authenticated Shell and truthful Home first impression.
+2. M7.2 — Library and core browsing hierarchy/density.
+3. M7.3 — Search and Discover visual organization.
+4. M7.4 — Now Playing, Queue, and Lyrics product presentation.
+5. M7.5 — Compact/desktop, light/dark, accessibility, and manual checkpoint review.
+
+Each phase is elaborated through a bounded discovery and finite slice. Existing retained state, controller ownership, playback ownership, and Flutter/Rust boundaries remain constraints rather than refactor targets.
+
+### Exit criteria
+
+1. A cold authenticated launch has a coherent music-product first impression on desktop and compact layouts, with Home, Discover, Search, Library, and current playback immediately understandable.
+2. Desktop uses a deliberate sidebar/content/player composition and compact uses reachable bottom navigation without hidden primary actions at 360 px.
+3. Home is useful and visually intentional using only existing truthful destinations and state; it is neither an empty launcher nor a fabricated personalized feed.
+4. Library, catalog, Search, Discover, Now Playing, Queue, and Lyrics share predictable typography, spacing, artwork, state, and action patterns with music-appropriate density.
+5. Light/dark, keyboard, pointer, touch, semantics, retained state, back behavior, and existing loading/empty/error/retry paths do not regress.
+6. No QQ protocol, credential, Provider, Domain, Bridge, queue, lyric-timing, or native-media ownership moves into presentation work.
+7. Relevant automated suites pass, and manual compact/desktop screenshots are reviewed before checkpointing user-visible completion.
+
+### Explicit non-goals
+
+- Copying QQ Music logos, proprietary imagery, promotions, exact layouts, or a private visual asset set.
+- New recommendation/feed APIs, fake personalized content, Search suggestions/history/hot words, remote mutation, downloads, social expansion, or another Provider.
+- Quiet/Luminous/Temporal personas, artwork-derived global palettes, shaders, glass/blur systems, or a theme-plugin framework.
+- Replacing the existing navigation, state-management, Bridge, music engine, or MV engine architecture.

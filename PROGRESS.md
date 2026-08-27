@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: EVIDENCE_GATED_LATER_DIRECTION
-  current_task: null
-  next_action: NO_LEGITIMATE_WORK
+  active_workstream: M7
+  current_task: M7.1_AUTHENTICATED_SHELL_HOME
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2 through M6 are checkpointed. The post-M6 discovery found no currently executable Roadmap-derived task: the remaining candidates are user-, environment-, or Human-Decision-blocked, while later cache/fallback/theme/product directions lack the evidence or authority required to become work. Project execution remains `ACTIVE` with `global_stop: false`; `NO_LEGITIMATE_WORK` is not project completion.
+M1's real-account playback observation remains open; M2 through M6 are checkpointed. The maintainer has explicitly activated M7 QQ Music-familiar Material 3 Product UI after manual review found that prior structural checkpoints did not produce enough visible product change. M7.1 is implementing the authenticated Shell and truthful Home first impression without adding data capabilities or changing navigation/controller ownership.
 
 # Completed Recently
 
@@ -75,13 +75,13 @@ M1's real-account playback observation remains open; M2 through M6 are checkpoin
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- No finite implementation task is active after the bounded post-M6 discovery. Resume global ranking when new user evidence, a required target environment, an accepted release/product decision, a reproduced failure, or another legitimate Roadmap provenance appears.
+- M7.1 is active from HD-004 and the bounded UI discovery: establish a deliberate wide sidebar/top Search affordance plus a truthful, visually intentional Home while preserving compact navigation, retained destinations, accessibility, and the single playback owner.
 
 # Next Candidates
 
-1. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
-2. Validate a required physical Android or unavailable desktop/mobile target when its real environment is supplied; do not infer it from emulation or another platform.
-3. Prepare production identity/signing and exact native-video notices only after HD-001 supplies release authority and ownership.
+1. Complete and validate M7.1 authenticated Shell/Home at 360 px and wide desktop, then obtain manual visual evidence rather than checkpointing from widget tests alone.
+2. M7.2 Library/core-browsing hierarchy and density, elaborated only after reviewing the M7.1 result.
+3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
 

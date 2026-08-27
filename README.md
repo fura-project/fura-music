@@ -6,7 +6,7 @@ The first in-process vertical slice implements sign-in, credential restore, user
 
 ## Status
 
-The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 reliability/daily-use quality, M3 QQ Music core-product coverage, M4 Deliberate Material 3 Product Experience, M5 Mainstream QQ Music Product Experience & Core Feature Completion, and M6 selected comments/MV protocol compatibility evidence are checkpointed. This is not release readiness, broad live catalog compatibility, remote MV playback validation, or M1 acceptance; real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
+The project has a working M1 implementation with offline regression coverage and bounded Linux/Android runtime evidence. M2 through M6 are checkpointed. M7 QQ Music-familiar Material 3 Product UI is active after manual review showed that the prior structural UI baseline did not yet create enough visible product maturity. This is not release readiness, broad live catalog compatibility, remote MV playback validation, or M1 acceptance; real QQ Music playback remains subject to the user-operated observation above. Product boundaries and architectural decisions are recorded in [PROJECT.md](PROJECT.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md). Current execution state lives in [PROGRESS.md](PROGRESS.md).
 
 No release is available yet.
 
