@@ -24,6 +24,7 @@ mod music_video;
 mod new_albums;
 mod new_songs;
 mod owned_playlists;
+mod personalized_tracks;
 mod playlist_containers;
 mod playlist_detail;
 mod playlist_search;
@@ -91,6 +92,9 @@ pub use new_songs::{
 };
 pub use owned_playlists::{
     OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,
+};
+pub use personalized_tracks::{
+    PersonalizedTrackField, QqMusicPersonalizedTracks, QqMusicPersonalizedTracksError,
 };
 pub use playlist_containers::{
     QqMusicCreatePlaylistError, QqMusicCreatedPlaylist, QqMusicDeletePlaylistError,

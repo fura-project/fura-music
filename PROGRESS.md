@@ -17,7 +17,7 @@ execution:
 - The composition root keeps explicit constructor injection while forwarding three immutable responsibility groups after authentication: Library/Catalog, Discovery/Search, and Playback.
 - The four Search types share one identical failure taxonomy/retry policy while retaining feature-specific results, pagination, Bridge DTO validation, and UI state.
 - Repeated catalog Queue test setup is shared without deleting any distinct regression scenario.
-- Governance is current-state oriented, and the complete Rust, Dart/Flutter, Linux build, and required Linux integration gates pass. See `docs/development/complexity-paydown-review.md`.
+- Governance is current-state oriented. The current full gates pass: 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, 385 Flutter tests, Linux x64 Release packaging, and all five required Linux integration targets. See `docs/development/complexity-paydown-review.md` for the earlier consolidation review.
 - The repository-wide capability matrix is current in `docs/development/first-release-capability-audit.md`. Existing read/catalog/playback foundations are strong, while truthful Home data, library mutations, and target-runtime evidence remain explicitly classified.
 
 # Active Work
@@ -34,6 +34,7 @@ execution:
 - Owned-playlist deletion now runs through Client, Provider, a cancellable generated Bridge, and an independent Dart gateway without UI wiring. Only an exact Provider-owned target may reach one request, and success requires the same returned directory ID; missing/zero/mismatched responses and cancellation/replacement remain unknown outcomes. Offline Rust/Dart coverage and the packaged Linux Bridge smoke pass; no real account was changed.
 - Daily 30 now has a truthful authenticated read foundation from direct Client request through a cancellable generated Bridge and Dart gateway. Three simultaneous semantic markers select zero or one existing catalog playlist; absence is not failure, ambiguity is rejected, and no heterogeneous feed data or presentation work crossed the boundary. Two current sources, one public real-response fixture, offline lifecycle coverage, and an anonymous structure-only probe support the contract; authenticated availability remains unclaimed.
 - Personalized playlist discovery now has a truthful authenticated read foundation from the same evidenced recommendation feed through Client, Provider, a cancellable generated Bridge, and an independent Dart gateway. Exactly zero or one `playlist...` shelf may yield at most 64 unique existing catalog summaries; source labels, tracking fields, heterogeneous cards, and “Treasure” presentation wording do not cross the boundary. Authenticated availability and recommendation quality remain unclaimed.
+- Personalized Track recommendations now use one independently cross-validated personal-radio request for at most five existing Track summaries through Client, Provider, a cancellable generated Bridge, and an independent Dart gateway. Radio identity, feedback/continuation fields, listening-history claims, and Home wording do not cross the boundary. Authenticated content and recommendation quality remain unclaimed.
 - Artist mutation remains evidence-blocked; do not infer its write contract from the existing follow-list read.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
 - Do not automate stored-account access or real-account mutation acceptance.
@@ -46,8 +47,7 @@ execution:
 
 # Next Candidates
 
-1. Discover a truthful listening-based Track recommendation contract without relabeling Radar or duplicating Daily 30 semantics.
-2. Run the whole capability convergence review without inventing another feature.
+1. Run the whole capability convergence review without inventing another feature.
 
 # Pending Human Decisions
 
@@ -68,3 +68,4 @@ execution:
 - Playlist rename remains evidence-blocked on one detailed current implementation; its mask, optional-field, and success semantics must not be guessed. Playlist deletion has only offline cross-layer validation; later UI must explicitly confirm it, refresh after unknown outcomes, and leave live acceptance to the maintainer.
 - Daily 30 has exact offline request/selection/lifecycle coverage and packaged Bridge cancellation, but no authenticated maintainer-account observation. The credential-free probe returned no Daily match, as expected, and proves only endpoint structure.
 - Personalized playlists have exact offline request/selection/lifecycle coverage, current independent source agreement, and a public real-response fixture, but no authenticated maintainer-account observation. The credential-free probe returned no shelf-level playlist marker, so it proves endpoint structure rather than personalization or content quality.
+- Personalized Tracks have exact offline request/mapping/lifecycle coverage and three current-source implementations, but no authenticated maintainer-account observation. The credential-free probe reached the named result and received explicit rejection, proving endpoint shape rather than personalized content, recommendation quality, media resolution, or playback.

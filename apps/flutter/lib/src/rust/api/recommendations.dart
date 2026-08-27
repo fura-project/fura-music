@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_radar_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_radar_error`, `map_radar_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_personalized_tracks_load`, `failed_radar_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_personalized_tracks_error`, `map_personalized_tracks_load`, `map_radar_error`, `map_radar_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicRecommendedPlaylistPageLoadHandle
 beginQqMusicRecommendedPlaylistPageLoad({
@@ -30,6 +30,10 @@ QqMusicDailyRecommendationLoadHandle beginQqMusicDailyRecommendationLoad() =>
 QqMusicPersonalizedPlaylistsLoadHandle
 beginQqMusicPersonalizedPlaylistsLoad() => RustLib.instance.api
     .crateApiRecommendationsBeginQqMusicPersonalizedPlaylistsLoad();
+
+QqMusicPersonalizedTracksLoadHandle beginQqMusicPersonalizedTracksLoad() =>
+    RustLib.instance.api
+        .crateApiRecommendationsBeginQqMusicPersonalizedTracksLoad();
 
 QqMusicRadarTrackPageLoadHandle beginQqMusicRadarTrackPageLoad({
   required int page,
@@ -54,6 +58,16 @@ abstract class QqMusicPersonalizedPlaylistsLoadHandle
   bool get isActive;
 
   Future<QqMusicPersonalizedPlaylistsLoad> run();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPersonalizedTracksLoadHandle>>
+abstract class QqMusicPersonalizedTracksLoadHandle
+    implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicPersonalizedTracksLoad> run();
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRadarTrackPageLoadHandle>>
@@ -127,6 +141,36 @@ class QqMusicPersonalizedPlaylistsLoad {
 }
 
 enum QqMusicPersonalizedPlaylistsLoadFailure {
+  coreUnavailable,
+  authenticationRequired,
+  credentialRejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  cancelled,
+  alreadyRunning,
+}
+
+class QqMusicPersonalizedTracksLoad {
+  final List<LibraryTrackSummary> tracks;
+  final QqMusicPersonalizedTracksLoadFailure? failure;
+
+  const QqMusicPersonalizedTracksLoad({required this.tracks, this.failure});
+
+  @override
+  int get hashCode => tracks.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicPersonalizedTracksLoad &&
+          runtimeType == other.runtimeType &&
+          tracks == other.tracks &&
+          failure == other.failure;
+}
+
+enum QqMusicPersonalizedTracksLoadFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,

@@ -29,7 +29,7 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 | Daily Recommendations | Gives a listener a small personalized daily starting point. | `IMPLEMENTED`: two current implementations and one public real-response fixture support the direct feed plus strict `recforyou` / playlist-jump / `#daily30:` selection. Client, Provider, cancellable Bridge, generated binding, Dart gateway, redaction, rejection cleanup, and account-replacement behavior have offline coverage. An anonymous structural probe confirmed endpoint shape but correctly returned no personalized match. | Later Home integration and optional maintainer-operated authenticated observation; neither blocks the reusable foundation. | authenticated read | Required | Zero or one evidenced Daily 30 playlist maps to the existing opaque catalog-playlist route; absence is truthful, ambiguity is rejected, and cancellation/replacement cannot cross account state. |
 | Treasure Playlist Library | Offers a distinctive QQ playlist-discovery surface rather than the user's own library. | `IMPLEMENTED`: two current implementations plus a public real-response fixture support an authenticated `playlist...` recommendation-feed shelf. Strict Client, Provider, cancellable Bridge, generated binding, and Dart-gateway coverage maps only bounded playlist summaries; an anonymous structure probe correctly did not claim personalized availability. | Later Home integration and optional maintainer-operated authenticated observation; the product label must remain presentation-owned and truthful to observed content. | authenticated read | Required | Zero or one evidenced playlist shelf maps at most 64 unique summaries to existing opaque catalog routes; absence is valid, ambiguity/malformed data is rejected, and no heterogeneous feed or tracking fields cross the Provider boundary. |
 | Popular Programs | Could expose a QQ-native editorial program surface. | `HUMAN_DECISION_REQUIRED`: no capability exists, and a spoken-audio root could conflict with the explicit podcast non-goal. | Product-boundary decision before implementation; protocol discovery may remain bounded. | read, evidence-dependent | Human decision | Proceed only if the maintainer confirms a bounded music-product role that does not create a podcast/general-media client. |
-| Listening-based song recommendations | Helps users resume music related to established listening. | `MISSING`: neither of the two requested Home sections has a verified capability; Radar is a distinct QQ-native surface and is not silently substituted. | Protocol semantics, Domain/Provider/Bridge, account replacement/cancellation. | authenticated read | Required | One evidenced reusable recommendation contract can supply truthful bounded Track sets; a second section must have distinct semantics or reuse the same capability transparently rather than inventing variety. |
+| Listening-based song recommendations | Helps users resume music related to established listening. | `IMPLEMENTED`: three current implementations agree on personal-radio ID `99` and `get_radio_track`; the selected modern request returns at most five existing Track summaries through strict Client, Provider, cancellable Bridge, generated binding, and independent Dart-gateway coverage. A credential-free structure probe reached the named result and correctly received credential rejection. | Later Home integration and optional maintainer-operated authenticated observation; listening-history and recommendation-quality claims remain unproven. | authenticated read | Required | One request maps zero through five unique existing Track summaries; malformed, duplicate, over-limit, rejected, cancelled, or account-replaced results remain exact. A second section needs distinct evidence or must transparently reuse this capability rather than inventing variety. |
 
 ## C — Personal Library
 
@@ -93,16 +93,11 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 ## Ranked immediate candidates
 
-1. **Treasure Playlist Library discovery** — determine whether QQ exposes a
-   stable collection whose actual semantics match the accepted Home section;
-   otherwise mark that specific surface evidence-blocked.
-2. **Listening-based Track recommendation discovery** — identify a current,
-   independently supported personalized Track contract without relabeling
-   Radar or duplicating Daily 30 semantics.
-3. **Core-capability convergence review after those bounded discoveries** —
-   reclassify the two remaining executable Home gaps and check whether every
-   first-release requirement is then implemented or explicitly blocked. This
-   is not permission to invent another capability.
+1. **Core-capability convergence review** — check whether every required
+   first-release capability is implemented, verified, or carries one exact
+   evidence, environment, or human-decision boundary. This is not permission
+   to invent another capability or turn deferred presentation wiring into Core
+   work.
 
 The Settings, signed-in account-summary, two-quality media, liked-Track,
 owned-playlist Track-mutation, create/delete-playlist, and Album-favorite

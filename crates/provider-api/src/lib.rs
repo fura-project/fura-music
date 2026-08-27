@@ -10,7 +10,7 @@ use music_domain::{
     NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
     ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingTracksPage,
     RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackCommentsPage, TrackId,
-    TrackSearchPage,
+    TrackSearchPage, TrackSummary,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -103,6 +103,32 @@ pub enum PersonalizedPlaylistsError {
     InvalidResponse,
     Replaced,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PersonalizedTracksError {
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+}
+
+impl fmt::Display for PersonalizedTracksError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "personalized Tracks require authentication",
+            Self::CredentialRejected => "QQ Music rejected the current credential",
+            Self::Network => "personalized-Track network request failed",
+            Self::ServiceUnavailable => "personalized Tracks are unavailable",
+            Self::InvalidResponse => "personalized Tracks returned an invalid response",
+            Self::Replaced => "the authenticated account changed during personalized-Track loading",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for PersonalizedTracksError {}
 
 impl fmt::Display for PersonalizedPlaylistsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -369,6 +395,17 @@ pub trait PersonalizedPlaylistsProvider: MusicProvider + Sync {
     fn personalized_playlists(
         &self,
     ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
+}
+
+/// Provider-neutral authenticated bounded personalized Track summaries.
+/// Radio identity, feedback, continuation, and product presentation remain
+/// Provider or future-product concerns.
+pub trait PersonalizedTracksProvider: MusicProvider + Sync {
+    type Error;
+
+    fn personalized_tracks(
+        &self,
+    ) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
 }
 
 /// Provider-neutral page-numbered QQ-native Radar Track recommendations.

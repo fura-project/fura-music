@@ -23,13 +23,14 @@ use provider_api::{
     FavoriteArtistsProvider, LibraryMutationError, LyricsError, LyricsProvider,
     MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
     NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PersonalizedPlaylistsError,
-    PersonalizedPlaylistsProvider, PlaylistCreationProvider, PlaylistDeletionProvider,
-    PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
-    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
-    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-    RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-    RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackLikeMutationProvider,
-    TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+    PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
+    PlaylistCreationProvider, PlaylistDeletionProvider, PlaylistDetailsProvider,
+    PlaylistSearchProvider, PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
+    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
+    QrAuthenticationSession, QrImageFormat, RadarRecommendationError, RadarRecommendationsProvider,
+    RankingsProvider, RecommendationError, RecommendedPlaylistsProvider, SearchError,
+    TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider,
+    UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
@@ -42,11 +43,11 @@ use qqmusic_client::{
     QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMusicVideoQuality,
     QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError,
     QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPersonalizedPlaylist,
-    QqMusicPersonalizedPlaylistsError, QqMusicPlaylistDetailError, QqMusicPlaylistSearchError,
-    QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError, QqMusicPlaylistTrackState,
-    QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError, QqMusicRecommendedPlaylist,
-    QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackComment,
-    QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
+    QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError, QqMusicPlaylistDetailError,
+    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError,
+    QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
     QqMusicTrackMusicVideoError, QqMusicTrackSummary, QrImageMediaType,
     WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
@@ -316,6 +317,39 @@ impl<T> QqMusicProvider<T> {
         if rejected {
             *state = QqMusicCredentialState::SignedOut;
             return Err(PersonalizedPlaylistsError::CredentialRejected);
+        }
+        Ok(())
+    }
+
+    fn authenticated_personalized_tracks_credential(
+        &self,
+    ) -> Result<Credential, PersonalizedTracksError> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => {
+                Err(PersonalizedTracksError::AuthenticationRequired)
+            }
+        }
+    }
+
+    fn finish_personalized_tracks_await(
+        &self,
+        candidate: &Credential,
+        rejected: bool,
+    ) -> Result<(), PersonalizedTracksError> {
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == candidate
+        );
+        if !still_current {
+            return Err(PersonalizedTracksError::Replaced);
+        }
+        if rejected {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(PersonalizedTracksError::CredentialRejected);
         }
         Ok(())
     }
@@ -919,6 +953,33 @@ where
             .iter()
             .map(map_personalized_playlist)
             .collect()
+    }
+}
+
+impl<T> PersonalizedTracksProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = PersonalizedTracksError;
+
+    async fn personalized_tracks(&self) -> Result<Vec<TrackSummary>, Self::Error> {
+        let candidate = self.authenticated_personalized_tracks_credential()?;
+        let response = self.client().personalized_tracks(&candidate).await;
+        self.finish_personalized_tracks_await(
+            &candidate,
+            matches!(
+                response,
+                Err(QqMusicPersonalizedTracksError::Rejected { .. })
+            ),
+        )?;
+        response
+            .as_ref()
+            .map_err(map_personalized_tracks_error)?
+            .tracks()
+            .iter()
+            .map(map_track_summary)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| PersonalizedTracksError::InvalidResponse)
     }
 }
 
@@ -2817,6 +2878,34 @@ fn map_personalized_playlists_error<E>(
     }
 }
 
+fn map_personalized_tracks_error<E>(
+    error: &QqMusicPersonalizedTracksError<E>,
+) -> PersonalizedTracksError {
+    match error {
+        QqMusicPersonalizedTracksError::Rejected { .. } => {
+            PersonalizedTracksError::CredentialRejected
+        }
+        QqMusicPersonalizedTracksError::Transport(_) => PersonalizedTracksError::Network,
+        QqMusicPersonalizedTracksError::HttpStatus(_)
+        | QqMusicPersonalizedTracksError::Upstream { .. } => {
+            PersonalizedTracksError::ServiceUnavailable
+        }
+        QqMusicPersonalizedTracksError::Serialize
+        | QqMusicPersonalizedTracksError::InvalidJson
+        | QqMusicPersonalizedTracksError::MissingGlobalCode
+        | QqMusicPersonalizedTracksError::MissingResult
+        | QqMusicPersonalizedTracksError::MissingResultCode
+        | QqMusicPersonalizedTracksError::MissingData
+        | QqMusicPersonalizedTracksError::MissingTracks
+        | QqMusicPersonalizedTracksError::TooManyTracks { .. }
+        | QqMusicPersonalizedTracksError::DuplicateTrackIdentity
+        | QqMusicPersonalizedTracksError::InvalidTrack { .. }
+        | QqMusicPersonalizedTracksError::InvalidArtist { .. } => {
+            PersonalizedTracksError::InvalidResponse
+        }
+    }
+}
+
 fn map_radar_error<E>(error: &QqMusicRadarError<E>) -> RadarRecommendationError {
     match error {
         QqMusicRadarError::Rejected { .. } => RadarRecommendationError::CredentialRejected,
@@ -3039,10 +3128,11 @@ mod tests {
         FavoriteAlbumsProvider, FavoriteArtistsProvider, LibraryMutationError, LyricsError,
         LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
         MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
-        PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PlaylistCreationProvider,
-        PlaylistDeletionProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
-        PlaylistTrackMutationProvider, ProviderCapability, QrAuthenticationProgress,
-        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
+        PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
+        PersonalizedTracksProvider, PlaylistCreationProvider, PlaylistDeletionProvider,
+        PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
+        ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
+        QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
         RadarRecommendationsProvider, RankingsProvider, RecommendationError,
         RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider,
         TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError,
@@ -3054,9 +3144,10 @@ mod tests {
         QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
         QqMusicArtistTracksError, QqMusicClient, QqMusicDailyRecommendationError,
         QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError, QqMusicNewAlbumsError,
-        QqMusicNewSongsError, QqMusicPersonalizedPlaylistsError, QqMusicPlaylistSearchError,
-        QqMusicRadarError, QqMusicRankingsError, QqMusicRecommendedPlaylistsError,
-        QqMusicSearchError, QqMusicTrackCommentsError, QqMusicTrackMusicVideoError,
+        QqMusicNewSongsError, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
+        QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
+        QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackCommentsError,
+        QqMusicTrackMusicVideoError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -4727,6 +4818,27 @@ mod tests {
         })
     }
 
+    fn personalized_tracks_response(code: i64, tracks: &[Value]) -> Value {
+        json!({
+            "code": 0,
+            "radio": {"code": code, "data": {"tracks": tracks}}
+        })
+    }
+
+    fn personalized_track(id: u64, mid: &str, title: &str) -> Value {
+        json!({
+            "id": id,
+            "mid": mid,
+            "title": title,
+            "subtitle": "",
+            "type": 0,
+            "interval": 245,
+            "file": {"media_mid": mid},
+            "singer": [{"id": 42001, "mid": "fixtureArtistMid", "name": "Artist"}],
+            "album": {"id": 43001, "mid": "fixtureAlbumMid", "name": "Album"}
+        })
+    }
+
     #[tokio::test]
     async fn authenticated_daily_recommendation_maps_only_evidenced_playlist() {
         let signed_out = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
@@ -4894,6 +5006,87 @@ mod tests {
         assert!(replaced.has_authenticated_credential());
     }
 
+    #[tokio::test]
+    async fn authenticated_personalized_tracks_map_existing_track_domain() {
+        let signed_out = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &personalized_tracks_response(0, &[]),
+        )));
+        assert_eq!(
+            signed_out.personalized_tracks().await,
+            Err(PersonalizedTracksError::AuthenticationRequired)
+        );
+
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &personalized_tracks_response(
+                0,
+                &[personalized_track(
+                    41_001,
+                    "fixtureTrackMid",
+                    "Synthetic personalized Track",
+                )],
+            ),
+        )));
+        set_authenticated(&provider, "123456");
+        let tracks = provider
+            .personalized_tracks()
+            .await
+            .expect("personalized Tracks");
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].id().provider().as_str(), "qq-music");
+        assert_eq!(
+            tracks[0].id().opaque(),
+            "track:41001:0:fixtureTrackMid:fixtureTrackMid"
+        );
+        assert_eq!(tracks[0].title(), "Synthetic personalized Track");
+        assert_eq!(tracks[0].artist_names(), &["Artist"]);
+        assert_eq!(tracks[0].album_title(), Some("Album"));
+        assert!(provider.has_authenticated_credential());
+        let debug = format!("{tracks:?}");
+        assert!(!debug.contains("Synthetic personalized Track"));
+        assert!(!debug.contains("fixtureTrackMid"));
+    }
+
+    #[tokio::test]
+    async fn personalized_tracks_clear_only_rejection_and_reject_late_account_result() {
+        let rejected = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "radio": {"code": 104_401}
+        }))));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.personalized_tracks().await,
+            Err(PersonalizedTracksError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &personalized_tracks_response(50_006, &[]),
+        )));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream.personalized_tracks().await,
+            Err(PersonalizedTracksError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let replaced = QqMusicProvider::new(QqMusicClient::new(GatedDailyTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&replaced, "123456");
+        let request = replaced.personalized_tracks();
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&replaced, "654321");
+            release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+        assert_eq!(result, Err(PersonalizedTracksError::Replaced));
+        assert!(replaced.has_authenticated_credential());
+    }
+
     #[test]
     fn maps_recommendation_failures_coarsely() {
         assert_eq!(
@@ -4939,6 +5132,18 @@ mod tests {
                 &QqMusicPersonalizedPlaylistsError::<Infallible>::MultiplePlaylistShelves
             ),
             PersonalizedPlaylistsError::InvalidResponse
+        );
+        assert_eq!(
+            super::map_personalized_tracks_error(
+                &QqMusicPersonalizedTracksError::<Infallible>::HttpStatus(503)
+            ),
+            PersonalizedTracksError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_personalized_tracks_error(
+                &QqMusicPersonalizedTracksError::<Infallible>::DuplicateTrackIdentity
+            ),
+            PersonalizedTracksError::InvalidResponse
         );
     }
 

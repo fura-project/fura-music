@@ -2,6 +2,7 @@
 
 - QQ Daily 30 comes from authenticated `music.recommend.RecommendFeed/get_recommend_feed`, not public playlists or Radar. Select a card only when `jumptype == 10014`, `extra_info.moduleID` starts `recforyou`, and `trace` contains `#daily30:`; zero is unavailable, multiple is invalid. Keep only the mapped `catalog:<playlist-id>` summary. Anonymous feed success proves structure but may contain no Daily 30 and never proves personalization.
 - QQ personalized playlist discovery comes from the same authenticated recommendation feed but is a separate capability: select exactly zero or one shelf whose `extra_info.moduleID` starts `playlist`, then map only playlist-jump cards to bounded unique `catalog:<playlist-id>` summaries. “Treasure Playlist Library” and the fixture title `你的歌单补给站` are presentation/evidence labels, not stable protocol or Domain names. Anonymous unlabelled playlist cards do not prove the personalized shelf.
+- QQ personalized Tracks use personal-radio ID `99` through `music.radioProxy.MbTrackRadioSvr/get_radio_track`. Keep the reusable boundary as one bounded authenticated `TrackSummary` set: do not expose radio/feedback/continuation fields, call it listening history without evidence, or fabricate two distinct Home products from one result.
 
 - The repository started from a single MIT `LICENSE` commit (`f439866`) on 2026-08-25; no legacy architecture or implementation needs preservation.
 - The product contract is QQ Music-first. Additional providers are for proven fallback or local-library needs, not breadth marketing.
