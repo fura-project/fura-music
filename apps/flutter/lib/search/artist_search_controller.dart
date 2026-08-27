@@ -16,8 +16,8 @@ class ArtistSearchController extends ChangeNotifier {
   ArtistSearchStage _stage = ArtistSearchStage.idle;
   String _query = '';
   List<ArtistSummary> _artists = const [];
-  ArtistSearchFailure? _failure;
-  ArtistSearchFailure? _appendFailure;
+  SearchFailure? _failure;
+  SearchFailure? _appendFailure;
   int _total = 0;
   int _nextPage = 1;
   bool _hasMore = false;
@@ -29,8 +29,8 @@ class ArtistSearchController extends ChangeNotifier {
   ArtistSearchStage get stage => _stage;
   String get query => _query;
   List<ArtistSummary> get artists => _artists;
-  ArtistSearchFailure? get failure => _failure;
-  ArtistSearchFailure? get appendFailure => _appendFailure;
+  SearchFailure? get failure => _failure;
+  SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
@@ -81,7 +81,7 @@ class ArtistSearchController extends ChangeNotifier {
           ? ArtistSearchStage.empty
           : ArtistSearchStage.content;
     } else {
-      _failure = result.failure ?? ArtistSearchFailure.invalidResponse;
+      _failure = result.failure ?? SearchFailure.invalidResponse;
       _stage = ArtistSearchStage.error;
     }
     _notify();
@@ -118,7 +118,7 @@ class ArtistSearchController extends ChangeNotifier {
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
-      _appendFailure = result.failure ?? ArtistSearchFailure.invalidResponse;
+      _appendFailure = result.failure ?? SearchFailure.invalidResponse;
     }
     _notify();
   }
@@ -153,12 +153,7 @@ class ArtistSearchController extends ChangeNotifier {
       result.total >= result.artists.length &&
       (!result.hasMore || result.artists.isNotEmpty);
 
-  bool _isRetryable(ArtistSearchFailure? failure) =>
-      failure == ArtistSearchFailure.coreUnavailable ||
-      failure == ArtistSearchFailure.network ||
-      failure == ArtistSearchFailure.serviceUnavailable ||
-      failure == ArtistSearchFailure.invalidResponse ||
-      failure == ArtistSearchFailure.alreadyRunning;
+  bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 

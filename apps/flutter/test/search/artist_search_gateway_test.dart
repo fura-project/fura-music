@@ -31,20 +31,19 @@ void main() {
   test('maps every Bridge failure and rejects conflicting success data', () {
     final expected = {
       bridge.QqMusicArtistSearchPageLoadFailure.coreUnavailable:
-          ArtistSearchFailure.coreUnavailable,
-      bridge.QqMusicArtistSearchPageLoadFailure.network:
-          ArtistSearchFailure.network,
+          SearchFailure.coreUnavailable,
+      bridge.QqMusicArtistSearchPageLoadFailure.network: SearchFailure.network,
       bridge.QqMusicArtistSearchPageLoadFailure.serviceUnavailable:
-          ArtistSearchFailure.serviceUnavailable,
+          SearchFailure.serviceUnavailable,
       bridge.QqMusicArtistSearchPageLoadFailure.invalidResponse:
-          ArtistSearchFailure.invalidResponse,
+          SearchFailure.invalidResponse,
       bridge.QqMusicArtistSearchPageLoadFailure.cancelled:
-          ArtistSearchFailure.cancelled,
+          SearchFailure.cancelled,
       bridge.QqMusicArtistSearchPageLoadFailure.alreadyRunning:
-          ArtistSearchFailure.alreadyRunning,
+          SearchFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: output) in expected.entries) {
-      expect(mapBridgeArtistSearchFailure(input), output);
+      expect(mapBridgeSearchFailure(input), output);
     }
 
     final conflict = mapBridgeArtistSearchPage(
@@ -56,7 +55,7 @@ void main() {
         failure: bridge.QqMusicArtistSearchPageLoadFailure.network,
       ),
     );
-    expect(conflict.failure, ArtistSearchFailure.invalidResponse);
+    expect(conflict.failure, SearchFailure.invalidResponse);
 
     final invalidIdentity = mapBridgeArtistSearchPage(
       const bridge.QqMusicArtistSearchPageLoad(
@@ -72,7 +71,7 @@ void main() {
         ],
       ),
     );
-    expect(invalidIdentity.failure, ArtistSearchFailure.invalidResponse);
+    expect(invalidIdentity.failure, SearchFailure.invalidResponse);
   });
 
   test('forwards operation inputs and cancellation', () {
@@ -109,5 +108,5 @@ class _ImmediateOperation implements ArtistSearchPageLoadOperation {
 
   @override
   Future<ArtistSearchPageResult> run() async =>
-      const ArtistSearchPageResult(failure: ArtistSearchFailure.cancelled);
+      const ArtistSearchPageResult(failure: SearchFailure.cancelled);
 }

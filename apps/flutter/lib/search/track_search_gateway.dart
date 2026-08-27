@@ -2,16 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/search/search_failure.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
-enum TrackSearchFailure {
-  coreUnavailable,
-  network,
-  serviceUnavailable,
-  invalidResponse,
-  cancelled,
-  alreadyRunning,
-}
+export 'package:flutterustmusic/search/search_failure.dart';
 
 class TrackSearchPageResult {
   const TrackSearchPageResult({
@@ -26,7 +20,7 @@ class TrackSearchPageResult {
   final int total;
   final bool hasMore;
   final List<TrackSearchItem> items;
-  final TrackSearchFailure? failure;
+  final SearchFailure? failure;
 }
 
 class TrackSearchItem {
@@ -96,7 +90,7 @@ class _RustTrackSearchPageLoadOperation
       return mapBridgeTrackSearchPage(await _handle.run());
     } on Object {
       return const TrackSearchPageResult(
-        failure: TrackSearchFailure.coreUnavailable,
+        failure: SearchFailure.coreUnavailable,
       );
     }
   }
@@ -113,18 +107,16 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
         result.hasMore ||
         result.items.isNotEmpty) {
       return const TrackSearchPageResult(
-        failure: TrackSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
-    return TrackSearchPageResult(failure: mapBridgeTrackSearchFailure(failure));
+    return TrackSearchPageResult(failure: mapBridgeSearchFailure(failure));
   }
   if (result.page <= 0 ||
       result.total < 0 ||
       result.items.length > result.total ||
       (result.hasMore && result.items.isEmpty)) {
-    return const TrackSearchPageResult(
-      failure: TrackSearchFailure.invalidResponse,
-    );
+    return const TrackSearchPageResult(failure: SearchFailure.invalidResponse);
   }
   final items = <TrackSearchItem>[];
   for (final item in result.items) {
@@ -132,7 +124,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     final mappedTrack = mapBridgeLibraryTrackSummary(track);
     if (mappedTrack == null) {
       return const TrackSearchPageResult(
-        failure: TrackSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
     final album = item.album;
@@ -143,7 +135,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
           album.title.trim().isEmpty ||
           (album.artworkUri != null && album.artworkUri!.trim().isEmpty)) {
         return const TrackSearchPageResult(
-          failure: TrackSearchFailure.invalidResponse,
+          failure: SearchFailure.invalidResponse,
         );
       }
       mappedAlbum = AlbumSummary(
@@ -155,7 +147,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     }
     if (!_sameAlbum(mappedTrack.album, mappedAlbum)) {
       return const TrackSearchPageResult(
-        failure: TrackSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
     final artists = <ArtistSummary>[];
@@ -164,7 +156,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
           artist.opaqueId.trim().isEmpty ||
           artist.name.trim().isEmpty) {
         return const TrackSearchPageResult(
-          failure: TrackSearchFailure.invalidResponse,
+          failure: SearchFailure.invalidResponse,
         );
       }
       artists.add(
@@ -177,7 +169,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     }
     if (!_sameArtists(mappedTrack.artists, artists)) {
       return const TrackSearchPageResult(
-        failure: TrackSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
     items.add(
@@ -218,19 +210,17 @@ bool _sameArtists(List<ArtistSummary> first, List<ArtistSummary> second) {
 }
 
 @visibleForTesting
-TrackSearchFailure mapBridgeTrackSearchFailure(
+SearchFailure mapBridgeSearchFailure(
   bridge.QqMusicTrackSearchPageLoadFailure failure,
 ) => switch (failure) {
   bridge.QqMusicTrackSearchPageLoadFailure.coreUnavailable =>
-    TrackSearchFailure.coreUnavailable,
-  bridge.QqMusicTrackSearchPageLoadFailure.network =>
-    TrackSearchFailure.network,
+    SearchFailure.coreUnavailable,
+  bridge.QqMusicTrackSearchPageLoadFailure.network => SearchFailure.network,
   bridge.QqMusicTrackSearchPageLoadFailure.serviceUnavailable =>
-    TrackSearchFailure.serviceUnavailable,
+    SearchFailure.serviceUnavailable,
   bridge.QqMusicTrackSearchPageLoadFailure.invalidResponse =>
-    TrackSearchFailure.invalidResponse,
-  bridge.QqMusicTrackSearchPageLoadFailure.cancelled =>
-    TrackSearchFailure.cancelled,
+    SearchFailure.invalidResponse,
+  bridge.QqMusicTrackSearchPageLoadFailure.cancelled => SearchFailure.cancelled,
   bridge.QqMusicTrackSearchPageLoadFailure.alreadyRunning =>
-    TrackSearchFailure.alreadyRunning,
+    SearchFailure.alreadyRunning,
 };

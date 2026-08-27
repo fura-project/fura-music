@@ -16,8 +16,8 @@ class AlbumSearchController extends ChangeNotifier {
   AlbumSearchStage _stage = AlbumSearchStage.idle;
   String _query = '';
   List<AlbumSummary> _albums = const [];
-  AlbumSearchFailure? _failure;
-  AlbumSearchFailure? _appendFailure;
+  SearchFailure? _failure;
+  SearchFailure? _appendFailure;
   int _total = 0;
   int _nextPage = 1;
   bool _hasMore = false;
@@ -29,8 +29,8 @@ class AlbumSearchController extends ChangeNotifier {
   AlbumSearchStage get stage => _stage;
   String get query => _query;
   List<AlbumSummary> get albums => _albums;
-  AlbumSearchFailure? get failure => _failure;
-  AlbumSearchFailure? get appendFailure => _appendFailure;
+  SearchFailure? get failure => _failure;
+  SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
@@ -81,7 +81,7 @@ class AlbumSearchController extends ChangeNotifier {
           ? AlbumSearchStage.empty
           : AlbumSearchStage.content;
     } else {
-      _failure = result.failure ?? AlbumSearchFailure.invalidResponse;
+      _failure = result.failure ?? SearchFailure.invalidResponse;
       _stage = AlbumSearchStage.error;
     }
     _notify();
@@ -118,7 +118,7 @@ class AlbumSearchController extends ChangeNotifier {
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
-      _appendFailure = result.failure ?? AlbumSearchFailure.invalidResponse;
+      _appendFailure = result.failure ?? SearchFailure.invalidResponse;
     }
     _notify();
   }
@@ -153,12 +153,7 @@ class AlbumSearchController extends ChangeNotifier {
       result.total >= result.albums.length &&
       (!result.hasMore || result.albums.isNotEmpty);
 
-  bool _isRetryable(AlbumSearchFailure? failure) =>
-      failure == AlbumSearchFailure.coreUnavailable ||
-      failure == AlbumSearchFailure.network ||
-      failure == AlbumSearchFailure.serviceUnavailable ||
-      failure == AlbumSearchFailure.invalidResponse ||
-      failure == AlbumSearchFailure.alreadyRunning;
+  bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 

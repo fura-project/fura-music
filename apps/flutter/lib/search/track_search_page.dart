@@ -587,7 +587,7 @@ class _SearchResults extends StatelessWidget {
   final int total;
   final bool hasMore;
   final bool isLoadingMore;
-  final TrackSearchFailure? appendFailure;
+  final SearchFailure? appendFailure;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final ValueChanged<int> onPlay;
@@ -1138,51 +1138,50 @@ class _SearchFooter extends StatelessWidget {
   );
 }
 
-String _trackFailureCopy(TrackSearchFailure? failure) => switch (failure) {
-  TrackSearchFailure.network => 'Check your connection and try again.',
-  TrackSearchFailure.serviceUnavailable =>
+String _trackFailureCopy(SearchFailure? failure) => switch (failure) {
+  SearchFailure.network => 'Check your connection and try again.',
+  SearchFailure.serviceUnavailable =>
     'QQ Music search is temporarily unavailable.',
-  TrackSearchFailure.cancelled => 'The search was cancelled.',
-  TrackSearchFailure.coreUnavailable =>
+  SearchFailure.cancelled => 'The search was cancelled.',
+  SearchFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
-  TrackSearchFailure.invalidResponse ||
-  TrackSearchFailure.alreadyRunning ||
+  SearchFailure.invalidResponse ||
+  SearchFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected search response.',
 };
 
-String _artistFailureCopy(ArtistSearchFailure? failure) => switch (failure) {
-  ArtistSearchFailure.network => 'Check your connection and try again.',
-  ArtistSearchFailure.serviceUnavailable =>
+String _artistFailureCopy(SearchFailure? failure) => switch (failure) {
+  SearchFailure.network => 'Check your connection and try again.',
+  SearchFailure.serviceUnavailable =>
     'QQ Music Artist search is temporarily unavailable.',
-  ArtistSearchFailure.cancelled => 'The Artist search was cancelled.',
-  ArtistSearchFailure.coreUnavailable =>
+  SearchFailure.cancelled => 'The Artist search was cancelled.',
+  SearchFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
-  ArtistSearchFailure.invalidResponse ||
-  ArtistSearchFailure.alreadyRunning ||
+  SearchFailure.invalidResponse ||
+  SearchFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected Artist search response.',
 };
 
-String _albumFailureCopy(AlbumSearchFailure? failure) => switch (failure) {
-  AlbumSearchFailure.network => 'Check your connection and try again.',
-  AlbumSearchFailure.serviceUnavailable =>
+String _albumFailureCopy(SearchFailure? failure) => switch (failure) {
+  SearchFailure.network => 'Check your connection and try again.',
+  SearchFailure.serviceUnavailable =>
     'QQ Music Album search is temporarily unavailable.',
-  AlbumSearchFailure.cancelled => 'The Album search was cancelled.',
-  AlbumSearchFailure.coreUnavailable =>
+  SearchFailure.cancelled => 'The Album search was cancelled.',
+  SearchFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
-  AlbumSearchFailure.invalidResponse ||
-  AlbumSearchFailure.alreadyRunning ||
+  SearchFailure.invalidResponse ||
+  SearchFailure.alreadyRunning ||
   null => 'QQ Music returned an unexpected Album search response.',
 };
 
-String _playlistFailureCopy(PlaylistSearchFailure? failure) =>
-    switch (failure) {
-      PlaylistSearchFailure.network => 'Check your connection and try again.',
-      PlaylistSearchFailure.serviceUnavailable =>
-        'QQ Music Playlist search is temporarily unavailable.',
-      PlaylistSearchFailure.cancelled => 'The Playlist search was cancelled.',
-      PlaylistSearchFailure.coreUnavailable =>
-        'The local music core is unavailable. Restart the app and try again.',
-      PlaylistSearchFailure.invalidResponse ||
-      PlaylistSearchFailure.alreadyRunning ||
-      null => 'QQ Music returned an unexpected Playlist search response.',
-    };
+String _playlistFailureCopy(SearchFailure? failure) => switch (failure) {
+  SearchFailure.network => 'Check your connection and try again.',
+  SearchFailure.serviceUnavailable =>
+    'QQ Music Playlist search is temporarily unavailable.',
+  SearchFailure.cancelled => 'The Playlist search was cancelled.',
+  SearchFailure.coreUnavailable =>
+    'The local music core is unavailable. Restart the app and try again.',
+  SearchFailure.invalidResponse ||
+  SearchFailure.alreadyRunning ||
+  null => 'QQ Music returned an unexpected Playlist search response.',
+};

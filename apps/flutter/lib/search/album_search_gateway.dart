@@ -1,15 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/search/search_failure.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
-enum AlbumSearchFailure {
-  coreUnavailable,
-  network,
-  serviceUnavailable,
-  invalidResponse,
-  cancelled,
-  alreadyRunning,
-}
+export 'package:flutterustmusic/search/search_failure.dart';
 
 class AlbumSearchPageResult {
   const AlbumSearchPageResult({
@@ -24,7 +18,7 @@ class AlbumSearchPageResult {
   final int total;
   final bool hasMore;
   final List<AlbumSummary> albums;
-  final AlbumSearchFailure? failure;
+  final SearchFailure? failure;
 }
 
 abstract interface class AlbumSearchGateway {
@@ -82,7 +76,7 @@ class _RustAlbumSearchPageLoadOperation
       return mapBridgeAlbumSearchPage(await _handle.run());
     } on Object {
       return const AlbumSearchPageResult(
-        failure: AlbumSearchFailure.coreUnavailable,
+        failure: SearchFailure.coreUnavailable,
       );
     }
   }
@@ -99,18 +93,16 @@ AlbumSearchPageResult mapBridgeAlbumSearchPage(
         result.hasMore ||
         result.albums.isNotEmpty) {
       return const AlbumSearchPageResult(
-        failure: AlbumSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
-    return AlbumSearchPageResult(failure: mapBridgeAlbumSearchFailure(failure));
+    return AlbumSearchPageResult(failure: mapBridgeSearchFailure(failure));
   }
   if (result.page <= 0 ||
       result.total < 0 ||
       result.albums.length > result.total ||
       (result.hasMore && result.albums.isEmpty)) {
-    return const AlbumSearchPageResult(
-      failure: AlbumSearchFailure.invalidResponse,
-    );
+    return const AlbumSearchPageResult(failure: SearchFailure.invalidResponse);
   }
   final albums = <AlbumSummary>[];
   for (final album in result.albums) {
@@ -119,7 +111,7 @@ AlbumSearchPageResult mapBridgeAlbumSearchPage(
         album.title.trim().isEmpty ||
         (album.artworkUri?.trim().isEmpty ?? false)) {
       return const AlbumSearchPageResult(
-        failure: AlbumSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
     albums.add(
@@ -140,19 +132,17 @@ AlbumSearchPageResult mapBridgeAlbumSearchPage(
 }
 
 @visibleForTesting
-AlbumSearchFailure mapBridgeAlbumSearchFailure(
+SearchFailure mapBridgeSearchFailure(
   bridge.QqMusicAlbumSearchPageLoadFailure failure,
 ) => switch (failure) {
   bridge.QqMusicAlbumSearchPageLoadFailure.coreUnavailable =>
-    AlbumSearchFailure.coreUnavailable,
-  bridge.QqMusicAlbumSearchPageLoadFailure.network =>
-    AlbumSearchFailure.network,
+    SearchFailure.coreUnavailable,
+  bridge.QqMusicAlbumSearchPageLoadFailure.network => SearchFailure.network,
   bridge.QqMusicAlbumSearchPageLoadFailure.serviceUnavailable =>
-    AlbumSearchFailure.serviceUnavailable,
+    SearchFailure.serviceUnavailable,
   bridge.QqMusicAlbumSearchPageLoadFailure.invalidResponse =>
-    AlbumSearchFailure.invalidResponse,
-  bridge.QqMusicAlbumSearchPageLoadFailure.cancelled =>
-    AlbumSearchFailure.cancelled,
+    SearchFailure.invalidResponse,
+  bridge.QqMusicAlbumSearchPageLoadFailure.cancelled => SearchFailure.cancelled,
   bridge.QqMusicAlbumSearchPageLoadFailure.alreadyRunning =>
-    AlbumSearchFailure.alreadyRunning,
+    SearchFailure.alreadyRunning,
 };

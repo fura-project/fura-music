@@ -28,7 +28,7 @@ void main() {
       ),
       _ImmediateOperation(const PlaylistSearchPageResult(page: 1)),
       _ImmediateOperation(
-        const PlaylistSearchPageResult(failure: PlaylistSearchFailure.network),
+        const PlaylistSearchPageResult(failure: SearchFailure.network),
       ),
       _ImmediateOperation(
         const PlaylistSearchPageResult(
@@ -50,7 +50,7 @@ void main() {
 
     await controller.submit('retry query');
     expect(controller.stage, PlaylistSearchStage.error);
-    expect(controller.failure, PlaylistSearchFailure.network);
+    expect(controller.failure, SearchFailure.network);
     controller.retry();
     await Future<void>.delayed(Duration.zero);
     expect(controller.stage, PlaylistSearchStage.content);
@@ -118,7 +118,7 @@ void main() {
         ),
       ),
       _ImmediateOperation(
-        const PlaylistSearchPageResult(failure: PlaylistSearchFailure.network),
+        const PlaylistSearchPageResult(failure: SearchFailure.network),
       ),
     ]);
     final controller = PlaylistSearchController(gateway);
@@ -130,7 +130,7 @@ void main() {
     await controller.loadMore();
     expect(controller.stage, PlaylistSearchStage.content);
     expect(controller.playlists, [firstPlaylist, secondPlaylist]);
-    expect(controller.appendFailure, PlaylistSearchFailure.network);
+    expect(controller.appendFailure, SearchFailure.network);
     expect(controller.canRetryMore, isTrue);
     controller.dispose();
   });

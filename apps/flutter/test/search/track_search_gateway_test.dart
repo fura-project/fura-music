@@ -73,20 +73,19 @@ void main() {
   test('maps every Bridge failure and rejects conflicting success data', () {
     final expected = {
       bridge.QqMusicTrackSearchPageLoadFailure.coreUnavailable:
-          TrackSearchFailure.coreUnavailable,
-      bridge.QqMusicTrackSearchPageLoadFailure.network:
-          TrackSearchFailure.network,
+          SearchFailure.coreUnavailable,
+      bridge.QqMusicTrackSearchPageLoadFailure.network: SearchFailure.network,
       bridge.QqMusicTrackSearchPageLoadFailure.serviceUnavailable:
-          TrackSearchFailure.serviceUnavailable,
+          SearchFailure.serviceUnavailable,
       bridge.QqMusicTrackSearchPageLoadFailure.invalidResponse:
-          TrackSearchFailure.invalidResponse,
+          SearchFailure.invalidResponse,
       bridge.QqMusicTrackSearchPageLoadFailure.cancelled:
-          TrackSearchFailure.cancelled,
+          SearchFailure.cancelled,
       bridge.QqMusicTrackSearchPageLoadFailure.alreadyRunning:
-          TrackSearchFailure.alreadyRunning,
+          SearchFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: output) in expected.entries) {
-      expect(mapBridgeTrackSearchFailure(input), output);
+      expect(mapBridgeSearchFailure(input), output);
     }
 
     final conflict = mapBridgeTrackSearchPage(
@@ -98,7 +97,7 @@ void main() {
         failure: bridge.QqMusicTrackSearchPageLoadFailure.network,
       ),
     );
-    expect(conflict.failure, TrackSearchFailure.invalidResponse);
+    expect(conflict.failure, SearchFailure.invalidResponse);
   });
 
   test('forwards normalized operation inputs and cancellation', () {
@@ -135,5 +134,5 @@ class _ImmediateOperation implements TrackSearchPageLoadOperation {
 
   @override
   Future<TrackSearchPageResult> run() async =>
-      const TrackSearchPageResult(failure: TrackSearchFailure.cancelled);
+      const TrackSearchPageResult(failure: SearchFailure.cancelled);
 }

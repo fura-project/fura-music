@@ -16,8 +16,8 @@ class TrackSearchController extends ChangeNotifier {
   TrackSearchStage _stage = TrackSearchStage.idle;
   String _query = '';
   List<TrackSearchItem> _items = const [];
-  TrackSearchFailure? _failure;
-  TrackSearchFailure? _appendFailure;
+  SearchFailure? _failure;
+  SearchFailure? _appendFailure;
   int _total = 0;
   int _nextPage = 1;
   bool _hasMore = false;
@@ -31,8 +31,8 @@ class TrackSearchController extends ChangeNotifier {
   List<TrackSearchItem> get items => _items;
   List<PlaylistTrackSummary> get tracks =>
       List.unmodifiable(_items.map((item) => item.track));
-  TrackSearchFailure? get failure => _failure;
-  TrackSearchFailure? get appendFailure => _appendFailure;
+  SearchFailure? get failure => _failure;
+  SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
@@ -83,7 +83,7 @@ class TrackSearchController extends ChangeNotifier {
           ? TrackSearchStage.empty
           : TrackSearchStage.content;
     } else {
-      _failure = result.failure ?? TrackSearchFailure.invalidResponse;
+      _failure = result.failure ?? SearchFailure.invalidResponse;
       _stage = TrackSearchStage.error;
     }
     _notify();
@@ -121,7 +121,7 @@ class TrackSearchController extends ChangeNotifier {
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
-      _appendFailure = result.failure ?? TrackSearchFailure.invalidResponse;
+      _appendFailure = result.failure ?? SearchFailure.invalidResponse;
     }
     _notify();
   }
@@ -156,12 +156,7 @@ class TrackSearchController extends ChangeNotifier {
       result.total >= result.items.length &&
       (!result.hasMore || result.items.isNotEmpty);
 
-  bool _isRetryable(TrackSearchFailure? failure) =>
-      failure == TrackSearchFailure.coreUnavailable ||
-      failure == TrackSearchFailure.network ||
-      failure == TrackSearchFailure.serviceUnavailable ||
-      failure == TrackSearchFailure.invalidResponse ||
-      failure == TrackSearchFailure.alreadyRunning;
+  bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 

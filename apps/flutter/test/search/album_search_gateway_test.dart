@@ -32,20 +32,19 @@ void main() {
   test('maps every Bridge failure and rejects conflicting success data', () {
     final expected = {
       bridge.QqMusicAlbumSearchPageLoadFailure.coreUnavailable:
-          AlbumSearchFailure.coreUnavailable,
-      bridge.QqMusicAlbumSearchPageLoadFailure.network:
-          AlbumSearchFailure.network,
+          SearchFailure.coreUnavailable,
+      bridge.QqMusicAlbumSearchPageLoadFailure.network: SearchFailure.network,
       bridge.QqMusicAlbumSearchPageLoadFailure.serviceUnavailable:
-          AlbumSearchFailure.serviceUnavailable,
+          SearchFailure.serviceUnavailable,
       bridge.QqMusicAlbumSearchPageLoadFailure.invalidResponse:
-          AlbumSearchFailure.invalidResponse,
+          SearchFailure.invalidResponse,
       bridge.QqMusicAlbumSearchPageLoadFailure.cancelled:
-          AlbumSearchFailure.cancelled,
+          SearchFailure.cancelled,
       bridge.QqMusicAlbumSearchPageLoadFailure.alreadyRunning:
-          AlbumSearchFailure.alreadyRunning,
+          SearchFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: output) in expected.entries) {
-      expect(mapBridgeAlbumSearchFailure(input), output);
+      expect(mapBridgeSearchFailure(input), output);
     }
 
     final conflict = mapBridgeAlbumSearchPage(
@@ -57,7 +56,7 @@ void main() {
         failure: bridge.QqMusicAlbumSearchPageLoadFailure.network,
       ),
     );
-    expect(conflict.failure, AlbumSearchFailure.invalidResponse);
+    expect(conflict.failure, SearchFailure.invalidResponse);
 
     final invalidIdentity = mapBridgeAlbumSearchPage(
       const bridge.QqMusicAlbumSearchPageLoad(
@@ -73,7 +72,7 @@ void main() {
         ],
       ),
     );
-    expect(invalidIdentity.failure, AlbumSearchFailure.invalidResponse);
+    expect(invalidIdentity.failure, SearchFailure.invalidResponse);
   });
 
   test('forwards operation inputs and cancellation', () {
@@ -110,5 +109,5 @@ class _ImmediateOperation implements AlbumSearchPageLoadOperation {
 
   @override
   Future<AlbumSearchPageResult> run() async =>
-      const AlbumSearchPageResult(failure: AlbumSearchFailure.cancelled);
+      const AlbumSearchPageResult(failure: SearchFailure.cancelled);
 }

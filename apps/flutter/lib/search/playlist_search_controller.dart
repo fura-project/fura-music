@@ -16,8 +16,8 @@ class PlaylistSearchController extends ChangeNotifier {
   PlaylistSearchStage _stage = PlaylistSearchStage.idle;
   String _query = '';
   List<UserPlaylistSummary> _playlists = const [];
-  PlaylistSearchFailure? _failure;
-  PlaylistSearchFailure? _appendFailure;
+  SearchFailure? _failure;
+  SearchFailure? _appendFailure;
   int _total = 0;
   int _nextPage = 1;
   bool _hasMore = false;
@@ -29,8 +29,8 @@ class PlaylistSearchController extends ChangeNotifier {
   PlaylistSearchStage get stage => _stage;
   String get query => _query;
   List<UserPlaylistSummary> get playlists => _playlists;
-  PlaylistSearchFailure? get failure => _failure;
-  PlaylistSearchFailure? get appendFailure => _appendFailure;
+  SearchFailure? get failure => _failure;
+  SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
@@ -81,7 +81,7 @@ class PlaylistSearchController extends ChangeNotifier {
           ? PlaylistSearchStage.empty
           : PlaylistSearchStage.content;
     } else {
-      _failure = result.failure ?? PlaylistSearchFailure.invalidResponse;
+      _failure = result.failure ?? SearchFailure.invalidResponse;
       _stage = PlaylistSearchStage.error;
     }
     _notify();
@@ -119,7 +119,7 @@ class PlaylistSearchController extends ChangeNotifier {
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
-      _appendFailure = result.failure ?? PlaylistSearchFailure.invalidResponse;
+      _appendFailure = result.failure ?? SearchFailure.invalidResponse;
     }
     _notify();
   }
@@ -157,12 +157,7 @@ class PlaylistSearchController extends ChangeNotifier {
       result.total >= result.playlists.length &&
       (!result.hasMore || result.playlists.isNotEmpty);
 
-  bool _isRetryable(PlaylistSearchFailure? failure) =>
-      failure == PlaylistSearchFailure.coreUnavailable ||
-      failure == PlaylistSearchFailure.network ||
-      failure == PlaylistSearchFailure.serviceUnavailable ||
-      failure == PlaylistSearchFailure.invalidResponse ||
-      failure == PlaylistSearchFailure.alreadyRunning;
+  bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 

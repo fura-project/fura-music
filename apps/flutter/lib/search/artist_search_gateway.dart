@@ -1,15 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/search/search_failure.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
-enum ArtistSearchFailure {
-  coreUnavailable,
-  network,
-  serviceUnavailable,
-  invalidResponse,
-  cancelled,
-  alreadyRunning,
-}
+export 'package:flutterustmusic/search/search_failure.dart';
 
 class ArtistSearchPageResult {
   const ArtistSearchPageResult({
@@ -24,7 +18,7 @@ class ArtistSearchPageResult {
   final int total;
   final bool hasMore;
   final List<ArtistSummary> artists;
-  final ArtistSearchFailure? failure;
+  final SearchFailure? failure;
 }
 
 abstract interface class ArtistSearchGateway {
@@ -81,7 +75,7 @@ class _RustArtistSearchPageLoadOperation
       return mapBridgeArtistSearchPage(await _handle.run());
     } on Object {
       return const ArtistSearchPageResult(
-        failure: ArtistSearchFailure.coreUnavailable,
+        failure: SearchFailure.coreUnavailable,
       );
     }
   }
@@ -98,20 +92,16 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
         result.hasMore ||
         result.artists.isNotEmpty) {
       return const ArtistSearchPageResult(
-        failure: ArtistSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
-    return ArtistSearchPageResult(
-      failure: mapBridgeArtistSearchFailure(failure),
-    );
+    return ArtistSearchPageResult(failure: mapBridgeSearchFailure(failure));
   }
   if (result.page <= 0 ||
       result.total < 0 ||
       result.artists.length > result.total ||
       (result.hasMore && result.artists.isEmpty)) {
-    return const ArtistSearchPageResult(
-      failure: ArtistSearchFailure.invalidResponse,
-    );
+    return const ArtistSearchPageResult(failure: SearchFailure.invalidResponse);
   }
   final artists = <ArtistSummary>[];
   for (final artist in result.artists) {
@@ -119,7 +109,7 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
         artist.opaqueId.trim().isEmpty ||
         artist.name.trim().isEmpty) {
       return const ArtistSearchPageResult(
-        failure: ArtistSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
     artists.add(
@@ -139,19 +129,18 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
 }
 
 @visibleForTesting
-ArtistSearchFailure mapBridgeArtistSearchFailure(
+SearchFailure mapBridgeSearchFailure(
   bridge.QqMusicArtistSearchPageLoadFailure failure,
 ) => switch (failure) {
   bridge.QqMusicArtistSearchPageLoadFailure.coreUnavailable =>
-    ArtistSearchFailure.coreUnavailable,
-  bridge.QqMusicArtistSearchPageLoadFailure.network =>
-    ArtistSearchFailure.network,
+    SearchFailure.coreUnavailable,
+  bridge.QqMusicArtistSearchPageLoadFailure.network => SearchFailure.network,
   bridge.QqMusicArtistSearchPageLoadFailure.serviceUnavailable =>
-    ArtistSearchFailure.serviceUnavailable,
+    SearchFailure.serviceUnavailable,
   bridge.QqMusicArtistSearchPageLoadFailure.invalidResponse =>
-    ArtistSearchFailure.invalidResponse,
+    SearchFailure.invalidResponse,
   bridge.QqMusicArtistSearchPageLoadFailure.cancelled =>
-    ArtistSearchFailure.cancelled,
+    SearchFailure.cancelled,
   bridge.QqMusicArtistSearchPageLoadFailure.alreadyRunning =>
-    ArtistSearchFailure.alreadyRunning,
+    SearchFailure.alreadyRunning,
 };

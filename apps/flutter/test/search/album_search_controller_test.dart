@@ -24,7 +24,7 @@ void main() {
       ),
       _ImmediateOperation(const AlbumSearchPageResult(page: 1)),
       _ImmediateOperation(
-        const AlbumSearchPageResult(failure: AlbumSearchFailure.network),
+        const AlbumSearchPageResult(failure: SearchFailure.network),
       ),
       _ImmediateOperation(
         const AlbumSearchPageResult(page: 1, total: 1, albums: [secondAlbum]),
@@ -42,7 +42,7 @@ void main() {
 
     await controller.submit('retry query');
     expect(controller.stage, AlbumSearchStage.error);
-    expect(controller.failure, AlbumSearchFailure.network);
+    expect(controller.failure, SearchFailure.network);
     controller.retry();
     await Future<void>.delayed(Duration.zero);
     expect(controller.stage, AlbumSearchStage.content);
@@ -104,7 +104,7 @@ void main() {
           ),
         ),
         _ImmediateOperation(
-          const AlbumSearchPageResult(failure: AlbumSearchFailure.network),
+          const AlbumSearchPageResult(failure: SearchFailure.network),
         ),
       ]);
       final controller = AlbumSearchController(gateway);
@@ -115,7 +115,7 @@ void main() {
       await controller.loadMore();
       expect(controller.stage, AlbumSearchStage.content);
       expect(controller.albums, [firstAlbum, secondAlbum]);
-      expect(controller.appendFailure, AlbumSearchFailure.network);
+      expect(controller.appendFailure, SearchFailure.network);
       expect(controller.canRetryMore, isTrue);
       controller.dispose();
     },

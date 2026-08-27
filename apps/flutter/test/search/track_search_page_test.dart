@@ -145,7 +145,7 @@ void main() {
     );
     addTearDown(playback.dispose);
     final search = _ResultSearchGateway(
-      const TrackSearchPageResult(failure: TrackSearchFailure.network),
+      const TrackSearchPageResult(failure: SearchFailure.network),
     );
 
     await tester.pumpWidget(

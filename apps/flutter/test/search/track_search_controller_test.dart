@@ -28,7 +28,7 @@ void main() {
       ),
       _ImmediateOperation(const TrackSearchPageResult(page: 1)),
       _ImmediateOperation(
-        const TrackSearchPageResult(failure: TrackSearchFailure.network),
+        const TrackSearchPageResult(failure: SearchFailure.network),
       ),
       _ImmediateOperation(
         const TrackSearchPageResult(page: 1, total: 1, items: [secondItem]),
@@ -46,7 +46,7 @@ void main() {
 
     await controller.submit('retry query');
     expect(controller.stage, TrackSearchStage.error);
-    expect(controller.failure, TrackSearchFailure.network);
+    expect(controller.failure, SearchFailure.network);
     expect(controller.canRetry, isTrue);
     controller.retry();
     await Future<void>.delayed(Duration.zero);
@@ -108,7 +108,7 @@ void main() {
           ),
         ),
         _ImmediateOperation(
-          const TrackSearchPageResult(failure: TrackSearchFailure.network),
+          const TrackSearchPageResult(failure: SearchFailure.network),
         ),
       ]);
       final controller = TrackSearchController(gateway);
@@ -134,7 +134,7 @@ void main() {
       await retryController.loadMore();
       expect(retryController.stage, TrackSearchStage.content);
       expect(retryController.tracks, [firstTrack]);
-      expect(retryController.appendFailure, TrackSearchFailure.network);
+      expect(retryController.appendFailure, SearchFailure.network);
       expect(retryController.canRetryMore, isTrue);
       controller.dispose();
       retryController.dispose();

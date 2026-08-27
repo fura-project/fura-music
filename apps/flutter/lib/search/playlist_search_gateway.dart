@@ -1,15 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/search/search_failure.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart' as bridge;
 
-enum PlaylistSearchFailure {
-  coreUnavailable,
-  network,
-  serviceUnavailable,
-  invalidResponse,
-  cancelled,
-  alreadyRunning,
-}
+export 'package:flutterustmusic/search/search_failure.dart';
 
 class PlaylistSearchPageResult {
   const PlaylistSearchPageResult({
@@ -24,7 +18,7 @@ class PlaylistSearchPageResult {
   final int total;
   final bool hasMore;
   final List<UserPlaylistSummary> playlists;
-  final PlaylistSearchFailure? failure;
+  final SearchFailure? failure;
 }
 
 abstract interface class PlaylistSearchGateway {
@@ -85,7 +79,7 @@ class _RustPlaylistSearchPageLoadOperation
       return mapBridgePlaylistSearchPage(await _handle.run());
     } on Object {
       return const PlaylistSearchPageResult(
-        failure: PlaylistSearchFailure.coreUnavailable,
+        failure: SearchFailure.coreUnavailable,
       );
     }
   }
@@ -102,19 +96,17 @@ PlaylistSearchPageResult mapBridgePlaylistSearchPage(
         result.hasMore ||
         result.playlists.isNotEmpty) {
       return const PlaylistSearchPageResult(
-        failure: PlaylistSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
-    return PlaylistSearchPageResult(
-      failure: mapBridgePlaylistSearchFailure(failure),
-    );
+    return PlaylistSearchPageResult(failure: mapBridgeSearchFailure(failure));
   }
   if (result.page <= 0 ||
       result.total < 0 ||
       result.playlists.length > result.total ||
       (result.hasMore && result.playlists.isEmpty)) {
     return const PlaylistSearchPageResult(
-      failure: PlaylistSearchFailure.invalidResponse,
+      failure: SearchFailure.invalidResponse,
     );
   }
   final playlists = <UserPlaylistSummary>[];
@@ -125,7 +117,7 @@ PlaylistSearchPageResult mapBridgePlaylistSearchPage(
         (playlist.artworkUri?.trim().isEmpty ?? false) ||
         (playlist.trackCount != null && playlist.trackCount! < 0)) {
       return const PlaylistSearchPageResult(
-        failure: PlaylistSearchFailure.invalidResponse,
+        failure: SearchFailure.invalidResponse,
       );
     }
     playlists.add(
@@ -147,19 +139,18 @@ PlaylistSearchPageResult mapBridgePlaylistSearchPage(
 }
 
 @visibleForTesting
-PlaylistSearchFailure mapBridgePlaylistSearchFailure(
+SearchFailure mapBridgeSearchFailure(
   bridge.QqMusicPlaylistSearchPageLoadFailure failure,
 ) => switch (failure) {
   bridge.QqMusicPlaylistSearchPageLoadFailure.coreUnavailable =>
-    PlaylistSearchFailure.coreUnavailable,
-  bridge.QqMusicPlaylistSearchPageLoadFailure.network =>
-    PlaylistSearchFailure.network,
+    SearchFailure.coreUnavailable,
+  bridge.QqMusicPlaylistSearchPageLoadFailure.network => SearchFailure.network,
   bridge.QqMusicPlaylistSearchPageLoadFailure.serviceUnavailable =>
-    PlaylistSearchFailure.serviceUnavailable,
+    SearchFailure.serviceUnavailable,
   bridge.QqMusicPlaylistSearchPageLoadFailure.invalidResponse =>
-    PlaylistSearchFailure.invalidResponse,
+    SearchFailure.invalidResponse,
   bridge.QqMusicPlaylistSearchPageLoadFailure.cancelled =>
-    PlaylistSearchFailure.cancelled,
+    SearchFailure.cancelled,
   bridge.QqMusicPlaylistSearchPageLoadFailure.alreadyRunning =>
-    PlaylistSearchFailure.alreadyRunning,
+    SearchFailure.alreadyRunning,
 };

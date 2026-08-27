@@ -34,20 +34,20 @@ void main() {
   test('maps every Bridge failure and rejects conflicting success data', () {
     final expected = {
       bridge.QqMusicPlaylistSearchPageLoadFailure.coreUnavailable:
-          PlaylistSearchFailure.coreUnavailable,
+          SearchFailure.coreUnavailable,
       bridge.QqMusicPlaylistSearchPageLoadFailure.network:
-          PlaylistSearchFailure.network,
+          SearchFailure.network,
       bridge.QqMusicPlaylistSearchPageLoadFailure.serviceUnavailable:
-          PlaylistSearchFailure.serviceUnavailable,
+          SearchFailure.serviceUnavailable,
       bridge.QqMusicPlaylistSearchPageLoadFailure.invalidResponse:
-          PlaylistSearchFailure.invalidResponse,
+          SearchFailure.invalidResponse,
       bridge.QqMusicPlaylistSearchPageLoadFailure.cancelled:
-          PlaylistSearchFailure.cancelled,
+          SearchFailure.cancelled,
       bridge.QqMusicPlaylistSearchPageLoadFailure.alreadyRunning:
-          PlaylistSearchFailure.alreadyRunning,
+          SearchFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: output) in expected.entries) {
-      expect(mapBridgePlaylistSearchFailure(input), output);
+      expect(mapBridgeSearchFailure(input), output);
     }
 
     final conflict = mapBridgePlaylistSearchPage(
@@ -59,7 +59,7 @@ void main() {
         failure: bridge.QqMusicPlaylistSearchPageLoadFailure.network,
       ),
     );
-    expect(conflict.failure, PlaylistSearchFailure.invalidResponse);
+    expect(conflict.failure, SearchFailure.invalidResponse);
 
     final invalidIdentity = mapBridgePlaylistSearchPage(
       const bridge.QqMusicPlaylistSearchPageLoad(
@@ -75,7 +75,7 @@ void main() {
         ],
       ),
     );
-    expect(invalidIdentity.failure, PlaylistSearchFailure.invalidResponse);
+    expect(invalidIdentity.failure, SearchFailure.invalidResponse);
   });
 
   test('forwards operation inputs and cancellation', () {
@@ -112,5 +112,5 @@ class _ImmediateOperation implements PlaylistSearchPageLoadOperation {
 
   @override
   Future<PlaylistSearchPageResult> run() async =>
-      const PlaylistSearchPageResult(failure: PlaylistSearchFailure.cancelled);
+      const PlaylistSearchPageResult(failure: SearchFailure.cancelled);
 }

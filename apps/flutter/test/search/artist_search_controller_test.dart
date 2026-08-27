@@ -24,7 +24,7 @@ void main() {
       ),
       _ImmediateOperation(const ArtistSearchPageResult(page: 1)),
       _ImmediateOperation(
-        const ArtistSearchPageResult(failure: ArtistSearchFailure.network),
+        const ArtistSearchPageResult(failure: SearchFailure.network),
       ),
       _ImmediateOperation(
         const ArtistSearchPageResult(
@@ -46,7 +46,7 @@ void main() {
 
     await controller.submit('retry query');
     expect(controller.stage, ArtistSearchStage.error);
-    expect(controller.failure, ArtistSearchFailure.network);
+    expect(controller.failure, SearchFailure.network);
     controller.retry();
     await Future<void>.delayed(Duration.zero);
     expect(controller.stage, ArtistSearchStage.content);
@@ -112,7 +112,7 @@ void main() {
           ),
         ),
         _ImmediateOperation(
-          const ArtistSearchPageResult(failure: ArtistSearchFailure.network),
+          const ArtistSearchPageResult(failure: SearchFailure.network),
         ),
       ]);
       final controller = ArtistSearchController(gateway);
@@ -123,7 +123,7 @@ void main() {
       await controller.loadMore();
       expect(controller.stage, ArtistSearchStage.content);
       expect(controller.artists, [firstArtist, secondArtist]);
-      expect(controller.appendFailure, ArtistSearchFailure.network);
+      expect(controller.appendFailure, SearchFailure.network);
       expect(controller.canRetryMore, isTrue);
       controller.dispose();
     },
