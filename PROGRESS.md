@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.2_COHERENT_LIBRARY_SECTIONS_DISCOVERY
-  next_action: DISCOVERY_PASS
+  current_task: M5.2_RETAINED_ADAPTIVE_LIBRARY_SECTIONS
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -68,12 +68,12 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Whole-project ranking after M5.1 selects bounded M5.2 Library-section discovery next: Playlists, favorite Albums, and favorite Artists are already capable retained collections, but the latter two remain toolbar utilities instead of obvious Library sections. Discovery must preserve their independent controllers, failure/paging/scroll/focus state, and nested return paths rather than merging them into a giant controller.
+- M5.2 discovery selected retained adaptive Library sections: Playlists, favorite Albums, and favorite Artists will become directly discoverable section peers inside the existing authenticated shell. Favorite controllers remain lazy and independently mounted after first visit; details stay above the retained section root. A static overview was ranked lower because it leaves lifecycle loss unresolved, while an aggregated feed was rejected for lacking evidence and requiring a second library model.
 
 # Next Candidates
 
-1. Run the bounded M5.2 discovery pass over the three existing Library collections and select one finite presentation slice with explicit retained-state acceptance criteria.
-2. Implement the selected Library section slice without changing Provider contracts, merging controllers, or replacing the current local navigation architecture.
+1. Implement the retained adaptive Library section selector and lazy section stack without changing Provider contracts, merging controllers, or replacing the current local navigation architecture.
+2. Preserve section refresh, paging, failures, scroll, focus, nested detail return, compact/desktop reachability, primary navigation, and the single playback owner with focused regressions.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
