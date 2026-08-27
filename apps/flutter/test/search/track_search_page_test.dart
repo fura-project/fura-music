@@ -9,13 +9,14 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
-import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
+
+import '../support/test_playback_queue_gateway.dart';
 
 Future<void> _selectSearchType(WidgetTester tester, String type) async {
   await tester.tap(find.byKey(const ValueKey('search-types')));
@@ -33,7 +34,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final playback = QueuePlaybackController(
-      _QueueGateway(),
+      TestPlaybackQueueGateway(),
       TrackPlaybackController(
         const _UnavailableMediaGateway(),
         ForegroundPlaybackController(const _NeverAudioEngine()),
@@ -78,7 +79,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final search = _ControlledSearchGateway();
     final playback = QueuePlaybackController(
-      _QueueGateway(),
+      TestPlaybackQueueGateway(),
       TrackPlaybackController(
         const _UnavailableMediaGateway(),
         ForegroundPlaybackController(const _NeverAudioEngine()),
@@ -137,7 +138,7 @@ void main() {
     tester,
   ) async {
     final playback = QueuePlaybackController(
-      _QueueGateway(),
+      TestPlaybackQueueGateway(),
       TrackPlaybackController(
         const _UnavailableMediaGateway(),
         ForegroundPlaybackController(const _NeverAudioEngine()),
@@ -194,7 +195,7 @@ void main() {
       durationSeconds: 180,
     );
     final search = _SearchGateway(track);
-    final queue = _QueueGateway();
+    final queue = TestPlaybackQueueGateway();
     final playback = QueuePlaybackController(
       queue,
       TrackPlaybackController(
@@ -268,7 +269,7 @@ void main() {
     final artistSearch = _ArtistSearchGateway();
     final albumSearch = _AlbumSearchGateway();
     final playback = QueuePlaybackController(
-      _QueueGateway(),
+      TestPlaybackQueueGateway(),
       TrackPlaybackController(
         const _UnavailableMediaGateway(),
         ForegroundPlaybackController(const _NeverAudioEngine()),
@@ -505,81 +506,6 @@ class _AlbumSearchOperation implements AlbumSearchPageLoadOperation {
   @override
   Future<AlbumSearchPageResult> run() async => result;
 }
-
-class _QueueGateway implements PlaybackQueueGateway {
-  PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
-  List<PlaylistTrackSummary> replacedTracks = const [];
-  final List<PlaylistTrackSummary> pushedTracks = [];
-  int? replacedIndex;
-
-  @override
-  PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
-
-  @override
-  PlaybackQueueResult replace({
-    required List<PlaylistTrackSummary> tracks,
-    required int? currentIndex,
-  }) {
-    replacedTracks = List.of(tracks);
-    replacedIndex = currentIndex;
-    _snapshot = _queueSnapshot(tracks, currentIndex);
-    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
-  }
-
-  @override
-  PlaybackQueueResult push(PlaylistTrackSummary track) {
-    pushedTracks.add(track);
-    final tracks = [..._snapshot.tracks, track];
-    final playbackRequested = _snapshot.currentIndex == null;
-    _snapshot = _queueSnapshot(tracks, _snapshot.currentIndex ?? 0);
-    return PlaybackQueueResult(
-      snapshot: _snapshot,
-      playbackRequested: playbackRequested,
-    );
-  }
-
-  @override
-  PlaybackQueueResult advance() => PlaybackQueueResult(snapshot: _snapshot);
-
-  @override
-  PlaybackQueueResult clear() {
-    _snapshot = PlaybackQueueSnapshot.empty();
-    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
-  }
-
-  @override
-  PlaybackQueueResult completeCurrent() =>
-      PlaybackQueueResult(snapshot: _snapshot);
-
-  @override
-  PlaybackQueueResult remove(int index) =>
-      PlaybackQueueResult(snapshot: _snapshot);
-
-  @override
-  PlaybackQueueResult rewind() => PlaybackQueueResult(snapshot: _snapshot);
-
-  @override
-  PlaybackQueueResult setOrder(PlaybackOrder order) =>
-      PlaybackQueueResult(snapshot: _snapshot);
-
-  @override
-  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) =>
-      PlaybackQueueResult(snapshot: _snapshot);
-
-  @override
-  PlaybackQueueResult select(int index) =>
-      PlaybackQueueResult(snapshot: _snapshot);
-}
-
-PlaybackQueueSnapshot _queueSnapshot(
-  List<PlaylistTrackSummary> tracks,
-  int? currentIndex,
-) => PlaybackQueueSnapshot(
-  tracks: tracks,
-  currentIndex: currentIndex,
-  hasPrevious: currentIndex != null && currentIndex > 0,
-  hasNext: currentIndex != null && currentIndex + 1 < tracks.length,
-);
 
 class _UnavailableMediaGateway implements MediaResolutionGateway {
   const _UnavailableMediaGateway();
