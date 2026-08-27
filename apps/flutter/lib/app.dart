@@ -5,6 +5,7 @@ import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -99,33 +100,44 @@ class MusicApp extends StatelessWidget {
     return MusicApp._(
       bootstrap: bootstrap,
       authenticationGateway: authenticationGateway,
-      libraryGateway: libraryGateway,
-      playlistDetailGateway: playlistDetailGateway,
-      mediaResolutionGateway: mediaResolutionGateway,
-      lyricGateway: lyricGateway,
-      playbackQueueGateway: playbackQueueGateway ?? RustPlaybackQueueGateway(),
-      searchGateway: searchGateway ?? const RustTrackSearchGateway(),
-      artistSearchGateway:
-          artistSearchGateway ?? const RustArtistSearchGateway(),
-      albumSearchGateway: albumSearchGateway ?? const RustAlbumSearchGateway(),
-      playlistSearchGateway:
-          playlistSearchGateway ?? const RustPlaylistSearchGateway(),
-      albumTrackGateway: albumTrackGateway ?? const RustAlbumTrackGateway(),
-      albumDetailsGateway:
-          albumDetailsGateway ?? const RustAlbumDetailsGateway(),
-      artistTrackGateway: artistTrackGateway ?? const RustArtistTrackGateway(),
-      artistAlbumGateway: artistAlbumGateway ?? const RustArtistAlbumGateway(),
-      recommendedPlaylistGateway:
-          recommendedPlaylistGateway ?? const RustRecommendedPlaylistGateway(),
-      newAlbumGateway: newAlbumGateway ?? const RustNewAlbumGateway(),
-      newSongGateway: newSongGateway ?? const RustNewSongGateway(),
-      rankingGateway: rankingGateway ?? const RustRankingGateway(),
-      radarGateway: radarGateway,
-      favoriteAlbumGateway: favoriteAlbumGateway,
-      favoriteArtistGateway: favoriteArtistGateway,
-      trackCommentGateway:
-          trackCommentGateway ?? const RustTrackCommentGateway(),
-      audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
+      libraryDependencies: AuthenticatedLibraryDependencies(
+        libraryGateway: libraryGateway,
+        playlistDetailGateway: playlistDetailGateway,
+        albumTrackGateway: albumTrackGateway ?? const RustAlbumTrackGateway(),
+        albumDetailsGateway:
+            albumDetailsGateway ?? const RustAlbumDetailsGateway(),
+        artistTrackGateway:
+            artistTrackGateway ?? const RustArtistTrackGateway(),
+        artistAlbumGateway:
+            artistAlbumGateway ?? const RustArtistAlbumGateway(),
+        favoriteAlbumGateway: favoriteAlbumGateway,
+        favoriteArtistGateway: favoriteArtistGateway,
+      ),
+      discoveryDependencies: AuthenticatedDiscoveryDependencies(
+        trackSearchGateway: searchGateway ?? const RustTrackSearchGateway(),
+        artistSearchGateway:
+            artistSearchGateway ?? const RustArtistSearchGateway(),
+        albumSearchGateway:
+            albumSearchGateway ?? const RustAlbumSearchGateway(),
+        playlistSearchGateway:
+            playlistSearchGateway ?? const RustPlaylistSearchGateway(),
+        recommendedPlaylistGateway:
+            recommendedPlaylistGateway ??
+            const RustRecommendedPlaylistGateway(),
+        newAlbumGateway: newAlbumGateway ?? const RustNewAlbumGateway(),
+        newSongGateway: newSongGateway ?? const RustNewSongGateway(),
+        rankingGateway: rankingGateway ?? const RustRankingGateway(),
+        radarGateway: radarGateway,
+      ),
+      playbackDependencies: AuthenticatedPlaybackDependencies(
+        mediaResolutionGateway: mediaResolutionGateway,
+        lyricGateway: lyricGateway,
+        playbackQueueGateway:
+            playbackQueueGateway ?? RustPlaybackQueueGateway(),
+        trackCommentGateway:
+            trackCommentGateway ?? const RustTrackCommentGateway(),
+        audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
+      ),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
@@ -134,56 +146,18 @@ class MusicApp extends StatelessWidget {
   const MusicApp._({
     required this.bootstrap,
     required this.authenticationGateway,
-    required this.libraryGateway,
-    required this.playlistDetailGateway,
-    required this.mediaResolutionGateway,
-    required this.lyricGateway,
-    required this.playbackQueueGateway,
-    required this.searchGateway,
-    required this.artistSearchGateway,
-    required this.albumSearchGateway,
-    required this.playlistSearchGateway,
-    required this.albumTrackGateway,
-    required this.albumDetailsGateway,
-    required this.artistTrackGateway,
-    required this.artistAlbumGateway,
-    required this.recommendedPlaylistGateway,
-    required this.newAlbumGateway,
-    required this.newSongGateway,
-    required this.rankingGateway,
-    required this.radarGateway,
-    required this.favoriteAlbumGateway,
-    required this.favoriteArtistGateway,
-    required this.trackCommentGateway,
-    required this.audioEngine,
+    required this.libraryDependencies,
+    required this.discoveryDependencies,
+    required this.playbackDependencies,
     required this.initialCredentialRestore,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
-  final UserLibraryGateway libraryGateway;
-  final PlaylistDetailGateway playlistDetailGateway;
-  final MediaResolutionGateway mediaResolutionGateway;
-  final LyricGateway lyricGateway;
-  final PlaybackQueueGateway playbackQueueGateway;
-  final TrackSearchGateway searchGateway;
-  final ArtistSearchGateway artistSearchGateway;
-  final AlbumSearchGateway albumSearchGateway;
-  final PlaylistSearchGateway playlistSearchGateway;
-  final AlbumTrackGateway albumTrackGateway;
-  final AlbumDetailsGateway albumDetailsGateway;
-  final ArtistTrackGateway artistTrackGateway;
-  final ArtistAlbumGateway artistAlbumGateway;
-  final RecommendedPlaylistGateway recommendedPlaylistGateway;
-  final NewAlbumGateway newAlbumGateway;
-  final NewSongGateway newSongGateway;
-  final RankingGateway rankingGateway;
-  final RadarGateway radarGateway;
-  final FavoriteAlbumGateway favoriteAlbumGateway;
-  final FavoriteArtistGateway favoriteArtistGateway;
-  final TrackCommentGateway trackCommentGateway;
-  final ForegroundAudioEngine audioEngine;
+  final AuthenticatedLibraryDependencies libraryDependencies;
+  final AuthenticatedDiscoveryDependencies discoveryDependencies;
+  final AuthenticatedPlaybackDependencies playbackDependencies;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -197,28 +171,9 @@ class MusicApp extends StatelessWidget {
       home: LoginPage(
         bootstrap: bootstrap,
         authenticationGateway: authenticationGateway,
-        libraryGateway: libraryGateway,
-        playlistDetailGateway: playlistDetailGateway,
-        mediaResolutionGateway: mediaResolutionGateway,
-        lyricGateway: lyricGateway,
-        playbackQueueGateway: playbackQueueGateway,
-        searchGateway: searchGateway,
-        artistSearchGateway: artistSearchGateway,
-        albumSearchGateway: albumSearchGateway,
-        playlistSearchGateway: playlistSearchGateway,
-        albumTrackGateway: albumTrackGateway,
-        albumDetailsGateway: albumDetailsGateway,
-        artistTrackGateway: artistTrackGateway,
-        artistAlbumGateway: artistAlbumGateway,
-        recommendedPlaylistGateway: recommendedPlaylistGateway,
-        newAlbumGateway: newAlbumGateway,
-        newSongGateway: newSongGateway,
-        rankingGateway: rankingGateway,
-        radarGateway: radarGateway,
-        favoriteAlbumGateway: favoriteAlbumGateway,
-        favoriteArtistGateway: favoriteArtistGateway,
-        trackCommentGateway: trackCommentGateway,
-        audioEngine: audioEngine,
+        libraryDependencies: libraryDependencies,
+        discoveryDependencies: discoveryDependencies,
+        playbackDependencies: playbackDependencies,
         initialCredentialRestore: initialCredentialRestore,
       ),
     );
@@ -229,56 +184,18 @@ class LoginPage extends StatefulWidget {
   const LoginPage({
     required this.bootstrap,
     required this.authenticationGateway,
-    required this.libraryGateway,
-    required this.playlistDetailGateway,
-    required this.mediaResolutionGateway,
-    required this.lyricGateway,
-    required this.playbackQueueGateway,
-    required this.searchGateway,
-    required this.artistSearchGateway,
-    required this.albumSearchGateway,
-    required this.playlistSearchGateway,
-    required this.albumTrackGateway,
-    required this.albumDetailsGateway,
-    required this.artistTrackGateway,
-    required this.artistAlbumGateway,
-    required this.recommendedPlaylistGateway,
-    required this.newAlbumGateway,
-    required this.newSongGateway,
-    required this.rankingGateway,
-    required this.radarGateway,
-    required this.favoriteAlbumGateway,
-    required this.favoriteArtistGateway,
-    required this.trackCommentGateway,
-    required this.audioEngine,
+    required this.libraryDependencies,
+    required this.discoveryDependencies,
+    required this.playbackDependencies,
     required this.initialCredentialRestore,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
-  final UserLibraryGateway libraryGateway;
-  final PlaylistDetailGateway playlistDetailGateway;
-  final MediaResolutionGateway mediaResolutionGateway;
-  final LyricGateway lyricGateway;
-  final PlaybackQueueGateway playbackQueueGateway;
-  final TrackSearchGateway searchGateway;
-  final ArtistSearchGateway artistSearchGateway;
-  final AlbumSearchGateway albumSearchGateway;
-  final PlaylistSearchGateway playlistSearchGateway;
-  final AlbumTrackGateway albumTrackGateway;
-  final AlbumDetailsGateway albumDetailsGateway;
-  final ArtistTrackGateway artistTrackGateway;
-  final ArtistAlbumGateway artistAlbumGateway;
-  final RecommendedPlaylistGateway recommendedPlaylistGateway;
-  final NewAlbumGateway newAlbumGateway;
-  final NewSongGateway newSongGateway;
-  final RankingGateway rankingGateway;
-  final RadarGateway radarGateway;
-  final FavoriteAlbumGateway favoriteAlbumGateway;
-  final FavoriteArtistGateway favoriteArtistGateway;
-  final TrackCommentGateway trackCommentGateway;
-  final ForegroundAudioEngine audioEngine;
+  final AuthenticatedLibraryDependencies libraryDependencies;
+  final AuthenticatedDiscoveryDependencies discoveryDependencies;
+  final AuthenticatedPlaybackDependencies playbackDependencies;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -315,28 +232,9 @@ class _LoginPageState extends State<LoginPage> {
         if (_controller.stage == LoginStage.authenticated) {
           return UserLibraryPage(
             key: const ValueKey('user-library-page'),
-            gateway: widget.libraryGateway,
-            detailGateway: widget.playlistDetailGateway,
-            mediaResolutionGateway: widget.mediaResolutionGateway,
-            lyricGateway: widget.lyricGateway,
-            playbackQueueGateway: widget.playbackQueueGateway,
-            searchGateway: widget.searchGateway,
-            artistSearchGateway: widget.artistSearchGateway,
-            albumSearchGateway: widget.albumSearchGateway,
-            playlistSearchGateway: widget.playlistSearchGateway,
-            albumTrackGateway: widget.albumTrackGateway,
-            albumDetailsGateway: widget.albumDetailsGateway,
-            artistTrackGateway: widget.artistTrackGateway,
-            artistAlbumGateway: widget.artistAlbumGateway,
-            recommendedPlaylistGateway: widget.recommendedPlaylistGateway,
-            newAlbumGateway: widget.newAlbumGateway,
-            newSongGateway: widget.newSongGateway,
-            rankingGateway: widget.rankingGateway,
-            radarGateway: widget.radarGateway,
-            favoriteAlbumGateway: widget.favoriteAlbumGateway,
-            favoriteArtistGateway: widget.favoriteArtistGateway,
-            trackCommentGateway: widget.trackCommentGateway,
-            audioEngine: widget.audioEngine,
+            libraryDependencies: widget.libraryDependencies,
+            discoveryDependencies: widget.discoveryDependencies,
+            playbackDependencies: widget.playbackDependencies,
             onSignInAgain: _controller.cancel,
             onSignOut: _controller.signOut,
           );

@@ -3,107 +3,53 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
-import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
-import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
+import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
-import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
-import 'package:flutterustmusic/discover/new_album_gateway.dart';
-import 'package:flutterustmusic/discover/new_song_gateway.dart';
-import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/home/home_page.dart';
-import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
-import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artists_page.dart';
 import 'package:flutterustmusic/library/library_section_selector.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
-import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
-import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/navigation/authenticated_navigation_state.dart';
-import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_page.dart';
-import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
-import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
-import 'package:flutterustmusic/search/album_search_gateway.dart';
-import 'package:flutterustmusic/search/artist_search_gateway.dart';
-import 'package:flutterustmusic/search/playlist_search_gateway.dart';
-import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 class UserLibraryPage extends StatefulWidget {
   const UserLibraryPage({
-    required this.gateway,
-    required this.detailGateway,
-    required this.mediaResolutionGateway,
-    required this.lyricGateway,
-    required this.playbackQueueGateway,
-    required this.audioEngine,
-    required this.trackCommentGateway,
+    required this.libraryDependencies,
+    required this.discoveryDependencies,
+    required this.playbackDependencies,
     required this.onSignInAgain,
     required this.onSignOut,
-    this.searchGateway,
-    this.artistSearchGateway,
-    this.albumSearchGateway,
-    this.playlistSearchGateway,
-    this.albumTrackGateway,
-    this.albumDetailsGateway,
-    this.artistTrackGateway,
-    this.artistAlbumGateway,
-    this.recommendedPlaylistGateway,
-    this.newAlbumGateway,
-    this.newSongGateway,
-    this.rankingGateway,
-    this.radarGateway,
-    this.favoriteAlbumGateway,
-    this.favoriteArtistGateway,
     super.key,
   });
 
-  final UserLibraryGateway gateway;
-  final PlaylistDetailGateway detailGateway;
-  final MediaResolutionGateway mediaResolutionGateway;
-  final LyricGateway lyricGateway;
-  final PlaybackQueueGateway playbackQueueGateway;
-  final ForegroundAudioEngine audioEngine;
-  final TrackCommentGateway trackCommentGateway;
+  final AuthenticatedLibraryDependencies libraryDependencies;
+  final AuthenticatedDiscoveryDependencies discoveryDependencies;
+  final AuthenticatedPlaybackDependencies playbackDependencies;
   final VoidCallback onSignInAgain;
   final Future<CredentialSignOutResult> Function() onSignOut;
-  final TrackSearchGateway? searchGateway;
-  final ArtistSearchGateway? artistSearchGateway;
-  final AlbumSearchGateway? albumSearchGateway;
-  final PlaylistSearchGateway? playlistSearchGateway;
-  final AlbumTrackGateway? albumTrackGateway;
-  final AlbumDetailsGateway? albumDetailsGateway;
-  final ArtistTrackGateway? artistTrackGateway;
-  final ArtistAlbumGateway? artistAlbumGateway;
-  final RecommendedPlaylistGateway? recommendedPlaylistGateway;
-  final NewAlbumGateway? newAlbumGateway;
-  final NewSongGateway? newSongGateway;
-  final RankingGateway? rankingGateway;
-  final RadarGateway? radarGateway;
-  final FavoriteAlbumGateway? favoriteAlbumGateway;
-  final FavoriteArtistGateway? favoriteArtistGateway;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -112,21 +58,6 @@ class UserLibraryPage extends StatefulWidget {
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final QueuePlaybackController _queuePlaybackController;
-  late final TrackSearchGateway _searchGateway;
-  late final ArtistSearchGateway _artistSearchGateway;
-  late final AlbumSearchGateway _albumSearchGateway;
-  late final PlaylistSearchGateway _playlistSearchGateway;
-  late final AlbumTrackGateway _albumTrackGateway;
-  late final AlbumDetailsGateway _albumDetailsGateway;
-  late final ArtistTrackGateway _artistTrackGateway;
-  late final ArtistAlbumGateway _artistAlbumGateway;
-  late final RecommendedPlaylistGateway _recommendedPlaylistGateway;
-  late final NewAlbumGateway _newAlbumGateway;
-  late final NewSongGateway _newSongGateway;
-  late final RankingGateway _rankingGateway;
-  late final RadarGateway _radarGateway;
-  late final FavoriteAlbumGateway _favoriteAlbumGateway;
-  late final FavoriteArtistGateway _favoriteArtistGateway;
   late final RecommendedPlaylistController _recommendedPlaylistController;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
@@ -162,48 +93,28 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   @override
   void initState() {
     super.initState();
-    _controller = UserLibraryController(widget.gateway);
-    _searchGateway = widget.searchGateway ?? const RustTrackSearchGateway();
-    _artistSearchGateway =
-        widget.artistSearchGateway ?? const RustArtistSearchGateway();
-    _albumSearchGateway =
-        widget.albumSearchGateway ?? const RustAlbumSearchGateway();
-    _playlistSearchGateway =
-        widget.playlistSearchGateway ?? const RustPlaylistSearchGateway();
-    _albumTrackGateway =
-        widget.albumTrackGateway ?? const RustAlbumTrackGateway();
-    _albumDetailsGateway =
-        widget.albumDetailsGateway ?? const RustAlbumDetailsGateway();
-    _artistTrackGateway =
-        widget.artistTrackGateway ?? const RustArtistTrackGateway();
-    _artistAlbumGateway =
-        widget.artistAlbumGateway ?? const RustArtistAlbumGateway();
-    _recommendedPlaylistGateway =
-        widget.recommendedPlaylistGateway ??
-        const RustRecommendedPlaylistGateway();
-    _newAlbumGateway = widget.newAlbumGateway ?? const RustNewAlbumGateway();
-    _newSongGateway = widget.newSongGateway ?? const RustNewSongGateway();
-    _rankingGateway = widget.rankingGateway ?? const RustRankingGateway();
-    _radarGateway = widget.radarGateway ?? RustRadarGateway();
-    _favoriteAlbumGateway =
-        widget.favoriteAlbumGateway ?? RustFavoriteAlbumGateway();
-    _favoriteArtistGateway =
-        widget.favoriteArtistGateway ?? RustFavoriteArtistGateway();
+    _controller = UserLibraryController(_library.libraryGateway);
     _recommendedPlaylistController = RecommendedPlaylistController(
-      _recommendedPlaylistGateway,
+      _discovery.recommendedPlaylistGateway,
     );
     _queuePlaybackController = QueuePlaybackController(
-      widget.playbackQueueGateway,
+      _playback.playbackQueueGateway,
       TrackPlaybackController(
-        widget.mediaResolutionGateway,
-        ForegroundPlaybackController(widget.audioEngine),
+        _playback.mediaResolutionGateway,
+        ForegroundPlaybackController(_playback.audioEngine),
       ),
-      lyrics: LyricController(widget.lyricGateway),
+      lyrics: LyricController(_playback.lyricGateway),
     );
     _queuePlaybackController.addListener(_onQueuePlaybackChanged);
     unawaited(_controller.load());
     unawaited(_recommendedPlaylistController.load());
   }
+
+  AuthenticatedLibraryDependencies get _library => widget.libraryDependencies;
+  AuthenticatedDiscoveryDependencies get _discovery =>
+      widget.discoveryDependencies;
+  AuthenticatedPlaybackDependencies get _playback =>
+      widget.playbackDependencies;
 
   void _onQueuePlaybackChanged() {
     if (!mounted) return;
@@ -282,7 +193,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             controller: _queuePlaybackController,
             onBack: _closeExpandedNowPlaying,
             onSignInAgain: widget.onSignInAgain,
-            commentsGateway: widget.trackCommentGateway,
+            commentsGateway: _playback.trackCommentGateway,
           ),
       ],
     );
@@ -325,7 +236,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     PlaylistLocalRoute() => PlaylistDetailPage(
       key: ValueKey(_playlistRouteKey(route)),
       playlist: route.playlist,
-      gateway: widget.detailGateway,
+      gateway: _library.playlistDetailGateway,
       queuePlaybackController: _queuePlaybackController,
       onBack: _returnFromTopRoute,
       onOpenAlbum: _openTrackContextAlbum,
@@ -335,7 +246,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     RankingLocalRoute() => RankingPage(
       key: ValueKey('ranking-detail-${route.ranking.opaqueId}'),
       ranking: route.ranking,
-      gateway: _rankingGateway,
+      gateway: _discovery.rankingGateway,
       queuePlaybackController: _queuePlaybackController,
       onBack: _returnFromTopRoute,
       onOpenAlbum: _openTrackContextAlbum,
@@ -345,8 +256,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     ArtistLocalRoute() => ArtistPage(
       key: ValueKey(_artistRouteKey(route)),
       artist: route.artist,
-      gateway: _artistTrackGateway,
-      albumGateway: _artistAlbumGateway,
+      gateway: _library.artistTrackGateway,
+      albumGateway: _library.artistAlbumGateway,
       queuePlaybackController: _queuePlaybackController,
       onBack: _returnFromTopRoute,
       onOpenAlbum: (album) => _openAlbumFromArtist(route.origin, album),
@@ -356,8 +267,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     AlbumLocalRoute() => AlbumPage(
       key: ValueKey(_albumRouteKey(route)),
       album: route.album,
-      gateway: _albumTrackGateway,
-      detailsGateway: _albumDetailsGateway,
+      gateway: _library.albumTrackGateway,
+      detailsGateway: _library.albumDetailsGateway,
       queuePlaybackController: _queuePlaybackController,
       onBack: _returnFromTopRoute,
       onOpenArtist: _albumCanOpenArtist(route.origin)
@@ -799,7 +710,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             if (_navigation.visitedLibrarySection(LibrarySection.albums))
               FavoriteAlbumsPage(
                 key: const ValueKey('favorite-albums-page'),
-                gateway: _favoriteAlbumGateway,
+                gateway: _library.favoriteAlbumGateway,
                 queuePlaybackController: _queuePlaybackController,
                 onBack: _returnFromLocalPage,
                 onOpenAlbum: _openFavoriteAlbum,
@@ -811,7 +722,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             if (_navigation.visitedLibrarySection(LibrarySection.artists))
               FavoriteArtistsPage(
                 key: const ValueKey('favorite-artists-page'),
-                gateway: _favoriteArtistGateway,
+                gateway: _library.favoriteArtistGateway,
                 queuePlaybackController: _queuePlaybackController,
                 onBack: _returnFromLocalPage,
                 onOpenArtist: _openFavoriteArtist,
@@ -860,12 +771,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           ))
             RecommendedPlaylistsPage(
               key: const ValueKey('recommended-playlists-page'),
-              gateway: _recommendedPlaylistGateway,
+              gateway: _discovery.recommendedPlaylistGateway,
               controller: _recommendedPlaylistController,
-              newAlbumGateway: _newAlbumGateway,
-              newSongGateway: _newSongGateway,
-              rankingGateway: _rankingGateway,
-              radarGateway: _radarGateway,
+              newAlbumGateway: _discovery.newAlbumGateway,
+              newSongGateway: _discovery.newSongGateway,
+              rankingGateway: _discovery.rankingGateway,
+              radarGateway: _discovery.radarGateway,
               queuePlaybackController: _queuePlaybackController,
               onBack: _returnFromLocalPage,
               onOpenPlaylist: _openRecommendedPlaylist,
@@ -883,10 +794,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           ))
             TrackSearchPage(
               key: const ValueKey('track-search-page'),
-              gateway: _searchGateway,
-              artistGateway: _artistSearchGateway,
-              albumGateway: _albumSearchGateway,
-              playlistGateway: _playlistSearchGateway,
+              gateway: _discovery.trackSearchGateway,
+              artistGateway: _discovery.artistSearchGateway,
+              albumGateway: _discovery.albumSearchGateway,
+              playlistGateway: _discovery.playlistSearchGateway,
               queuePlaybackController: _queuePlaybackController,
               onBack: _returnFromLocalPage,
               onOpenAlbum: _openAlbum,
