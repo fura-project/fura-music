@@ -4,27 +4,27 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: HOME_FOCUSED_UI_REVIEW
-  current_task: null
-  next_action: MAINTAINER_HOME_VISUAL_ACCEPTANCE
+  active_workstream: FIRST_RELEASE_CORE_CAPABILITY_COMPLETION
+  current_task: TYPED_PERSISTENT_SETTINGS_FOUNDATION
+  next_action: IMPLEMENT
 ---
 
 # Current State
 
-- New QQ Music capabilities and visual redesign remain frozen after the maintainer-authorized complexity-paydown pass.
+- Visual UI redesign is frozen while the maintainer-authorized first-release core-capability pass is active.
 - M2 through M6 are checkpointed. M7 is not checkpointed and is paused after bounded Home, Library, and persistent-player presentation work.
 - The authenticated presentation now uses one typed local-route stack instead of unrelated nullable route fields and a long Back priority chain. Retained destination/detail widgets, controllers, playback, Queue, lyrics, and focus behavior remain covered by existing regressions.
 - The composition root keeps explicit constructor injection while forwarding three immutable responsibility groups after authentication: Library/Catalog, Discovery/Search, and Playback.
 - The four Search types share one identical failure taxonomy/retry policy while retaining feature-specific results, pagination, Bridge DTO validation, and UI state.
 - Repeated catalog Queue test setup is shared without deleting any distinct regression scenario.
 - Governance is current-state oriented, and the complete Rust, Dart/Flutter, Linux build, and required Linux integration gates pass. See `docs/development/complexity-paydown-review.md`.
-- HD-007 supplies the final Home composition for this review: the desktop Sidebar now spans the application content height while the Top Bar and active player belong to the Main Region; Home uses a dominant public recommendation, an artwork-led personal-playlist shelf, and the six ordered sections. Program and listening-history sections remain truthful unavailable states because no verified capability supplies them. One bounded `agy` Material review informed only hierarchy corrections; no Provider, Bridge, playback, or other page content changed.
+- The repository-wide capability matrix is current in `docs/development/first-release-capability-audit.md`. Existing read/catalog/playback foundations are strong, while account summary, truthful Home data, library mutations, audio quality, Settings, and target-runtime evidence remain explicitly classified.
 
 # Active Work
 
-- Home is `HOME_READY_FOR_HUMAN_VISUAL_REVIEW`; final authenticated desktop and 360 px screenshots are available locally, and no further Home iteration is selected without maintainer evidence.
-- Keep Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 work paused. A next UI page requires explicit maintainer acceptance/authority.
-- Authenticated screenshots remain temporary local files and are not committed because they contain current catalog and personal-library presentation.
+- Implement the selected typed persistent Settings foundation with only the already-existing system/light/dark theme preference, versioned storage, safe defaults, and read/write/reset tests.
+- Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
+- Do not automate stored-account access or real-account mutation acceptance.
 
 # Blockers
 
@@ -34,9 +34,11 @@ execution:
 
 # Next Candidates
 
-1. Record maintainer acceptance or bounded Home corrections from the supplied desktop/compact screenshots.
-2. Record the M1 playback/Queue/lyrics observation when the maintainer supplies only coarse outcomes; do not access stored credentials autonomously.
-3. Resume another page only after explicit product authority; otherwise keep the UI freeze.
+1. Complete the typed persistent Settings foundation, then update the capability matrix and rerank.
+2. Perform bounded signed-in account-summary discovery using sanitized evidence; do not retain personal responses.
+3. Cross-validate audio-quality request, returned-quality, entitlement, and fallback semantics before implementation.
+4. Research one smallest reversible personal-library mutation without autonomously changing the maintainer's account.
+5. Discover truthful Home recommendation semantics without substituting unrelated existing data.
 
 # Pending Human Decisions
 
@@ -46,5 +48,5 @@ execution:
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback or broad catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, or unavailable operating systems.
-- The directed Home pass has real authenticated desktop/compact screenshots and a bounded Material-only `agy` critique. Popular programs and both listening-history recommendation sections remain visible capability gaps rather than fabricated content. The pass is not product-complete until the maintainer accepts the result and does not resume the rest of M7.
+- The previous directed Home remains a paused presentation snapshot, not accepted product completion. Public recommendations are not Daily Recommendations, personal playlists are not a Treasure Playlist Library, and the missing Home data capabilities are tracked without fabricated substitutions.
 - Historical research/checkpoint documents contain useful protocol and evidence boundaries. They are retained unless a file is proven to duplicate Git and current governance without unique reasoning.

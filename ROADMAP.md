@@ -55,7 +55,17 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Resume condition:** an explicit post-maintenance product decision plus representative running-app evidence. Resumption must preserve retained state, accessibility, and the existing Flutter/Rust/music ownership boundaries.
 
-**Home-only review gate:** HD-006 and HD-007 authorize one focused Home pass without resuming other M7 pages. Wide desktop now uses a full-height Sidebar beside a Main Region containing the Top Bar, Home, and active player. The ordered Home composition uses real public recommendations and personal playlists; unsupported program and listening-history sections remain explicit unavailable states. Automated and local running-app evidence is complete; maintainer visual acceptance is required before any other UI page or UI checkpoint.
+**Home-only review gate:** HD-006 and HD-007 authorized one focused Home pass without resuming other M7 pages. Wide desktop now uses a full-height Sidebar beside a Main Region containing the Top Bar, Home, and active player. The ordered Home composition uses real public recommendations and personal playlists; unsupported program and listening-history sections remain explicit unavailable states. That presentation snapshot is now paused by HD-008 before maintainer visual acceptance.
+
+## Active Workstream — First-Release Core Capability Completion
+
+**Goal:** freeze page-level visual redesign and complete the smallest truthful Account, Home-data, Library, Playback/media, Catalog, Settings, Platform, and Track-related capability foundation needed by the already authorized QQ Music-first first release.
+
+**Execution:** maintain one repository-wide capability matrix, implement one bounded capability at a time, run layer-appropriate tests, and rerank current evidence. Safe reads and offline mutation semantics are authorized; stored account automation and autonomous real-account writes are forbidden.
+
+**Exit criteria:** every required capability in `docs/development/first-release-capability-audit.md` is `VERIFIED` or carries an exact `EVIDENCE_BLOCKED`, `ENVIRONMENT_BLOCKED`, or `HUMAN_DECISION_REQUIRED` boundary, with no untracked executable `MISSING` first-release capability. A checkpoint proves core readiness for later UI wiring, not user-visible product completion.
+
+**Non-goals:** page redesign, Settings-page design, all QQ APIs, social/video or download expansion, another Provider, background-service architecture without product authority, real-account mutation automation, or a generic capability, settings, paging, or dependency-injection framework.
 
 ## Completed Maintenance Pass — Complexity Paydown
 
@@ -78,6 +88,6 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 ## Later Evidence-Gated Direction
 
-The next highest-value evidence is a maintainer-operated authenticated compact/desktop running-product review. M7 remains paused until that evidence and a subsequent whole-product ranking establish product authority; automated tests do not establish visual product completion.
+M7 and its authenticated compact/desktop visual review remain paused until the core-capability checkpoint or an explicit maintainer override. Automated tests do not establish visual product completion.
 
 Offline/cache behavior, a narrow local-library capability, or media fallback require demonstrated user value and separate Roadmap authority. They must not turn the product into a multi-service aggregator. Release identity/signing and external distribution remain governed by HD-001 and the linked technical debt.

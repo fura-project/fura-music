@@ -80,4 +80,12 @@
 
 **Consequences:** The agent may make the smallest shared Shell geometry and neutral dark-surface correction required to render this Home coherently, while preserving Home, Discover, Search, and Library navigation, retained resize state, accessibility, compact reachability, and playback ownership. This does not resume another M7 page, authorize new data/API work, or permit a UI checkpoint before maintainer visual approval.
 
+## HD-008 — First-release core capability completion before further UI work
+
+**Status:** Accepted on 2026-08-27
+
+**Decision:** Pause Home and all other page-level visual redesign. Audit and complete the finite mainstream first-release capability foundation across Account, truthful Home data, Personal Library, Playback/media, Catalog, Settings, Platform integration, Comments, and Track-associated MV before returning to page-by-page UI work. This authorizes bounded protocol discovery, safe read capabilities, typed offline remote-mutation semantics, and a local Settings foundation. It does not authorize stored-account automation or autonomous real-account writes.
+
+**Consequences:** M7 remains paused without being rejected. The active workstream may implement one evidenced capability at a time within the existing Flutter/Rust/Bridge boundaries. A first-release capability checkpoint is core readiness for later product UI, not visual acceptance or release readiness. Background playback remains a separate product decision because it would add a material lifecycle/platform architecture; Popular Programs also requires boundary confirmation if it would turn the client into a podcast/general-media product.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.
