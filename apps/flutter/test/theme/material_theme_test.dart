@@ -12,8 +12,8 @@ void main() {
     for (final theme in themes) {
       final colors = theme.colorScheme;
       expect(theme.useMaterial3, isTrue);
-      expect(theme.scaffoldBackgroundColor, colors.surface);
-      expect(theme.appBarTheme.backgroundColor, colors.surface);
+      expect(theme.scaffoldBackgroundColor, colors.surfaceContainerLowest);
+      expect(theme.appBarTheme.backgroundColor, colors.surfaceContainerLowest);
       expect(theme.appBarTheme.foregroundColor, colors.onSurface);
       expect(theme.cardTheme.color, colors.surfaceContainerLow);
       expect(theme.dialogTheme.backgroundColor, colors.surfaceContainerHigh);
@@ -28,14 +28,23 @@ void main() {
         colors.surfaceContainerHighest,
       );
       expect(theme.listTileTheme.selectedTileColor, colors.secondaryContainer);
-      expect(theme.navigationBarTheme.backgroundColor, colors.surfaceContainer);
+      expect(
+        theme.navigationBarTheme.backgroundColor,
+        colors.surfaceContainerLow,
+      );
+      expect(theme.navigationBarTheme.height, 72);
       expect(
         theme.navigationBarTheme.indicatorColor,
         colors.secondaryContainer,
       );
       expect(
         theme.navigationRailTheme.backgroundColor,
-        colors.surfaceContainerLow,
+        colors.surfaceContainer,
+      );
+      expect(theme.navigationRailTheme.minWidth, MusicSizes.desktopRail);
+      expect(
+        theme.navigationRailTheme.minExtendedWidth,
+        MusicSizes.desktopSidebar,
       );
       expect(
         theme.navigationRailTheme.indicatorColor,

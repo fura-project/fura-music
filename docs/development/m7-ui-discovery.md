@@ -42,3 +42,7 @@ Current QQ Music desktop references consistently use a persistent left navigatio
 ## Selection
 
 Candidate 1 is selected because it addresses the maintainer's direct first-impression evidence, establishes the composition used by every later page, and can be completed without new product data or architecture. Candidates 2 and 3 remain ordered hypotheses until the first slice is manually reviewed.
+
+## Implementation evidence
+
+The selected slice now has an extended wide sidebar, direct top Search affordance, and responsive truthful Home hierarchy. Focused 360 px and wide desktop regressions, keyboard navigation, the complete 336-test Flutter suite, strict Dart analysis, and Linux x64 Release pass. A representative authenticated desktop visual review remains required before candidate 2 is elaborated; automated layout evidence does not substitute for product-level visual approval.

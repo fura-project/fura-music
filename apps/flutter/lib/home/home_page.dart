@@ -22,14 +22,11 @@ class HomePage extends StatelessWidget {
             : constraints.maxWidth < 520
             ? MusicSpacing.pageCompact
             : MusicSpacing.page;
-        final columns = constraints.maxWidth >= 900
-            ? 3
-            : constraints.maxWidth >= 600
-            ? 2
-            : 1;
+        final wide = constraints.maxWidth >= 760;
+        final columns = constraints.maxWidth >= 720 ? 2 : 1;
         final availableWidth = (constraints.maxWidth - pagePadding * 2).clamp(
           0.0,
-          960.0,
+          MusicSizes.contentMaxWidth,
         );
         final tileWidth =
             (availableWidth - MusicSpacing.contentGap * (columns - 1)) /
@@ -45,33 +42,30 @@ class HomePage extends StatelessWidget {
           ),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 960),
+              constraints: const BoxConstraints(
+                maxWidth: MusicSizes.contentMaxWidth,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      'Start listening',
-                      key: const ValueKey('home-heading'),
-                      style: Theme.of(context).textTheme.headlineLarge,
+                  _HomeHero(wide: wide, onOpenLibrary: onOpenLibrary),
+                  const SizedBox(height: MusicSpacing.pageWide),
+                  if (wide)
+                    const Row(
+                      children: [
+                        Expanded(child: _HomeSectionHeading()),
+                        _HomeSectionSupportingText(),
+                      ],
+                    )
+                  else
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _HomeSectionHeading(),
+                        SizedBox(height: MusicSpacing.itemGap),
+                        _HomeSectionSupportingText(),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: MusicSpacing.itemGap),
-                  Text(
-                    'Explore QQ Music or return to the collection you know.',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: MusicSpacing.section),
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      'Choose where to begin',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
                   const SizedBox(height: MusicSpacing.contentGap),
                   Wrap(
                     spacing: MusicSpacing.contentGap,
@@ -81,7 +75,8 @@ class HomePage extends StatelessWidget {
                         key: const ValueKey('home-open-discover'),
                         width: tileWidth,
                         icon: Icons.explore_rounded,
-                        title: 'Discover',
+                        eyebrow: 'DISCOVER',
+                        title: 'Find something new',
                         description: 'Recommendations, rankings, Radar, and new releases',
                         onTap: onOpenDiscover,
                       ),
@@ -89,21 +84,37 @@ class HomePage extends StatelessWidget {
                         key: const ValueKey('home-open-search'),
                         width: tileWidth,
                         icon: Icons.search_rounded,
+                        eyebrow: 'SEARCH',
                         title: 'Search the catalog',
-                        description:
-                            'Find Tracks, Artists, Albums, and Playlists',
+                        description: 'Tracks, Artists, Albums, and Playlists from QQ Music',
                         onTap: onOpenSearch,
                       ),
-                      _HomeDestination(
-                        key: const ValueKey('home-open-library'),
-                        width: tileWidth,
-                        icon: Icons.library_music_rounded,
-                        title: 'Your music',
-                        description:
-                            'Playlists, favorite Albums, and favorite Artists',
-                        onTap: onOpenLibrary,
-                      ),
                     ],
+                  ),
+                  const SizedBox(height: MusicSpacing.pageWide),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: MusicRadii.content,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(MusicSpacing.contentGap),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: MusicSpacing.contentGap),
+                          Expanded(
+                            child: Text(
+                              'Your saved session stays on this device; catalog requests go directly to QQ Music.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -115,10 +126,200 @@ class HomePage extends StatelessWidget {
   );
 }
 
+class _HomeSectionHeading extends StatelessWidget {
+  const _HomeSectionHeading();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    header: true,
+    child: Text(
+      'Explore QQ Music',
+      style: Theme.of(context).textTheme.headlineSmall,
+    ),
+  );
+}
+
+class _HomeSectionSupportingText extends StatelessWidget {
+  const _HomeSectionSupportingText();
+
+  @override
+  Widget build(BuildContext context) => Text(
+    'Your existing catalog, one tap away',
+    style: Theme.of(context).textTheme.bodyMedium
+        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+  );
+}
+
+class _HomeHero extends StatelessWidget {
+  const _HomeHero({required this.wide, required this.onOpenLibrary});
+
+  final bool wide;
+  final VoidCallback onOpenLibrary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final copy = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            'Music starts here',
+            key: const ValueKey('home-heading'),
+            style: theme.textTheme.displaySmall?.copyWith(
+              color: colors.onPrimaryContainer,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.7,
+            ),
+          ),
+        ),
+        const SizedBox(height: MusicSpacing.itemGap),
+        Text(
+          'Open your playlists and favorites, or explore the QQ Music catalog.',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: colors.onPrimaryContainer.withValues(alpha: 0.78),
+          ),
+        ),
+        const SizedBox(height: MusicSpacing.contentGap),
+        FilledButton.icon(
+          key: const ValueKey('home-open-library'),
+          onPressed: onOpenLibrary,
+          icon: const Icon(Icons.library_music_rounded),
+          label: const Text('Open your music'),
+          style: FilledButton.styleFrom(
+            backgroundColor: colors.primary,
+            foregroundColor: colors.onPrimary,
+          ),
+        ),
+      ],
+    );
+
+    return Container(
+      key: const ValueKey('home-hero'),
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: wide ? 288 : 260),
+      decoration: BoxDecoration(
+        borderRadius: MusicRadii.hero,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.primaryContainer,
+            Color.alphaBlend(
+              colors.primary.withValues(alpha: 0.16),
+              colors.tertiaryContainer,
+            ),
+          ],
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.all(
+          wide ? MusicSpacing.pageWide : MusicSpacing.page,
+        ),
+        child: wide
+            ? Row(
+                children: [
+                  Expanded(flex: 3, child: copy),
+                  const SizedBox(width: MusicSpacing.pageWide),
+                  const Expanded(flex: 2, child: _MusicArtworkMotif()),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  copy,
+                  const SizedBox(height: MusicSpacing.page),
+                  const Align(
+                    alignment: Alignment.centerRight,
+                    child: SizedBox(
+                      width: 128,
+                      height: 72,
+                      child: _MusicArtworkMotif(compact: true),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _MusicArtworkMotif extends StatelessWidget {
+  const _MusicArtworkMotif({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ExcludeSemantics(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Transform.rotate(
+            angle: -0.13,
+            child: _MotifTile(
+              color: colors.tertiary,
+              icon: Icons.album_rounded,
+              size: compact ? 62 : 150,
+            ),
+          ),
+          Transform.translate(
+            offset: Offset(compact ? 40 : 78, compact ? 8 : 24),
+            child: Transform.rotate(
+              angle: 0.12,
+              child: _MotifTile(
+                color: colors.primary,
+                icon: Icons.graphic_eq_rounded,
+                size: compact ? 54 : 124,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MotifTile extends StatelessWidget {
+  const _MotifTile({
+    required this.color,
+    required this.icon,
+    required this.size,
+  });
+
+  final Color color;
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: MusicRadii.artwork,
+      boxShadow: [
+        BoxShadow(
+          color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.16),
+          blurRadius: 24,
+          offset: const Offset(0, 12),
+        ),
+      ],
+    ),
+    child: Icon(icon, color: Colors.white, size: size * 0.42),
+  );
+}
+
 class _HomeDestination extends StatelessWidget {
   const _HomeDestination({
     required this.width,
     required this.icon,
+    required this.eyebrow,
     required this.title,
     required this.description,
     required this.onTap,
@@ -127,6 +328,7 @@ class _HomeDestination extends StatelessWidget {
 
   final double width;
   final IconData icon;
+  final String eyebrow;
   final String title;
   final String description;
   final VoidCallback onTap;
@@ -143,20 +345,57 @@ class _HomeDestination extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 144),
+            constraints: const BoxConstraints(minHeight: 152),
             child: Padding(
               padding: const EdgeInsets.all(MusicSpacing.contentGap),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Icon(icon, color: colors.primary, size: 28),
-                  const SizedBox(height: MusicSpacing.contentGap),
-                  Text(title, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: MusicSpacing.itemGap),
-                  Text(
-                    description,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: colors.onSurfaceVariant),
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: colors.secondaryContainer,
+                      borderRadius: MusicRadii.content,
+                    ),
+                    child: Icon(
+                      icon,
+                      color: colors.onSecondaryContainer,
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(width: MusicSpacing.contentGap),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          eyebrow,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: colors.primary,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.1,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: MusicSpacing.itemGap),
+                        Text(
+                          description,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: MusicSpacing.itemGap),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: colors.onSurfaceVariant,
                   ),
                 ],
               ),

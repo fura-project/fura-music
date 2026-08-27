@@ -10,7 +10,14 @@ abstract final class MusicSpacing {
   static const double itemGap = 8;
 }
 
+abstract final class MusicSizes {
+  static const double desktopRail = 80;
+  static const double desktopSidebar = 232;
+  static const double contentMaxWidth = 1180;
+}
+
 abstract final class MusicRadii {
+  static const BorderRadius hero = BorderRadius.all(Radius.circular(32));
   static const BorderRadius panel = BorderRadius.all(Radius.circular(28));
   static const BorderRadius artwork = BorderRadius.all(Radius.circular(20));
   static const BorderRadius content = BorderRadius.all(Radius.circular(16));
@@ -22,7 +29,7 @@ abstract final class MusicMotion {
 }
 
 abstract final class MusicMaterialTheme {
-  static const Color seedColor = Color(0xFF24B86A);
+  static const Color seedColor = Color(0xFF31C27C);
 
   static ThemeData light() => _create(Brightness.light);
 
@@ -65,10 +72,10 @@ abstract final class MusicMaterialTheme {
     );
 
     return base.copyWith(
-      scaffoldBackgroundColor: colors.surface,
+      scaffoldBackgroundColor: colors.surfaceContainerLowest,
       textTheme: textTheme,
       appBarTheme: AppBarThemeData(
-        backgroundColor: colors.surface,
+        backgroundColor: colors.surfaceContainerLowest,
         foregroundColor: colors.onSurface,
         elevation: 0,
         scrolledUnderElevation: 1,
@@ -127,15 +134,19 @@ abstract final class MusicMaterialTheme {
         selectedTileColor: colors.secondaryContainer,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: colors.surfaceContainer,
-        indicatorColor: colors.secondaryContainer,
-        elevation: 0,
-      ),
-      navigationRailTheme: NavigationRailThemeData(
         backgroundColor: colors.surfaceContainerLow,
         indicatorColor: colors.secondaryContainer,
         elevation: 0,
+        height: 72,
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: colors.surfaceContainer,
+        indicatorColor: colors.secondaryContainer,
+        elevation: 0,
         useIndicator: true,
+        minWidth: MusicSizes.desktopRail,
+        minExtendedWidth: MusicSizes.desktopSidebar,
+        groupAlignment: -0.72,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(shape: WidgetStatePropertyAll(controlShape)),

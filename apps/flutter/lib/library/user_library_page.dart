@@ -1133,6 +1133,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     builder: (context, constraints) {
       final destination = _primaryDestination;
       final wide = constraints.maxWidth >= 840;
+      final extendedSidebar = constraints.maxWidth >= 1100;
       final compactActions = constraints.maxWidth < 520;
       final primaryContent = IndexedStack(
         index: destination.index,
@@ -1191,7 +1192,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           if (wide)
             NavigationRail(
               selectedIndex: destination.index,
-              labelType: NavigationRailLabelType.all,
+              extended: extendedSidebar,
+              labelType: extendedSidebar
+                  ? NavigationRailLabelType.none
+                  : NavigationRailLabelType.all,
+              minWidth: MusicSizes.desktopRail,
+              minExtendedWidth: MusicSizes.desktopSidebar,
+              leading: _MusicSidebarBrand(expanded: extendedSidebar),
               onDestinationSelected: _selectPrimaryDestinationByIndex,
               destinations: _navigationRailDestinations(),
             )
@@ -1216,16 +1223,18 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       return Scaffold(
         key: const ValueKey('authenticated-primary-shell'),
         appBar: AppBar(
-          title: Text(
-            switch (destination) {
+          title: _PrimaryShellTitle(
+            title: switch (destination) {
               _PrimaryDestination.home => 'Home',
               _PrimaryDestination.discover => 'Discover',
               _PrimaryDestination.search => 'Search QQ Music',
               _PrimaryDestination.library => 'Your music',
             },
-            style: compactActions
-                ? Theme.of(context).textTheme.titleMedium
-                : null,
+            compact: compactActions,
+            showSearchShortcut:
+                extendedSidebar && destination != _PrimaryDestination.search,
+            onOpenSearch: () =>
+                _selectPrimaryDestination(_PrimaryDestination.search),
           ),
           titleSpacing: compactActions ? 8 : 16,
           actions: _primaryActions(
@@ -1474,6 +1483,110 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       onSignInAgain: widget.onSignInAgain,
     ),
   };
+}
+
+class _MusicSidebarBrand extends StatelessWidget {
+  const _MusicSidebarBrand({required this.expanded});
+
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final mark = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: colors.primary,
+        borderRadius: MusicRadii.control,
+      ),
+      child: Icon(Icons.graphic_eq_rounded, color: colors.onPrimary),
+    );
+    return SizedBox(
+      width: expanded ? MusicSizes.desktopSidebar : MusicSizes.desktopRail,
+      child: Padding(
+        key: const ValueKey('music-sidebar-brand'),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+        child: expanded
+            ? Row(
+                children: [
+                  mark,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Music',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          'QQ Music client',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : Tooltip(message: 'QQ Music client', child: mark),
+      ),
+    );
+  }
+}
+
+class _PrimaryShellTitle extends StatelessWidget {
+  const _PrimaryShellTitle({
+    required this.title,
+    required this.compact,
+    required this.showSearchShortcut,
+    required this.onOpenSearch,
+  });
+
+  final String title;
+  final bool compact;
+  final bool showSearchShortcut;
+  final VoidCallback onOpenSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleText = Text(
+      title,
+      style: compact ? Theme.of(context).textTheme.titleMedium : null,
+    );
+    if (!showSearchShortcut) return titleText;
+    return Row(
+      children: [
+        titleText,
+        const SizedBox(width: MusicSpacing.pageWide),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('top-search-shortcut'),
+                onPressed: onOpenSearch,
+                icon: const Icon(Icons.search_rounded),
+                label: const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Search QQ Music'),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _PlaylistCollection extends StatelessWidget {

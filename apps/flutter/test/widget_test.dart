@@ -409,6 +409,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-hero')), findsOneWidget);
+    expect(find.byKey(const ValueKey('music-sidebar-brand')), findsOneWidget);
+    expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
+    expect(
+      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      isTrue,
+    );
     expect(find.text('Your playlists'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('home-open-library')));
     await tester.pumpAndSettle();
@@ -543,6 +550,8 @@ void main() {
         hasLength(4),
       );
       expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-hero')), findsOneWidget);
+      expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
       expect(tester.takeException(), isNull);
 
       final homeSearch = find.byKey(const ValueKey('home-open-search'));
@@ -792,6 +801,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(NavigationRail), findsOneWidget);
+    expect(
+      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      isTrue,
+    );
+    expect(find.byKey(const ValueKey('music-sidebar-brand')), findsOneWidget);
+    expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
     final searchEntry = find.byKey(const ValueKey('open-track-search'));
     tester.widget<Focus>(searchEntry).focusNode?.requestFocus();
     await tester.pump();
@@ -3672,7 +3687,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('sign-out-cancel')));
     await tester.pumpAndSettle();
     expect(authentication.signOutCalls, 0);
-    expect(find.text('Your music'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
 
     await tester.tap(find.byTooltip('Sign out'));
     await tester.pumpAndSettle();

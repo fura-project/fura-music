@@ -293,6 +293,8 @@ Make the existing application immediately read as a mature, cross-platform QQ Mu
 
 Each phase is elaborated through a bounded discovery and finite slice. Existing retained state, controller ownership, playback ownership, and Flutter/Rust boundaries remain constraints rather than refactor targets.
 
+M7.1 is implemented under automated evidence: the wide shell now has an extended labeled sidebar and top Search affordance, while Home establishes a responsive primary-Library/secondary-catalog hierarchy without invented feed data. Compact and desktop widget regressions plus Linux Release pass; representative authenticated visual approval remains open before this composition is propagated through M7.2.
+
 ### Exit criteria
 
 1. A cold authenticated launch has a coherent music-product first impression on desktop and compact layouts, with Home, Discover, Search, Library, and current playback immediately understandable.
