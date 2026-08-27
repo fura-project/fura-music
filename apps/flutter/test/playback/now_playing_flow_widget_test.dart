@@ -68,6 +68,85 @@ void main() {
     expect(find.textContaining('Stopped'), findsOneWidget);
   });
 
+  testWidgets(
+    'desktop persistent player groups identity transport and utilities',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _openDetail(
+        tester,
+        media: _FakeMediaGateway([
+          _ImmediateMediaOperation(_success('desktop-zones')),
+        ]),
+        audio: _FakeAudioEngine([_FakeAudioSession()]),
+      );
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+
+      final identity = find.byKey(const ValueKey('now-playing-track-zone'));
+      final transport = find.byKey(
+        const ValueKey('now-playing-transport-zone'),
+      );
+      final utilities = find.byKey(const ValueKey('now-playing-utility-zone'));
+      expect(
+        find.byKey(const ValueKey('now-playing-desktop-layout')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: identity,
+          matching: find.byKey(const ValueKey('now-playing-title')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: transport,
+          matching: find.byKey(const ValueKey('now-playing-primary-action')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: transport,
+          matching: find.byKey(const ValueKey('now-playing-progress')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: utilities,
+          matching: find.byKey(const ValueKey('now-playing-volume')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: utilities,
+          matching: find.byKey(const ValueKey('now-playing-show-queue')),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      tester.view.physicalSize = const Size(800, 700);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('now-playing-desktop-layout')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('now-playing-primary-action')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('now-playing status announces meaningful state changes', (
     tester,
   ) async {

@@ -5,13 +5,13 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M7
-  current_task: M7.3_DISCOVER_SEARCH_DISCOVERY
+  current_task: M7.4_EXPANDED_NOW_PLAYING_DISCOVERY
   next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2 through M6 are checkpointed. M7 is now explicitly a UI/Product Consolidation workstream: horizontal feature expansion is paused while the existing Home, Library, Discover, Search, catalog, playback, Queue, Lyrics, Comments, and MV capabilities are organized into one mainstream Material 3 music product. The corrected real Home and bounded Library-root consolidation are automated-green; Discover/Search product hierarchy is the next discovery.
+M1's real-account playback observation remains open; M2 through M6 are checkpointed. M7 is now explicitly a UI/Product Consolidation workstream: horizontal feature expansion is paused while the existing Home, Library, Discover, Search, catalog, playback, Queue, Lyrics, Comments, and MV capabilities are organized into one mainstream Material 3 music product. The corrected Home, bounded Library root, and desktop persistent player are automated-green; expanded Now Playing is the next discovery.
 
 # Completed Recently
 
@@ -75,16 +75,18 @@ M1's real-account playback observation remains open; M2 through M6 are checkpoin
 - Corrected M7.1 after the maintainer's product-consolidation review rejected launcher-style Home acceptance. The decorative Hero is gone: Home now renders up to eight real public recommended playlists and eight already-loaded personal playlists with artwork, counts, loading/empty/error/retry states, Search/Library/Discover actions, direct existing detail navigation, exact Home return, and focus restoration. Home and Discover share one recommendation controller and request rather than duplicating protocol work. No endpoint, fake content, Provider, playback rule, or navigation framework was added. Strict Dart checks, all 338 Flutter tests, and Linux x64 Release pass; real-account visual acceptance remains separate.
 - Implemented the first bounded M7.2 Library slice: Playlists, favorite Albums, and favorite Artists now use one responsive collection-header grammar with the title, truthful known count, and refresh action grouped in the collection context. The previous playlist AppBar action and Album/Artist floating action rows are gone; unknown loading counts are not shown as zero. Existing lazy controllers, pagination, IndexedStack retention, scroll/focus return, detail routes, and compact/desktop item layouts remain unchanged. Focused 360 px/desktop regressions, strict Dart analysis, all 338 Flutter tests, and Linux x64 Release pass.
 - Completed the bounded M7.2 Library-root consolidation by choosing content-appropriate density rather than identical cards: personal Playlists are now a 56 px artwork-led desktop list with explicit Playlist/Tracks columns, while compact Playlists retain 72 px touch rows and artwork-browsing Albums/Artists retain their grids. The prior oversized desktop playlist cover wall is removed. Exact detail return, scroll offset, focus, semantics, and 360 px reachability have focused regressions; strict Dart analysis, all 338 Flutter tests, and Linux x64 Release pass.
+- Completed the bounded M7.3 Discover/Search review without manufacturing a refactor: Search already has an intent-first field, typed selector, content-specific results, and retained controllers; Discover already gives its five QQ-native sections distinct Track, Album, ranking, and playlist presentations. A forced common frame would erase useful differences, so no code changed for this candidate.
+- Implemented the bounded desktop persistent-player grouping: at 900 px and wider, current Track identity/artwork, centered primary transport with progress, and Lyrics/volume/Queue utilities occupy three explicit zones; the primary control uses the Material filled treatment. Medium and compact layouts retain their existing adaptive compositions, and the single playback/Queue/Lyrics ownership path is unchanged. A focused wide-to-medium resize regression, strict Dart analysis, all 339 Flutter tests, and Linux x64 Release pass.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M7.3 bounded discovery compares Discover and Search framing, selector hierarchy, and content density without merging their typed controllers or inventing a heterogeneous feed.
+- M7.4 bounded discovery now audits expanded Now Playing hierarchy over its existing artwork, transport, Lyrics, Queue, Comments, and MV paths; it may not add effects or a second playback owner.
 
 # Next Candidates
 
-1. Audit and implement the highest-value bounded Discover/Search hierarchy failure from the five-item M7 product audit without erasing typed retained state.
-2. Audit the persistent player's desktop grouping after Discover/Search establishes the remaining primary-destination grammar.
+1. Audit the highest-value bounded expanded Now Playing hierarchy failure without changing playback, Queue, Lyrics, Comments, or MV ownership.
+2. Perform an authenticated visual acceptance pass with the maintainer when convenient; automated structure tests do not prove real-data product quality.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers

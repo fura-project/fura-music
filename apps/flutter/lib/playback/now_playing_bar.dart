@@ -103,6 +103,7 @@ class NowPlayingBar extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final narrow = constraints.maxWidth < 520;
+                final desktop = constraints.maxWidth >= 900;
                 return Padding(
                   padding: EdgeInsets.fromLTRB(16, narrow ? 8 : 10, 12, 4),
                   child: Column(
@@ -149,6 +150,17 @@ class NowPlayingBar extends StatelessWidget {
                             ),
                           ],
                         )
+                      else if (desktop)
+                        _DesktopNowPlayingLayout(
+                          controller: controller,
+                          track: track,
+                          authenticationFailure: authenticationFailure,
+                          error: error,
+                          onSignInAgain: onSignInAgain,
+                          onOpenCatalog: openCatalog,
+                          catalogLabel: catalogLabel,
+                          onOpenExpanded: expandedNavigation?.onOpen,
+                        )
                       else
                         Row(
                           children: [
@@ -183,7 +195,8 @@ class NowPlayingBar extends StatelessWidget {
                             _QueueButton(controller: controller),
                           ],
                         ),
-                      _PlaybackProgress(controller: playback, track: track),
+                      if (!desktop)
+                        _PlaybackProgress(controller: playback, track: track),
                     ],
                   ),
                 );
@@ -267,6 +280,100 @@ class NowPlayingBar extends StatelessWidget {
           action.album?.opaqueId == expectedAction.album?.opaqueId &&
           action.artist?.providerId == expectedAction.artist?.providerId &&
           action.artist?.opaqueId == expectedAction.artist?.opaqueId,
+    );
+  }
+}
+
+class _DesktopNowPlayingLayout extends StatelessWidget {
+  const _DesktopNowPlayingLayout({
+    required this.controller,
+    required this.track,
+    required this.authenticationFailure,
+    required this.error,
+    required this.onSignInAgain,
+    required this.onOpenCatalog,
+    required this.catalogLabel,
+    required this.onOpenExpanded,
+  });
+
+  final QueuePlaybackController controller;
+  final PlaylistTrackSummary track;
+  final bool authenticationFailure;
+  final bool error;
+  final VoidCallback onSignInAgain;
+  final VoidCallback? onOpenCatalog;
+  final String? catalogLabel;
+  final VoidCallback? onOpenExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final playback = controller.playback;
+    return Row(
+      key: const ValueKey('now-playing-desktop-layout'),
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          flex: 4,
+          child: Row(
+            key: const ValueKey('now-playing-track-zone'),
+            children: [
+              _NowPlayingArtwork(
+                track: track,
+                stage: playback.stage,
+                dimension: 56,
+                onOpenCatalog: onOpenCatalog,
+                catalogLabel: catalogLabel,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _TrackInfo(
+                  track: track,
+                  status: _statusCopy(controller),
+                  error: error,
+                  onOpenExpanded: onOpenExpanded,
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
+        Expanded(
+          flex: 4,
+          child: Column(
+            key: const ValueKey('now-playing-transport-zone'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: _transportControls(
+                  controller,
+                  authenticationFailure,
+                  onSignInAgain,
+                  prominentPrimary: true,
+                ),
+              ),
+              _PlaybackProgress(controller: playback, track: track),
+            ],
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: Row(
+            key: const ValueKey('now-playing-utility-zone'),
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (controller.lyrics != null)
+                _LyricsButton(
+                  controller: controller,
+                  onSignInAgain: onSignInAgain,
+                ),
+              _VolumeButton(controller: controller),
+              _QueueButton(controller: controller),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
