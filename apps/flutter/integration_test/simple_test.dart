@@ -9,6 +9,7 @@ import 'package:flutterustmusic/src/rust/api/favorite_albums.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart';
+import 'package:flutterustmusic/src/rust/api/music_video.dart';
 import 'package:flutterustmusic/src/rust/api/new_albums.dart';
 import 'package:flutterustmusic/src/rust/api/new_songs.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
@@ -33,6 +34,7 @@ void main() {
       'UserLibrary',
       'Lyrics',
       'Comments',
+      'MusicVideo',
       'MediaResolution',
     ]);
     final restore = restoreQqMusicCredentialFromSecureStorage();
@@ -263,6 +265,17 @@ void main() {
     expect(
       cancelledCommentLoad.failure,
       QqMusicTrackCommentPageLoadFailure.cancelled,
+    );
+    final unusedMusicVideoLoad = beginTrackMusicVideoLoad(
+      providerId: 'qq-music',
+      opaqueTrackId: 'track:41001:0:fixtureTrackMid1:fixtureFileMid1',
+    );
+    expect(unusedMusicVideoLoad.isActive, isTrue);
+    expect(unusedMusicVideoLoad.cancel(), isTrue);
+    final cancelledMusicVideoLoad = await unusedMusicVideoLoad.run();
+    expect(
+      cancelledMusicVideoLoad.failure,
+      TrackMusicVideoLoadFailure.cancelled,
     );
     final queue = createPlaybackQueue();
     final queueTrack = LibraryTrackSummary(
