@@ -65,7 +65,7 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 | Capability | User value | State and evidence | Missing layers | Safety | First-release decision | Acceptance boundary |
 | --- | --- | --- | --- | --- | --- | --- |
-| Typed persistent settings foundation | Stable preferences survive restart and later UI can bind without inventing storage rules. | `MISSING`: theme follows the OS directly; no settings model, persistence, reset, or schema exists. | Dart model, local persistence adapter, startup wiring, tests. | platform-local | Required | Versioned typed settings read/write/reset with validated defaults persists the existing system/light/dark theme preference; malformed/future data fails safely; no Settings page is added. |
+| Typed persistent settings foundation | Stable preferences survive restart and later UI can bind without inventing storage rules. | `VERIFIED`: a version-1 typed document stores only the existing system/light/dark preference through the official async `shared_preferences` API; startup wiring, defaults, malformed/future document handling, read/write/reset, storage failure, and a disposable Linux native round trip pass. | Other target runtimes remain covered by the Platform row. The final Settings UI is deliberately deferred. | platform-local | Required | Versioned typed settings read/write/reset with validated defaults persists the existing system/light/dark theme preference; malformed/future data fails safely; no Settings page is added. |
 | Playback-quality preference | A chosen quality can become the default request. | `MISSING`: blocked on the audio-quality capability above. | Reusable quality policy plus local settings field. | platform-local | Required after quality support | Persist only values supported by the implemented quality policy; migration/default behavior is tested. |
 | Lyric translation/romanization preferences | Users can hide/show available auxiliary lines. | `OUT_OF_SCOPE` for now: current Domain aligns auxiliary text but does not prove stable translation versus romanization classification. | Evidence and typed lyric metadata before a setting. | platform-local | Later | Add only after the lyric source can truthfully distinguish the controlled content. |
 
@@ -89,26 +89,22 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 ## Ranked immediate candidates
 
-1. **Typed persistent Settings foundation** — highest executable value: it is
-   required, platform-local, supported by an official cross-platform Flutter
-   plugin already compatible with the checkout, and unblocks later theme and
-   quality wiring without protocol or account risk.
-2. **Signed-in account summary discovery** — high safety/account clarity value;
+1. **Signed-in account summary discovery** — high safety/account clarity value;
    investigate the data already returned by the named authenticated user-info
    operation before adding a new endpoint. Implementation still needs sanitized
    response evidence.
-3. **Audio-quality discovery and negotiation** — high core music value and a
+2. **Audio-quality discovery and negotiation** — high core music value and a
    dependency of a real preference, but request prefixes, entitlement, actual
    returned quality, and fallback must be cross-validated before code changes.
-4. **Personal-library core mutation discovery** — high mainstream value but a
+3. **Personal-library core mutation discovery** — high mainstream value but a
    broad remote-write surface. Start with the smallest independently evidenced,
    reversible operation; real-account acceptance remains maintainer-operated.
-5. **Home recommendation capability discovery** — needed by the accepted Home
+4. **Home recommendation capability discovery** — needed by the accepted Home
    composition, but must establish each section's semantics rather than reuse
    public recommendations or personal playlists under misleading names. Popular
    Programs remains product-authority-sensitive.
 
-The selected first slice is the typed persistent Settings foundation. Its
-explicit non-goals are a Settings page, audio-quality support, playback-mode
-persistence, secure/critical data storage, theme redesign, or a general
-configuration framework.
+The Settings slice is complete within its platform-evidence boundary. The next
+selected task is bounded signed-in account-summary discovery. It may inspect
+current implementations and sanitized response shapes, but it may not call the
+stored account, add a speculative endpoint, or retain personal response data.

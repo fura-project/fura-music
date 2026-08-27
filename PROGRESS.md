@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: FIRST_RELEASE_CORE_CAPABILITY_COMPLETION
-  current_task: TYPED_PERSISTENT_SETTINGS_FOUNDATION
-  next_action: IMPLEMENT
+  current_task: SIGNED_IN_ACCOUNT_SUMMARY_DISCOVERY
+  next_action: DISCOVER
 ---
 
 # Current State
@@ -22,7 +22,8 @@ execution:
 
 # Active Work
 
-- Implement the selected typed persistent Settings foundation with only the already-existing system/light/dark theme preference, versioned storage, safe defaults, and read/write/reset tests.
+- The typed Settings foundation now persists only the existing system/light/dark preference in a versioned noncritical local document. Defaults, malformed/future documents, storage failures, read/write/reset, startup Theme wiring, and a disposable Linux native round trip are verified; no Settings page was added.
+- Discover whether the existing named user-info response can safely provide a bounded signed-in display name and optional avatar before adding another account endpoint.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
 - Do not automate stored-account access or real-account mutation acceptance.
 
@@ -34,11 +35,10 @@ execution:
 
 # Next Candidates
 
-1. Complete the typed persistent Settings foundation, then update the capability matrix and rerank.
-2. Perform bounded signed-in account-summary discovery using sanitized evidence; do not retain personal responses.
-3. Cross-validate audio-quality request, returned-quality, entitlement, and fallback semantics before implementation.
-4. Research one smallest reversible personal-library mutation without autonomously changing the maintainer's account.
-5. Discover truthful Home recommendation semantics without substituting unrelated existing data.
+1. Perform bounded signed-in account-summary discovery using sanitized evidence; do not retain personal responses.
+2. Cross-validate audio-quality request, returned-quality, entitlement, and fallback semantics before implementation.
+3. Research one smallest reversible personal-library mutation without autonomously changing the maintainer's account.
+4. Discover truthful Home recommendation semantics without substituting unrelated existing data.
 
 # Pending Human Decisions
 

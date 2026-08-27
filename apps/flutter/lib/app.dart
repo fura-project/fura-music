@@ -28,6 +28,7 @@ import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
@@ -57,6 +58,7 @@ class MusicApp extends StatelessWidget {
     FavoriteArtistGateway? favoriteArtistGateway,
     TrackCommentGateway? trackCommentGateway,
     ForegroundAudioEngine? audioEngine,
+    AppSettings initialSettings = AppSettings.defaults,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
     Key? key,
@@ -138,6 +140,7 @@ class MusicApp extends StatelessWidget {
             trackCommentGateway ?? const RustTrackCommentGateway(),
         audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
       ),
+      initialSettings: initialSettings,
       initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
@@ -149,6 +152,7 @@ class MusicApp extends StatelessWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.initialSettings,
     required this.initialCredentialRestore,
     super.key,
   });
@@ -158,6 +162,7 @@ class MusicApp extends StatelessWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final AppSettings initialSettings;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -167,7 +172,7 @@ class MusicApp extends StatelessWidget {
       title: 'Flutterust Music',
       theme: MusicMaterialTheme.light(),
       darkTheme: MusicMaterialTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: initialSettings.theme.materialThemeMode,
       home: LoginPage(
         bootstrap: bootstrap,
         authenticationGateway: authenticationGateway,

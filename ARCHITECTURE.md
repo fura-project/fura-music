@@ -238,6 +238,17 @@ The adaptive now-playing surface consumes the queue controller and exposes bound
 
 Credential semantics and serialization remain in Rust. `flutter_secure_storage` is a platform integration edge only; it stores one opaque versioned document and cannot declare a user authenticated. Android backup is disabled, Apple synchronization is disabled, and corrupt or unavailable storage must remain distinguishable from an upstream credential rejection. Linux passed a disposable runtime write/read/delete integration on 2026-08-25 and Android 16 x64 passed the same bounded test on 2026-08-26; other target runtimes remain tracked by TD-004.
 
+Noncritical presentation preferences remain at the Flutter edge. `AppSettings`
+currently contains only the existing system/light/dark theme choice, while
+`AppSettingsStore` owns one versioned JSON document over the official async
+`shared_preferences` adapter. Missing, malformed, future-version, or unavailable
+storage falls back to a typed default without rewriting the original document;
+save and reset affect only the project-owned key. Startup reads that document
+before constructing `MusicApp` and maps the typed choice to the existing
+Material themes. This store is not secure storage, contains no account data, and
+does not authorize speculative playback or lyric preferences. A disposable
+random-key Linux integration proves native read/write/delete and cleanup.
+
 ## Forbidden dependencies
 
 - Flutter presentation importing or reimplementing QQ Music protocol behavior.

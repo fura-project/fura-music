@@ -76,10 +76,11 @@ flutter test
 flutter build linux
 flutter test integration_test/simple_test.dart -d linux
 flutter test integration_test/secure_storage_test.dart -d linux
+flutter test integration_test/settings_storage_test.dart -d linux
 flutter test integration_test/playback_engine_test.dart -d linux
 flutter test integration_test/music_video_engine_test.dart -d linux
 ```
 
-Use `dart analyze` on the current local SDK because `flutter analyze` fails under this checkout's non-ASCII path; see `MEMORY.md`. The secure-storage integration uses one randomized non-account key and cleans it in `finally`.
+Use `dart analyze` on the current local SDK because `flutter analyze` fails under this checkout's non-ASCII path; see `MEMORY.md`. The secure-storage and Settings integrations each use one independent randomized non-account key and clean it in `finally`.
 
 After changing public Rust files under `bridges/flutter/src/api`, run pinned `flutter_rust_bridge_codegen` 2.13.0 from `apps/flutter`, then search for orphaned generated API files; the generator does not remove renamed modules automatically.

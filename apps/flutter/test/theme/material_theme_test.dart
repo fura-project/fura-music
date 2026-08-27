@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 void main() {
@@ -78,5 +79,15 @@ void main() {
       MusicRadii.control,
     );
     expect(MusicMotion.stateChange, const Duration(milliseconds: 240));
+  });
+
+  test('maps each typed theme preference to Flutter Material', () {
+    for (final (preference, expected) in <(AppThemePreference, ThemeMode)>[
+      (AppThemePreference.system, ThemeMode.system),
+      (AppThemePreference.light, ThemeMode.light),
+      (AppThemePreference.dark, ThemeMode.dark),
+    ]) {
+      expect(preference.materialThemeMode, expected);
+    }
   });
 }
