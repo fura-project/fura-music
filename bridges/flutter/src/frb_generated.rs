@@ -4834,11 +4834,14 @@ fn wire__crate__api__media__begin_qq_music_media_resolution_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_provider_id = <String>::sse_decode(&mut deserializer);
             let api_opaque_track_id = <String>::sse_decode(&mut deserializer);
+            let api_preferred_quality =
+                <crate::api::media::QqMusicMediaQualityPreference>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Ok::<_, ()>(crate::api::media::begin_qq_music_media_resolution(
                     api_provider_id,
                     api_opaque_track_id,
+                    api_preferred_quality,
                 ))?;
                 std::result::Result::Ok(output_ok)
             })())
@@ -7929,7 +7932,23 @@ impl SseDecode for crate::api::media::QqMusicMediaQuality {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::media::QqMusicMediaQuality::Standard,
+            1 => crate::api::media::QqMusicMediaQuality::High,
             _ => unreachable!("Invalid variant for QqMusicMediaQuality: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::media::QqMusicMediaQualityPreference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::media::QqMusicMediaQualityPreference::Standard,
+            1 => crate::api::media::QqMusicMediaQualityPreference::High,
+            _ => unreachable!(
+                "Invalid variant for QqMusicMediaQualityPreference: {}",
+                inner
+            ),
         };
     }
 }
@@ -10554,6 +10573,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicMediaQuality {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::Standard => 0.into_dart(),
+            Self::High => 1.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -10566,6 +10586,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicMediaQuality>
     for crate::api::media::QqMusicMediaQuality
 {
     fn into_into_dart(self) -> crate::api::media::QqMusicMediaQuality {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicMediaQualityPreference {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Standard => 0.into_dart(),
+            Self::High => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::media::QqMusicMediaQualityPreference
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicMediaQualityPreference>
+    for crate::api::media::QqMusicMediaQualityPreference
+{
+    fn into_into_dart(self) -> crate::api::media::QqMusicMediaQualityPreference {
         self
     }
 }
@@ -13480,6 +13521,23 @@ impl SseEncode for crate::api::media::QqMusicMediaQuality {
         <i32>::sse_encode(
             match self {
                 crate::api::media::QqMusicMediaQuality::Standard => 0,
+                crate::api::media::QqMusicMediaQuality::High => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::media::QqMusicMediaQualityPreference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::media::QqMusicMediaQualityPreference::Standard => 0,
+                crate::api::media::QqMusicMediaQualityPreference::High => 1,
                 _ => {
                     unimplemented!("");
                 }

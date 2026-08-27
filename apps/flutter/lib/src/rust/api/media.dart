@@ -8,14 +8,16 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `await_resolution`, `failed_resolution`, `map_error`, `map_resolution`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicMediaResolutionHandle beginQqMusicMediaResolution({
   required String providerId,
   required String opaqueTrackId,
+  required QqMusicMediaQualityPreference preferredQuality,
 }) => RustLib.instance.api.crateApiMediaBeginQqMusicMediaResolution(
   providerId: providerId,
   opaqueTrackId: opaqueTrackId,
+  preferredQuality: preferredQuality,
 );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>>
@@ -29,7 +31,9 @@ abstract class QqMusicMediaResolutionHandle implements RustOpaqueInterface {
 
 enum QqMusicMediaFormat { mp3 }
 
-enum QqMusicMediaQuality { standard }
+enum QqMusicMediaQuality { standard, high }
+
+enum QqMusicMediaQualityPreference { standard, high }
 
 class QqMusicMediaResolution {
   final QqMusicResolvedMediaSource? source;

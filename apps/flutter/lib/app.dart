@@ -85,6 +85,12 @@ class MusicApp extends StatelessWidget {
       );
       mediaResolutionGateway ??= RustMediaResolutionGateway(
         credentialVault: fallbackCredentialVault,
+        preferredQuality: switch (initialSettings.playbackQuality) {
+          AppPlaybackQualityPreference.standard =>
+            PlaybackAudioQualityPreference.standard,
+          AppPlaybackQualityPreference.high =>
+            PlaybackAudioQualityPreference.high,
+        },
       );
       lyricGateway ??= RustLyricGateway(
         credentialVault: fallbackCredentialVault,

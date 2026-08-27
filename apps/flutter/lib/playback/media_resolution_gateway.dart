@@ -4,7 +4,9 @@ import 'package:flutterustmusic/src/rust/api/media.dart' as bridge;
 
 enum PlaybackAudioFormat { mp3 }
 
-enum PlaybackAudioQuality { standard }
+enum PlaybackAudioQuality { standard, high }
+
+enum PlaybackAudioQualityPreference { standard, high }
 
 enum MediaResolutionFailure {
   coreUnavailable,
@@ -65,12 +67,14 @@ abstract interface class MediaResolutionOperation {
 typedef MediaResolutionOperationFactory = MediaResolutionOperation Function(
   String providerId,
   String opaqueTrackId,
+  PlaybackAudioQualityPreference preferredQuality,
 );
 
 class RustMediaResolutionGateway implements MediaResolutionGateway {
   RustMediaResolutionGateway({
     CredentialVault? credentialVault,
     MediaResolutionOperationFactory? operationFactory,
+    this.preferredQuality = PlaybackAudioQualityPreference.standard,
   }) : _operationFactory = operationFactory ?? _beginRustResolution,
        _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
@@ -78,13 +82,14 @@ class RustMediaResolutionGateway implements MediaResolutionGateway {
 
   final CredentialVault _credentialVault;
   final MediaResolutionOperationFactory _operationFactory;
+  final PlaybackAudioQualityPreference preferredQuality;
 
   @override
   MediaResolutionOperation beginResolution({
     required String providerId,
     required String opaqueTrackId,
   }) => _VaultCleaningMediaResolutionOperation(
-    _operationFactory(providerId, opaqueTrackId),
+    _operationFactory(providerId, opaqueTrackId, preferredQuality),
     _credentialVault,
   );
 }
@@ -92,10 +97,17 @@ class RustMediaResolutionGateway implements MediaResolutionGateway {
 MediaResolutionOperation _beginRustResolution(
   String providerId,
   String opaqueTrackId,
+  PlaybackAudioQualityPreference preferredQuality,
 ) => _RustMediaResolutionOperation(
   bridge.beginQqMusicMediaResolution(
     providerId: providerId,
     opaqueTrackId: opaqueTrackId,
+    preferredQuality: switch (preferredQuality) {
+      PlaybackAudioQualityPreference.standard =>
+        bridge.QqMusicMediaQualityPreference.standard,
+      PlaybackAudioQualityPreference.high =>
+        bridge.QqMusicMediaQualityPreference.high,
+    },
   ),
 );
 
@@ -180,6 +192,7 @@ MediaResolutionResult mapBridgeMediaResolution(
       },
       quality: switch (bridgeSource.quality) {
         bridge.QqMusicMediaQuality.standard => PlaybackAudioQuality.standard,
+        bridge.QqMusicMediaQuality.high => PlaybackAudioQuality.high,
       },
       validForSeconds: bridgeSource.validForSeconds,
     ),

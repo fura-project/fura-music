@@ -14,24 +14,56 @@ void main() {
     expect(result.settings, AppSettings.defaults);
   });
 
-  test('round trips every supported theme in the current schema', () async {
+  test('round trips every supported theme and playback quality', () async {
     for (final theme in AppThemePreference.values) {
-      final storage = _MemoryDocumentStorage();
-      final store = AppSettingsStore(storage: storage);
+      for (final playbackQuality in AppPlaybackQualityPreference.values) {
+        final storage = _MemoryDocumentStorage();
+        final store = AppSettingsStore(storage: storage);
 
-      expect(
-        await store.save(AppSettings(theme: theme)),
-        AppSettingsWriteResult.saved,
-      );
-      final stored = jsonDecode(storage.document!) as Map<String, dynamic>;
-      expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
-      expect(stored['theme'], theme.name);
+        expect(
+          await store.save(
+            AppSettings(theme: theme, playbackQuality: playbackQuality),
+          ),
+          AppSettingsWriteResult.saved,
+        );
+        final stored = jsonDecode(storage.document!) as Map<String, dynamic>;
+        expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
+        expect(stored['theme'], theme.name);
+        expect(stored['playbackQuality'], playbackQuality.name);
 
-      final loaded = await store.load();
-      expect(loaded.state, AppSettingsLoadState.stored);
-      expect(loaded.settings, AppSettings(theme: theme));
+        final loaded = await store.load();
+        expect(loaded.state, AppSettingsLoadState.stored);
+        expect(
+          loaded.settings,
+          AppSettings(theme: theme, playbackQuality: playbackQuality),
+        );
+      }
     }
   });
+
+  test(
+    'migrates the theme-only version 1 document to standard quality',
+    () async {
+      final storage = _MemoryDocumentStorage(
+        document: jsonEncode(<String, Object>{
+          'schemaVersion': 1,
+          'theme': 'dark',
+        }),
+      );
+
+      final result = await AppSettingsStore(storage: storage).load();
+
+      expect(result.state, AppSettingsLoadState.migrated);
+      expect(
+        result.settings,
+        const AppSettings(
+          theme: AppThemePreference.dark,
+          playbackQuality: AppPlaybackQualityPreference.standard,
+        ),
+      );
+      expect(storage.writeCount, 0);
+    },
+  );
 
   test(
     'uses defaults without rewriting malformed or future documents',
@@ -44,8 +76,16 @@ void main() {
           AppSettingsLoadState.invalidDocument,
         ),
         (
-          jsonEncode(<String, Object>{'schemaVersion': 2, 'theme': 'dark'}),
+          jsonEncode(<String, Object>{'schemaVersion': 3, 'theme': 'dark'}),
           AppSettingsLoadState.unsupportedVersion,
+        ),
+        (
+          jsonEncode(<String, Object>{
+            'schemaVersion': 2,
+            'theme': 'dark',
+            'playbackQuality': 'lossless',
+          }),
+          AppSettingsLoadState.invalidDocument,
         ),
       ]) {
         final storage = _MemoryDocumentStorage(document: document);

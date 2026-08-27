@@ -24,14 +24,22 @@ void main() {
     try {
       expect(await storage.read(), isNull, reason: 'test-key collision');
       expect(
-        await store.save(const AppSettings(theme: AppThemePreference.dark)),
+        await store.save(
+          const AppSettings(
+            theme: AppThemePreference.dark,
+            playbackQuality: AppPlaybackQualityPreference.high,
+          ),
+        ),
         AppSettingsWriteResult.saved,
       );
       final loaded = await store.load();
       expect(loaded.state, AppSettingsLoadState.stored);
       expect(
         loaded.settings,
-        const AppSettings(theme: AppThemePreference.dark),
+        const AppSettings(
+          theme: AppThemePreference.dark,
+          playbackQuality: AppPlaybackQualityPreference.high,
+        ),
       );
       expect(await store.reset(), AppSettingsWriteResult.saved);
       expect(await storage.read(), isNull);

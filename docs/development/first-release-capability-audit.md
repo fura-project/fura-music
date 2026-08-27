@@ -47,7 +47,7 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 | --- | --- | --- | --- | --- | --- | --- |
 | Standard media resolution and foreground playback | A selected QQ Track can produce sound. | `EVIDENCE_BLOCKED`: standard MP3 resolution, redacted expiring sources, local/loopback Linux playback, and corrected protocol tests exist; the real authenticated QQ playback observation is still pending. | Maintainer-operated M1 observation only unless it reproduces a defect. | authenticated read + platform-local | Required | Ordinary QQ Track plays through the current foreground owner; coarse live result is recorded without URI, identity, or credential data. |
 | Track availability and failure taxonomy | Users are not given invented VIP/region/copyright explanations. | `VERIFIED`: unavailable, credential rejection, network/service, invalid response, core unavailable, and replacement remain distinct through Provider/Bridge/Dart. | More specific entitlement reasons lack evidence. | authenticated read | Required | Coarse states remain truthful end to end; finer reason is added only with repeatable evidence. |
-| Audio quality selection and fallback | Users can choose an appropriate stream without making every failure terminal. | `MISSING`: Domain and protocol are intentionally standard-MP3 only; no preference or quality negotiation exists. | Protocol discovery, Domain policy, Provider/Bridge, Settings wiring. | authenticated read + platform-local preference | Required | At least standard plus one evidenced higher quality can be requested, actual returned quality is reported, unsupported/unauthorized quality falls back by an explicit tested policy, and no VIP state is guessed. |
+| Audio quality selection and fallback | Users can choose an appropriate stream without making every failure terminal. | `IMPLEMENTED`: three current implementations agree on M500 standard MP3 and M800 high MP3; Client, Provider, Bridge, Dart gateway, and settings tests cover exact requests, actual returned quality, High-only unavailable fallback, redaction, cancellation, and account replacement. A bounded no-account gate accepts both schemas. | Settings UI remains deferred; authenticated account entitlement/playback observation remains maintainer-operated. | authenticated read + platform-local preference | Required | Standard or High can be requested; High falls back only from an unavailable item to Standard; the actual quality is reported and no VIP state is guessed. |
 | Queue, previous/next, shuffle, repeat, removal, and completion | Daily listening remains predictable across a session. | `VERIFIED`: Rust positional queue owns order/repeat/completion; Bridge and one Dart owner have domain, adapter, controller, and Widget regressions. | Cross-session persistence is not authorized. | platform-local | Required | Duplicates and mutations retain positional identity; completion and manual traversal follow documented mode semantics. |
 | Seek, volume, source replacement, and failure recovery | Playback remains controllable when a source changes or fails. | `VERIFIED` for offline/local behavior: controller generation, stale suppression, seek/volume, retry, stop, and Queue-selected replacement are tested. | Real QQ source behavior remains inside the M1 observation. | authenticated read + platform-local | Required | Late resolution/player events cannot replace a newer Track and failure retains a recoverable current Queue state. |
 | Synchronized and word-timed lyrics | The defining lyric experience follows playback. | `EVIDENCE_BLOCKED`: QRC decryption/parsing/alignment and position-driven presentation are well covered offline; a credential-free live lyric gate exists; the authenticated playback-to-lyrics observation remains pending. | Maintainer-operated M1 observation. | authenticated read | Required | Synchronized lines advance during real playback and word timing appears when the source supplies it; only coarse outcome is retained. |
@@ -65,8 +65,8 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 | Capability | User value | State and evidence | Missing layers | Safety | First-release decision | Acceptance boundary |
 | --- | --- | --- | --- | --- | --- | --- |
-| Typed persistent settings foundation | Stable preferences survive restart and later UI can bind without inventing storage rules. | `VERIFIED`: a version-1 typed document stores only the existing system/light/dark preference through the official async `shared_preferences` API; startup wiring, defaults, malformed/future document handling, read/write/reset, storage failure, and a disposable Linux native round trip pass. | Other target runtimes remain covered by the Platform row. The final Settings UI is deliberately deferred. | platform-local | Required | Versioned typed settings read/write/reset with validated defaults persists the existing system/light/dark theme preference; malformed/future data fails safely; no Settings page is added. |
-| Playback-quality preference | A chosen quality can become the default request. | `MISSING`: blocked on the audio-quality capability above. | Reusable quality policy plus local settings field. | platform-local | Required after quality support | Persist only values supported by the implemented quality policy; migration/default behavior is tested. |
+| Typed persistent settings foundation | Stable preferences survive restart and later UI can bind without inventing storage rules. | `VERIFIED`: a version-2 typed document stores system/light/dark plus standard/high playback preference through the official async `shared_preferences` API; startup wiring, defaults, version-1 migration, malformed/future handling, read/write/reset, storage failure, and a disposable Linux native round trip pass. | Other target runtimes remain covered by the Platform row. The final Settings UI is deliberately deferred. | platform-local | Required | Versioned typed settings persist only implemented preferences with validated defaults and migration; malformed/future data fails safely; no Settings page is added. |
+| Playback-quality preference | A chosen quality can become the default request. | `IMPLEMENTED`: standard is the compatibility-preserving default, High is the only higher option, version-1 documents migrate to Standard, and startup injects the loaded preference into the typed media gateway. | Final Settings UI and maintainer-operated authenticated behavior observation remain deferred. | platform-local | Required after quality support | Persist only Standard/High, default and migrate to Standard, and pass the loaded preference into Rust-owned negotiation without inventing another playback owner. |
 | Lyric translation/romanization preferences | Users can hide/show available auxiliary lines. | `OUT_OF_SCOPE` for now: current Domain aligns auxiliary text but does not prove stable translation versus romanization classification. | Evidence and typed lyric metadata before a setting. | platform-local | Later | Add only after the lyric source can truthfully distinguish the controlled content. |
 
 ## G — Platform integration
@@ -89,19 +89,16 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 ## Ranked immediate candidates
 
-1. **Audio-quality discovery and negotiation** — high core music value and a
-   dependency of a real preference, but request prefixes, entitlement, actual
-   returned quality, and fallback must be cross-validated before code changes.
-2. **Personal-library core mutation discovery** — high mainstream value but a
+1. **Personal-library core mutation discovery** — high mainstream value but a
    broad remote-write surface. Start with the smallest independently evidenced,
    reversible operation; real-account acceptance remains maintainer-operated.
-3. **Home recommendation capability discovery** — needed by the accepted Home
+2. **Home recommendation capability discovery** — needed by the accepted Home
    composition, but must establish each section's semantics rather than reuse
    public recommendations or personal playlists under misleading names. Popular
    Programs remains product-authority-sensitive.
 
-The Settings and signed-in account-summary foundations are complete within
-their stated platform/live-evidence boundaries. The next selected task is
-bounded audio-quality discovery; it may inspect current implementations and
-safe service evidence, but it may not infer VIP entitlement or silently relabel
-the actual returned format.
+The Settings, signed-in account-summary, and two-quality media foundations are
+complete within their stated platform/live-evidence boundaries. The next
+selected task is bounded personal-library mutation discovery. It must select
+one smallest reversible operation from current independent evidence and may
+not execute the maintainer's stored account or fabricate mutation success.

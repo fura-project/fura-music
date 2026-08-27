@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum AppSettingsLoadState {
   defaults,
   stored,
+  migrated,
   invalidDocument,
   unsupportedVersion,
   storageUnavailable,
@@ -98,7 +99,7 @@ class AppSettingsStore {
         state: AppSettingsLoadState.invalidDocument,
       );
     }
-    if (version != AppSettings.currentSchemaVersion) {
+    if (version != 1 && version != AppSettings.currentSchemaVersion) {
       return const AppSettingsLoadResult(
         settings: AppSettings.defaults,
         state: AppSettingsLoadState.unsupportedVersion,
@@ -122,8 +123,35 @@ class AppSettingsStore {
       );
     }
 
+    if (version == 1) {
+      return AppSettingsLoadResult(
+        settings: AppSettings(
+          theme: theme,
+          playbackQuality: AppPlaybackQualityPreference.standard,
+        ),
+        state: AppSettingsLoadState.migrated,
+      );
+    }
+
+    final playbackQualityName = decoded['playbackQuality'];
+    if (playbackQualityName is! String) {
+      return const AppSettingsLoadResult(
+        settings: AppSettings.defaults,
+        state: AppSettingsLoadState.invalidDocument,
+      );
+    }
+    final playbackQuality = AppPlaybackQualityPreference.values
+        .where((candidate) => candidate.name == playbackQualityName)
+        .firstOrNull;
+    if (playbackQuality == null) {
+      return const AppSettingsLoadResult(
+        settings: AppSettings.defaults,
+        state: AppSettingsLoadState.invalidDocument,
+      );
+    }
+
     return AppSettingsLoadResult(
-      settings: AppSettings(theme: theme),
+      settings: AppSettings(theme: theme, playbackQuality: playbackQuality),
       state: AppSettingsLoadState.stored,
     );
   }
@@ -132,6 +160,7 @@ class AppSettingsStore {
     final document = jsonEncode(<String, Object>{
       'schemaVersion': AppSettings.currentSchemaVersion,
       'theme': settings.theme.name,
+      'playbackQuality': settings.playbackQuality.name,
     });
     try {
       await _storage.write(document);

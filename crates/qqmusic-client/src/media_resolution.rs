@@ -10,14 +10,13 @@ use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_MEDIA_RESPONSE_BYTES: usize = 256 * 1024;
 const MEDIA_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-const STANDARD_MP3_PREFIX: &str = "M500";
-const STANDARD_MP3_EXTENSION: &str = ".mp3";
+const MP3_EXTENSION: &str = ".mp3";
 const PREFERRED_CDN_HOST: &str = "dl.stream.qqmusic.qq.com";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaProtocolPhase {
     CdnDispatch,
-    StandardVkey,
+    Vkey,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -217,13 +216,29 @@ impl fmt::Debug for QqMusicCdnDispatch {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicAudioQuality {
+    Standard,
+    High,
+}
+
+impl QqMusicAudioQuality {
+    const fn prefix(self) -> &'static str {
+        match self {
+            Self::Standard => "M500",
+            Self::High => "M800",
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq)]
-pub struct QqMusicStandardMediaSource {
+pub struct QqMusicMediaSource {
     uri: String,
+    quality: QqMusicAudioQuality,
     valid_for_seconds: u32,
 }
 
-impl QqMusicStandardMediaSource {
+impl QqMusicMediaSource {
     /// Returns the short-lived authorization URI for immediate playback.
     /// This value must never be logged or persisted past its validity.
     #[must_use]
@@ -232,18 +247,23 @@ impl QqMusicStandardMediaSource {
     }
 
     #[must_use]
+    pub const fn quality(&self) -> QqMusicAudioQuality {
+        self.quality
+    }
+
+    #[must_use]
     pub const fn valid_for_seconds(&self) -> u32 {
         self.valid_for_seconds
     }
 }
 
-impl fmt::Debug for QqMusicStandardMediaSource {
+impl fmt::Debug for QqMusicMediaSource {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicStandardMediaSource")
+            .debug_struct("QqMusicMediaSource")
             .field("uri", &"[REDACTED]")
             .field("format", &"MP3")
-            .field("quality", &"standard")
+            .field("quality", &self.quality)
             .field("valid_for_seconds", &self.valid_for_seconds)
             .finish()
     }
@@ -321,29 +341,32 @@ where
         })
     }
 
-    /// Resolves one standard 128 kbps MP3 source using a previously fetched
-    /// CDN dispatch. The source URI is short-lived and secret-bearing.
+    /// Resolves one exact MP3 quality using a previously fetched CDN dispatch.
+    /// The source URI is short-lived and secret-bearing. Fallback policy stays
+    /// outside the protocol client so an unavailable quality is not confused
+    /// with transport, credential, or response failures.
     ///
     /// # Errors
     ///
     /// Rejects malformed identities before transport, keeps explicit
     /// credential rejection separate, and preserves unknown per-item outcomes
     /// as [`QqMusicMediaError::Unavailable`].
-    pub async fn standard_mp3_source(
+    pub async fn mp3_source(
         &self,
         credential: &Credential,
         song_mid: &str,
         file_media_mid: Option<&str>,
+        quality: QqMusicAudioQuality,
         dispatch: &QqMusicCdnDispatch,
-    ) -> Result<QqMusicStandardMediaSource, QqMusicMediaError<T::Error>> {
-        let phase = MediaProtocolPhase::StandardVkey;
+    ) -> Result<QqMusicMediaSource, QqMusicMediaError<T::Error>> {
+        let phase = MediaProtocolPhase::Vkey;
         if !is_safe_media_mid(song_mid) {
             return Err(QqMusicMediaError::InvalidSongMid);
         }
         if file_media_mid.is_some_and(|value| !is_safe_media_mid(value)) {
             return Err(QqMusicMediaError::InvalidFileMediaMid);
         }
-        let filename = standard_mp3_filename(song_mid, file_media_mid);
+        let filename = mp3_filename(song_mid, file_media_mid, quality);
         let guid = request_guid().map_err(|()| QqMusicMediaError::RandomnessUnavailable)?;
         let body = serde_json::to_vec(&StandardVkeyRequest::new(
             credential,
@@ -429,8 +452,9 @@ where
                 field: MediaResponseField::SourcePath,
             },
         )?;
-        Ok(QqMusicStandardMediaSource {
+        Ok(QqMusicMediaSource {
             uri,
+            quality,
             valid_for_seconds: expiration_seconds.min(dispatch.expiration_seconds),
         })
     }
@@ -512,10 +536,14 @@ fn is_safe_media_mid(value: &str) -> bool {
     !value.is_empty() && value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
-fn standard_mp3_filename(song_mid: &str, file_media_mid: Option<&str>) -> String {
+fn mp3_filename(
+    song_mid: &str,
+    file_media_mid: Option<&str>,
+    quality: QqMusicAudioQuality,
+) -> String {
     file_media_mid.map_or_else(
-        || format!("{STANDARD_MP3_PREFIX}{song_mid}{song_mid}{STANDARD_MP3_EXTENSION}"),
-        |file_media_mid| format!("{STANDARD_MP3_PREFIX}{file_media_mid}{STANDARD_MP3_EXTENSION}"),
+        || format!("{}{song_mid}{song_mid}{}", quality.prefix(), MP3_EXTENSION),
+        |file_media_mid| format!("{}{file_media_mid}{}", quality.prefix(), MP3_EXTENSION),
     )
 }
 
@@ -797,7 +825,7 @@ mod tests {
 
     use super::{
         MAX_MEDIA_RESPONSE_BYTES, MEDIA_REQUEST_TIMEOUT, MediaProtocolPhase, MediaResponseField,
-        QqMusicCdnDispatch, QqMusicMediaError,
+        QqMusicAudioQuality, QqMusicCdnDispatch, QqMusicMediaError,
     };
     use crate::{Credential, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient};
 
@@ -858,10 +886,11 @@ mod tests {
         let client = QqMusicClient::new(transport);
         let dispatch = client.cdn_dispatch().await.expect("dispatch");
         let source = client
-            .standard_mp3_source(
+            .mp3_source(
                 &credential(),
                 "fixtureMid1",
                 Some("fixtureFileMid1"),
+                QqMusicAudioQuality::Standard,
                 &dispatch,
             )
             .await
@@ -922,6 +951,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn resolves_high_mp3_and_reports_the_requested_quality() {
+        let mut fixture = vkey_fixture("M800fixtureFileMid1.mp3?vkey=fixture-secret-vkey");
+        fixture["req_0"]["data"]["midurlinfo"][0]["filename"] = json!("M800fixtureFileMid1.mp3");
+        let client = QqMusicClient::new(FakeTransport::new([fixture]));
+
+        let source = client
+            .mp3_source(
+                &credential(),
+                "fixtureMid1",
+                Some("fixtureFileMid1"),
+                QqMusicAudioQuality::High,
+                &valid_dispatch(),
+            )
+            .await
+            .expect("high-quality source");
+
+        assert_eq!(source.quality(), QqMusicAudioQuality::High);
+        assert_eq!(
+            source.uri(),
+            "http://audio.example.test/M800fixtureFileMid1.mp3?vkey=fixture-secret-vkey"
+        );
+        let request = &client.transport().requests()[0];
+        let body: Value =
+            serde_json::from_slice(request.body_bytes().expect("high vkey request body"))
+                .expect("high vkey request JSON");
+        assert_eq!(
+            body["req_0"]["param"]["filename"],
+            json!(["M800fixtureFileMid1.mp3"])
+        );
+    }
+
+    #[tokio::test]
     async fn falls_back_to_the_evidenced_double_song_mid_filename() {
         let mut fixture = vkey_fixture("M500fixtureMid1fixtureMid1.mp3?vkey=fixture-secret-vkey");
         fixture["req_0"]["data"]["midurlinfo"][0]["filename"] =
@@ -929,7 +990,13 @@ mod tests {
         let client = QqMusicClient::new(FakeTransport::new([fixture]));
 
         let source = client
-            .standard_mp3_source(&credential(), "fixtureMid1", None, &valid_dispatch())
+            .mp3_source(
+                &credential(),
+                "fixtureMid1",
+                None,
+                QqMusicAudioQuality::Standard,
+                &valid_dispatch(),
+            )
             .await
             .expect("fallback source");
         assert_eq!(
@@ -975,10 +1042,11 @@ mod tests {
         let dispatch = valid_dispatch();
         assert!(matches!(
             client
-                .standard_mp3_source(
+                .mp3_source(
                     &credential(),
                     "unsafe/mid",
                     Some("fixtureFileMid1"),
+                    QqMusicAudioQuality::Standard,
                     &dispatch,
                 )
                 .await,
@@ -986,7 +1054,13 @@ mod tests {
         ));
         assert!(matches!(
             client
-                .standard_mp3_source(&credential(), "fixtureMid1", Some("unsafe/file"), &dispatch,)
+                .mp3_source(
+                    &credential(),
+                    "fixtureMid1",
+                    Some("unsafe/file"),
+                    QqMusicAudioQuality::Standard,
+                    &dispatch,
+                )
                 .await,
             Err(QqMusicMediaError::InvalidFileMediaMid)
         ));
@@ -1014,10 +1088,11 @@ mod tests {
         })]));
         assert!(matches!(
             client
-                .standard_mp3_source(
+                .mp3_source(
                     &credential(),
                     "fixtureMid1",
                     Some("fixtureFileMid1"),
+                    QqMusicAudioQuality::Standard,
                     &valid_dispatch(),
                 )
                 .await,
@@ -1035,10 +1110,11 @@ mod tests {
                 "req_0": { "code": code }
             })]));
             let result = client
-                .standard_mp3_source(
+                .mp3_source(
                     &credential(),
                     "fixtureMid1",
                     Some("fixtureFileMid1"),
+                    QqMusicAudioQuality::Standard,
                     &valid_dispatch(),
                 )
                 .await;
@@ -1050,7 +1126,7 @@ mod tests {
                 assert!(matches!(
                     result,
                     Err(QqMusicMediaError::Upstream {
-                        phase: MediaProtocolPhase::StandardVkey,
+                        phase: MediaProtocolPhase::Vkey,
                         result_code: Some(50_006),
                         ..
                     })
@@ -1067,10 +1143,11 @@ mod tests {
         })]));
         assert!(matches!(
             nested_rejection
-                .standard_mp3_source(
+                .mp3_source(
                     &credential(),
                     "fixtureMid1",
                     Some("fixtureFileMid1"),
+                    QqMusicAudioQuality::Standard,
                     &valid_dispatch(),
                 )
                 .await,
@@ -1085,15 +1162,16 @@ mod tests {
         )]));
         assert!(matches!(
             absolute
-                .standard_mp3_source(
+                .mp3_source(
                     &credential(),
                     "fixtureMid1",
                     Some("fixtureFileMid1"),
+                    QqMusicAudioQuality::Standard,
                     &valid_dispatch(),
                 )
                 .await,
             Err(QqMusicMediaError::InvalidResponse {
-                phase: MediaProtocolPhase::StandardVkey,
+                phase: MediaProtocolPhase::Vkey,
                 field: MediaResponseField::SourcePath,
             })
         ));
@@ -1103,15 +1181,16 @@ mod tests {
         let mismatched = QqMusicClient::new(FakeTransport::new([mismatched]));
         assert!(matches!(
             mismatched
-                .standard_mp3_source(
+                .mp3_source(
                     &credential(),
                     "fixtureMid1",
                     Some("fixtureFileMid1"),
+                    QqMusicAudioQuality::Standard,
                     &valid_dispatch(),
                 )
                 .await,
             Err(QqMusicMediaError::InvalidResponse {
-                phase: MediaProtocolPhase::StandardVkey,
+                phase: MediaProtocolPhase::Vkey,
                 field: MediaResponseField::ItemSongMid,
             })
         ));
@@ -1121,15 +1200,16 @@ mod tests {
         let wrong_file = QqMusicClient::new(FakeTransport::new([wrong_file]));
         assert!(matches!(
             wrong_file
-                .standard_mp3_source(
+                .mp3_source(
                     &credential(),
                     "fixtureMid1",
                     Some("fixtureFileMid1"),
+                    QqMusicAudioQuality::Standard,
                     &valid_dispatch(),
                 )
                 .await,
             Err(QqMusicMediaError::InvalidResponse {
-                phase: MediaProtocolPhase::StandardVkey,
+                phase: MediaProtocolPhase::Vkey,
                 field: MediaResponseField::ItemFilename,
             })
         ));

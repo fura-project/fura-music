@@ -16,6 +16,13 @@ pub enum QqMusicMediaFormat {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicMediaQuality {
     Standard,
+    High,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicMediaQualityPreference {
+    Standard,
+    High,
 }
 
 /// Short-lived playback input. The URI can contain authorization material and
@@ -70,12 +77,14 @@ impl fmt::Debug for QqMusicMediaResolution {
     }
 }
 
-/// One cancellable, single-use standard-media resolution. The provider-owned
-/// track identity is retained for routing and redacted from diagnostics.
+/// One cancellable, single-use media resolution. The provider-owned track
+/// identity is retained for routing and redacted from diagnostics. The
+/// preference is non-secret and the returned source reports actual quality.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicMediaResolutionHandle {
     provider_id: String,
     opaque_track_id: String,
+    preferred_quality: QqMusicMediaQualityPreference,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
@@ -87,6 +96,7 @@ impl fmt::Debug for QqMusicMediaResolutionHandle {
             .debug_struct("QqMusicMediaResolutionHandle")
             .field("provider_id", &self.provider_id)
             .field("opaque_track_id", &"[REDACTED]")
+            .field("preferred_quality", &self.preferred_quality)
             .field("active", &self.is_active())
             .field("running", &self.running.load(Ordering::SeqCst))
             .finish()
@@ -105,7 +115,11 @@ impl QqMusicMediaResolutionHandle {
         let outcome = match domain_track_id(&self.provider_id, &self.opaque_track_id) {
             Ok(track_id) => match native_qq_music_provider() {
                 Ok(provider) => {
-                    self.await_resolution(provider.resolve_standard_media(track_id))
+                    let preferred_quality = match self.preferred_quality {
+                        QqMusicMediaQualityPreference::Standard => AudioQuality::Standard,
+                        QqMusicMediaQualityPreference::High => AudioQuality::High,
+                    };
+                    self.await_resolution(provider.resolve_media(track_id, preferred_quality))
                         .await
                 }
                 Err(()) => failed_resolution(QqMusicMediaResolutionFailure::CoreUnavailable),
@@ -154,10 +168,12 @@ impl QqMusicMediaResolutionHandle {
 pub fn begin_qq_music_media_resolution(
     provider_id: String,
     opaque_track_id: String,
+    preferred_quality: QqMusicMediaQualityPreference,
 ) -> QqMusicMediaResolutionHandle {
     QqMusicMediaResolutionHandle {
         provider_id,
         opaque_track_id,
+        preferred_quality,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -176,6 +192,7 @@ fn map_resolution(
                 },
                 quality: match source.quality() {
                     AudioQuality::Standard => QqMusicMediaQuality::Standard,
+                    AudioQuality::High => QqMusicMediaQuality::High,
                 },
                 valid_for_seconds: source.valid_for_seconds(),
             }),
@@ -222,8 +239,8 @@ mod tests {
     use tokio::sync::Notify;
 
     use super::{
-        QqMusicMediaFormat, QqMusicMediaQuality, QqMusicMediaResolutionFailure,
-        begin_qq_music_media_resolution, map_error, map_resolution,
+        QqMusicMediaFormat, QqMusicMediaQuality, QqMusicMediaQualityPreference,
+        QqMusicMediaResolutionFailure, begin_qq_music_media_resolution, map_error, map_resolution,
     };
 
     #[test]
@@ -251,6 +268,23 @@ mod tests {
         assert!(!debug.contains("audio.example"));
         assert!(!debug.contains("vkey"));
         assert!(!debug.contains("41001"));
+
+        let high = map_resolution(Ok(ResolvedMediaSource::new(
+            TrackId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "track:41001:0:1:private-mid",
+            )
+            .expect("track ID"),
+            "http://audio.example.test/high.mp3?vkey=private",
+            AudioFormat::Mp3,
+            AudioQuality::High,
+            7_200,
+        )
+        .expect("high source")));
+        assert_eq!(
+            high.source.expect("mapped high source").quality,
+            QqMusicMediaQuality::High
+        );
     }
 
     #[test]
@@ -307,6 +341,7 @@ mod tests {
         let handle = begin_qq_music_media_resolution(
             "qq-music".into(),
             "track:41001:0:1:private-mid".into(),
+            QqMusicMediaQualityPreference::High,
         );
         let started = Arc::new(Notify::new());
         let dropped = Arc::new(AtomicBool::new(false));

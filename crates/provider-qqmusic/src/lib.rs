@@ -32,7 +32,7 @@ use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
     HttpTransport, QqMusicAlbumDetailsError, QqMusicAlbumSearchError, QqMusicAlbumSummary,
     QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
-    QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError,
+    QqMusicArtistTracksError, QqMusicAudioQuality, QqMusicClient, QqMusicFavoriteAlbumsError,
     QqMusicFavoriteArtistsError, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
     QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMusicVideoQuality,
     QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError,
@@ -1099,9 +1099,10 @@ where
 {
     type Error = MediaResolutionError;
 
-    async fn resolve_standard_media(
+    async fn resolve_media(
         &self,
         track_id: TrackId,
+        preferred_quality: AudioQuality,
     ) -> Result<ResolvedMediaSource, Self::Error> {
         let candidate = self.authenticated_media_credential()?;
         let route = parse_media_track(&track_id)?;
@@ -1113,23 +1114,45 @@ where
         )?;
         let dispatch = dispatch_response.as_ref().map_err(map_media_error)?;
 
-        let source_response = self
-            .client()
-            .standard_mp3_source(&candidate, route.song_mid, route.file_media_mid, dispatch)
-            .await;
-        self.finish_media_await(
-            &candidate,
-            matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
-        )?;
-        let source = source_response.as_ref().map_err(map_media_error)?;
-        ResolvedMediaSource::new(
-            track_id,
-            source.uri().to_owned(),
-            AudioFormat::Mp3,
-            AudioQuality::Standard,
-            source.valid_for_seconds(),
-        )
-        .map_err(|_| MediaResolutionError::InvalidResponse)
+        let qualities: &[QqMusicAudioQuality] = match preferred_quality {
+            AudioQuality::Standard => &[QqMusicAudioQuality::Standard],
+            AudioQuality::High => &[QqMusicAudioQuality::High, QqMusicAudioQuality::Standard],
+        };
+        for (index, quality) in qualities.iter().copied().enumerate() {
+            let source_response = self
+                .client()
+                .mp3_source(
+                    &candidate,
+                    route.song_mid,
+                    route.file_media_mid,
+                    quality,
+                    dispatch,
+                )
+                .await;
+            self.finish_media_await(
+                &candidate,
+                matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
+            )?;
+            match source_response {
+                Ok(source) => {
+                    let actual_quality = match source.quality() {
+                        QqMusicAudioQuality::Standard => AudioQuality::Standard,
+                        QqMusicAudioQuality::High => AudioQuality::High,
+                    };
+                    return ResolvedMediaSource::new(
+                        track_id,
+                        source.uri().to_owned(),
+                        AudioFormat::Mp3,
+                        actual_quality,
+                        source.valid_for_seconds(),
+                    )
+                    .map_err(|_| MediaResolutionError::InvalidResponse);
+                }
+                Err(QqMusicMediaError::Unavailable { .. }) if index + 1 < qualities.len() => {}
+                Err(error) => return Err(map_media_error(&error)),
+            }
+        }
+        Err(MediaResolutionError::Unavailable)
     }
 }
 
@@ -2946,10 +2969,10 @@ mod tests {
                 self.request_started.notify_one();
                 self.release_request.notified().await;
             }
-            let response = if call == 1 {
-                media_dispatch_json()
-            } else {
-                media_vkey_json(0, "fixture.mp3?vkey=private")
+            let response = match call {
+                1 => media_dispatch_json(),
+                2 => high_media_vkey_json(101_404, ""),
+                _ => media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=private"),
             };
             Ok(HttpResponse::new(
                 200,
@@ -4335,6 +4358,12 @@ mod tests {
         })
     }
 
+    fn high_media_vkey_json(result: i64, path: &str) -> Value {
+        let mut response = media_vkey_json(result, path);
+        response["req_0"]["data"]["midurlinfo"][0]["filename"] = json!("M800fixtureFileMid1.mp3");
+        response
+    }
+
     fn lyrics_success_json() -> Value {
         json!({
             "code": 0,
@@ -4935,7 +4964,7 @@ mod tests {
         let track_id = qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1");
 
         let source = provider
-            .resolve_standard_media(track_id.clone())
+            .resolve_media(track_id.clone(), AudioQuality::Standard)
             .await
             .expect("standard media");
         assert_eq!(source.track_id(), &track_id);
@@ -4965,6 +4994,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn high_quality_reports_actual_source_and_falls_back_only_when_unavailable() {
+        let high = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            high_media_vkey_json(0, "M800fixtureFileMid1.mp3?vkey=private-high-source"),
+        ])));
+        set_authenticated(&high, "123456");
+        let high_source = high
+            .resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::High,
+            )
+            .await
+            .expect("high media");
+        assert_eq!(high_source.quality(), AudioQuality::High);
+
+        let fallback = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            high_media_vkey_json(101_404, ""),
+            media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=private-standard-source"),
+        ])));
+        set_authenticated(&fallback, "123456");
+        let fallback_source = fallback
+            .resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::High,
+            )
+            .await
+            .expect("standard fallback");
+        assert_eq!(fallback_source.quality(), AudioQuality::Standard);
+        let requests = fallback.client().transport().requests();
+        assert_eq!(requests.len(), 3);
+        let high_request: Value =
+            serde_json::from_slice(requests[1].body_bytes().expect("high request body"))
+                .expect("high request JSON");
+        let standard_request: Value =
+            serde_json::from_slice(requests[2].body_bytes().expect("standard request body"))
+                .expect("standard request JSON");
+        assert_eq!(
+            high_request["req_0"]["param"]["filename"],
+            json!(["M800fixtureFileMid1.mp3"])
+        );
+        assert_eq!(
+            standard_request["req_0"]["param"]["filename"],
+            json!(["M500fixtureFileMid1.mp3"])
+        );
+
+        let service_failure = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            json!({"code": 0, "req_0": {"code": 50_006}}),
+        ])));
+        set_authenticated(&service_failure, "123456");
+        assert_eq!(
+            service_failure
+                .resolve_media(
+                    qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                    AudioQuality::High,
+                )
+                .await,
+            Err(MediaResolutionError::ServiceUnavailable)
+        );
+        assert_eq!(service_failure.client().transport().requests().len(), 2);
+    }
+
+    #[tokio::test]
     async fn rejects_foreign_and_malformed_media_identity_before_transport() {
         let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([])));
         set_authenticated(&provider, "123456");
@@ -4984,7 +5077,9 @@ mod tests {
         ];
         for track_id in invalid {
             assert_eq!(
-                provider.resolve_standard_media(track_id).await,
+                provider
+                    .resolve_media(track_id, AudioQuality::Standard)
+                    .await,
                 Err(MediaResolutionError::InvalidResponse)
             );
         }
@@ -5006,9 +5101,10 @@ mod tests {
         set_authenticated(&unavailable, "123456");
         assert_eq!(
             unavailable
-                .resolve_standard_media(qq_track_id(
-                    "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
-                ))
+                .resolve_media(
+                    qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1",),
+                    AudioQuality::Standard
+                )
                 .await,
             Err(MediaResolutionError::Unavailable)
         );
@@ -5021,9 +5117,10 @@ mod tests {
         set_authenticated(&rejected, "123456");
         assert_eq!(
             rejected
-                .resolve_standard_media(qq_track_id(
-                    "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
-                ))
+                .resolve_media(
+                    qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1",),
+                    AudioQuality::Standard
+                )
                 .await,
             Err(MediaResolutionError::CredentialRejected)
         );
@@ -5036,9 +5133,10 @@ mod tests {
         set_authenticated(&upstream, "123456");
         assert_eq!(
             upstream
-                .resolve_standard_media(qq_track_id(
-                    "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
-                ))
+                .resolve_media(
+                    qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1",),
+                    AudioQuality::Standard
+                )
                 .await,
             Err(MediaResolutionError::ServiceUnavailable)
         );
@@ -5046,8 +5144,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn media_resolution_rechecks_account_after_both_network_awaits() {
-        for gate_call in [1, 2] {
+    async fn quality_fallback_rechecks_account_after_every_network_await() {
+        for gate_call in [1, 2, 3] {
             let request_started = Arc::new(Notify::new());
             let release_request = Arc::new(Notify::new());
             let calls = Arc::new(AtomicUsize::new(0));
@@ -5059,9 +5157,10 @@ mod tests {
             }));
             set_authenticated(&provider, "123456");
 
-            let request = provider.resolve_standard_media(qq_track_id(
-                "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
-            ));
+            let request = provider.resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::High,
+            );
             let replacement = async {
                 request_started.notified().await;
                 set_authenticated(&provider, "654321");

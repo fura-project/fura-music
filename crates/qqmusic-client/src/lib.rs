@@ -65,8 +65,8 @@ pub use lyrics::{
     QqMusicLyricsError, QqMusicTimedLyricLine, QqMusicTimedLyricSegment,
 };
 pub use media_resolution::{
-    MediaProtocolPhase, MediaResponseField, QqMusicCdnDispatch, QqMusicMediaError,
-    QqMusicStandardMediaSource,
+    MediaProtocolPhase, MediaResponseField, QqMusicAudioQuality, QqMusicCdnDispatch,
+    QqMusicMediaError, QqMusicMediaSource,
 };
 pub use music_video::{
     MusicVideoProtocolPhase, MusicVideoResponseField, QqMusicMusicVideoQuality,

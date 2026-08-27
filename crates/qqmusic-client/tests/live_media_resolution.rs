@@ -1,4 +1,6 @@
-use qqmusic_client::{Credential, LoginType, QqMusicClient, QqMusicMediaError, ReqwestTransport};
+use qqmusic_client::{
+    Credential, LoginType, QqMusicAudioQuality, QqMusicClient, QqMusicMediaError, ReqwestTransport,
+};
 
 /// Opt-in compatibility probe using only a public song MID and a deliberately
 /// non-account credential. It retains no source URL, vkey, or response body.
@@ -24,12 +26,17 @@ async fn resolves_dispatch_and_parses_a_non_account_vkey_outcome() {
         LoginType::new(1).expect("login type"),
     )
     .expect("synthetic non-account credential");
-    match client
-        .standard_mp3_source(&non_account, "003w2xz20QlUZt", None, &dispatch)
-        .await
-    {
-        Ok(source) => assert!(source.valid_for_seconds() > 0),
-        Err(QqMusicMediaError::Unavailable { .. } | QqMusicMediaError::Rejected { .. }) => {}
-        Err(error) => panic!("non-account media response shape changed: {error:?}"),
+    for quality in [QqMusicAudioQuality::Standard, QqMusicAudioQuality::High] {
+        match client
+            .mp3_source(&non_account, "003w2xz20QlUZt", None, quality, &dispatch)
+            .await
+        {
+            Ok(source) => {
+                assert_eq!(source.quality(), quality);
+                assert!(source.valid_for_seconds() > 0);
+            }
+            Err(QqMusicMediaError::Unavailable { .. } | QqMusicMediaError::Rejected { .. }) => {}
+            Err(error) => panic!("non-account media response shape changed: {error:?}"),
+        }
     }
 }

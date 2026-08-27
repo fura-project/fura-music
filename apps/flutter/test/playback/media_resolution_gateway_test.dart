@@ -26,6 +26,18 @@ void main() {
     expect(result.source?.quality, PlaybackAudioQuality.standard);
     expect(result.source?.validForSeconds, 7_200);
     expect('$result ${result.source}', isNot(contains('must-not-leak')));
+
+    final high = mapBridgeMediaResolution(
+      const bridge.QqMusicMediaResolution(
+        source: bridge.QqMusicResolvedMediaSource(
+          uri: 'https://audio.example.test/high.mp3',
+          format: bridge.QqMusicMediaFormat.mp3,
+          quality: bridge.QqMusicMediaQuality.high,
+          validForSeconds: 7_200,
+        ),
+      ),
+    );
+    expect(high.source?.quality, PlaybackAudioQuality.high);
   });
 
   test('maps every Bridge failure without collapsing availability', () {
@@ -99,14 +111,17 @@ void main() {
   test('forwards exact opaque identity and cancellation', () async {
     late String providerId;
     late String opaqueTrackId;
+    late PlaybackAudioQualityPreference preferredQuality;
     final operation = _ImmediateResolution(
       const MediaResolutionResult(failure: MediaResolutionFailure.cancelled),
     );
     final gateway = RustMediaResolutionGateway(
       credentialVault: _FakeVault(),
-      operationFactory: (provider, opaque) {
+      preferredQuality: PlaybackAudioQualityPreference.high,
+      operationFactory: (provider, opaque, quality) {
         providerId = provider;
         opaqueTrackId = opaque;
+        preferredQuality = quality;
         return operation;
       },
     );
@@ -118,6 +133,7 @@ void main() {
     expect(begun.cancel(), isTrue);
     expect(providerId, 'qq-music');
     expect(opaqueTrackId, 'track:41001:0:1:opaqueMid');
+    expect(preferredQuality, PlaybackAudioQualityPreference.high);
     expect(operation.cancelCalls, 1);
   });
 
@@ -125,7 +141,7 @@ void main() {
     final rejectedVault = _FakeVault();
     final rejected = RustMediaResolutionGateway(
       credentialVault: rejectedVault,
-      operationFactory: (_, _) => _ImmediateResolution(
+      operationFactory: (_, _, _) => _ImmediateResolution(
         const MediaResolutionResult(
           failure: MediaResolutionFailure.credentialRejected,
         ),
@@ -140,7 +156,7 @@ void main() {
     final transientVault = _FakeVault();
     final transient = RustMediaResolutionGateway(
       credentialVault: transientVault,
-      operationFactory: (_, _) => _ImmediateResolution(
+      operationFactory: (_, _, _) => _ImmediateResolution(
         const MediaResolutionResult(failure: MediaResolutionFailure.network),
       ),
     );
@@ -154,7 +170,7 @@ void main() {
     );
     final cleanupFailure = RustMediaResolutionGateway(
       credentialVault: failingVault,
-      operationFactory: (_, _) => _ImmediateResolution(
+      operationFactory: (_, _, _) => _ImmediateResolution(
         const MediaResolutionResult(
           failure: MediaResolutionFailure.credentialRejected,
         ),

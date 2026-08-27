@@ -521,6 +521,7 @@ abstract class RustLibApi extends BaseApi {
   QqMusicMediaResolutionHandle crateApiMediaBeginQqMusicMediaResolution({
     required String providerId,
     required String opaqueTrackId,
+    required QqMusicMediaQualityPreference preferredQuality,
   });
 
   QqMusicNewAlbumPageLoadHandle crateApiNewAlbumsBeginQqMusicNewAlbumPageLoad({
@@ -4035,6 +4036,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   QqMusicMediaResolutionHandle crateApiMediaBeginQqMusicMediaResolution({
     required String providerId,
     required String opaqueTrackId,
+    required QqMusicMediaQualityPreference preferredQuality,
   }) {
     return handler.executeSync(
       SyncTask(
@@ -4042,6 +4044,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(providerId, serializer);
           sse_encode_String(opaqueTrackId, serializer);
+          sse_encode_qq_music_media_quality_preference(
+            preferredQuality,
+            serializer,
+          );
           return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 94)!;
         },
         codec: SseCodec(
@@ -4050,7 +4056,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiMediaBeginQqMusicMediaResolutionConstMeta,
-        argValues: [providerId, opaqueTrackId],
+        argValues: [providerId, opaqueTrackId, preferredQuality],
         apiImpl: this,
       ),
     );
@@ -4059,7 +4065,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiMediaBeginQqMusicMediaResolutionConstMeta =>
       const TaskConstMeta(
         debugName: "begin_qq_music_media_resolution",
-        argNames: ["providerId", "opaqueTrackId"],
+        argNames: ["providerId", "opaqueTrackId", "preferredQuality"],
       );
 
   @override
@@ -7333,6 +7339,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   QqMusicMediaQuality dco_decode_qq_music_media_quality(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return QqMusicMediaQuality.values[raw as int];
+  }
+
+  @protected
+  QqMusicMediaQualityPreference dco_decode_qq_music_media_quality_preference(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return QqMusicMediaQualityPreference.values[raw as int];
   }
 
   @protected
@@ -10629,6 +10643,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return QqMusicMediaQuality.values[inner];
+  }
+
+  @protected
+  QqMusicMediaQualityPreference sse_decode_qq_music_media_quality_preference(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return QqMusicMediaQualityPreference.values[inner];
   }
 
   @protected
@@ -14077,6 +14100,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_qq_music_media_quality(
     QqMusicMediaQuality self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_qq_music_media_quality_preference(
+    QqMusicMediaQualityPreference self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs

@@ -5,11 +5,12 @@ use std::future::Future;
 
 use music_domain::{
     AccountSummary, AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage,
-    ArtistId, ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, FavoriteArtistsPage,
-    MusicVideo, NewAlbumRegion, NewAlbumReleasesPage, NewSongCategory, NewSongCollection,
-    PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId,
-    RadarTrackPage, RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage,
-    ResolvedMediaSource, SynchronizedLyrics, TrackCommentsPage, TrackId, TrackSearchPage,
+    ArtistId, ArtistSearchPage, ArtistTracksPage, AudioQuality, FavoriteAlbumsPage,
+    FavoriteArtistsPage, MusicVideo, NewAlbumRegion, NewAlbumReleasesPage, NewSongCategory,
+    NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
+    ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingTracksPage,
+    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackCommentsPage, TrackId,
+    TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -662,15 +663,17 @@ impl fmt::Display for MediaResolutionError {
 
 impl std::error::Error for MediaResolutionError {}
 
-/// First provider-neutral media capability. It deliberately resolves only the
-/// standard source selected for M1; quality negotiation is added only with
-/// evidence and a real product setting.
+/// Provider-neutral immediate-playback resolution. The requested quality is a
+/// preference: a provider may return a lower actual quality only according to
+/// its documented fallback policy, and the returned source must report what it
+/// actually resolved.
 pub trait MediaResolutionProvider: MusicProvider + Sync {
     type Error;
 
-    fn resolve_standard_media(
+    fn resolve_media(
         &self,
         track_id: TrackId,
+        preferred_quality: AudioQuality,
     ) -> impl Future<Output = Result<ResolvedMediaSource, Self::Error>> + Send;
 }
 

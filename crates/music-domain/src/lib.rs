@@ -1012,6 +1012,7 @@ pub enum AudioFormat {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioQuality {
     Standard,
+    High,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

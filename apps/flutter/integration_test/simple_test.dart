@@ -237,6 +237,7 @@ void main() {
     final unusedMediaResolution = beginQqMusicMediaResolution(
       providerId: 'qq-music',
       opaqueTrackId: 'track:41001:0:1:fixtureTrackMid1',
+      preferredQuality: QqMusicMediaQualityPreference.high,
     );
     expect(unusedMediaResolution.isActive, isTrue);
     expect(unusedMediaResolution.cancel(), isTrue);

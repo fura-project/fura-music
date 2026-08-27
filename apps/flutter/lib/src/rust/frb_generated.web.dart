@@ -1216,6 +1216,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QqMusicMediaQuality dco_decode_qq_music_media_quality(dynamic raw);
 
   @protected
+  QqMusicMediaQualityPreference dco_decode_qq_music_media_quality_preference(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicMediaResolution dco_decode_qq_music_media_resolution(dynamic raw);
 
   @protected
@@ -2609,6 +2614,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   QqMusicMediaQuality sse_decode_qq_music_media_quality(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicMediaQualityPreference sse_decode_qq_music_media_quality_preference(
     SseDeserializer deserializer,
   );
 
@@ -4218,6 +4228,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_media_quality(
     QqMusicMediaQuality self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_media_quality_preference(
+    QqMusicMediaQualityPreference self,
     SseSerializer serializer,
   );
 

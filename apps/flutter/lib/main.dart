@@ -6,6 +6,7 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
@@ -26,11 +27,16 @@ Future<void> main() async {
   final playlistDetailGateway = RustPlaylistDetailGateway(
     credentialVault: credentialVault,
   );
+  final settingsLoad = await AppSettingsStore().load();
   final mediaResolutionGateway = RustMediaResolutionGateway(
     credentialVault: credentialVault,
+    preferredQuality: switch (settingsLoad.settings.playbackQuality) {
+      AppPlaybackQualityPreference.standard =>
+        PlaybackAudioQualityPreference.standard,
+      AppPlaybackQualityPreference.high => PlaybackAudioQualityPreference.high,
+    },
   );
   final lyricGateway = RustLyricGateway(credentialVault: credentialVault);
-  final settingsLoad = await AppSettingsStore().load();
   final credentialRestore = await authenticationGateway.restoreCredential();
 
   runApp(
