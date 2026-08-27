@@ -536,6 +536,52 @@ impl fmt::Display for UserLibraryError {
 
 impl std::error::Error for UserLibraryError {}
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LibraryMutationError {
+    AuthenticationRequired,
+    CredentialRejected,
+    /// The request may have reached QQ Music, so the desired remote state must
+    /// be refreshed before presenting a definitive result.
+    NetworkOutcomeUnknown,
+    ServiceUnavailable,
+    InvalidRequest,
+    InvalidResponseOutcomeUnknown,
+    /// The write belonged to an older account generation; its remote outcome
+    /// may be unknown and must never be applied to the replacement account UI.
+    Replaced,
+}
+
+impl fmt::Display for LibraryMutationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "library mutation requires authentication",
+            Self::CredentialRejected => "library-mutation credential was rejected",
+            Self::NetworkOutcomeUnknown => "library-mutation network outcome is unknown",
+            Self::ServiceUnavailable => "library-mutation service is unavailable",
+            Self::InvalidRequest => "library-mutation request is invalid",
+            Self::InvalidResponseOutcomeUnknown => {
+                "library-mutation response is invalid and its remote outcome is unknown"
+            }
+            Self::Replaced => "library mutation was replaced by newer account state",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for LibraryMutationError {}
+
+/// Provider-neutral desired membership in the current account's liked-Track
+/// collection. The Provider owns source-specific IDs and write semantics.
+pub trait TrackLikeMutationProvider: MusicProvider + Sync {
+    type Error;
+
+    fn set_track_liked(
+        &self,
+        track_id: TrackId,
+        liked: bool,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
 /// Narrow first user-library capability. Favorited playlists deliberately use
 /// a separate future operation instead of being implied by this owned list.
 pub trait OwnedPlaylistsProvider: MusicProvider + Sync {

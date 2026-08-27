@@ -16,6 +16,7 @@ import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/api/rankings.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart';
 import 'package:flutterustmusic/src/rust/api/search.dart';
+import 'package:flutterustmusic/src/rust/api/track_likes.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -32,6 +33,7 @@ void main() {
       'Recommendations',
       'Authentication',
       'UserLibrary',
+      'PlaylistMutation',
       'Lyrics',
       'Comments',
       'MusicVideo',
@@ -245,6 +247,18 @@ void main() {
     expect(
       cancelledMediaResolution.failure,
       QqMusicMediaResolutionFailure.cancelled,
+    );
+    final unusedTrackLike = beginQqMusicTrackLikeMutation(
+      providerId: 'qq-music',
+      opaqueTrackId: 'track:41001:0:fixtureTrackMid:fixtureFileMid',
+      desiredState: QqMusicTrackLikeState.liked,
+    );
+    expect(unusedTrackLike.isActive, isTrue);
+    expect(unusedTrackLike.cancel(), isTrue);
+    final cancelledTrackLike = await unusedTrackLike.run();
+    expect(
+      cancelledTrackLike.failure,
+      QqMusicTrackLikeMutationFailure.cancelledOutcomeUnknown,
     );
     final unusedLyricLoad = beginQqMusicLyricLoad(
       providerId: 'qq-music',

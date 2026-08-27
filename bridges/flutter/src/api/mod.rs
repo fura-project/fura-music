@@ -15,6 +15,7 @@ pub mod queue;
 pub mod rankings;
 pub mod recommendations;
 pub mod search;
+pub mod track_likes;
 
 fn domain_track_id(provider_id: &str, opaque_track_id: &str) -> Result<music_domain::TrackId, ()> {
     let provider = music_domain::ProviderId::new(provider_id).map_err(|_| ())?;

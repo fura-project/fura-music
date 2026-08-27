@@ -29,6 +29,7 @@ mod radar_recommendations;
 mod rankings;
 mod recommendations;
 mod search;
+mod track_likes;
 mod transport;
 mod wechat_exchange;
 mod wechat_login;
@@ -100,6 +101,7 @@ pub use recommendations::{
     RecommendedPlaylistField,
 };
 pub use search::{QqMusicSearchError, QqMusicTrackSearchPage, SearchTrackField};
+pub use track_likes::{QqMusicTrackLikeError, QqMusicTrackLikeState};
 pub use transport::{
     HttpMethod, HttpRequest, HttpResponse, HttpTransport, ReqwestTransport, ReqwestTransportError,
 };

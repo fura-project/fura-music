@@ -58,6 +58,7 @@ mod tests {
                 "Recommendations",
                 "Authentication",
                 "UserLibrary",
+                "PlaylistMutation",
                 "Lyrics",
                 "Comments",
                 "MusicVideo",

@@ -37,7 +37,8 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 | --- | --- | --- | --- | --- | --- | --- |
 | User playlists and liked songs | Users can reach their primary saved music. | `VERIFIED`: owned/favorite aggregation, liked-songs routing, playlist detail paging, cancellation and account replacement have offline coverage; the maintainer observed the real playlist list. | M1 real playback observation remains separate; TD-005 bounds favorite aggregation at 1,000 rows. | authenticated read | Required | Complete bounded collection and details load without silent truncation or cross-account results. |
 | Favorite Albums and Artists | Users can browse saved catalog entities. | `VERIFIED`: authenticated paged Client → Provider → Bridge → Dart paths and retained pages have offline regressions. | Broad live-account compatibility is not established. | authenticated read | Required | Typed pages preserve opaque identity, continuation, credential rejection, and replacement. |
-| Like/unlike Track and add/remove Track from playlist | Core collection actions let listening become a reusable library. | `MISSING`: no mutation Client, Provider capability implementation, Bridge, or refresh contract exists. | Protocol evidence and every reusable layer; minimal verification control later. | remote mutation | Required | Offline request/mapping/replacement tests pass; app-level confirmation/error semantics are defined; only maintainer-operated real-account acceptance may close live evidence. |
+| Like/unlike Track | A listener can keep or remove the current Track in the built-in liked-song collection. | `IMPLEMENTED`: three current implementations agree on the playlist-detail write protocol, and one has an authenticated reversible roundtrip. This repository has exact offline Client, Provider, cancellable Bridge, Dart-gateway, credential-rejection, and account-replacement coverage only. | Minimal later verification control, refresh integration, and maintainer-operated live acceptance. | remote mutation | Required | One desired liked/not-liked state maps from opaque Track identity; invalid input is rejected before transport; uncertain network/response/replacement/cancellation outcomes require refresh and are never reported as confirmed. |
+| Add/remove Track from owned playlist | Users can organize saved music beyond the built-in liked collection. | `MISSING`: the underlying protocol is independently evidenced, but no provider-neutral target-playlist mutation contract or refresh wiring exists. | Extend the bounded Client/Provider/Bridge contract to validated owned playlists; minimal verification control later. | remote mutation | Required | Only an owned opaque playlist target is accepted; one Track add/remove has offline request, failure, cancellation, replacement, and refresh-consistency coverage; live acceptance remains maintainer-operated. |
 | Create/rename/delete playlist | Users can manage their own playlist containers. | `MISSING`: no mutation implementation exists. | Protocol evidence and every reusable layer; destructive confirmation remains Flutter-owned later. | remote mutation | Required | Typed create/edit/delete results and refresh consistency are covered offline; destructive live acceptance is maintainer-operated only. |
 | Favorite/unfavorite Album or Artist | Browsing can update the same saved collections shown by Library. | `MISSING`: read paths exist but mutation paths do not. | Protocol evidence and Client through Bridge. | remote mutation | Required | Exact entity identity, idempotent outcome, account replacement, and subsequent collection refresh are covered offline; live acceptance is maintainer-operated. |
 
@@ -89,16 +90,17 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 ## Ranked immediate candidates
 
-1. **Personal-library core mutation discovery** — high mainstream value but a
-   broad remote-write surface. Start with the smallest independently evidenced,
-   reversible operation; real-account acceptance remains maintainer-operated.
+1. **Owned-playlist Track add/remove** — the next smallest reversible library
+   write and the closest extension of the now-bounded liked-Track protocol. It
+   must reject favorite/catalog playlist targets and retain unknown-outcome
+   semantics; real-account acceptance remains maintainer-operated.
 2. **Home recommendation capability discovery** — needed by the accepted Home
    composition, but must establish each section's semantics rather than reuse
    public recommendations or personal playlists under misleading names. Popular
    Programs remains product-authority-sensitive.
 
-The Settings, signed-in account-summary, and two-quality media foundations are
-complete within their stated platform/live-evidence boundaries. The next
-selected task is bounded personal-library mutation discovery. It must select
-one smallest reversible operation from current independent evidence and may
-not execute the maintainer's stored account or fabricate mutation success.
+The Settings, signed-in account-summary, two-quality media, and liked-Track
+mutation foundations are complete within their stated platform/live-evidence
+boundaries. The next selected task is bounded add/remove for one Track and one
+validated owned playlist; it may not execute the maintainer's stored account or
+fabricate mutation success.
