@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.4_TRACK_CONTEXT_COMMENTS_DISCOVERY
-  next_action: DISCOVERY_PASS
+  current_task: M5.4_READ_ONLY_TRACK_COMMENTS
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -70,13 +70,12 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Whole-project ranking selects M5.4 Track context and read-only comments discovery next. This phase is explicitly authorized, but protocol-facing implementation requires current source/fixture evidence, a provider-neutral minimum model, and a bounded Track-to-comments journey before any endpoint or UI is added.
+- Completed the bounded M5.4 Track-context audit. Album, credited Artists, lyrics, Queue, playback availability, and playback modes already have focused current-Track paths; the missing product slice is read-only comments rather than a generic Track-detail framework. Two independent maintained clients cross-validate the selected anonymous legacy song-comment request and its hot/newest fields, while a newer musicu cursor operation remains evidence-blocked. The selected finite task adds separate first-page hot comments plus paged newest comments from expanded Now Playing, with a small provider-neutral model, content-safe fixtures, cancellation/stale handling, failure isolation, and no social mutation.
 
 # Next Candidates
 
-1. Inventory the Track context already preserved in Domain/Queue/presentation and the current independent QQ comment implementations or sanitized fixtures without accessing stored credentials or retaining returned content.
-2. Produce at most three finite M5.4 candidates, rank the smallest provider-neutral read-only comments journey, and explicitly classify any missing protocol evidence before implementation.
-3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
+1. Implement the selected M5.4 read-only Track comments vertical slice through Domain, QQ client, Provider, cancellable Bridge, controller, and an adaptive expanded-Now-Playing surface; prove hot/newest separation, pagination, cancellation/stale disposal, failure isolation, 360 px/wide reachability, and playback-state preservation offline.
+2. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
 
