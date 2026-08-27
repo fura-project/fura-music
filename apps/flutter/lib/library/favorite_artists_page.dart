@@ -15,6 +15,7 @@ class FavoriteArtistsPage extends StatefulWidget {
     required this.onBack,
     required this.onOpenArtist,
     required this.onSignInAgain,
+    this.embedded = false,
     super.key,
   });
 
@@ -23,6 +24,7 @@ class FavoriteArtistsPage extends StatefulWidget {
   final VoidCallback onBack;
   final ValueChanged<ArtistSummary> onOpenArtist;
   final VoidCallback onSignInAgain;
+  final bool embedded;
 
   @override
   State<FavoriteArtistsPage> createState() => _FavoriteArtistsPageState();
@@ -45,42 +47,68 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: IconButton(
-        tooltip: 'Back to playlists',
-        onPressed: widget.onBack,
-        icon: const Icon(Icons.arrow_back_rounded),
-      ),
-      title: const Text('Favorite artists'),
-      actions: [
-        AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) => IconButton(
-            tooltip: _controller.isLoading
-                ? 'Refreshing favorite artists'
-                : 'Refresh favorite artists',
-            onPressed: _controller.isLoading ? null : _controller.load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ),
-        const SizedBox(width: 8),
-      ],
-    ),
-    body: SafeArea(
+  Widget build(BuildContext context) {
+    final content = SafeArea(
       child: AnimatedBuilder(
         animation: _controller,
-        builder: (context, _) => AnimatedSwitcher(
-          duration: const Duration(milliseconds: 240),
-          child: _body(context),
-        ),
+        builder: (context, _) {
+          final body = AnimatedSwitcher(
+            duration: const Duration(milliseconds: 240),
+            child: _body(context),
+          );
+          if (!widget.embedded) return body;
+          return Column(
+            children: [
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 12),
+                  child: IconButton(
+                    key: const ValueKey('favorite-artists-refresh'),
+                    tooltip: _controller.isLoading
+                        ? 'Refreshing favorite artists'
+                        : 'Refresh favorite artists',
+                    onPressed: _controller.isLoading ? null : _controller.load,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ),
+              ),
+              Expanded(child: body),
+            ],
+          );
+        },
       ),
-    ),
-    bottomNavigationBar: NowPlayingBar(
-      controller: widget.queuePlaybackController,
-      onSignInAgain: widget.onSignInAgain,
-    ),
-  );
+    );
+    if (widget.embedded) return content;
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back to playlists',
+          onPressed: widget.onBack,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: const Text('Favorite artists'),
+        actions: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) => IconButton(
+              tooltip: _controller.isLoading
+                  ? 'Refreshing favorite artists'
+                  : 'Refresh favorite artists',
+              onPressed: _controller.isLoading ? null : _controller.load,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: content,
+      bottomNavigationBar: NowPlayingBar(
+        controller: widget.queuePlaybackController,
+        onSignInAgain: widget.onSignInAgain,
+      ),
+    );
+  }
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
     FavoriteArtistStage.loading => const MusicLoadingPanel(

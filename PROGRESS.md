@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.2_RETAINED_ADAPTIVE_LIBRARY_SECTIONS
-  next_action: IMPLEMENT
+  current_task: M5.3_AUTHORITATIVE_PLAYBACK_MODES_DISCOVERY
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -64,16 +64,17 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 - Completed the M4 deliberate Material product checkpoint against all seven Roadmap exit criteria. The review found no Provider/UI leakage, duplicate player/navigation/state owner, sidecar, unapproved dependency/Provider/product expansion, accessibility/adaptive blocker, or changed debt trigger. The default Material baseline is stable within current automated Linux evidence; manual all-platform visual approval, live QQ compatibility, release readiness, deferred theme personas, and the M1 user observation are not claimed.
 - Accepted the maintainer's post-M4 product direction and activated M5: the first-release experience is now explicitly Home-first, with Discover, Search, and Library as distinct primary destinations; Library remains first-class; common playback modes, bounded read-only comments, and bounded QQ MV work are authorized behind the existing Rust/Flutter boundaries. Focus/quiet experiences, mutations, additional Providers, background playback, downloads, and release identity remain outside this decision.
 - Implemented M5.1 Home-first authenticated shell foundation: authenticated startup now opens a small presentation-only Home with honest routes into the existing Discover, Search, and Library journeys; all four destinations remain directly reachable through adaptive Material navigation, Search/Discover retain their loaded controllers across destination and width changes, primary back returns to Home, local overlays still unwind to their retained origins, and one persistent queue/playback/lyric owner remains unchanged. Account rejection cannot be hidden behind Home. Strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, packaged Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
+- Implemented M5.2 retained adaptive Library sections: Playlists, favorite Albums, and favorite Artists are now direct section peers inside the existing authenticated shell. Favorite collections initialize only on first visit and then retain their independent controllers, results, pagination, failures, and detail routes across section and width changes; primary navigation and the single Now Playing owner stay visible. Local return unwinds detail → originating section → Playlists → Home with focused regressions for compact/desktop reachability, refresh, laziness, request stability, focus, and hidden-section back behavior. Strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, packaged Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M5.2 discovery selected retained adaptive Library sections: Playlists, favorite Albums, and favorite Artists will become directly discoverable section peers inside the existing authenticated shell. Favorite controllers remain lazy and independently mounted after first visit; details stay above the retained section root. A static overview was ranked lower because it leaves lifecycle loss unresolved, while an aggregated feed was rejected for lacking evidence and requiring a second library model.
+- Whole-project ranking selected M5.3 authoritative playback modes as the next bounded discovery. Sequential, repeat-all, repeat-one, and shuffle are explicitly Roadmap-authorized daily-use queue behavior, but the exact positional semantics, mutation invariants, Bridge surface, and presentation state must be derived from the existing Rust queue before implementation.
 
 # Next Candidates
 
-1. Implement the retained adaptive Library section selector and lazy section stack without changing Provider contracts, merging controllers, or replacing the current local navigation architecture.
-2. Preserve section refresh, paging, failures, scroll, focus, nested detail return, compact/desktop reachability, primary navigation, and the single playback owner with focused regressions.
+1. Audit the current Rust positional queue, Bridge, Flutter playback coordinator, transport controls, and tests; produce at most three finite M5.3 candidates with explicit mode semantics and mutation invariants.
+2. Select the smallest authoritative Rust-owned playback-mode slice that exposes one typed Bridge state and accessible Flutter control without duplicating transport ownership or adding persistence/background playback.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers

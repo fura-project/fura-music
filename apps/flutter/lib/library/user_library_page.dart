@@ -22,6 +22,7 @@ import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artists_page.dart';
+import 'package:flutterustmusic/library/library_section_selector.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
@@ -102,8 +103,6 @@ class UserLibraryPage extends StatefulWidget {
   State<UserLibraryPage> createState() => _UserLibraryPageState();
 }
 
-enum _FavoriteCollection { artists, albums }
-
 enum _PrimaryDestination { home, discover, search, library }
 
 class _UserLibraryPageState extends State<UserLibraryPage> {
@@ -133,20 +132,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final FocusNode _recommendationsReturnFocusNode = FocusNode(
     debugLabel: 'recommendations entry',
   );
-  final FocusNode _favoriteAlbumsReturnFocusNode = FocusNode(
-    debugLabel: 'favorite albums entry',
-  );
-  final FocusNode _favoriteArtistsReturnFocusNode = FocusNode(
-    debugLabel: 'favorite artists entry',
-  );
-  final FocusNode _favoriteCollectionsReturnFocusNode = FocusNode(
-    debugLabel: 'favorite collections entry',
+  final FocusScopeNode _librarySectionFocusScopeNode = FocusScopeNode(
+    debugLabel: 'library section selector',
   );
   final FocusNode _backShortcutFallbackFocusNode = FocusNode(
     debugLabel: 'authenticated back shortcut fallback',
   );
-  final GlobalKey<PopupMenuButtonState<_FavoriteCollection>>
-  _favoriteCollectionsMenuKey = GlobalKey();
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
   UserPlaylistSummary? _selectedPlaylist;
   AlbumSummary? _selectedAlbum;
@@ -168,6 +159,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool _recommendationsVisited = false;
   bool _favoriteAlbumsOpen = false;
   bool _favoriteArtistsOpen = false;
+  bool _favoriteAlbumsVisited = false;
+  bool _favoriteArtistsVisited = false;
   bool _expandedNowPlayingOpen = false;
   bool _handledLyricCredentialRejection = false;
   bool _signingOut = false;
@@ -235,9 +228,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _playlistReturnFocusNode.dispose();
     _searchReturnFocusNode.dispose();
     _recommendationsReturnFocusNode.dispose();
-    _favoriteAlbumsReturnFocusNode.dispose();
-    _favoriteArtistsReturnFocusNode.dispose();
-    _favoriteCollectionsReturnFocusNode.dispose();
+    _librarySectionFocusScopeNode.dispose();
     _backShortcutFallbackFocusNode.dispose();
     super.dispose();
   }
@@ -252,39 +243,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     final selectedRanking = _selectedRanking;
     final selectedFavoriteArtist = _selectedFavoriteArtist;
     final favoriteArtistAlbum = _favoriteArtistAlbum;
-    final page = _favoriteArtistsOpen
+    final page = _favoriteArtistsOpen && selectedFavoriteArtist != null
         ? IndexedStack(
-            index: favoriteArtistAlbum != null
-                ? 2
-                : selectedFavoriteArtist != null
-                ? 1
-                : 0,
+            index: favoriteArtistAlbum != null ? 2 : 1,
             children: [
-              FavoriteArtistsPage(
-                key: const ValueKey('favorite-artists-page'),
-                gateway: _favoriteArtistGateway,
+              _primaryScaffold(),
+              ArtistPage(
+                key: ValueKey(
+                  'favorite-artist-detail-${selectedFavoriteArtist.opaqueId}',
+                ),
+                artist: selectedFavoriteArtist,
+                gateway: _artistTrackGateway,
+                albumGateway: _artistAlbumGateway,
                 queuePlaybackController: _queuePlaybackController,
-                onBack: _closeFavoriteArtists,
-                onOpenArtist: _openFavoriteArtist,
+                onBack: _returnFromFavoriteArtist,
+                onOpenAlbum: _openFavoriteArtistAlbum,
+                backTooltip: 'Back to favorite artists',
                 onSignInAgain: widget.onSignInAgain,
               ),
-              if (selectedFavoriteArtist == null)
-                const SizedBox.shrink()
-              else
-                ArtistPage(
-                  key: ValueKey(
-                    'favorite-artist-detail-'
-                    '${selectedFavoriteArtist.opaqueId}',
-                  ),
-                  artist: selectedFavoriteArtist,
-                  gateway: _artistTrackGateway,
-                  albumGateway: _artistAlbumGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnFromFavoriteArtist,
-                  onOpenAlbum: _openFavoriteArtistAlbum,
-                  backTooltip: 'Back to favorite artists',
-                  onSignInAgain: widget.onSignInAgain,
-                ),
               if (favoriteArtistAlbum == null)
                 const SizedBox.shrink()
               else
@@ -303,34 +279,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 ),
             ],
           )
-        : _favoriteAlbumsOpen
+        : _favoriteAlbumsOpen && selectedAlbum != null
         ? IndexedStack(
-            index: selectedAlbum == null ? 0 : 1,
+            index: 1,
             children: [
-              FavoriteAlbumsPage(
-                key: const ValueKey('favorite-albums-page'),
-                gateway: _favoriteAlbumGateway,
+              _primaryScaffold(),
+              AlbumPage(
+                key: ValueKey(
+                  'favorite-album-detail-${selectedAlbum.opaqueId}',
+                ),
+                album: selectedAlbum,
+                gateway: _albumTrackGateway,
+                detailsGateway: _albumDetailsGateway,
                 queuePlaybackController: _queuePlaybackController,
-                onBack: _closeFavoriteAlbums,
-                onOpenAlbum: _openFavoriteAlbum,
+                onBack: _returnFromFavoriteAlbum,
+                onOpenArtist: _openAlbumContextArtist,
+                backTooltip: 'Back to favorite albums',
                 onSignInAgain: widget.onSignInAgain,
               ),
-              if (selectedAlbum == null)
-                const SizedBox.shrink()
-              else
-                AlbumPage(
-                  key: ValueKey(
-                    'favorite-album-detail-${selectedAlbum.opaqueId}',
-                  ),
-                  album: selectedAlbum,
-                  gateway: _albumTrackGateway,
-                  detailsGateway: _albumDetailsGateway,
-                  queuePlaybackController: _queuePlaybackController,
-                  onBack: _returnFromFavoriteAlbum,
-                  onOpenArtist: _openAlbumContextArtist,
-                  backTooltip: 'Back to favorite albums',
-                  onSignInAgain: widget.onSignInAgain,
-                ),
             ],
           )
         : _recommendationsOpen
@@ -618,8 +584,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       ],
     );
     final hasOverlayPage = _hasOverlayPage;
+    final hasLibrarySubsection = _hasLibrarySubsection;
     final hasPrimaryPeer = _primaryDestination != _PrimaryDestination.home;
-    final hasLocalPage = hasOverlayPage || hasPrimaryPeer;
+    final hasLocalPage =
+        hasOverlayPage || hasLibrarySubsection || hasPrimaryPeer;
     if (hasOverlayPage && !_overlayPageActive) {
       WidgetsBinding.instance.addPostFrameCallback(
         _restoreBackShortcutFallbackFocus,
@@ -719,15 +687,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _trackContextArtist != null ||
       _albumContextArtist != null ||
       _albumArtistContextAlbum != null ||
-      _favoriteArtistsOpen ||
       _selectedFavoriteArtist != null ||
       _favoriteArtistAlbum != null ||
-      _favoriteAlbumsOpen ||
       _selectedRecommendedPlaylist != null ||
       _selectedRanking != null ||
       _selectedAlbum != null ||
       _selectedArtist != null ||
       _selectedSearchPlaylist != null;
+
+  bool get _hasLibrarySubsection =>
+      _primaryDestination == _PrimaryDestination.library &&
+      (_favoriteAlbumsOpen || _favoriteArtistsOpen);
 
   void _restoreBackShortcutFallbackFocus(Duration _) {
     if (!mounted ||
@@ -754,6 +724,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _returnFromLocalPage();
       return KeyEventResult.handled;
     }
+    if (_hasLibrarySubsection) {
+      _selectLibrarySection(LibrarySection.playlists);
+      return KeyEventResult.handled;
+    }
     if (_primaryDestination != _PrimaryDestination.home) {
       _selectPrimaryDestination(_PrimaryDestination.home);
       return KeyEventResult.handled;
@@ -778,24 +752,43 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     });
   }
 
-  void _openFavoriteAlbums() {
-    if (_favoriteAlbumsOpen ||
-        _favoriteArtistsOpen ||
-        _primaryDestination != _PrimaryDestination.library ||
-        _selectedPlaylist != null) {
+  LibrarySection get _librarySection => _favoriteAlbumsOpen
+      ? LibrarySection.albums
+      : _favoriteArtistsOpen
+      ? LibrarySection.artists
+      : LibrarySection.playlists;
+
+  void _selectLibrarySection(LibrarySection section) {
+    if (_primaryDestination != _PrimaryDestination.library ||
+        _librarySection == section) {
       return;
     }
-    setState(() => _favoriteAlbumsOpen = true);
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _favoriteAlbumsOpen = section == LibrarySection.albums;
+      _favoriteArtistsOpen = section == LibrarySection.artists;
+      _favoriteAlbumsVisited |= section == LibrarySection.albums;
+      _favoriteArtistsVisited |= section == LibrarySection.artists;
+    });
+    if (section == LibrarySection.playlists) {
+      _restoreLibrarySectionFocus();
+    }
   }
 
-  void _openFavoriteArtists() {
-    if (_favoriteArtistsOpen ||
-        _favoriteAlbumsOpen ||
-        _primaryDestination != _PrimaryDestination.library ||
-        _selectedPlaylist != null) {
-      return;
-    }
-    setState(() => _favoriteArtistsOpen = true);
+  void _restoreLibrarySectionFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _primaryDestination != _PrimaryDestination.library ||
+          _librarySection != LibrarySection.playlists) {
+        return;
+      }
+      final previousChild = _librarySectionFocusScopeNode.focusedChild;
+      if (previousChild?.context != null) {
+        previousChild!.requestFocus();
+      } else {
+        _librarySectionFocusScopeNode.nextFocus();
+      }
+    });
   }
 
   void _openTrackContextAlbum(AlbumSummary album) {
@@ -898,7 +891,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _selectedFavoriteArtist = null;
       _favoriteArtistsOpen = false;
     });
-    _restoreFavoriteCollectionFocus(_favoriteArtistsReturnFocusNode);
+    _restoreLibrarySectionFocus();
   }
 
   void _openFavoriteArtist(ArtistSummary artist) {
@@ -933,17 +926,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _selectedAlbum = null;
       _favoriteAlbumsOpen = false;
     });
-    _restoreFavoriteCollectionFocus(_favoriteAlbumsReturnFocusNode);
-  }
-
-  void _restoreFavoriteCollectionFocus(FocusNode wideFocusNode) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _favoriteAlbumsOpen || _favoriteArtistsOpen) return;
-      final target = wideFocusNode.context != null
-          ? wideFocusNode
-          : _favoriteCollectionsReturnFocusNode;
-      if (target.context != null) target.requestFocus();
-    });
+    _restoreLibrarySectionFocus();
   }
 
   void _openFavoriteAlbum(AlbumSummary album) {
@@ -1096,6 +1079,50 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     });
   }
 
+  Widget _libraryDestinationBody() => Column(
+    children: [
+      FocusScope(
+        node: _librarySectionFocusScopeNode,
+        child: LibrarySectionSelector(
+          selected: _librarySection,
+          onSelected: _selectLibrarySection,
+        ),
+      ),
+      Expanded(
+        child: IndexedStack(
+          index: _librarySection.index,
+          children: [
+            _libraryBody(),
+            if (_favoriteAlbumsVisited)
+              FavoriteAlbumsPage(
+                key: const ValueKey('favorite-albums-page'),
+                gateway: _favoriteAlbumGateway,
+                queuePlaybackController: _queuePlaybackController,
+                onBack: _closeFavoriteAlbums,
+                onOpenAlbum: _openFavoriteAlbum,
+                onSignInAgain: widget.onSignInAgain,
+                embedded: true,
+              )
+            else
+              const SizedBox.shrink(),
+            if (_favoriteArtistsVisited)
+              FavoriteArtistsPage(
+                key: const ValueKey('favorite-artists-page'),
+                gateway: _favoriteArtistGateway,
+                queuePlaybackController: _queuePlaybackController,
+                onBack: _closeFavoriteArtists,
+                onOpenArtist: _openFavoriteArtist,
+                onSignInAgain: widget.onSignInAgain,
+                embedded: true,
+              )
+            else
+              const SizedBox.shrink(),
+          ],
+        ),
+      ),
+    ],
+  );
+
   Widget _primaryScaffold() => LayoutBuilder(
     builder: (context, constraints) {
       final destination = _primaryDestination;
@@ -1148,7 +1175,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             )
           else
             const SizedBox.shrink(),
-          _libraryBody(),
+          _libraryDestinationBody(),
         ],
       );
       final body = Row(
@@ -1324,69 +1351,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     required bool compactActions,
     required _PrimaryDestination destination,
   }) => [
-    if (destination == _PrimaryDestination.library && compactActions)
-      Focus(
-        key: const ValueKey('open-favorite-collections'),
-        focusNode: _favoriteCollectionsReturnFocusNode,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              (event.logicalKey == LogicalKeyboardKey.enter ||
-                  event.logicalKey == LogicalKeyboardKey.space)) {
-            _favoriteCollectionsMenuKey.currentState?.showButtonMenu();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: PopupMenuButton<_FavoriteCollection>(
-          key: _favoriteCollectionsMenuKey,
-          tooltip: 'Open saved collections',
-          constraints: const BoxConstraints(minWidth: 200),
-          onSelected: (collection) => switch (collection) {
-            _FavoriteCollection.artists => _openFavoriteArtists(),
-            _FavoriteCollection.albums => _openFavoriteAlbums(),
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
-              value: _FavoriteCollection.artists,
-              child: Row(
-                children: [
-                  Icon(Icons.person_rounded),
-                  SizedBox(width: 12),
-                  Text('Favorite artists'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: _FavoriteCollection.albums,
-              child: Row(
-                children: [
-                  Icon(Icons.album_rounded),
-                  SizedBox(width: 12),
-                  Text('Favorite albums'),
-                ],
-              ),
-            ),
-          ],
-          icon: const Icon(Icons.library_music_rounded),
-        ),
-      ),
-    if (destination == _PrimaryDestination.library && !compactActions)
-      IconButton(
-        key: const ValueKey('open-favorite-artists'),
-        focusNode: _favoriteArtistsReturnFocusNode,
-        tooltip: 'Open favorite artists',
-        onPressed: _openFavoriteArtists,
-        icon: const Icon(Icons.person_rounded),
-      ),
-    if (destination == _PrimaryDestination.library && !compactActions)
-      IconButton(
-        key: const ValueKey('open-favorite-albums'),
-        focusNode: _favoriteAlbumsReturnFocusNode,
-        tooltip: 'Open favorite albums',
-        onPressed: _openFavoriteAlbums,
-        icon: const Icon(Icons.album_rounded),
-      ),
-    if (destination == _PrimaryDestination.library)
+    if (destination == _PrimaryDestination.library &&
+        _librarySection == LibrarySection.playlists)
       AnimatedBuilder(
         animation: _controller,
         builder: (context, _) => IconButton(

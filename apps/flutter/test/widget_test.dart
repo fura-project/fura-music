@@ -12,11 +12,11 @@ import 'package:flutter/material.dart'
         Focus,
         FocusManager,
         GridView,
-        IconButton,
         InkWell,
         ListView,
         NavigationBar,
         NavigationRail,
+        OutlinedButton,
         Scrollable,
         ScrollableState,
         Semantics,
@@ -70,6 +70,21 @@ Future<void> _selectAdaptiveSection(
 Future<void> _openLibrary(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('primary-library-destination')));
   await tester.pumpAndSettle();
+}
+
+Future<void> _selectLibrarySection(WidgetTester tester, String section) async {
+  final control = find.byKey(const ValueKey('library-section-selector'));
+  final itemFinder = find.byKey(ValueKey('library-section-$section'));
+  if (tester.widget(control) is OutlinedButton) {
+    await tester.tap(control);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+  }
+  await tester.ensureVisible(itemFinder);
+  await tester.tap(itemFinder);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump();
 }
 
 void main() {
@@ -1071,9 +1086,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await _openLibrary(tester);
-      await tester.tap(find.byTooltip('Open saved collections'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Favorite albums'));
+      await _selectLibrarySection(tester, 'albums');
       await tester.pump();
 
       expect(
@@ -1103,12 +1116,7 @@ void main() {
       expect(find.byType(MusicContentStatePanel), findsOneWidget);
       expect(find.text('No favorite albums yet'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Back to playlists'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Open saved collections'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Favorite artists'));
-      await tester.pumpAndSettle();
+      await _selectLibrarySection(tester, 'artists');
 
       expect(
         find.byKey(const ValueKey('favorite-artists-empty')),
@@ -1151,10 +1159,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await _openLibrary(tester);
-      await tester.tap(find.byTooltip('Open saved collections'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Favorite albums'));
-      await tester.pumpAndSettle();
+      await _selectLibrarySection(tester, 'albums');
 
       final albumError = find.byKey(const ValueKey('favorite-albums-error'));
       expect(albumError, findsOneWidget);
@@ -1179,12 +1184,7 @@ void main() {
       );
       expect(albums.requests, [(0, 20), (0, 20)]);
 
-      await tester.tap(find.byTooltip('Back to playlists'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Open saved collections'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Favorite artists'));
-      await tester.pumpAndSettle();
+      await _selectLibrarySection(tester, 'artists');
 
       final artistError = find.byKey(
         const ValueKey('favorite-artists-credential-rejected'),
@@ -1255,20 +1255,22 @@ void main() {
       await tester.pumpAndSettle();
 
       await _openLibrary(tester);
-      final compactEntry = find.byKey(
-        const ValueKey('open-favorite-collections'),
+      final sectionSelector = find.byKey(
+        const ValueKey('library-section-selector'),
       );
-      final wideEntry = find.byKey(const ValueKey('open-favorite-albums'));
       expect(favorites.requests, isEmpty);
       expect(find.text('Your music'), findsOneWidget);
-      expect(compactEntry, findsOneWidget);
-      expect(wideEntry, findsNothing);
+      expect(sectionSelector, findsOneWidget);
+      expect(find.text('Library: Playlists'), findsOneWidget);
+      expect(
+        tester
+            .getSemantics(sectionSelector)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('Open saved collections'));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Favorite albums'));
-      await tester.pumpAndSettle();
+      await _selectLibrarySection(tester, 'albums');
       expect(tester.takeException(), isNull);
       expect(
         find.byKey(const ValueKey('favorite-albums-content')),
@@ -1277,6 +1279,19 @@ void main() {
       expect(find.text('Saved Album'), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
       expect(find.byType(GridView), findsNothing);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('favorite-albums-refresh')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('primary-home-destination')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+      expect(await tester.binding.handlePopRoute(), isFalse);
+      await _openLibrary(tester);
+      expect(find.text('Saved Album'), findsOneWidget);
+      expect(favorites.requests, [(0, 20)]);
 
       tester.view.physicalSize = const Size(1000, 700);
       await tester.pumpAndSettle();
@@ -1314,17 +1329,30 @@ void main() {
       tester.view.physicalSize = const Size(360, 800);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('Back to playlists'));
+      expect(await tester.binding.handlePopRoute(), isTrue);
       await tester.pumpAndSettle();
       expect(find.text('No playlists yet'), findsOneWidget);
       expect(find.text('Your music'), findsOneWidget);
-      expect(tester.widget<Focus>(compactEntry).focusNode?.hasFocus, isTrue);
+      expect(find.text('Library: Playlists'), findsOneWidget);
+      final focusedContext = FocusManager.instance.primaryFocus?.context;
+      expect(focusedContext, isNotNull);
+      expect(
+        find
+            .ancestor(
+              of: find.byElementPredicate(
+                (element) => identical(element, focusedContext),
+              ),
+              matching: find.byKey(const ValueKey('library-section-selector')),
+            )
+            .evaluate(),
+        isNotEmpty,
+      );
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'opens favorite Artists through compact pointer and desktop keyboard routes',
+    'retains favorite Artists across compact and desktop Library sections',
     (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1;
@@ -1358,11 +1386,6 @@ void main() {
       final albumTracks = _WidgetAlbumGateway(
         const AlbumTrackPageResult(total: 1, tracks: [track]),
       );
-      final compactEntry = find.byKey(
-        const ValueKey('open-favorite-collections'),
-      );
-      final wideEntry = find.byKey(const ValueKey('open-favorite-artists'));
-
       await tester.pumpWidget(
         MusicApp(
           bootstrap: _bootstrap,
@@ -1385,23 +1408,20 @@ void main() {
       await _openLibrary(tester);
       expect(favorites.requests, isEmpty);
       expect(find.text('Your music'), findsOneWidget);
-      expect(compactEntry, findsOneWidget);
-      expect(wideEntry, findsNothing);
+      final sectionSelector = find.byKey(
+        const ValueKey('library-section-selector'),
+      );
+      expect(sectionSelector, findsOneWidget);
+      expect(find.text('Library: Playlists'), findsOneWidget);
       expect(tester.takeException(), isNull);
       expect(
         tester
-            .getSemantics(find.byTooltip('Open saved collections'))
+            .getSemantics(sectionSelector)
             .getSemanticsData()
             .hasAction(SemanticsAction.tap),
         isTrue,
       );
-      tester.widget<Focus>(compactEntry).focusNode?.requestFocus();
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pumpAndSettle();
-      expect(find.text('Favorite artists'), findsOneWidget);
-      await tester.tap(find.text('Favorite artists'));
-      await tester.pumpAndSettle();
+      await _selectLibrarySection(tester, 'artists');
       expect(
         find.byKey(const ValueKey('favorite-artists-content')),
         findsOneWidget,
@@ -1410,12 +1430,17 @@ void main() {
       expect(favorites.requests, [(0, 20)]);
 
       final artistAction = find.byKey(const ValueKey('favorite-artist-0'));
+      final artistSemantics = find.ancestor(
+        of: artistAction,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label == 'Saved Artist, Artist',
+        ),
+      );
       expect(
-        tester
-            .getSemantics(artistAction)
-            .getSemanticsData()
-            .hasAction(SemanticsAction.tap),
-        isTrue,
+        tester.widget<Semantics>(artistSemantics).properties.onTap,
+        isNotNull,
       );
       await tester.tap(artistAction);
       await tester.pumpAndSettle();
@@ -1427,31 +1452,17 @@ void main() {
       expect(find.text('Saved Artist'), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
 
+      await _selectLibrarySection(tester, 'playlists');
+      expect(find.text('No playlists yet'), findsOneWidget);
+      await _selectLibrarySection(tester, 'artists');
+      expect(find.text('Saved Artist'), findsOneWidget);
+      expect(favorites.requests, [(0, 20)]);
+
       tester.view.physicalSize = const Size(1000, 700);
       await tester.pumpAndSettle();
       expect(find.byType(GridView), findsOneWidget);
-      FocusManager.instance.primaryFocus?.unfocus();
-      var artistFocused = false;
-      for (var attempt = 0; attempt < 24; attempt += 1) {
-        final focusedContext = FocusManager.instance.primaryFocus?.context;
-        if (focusedContext != null &&
-            find
-                .ancestor(
-                  of: find.byElementPredicate(
-                    (element) => identical(element, focusedContext),
-                  ),
-                  matching: artistAction,
-                )
-                .evaluate()
-                .isNotEmpty) {
-          artistFocused = true;
-          break;
-        }
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
-      }
-      expect(artistFocused, isTrue);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(tester.widget<InkWell>(artistAction).onTap, isNotNull);
+      await tester.tap(artistAction);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
       expect(artistTracks.requests, [(artist, 0, 30), (artist, 0, 30)]);
@@ -1476,10 +1487,12 @@ void main() {
       );
       await tester.tap(find.byTooltip('Back to favorite artists'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Back to playlists'));
-      await tester.pumpAndSettle();
+      await _selectLibrarySection(tester, 'playlists');
       expect(find.text('No playlists yet'), findsOneWidget);
-      expect(tester.widget<IconButton>(wideEntry).focusNode?.hasFocus, isTrue);
+      expect(
+        find.byKey(const ValueKey('library-section-artists')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     },
   );
