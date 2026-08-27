@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.3_AUTHORITATIVE_PLAYBACK_MODES_DISCOVERY
-  next_action: DISCOVERY_PASS
+  current_task: M5.3_RUST_OWNED_PLAYBACK_MODES
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -69,12 +69,12 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Whole-project ranking selected M5.3 authoritative playback modes as the next bounded discovery. Sequential, repeat-all, repeat-one, and shuffle are explicitly Roadmap-authorized daily-use queue behavior, but the exact positional semantics, mutation invariants, Bridge surface, and presentation state must be derived from the existing Rust queue before implementation.
+- M5.3 discovery selected one complete two-axis Rust-owned playback-mode slice. Order is sequential/shuffle and repeat is off/all/one; shuffle changes traversal without reordering the public positional Queue, repeat one affects completion rather than manual navigation, and repeat all wraps the active order. Selection/replacement/membership mutation starts a new shuffle cycle anchored at the resulting current Track. Mode state remains session-local, and Flutter only maps state and triggers typed commands.
 
 # Next Candidates
 
-1. Audit the current Rust positional queue, Bridge, Flutter playback coordinator, transport controls, and tests; produce at most three finite M5.3 candidates with explicit mode semantics and mutation invariants.
-2. Select the smallest authoritative Rust-owned playback-mode slice that exposes one typed Bridge state and accessible Flutter control without duplicating transport ownership or adding persistence/background playback.
+1. Implement deterministic playback-order/repeat semantics and mutation repair in `music-domain`, then expose the state and setters through the existing coarse Bridge, gateway, and coordinator.
+2. Add accessible compact/wide mode controls to the one existing Now Playing implementation and prove completion, manual navigation, duplicate/mutation behavior, no restart on mode change, and 360 px reachability.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
