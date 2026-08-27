@@ -324,7 +324,7 @@ struct RawCommentGroup {
 
 #[derive(Deserialize)]
 struct RawComment {
-    commentid: Option<FlexibleUnsigned>,
+    commentid: Option<FlexibleCommentId>,
     nick: Option<String>,
     rootcommentcontent: Option<String>,
     praisenum: Option<FlexibleUnsigned>,
@@ -338,19 +338,35 @@ enum FlexibleUnsigned {
     Text(String),
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum FlexibleCommentId {
+    Number(u64),
+    Text(String),
+}
+
+impl FlexibleCommentId {
+    fn into_string(self) -> Option<String> {
+        match self {
+            Self::Number(value) if value != 0 => Some(value.to_string()),
+            Self::Text(value)
+                if value != "0"
+                    && !value.trim().is_empty()
+                    && value.len() <= MAX_COMMENT_ID_BYTES
+                    && !value.chars().any(char::is_control) =>
+            {
+                Some(value)
+            }
+            Self::Number(_) | Self::Text(_) => None,
+        }
+    }
+}
+
 impl FlexibleUnsigned {
     fn to_u64(&self) -> Option<u64> {
         match self {
             Self::Number(value) => Some(*value),
             Self::Text(value) => value.parse().ok(),
-        }
-    }
-
-    fn into_string(self) -> Option<String> {
-        match self {
-            Self::Number(value) => Some(value.to_string()),
-            Self::Text(value) if value.bytes().all(|byte| byte.is_ascii_digit()) => Some(value),
-            Self::Text(_) => None,
         }
     }
 }
@@ -397,12 +413,18 @@ fn map_response<E>(
         .into_iter()
         .enumerate()
         .map(|(index, raw)| map_comment(raw, CommentSection::Hot, index))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect();
     let latest_comments = raw_latest
         .into_iter()
         .enumerate()
         .map(|(index, raw)| map_comment(raw, CommentSection::Latest, index))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect();
     let returned_end = offset
         .checked_add(raw_latest_count)
         .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
@@ -429,21 +451,30 @@ fn map_comment<E>(
     raw: RawComment,
     section: CommentSection,
     index: usize,
-) -> Result<QqMusicTrackComment, QqMusicTrackCommentsError<E>> {
+) -> Result<Option<QqMusicTrackComment>, QqMusicTrackCommentsError<E>> {
     let invalid = |field| QqMusicTrackCommentsError::InvalidComment {
         section,
         index,
         field,
     };
+    let content = raw
+        .rootcommentcontent
+        .ok_or_else(|| invalid(CommentField::Content))?;
+    if content.trim().is_empty() {
+        return match section {
+            CommentSection::Latest => Ok(None),
+            CommentSection::Hot => Err(invalid(CommentField::Content)),
+        };
+    }
+    if content.len() > MAX_CONTENT_BYTES {
+        return Err(invalid(CommentField::Content));
+    }
     let comment_id = raw
         .commentid
-        .and_then(FlexibleUnsigned::into_string)
-        .filter(|value| value != "0" && value.len() <= MAX_COMMENT_ID_BYTES)
+        .and_then(FlexibleCommentId::into_string)
         .ok_or_else(|| invalid(CommentField::Id))?;
     let author_display_name = bounded_text(raw.nick, MAX_AUTHOR_BYTES)
         .ok_or_else(|| invalid(CommentField::AuthorDisplayName))?;
-    let content = bounded_text(raw.rootcommentcontent, MAX_CONTENT_BYTES)
-        .ok_or_else(|| invalid(CommentField::Content))?;
     let published_at_unix_seconds = raw
         .time
         .as_ref()
@@ -455,13 +486,13 @@ fn map_comment<E>(
         .as_ref()
         .and_then(FlexibleUnsigned::to_u64)
         .ok_or_else(|| invalid(CommentField::PraiseCount))?;
-    Ok(QqMusicTrackComment {
+    Ok(Some(QqMusicTrackComment {
         comment_id,
         author_display_name,
         content,
         published_at_unix_seconds,
         praise_count,
-    })
+    }))
 }
 
 fn bounded_text(value: Option<String>, max_bytes: usize) -> Option<String> {
@@ -476,8 +507,8 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        CommentField, CommentSection, MAX_RESPONSE_BYTES, QqMusicTrackCommentsError,
-        REQUEST_TIMEOUT,
+        CommentField, CommentSection, MAX_CONTENT_BYTES, MAX_RESPONSE_BYTES,
+        QqMusicTrackCommentsError, REQUEST_TIMEOUT,
     };
     use crate::{HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient};
 
@@ -593,6 +624,105 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn keeps_bounded_non_numeric_comment_identity_opaque() {
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "code": 0,
+            "subcode": 0,
+            "comment": {
+                "commenttotal": 1,
+                "commentlist": [
+                    comment(
+                        &json!("fixture-comment:id/value=opaque"),
+                        "Fixture author",
+                        "Fixture text",
+                        &json!(1_700_000_002),
+                        &json!(7)
+                    )
+                ]
+            }
+        })));
+
+        let page = client
+            .track_comments(41001, 0, 20)
+            .await
+            .expect("comment page");
+        assert_eq!(
+            page.latest_comments()[0].comment_id(),
+            "fixture-comment:id/value=opaque"
+        );
+        assert!(!format!("{page:?}").contains("fixture-comment:id/value=opaque"));
+    }
+
+    #[tokio::test]
+    async fn skips_evidenced_blank_deleted_rows_without_changing_pagination() {
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "code": 0,
+            "subcode": 0,
+            "comment": {
+                "commenttotal": 2,
+                "commentlist": [
+                    comment(
+                        &json!(92001),
+                        "Fixture author",
+                        "Fixture text",
+                        &json!(1_700_000_002),
+                        &json!(7)
+                    ),
+                    comment(
+                        &json!(92002),
+                        "Deleted author",
+                        "   ",
+                        &json!(1_700_000_003),
+                        &json!(0)
+                    )
+                ]
+            }
+        })));
+
+        let page = client
+            .track_comments(41001, 0, 2)
+            .await
+            .expect("comment page");
+        assert_eq!(page.total(), 2);
+        assert_eq!(page.latest_comments().len(), 1);
+        assert!(!page.has_more());
+    }
+
+    #[tokio::test]
+    async fn does_not_extend_blank_deleted_row_tolerance_to_hot_comments() {
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "code": 0,
+            "subcode": 0,
+            "hot_comment": {
+                "commentlist": [comment(
+                    &json!(92002),
+                    "Fixture author",
+                    "   ",
+                    &json!(1_700_000_003),
+                    &json!(0)
+                )]
+            },
+            "comment": {
+                "commenttotal": 0,
+                "commentlist": []
+            }
+        })));
+
+        let error = client
+            .track_comments(41001, 0, 20)
+            .await
+            .expect_err("blank hot comment remains invalid");
+        assert!(matches!(
+            error,
+            QqMusicTrackCommentsError::InvalidComment {
+                section: CommentSection::Hot,
+                index: 0,
+                field: CommentField::Content,
+            }
+        ));
+    }
+
+    #[tokio::test]
     async fn later_and_zero_row_pages_have_safe_terminal_semantics() {
         let later = QqMusicClient::new(CommentsTransport::from_json(&json!({
             "hot_comment": {"commentlist": [
@@ -648,13 +778,14 @@ mod tests {
                 .is_empty()
         );
 
+        let oversized_content = format!("must-not-leak{}", "x".repeat(MAX_CONTENT_BYTES));
         let invalid = QqMusicClient::new(CommentsTransport::from_json(&json!({
             "comment": {
                 "commenttotal": 1,
                 "commentlist": [comment(
                     &json!(92001),
                     "must-not-leak-author",
-                    " ",
+                    &oversized_content,
                     &json!(1_700_000_002),
                     &json!(2)
                 )]
@@ -663,7 +794,7 @@ mod tests {
         let error = invalid
             .track_comments(41001, 0, 20)
             .await
-            .expect_err("blank content");
+            .expect_err("oversized content");
         assert!(matches!(
             error,
             QqMusicTrackCommentsError::InvalidComment {
