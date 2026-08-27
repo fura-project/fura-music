@@ -93,6 +93,34 @@ Bridge, generated bindings, Dart gateway, credential rejection cleanup, account
 replacement, and packaged-Bridge cancellation are covered; live acceptance
 remains explicitly maintainer-operated.
 
+### Playlist rename evidence boundary
+
+A bounded 2026-08-28 rescan did not establish a second independent rename
+contract. The sole detailed implementation remains
+[tlyanyu/multiPlatformMusicApi at `0fd583b`](https://github.com/tlyanyu/multiPlatformMusicApi/blob/0fd583b384f5d6477067ff3d29ccedd97fc3a317/platforms/qqmusic/module/playlist_update.js):
+
+```text
+music.musicasset.PlaylistBaseWrite / EditPlaylist
+param:
+  dirId
+  mask: 15
+  dirNewName
+  dirNewDesc
+  dirNewPicUrl
+  dirNewtaglist
+```
+
+That implementation notes that description editing does not work, which makes
+the mask and optional-field semantics especially unsuitable for inference. The
+current L-1124, feeluown-qqmusic, ylw1997, jsososo, RethinkQAQ,
+SJCYZ/QQMusicApi-Java, guowenye/QQMusicApi-nodejs, Suxiaoqinx, and wxuyu
+repositories were also inspected; they supplied no independent detailed
+rename request or response contract. Search results likewise produced no
+primary implementation beyond tlyanyu. Rename is therefore
+`EVIDENCE_BLOCKED` until another current detailed source, sanitized response
+fixture, or repeatable authenticated reversible integration exists. This does
+not block the separately cross-validated `DelPlaylist` foundation.
+
 ## Catalog-entity mutation discovery
 
 Album favorite state has enough bounded evidence for an offline foundation:
