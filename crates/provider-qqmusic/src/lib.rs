@@ -5,25 +5,26 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use music_domain::{
-    AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage,
-    ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat, AudioQuality,
-    FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, MusicVideoId, MusicVideoQuality,
-    MusicVideoSource, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory,
-    NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
-    ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
-    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
-    TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem,
-    TrackSearchPage, TrackSummary,
+    AccountSummary, AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage,
+    ArtistAlbumsPage, ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat,
+    AudioQuality, FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, MusicVideoId,
+    MusicVideoQuality, MusicVideoSource, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage,
+    NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
+    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
+    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
+    SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage,
+    TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
-    AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
-    ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, CommentsError,
-    FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError, LyricsProvider,
-    MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
-    NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
-    PlaylistSearchProvider, ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge,
-    QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-    RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider, RecommendationError,
+    AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider, AlbumSearchProvider,
+    AlbumTracksProvider, ArtistAlbumsProvider, ArtistSearchProvider, ArtistTracksProvider,
+    AuthenticationError, CatalogError, CommentsError, FavoriteAlbumsProvider,
+    FavoriteArtistsProvider, LyricsError, LyricsProvider, MediaResolutionError,
+    MediaResolutionProvider, MusicProvider, MusicVideoError, NewAlbumReleasesProvider,
+    NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
+    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
+    RadarRecommendationsProvider, RankingsProvider, RecommendationError,
     RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackMusicVideoProvider,
     TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
 };
@@ -94,6 +95,37 @@ impl<T> QqMusicProvider<T> {
             *credential_guard(&self.credential),
             QqMusicCredentialState::Authenticated(_)
         )
+    }
+
+    fn authenticated_account_credential(&self) -> Result<Credential, AccountSummaryError> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => {
+                Err(AccountSummaryError::AuthenticationRequired)
+            }
+        }
+    }
+
+    fn finish_account_await(
+        &self,
+        candidate: &Credential,
+        rejected: bool,
+    ) -> Result<(), AccountSummaryError> {
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == candidate
+        );
+        if !still_current {
+            return Err(AccountSummaryError::Replaced);
+        }
+        if rejected {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(AccountSummaryError::CredentialRejected);
+        }
+        Ok(())
     }
 
     fn authenticated_credential(&self) -> Result<Credential, UserLibraryError> {
@@ -386,7 +418,7 @@ where
         *active = None;
 
         match verification {
-            Ok(()) => {
+            Ok(_) => {
                 *state = QqMusicCredentialState::Authenticated(candidate);
                 Ok(())
             }
@@ -1224,6 +1256,31 @@ where
 
     fn sign_out(&self) {
         QqMusicProvider::sign_out(self);
+    }
+}
+
+impl<T> AccountSummaryProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = AccountSummaryError;
+
+    async fn account_summary(&self) -> Result<AccountSummary, Self::Error> {
+        let candidate = self.authenticated_account_credential()?;
+        let response = self.client().verify_credential(&candidate).await;
+        let rejected = matches!(response, Err(CredentialVerificationError::Rejected { .. }));
+        self.finish_account_await(&candidate, rejected)?;
+        let summary = response
+            .as_ref()
+            .map_err(map_account_summary_error)?
+            .as_ref()
+            .ok_or(AccountSummaryError::InvalidResponse)?;
+
+        AccountSummary::new(qq_music_provider_id(), summary.display_name())
+            .map(|summary_domain| {
+                summary_domain.with_avatar_uri(summary.avatar_uri().map(str::to_owned))
+            })
+            .map_err(|_| AccountSummaryError::InvalidResponse)
     }
 }
 
@@ -2399,6 +2456,22 @@ fn map_verification_error<E>(error: &CredentialVerificationError<E>) -> Authenti
     }
 }
 
+fn map_account_summary_error<E>(error: &CredentialVerificationError<E>) -> AccountSummaryError {
+    match error {
+        CredentialVerificationError::Transport(_) => AccountSummaryError::Network,
+        CredentialVerificationError::HttpStatus(_)
+        | CredentialVerificationError::Upstream { .. } => AccountSummaryError::ServiceUnavailable,
+        CredentialVerificationError::Rejected { .. } => AccountSummaryError::CredentialRejected,
+        CredentialVerificationError::Serialize
+        | CredentialVerificationError::InvalidJson
+        | CredentialVerificationError::MissingGlobalCode
+        | CredentialVerificationError::MissingVerificationResult
+        | CredentialVerificationError::MissingVerificationCode => {
+            AccountSummaryError::InvalidResponse
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
@@ -2412,11 +2485,11 @@ mod tests {
         ProviderId, RankingId, TrackId,
     };
     use provider_api::{
-        AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
-        ArtistSearchProvider, ArtistTracksProvider, CatalogError, CommentsError,
-        FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError, LyricsProvider,
-        MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
-        NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
+        AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider, AlbumSearchProvider,
+        AlbumTracksProvider, ArtistAlbumsProvider, ArtistSearchProvider, ArtistTracksProvider,
+        CatalogError, CommentsError, FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError,
+        LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
+        MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
         PlaylistDetailsProvider, PlaylistSearchProvider, ProviderCapability,
         QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
         RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider,
@@ -2695,7 +2768,12 @@ mod tests {
                         "code": 0,
                         "music.UserInfo.userInfoServer": {
                             "code": code,
-                            "data": {"info": {}}
+                            "data": {
+                                "info": {
+                                    "nick": "Synthetic listener",
+                                    "logo": "https://example.invalid/avatar.jpg"
+                                }
+                            }
                         }
                     }))
                     .expect("fixture JSON"),
@@ -5162,6 +5240,83 @@ mod tests {
                 .expect("restore candidate"),
             QqMusicCredentialRestoreState::VerificationRequired,
         );
+    }
+
+    #[tokio::test]
+    async fn account_summary_maps_only_public_identity_for_current_credential() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(0)));
+        set_authenticated(&provider, "123456");
+
+        let summary = provider.account_summary().await.expect("account summary");
+
+        assert_eq!(summary.provider().as_str(), "qq-music");
+        assert_eq!(summary.display_name(), "Synthetic listener");
+        assert_eq!(
+            summary.avatar_uri(),
+            Some("https://example.invalid/avatar.jpg")
+        );
+        let debug = format!("{summary:?}");
+        assert!(!debug.contains("Synthetic listener"));
+        assert!(!debug.contains("avatar.jpg"));
+        assert!(!debug.contains("123456"));
+    }
+
+    #[tokio::test]
+    async fn account_summary_requires_authentication_and_rejects_missing_identity() {
+        let signed_out = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(0)));
+        assert_eq!(
+            signed_out.account_summary().await,
+            Err(AccountSummaryError::AuthenticationRequired)
+        );
+
+        let missing = QqMusicProvider::new(QqMusicClient::new(VerificationTransport {
+            response: HttpResponse::new(
+                200,
+                serde_json::to_vec(&json!({
+                    "code": 0,
+                    "music.UserInfo.userInfoServer": {
+                        "code": 0,
+                        "data": {"info": {}}
+                    }
+                }))
+                .expect("fixture JSON"),
+            ),
+        }));
+        set_authenticated(&missing, "123456");
+        assert_eq!(
+            missing.account_summary().await,
+            Err(AccountSummaryError::InvalidResponse)
+        );
+        assert!(missing.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn account_summary_rejection_clears_credential_and_late_result_cannot_cross_accounts() {
+        let rejected = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(1000)));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.account_summary().await,
+            Err(AccountSummaryError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let verification_started = Arc::new(Notify::new());
+        let release_verification = Arc::new(Notify::new());
+        let provider = QqMusicProvider::new(QqMusicClient::new(GatedVerificationTransport {
+            verification_started: Arc::clone(&verification_started),
+            release_verification: Arc::clone(&release_verification),
+        }));
+        set_authenticated(&provider, "123456");
+        let request = provider.account_summary();
+        let replacement = async {
+            verification_started.notified().await;
+            set_authenticated(&provider, "654321");
+            release_verification.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+
+        assert_eq!(result, Err(AccountSummaryError::Replaced));
+        assert!(provider.has_authenticated_credential());
     }
 
     #[tokio::test]

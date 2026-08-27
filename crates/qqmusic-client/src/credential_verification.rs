@@ -9,6 +9,39 @@ use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_VERIFICATION_RESPONSE_BYTES: usize = 512 * 1024;
 const VERIFICATION_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_ACCOUNT_DISPLAY_NAME_BYTES: usize = 512;
+const MAX_ACCOUNT_AVATAR_URI_BYTES: usize = 4096;
+
+/// Public, diagnostics-redacted identity fields returned by QQ Music's
+/// authenticated login-info operation. Account identifiers and credential
+/// material never enter this value.
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicAccountSummary {
+    display_name: String,
+    avatar_uri: Option<String>,
+}
+
+impl QqMusicAccountSummary {
+    #[must_use]
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    #[must_use]
+    pub fn avatar_uri(&self) -> Option<&str> {
+        self.avatar_uri.as_deref()
+    }
+}
+
+impl fmt::Debug for QqMusicAccountSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicAccountSummary")
+            .field("display_name", &"[REDACTED]")
+            .field("has_avatar", &self.avatar_uri.is_some())
+            .finish()
+    }
+}
 
 pub enum CredentialVerificationError<E> {
     Transport(E),
@@ -116,7 +149,7 @@ where
     pub async fn verify_credential(
         &self,
         credential: &Credential,
-    ) -> Result<(), CredentialVerificationError<T::Error>> {
+    ) -> Result<Option<QqMusicAccountSummary>, CredentialVerificationError<T::Error>> {
         let body = serde_json::to_vec(&VerificationRequest::new(credential))
             .map_err(|_| CredentialVerificationError::Serialize)?;
         let response = self
@@ -222,11 +255,23 @@ struct VerificationResponse {
 #[derive(Deserialize)]
 struct VerificationResult {
     code: Option<i64>,
+    data: Option<VerificationData>,
+}
+
+#[derive(Deserialize)]
+struct VerificationData {
+    info: Option<LoginUserInfo>,
+}
+
+#[derive(Deserialize)]
+struct LoginUserInfo {
+    nick: Option<String>,
+    logo: Option<String>,
 }
 
 fn verify_response<E>(
     envelope: VerificationResponse,
-) -> Result<(), CredentialVerificationError<E>> {
+) -> Result<Option<QqMusicAccountSummary>, CredentialVerificationError<E>> {
     let global_code = envelope
         .code
         .ok_or(CredentialVerificationError::MissingGlobalCode)?;
@@ -261,7 +306,23 @@ fn verify_response<E>(
             verification_code: Some(verification_code),
         });
     }
-    Ok(())
+    Ok(verification
+        .data
+        .and_then(|data| data.info)
+        .and_then(map_account_summary))
+}
+
+fn map_account_summary(info: LoginUserInfo) -> Option<QqMusicAccountSummary> {
+    let display_name = bounded_nonblank(info.nick, MAX_ACCOUNT_DISPLAY_NAME_BYTES)?;
+    let avatar_uri = bounded_nonblank(info.logo, MAX_ACCOUNT_AVATAR_URI_BYTES);
+    Some(QqMusicAccountSummary {
+        display_name,
+        avatar_uri,
+    })
+}
+
+fn bounded_nonblank(value: Option<String>, max_bytes: usize) -> Option<String> {
+    value.filter(|value| !value.trim().is_empty() && value.len() <= max_bytes)
 }
 
 #[cfg(test)]
@@ -273,7 +334,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::CredentialVerificationError;
+    use super::{CredentialVerificationError, MAX_ACCOUNT_DISPLAY_NAME_BYTES};
     use crate::{
         Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
@@ -361,6 +422,66 @@ mod tests {
         assert!(cookie.contains("qm_keyst=W_X_private-key"));
         assert!(cookie.contains("wxuin=123456"));
         assert!(!format!("{request:?}").contains("private-key"));
+    }
+
+    #[tokio::test]
+    async fn maps_bounded_nested_account_summary_without_exposing_identity_in_debug() {
+        let client = QqMusicClient::new(FakeTransport::new(&json!({
+            "code": 0,
+            "music.UserInfo.userInfoServer": {
+                "code": 0,
+                "data": {
+                    "errMsg": "",
+                    "identify": "",
+                    "celebrityInfo": {"uin": 0},
+                    "info": {
+                        "nick": "Synthetic listener",
+                        "logo": "https://example.invalid/avatar.jpg",
+                        "gender": 0
+                    }
+                }
+            }
+        })));
+
+        let summary = client
+            .verify_credential(&credential())
+            .await
+            .expect("valid credential response")
+            .expect("nested account summary");
+
+        assert_eq!(summary.display_name(), "Synthetic listener");
+        assert_eq!(
+            summary.avatar_uri(),
+            Some("https://example.invalid/avatar.jpg")
+        );
+        let debug = format!("{summary:?}");
+        assert!(!debug.contains("Synthetic listener"));
+        assert!(!debug.contains("avatar.jpg"));
+    }
+
+    #[tokio::test]
+    async fn verifies_credential_when_optional_account_summary_is_absent_or_unbounded() {
+        for info in [
+            json!({}),
+            json!({"nick": "   ", "logo": "https://example.invalid/avatar.jpg"}),
+            json!({"nick": "x".repeat(MAX_ACCOUNT_DISPLAY_NAME_BYTES + 1)}),
+        ] {
+            let client = QqMusicClient::new(FakeTransport::new(&json!({
+                "code": 0,
+                "music.UserInfo.userInfoServer": {
+                    "code": 0,
+                    "data": {"info": info}
+                }
+            })));
+
+            assert_eq!(
+                client
+                    .verify_credential(&credential())
+                    .await
+                    .expect("credential remains valid"),
+                None
+            );
+        }
     }
 
     #[tokio::test]

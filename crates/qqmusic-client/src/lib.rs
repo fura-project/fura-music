@@ -49,7 +49,7 @@ pub use credential::{
     CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,
     LocalCredentialValidity, LoginType,
 };
-pub use credential_verification::CredentialVerificationError;
+pub use credential_verification::{CredentialVerificationError, QqMusicAccountSummary};
 pub use favorite_albums::{
     FavoriteAlbumField, QqMusicFavoriteAlbumsError, QqMusicFavoriteAlbumsPage,
 };

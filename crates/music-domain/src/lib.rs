@@ -64,6 +64,79 @@ impl fmt::Display for InvalidProviderId {
 
 impl std::error::Error for InvalidProviderId {}
 
+/// Minimum provider-neutral identity shown for the currently authenticated
+/// account. Provider credentials and account identifiers deliberately remain
+/// outside this presentation-safe value.
+#[derive(Clone, Eq, PartialEq)]
+pub struct AccountSummary {
+    provider: ProviderId,
+    display_name: String,
+    avatar_uri: Option<String>,
+}
+
+impl AccountSummary {
+    /// # Errors
+    ///
+    /// Returns [`InvalidAccountSummary`] when the display name is blank.
+    pub fn new(
+        provider: ProviderId,
+        display_name: impl Into<String>,
+    ) -> Result<Self, InvalidAccountSummary> {
+        let display_name = display_name.into();
+        if display_name.trim().is_empty() {
+            return Err(InvalidAccountSummary);
+        }
+        Ok(Self {
+            provider,
+            display_name,
+            avatar_uri: None,
+        })
+    }
+
+    #[must_use]
+    pub fn with_avatar_uri(mut self, avatar_uri: Option<String>) -> Self {
+        self.avatar_uri = avatar_uri.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    #[must_use]
+    pub const fn provider(&self) -> &ProviderId {
+        &self.provider
+    }
+
+    #[must_use]
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    #[must_use]
+    pub fn avatar_uri(&self) -> Option<&str> {
+        self.avatar_uri.as_deref()
+    }
+}
+
+impl fmt::Debug for AccountSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AccountSummary")
+            .field("provider", &self.provider)
+            .field("display_name", &"[REDACTED]")
+            .field("has_avatar", &self.avatar_uri.is_some())
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidAccountSummary;
+
+impl fmt::Display for InvalidAccountSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("account display name must not be blank")
+    }
+}
+
+impl std::error::Error for InvalidAccountSummary {}
+
 /// Provider-scoped playlist identity. The opaque value is interpreted only by
 /// the owning provider and must not be parsed by presentation code.
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -2566,14 +2639,14 @@ fn nonblank(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId,
-        ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, MusicVideo, MusicVideoField,
-        MusicVideoId, MusicVideoQuality, MusicVideoSource, MusicVideoSourceField, NewAlbumRegion,
-        NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId,
-        PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
-        RankingGroup, RankingId, RankingSummary, RankingTracksPage, ResolvedMediaSource,
-        ResolvedMediaSourceField, TrackComment, TrackCommentField, TrackCommentId,
-        TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+        AccountSummary, AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage,
+        ArtistId, ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, MusicVideo,
+        MusicVideoField, MusicVideoId, MusicVideoQuality, MusicVideoSource, MusicVideoSourceField,
+        NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory, NewSongCollection,
+        PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId,
+        RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
+        ResolvedMediaSource, ResolvedMediaSourceField, TrackComment, TrackCommentField,
+        TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
         TrackSummaryField,
     };
 
@@ -2588,6 +2661,29 @@ mod tests {
         for value in ["", "QQMusic", "qq music", "qq_music"] {
             assert!(ProviderId::new(value).is_err(), "accepted {value:?}");
         }
+    }
+
+    #[test]
+    fn account_summary_is_bounded_to_presentation_safe_identity() {
+        let summary = AccountSummary::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "Synthetic listener",
+        )
+        .expect("summary")
+        .with_avatar_uri(Some("https://example.invalid/avatar.jpg".into()));
+
+        assert_eq!(summary.provider().as_str(), "qq-music");
+        assert_eq!(summary.display_name(), "Synthetic listener");
+        assert_eq!(
+            summary.avatar_uri(),
+            Some("https://example.invalid/avatar.jpg")
+        );
+        let debug = format!("{summary:?}");
+        assert!(!debug.contains("Synthetic listener"));
+        assert!(!debug.contains("avatar.jpg"));
+        assert!(
+            AccountSummary::new(ProviderId::new("qq-music").expect("provider"), "   ").is_err()
+        );
     }
 
     #[test]

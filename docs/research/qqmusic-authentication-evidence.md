@@ -1,8 +1,8 @@
 # QQ Music authentication evidence
 
 - **Status:** Active research for M1 authentication
-- **Last checked:** 2026-08-25
-- **Scope:** Credential lifecycle, restore semantics, and the first WeChat QR protocol slices.
+- **Last checked:** 2026-08-27
+- **Scope:** Credential lifecycle, restore semantics, bounded signed-in account identity, and the first WeChat QR protocol slices.
 
 This note records behavioral evidence, not source code. Reference implementations have different licenses, so implementation in this repository must be independent.
 
@@ -46,6 +46,26 @@ L-1124, yakult, and ylw1997 independently use the named `music.UserInfo.userInfo
 The implementation requires both the global response code and the named result code to be zero. Codes `1000`, `104400`, and `104401` are the only currently cross-validated credential-rejection values. A non-rejection value such as `50006`, HTTP failure, transport error, or missing/malformed result is not logout evidence and retains the startup candidate for retry.
 
 Verification has an exact process-local attempt ID. The Provider compares both that ID and the retained candidate before and after the await; cancellation, retry, or beginning a new QR login makes a late result `Replaced`. Only explicit rejection clears Rust credential state and triggers platform-vault deletion at the Dart edge. This lifecycle is fixture-tested but has not accepted a real account credential in this checkout.
+
+### Bounded signed-in account identity
+
+Two current independent implementations agree on the only public identity
+fields selected for the first-release account summary:
+
+- [yakult `qrLogin.ts` at `2c27d6b`](https://github.com/yakult-green-tea/qq-music-api/blob/2c27d6b90dd56bcf0796883e27216f69189d8f68/src/services/auth/qrLogin.ts) records a measured real-session `GetLoginUserInfo` shape with account fields nested under `data.info`; its sanitized regression uses `info.nick` and `info.logo` and records that the response does not carry a reliable account ID;
+- [ylw1997's current `get-user-info` contract at `5f87b07`](https://github.com/ylw1997/qqmusic-api/blob/5f87b07b85923f8862d7b57f9d558ce0314ba1a7/docs/apis/get-user-info.md) independently documents the same named operation and the same nested `nick` / `logo` fields.
+
+L-1124's current implementation deliberately consumes only the response code
+for credential validity and does not model profile data. The project therefore
+keeps credential verification successful when `info` is absent or unusable,
+while the separate account-summary capability requires a bounded nonblank
+display name and treats the avatar as optional. It exposes neither the account
+ID nor any credential field, rechecks the exact credential after the await,
+and cancels or rejects results that cross sign-out/account replacement.
+
+No stored credential or real account was accessed during this discovery. The
+offline fixture is synthetic and retains no personal response content, so it
+does not by itself prove current behavior for the maintainer's account.
 
 ## Important differences
 

@@ -4,12 +4,12 @@ use std::fmt;
 use std::future::Future;
 
 use music_domain::{
-    AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
-    ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo,
-    NewAlbumRegion, NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId,
-    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
-    RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyrics, TrackCommentsPage, TrackId, TrackSearchPage,
+    AccountSummary, AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage,
+    ArtistId, ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, FavoriteArtistsPage,
+    MusicVideo, NewAlbumRegion, NewAlbumReleasesPage, NewSongCategory, NewSongCollection,
+    PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId,
+    RadarTrackPage, RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage,
+    ResolvedMediaSource, SynchronizedLyrics, TrackCommentsPage, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -472,6 +472,41 @@ pub trait QrAuthenticationProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<Self::Session, Self::Error>> + Send;
     fn has_authenticated_credential(&self) -> bool;
     fn sign_out(&self);
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AccountSummaryError {
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+}
+
+impl fmt::Display for AccountSummaryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "account summary requires authentication",
+            Self::CredentialRejected => "account-summary credential was rejected",
+            Self::Network => "account-summary network request failed",
+            Self::ServiceUnavailable => "account summary is unavailable",
+            Self::InvalidResponse => "account summary returned an invalid response",
+            Self::Replaced => "the authenticated account changed during account-summary loading",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for AccountSummaryError {}
+
+/// Provider-neutral public identity for the exact currently authenticated
+/// account. Credentials and provider account identifiers remain private to
+/// the concrete Provider.
+pub trait AccountSummaryProvider: MusicProvider + Sync {
+    type Error;
+
+    fn account_summary(&self) -> impl Future<Output = Result<AccountSummary, Self::Error>> + Send;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -5,7 +5,7 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: FIRST_RELEASE_CORE_CAPABILITY_COMPLETION
-  current_task: SIGNED_IN_ACCOUNT_SUMMARY_DISCOVERY
+  current_task: AUDIO_QUALITY_DISCOVERY
   next_action: DISCOVER
 ---
 
@@ -18,12 +18,13 @@ execution:
 - The four Search types share one identical failure taxonomy/retry policy while retaining feature-specific results, pagination, Bridge DTO validation, and UI state.
 - Repeated catalog Queue test setup is shared without deleting any distinct regression scenario.
 - Governance is current-state oriented, and the complete Rust, Dart/Flutter, Linux build, and required Linux integration gates pass. See `docs/development/complexity-paydown-review.md`.
-- The repository-wide capability matrix is current in `docs/development/first-release-capability-audit.md`. Existing read/catalog/playback foundations are strong, while account summary, truthful Home data, library mutations, audio quality, Settings, and target-runtime evidence remain explicitly classified.
+- The repository-wide capability matrix is current in `docs/development/first-release-capability-audit.md`. Existing read/catalog/playback foundations are strong, while truthful Home data, library mutations, audio quality, and target-runtime evidence remain explicitly classified.
 
 # Active Work
 
 - The typed Settings foundation now persists only the existing system/light/dark preference in a versioned noncritical local document. Defaults, malformed/future documents, storage failures, read/write/reset, startup Theme wiring, and a disposable Linux native round trip are verified; no Settings page was added.
-- Discover whether the existing named user-info response can safely provide a bounded signed-in display name and optional avatar before adding another account endpoint.
+- The signed-in account-summary foundation now maps only a bounded display name and optional avatar through Domain, Provider, a cancellable Bridge, and a Dart gateway. It remains presentation-deferred and is not claimed as maintainer-account live evidence.
+- Cross-validate audio-quality request, returned-quality, entitlement, and fallback semantics before implementation; do not infer VIP status or silently relabel the returned format.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
 - Do not automate stored-account access or real-account mutation acceptance.
 
@@ -35,10 +36,9 @@ execution:
 
 # Next Candidates
 
-1. Perform bounded signed-in account-summary discovery using sanitized evidence; do not retain personal responses.
-2. Cross-validate audio-quality request, returned-quality, entitlement, and fallback semantics before implementation.
-3. Research one smallest reversible personal-library mutation without autonomously changing the maintainer's account.
-4. Discover truthful Home recommendation semantics without substituting unrelated existing data.
+1. Cross-validate audio-quality request, returned-quality, entitlement, and fallback semantics before implementation.
+2. Research one smallest reversible personal-library mutation without autonomously changing the maintainer's account.
+3. Discover truthful Home recommendation semantics without substituting unrelated existing data.
 
 # Pending Human Decisions
 
@@ -50,3 +50,4 @@ execution:
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, or unavailable operating systems.
 - The previous directed Home remains a paused presentation snapshot, not accepted product completion. Public recommendations are not Daily Recommendations, personal playlists are not a Treasure Playlist Library, and the missing Home data capabilities are tracked without fabricated substitutions.
 - Historical research/checkpoint documents contain useful protocol and evidence boundaries. They are retained unless a file is proven to duplicate Git and current governance without unique reasoning.
+- Signed-in account-summary mapping is supported by two current independent implementations and synthetic offline coverage; this checkout has not retained or observed the maintainer's live account profile response.

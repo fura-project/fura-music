@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_restore`, `failed_start`, `failed_verification`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `native_qq_music_provider`, `start_attempt_guard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_account_summary`, `failed_restore`, `failed_start`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `native_qq_music_provider`, `start_attempt_guard`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveQqMusicWechatQrLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
@@ -26,6 +26,9 @@ bool cancelQqMusicWechatQrLoginStart({required int attemptId}) =>
 
 bool qqMusicHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiAuthenticationQqMusicHasAuthenticatedCredential();
+
+QqMusicAccountSummaryLoadHandle beginQqMusicAccountSummaryLoad() =>
+    RustLib.instance.api.crateApiAuthenticationBeginQqMusicAccountSummaryLoad();
 
 /// Clears the process-local QQ Music credential and cancels authentication
 /// work. The Flutter platform edge deletes the separately stored vault entry
@@ -67,6 +70,15 @@ bool cancelQqMusicCredentialVerification({required int attemptId}) => RustLib
       attemptId: attemptId,
     );
 
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAccountSummaryLoadHandle>>
+abstract class QqMusicAccountSummaryLoadHandle implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicAccountSummaryLoad> run();
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicQrLoginSessionHandle>>
 abstract class QqMusicQrLoginSessionHandle implements RustOpaqueInterface {
   Future<QqMusicQrLoginUpdate> advance();
@@ -74,6 +86,54 @@ abstract class QqMusicQrLoginSessionHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
+}
+
+class QqMusicAccountSummary {
+  final String displayName;
+  final String? avatarUri;
+
+  const QqMusicAccountSummary({required this.displayName, this.avatarUri});
+
+  @override
+  int get hashCode => displayName.hashCode ^ avatarUri.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicAccountSummary &&
+          runtimeType == other.runtimeType &&
+          displayName == other.displayName &&
+          avatarUri == other.avatarUri;
+}
+
+enum QqMusicAccountSummaryFailure {
+  coreUnavailable,
+  authenticationRequired,
+  credentialRejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  cancelled,
+  alreadyRunning,
+}
+
+class QqMusicAccountSummaryLoad {
+  final QqMusicAccountSummary? summary;
+  final QqMusicAccountSummaryFailure? failure;
+
+  const QqMusicAccountSummaryLoad({this.summary, this.failure});
+
+  @override
+  int get hashCode => summary.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicAccountSummaryLoad &&
+          runtimeType == other.runtimeType &&
+          summary == other.summary &&
+          failure == other.failure;
 }
 
 class QqMusicCredentialExport {

@@ -1,18 +1,18 @@
 use std::fmt;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{LazyLock, Mutex as StdMutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use provider_api::{
-    AuthenticationError, QrAuthenticationProgress, QrAuthenticationProvider,
-    QrAuthenticationSession, QrImageFormat,
+    AccountSummaryError, AccountSummaryProvider, AuthenticationError, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
 };
 use provider_qqmusic::{
     QqMusicCredentialRestoreState as ProviderCredentialRestoreState, QqMusicProvider,
     QqMusicQrAuthenticationCancellation, QqMusicQrAuthenticationSession,
 };
 use qqmusic_client::{CredentialPersistenceError, QqMusicClient, ReqwestTransport};
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
@@ -159,6 +159,41 @@ pub struct QqMusicCredentialVerification {
     pub failure: Option<QqMusicCredentialVerificationFailure>,
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicAccountSummary {
+    pub display_name: String,
+    pub avatar_uri: Option<String>,
+}
+
+impl fmt::Debug for QqMusicAccountSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicAccountSummary")
+            .field("display_name", &"[REDACTED]")
+            .field("has_avatar", &self.avatar_uri.is_some())
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicAccountSummaryFailure {
+    CoreUnavailable,
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+    Cancelled,
+    AlreadyRunning,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QqMusicAccountSummaryLoad {
+    pub summary: Option<QqMusicAccountSummary>,
+    pub failure: Option<QqMusicAccountSummaryFailure>,
+}
+
 impl fmt::Debug for QqMusicCredentialExport {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -275,6 +310,84 @@ pub fn qq_music_has_authenticated_credential() -> bool {
         .is_ok_and(QrAuthenticationProvider::has_authenticated_credential)
 }
 
+/// One cancellable, single-use account-summary read. It owns no credential or
+/// account identifier and returns only presentation-safe identity fields.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicAccountSummaryLoadHandle {
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl QqMusicAccountSummaryLoadHandle {
+    pub async fn run(&self) -> QqMusicAccountSummaryLoad {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_account_summary(QqMusicAccountSummaryFailure::Cancelled);
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_account_summary(QqMusicAccountSummaryFailure::AlreadyRunning);
+        }
+        let outcome = match native_qq_music_provider() {
+            Ok(provider) => {
+                tokio::select! {
+                    () = self.cancelled.notified() => {
+                        failed_account_summary(QqMusicAccountSummaryFailure::Cancelled)
+                    }
+                    result = provider.account_summary() => {
+                        if self.active.load(Ordering::SeqCst) {
+                            map_account_summary_load(result)
+                        } else {
+                            failed_account_summary(QqMusicAccountSummaryFailure::Cancelled)
+                        }
+                    }
+                }
+            }
+            Err(()) => failed_account_summary(QqMusicAccountSummaryFailure::CoreUnavailable),
+        };
+        self.running.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        outcome
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_qq_music_account_summary_load() -> QqMusicAccountSummaryLoadHandle {
+    QqMusicAccountSummaryLoadHandle {
+        active: AtomicBool::new(true),
+        running: AtomicBool::new(false),
+        cancelled: Notify::new(),
+    }
+}
+
+fn map_account_summary_load(
+    result: Result<music_domain::AccountSummary, AccountSummaryError>,
+) -> QqMusicAccountSummaryLoad {
+    match result {
+        Ok(summary) => QqMusicAccountSummaryLoad {
+            summary: Some(QqMusicAccountSummary {
+                display_name: summary.display_name().to_owned(),
+                avatar_uri: summary.avatar_uri().map(str::to_owned),
+            }),
+            failure: None,
+        },
+        Err(error) => failed_account_summary(map_account_summary_failure(error)),
+    }
+}
+
 /// Clears the process-local QQ Music credential and cancels authentication
 /// work. The Flutter platform edge deletes the separately stored vault entry
 /// only after this succeeds.
@@ -382,6 +495,15 @@ const fn failed_verification(
     }
 }
 
+const fn failed_account_summary(
+    failure: QqMusicAccountSummaryFailure,
+) -> QqMusicAccountSummaryLoad {
+    QqMusicAccountSummaryLoad {
+        summary: None,
+        failure: Some(failure),
+    }
+}
+
 const fn failed_restore(failure: QqMusicCredentialRestoreFailure) -> QqMusicCredentialRestore {
     QqMusicCredentialRestore {
         state: None,
@@ -437,6 +559,19 @@ const fn map_error(error: AuthenticationError) -> QqMusicQrLoginFailure {
         AuthenticationError::TooManyNetworkFailures => {
             QqMusicQrLoginFailure::TooManyNetworkFailures
         }
+    }
+}
+
+const fn map_account_summary_failure(error: AccountSummaryError) -> QqMusicAccountSummaryFailure {
+    match error {
+        AccountSummaryError::AuthenticationRequired => {
+            QqMusicAccountSummaryFailure::AuthenticationRequired
+        }
+        AccountSummaryError::CredentialRejected => QqMusicAccountSummaryFailure::CredentialRejected,
+        AccountSummaryError::Network => QqMusicAccountSummaryFailure::Network,
+        AccountSummaryError::ServiceUnavailable => QqMusicAccountSummaryFailure::ServiceUnavailable,
+        AccountSummaryError::InvalidResponse => QqMusicAccountSummaryFailure::InvalidResponse,
+        AccountSummaryError::Replaced => QqMusicAccountSummaryFailure::Replaced,
     }
 }
 
@@ -500,12 +635,14 @@ const fn map_verification_failure(
 #[cfg(test)]
 mod tests {
     use super::{
-        QqMusicCredentialExport, QqMusicCredentialRestoreFailure,
-        QqMusicCredentialVerificationFailure, QqMusicQrChallenge, QqMusicQrImageFormat,
-        QqMusicQrLoginFailure, clear_start_attempt, failed_start, map_error, map_persistence_error,
-        map_verification_failure, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
+        QqMusicAccountSummary, QqMusicAccountSummaryFailure, QqMusicCredentialExport,
+        QqMusicCredentialRestoreFailure, QqMusicCredentialVerificationFailure, QqMusicQrChallenge,
+        QqMusicQrImageFormat, QqMusicQrLoginFailure, begin_qq_music_account_summary_load,
+        clear_start_attempt, failed_start, map_account_summary_failure, map_error,
+        map_persistence_error, map_verification_failure, reserve_qq_music_wechat_qr_login_start,
+        start_attempt_guard,
     };
-    use provider_api::AuthenticationError;
+    use provider_api::{AccountSummaryError, AuthenticationError};
     use qqmusic_client::{CredentialPersistenceError, InvalidCredential};
 
     #[test]
@@ -549,6 +686,39 @@ mod tests {
         let debug = format!("{export:?}");
         assert!(debug.contains("17"));
         assert!(!debug.contains("private"));
+    }
+
+    #[test]
+    fn account_summary_bridge_is_typed_and_redacts_debug_output() {
+        let summary = QqMusicAccountSummary {
+            display_name: "Synthetic listener".into(),
+            avatar_uri: Some("https://example.invalid/avatar.jpg".into()),
+        };
+        let debug = format!("{summary:?}");
+        assert!(!debug.contains("Synthetic listener"));
+        assert!(!debug.contains("avatar.jpg"));
+        assert_eq!(
+            map_account_summary_failure(AccountSummaryError::CredentialRejected),
+            QqMusicAccountSummaryFailure::CredentialRejected
+        );
+        assert_eq!(
+            map_account_summary_failure(AccountSummaryError::Replaced),
+            QqMusicAccountSummaryFailure::Replaced
+        );
+    }
+
+    #[tokio::test]
+    async fn account_summary_load_cancellation_is_exact_and_terminal() {
+        let handle = begin_qq_music_account_summary_load();
+        assert!(handle.is_active());
+        assert!(handle.cancel());
+        assert!(!handle.cancel());
+        let result = handle.run().await;
+        assert!(result.summary.is_none());
+        assert_eq!(
+            result.failure,
+            Some(QqMusicAccountSummaryFailure::Cancelled)
+        );
     }
 
     #[test]

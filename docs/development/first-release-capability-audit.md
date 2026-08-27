@@ -18,7 +18,7 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 | WeChat QR sign-in lifecycle | A normal user can establish an account session. | `VERIFIED`: client/provider/Bridge/controller tests cover create, scan, confirm, expiry, refusal, timeout, cancellation, retry budget, and replacement; the maintainer observed a successful scan. | No core layer. | authenticated read | Required | One bounded QR session reaches authenticated or an exact terminal state without leaking account material. |
 | Credential persistence, restore, and server verification | Restart does not silently lose or falsely trust a session. | `VERIFIED`: versioned Rust credential document, platform vault adapter, server verification, rejection/replacement rules, and Linux/Android disposable vault integrations exist; the maintainer observed restore. | Apple/Windows runtime evidence remains absent. | platform-local + authenticated read | Required | Stored material becomes authenticated only after QQ acceptance; transient failures preserve it and explicit rejection clears it at the platform edge. |
 | Sign-out and account replacement | A user can safely end or replace a session. | `VERIFIED`: late login/verification/library results cannot cross replacement; sign-out orders core and vault cleanup and exposes cleanup failure. | No core layer. | authenticated read | Required | Active core state is cleared, stale operations cannot promote, and vault failure remains visible/retryable. |
-| Signed-in account summary | A user can confirm which QQ Music account is active before using personal data or mutations. | `MISSING`: the existing `GetLoginUserInfo` operation validates only result codes and deliberately discards response data. | Protocol evidence, Domain model, Provider, Bridge, local model. | authenticated read | Required | A bounded display name and optional avatar are mapped from current evidence, redacted in diagnostics, and remain tied to exact credential generation. |
+| Signed-in account summary | A user can confirm which QQ Music account is active before using personal data or mutations. | `IMPLEMENTED`: two current independent implementations agree on nested `info.nick` / `info.logo`, including one measured real-session shape; synthetic client fixtures plus Domain, Provider, cancellable Bridge, and Dart-gateway tests cover bounded mapping, redacted diagnostics, rejection, cancellation, vault cleanup, and exact account replacement. | Later presentation integration and optional maintainer-operated live observation; neither blocks the reusable foundation. | authenticated read | Required | A bounded display name and optional avatar are mapped from current evidence, redacted in diagnostics, and remain tied to exact credential generation. |
 | Additional login methods | Some users may not use WeChat. | `OUT_OF_SCOPE`: no demonstrated first-release blocker; one maintained login path already works. | All layers. | authenticated read | Later | Requires evidence that WeChat QR alone materially blocks target users. |
 
 ## B — Home recommendation data
@@ -89,22 +89,19 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 ## Ranked immediate candidates
 
-1. **Signed-in account summary discovery** — high safety/account clarity value;
-   investigate the data already returned by the named authenticated user-info
-   operation before adding a new endpoint. Implementation still needs sanitized
-   response evidence.
-2. **Audio-quality discovery and negotiation** — high core music value and a
+1. **Audio-quality discovery and negotiation** — high core music value and a
    dependency of a real preference, but request prefixes, entitlement, actual
    returned quality, and fallback must be cross-validated before code changes.
-3. **Personal-library core mutation discovery** — high mainstream value but a
+2. **Personal-library core mutation discovery** — high mainstream value but a
    broad remote-write surface. Start with the smallest independently evidenced,
    reversible operation; real-account acceptance remains maintainer-operated.
-4. **Home recommendation capability discovery** — needed by the accepted Home
+3. **Home recommendation capability discovery** — needed by the accepted Home
    composition, but must establish each section's semantics rather than reuse
    public recommendations or personal playlists under misleading names. Popular
    Programs remains product-authority-sensitive.
 
-The Settings slice is complete within its platform-evidence boundary. The next
-selected task is bounded signed-in account-summary discovery. It may inspect
-current implementations and sanitized response shapes, but it may not call the
-stored account, add a speculative endpoint, or retain personal response data.
+The Settings and signed-in account-summary foundations are complete within
+their stated platform/live-evidence boundaries. The next selected task is
+bounded audio-quality discovery; it may inspect current implementations and
+safe service evidence, but it may not infer VIP entitlement or silently relabel
+the actual returned format.
