@@ -100,18 +100,18 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 ## TD-007 — Remote library mutations duplicate single-use lifecycle adapters
 
-**Status:** Open
+**Status:** Resolved
 
 **Problem:** Liked-Track and owned-playlist Track membership deliberately use two explicit Bridge handles and Dart gateways with nearly identical single-use cancellation, typed unknown-outcome, and credential-cleanup mechanics.
 
 **Why accepted:** Two concrete operations established the real common lifecycle while keeping their desired-state types and Provider contracts clear. A generic remote-mutation framework before that evidence would have been speculative and harder to audit for account safety.
 
-**Impact:** Failure mapping and cancellation rules currently need parallel updates in two narrow files.
+**Impact:** The proven single-use Rust lifecycle and Dart credential-cleanup rule are now shared; operation-specific typed failure mapping remains intentionally explicit.
 
 **Risk:** A third copied mutation path could drift by reporting an uncertain remote write as a definitive failure, retrying it, or clearing credentials for a non-rejection.
 
-**Suggested solution:** When a third distinct remote library mutation is selected, extract only the proven single-use lifecycle and credential-cleanup mechanics while preserving operation-specific typed inputs/results and Provider-owned identity parsing.
+**Suggested solution:** Implemented as one private Bridge lifecycle and one narrow Dart cleanup helper. Keep operation-specific typed inputs/results and Provider-owned identity parsing separate.
 
-**Trigger condition:** The third distinct remote library mutation enters implementation.
+**Trigger condition:** Triggered and resolved on 2026-08-28 before the selected create-playlist operation entered implementation. Reopen only if another proven lifecycle rule starts being copied across remote mutations.
 
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

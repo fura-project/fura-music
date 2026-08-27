@@ -15,6 +15,7 @@ pub mod playlist_tracks;
 pub mod queue;
 pub mod rankings;
 pub mod recommendations;
+mod remote_mutation;
 pub mod search;
 pub mod track_likes;
 

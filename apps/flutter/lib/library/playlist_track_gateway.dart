@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/library/remote_mutation_support.dart';
 import 'package:flutterustmusic/src/rust/api/playlist_tracks.dart' as bridge;
 
 enum PlaylistTrackState { present, absent }
@@ -130,18 +131,16 @@ class _VaultCleaningPlaylistTrackMutationOperation
   @override
   Future<PlaylistTrackMutationResult> run() async {
     final result = await _inner.run();
-    if (result.failure != PlaylistTrackMutationFailure.credentialRejected) {
-      return result;
-    }
-    try {
-      await _credentialVault.delete();
-      return result;
-    } on Object {
-      return const PlaylistTrackMutationResult(
+    return finishRemoteMutationCredentialRejection(
+      result: result,
+      credentialRejected:
+          result.failure == PlaylistTrackMutationFailure.credentialRejected,
+      credentialVault: _credentialVault,
+      cleanupFailureResult: const PlaylistTrackMutationResult(
         failure:
             PlaylistTrackMutationFailure.credentialRejectedStorageCleanupFailed,
-      );
-    }
+      ),
+    );
   }
 }
 

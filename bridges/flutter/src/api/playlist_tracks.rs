@@ -1,10 +1,9 @@
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use provider_api::{LibraryMutationError, PlaylistTrackMutationProvider};
-use tokio::sync::Notify;
 
 use super::authentication::native_qq_music_provider;
+use super::remote_mutation::{RemoteMutationLifecycle, RemoteMutationStart};
 use super::{domain_playlist_id, domain_track_id};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,9 +43,7 @@ pub struct QqMusicPlaylistTrackMutationHandle {
     opaque_playlist_id: String,
     opaque_track_id: String,
     desired_state: QqMusicPlaylistTrackState,
-    active: AtomicBool,
-    running: AtomicBool,
-    cancelled: Notify,
+    lifecycle: RemoteMutationLifecycle,
 }
 
 impl fmt::Debug for QqMusicPlaylistTrackMutationHandle {
@@ -58,18 +55,23 @@ impl fmt::Debug for QqMusicPlaylistTrackMutationHandle {
             .field("opaque_track_id", &"[REDACTED]")
             .field("desired_state", &self.desired_state)
             .field("active", &self.is_active())
-            .field("running", &self.running.load(Ordering::SeqCst))
+            .field("running", &self.lifecycle.is_running())
             .finish()
     }
 }
 
 impl QqMusicPlaylistTrackMutationHandle {
     pub async fn run(&self) -> QqMusicPlaylistTrackMutationResult {
-        if !self.active.load(Ordering::SeqCst) {
-            return failed_mutation(QqMusicPlaylistTrackMutationFailure::CancelledOutcomeUnknown);
-        }
-        if self.running.swap(true, Ordering::SeqCst) {
-            return failed_mutation(QqMusicPlaylistTrackMutationFailure::AlreadyRunning);
+        match self.lifecycle.try_start() {
+            RemoteMutationStart::Started => {}
+            RemoteMutationStart::Cancelled => {
+                return failed_mutation(
+                    QqMusicPlaylistTrackMutationFailure::CancelledOutcomeUnknown,
+                );
+            }
+            RemoteMutationStart::AlreadyRunning => {
+                return failed_mutation(QqMusicPlaylistTrackMutationFailure::AlreadyRunning);
+            }
         }
         let outcome = match (
             domain_playlist_id(&self.provider_id, &self.opaque_playlist_id),
@@ -79,7 +81,7 @@ impl QqMusicPlaylistTrackMutationHandle {
                 Ok(provider) => {
                     let present = self.desired_state == QqMusicPlaylistTrackState::Present;
                     tokio::select! {
-                        () = self.cancelled.notified() => {
+                        () = self.lifecycle.cancelled() => {
                             failed_mutation(
                                 QqMusicPlaylistTrackMutationFailure::CancelledOutcomeUnknown,
                             )
@@ -89,7 +91,7 @@ impl QqMusicPlaylistTrackMutationHandle {
                             track_id,
                             present,
                         ) => {
-                            if self.active.load(Ordering::SeqCst) {
+                            if self.lifecycle.is_active() {
                                 map_mutation(result, self.desired_state)
                             } else {
                                 failed_mutation(
@@ -103,23 +105,18 @@ impl QqMusicPlaylistTrackMutationHandle {
             },
             _ => failed_mutation(QqMusicPlaylistTrackMutationFailure::InvalidRequest),
         };
-        self.running.store(false, Ordering::SeqCst);
-        self.active.store(false, Ordering::SeqCst);
+        self.lifecycle.finish();
         outcome
     }
 
     #[flutter_rust_bridge::frb(sync)]
     pub fn cancel(&self) -> bool {
-        let was_active = self.active.swap(false, Ordering::SeqCst);
-        if was_active {
-            self.cancelled.notify_one();
-        }
-        was_active
+        self.lifecycle.cancel()
     }
 
     #[flutter_rust_bridge::frb(sync, getter)]
     pub fn is_active(&self) -> bool {
-        self.active.load(Ordering::SeqCst)
+        self.lifecycle.is_active()
     }
 }
 
@@ -135,9 +132,7 @@ pub fn begin_qq_music_playlist_track_mutation(
         opaque_playlist_id,
         opaque_track_id,
         desired_state,
-        active: AtomicBool::new(true),
-        running: AtomicBool::new(false),
-        cancelled: Notify::new(),
+        lifecycle: RemoteMutationLifecycle::new(),
     }
 }
 

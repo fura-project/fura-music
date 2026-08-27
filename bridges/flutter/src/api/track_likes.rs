@@ -1,11 +1,10 @@
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use provider_api::{LibraryMutationError, TrackLikeMutationProvider};
-use tokio::sync::Notify;
 
 use super::authentication::native_qq_music_provider;
 use super::domain_track_id;
+use super::remote_mutation::{RemoteMutationLifecycle, RemoteMutationStart};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicTrackLikeState {
@@ -42,9 +41,7 @@ pub struct QqMusicTrackLikeMutationHandle {
     provider_id: String,
     opaque_track_id: String,
     desired_state: QqMusicTrackLikeState,
-    active: AtomicBool,
-    running: AtomicBool,
-    cancelled: Notify,
+    lifecycle: RemoteMutationLifecycle,
 }
 
 impl fmt::Debug for QqMusicTrackLikeMutationHandle {
@@ -55,31 +52,34 @@ impl fmt::Debug for QqMusicTrackLikeMutationHandle {
             .field("opaque_track_id", &"[REDACTED]")
             .field("desired_state", &self.desired_state)
             .field("active", &self.is_active())
-            .field("running", &self.running.load(Ordering::SeqCst))
+            .field("running", &self.lifecycle.is_running())
             .finish()
     }
 }
 
 impl QqMusicTrackLikeMutationHandle {
     pub async fn run(&self) -> QqMusicTrackLikeMutationResult {
-        if !self.active.load(Ordering::SeqCst) {
-            return failed_mutation(QqMusicTrackLikeMutationFailure::CancelledOutcomeUnknown);
-        }
-        if self.running.swap(true, Ordering::SeqCst) {
-            return failed_mutation(QqMusicTrackLikeMutationFailure::AlreadyRunning);
+        match self.lifecycle.try_start() {
+            RemoteMutationStart::Started => {}
+            RemoteMutationStart::Cancelled => {
+                return failed_mutation(QqMusicTrackLikeMutationFailure::CancelledOutcomeUnknown);
+            }
+            RemoteMutationStart::AlreadyRunning => {
+                return failed_mutation(QqMusicTrackLikeMutationFailure::AlreadyRunning);
+            }
         }
         let outcome = match domain_track_id(&self.provider_id, &self.opaque_track_id) {
             Ok(track_id) => match native_qq_music_provider() {
                 Ok(provider) => {
                     let liked = self.desired_state == QqMusicTrackLikeState::Liked;
                     tokio::select! {
-                        () = self.cancelled.notified() => {
+                        () = self.lifecycle.cancelled() => {
                             failed_mutation(
                                 QqMusicTrackLikeMutationFailure::CancelledOutcomeUnknown,
                             )
                         }
                         result = provider.set_track_liked(track_id, liked) => {
-                            if self.active.load(Ordering::SeqCst) {
+                            if self.lifecycle.is_active() {
                                 map_mutation(result, self.desired_state)
                             } else {
                                 failed_mutation(
@@ -93,23 +93,18 @@ impl QqMusicTrackLikeMutationHandle {
             },
             Err(()) => failed_mutation(QqMusicTrackLikeMutationFailure::InvalidRequest),
         };
-        self.running.store(false, Ordering::SeqCst);
-        self.active.store(false, Ordering::SeqCst);
+        self.lifecycle.finish();
         outcome
     }
 
     #[flutter_rust_bridge::frb(sync)]
     pub fn cancel(&self) -> bool {
-        let was_active = self.active.swap(false, Ordering::SeqCst);
-        if was_active {
-            self.cancelled.notify_one();
-        }
-        was_active
+        self.lifecycle.cancel()
     }
 
     #[flutter_rust_bridge::frb(sync, getter)]
     pub fn is_active(&self) -> bool {
-        self.active.load(Ordering::SeqCst)
+        self.lifecycle.is_active()
     }
 }
 
@@ -123,9 +118,7 @@ pub fn begin_qq_music_track_like_mutation(
         provider_id,
         opaque_track_id,
         desired_state,
-        active: AtomicBool::new(true),
-        running: AtomicBool::new(false),
-        cancelled: Notify::new(),
+        lifecycle: RemoteMutationLifecycle::new(),
     }
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/library/remote_mutation_support.dart';
 import 'package:flutterustmusic/src/rust/api/track_likes.dart' as bridge;
 
 enum TrackLikeState { liked, notLiked }
@@ -118,18 +119,16 @@ class _VaultCleaningTrackLikeMutationOperation
   @override
   Future<TrackLikeMutationResult> run() async {
     final result = await _inner.run();
-    if (result.failure != TrackLikeMutationFailure.credentialRejected) {
-      return result;
-    }
-    try {
-      await _credentialVault.delete();
-      return result;
-    } on Object {
-      return const TrackLikeMutationResult(
+    return finishRemoteMutationCredentialRejection(
+      result: result,
+      credentialRejected:
+          result.failure == TrackLikeMutationFailure.credentialRejected,
+      credentialVault: _credentialVault,
+      cleanupFailureResult: const TrackLikeMutationResult(
         failure:
             TrackLikeMutationFailure.credentialRejectedStorageCleanupFailed,
-      );
-    }
+      ),
+    );
   }
 }
 
