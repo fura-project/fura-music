@@ -82,4 +82,20 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Reassess when a sanitized fixture or controlled integration returns `hasmore` after page ten, or before public alpha if large-library support becomes an acceptance requirement.
 
+## TD-006 — Native video distribution notices are not assembled
+
+**Status:** Open
+
+**Problem:** M5.5 adds the MIT-licensed `media_kit` packages and their bundled native playback libraries. Development builds intentionally do not yet contain a project-owned, per-platform inventory and notice bundle covering the exact libmpv/FFmpeg build flavor and all applicable native-library terms.
+
+**Why accepted:** The dependency decision used the upstream default non-GPL video flavor and bounded local Linux/Android packaging evidence. No artifact is authorized for external distribution while HD-001 remains pending, so assembling production notices before the final artifact shape and release ownership exist would be premature.
+
+**Impact:** Development and testing can continue, but an MV-capable binary must not be published as a release until its exact native dependency inventory and required notices/source or relinking information have been reviewed and included.
+
+**Risk:** Publishing without that review could omit license text or another obligation imposed by the native media stack. Dependency updates could also change the bundled build flavor or license set without an obvious Dart API change.
+
+**Suggested solution:** During authorized release preparation, inventory each platform artifact, verify the selected native build configuration against upstream provenance and licenses, include the required third-party notices and corresponding source/relink information, and add a repeatable release check that detects dependency or build-flavor changes. Obtain human/legal guidance if the applicable distribution terms remain uncertain.
+
+**Trigger condition:** Schedule together with TD-002 after HD-001 is resolved and before the first external MV-capable artifact is distributed; reassess immediately if the media packages or native build flavor change.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

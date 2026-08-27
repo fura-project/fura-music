@@ -194,6 +194,8 @@ Turn the checkpointed Material client into a familiar, complete first-release QQ
 
 Each phase begins with bounded discovery and a finite slice. Protocol-facing comments and MV work require current evidence before implementation. The user-operated M1 playback/Queue/Lyrics observation remains the highest-priority acceptance evidence when the maintainer supplies a coarse secret-safe result, but it does not block independent M5 work.
 
+M5.1 through M5.5 are implemented. M5.6 is the active phase; it audits and classifies remaining first-release gaps before the checkpoint review rather than assuming another feature is required.
+
 ### Exit criteria
 
 1. Home is the authenticated default and provides useful, truthful entry points from stable capabilities rather than an empty destination or speculative feed.
