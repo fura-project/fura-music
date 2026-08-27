@@ -6,6 +6,9 @@ import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/comments/track_comments_surface.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_panel.dart';
+import 'package:flutterustmusic/music_video/track_music_video_engine.dart';
+import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
+import 'package:flutterustmusic/music_video/track_music_video_surface.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 
@@ -15,6 +18,8 @@ class ExpandedNowPlayingPage extends StatelessWidget {
     required this.onBack,
     required this.onSignInAgain,
     this.commentsGateway = const RustTrackCommentGateway(),
+    this.musicVideoGateway = const RustTrackMusicVideoGateway(),
+    this.musicVideoEngine = const MediaKitTrackMusicVideoEngine(),
     super.key,
   });
 
@@ -22,6 +27,8 @@ class ExpandedNowPlayingPage extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
   final TrackCommentGateway commentsGateway;
+  final TrackMusicVideoGateway musicVideoGateway;
+  final TrackMusicVideoEngine musicVideoEngine;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -40,6 +47,8 @@ class ExpandedNowPlayingPage extends StatelessWidget {
       onBack: onBack,
       onSignInAgain: onSignInAgain,
       commentsGateway: commentsGateway,
+      musicVideoGateway: musicVideoGateway,
+      musicVideoEngine: musicVideoEngine,
     ),
     bottomNavigationBar: NowPlayingBar.expanded(
       controller: controller,
@@ -54,12 +63,16 @@ class _ExpandedNowPlayingBody extends StatefulWidget {
     required this.onBack,
     required this.onSignInAgain,
     required this.commentsGateway,
+    required this.musicVideoGateway,
+    required this.musicVideoEngine,
   });
 
   final QueuePlaybackController controller;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
   final TrackCommentGateway commentsGateway;
+  final TrackMusicVideoGateway musicVideoGateway;
+  final TrackMusicVideoEngine musicVideoEngine;
 
   @override
   State<_ExpandedNowPlayingBody> createState() =>
@@ -110,6 +123,7 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
                 child: _ExpandedTrackHero(
                   track: track,
                   onOpenComments: () => _openComments(context, track),
+                  onOpenMusicVideo: () => _openMusicVideo(context, track),
                 ),
               ),
               VerticalDivider(
@@ -134,6 +148,7 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
                 track: track,
                 compact: true,
                 onOpenComments: () => _openComments(context, track),
+                onOpenMusicVideo: () => _openMusicVideo(context, track),
               ),
             ),
             Divider(
@@ -175,6 +190,18 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
     );
   }
 
+  void _openMusicVideo(BuildContext context, PlaylistTrackSummary track) {
+    unawaited(
+      showTrackMusicVideoSurface(
+        context: context,
+        gateway: widget.musicVideoGateway,
+        engine: widget.musicVideoEngine,
+        track: track,
+        playbackController: widget.controller,
+      ),
+    );
+  }
+
   void _readCurrent() {
     _track = widget.controller.current;
     _currentIndex = widget.controller.currentIndex;
@@ -195,11 +222,13 @@ class _ExpandedTrackHero extends StatelessWidget {
   const _ExpandedTrackHero({
     required this.track,
     required this.onOpenComments,
+    required this.onOpenMusicVideo,
     this.compact = false,
   });
 
   final PlaylistTrackSummary track;
   final VoidCallback onOpenComments;
+  final VoidCallback onOpenMusicVideo;
   final bool compact;
 
   @override
@@ -275,11 +304,24 @@ class _ExpandedTrackHero extends StatelessWidget {
                       ),
                     ),
                   SizedBox(height: compact ? 8 : 16),
-                  OutlinedButton.icon(
-                    key: const ValueKey('expanded-now-playing-comments'),
-                    onPressed: onOpenComments,
-                    icon: const Icon(Icons.mode_comment_outlined),
-                    label: const Text('Comments'),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        key: const ValueKey('expanded-now-playing-mv'),
+                        onPressed: onOpenMusicVideo,
+                        icon: const Icon(Icons.music_video_outlined),
+                        label: const Text('MV'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('expanded-now-playing-comments'),
+                        onPressed: onOpenComments,
+                        icon: const Icon(Icons.mode_comment_outlined),
+                        label: const Text('Comments'),
+                      ),
+                    ],
                   ),
                 ],
               ),
