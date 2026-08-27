@@ -1689,20 +1689,10 @@ class _PlaylistCollection extends StatelessWidget {
             MusicSpacing.pageCompact,
           ),
           child: desktop
-              ? GridView.builder(
-                  key: const PageStorageKey<String>('user-playlist-grid'),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisExtent: 270,
-                    crossAxisSpacing: 24,
-                    mainAxisSpacing: 28,
-                  ),
-                  itemCount: playlists.length,
-                  itemBuilder: (context, index) => _PlaylistGridItem(
-                    playlist: playlists[index],
-                    onTap: () => onSelected(playlists[index]),
-                    focusNode: _focusNodeFor(playlists[index]),
-                  ),
+              ? _DesktopPlaylistList(
+                  playlists: playlists,
+                  onSelected: onSelected,
+                  focusNodeFor: _focusNodeFor,
                 )
               : ListView.separated(
                   key: const PageStorageKey<String>('user-playlist-list'),
@@ -1721,55 +1711,55 @@ class _PlaylistCollection extends StatelessWidget {
   }
 }
 
-class _PlaylistGridItem extends StatelessWidget {
-  const _PlaylistGridItem({
-    required this.playlist,
-    required this.onTap,
-    required this.focusNode,
+class _DesktopPlaylistList extends StatelessWidget {
+  const _DesktopPlaylistList({
+    required this.playlists,
+    required this.onSelected,
+    required this.focusNodeFor,
   });
 
-  final UserPlaylistSummary playlist;
-  final VoidCallback onTap;
-  final FocusNode? focusNode;
+  final List<UserPlaylistSummary> playlists;
+  final ValueChanged<UserPlaylistSummary> onSelected;
+  final FocusNode? Function(UserPlaylistSummary playlist) focusNodeFor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Semantics(
-      label: _semanticLabel(playlist),
-      button: true,
-      excludeSemantics: true,
-      onTap: onTap,
-      child: InkWell(
-        focusNode: focusNode,
-        borderRadius: MusicRadii.artwork,
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _PlaylistArtwork(playlist: playlist)),
-            const SizedBox(height: 12),
-            Text(
-              playlist.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                height: 1.2,
-              ),
-            ),
-            if (playlist.trackCount case final count?) ...[
-              const SizedBox(height: 4),
-              Text(
-                '$count tracks',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
+    final mutedStyle = theme.textTheme.labelLarge?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Column(
+      children: [
+        Padding(
+          key: const ValueKey('user-playlist-table-header'),
+          padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 16, 12),
+          child: Row(
+            children: [
+              const SizedBox(width: 64),
+              Expanded(child: Text('Playlist', style: mutedStyle)),
+              SizedBox(width: 104, child: Text('Tracks', style: mutedStyle)),
+              const SizedBox(width: 40),
             ],
-          ],
+          ),
         ),
-      ),
+        const Divider(),
+        Expanded(
+          child: ListView.separated(
+            key: const PageStorageKey<String>('user-playlist-list-desktop'),
+            itemCount: playlists.length,
+            separatorBuilder: (_, _) => const Divider(),
+            itemBuilder: (context, index) {
+              final playlist = playlists[index];
+              return _PlaylistListItem(
+                playlist: playlist,
+                onTap: () => onSelected(playlist),
+                focusNode: focusNodeFor(playlist),
+                desktop: true,
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1779,15 +1769,18 @@ class _PlaylistListItem extends StatelessWidget {
     required this.playlist,
     required this.onTap,
     required this.focusNode,
+    this.desktop = false,
   });
 
   final UserPlaylistSummary playlist;
   final VoidCallback onTap;
   final FocusNode? focusNode;
+  final bool desktop;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final count = playlist.trackCount;
     return Semantics(
       label: _semanticLabel(playlist),
       button: true,
@@ -1798,11 +1791,11 @@ class _PlaylistListItem extends StatelessWidget {
         borderRadius: MusicRadii.content,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: EdgeInsets.symmetric(vertical: desktop ? 4 : 6),
           child: Row(
             children: [
               SizedBox.square(
-                dimension: 72,
+                dimension: desktop ? 56 : 72,
                 child: _PlaylistArtwork(playlist: playlist),
               ),
               const SizedBox(width: MusicSpacing.contentGap),
@@ -1812,13 +1805,13 @@ class _PlaylistListItem extends StatelessWidget {
                   children: [
                     Text(
                       playlist.title,
-                      maxLines: 2,
+                      maxLines: desktop ? 1 : 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (playlist.trackCount case final count?) ...[
+                    if (!desktop && count != null) ...[
                       const SizedBox(height: 4),
                       Text(
                         '$count tracks',
@@ -1830,6 +1823,22 @@ class _PlaylistListItem extends StatelessWidget {
                   ],
                 ),
               ),
+              SizedBox(
+                width: desktop ? 104 : 0,
+                child: desktop && count != null
+                    ? Text(
+                        '$count tracks',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : null,
+              ),
+              if (desktop)
+                const SizedBox(
+                  width: 40,
+                  child: Icon(Icons.chevron_right_rounded),
+                ),
             ],
           ),
         ),
@@ -1847,7 +1856,7 @@ class _PlaylistArtwork extends StatelessWidget {
   Widget build(BuildContext context) {
     final uri = playlist.artworkUri;
     return ClipRRect(
-      borderRadius: MusicRadii.artwork,
+      borderRadius: MusicRadii.content,
       child: uri == null
           ? const _ArtworkPlaceholder()
           : Image.network(

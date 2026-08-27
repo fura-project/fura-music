@@ -17,6 +17,7 @@ import 'package:flutter/material.dart'
         NavigationBar,
         NavigationRail,
         OutlinedButton,
+        PageStorageKey,
         Scrollable,
         ScrollableState,
         Semantics,
@@ -439,6 +440,12 @@ void main() {
 
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('Your playlists'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('user-playlist-table-header')),
+      findsOneWidget,
+    );
+    expect(find.text('Playlist'), findsOneWidget);
+    expect(find.text('Tracks'), findsOneWidget);
     final playlistsHeader = find.byKey(
       const ValueKey('library-playlists-header'),
     );
@@ -3101,6 +3108,10 @@ void main() {
 
     await _openLibrary(tester);
     expect(find.text('Narrow playlist'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('user-playlist-table-header')),
+      findsNothing,
+    );
     final playlistSemantics = tester.getSemantics(find.text('Narrow playlist'));
     expect(playlistSemantics.label, 'Narrow playlist');
     expect(
@@ -3462,9 +3473,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openLibrary(tester);
-    final grid = find.byType(GridView);
+    final list = find.byKey(
+      const PageStorageKey<String>('user-playlist-list-desktop'),
+    );
     final scrollable = find.descendant(
-      of: grid,
+      of: list,
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(

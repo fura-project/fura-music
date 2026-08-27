@@ -5,13 +5,13 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M7
-  current_task: M7.2_LIBRARY_ITEM_GRAMMAR_DISCOVERY
+  current_task: M7.3_DISCOVER_SEARCH_DISCOVERY
   next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2 through M6 are checkpointed. M7 is now explicitly a UI/Product Consolidation workstream: horizontal feature expansion is paused while the existing Home, Library, Discover, Search, catalog, playback, Queue, Lyrics, Comments, and MV capabilities are organized into one mainstream Material 3 music product. The corrected real Home and first Library framing slices are automated-green; personal-collection item grammar is the next bounded discovery.
+M1's real-account playback observation remains open; M2 through M6 are checkpointed. M7 is now explicitly a UI/Product Consolidation workstream: horizontal feature expansion is paused while the existing Home, Library, Discover, Search, catalog, playback, Queue, Lyrics, Comments, and MV capabilities are organized into one mainstream Material 3 music product. The corrected real Home and bounded Library-root consolidation are automated-green; Discover/Search product hierarchy is the next discovery.
 
 # Completed Recently
 
@@ -74,16 +74,17 @@ M1's real-account playback observation remains open; M2 through M6 are checkpoin
 - Implemented the first M7 visual slice: wide authenticated layouts now use a deliberate 232 px labeled sidebar with a generic music mark and persistent top Search shortcut, while compact layouts retain the 72 px bottom navigation. Home now has a responsive green Material hero, one primary Library action, secondary Discover/Search routes, a generic decorative music motif, bounded content width, and truthful direct-to-QQ/session copy without fabricated recommendations or copied QQ assets. A focused regression exposed and fixed the initially unbounded sidebar-leading layout; 360 px, 1100/1200 px, keyboard, retained navigation, sign-out, light/dark theme, strict Dart analysis, all 336 Flutter tests, and Linux x64 Release pass. Real authenticated visual approval is intentionally still open.
 - Corrected M7.1 after the maintainer's product-consolidation review rejected launcher-style Home acceptance. The decorative Hero is gone: Home now renders up to eight real public recommended playlists and eight already-loaded personal playlists with artwork, counts, loading/empty/error/retry states, Search/Library/Discover actions, direct existing detail navigation, exact Home return, and focus restoration. Home and Discover share one recommendation controller and request rather than duplicating protocol work. No endpoint, fake content, Provider, playback rule, or navigation framework was added. Strict Dart checks, all 338 Flutter tests, and Linux x64 Release pass; real-account visual acceptance remains separate.
 - Implemented the first bounded M7.2 Library slice: Playlists, favorite Albums, and favorite Artists now use one responsive collection-header grammar with the title, truthful known count, and refresh action grouped in the collection context. The previous playlist AppBar action and Album/Artist floating action rows are gone; unknown loading counts are not shown as zero. Existing lazy controllers, pagination, IndexedStack retention, scroll/focus return, detail routes, and compact/desktop item layouts remain unchanged. Focused 360 px/desktop regressions, strict Dart analysis, all 338 Flutter tests, and Linux x64 Release pass.
+- Completed the bounded M7.2 Library-root consolidation by choosing content-appropriate density rather than identical cards: personal Playlists are now a 56 px artwork-led desktop list with explicit Playlist/Tracks columns, while compact Playlists retain 72 px touch rows and artwork-browsing Albums/Artists retain their grids. The prior oversized desktop playlist cover wall is removed. Exact detail return, scroll offset, focus, semantics, and 360 px reachability have focused regressions; strict Dart analysis, all 338 Flutter tests, and Linux x64 Release pass.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M7.2 bounded discovery now compares the existing Playlist/Album/Artist cards and compact rows after their shared header was established. Any next change must improve all applicable personal collections without extracting controllers or rewriting navigation.
+- M7.3 bounded discovery compares Discover and Search framing, selector hierarchy, and content density without merging their typed controllers or inventing a heterogeneous feed.
 
 # Next Candidates
 
-1. Audit whether one bounded shared artwork/metadata/density grammar is justified across Playlist, Album, and Artist collection items; do not force unlike music entities into identical cards.
-2. Consolidate Discover/Search presentation only after the Library slice establishes shared content hierarchy without erasing typed controller state.
+1. Audit and implement the highest-value bounded Discover/Search hierarchy failure from the five-item M7 product audit without erasing typed retained state.
+2. Audit the persistent player's desktop grouping after Discover/Search establishes the remaining primary-destination grammar.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
