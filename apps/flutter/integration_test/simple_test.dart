@@ -220,6 +220,16 @@ void main() {
       cancelledDailyRecommendationLoad.failure,
       QqMusicDailyRecommendationLoadFailure.cancelled,
     );
+    final unusedPersonalizedPlaylistsLoad =
+        beginQqMusicPersonalizedPlaylistsLoad();
+    expect(unusedPersonalizedPlaylistsLoad.isActive, isTrue);
+    expect(unusedPersonalizedPlaylistsLoad.cancel(), isTrue);
+    final cancelledPersonalizedPlaylistsLoad =
+        await unusedPersonalizedPlaylistsLoad.run();
+    expect(
+      cancelledPersonalizedPlaylistsLoad.failure,
+      QqMusicPersonalizedPlaylistsLoadFailure.cancelled,
+    );
     final unusedRadarLoad = beginQqMusicRadarTrackPageLoad(page: 1);
     expect(unusedRadarLoad.isActive, isTrue);
     expect(unusedRadarLoad.cancel(), isTrue);

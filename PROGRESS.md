@@ -33,6 +33,7 @@ execution:
 - Playlist rename remains `EVIDENCE_BLOCKED`: a bounded current-source rescan found only one detailed `EditPlaylist` contract, whose own implementation says description editing is ineffective. No Client request will be inferred from that single source.
 - Owned-playlist deletion now runs through Client, Provider, a cancellable generated Bridge, and an independent Dart gateway without UI wiring. Only an exact Provider-owned target may reach one request, and success requires the same returned directory ID; missing/zero/mismatched responses and cancellation/replacement remain unknown outcomes. Offline Rust/Dart coverage and the packaged Linux Bridge smoke pass; no real account was changed.
 - Daily 30 now has a truthful authenticated read foundation from direct Client request through a cancellable generated Bridge and Dart gateway. Three simultaneous semantic markers select zero or one existing catalog playlist; absence is not failure, ambiguity is rejected, and no heterogeneous feed data or presentation work crossed the boundary. Two current sources, one public real-response fixture, offline lifecycle coverage, and an anonymous structure-only probe support the contract; authenticated availability remains unclaimed.
+- Personalized playlist discovery now has a truthful authenticated read foundation from the same evidenced recommendation feed through Client, Provider, a cancellable generated Bridge, and an independent Dart gateway. Exactly zero or one `playlist...` shelf may yield at most 64 unique existing catalog summaries; source labels, tracking fields, heterogeneous cards, and “Treasure” presentation wording do not cross the boundary. Authenticated availability and recommendation quality remain unclaimed.
 - Artist mutation remains evidence-blocked; do not infer its write contract from the existing follow-list read.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
 - Do not automate stored-account access or real-account mutation acceptance.
@@ -45,9 +46,8 @@ execution:
 
 # Next Candidates
 
-1. Discover whether a stable QQ collection truthfully matches the accepted Treasure Playlist Library section.
-2. Discover a truthful listening-based Track recommendation contract without relabeling Radar or duplicating Daily 30 semantics.
-3. After those bounded discoveries, run the whole capability convergence review without inventing another feature.
+1. Discover a truthful listening-based Track recommendation contract without relabeling Radar or duplicating Daily 30 semantics.
+2. Run the whole capability convergence review without inventing another feature.
 
 # Pending Human Decisions
 
@@ -67,3 +67,4 @@ execution:
 - Album favorite writes have current method-level cross-validation, exact offline cross-layer coverage, and an external authenticated reversible test for the numeric-ID form, but this repository has not retained a real response fixture or executed the maintainer account. Artist write semantics remain evidence-blocked.
 - Playlist rename remains evidence-blocked on one detailed current implementation; its mask, optional-field, and success semantics must not be guessed. Playlist deletion has only offline cross-layer validation; later UI must explicitly confirm it, refresh after unknown outcomes, and leave live acceptance to the maintainer.
 - Daily 30 has exact offline request/selection/lifecycle coverage and packaged Bridge cancellation, but no authenticated maintainer-account observation. The credential-free probe returned no Daily match, as expected, and proves only endpoint structure.
+- Personalized playlists have exact offline request/selection/lifecycle coverage, current independent source agreement, and a public real-response fixture, but no authenticated maintainer-account observation. The credential-free probe returned no shelf-level playlist marker, so it proves endpoint structure rather than personalization or content quality.

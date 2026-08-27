@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::time::Duration;
 
@@ -14,9 +15,18 @@ const MAX_TEXT_BYTES: usize = 4 * 1024;
 const DAILY_PLAYLIST_JUMP_TYPE: u32 = 10_014;
 const DAILY_MODULE_PREFIX: &str = "recforyou";
 const DAILY_TRACE_MARKER: &str = "#daily30:";
+const PERSONALIZED_PLAYLIST_MODULE_PREFIX: &str = "playlist";
+const MAX_PERSONALIZED_PLAYLISTS: usize = 64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DailyRecommendationField {
+    PlaylistId,
+    Title,
+    ArtworkUri,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PersonalizedPlaylistField {
     PlaylistId,
     Title,
     ArtworkUri,
@@ -46,6 +56,146 @@ pub enum QqMusicDailyRecommendationError<E> {
     InvalidDailyPlaylist {
         field: DailyRecommendationField,
     },
+}
+
+pub enum QqMusicPersonalizedPlaylistsError<E> {
+    Transport(E),
+    Serialize,
+    HttpStatus(u16),
+    InvalidJson,
+    MissingGlobalCode,
+    MissingResult,
+    MissingResultCode,
+    MissingData,
+    MissingDataCode,
+    MissingShelves,
+    InvalidFeed,
+    Rejected {
+        code: i64,
+    },
+    Upstream {
+        global_code: i64,
+        result_code: Option<i64>,
+        data_code: Option<i64>,
+    },
+    MultiplePlaylistShelves,
+    TooManyPlaylists,
+    DuplicatePlaylistId,
+    InvalidPlaylist {
+        field: PersonalizedPlaylistField,
+    },
+}
+
+impl<E> fmt::Debug for QqMusicPersonalizedPlaylistsError<E> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Transport(_) => formatter.write_str("Transport([REDACTED])"),
+            Self::Serialize => formatter.write_str("Serialize"),
+            Self::HttpStatus(status) => formatter.debug_tuple("HttpStatus").field(status).finish(),
+            Self::InvalidJson => formatter.write_str("InvalidJson([REDACTED])"),
+            Self::MissingGlobalCode => formatter.write_str("MissingGlobalCode"),
+            Self::MissingResult => formatter.write_str("MissingResult"),
+            Self::MissingResultCode => formatter.write_str("MissingResultCode"),
+            Self::MissingData => formatter.write_str("MissingData"),
+            Self::MissingDataCode => formatter.write_str("MissingDataCode"),
+            Self::MissingShelves => formatter.write_str("MissingShelves"),
+            Self::InvalidFeed => formatter.write_str("InvalidFeed"),
+            Self::Rejected { code } => formatter
+                .debug_struct("Rejected")
+                .field("code", code)
+                .finish(),
+            Self::Upstream {
+                global_code,
+                result_code,
+                data_code,
+            } => formatter
+                .debug_struct("Upstream")
+                .field("global_code", global_code)
+                .field("result_code", result_code)
+                .field("data_code", data_code)
+                .finish(),
+            Self::MultiplePlaylistShelves => formatter.write_str("MultiplePlaylistShelves"),
+            Self::TooManyPlaylists => formatter.write_str("TooManyPlaylists"),
+            Self::DuplicatePlaylistId => formatter.write_str("DuplicatePlaylistId([REDACTED])"),
+            Self::InvalidPlaylist { field } => formatter
+                .debug_struct("InvalidPlaylist")
+                .field("field", field)
+                .finish(),
+        }
+    }
+}
+
+impl<E> fmt::Display for QqMusicPersonalizedPlaylistsError<E> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Transport(_) => {
+                formatter.write_str("QQ Music personalized-playlist request failed")
+            }
+            Self::Serialize => {
+                formatter.write_str("could not serialize personalized-playlist request")
+            }
+            Self::HttpStatus(status) => write!(
+                formatter,
+                "personalized-playlist request returned HTTP {status}"
+            ),
+            Self::InvalidJson => {
+                formatter.write_str("personalized-playlist response was not valid JSON")
+            }
+            Self::MissingGlobalCode => {
+                formatter.write_str("personalized-playlist response has no global code")
+            }
+            Self::MissingResult => formatter.write_str("personalized-playlist result is missing"),
+            Self::MissingResultCode => {
+                formatter.write_str("personalized-playlist result has no code")
+            }
+            Self::MissingData => formatter.write_str("personalized-playlist data is missing"),
+            Self::MissingDataCode => {
+                formatter.write_str("personalized-playlist data has no return code")
+            }
+            Self::MissingShelves => {
+                formatter.write_str("personalized-playlist feed shelves are missing")
+            }
+            Self::InvalidFeed => {
+                formatter.write_str("personalized-playlist feed structure is invalid")
+            }
+            Self::Rejected { code } => write!(
+                formatter,
+                "QQ Music rejected the credential with code {code}"
+            ),
+            Self::Upstream {
+                global_code,
+                result_code,
+                data_code,
+            } => write!(
+                formatter,
+                "personalized-playlist request failed with global code {global_code}, result code {result_code:?}, and data code {data_code:?}"
+            ),
+            Self::MultiplePlaylistShelves => {
+                formatter.write_str("personalized-playlist feed returned multiple matching shelves")
+            }
+            Self::TooManyPlaylists => {
+                formatter.write_str("personalized-playlist shelf exceeded the safety limit")
+            }
+            Self::DuplicatePlaylistId => {
+                formatter.write_str("personalized-playlist shelf contains duplicate identity")
+            }
+            Self::InvalidPlaylist { field } => {
+                write!(formatter, "personalized playlist has an invalid {field:?}")
+            }
+        }
+    }
+}
+
+impl<E> std::error::Error for QqMusicPersonalizedPlaylistsError<E>
+where
+    E: std::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Transport(error) => Some(error),
+            _ => None,
+        }
+    }
 }
 
 impl<E> fmt::Debug for QqMusicDailyRecommendationError<E> {
@@ -142,6 +292,41 @@ pub struct QqMusicDailyRecommendation {
     artwork_uri: Option<String>,
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicPersonalizedPlaylist {
+    playlist_id: u64,
+    title: String,
+    artwork_uri: Option<String>,
+}
+
+impl QqMusicPersonalizedPlaylist {
+    #[must_use]
+    pub const fn playlist_id(&self) -> u64 {
+        self.playlist_id
+    }
+
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    #[must_use]
+    pub fn artwork_uri(&self) -> Option<&str> {
+        self.artwork_uri.as_deref()
+    }
+}
+
+impl fmt::Debug for QqMusicPersonalizedPlaylist {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicPersonalizedPlaylist")
+            .field("playlist_id", &"[REDACTED]")
+            .field("title", &"[REDACTED]")
+            .field("has_artwork", &self.artwork_uri.is_some())
+            .finish()
+    }
+}
+
 impl QqMusicDailyRecommendation {
     #[must_use]
     pub const fn playlist_id(&self) -> u64 {
@@ -209,6 +394,43 @@ where
         let envelope: DailyRecommendationResponse = serde_json::from_slice(response.body())
             .map_err(|_| QqMusicDailyRecommendationError::InvalidJson)?;
         map_response(envelope)
+    }
+
+    /// Loads the authenticated personalized-playlist shelf without exposing
+    /// the heterogeneous recommendation feed upstream.
+    ///
+    /// # Errors
+    ///
+    /// Keeps credential rejection, transport, service, response-shape, and
+    /// playlist-card mapping failures distinct without retaining feed content.
+    pub async fn personalized_playlists(
+        &self,
+        credential: &Credential,
+    ) -> Result<Vec<QqMusicPersonalizedPlaylist>, QqMusicPersonalizedPlaylistsError<T::Error>> {
+        let body = serde_json::to_vec(&DailyRecommendationRequest::new(credential))
+            .map_err(|_| QqMusicPersonalizedPlaylistsError::Serialize)?;
+        let response = self
+            .transport()
+            .execute(
+                HttpRequest::post(MUSICU_URL)
+                    .header("Content-Type", "application/json")
+                    .header("Origin", "https://y.qq.com")
+                    .header("Referer", "https://y.qq.com/")
+                    .header("Cookie", credential.musicu_cookie_header())
+                    .body(body)
+                    .response_body_limit(MAX_RESPONSE_BYTES)
+                    .timeout(REQUEST_TIMEOUT),
+            )
+            .await
+            .map_err(QqMusicPersonalizedPlaylistsError::Transport)?;
+        if !(200..300).contains(&response.status()) {
+            return Err(QqMusicPersonalizedPlaylistsError::HttpStatus(
+                response.status(),
+            ));
+        }
+        let envelope: DailyRecommendationResponse = serde_json::from_slice(response.body())
+            .map_err(|_| QqMusicPersonalizedPlaylistsError::InvalidJson)?;
+        map_personalized_response(envelope)
     }
 }
 
@@ -296,6 +518,7 @@ struct DailyRecommendationData {
 
 #[derive(Deserialize)]
 struct RawShelf {
+    extra_info: Option<RawExtraInfo>,
     #[serde(rename = "v_niche")]
     niches: Option<Vec<RawNiche>>,
 }
@@ -389,6 +612,93 @@ fn map_response<E>(
     Ok(candidate)
 }
 
+fn map_personalized_response<E>(
+    envelope: DailyRecommendationResponse,
+) -> Result<Vec<QqMusicPersonalizedPlaylist>, QqMusicPersonalizedPlaylistsError<E>> {
+    let global_code = envelope
+        .code
+        .ok_or(QqMusicPersonalizedPlaylistsError::MissingGlobalCode)?;
+    let result_code = envelope.feed.as_ref().and_then(|result| result.code);
+    let data_code = envelope
+        .feed
+        .as_ref()
+        .and_then(|result| result.data.as_ref())
+        .and_then(|data| data.retcode);
+    if let Some(code) = [Some(global_code), result_code, data_code]
+        .into_iter()
+        .flatten()
+        .find(|code| is_credential_rejection_code(*code))
+    {
+        return Err(QqMusicPersonalizedPlaylistsError::Rejected { code });
+    }
+    if global_code != 0
+        || result_code.is_some_and(|code| code != 0)
+        || data_code.is_some_and(|code| code != 0)
+    {
+        return Err(QqMusicPersonalizedPlaylistsError::Upstream {
+            global_code,
+            result_code,
+            data_code,
+        });
+    }
+    let result = envelope
+        .feed
+        .ok_or(QqMusicPersonalizedPlaylistsError::MissingResult)?;
+    result
+        .code
+        .ok_or(QqMusicPersonalizedPlaylistsError::MissingResultCode)?;
+    let data = result
+        .data
+        .ok_or(QqMusicPersonalizedPlaylistsError::MissingData)?;
+    data.retcode
+        .ok_or(QqMusicPersonalizedPlaylistsError::MissingDataCode)?;
+    let shelves = data
+        .shelves
+        .ok_or(QqMusicPersonalizedPlaylistsError::MissingShelves)?;
+
+    let mut matching_shelf = None;
+    for shelf in shelves {
+        if shelf
+            .extra_info
+            .as_ref()
+            .and_then(|extra| extra.module_id.as_deref())
+            .is_some_and(|module| module.starts_with(PERSONALIZED_PLAYLIST_MODULE_PREFIX))
+        {
+            if matching_shelf.is_some() {
+                return Err(QqMusicPersonalizedPlaylistsError::MultiplePlaylistShelves);
+            }
+            matching_shelf = Some(shelf);
+        }
+    }
+    let Some(shelf) = matching_shelf else {
+        return Ok(Vec::new());
+    };
+    let niches = shelf
+        .niches
+        .ok_or(QqMusicPersonalizedPlaylistsError::InvalidFeed)?;
+    let mut playlist_ids = HashSet::new();
+    let mut playlists = Vec::new();
+    for niche in niches {
+        let cards = niche
+            .cards
+            .ok_or(QqMusicPersonalizedPlaylistsError::InvalidFeed)?;
+        for card in cards {
+            if card.jumptype != Some(DAILY_PLAYLIST_JUMP_TYPE) {
+                continue;
+            }
+            if playlists.len() == MAX_PERSONALIZED_PLAYLISTS {
+                return Err(QqMusicPersonalizedPlaylistsError::TooManyPlaylists);
+            }
+            let playlist = map_personalized_playlist(&card)?;
+            if !playlist_ids.insert(playlist.playlist_id()) {
+                return Err(QqMusicPersonalizedPlaylistsError::DuplicatePlaylistId);
+            }
+            playlists.push(playlist);
+        }
+    }
+    Ok(playlists)
+}
+
 fn is_daily_playlist_card(card: &RawCard) -> bool {
     card.jumptype == Some(DAILY_PLAYLIST_JUMP_TYPE)
         && card
@@ -435,6 +745,39 @@ fn map_daily_playlist<E>(
     })
 }
 
+fn map_personalized_playlist<E>(
+    card: &RawCard,
+) -> Result<QqMusicPersonalizedPlaylist, QqMusicPersonalizedPlaylistsError<E>> {
+    let playlist_id = card
+        .id
+        .as_deref()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value != 0)
+        .ok_or(QqMusicPersonalizedPlaylistsError::InvalidPlaylist {
+            field: PersonalizedPlaylistField::PlaylistId,
+        })?;
+    let title = bounded_nonblank(card.title.as_deref()).ok_or(
+        QqMusicPersonalizedPlaylistsError::InvalidPlaylist {
+            field: PersonalizedPlaylistField::Title,
+        },
+    )?;
+    let artwork_uri = match card.cover.as_deref() {
+        None => None,
+        Some(value) if value.trim().is_empty() => None,
+        Some(value) if value.len() <= MAX_TEXT_BYTES && https_uri(value) => Some(value.to_owned()),
+        Some(_) => {
+            return Err(QqMusicPersonalizedPlaylistsError::InvalidPlaylist {
+                field: PersonalizedPlaylistField::ArtworkUri,
+            });
+        }
+    };
+    Ok(QqMusicPersonalizedPlaylist {
+        playlist_id,
+        title,
+        artwork_uri,
+    })
+}
+
 fn bounded_nonblank(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
@@ -453,7 +796,10 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{DailyRecommendationField, QqMusicDailyRecommendationError};
+    use super::{
+        DailyRecommendationField, PersonalizedPlaylistField, QqMusicDailyRecommendationError,
+        QqMusicPersonalizedPlaylistsError,
+    };
     use crate::{
         Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
@@ -599,6 +945,98 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn maps_only_the_evidenced_personalized_playlist_shelf() {
+        let client = QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&[
+            personalized_card("9001", "First private playlist"),
+            personalized_card("9002", "Second private playlist"),
+            json!({"id": "ignored", "title": "Non-playlist", "jumptype": 10002}),
+        ])));
+
+        let playlists = client
+            .personalized_playlists(&credential())
+            .await
+            .expect("personalized playlists");
+        assert_eq!(playlists.len(), 2);
+        assert_eq!(playlists[0].playlist_id(), 9001);
+        assert_eq!(playlists[0].title(), "First private playlist");
+        assert_eq!(
+            playlists[0].artwork_uri(),
+            Some("https://example.invalid/personalized.jpg")
+        );
+
+        let requests = client.transport().requests.lock().expect("requests");
+        let body: Value =
+            serde_json::from_slice(requests[0].body_bytes().expect("body")).expect("request JSON");
+        assert_eq!(body["feed"]["module"], "music.recommend.RecommendFeed");
+        assert_eq!(body["feed"]["method"], "get_recommend_feed");
+        let debug = format!("{playlists:?} {:?}", requests[0]);
+        assert!(!debug.contains("W_X_private-key"));
+        assert!(!debug.contains("First private playlist"));
+        assert!(!debug.contains("9001"));
+    }
+
+    #[tokio::test]
+    async fn distinguishes_absence_ambiguity_and_invalid_personalized_cards() {
+        let absent = QqMusicClient::new(DailyTransport::new(&feed_json(&[])))
+            .personalized_playlists(&credential())
+            .await
+            .expect("feed without personalized shelf");
+        assert!(absent.is_empty());
+
+        let multiple = QqMusicClient::new(DailyTransport::new(&json!({
+            "code": 0,
+            "feed": {"code": 0, "data": {"retcode": 0, "v_shelf": [
+                {"extra_info": {"moduleID": "playlist@1"}, "v_niche": []},
+                {"extra_info": {"moduleID": "playlist@2"}, "v_niche": []}
+            ]}}
+        })))
+        .personalized_playlists(&credential())
+        .await;
+        assert!(matches!(
+            multiple,
+            Err(QqMusicPersonalizedPlaylistsError::MultiplePlaylistShelves)
+        ));
+
+        let duplicate = QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&[
+            personalized_card("9001", "Private one"),
+            personalized_card("9001", "Private duplicate"),
+        ])))
+        .personalized_playlists(&credential())
+        .await;
+        assert!(matches!(
+            duplicate,
+            Err(QqMusicPersonalizedPlaylistsError::DuplicatePlaylistId)
+        ));
+        assert!(!format!("{duplicate:?}").contains("Private duplicate"));
+
+        let invalid = QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&[
+            personalized_card("not-a-number", "Private invalid"),
+        ])))
+        .personalized_playlists(&credential())
+        .await;
+        assert!(matches!(
+            invalid,
+            Err(QqMusicPersonalizedPlaylistsError::InvalidPlaylist {
+                field: PersonalizedPlaylistField::PlaylistId
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn bounds_personalized_playlist_output() {
+        let cards = (1..=65)
+            .map(|id| personalized_card(&id.to_string(), "Private playlist"))
+            .collect::<Vec<_>>();
+        let result = QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&cards)))
+            .personalized_playlists(&credential())
+            .await;
+        assert!(matches!(
+            result,
+            Err(QqMusicPersonalizedPlaylistsError::TooManyPlaylists)
+        ));
+    }
+
     fn feed_json(cards: &[Value]) -> Value {
         json!({
             "code": 0,
@@ -620,6 +1058,31 @@ mod tests {
             "jumptype": 10014,
             "trace": "fixture#daily30:8#private",
             "extra_info": {"moduleID": "recforyou@0@0"}
+        })
+    }
+
+    fn personalized_feed_json(cards: &[Value]) -> Value {
+        json!({
+            "code": 0,
+            "feed": {
+                "code": 0,
+                "data": {
+                    "retcode": 0,
+                    "v_shelf": [{
+                        "extra_info": {"moduleID": "playlist@135@0"},
+                        "v_niche": [{"v_card": cards}]
+                    }]
+                }
+            }
+        })
+    }
+
+    fn personalized_card(id: &str, title: &str) -> Value {
+        json!({
+            "id": id,
+            "title": title,
+            "cover": "https://example.invalid/personalized.jpg",
+            "jumptype": 10014
         })
     }
 }

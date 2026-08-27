@@ -56,7 +56,9 @@ pub use credential::{
 };
 pub use credential_verification::{CredentialVerificationError, QqMusicAccountSummary};
 pub use daily_recommendation::{
-    DailyRecommendationField, QqMusicDailyRecommendation, QqMusicDailyRecommendationError,
+    DailyRecommendationField, PersonalizedPlaylistField, QqMusicDailyRecommendation,
+    QqMusicDailyRecommendationError, QqMusicPersonalizedPlaylist,
+    QqMusicPersonalizedPlaylistsError,
 };
 pub use favorite_albums::{
     FavoriteAlbumField, QqMusicFavoriteAlbumsError, QqMusicFavoriteAlbumsPage,

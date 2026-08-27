@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_radar_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_radar_error`, `map_radar_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_radar_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_radar_error`, `map_radar_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicRecommendedPlaylistPageLoadHandle
 beginQqMusicRecommendedPlaylistPageLoad({
@@ -27,6 +27,10 @@ QqMusicDailyRecommendationLoadHandle beginQqMusicDailyRecommendationLoad() =>
     RustLib.instance.api
         .crateApiRecommendationsBeginQqMusicDailyRecommendationLoad();
 
+QqMusicPersonalizedPlaylistsLoadHandle
+beginQqMusicPersonalizedPlaylistsLoad() => RustLib.instance.api
+    .crateApiRecommendationsBeginQqMusicPersonalizedPlaylistsLoad();
+
 QqMusicRadarTrackPageLoadHandle beginQqMusicRadarTrackPageLoad({
   required int page,
 }) => RustLib.instance.api
@@ -40,6 +44,16 @@ abstract class QqMusicDailyRecommendationLoadHandle
   bool get isActive;
 
   Future<QqMusicDailyRecommendationLoad> run();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPersonalizedPlaylistsLoadHandle>>
+abstract class QqMusicPersonalizedPlaylistsLoadHandle
+    implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicPersonalizedPlaylistsLoad> run();
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRadarTrackPageLoadHandle>>
@@ -80,6 +94,39 @@ class QqMusicDailyRecommendationLoad {
 }
 
 enum QqMusicDailyRecommendationLoadFailure {
+  coreUnavailable,
+  authenticationRequired,
+  credentialRejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  cancelled,
+  alreadyRunning,
+}
+
+class QqMusicPersonalizedPlaylistsLoad {
+  final List<LibraryPlaylistSummary> playlists;
+  final QqMusicPersonalizedPlaylistsLoadFailure? failure;
+
+  const QqMusicPersonalizedPlaylistsLoad({
+    required this.playlists,
+    this.failure,
+  });
+
+  @override
+  int get hashCode => playlists.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicPersonalizedPlaylistsLoad &&
+          runtimeType == other.runtimeType &&
+          playlists == other.playlists &&
+          failure == other.failure;
+}
+
+enum QqMusicPersonalizedPlaylistsLoadFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
