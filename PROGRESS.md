@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.5_QQ_MV_DISCOVERY
-  next_action: DISCOVERY_PASS
+  current_task: M5.5_TRACK_ASSOCIATED_MV_VERTICAL_SLICE
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -71,11 +71,11 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M5.5 bounded QQ MV discovery is active. It must first establish a coherent Track-to-MV product journey, current protocol evidence, media/metadata boundaries, and a safe cross-platform playback strategy before any implementation is selected; M5 does not authorize a generic video platform, downloads, comments mutation, or a second audio/playback owner.
+- M5.5 selected one bounded Track-associated MV vertical slice. Expanded Now Playing will load the exact current Track's optional QQ MV through a provider-neutral cancellable operation, then present one HTTPS MP4 through a disposable project-owned `media_kit` video edge. The existing `audioplayers` Queue remains authoritative: MV play pauses music, a later music/Track activation stops MV, and closing MV never auto-resumes music. Related-MV lists, Artist/Search/Discover MV, HLS, quality UI, fullscreen/PiP, video social/download/cache behavior, audio-engine replacement, and live-account probing remain excluded.
 
 # Next Candidates
 
-1. Perform the bounded M5.5 QQ MV discovery pass: audit current Track identity and Now Playing/catalog journeys, cross-validate maintained direct QQ MV metadata/source implementations, evaluate whether the existing foreground media edge can safely compose video without a second music owner, rank at most three finite candidates, and implement only if the selected request and product path have sufficient evidence.
+1. Implement the selected M5.5 Track-associated MV slice from `docs/research/m5-track-mv-discovery.md`: bounded QQ client fixtures and Provider mapping, provider-neutral Domain/capability and cancellable Bridge, MV-only video adapter/controller, adaptive expanded-Now-Playing entry, explicit audio/video ownership races, and Linux/Android packaging evidence.
 2. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
