@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: null
-  next_action: DISCOVERY_PASS
+  current_task: M5.1_HOME_FIRST_AUTHENTICATED_SHELL_FOUNDATION
+  next_action: IMPLEMENT
 ---
 
 # Current Milestone
@@ -67,12 +67,12 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M5 is newly authorized. The next action is a bounded discovery pass over the authenticated shell/Home, Library coherence, and playback modes, followed by selection of one finite high-value slice. The dated post-M4 `NO_LEGITIMATE_WORK` ranking remains historical evidence, not current scheduling authority.
+- The bounded M5 discovery ranked Home-first shell, coherent Library sections, and authoritative playback modes. M5.1 Home-first authenticated shell foundation is selected because it establishes the explicitly authorized first-release default over existing stable capabilities without new protocol work; the dated post-M4 `NO_LEGITIMATE_WORK` ranking remains historical evidence.
 
 # Next Candidates
 
-1. Run the bounded M5 discovery pass and rank at most three finite candidates from Home-first shell, coherent Library, and authoritative playback modes.
-2. Select and implement the highest-value candidate without introducing a second playback owner, generic feed, navigation framework, or speculative protocol work.
+1. Implement M5.1 Home as the authenticated default and fourth primary destination, using only honest entry points into existing stable capabilities.
+2. Preserve retained Search/Discover/local-detail state, primary/local back behavior, focus, accessibility, 360 px reachability, and the one existing playback owner with focused regressions.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
