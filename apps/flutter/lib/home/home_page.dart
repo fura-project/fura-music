@@ -10,7 +10,6 @@ class HomePage extends StatelessWidget {
     required this.libraryController,
     required this.recommendationController,
     required this.onOpenDiscover,
-    required this.onOpenSearch,
     required this.onOpenLibrary,
     required this.onOpenPlaylist,
     required this.onOpenRecommendation,
@@ -24,7 +23,6 @@ class HomePage extends StatelessWidget {
   final UserLibraryController libraryController;
   final RecommendedPlaylistController recommendationController;
   final VoidCallback onOpenDiscover;
-  final VoidCallback onOpenSearch;
   final VoidCallback onOpenLibrary;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
@@ -41,7 +39,7 @@ class HomePage extends StatelessWidget {
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 600;
           final pagePadding = constraints.maxWidth >= 840
-              ? MusicSpacing.pageWide
+              ? MusicSpacing.panel
               : constraints.maxWidth < 520
               ? MusicSpacing.pageCompact
               : MusicSpacing.page;
@@ -56,9 +54,7 @@ class HomePage extends StatelessWidget {
             ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: MusicSizes.contentMaxWidth,
-                ),
+                constraints: const BoxConstraints(maxWidth: 1280),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -69,40 +65,37 @@ class HomePage extends StatelessWidget {
                         key: const ValueKey('home-heading'),
                         style:
                             (compact
-                                    ? Theme.of(context).textTheme.headlineLarge
-                                    : Theme.of(context).textTheme.displaySmall)
+                                    ? Theme.of(context).textTheme.headlineSmall
+                                    : Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium)
                                 ?.copyWith(
                                   fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.6,
+                                  letterSpacing: -0.3,
                                 ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
-                      'Pick up your music or explore a few current QQ Music selections.',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      'Your music and current QQ Music picks, ready when you are.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: MusicSpacing.contentGap),
-                    _HomeQuickActions(
-                      compact: compact,
-                      onOpenSearch: onOpenSearch,
-                      onOpenLibrary: onOpenLibrary,
-                    ),
                     SizedBox(
                       height: compact
-                          ? MusicSpacing.page
-                          : MusicSpacing.pageWide,
+                          ? MusicSpacing.section
+                          : MusicSpacing.panel,
                     ),
                     _HomeSectionHeader(
-                      title: 'Recommended for you',
+                      title: 'Recommended playlists',
                       supportingText: 'Public playlist picks from QQ Music',
                       actionKey: const ValueKey('home-open-discover'),
-                      actionLabel: 'Discover more',
+                      actionLabel: 'See all',
                       onAction: onOpenDiscover,
+                      compact: compact,
                     ),
-                    const SizedBox(height: MusicSpacing.contentGap),
+                    const SizedBox(height: 12),
                     _RecommendationSection(
                       controller: recommendationController,
                       compact: compact,
@@ -112,17 +105,18 @@ class HomePage extends StatelessWidget {
                     ),
                     SizedBox(
                       height: compact
-                          ? MusicSpacing.page
-                          : MusicSpacing.pageWide,
+                          ? MusicSpacing.section
+                          : MusicSpacing.page,
                     ),
                     _HomeSectionHeader(
                       title: 'Your playlists',
                       supportingText: 'Saved in your QQ Music library',
                       actionKey: const ValueKey('home-open-library'),
-                      actionLabel: 'View your music',
+                      actionLabel: 'Open library',
                       onAction: onOpenLibrary,
+                      compact: compact,
                     ),
-                    const SizedBox(height: MusicSpacing.contentGap),
+                    const SizedBox(height: 12),
                     _LibrarySection(
                       controller: libraryController,
                       compact: compact,
@@ -142,37 +136,6 @@ class HomePage extends StatelessWidget {
   );
 }
 
-class _HomeQuickActions extends StatelessWidget {
-  const _HomeQuickActions({
-    required this.compact,
-    required this.onOpenSearch,
-    required this.onOpenLibrary,
-  });
-
-  final bool compact;
-  final VoidCallback onOpenSearch;
-  final VoidCallback onOpenLibrary;
-
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: MusicSpacing.itemGap,
-    runSpacing: MusicSpacing.itemGap,
-    children: [
-      FilledButton.tonalIcon(
-        key: const ValueKey('home-open-search'),
-        onPressed: onOpenSearch,
-        icon: const Icon(Icons.search_rounded),
-        label: Text(compact ? 'Search' : 'Search QQ Music'),
-      ),
-      OutlinedButton.icon(
-        onPressed: onOpenLibrary,
-        icon: const Icon(Icons.library_music_rounded),
-        label: const Text('Your music'),
-      ),
-    ],
-  );
-}
-
 class _HomeSectionHeader extends StatelessWidget {
   const _HomeSectionHeader({
     required this.title,
@@ -180,6 +143,7 @@ class _HomeSectionHeader extends StatelessWidget {
     required this.actionKey,
     required this.actionLabel,
     required this.onAction,
+    required this.compact,
   });
 
   final String title;
@@ -187,37 +151,45 @@ class _HomeSectionHeader extends StatelessWidget {
   final Key actionKey;
   final String actionLabel;
   final VoidCallback onAction;
+  final bool compact;
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.end,
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Semantics(
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Semantics(
               header: true,
               child: Text(
                 title,
-                style: Theme.of(context).textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    (compact
+                            ? Theme.of(context).textTheme.titleLarge
+                            : Theme.of(context).textTheme.headlineSmall)
+                        ?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
-            const SizedBox(height: 3),
-            Text(
-              supportingText,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: MusicSpacing.itemGap),
+          TextButton(
+            key: actionKey,
+            onPressed: onAction,
+            child: Text(actionLabel),
+          ),
+        ],
       ),
-      const SizedBox(width: MusicSpacing.itemGap),
-      TextButton(key: actionKey, onPressed: onAction, child: Text(actionLabel)),
+      Text(
+        supportingText,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
     ],
   );
 }
@@ -310,6 +282,7 @@ class _LibrarySection extends StatelessWidget {
       key: const ValueKey('home-library-loading'),
       compact: compact,
       semanticLabel: 'Loading your playlists',
+      rows: true,
     ),
     UserLibraryStage.empty => _HomeInlineState(
       key: const ValueKey('home-library-empty'),
@@ -334,25 +307,13 @@ class _LibrarySection extends StatelessWidget {
             )
           : null,
     ),
-    UserLibraryStage.content => _HomePlaylistStrip<UserPlaylistSummary>(
+    UserLibraryStage.content => _HomeLibraryRows(
       key: const ValueKey('home-library-section'),
-      items: controller.playlists.take(8).toList(growable: false),
+      items: controller.playlists.take(compact ? 4 : 6).toList(growable: false),
       compact: compact,
-      title: (playlist) => playlist.title,
-      artworkUri: (playlist) => playlist.artworkUri,
-      detail: (playlist) => playlist.trackCount == null
-          ? 'Saved playlist'
-          : '${playlist.trackCount} tracks',
-      semanticLabel: (playlist) => playlist.trackCount == null
-          ? '${playlist.title}, saved playlist'
-          : '${playlist.title}, ${playlist.trackCount} tracks',
-      itemKey: (index) => ValueKey('home-library-playlist-$index'),
       onSelected: onSelected,
+      lastOpened: lastOpened,
       returnFocusNode: returnFocusNode,
-      focusMatches: (playlist) =>
-          lastOpened?.providerId == playlist.providerId &&
-          lastOpened?.opaqueId == playlist.opaqueId,
-      placeholderIcon: Icons.library_music_rounded,
     ),
     UserLibraryStage.authenticationRequired ||
     UserLibraryStage.credentialRejected => const SizedBox.shrink(),
@@ -389,10 +350,9 @@ class _HomePlaylistStrip<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardWidth = compact ? 148.0 : 184.0;
-    final artworkHeight = compact ? 116.0 : 148.0;
+    final cardWidth = compact ? 152.0 : 160.0;
     return SizedBox(
-      height: artworkHeight + 76,
+      height: cardWidth + 58,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -418,13 +378,13 @@ class _HomePlaylistStrip<T> extends StatelessWidget {
                     children: [
                       SizedBox(
                         width: cardWidth,
-                        height: artworkHeight,
+                        height: cardWidth,
                         child: _HomeArtwork(
                           uri: artworkUri(item),
                           placeholderIcon: placeholderIcon,
                         ),
                       ),
-                      const SizedBox(height: MusicSpacing.itemGap),
+                      const SizedBox(height: 10),
                       Text(
                         title(item),
                         maxLines: 1,
@@ -432,7 +392,7 @@ class _HomePlaylistStrip<T> extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         detail(item),
                         maxLines: 1,
@@ -453,11 +413,154 @@ class _HomePlaylistStrip<T> extends StatelessWidget {
   }
 }
 
+class _HomeLibraryRows extends StatelessWidget {
+  const _HomeLibraryRows({
+    required this.items,
+    required this.compact,
+    required this.onSelected,
+    required this.lastOpened,
+    required this.returnFocusNode,
+    super.key,
+  });
+
+  final List<UserPlaylistSummary> items;
+  final bool compact;
+  final ValueChanged<UserPlaylistSummary> onSelected;
+  final UserPlaylistSummary? lastOpened;
+  final FocusNode? returnFocusNode;
+
+  bool _focusMatches(UserPlaylistSummary playlist) =>
+      lastOpened?.providerId == playlist.providerId &&
+      lastOpened?.opaqueId == playlist.opaqueId;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = compact
+          ? 1
+          : constraints.maxWidth >= 1040
+          ? 3
+          : 2;
+      const gap = 12.0;
+      final itemWidth = (constraints.maxWidth - (columns - 1) * gap) / columns;
+      return Wrap(
+        key: ValueKey(compact ? 'home-library-list' : 'home-library-grid'),
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (var index = 0; index < items.length; index++)
+            SizedBox(
+              width: itemWidth,
+              child: _HomeLibraryRow(
+                item: items[index],
+                itemKey: ValueKey('home-library-playlist-$index'),
+                onSelected: onSelected,
+                focusNode: _focusMatches(items[index]) ? returnFocusNode : null,
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _HomeLibraryRow extends StatelessWidget {
+  const _HomeLibraryRow({
+    required this.item,
+    required this.itemKey,
+    required this.onSelected,
+    required this.focusNode,
+  });
+
+  final UserPlaylistSummary item;
+  final Key itemKey;
+  final ValueChanged<UserPlaylistSummary> onSelected;
+  final FocusNode? focusNode;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final detail = item.trackCount == null
+        ? 'Saved playlist'
+        : '${item.trackCount} tracks';
+    final semanticLabel = item.trackCount == null
+        ? '${item.title}, saved playlist'
+        : '${item.title}, ${item.trackCount} tracks';
+    return Focus(
+      focusNode: focusNode,
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        excludeSemantics: true,
+        onTap: () => onSelected(item),
+        child: Material(
+          color: colors.surfaceContainerLow,
+          borderRadius: MusicRadii.control,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: itemKey,
+            onTap: () => onSelected(item),
+            child: Padding(
+              padding: const EdgeInsets.all(MusicSpacing.itemGap),
+              child: Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 56,
+                    child: _HomeArtwork(
+                      uri: item.artworkUri,
+                      placeholderIcon: Icons.library_music_rounded,
+                      radius: MusicRadii.control,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: MusicSpacing.itemGap),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeArtwork extends StatelessWidget {
-  const _HomeArtwork({required this.uri, required this.placeholderIcon});
+  const _HomeArtwork({
+    required this.uri,
+    required this.placeholderIcon,
+    this.radius = MusicRadii.content,
+  });
 
   final String? uri;
   final IconData placeholderIcon;
+  final BorderRadius radius;
 
   @override
   Widget build(BuildContext context) {
@@ -465,7 +568,7 @@ class _HomeArtwork extends StatelessWidget {
     final placeholder = DecoratedBox(
       decoration: BoxDecoration(
         color: colors.secondaryContainer,
-        borderRadius: MusicRadii.content,
+        borderRadius: radius,
       ),
       child: Icon(
         placeholderIcon,
@@ -474,7 +577,7 @@ class _HomeArtwork extends StatelessWidget {
       ),
     );
     return ClipRRect(
-      borderRadius: MusicRadii.content,
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(
@@ -490,31 +593,69 @@ class _HomeLoadingStrip extends StatelessWidget {
   const _HomeLoadingStrip({
     required this.compact,
     required this.semanticLabel,
+    this.rows = false,
     super.key,
   });
 
   final bool compact;
   final String semanticLabel;
+  final bool rows;
 
   @override
   Widget build(BuildContext context) => Semantics(
     label: semanticLabel,
-    child: SizedBox(
-      height: compact ? 192 : 224,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: compact ? 3 : 5,
-        separatorBuilder: (_, _) =>
-            const SizedBox(width: MusicSpacing.contentGap),
-        itemBuilder: (_, _) => Container(
-          width: compact ? 148 : 184,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: MusicRadii.content,
+    child: rows
+        ? _HomeLoadingRows(compact: compact)
+        : SizedBox(
+            height: compact ? 210 : 218,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: compact ? 3 : 7,
+              separatorBuilder: (_, _) =>
+                  const SizedBox(width: MusicSpacing.contentGap),
+              itemBuilder: (_, _) => Container(
+                width: compact ? 152 : 160,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: MusicRadii.content,
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
-    ),
+  );
+}
+
+class _HomeLoadingRows extends StatelessWidget {
+  const _HomeLoadingRows({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = compact
+          ? 1
+          : constraints.maxWidth >= 1040
+          ? 3
+          : 2;
+      const gap = 12.0;
+      final itemWidth = (constraints.maxWidth - (columns - 1) * gap) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (var index = 0; index < (compact ? 4 : 6); index++)
+            Container(
+              width: itemWidth,
+              height: 72,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: MusicRadii.control,
+              ),
+            ),
+        ],
+      );
+    },
   );
 }
 

@@ -64,4 +64,12 @@
 
 **Consequences:** M7 remains authorized but paused and not checkpointed. The maintenance pass may autonomously perform evidence-backed refactors and governance compression within its Roadmap exit criteria. After full regression and complexity review, whole-project ranking must inspect the running product and available evidence; it must not automatically invent another milestone or resume visual work without current product authority.
 
+## HD-006 — Home-only visual integration pass
+
+**Status:** Accepted on 2026-08-27
+
+**Decision:** After the complexity-paydown pass, authorize one bounded Home-only Material 3 visual integration task. Codex owns implementation and architecture; the local `agy`/Gemini workflow may provide visual critique only. The pass may use existing truthful recommendation and personal-library data, perform at most three visual review rounds, and must stop for maintainer visual acceptance before changing another page.
+
+**Consequences:** This decision does not resume M7 globally or authorize new data, another page, Shell/navigation redesign, playback changes, theme work, framework adoption, or pixel copying. Home may receive Home-specific layout/widgets and the smallest compatible Shell/test adjustment. Final authenticated screenshots remain ephemeral because they contain current catalog and personal-library presentation; they are not committed.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

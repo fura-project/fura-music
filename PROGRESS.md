@@ -4,9 +4,9 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: POST_MAINTENANCE_REVIEW
+  active_workstream: HOME_FOCUSED_UI_REVIEW
   current_task: null
-  next_action: MAINTAINER_RUNNING_APP_REVIEW
+  next_action: MAINTAINER_HOME_VISUAL_ACCEPTANCE
 ---
 
 # Current State
@@ -18,12 +18,13 @@ execution:
 - The four Search types share one identical failure taxonomy/retry policy while retaining feature-specific results, pagination, Bridge DTO validation, and UI state.
 - Repeated catalog Queue test setup is shared without deleting any distinct regression scenario.
 - Governance is current-state oriented, and the complete Rust, Dart/Flutter, Linux build, and required Linux integration gates pass. See `docs/development/complexity-paydown-review.md`.
+- HD-006 authorized one Home-only visual pass. The real-data Home now removes duplicate navigation actions, establishes a restrained page/section hierarchy, uses a denser artwork recommendation shelf, and presents personal playlists as compact metadata rows. Desktop and compact running screenshots received two bounded `agy` reviews; no other page or product capability changed.
 
 # Active Work
 
-- The maintenance pass has no remaining code task.
-- The next evidence is a maintainer-operated authenticated compact/desktop running-app review. Autonomous startup is not used because it could consume stored account credentials.
-- Keep M7 paused and do not create a numbered milestone until that observation and whole-product ranking establish authorized executable work.
+- Home is `HOME_READY_FOR_HUMAN_VISUAL_REVIEW`; no further Home iteration is selected without maintainer evidence.
+- Keep Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 work paused. A next UI page requires explicit maintainer acceptance/authority.
+- Authenticated screenshots remain temporary local files and are not committed because they contain current catalog and personal-library presentation.
 
 # Blockers
 
@@ -33,9 +34,9 @@ execution:
 
 # Next Candidates
 
-1. Record a coarse authenticated compact/desktop product observation without credentials, response bodies, or personal content.
+1. Record maintainer acceptance or bounded Home corrections from the supplied desktop/compact screenshots.
 2. Record the M1 playback/Queue/lyrics observation when the maintainer supplies only coarse outcomes; do not access stored credentials autonomously.
-3. Validate one unavailable target only when its real environment is supplied and release relevance is established.
+3. Resume another page only after explicit product authority; otherwise keep the UI freeze.
 
 # Pending Human Decisions
 
@@ -45,5 +46,5 @@ execution:
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback or broad catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, or unavailable operating systems.
-- M7's user-visible product effect has not been checkpointed by representative authenticated compact/desktop visual review; the completed maintenance pass does not promote it to product-complete or authorize resumption.
+- The Home pass has real authenticated desktop/compact screenshots and external visual critique, but it is not product-complete until the maintainer accepts the result. It does not validate or resume the rest of M7.
 - Historical research/checkpoint documents contain useful protocol and evidence boundaries. They are retained unless a file is proven to duplicate Git and current governance without unique reasoning.

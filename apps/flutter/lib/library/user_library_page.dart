@@ -753,9 +753,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             onOpenDiscover: () => _selectPrimaryDestination(
               AuthenticatedPrimaryDestination.discover,
             ),
-            onOpenSearch: () => _selectPrimaryDestination(
-              AuthenticatedPrimaryDestination.search,
-            ),
             onOpenLibrary: () => _selectPrimaryDestination(
               AuthenticatedPrimaryDestination.library,
             ),

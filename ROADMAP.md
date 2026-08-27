@@ -55,6 +55,8 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Resume condition:** an explicit post-maintenance product decision plus representative running-app evidence. Resumption must preserve retained state, accessibility, and the existing Flutter/Rust/music ownership boundaries.
 
+**Home-only review gate:** HD-006 authorized one focused Home pass without resuming other M7 pages. The truthful Home now uses a restrained welcome, an artwork-led recommendation shelf, and dense personal-playlist rows on desktop/compact. Automated and local running-app evidence is complete; maintainer visual acceptance is required before any other UI page.
+
 ## Completed Maintenance Pass — Complexity Paydown
 
 **Goal:** reduce accumulated implementation and governance complexity while preserving every existing user-visible behavior, retained state, test, supported flow, and architecture boundary.

@@ -429,6 +429,8 @@ void main() {
     expect(find.byKey(const ValueKey('home-library-section')), findsOneWidget);
     expect(find.text('Synthetic recommendation'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-library-grid')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-open-search')), findsNothing);
     expect(find.byKey(const ValueKey('music-sidebar-brand')), findsOneWidget);
     expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
     expect(
@@ -640,6 +642,12 @@ void main() {
         title: 'Retained search result',
         artistNames: ['Artist'],
       );
+      const compactPlaylist = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'owned:7001:201',
+        title: 'Compact Home playlist',
+        trackCount: 8,
+      );
       final search = _WidgetSearchGateway(
         const TrackSearchPageResult(
           page: 1,
@@ -666,7 +674,9 @@ void main() {
             _WaitingSession(),
             authenticated: true,
           ),
-          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          libraryGateway: _WidgetLibraryGateway([
+            const UserLibraryResult(playlists: [compactPlaylist]),
+          ]),
           searchGateway: search,
           recommendedPlaylistGateway: recommendations,
         ),
@@ -684,11 +694,12 @@ void main() {
         find.byKey(const ValueKey('home-recommendations-section')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('home-library-empty')), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-library-list')), findsOneWidget);
+      expect(find.text('Compact Home playlist'), findsOneWidget);
       expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
       expect(tester.takeException(), isNull);
 
-      final homeSearch = find.byKey(const ValueKey('home-open-search'));
+      final homeSearch = find.byKey(const ValueKey('open-track-search'));
       await tester.ensureVisible(homeSearch);
       await tester.pumpAndSettle();
       await tester.tap(homeSearch);
