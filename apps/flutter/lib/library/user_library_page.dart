@@ -808,80 +808,84 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           _libraryDestinationBody(),
         ],
       );
-      final body = Row(
-        children: [
-          if (wide)
-            NavigationRail(
-              selectedIndex: destination.index,
-              extended: extendedSidebar,
-              labelType: extendedSidebar
-                  ? NavigationRailLabelType.none
-                  : NavigationRailLabelType.all,
-              minWidth: MusicSizes.desktopRail,
-              minExtendedWidth: MusicSizes.desktopSidebar,
-              leading: _MusicSidebarBrand(expanded: extendedSidebar),
-              onDestinationSelected: _selectPrimaryDestinationByIndex,
-              destinations: _navigationRailDestinations(),
-            )
-          else
-            const SizedBox.shrink(),
-          if (wide)
-            const VerticalDivider(width: 1)
-          else
-            const SizedBox.shrink(),
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) => switch (_controller.stage) {
-                UserLibraryStage.authenticationRequired ||
-                UserLibraryStage.credentialRejected => _libraryBody(),
-                _ => primaryContent,
-              },
-            ),
-          ),
-        ],
+      final mainBody = AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => switch (_controller.stage) {
+          UserLibraryStage.authenticationRequired ||
+          UserLibraryStage.credentialRejected => _libraryBody(),
+          _ => primaryContent,
+        },
+      );
+      final mainAppBar = AppBar(
+        title: _PrimaryShellTitle(
+          title: switch (destination) {
+            AuthenticatedPrimaryDestination.home => 'Home',
+            AuthenticatedPrimaryDestination.discover => 'Discover',
+            AuthenticatedPrimaryDestination.search => 'Search QQ Music',
+            AuthenticatedPrimaryDestination.library => 'Your music',
+          },
+          compact: compactActions,
+          showTitle:
+              destination != AuthenticatedPrimaryDestination.home ||
+              !extendedSidebar,
+          showSearchShortcut:
+              extendedSidebar &&
+              destination != AuthenticatedPrimaryDestination.search,
+          onOpenSearch: () =>
+              _selectPrimaryDestination(AuthenticatedPrimaryDestination.search),
+        ),
+        titleSpacing: compactActions ? 8 : 16,
+        actions: _primaryActions(compactActions: compactActions),
       );
       return Scaffold(
         key: const ValueKey('authenticated-primary-shell'),
-        appBar: AppBar(
-          title: _PrimaryShellTitle(
-            title: switch (destination) {
-              AuthenticatedPrimaryDestination.home => 'Home',
-              AuthenticatedPrimaryDestination.discover => 'Discover',
-              AuthenticatedPrimaryDestination.search => 'Search QQ Music',
-              AuthenticatedPrimaryDestination.library => 'Your music',
-            },
-            compact: compactActions,
-            showSearchShortcut:
-                extendedSidebar &&
-                destination != AuthenticatedPrimaryDestination.search,
-            onOpenSearch: () => _selectPrimaryDestination(
-              AuthenticatedPrimaryDestination.search,
-            ),
-          ),
-          titleSpacing: compactActions ? 8 : 16,
-          actions: _primaryActions(compactActions: compactActions),
-        ),
-        body: body,
-        bottomNavigationBar: wide
-            ? NowPlayingBar(
-                controller: _queuePlaybackController,
-                onSignInAgain: widget.onSignInAgain,
+        body: Row(
+          children: [
+            if (wide)
+              NavigationRail(
+                selectedIndex: destination.index,
+                extended: extendedSidebar,
+                labelType: extendedSidebar
+                    ? NavigationRailLabelType.none
+                    : NavigationRailLabelType.all,
+                minWidth: MusicSizes.desktopRail,
+                minExtendedWidth: MusicSizes.desktopSidebar,
+                leading: _MusicSidebarBrand(expanded: extendedSidebar),
+                onDestinationSelected: _selectPrimaryDestinationByIndex,
+                destinations: _navigationRailDestinations(),
               )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  NowPlayingBar(
-                    controller: _queuePlaybackController,
-                    onSignInAgain: widget.onSignInAgain,
-                  ),
-                  NavigationBar(
-                    selectedIndex: destination.index,
-                    onDestinationSelected: _selectPrimaryDestinationByIndex,
-                    destinations: _navigationBarDestinations(),
-                  ),
-                ],
+            else
+              const SizedBox.shrink(),
+            if (wide) const VerticalDivider(width: 1),
+            if (!wide) const SizedBox.shrink(),
+            Expanded(
+              child: Scaffold(
+                appBar: mainAppBar,
+                body: mainBody,
+                bottomNavigationBar: wide
+                    ? NowPlayingBar(
+                        controller: _queuePlaybackController,
+                        onSignInAgain: widget.onSignInAgain,
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          NowPlayingBar(
+                            controller: _queuePlaybackController,
+                            onSignInAgain: widget.onSignInAgain,
+                          ),
+                          NavigationBar(
+                            selectedIndex: destination.index,
+                            onDestinationSelected:
+                                _selectPrimaryDestinationByIndex,
+                            destinations: _navigationBarDestinations(),
+                          ),
+                        ],
+                      ),
               ),
+            ),
+          ],
+        ),
       );
     },
   );
@@ -1148,42 +1152,49 @@ class _PrimaryShellTitle extends StatelessWidget {
   const _PrimaryShellTitle({
     required this.title,
     required this.compact,
+    required this.showTitle,
     required this.showSearchShortcut,
     required this.onOpenSearch,
   });
 
   final String title;
   final bool compact;
+  final bool showTitle;
   final bool showSearchShortcut;
   final VoidCallback onOpenSearch;
 
   @override
   Widget build(BuildContext context) {
-    final titleText = Text(
-      title,
-      style: compact ? Theme.of(context).textTheme.titleMedium : null,
-    );
-    if (!showSearchShortcut) return titleText;
+    final titleText = showTitle
+        ? Text(
+            title,
+            style: compact ? Theme.of(context).textTheme.titleMedium : null,
+          )
+        : null;
+    if (!showSearchShortcut) return titleText ?? const SizedBox.shrink();
     return Row(
       children: [
-        titleText,
-        const SizedBox(width: MusicSpacing.pageWide),
+        if (titleText != null) ...[
+          titleText,
+          const SizedBox(width: MusicSpacing.pageWide),
+        ],
         Expanded(
           child: Align(
             alignment: Alignment.centerRight,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: FilledButton.tonalIcon(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: SearchBar(
                 key: const ValueKey('top-search-shortcut'),
-                onPressed: onOpenSearch,
-                icon: const Icon(Icons.search_rounded),
-                label: const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Search QQ Music'),
+                onTap: onOpenSearch,
+                hintText: 'Search QQ Music',
+                leading: const Icon(Icons.search_rounded),
+                elevation: const WidgetStatePropertyAll(0),
+                backgroundColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.surfaceContainerHigh,
                 ),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(44),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                constraints: const BoxConstraints(minHeight: 40),
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 16),
                 ),
               ),
             ),

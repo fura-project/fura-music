@@ -72,4 +72,12 @@
 
 **Consequences:** This decision does not resume M7 globally or authorize new data, another page, Shell/navigation redesign, playback changes, theme work, framework adoption, or pixel copying. Home may receive Home-specific layout/widgets and the smallest compatible Shell/test adjustment. Final authenticated screenshots remain ephemeral because they contain current catalog and personal-library presentation; they are not committed.
 
+## HD-007 — Directed Home composition and desktop Shell hierarchy
+
+**Status:** Accepted on 2026-08-27
+
+**Decision:** The focused Home pass uses QQ Music only as a composition reference and Material 3 as the implementation language. Wide desktop places the persistent Sidebar beside a Main Region that alone owns the Top Bar, page content, and active player. Home keeps the six ordered product sections supplied by the maintainer. Existing public recommendations and personal playlists may populate only truthful matching sections; unavailable program and listening-history recommendation sections must remain explicit rather than substituting unrelated data or expanding the QQ protocol.
+
+**Consequences:** The agent may make the smallest shared Shell geometry and neutral dark-surface correction required to render this Home coherently, while preserving Home, Discover, Search, and Library navigation, retained resize state, accessibility, compact reachability, and playback ownership. This does not resume another M7 page, authorize new data/API work, or permit a UI checkpoint before maintainer visual approval.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

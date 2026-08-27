@@ -55,7 +55,7 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Resume condition:** an explicit post-maintenance product decision plus representative running-app evidence. Resumption must preserve retained state, accessibility, and the existing Flutter/Rust/music ownership boundaries.
 
-**Home-only review gate:** HD-006 authorized one focused Home pass without resuming other M7 pages. The truthful Home now uses a restrained welcome, an artwork-led recommendation shelf, and dense personal-playlist rows on desktop/compact. Automated and local running-app evidence is complete; maintainer visual acceptance is required before any other UI page.
+**Home-only review gate:** HD-006 and HD-007 authorize one focused Home pass without resuming other M7 pages. Wide desktop now uses a full-height Sidebar beside a Main Region containing the Top Bar, Home, and active player. The ordered Home composition uses real public recommendations and personal playlists; unsupported program and listening-history sections remain explicit unavailable states. Automated and local running-app evidence is complete; maintainer visual acceptance is required before any other UI page or UI checkpoint.
 
 ## Completed Maintenance Pass — Complexity Paydown
 

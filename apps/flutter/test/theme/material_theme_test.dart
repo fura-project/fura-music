@@ -53,6 +53,12 @@ void main() {
       expect(theme.dividerTheme.color, colors.outlineVariant);
       expect(theme.progressIndicatorTheme.color, colors.primary);
     }
+
+    expect(
+      themes[1].colorScheme.surfaceContainerLowest,
+      const Color(0xFF0D0F0E),
+    );
+    expect(themes[1].colorScheme.surfaceContainer, const Color(0xFF1C1F1D));
   });
 
   test('keeps component geometry and interaction motion centralized', () {

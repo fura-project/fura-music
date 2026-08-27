@@ -36,11 +36,27 @@ abstract final class MusicMaterialTheme {
   static ThemeData dark() => _create(Brightness.dark);
 
   static ThemeData _create(Brightness brightness) {
-    final colors = ColorScheme.fromSeed(
+    final seededColors = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: brightness,
       dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
     );
+    final colors = brightness == Brightness.dark
+        ? seededColors.copyWith(
+            surface: const Color(0xFF121412),
+            surfaceDim: const Color(0xFF121412),
+            surfaceBright: const Color(0xFF383B38),
+            surfaceContainerLowest: const Color(0xFF0D0F0E),
+            surfaceContainerLow: const Color(0xFF171918),
+            surfaceContainer: const Color(0xFF1C1F1D),
+            surfaceContainerHigh: const Color(0xFF252825),
+            surfaceContainerHighest: const Color(0xFF303330),
+            onSurface: const Color(0xFFE3E4DF),
+            onSurfaceVariant: const Color(0xFFC1C8C1),
+            outline: const Color(0xFF8B938C),
+            outlineVariant: const Color(0xFF414843),
+          )
+        : seededColors;
     final base = ThemeData(colorScheme: colors, useMaterial3: true);
     final textTheme = base.textTheme.copyWith(
       displayMedium: base.textTheme.displayMedium?.copyWith(
@@ -146,7 +162,7 @@ abstract final class MusicMaterialTheme {
         useIndicator: true,
         minWidth: MusicSizes.desktopRail,
         minExtendedWidth: MusicSizes.desktopSidebar,
-        groupAlignment: -0.72,
+        groupAlignment: -1,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(shape: WidgetStatePropertyAll(controlShape)),

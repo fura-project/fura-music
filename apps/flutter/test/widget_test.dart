@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
+        AppBar,
         Brightness,
         FilledButton,
         Focus,
@@ -429,7 +430,35 @@ void main() {
     expect(find.byKey(const ValueKey('home-library-section')), findsOneWidget);
     expect(find.text('Synthetic recommendation'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
-    expect(find.byKey(const ValueKey('home-library-grid')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-daily-heading')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-programs-heading')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-listening-one-heading')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('home-recommended-playlists-heading')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('home-listening-two-heading')),
+      findsOneWidget,
+    );
+    final sectionTops =
+        [
+              'home-daily-heading',
+              'home-library-heading',
+              'home-programs-heading',
+              'home-listening-one-heading',
+              'home-recommended-playlists-heading',
+              'home-listening-two-heading',
+            ]
+            .map((key) => tester.getTopLeft(find.byKey(ValueKey(key))).dy)
+            .toList(growable: false);
+    for (var index = 1; index < sectionTops.length; index++) {
+      expect(sectionTops[index], greaterThan(sectionTops[index - 1]));
+    }
     expect(find.byKey(const ValueKey('home-open-search')), findsNothing);
     expect(find.byKey(const ValueKey('music-sidebar-brand')), findsOneWidget);
     expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
@@ -437,6 +466,12 @@ void main() {
       tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
       isTrue,
     );
+    final railRect = tester.getRect(find.byType(NavigationRail));
+    final appBarRect = tester.getRect(find.byType(AppBar));
+    expect(railRect.top, 0);
+    expect(railRect.height, 900);
+    expect(appBarRect.left, greaterThanOrEqualTo(railRect.right));
+    expect(appBarRect.top, 0);
     await tester.tap(find.byKey(const ValueKey('home-open-library')));
     await tester.pumpAndSettle();
 
@@ -694,7 +729,7 @@ void main() {
         find.byKey(const ValueKey('home-recommendations-section')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('home-library-list')), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
       expect(find.text('Compact Home playlist'), findsOneWidget);
       expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
       expect(tester.takeException(), isNull);
