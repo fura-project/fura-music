@@ -5,11 +5,11 @@ use std::future::Future;
 
 use music_domain::{
     AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage, ArtistId,
-    ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, FavoriteArtistsPage, NewAlbumRegion,
-    NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage,
-    PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId,
-    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics,
-    TrackCommentsPage, TrackId, TrackSearchPage,
+    ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo,
+    NewAlbumRegion, NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId,
+    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
+    RankingGroup, RankingId, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
+    SynchronizedLyrics, TrackCommentsPage, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -22,6 +22,7 @@ pub enum ProviderCapability {
     PlaylistMutation,
     Lyrics,
     Comments,
+    MusicVideo,
     MediaResolution,
 }
 
@@ -130,6 +131,28 @@ impl fmt::Display for CommentsError {
 }
 
 impl std::error::Error for CommentsError {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MusicVideoError {
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    SourceUnavailable,
+}
+
+impl fmt::Display for MusicVideoError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::Network => "music video network request failed",
+            Self::ServiceUnavailable => "music video service is unavailable",
+            Self::InvalidResponse => "music video service returned an invalid response",
+            Self::SourceUnavailable => "music video has no supported playable source",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for MusicVideoError {}
 
 /// Provider-neutral Track search. Query ranking and page conversion remain
 /// owned by the concrete Provider.
@@ -308,6 +331,18 @@ pub trait TrackCommentsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<TrackCommentsPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral lookup of the exact music video associated with one
+/// Track. `Ok(None)` is a truthful no-MV result, distinct from failures and
+/// from an MV whose source is unavailable.
+pub trait TrackMusicVideoProvider: MusicProvider + Sync {
+    type Error;
+
+    fn track_music_video(
+        &self,
+        track_id: TrackId,
+    ) -> impl Future<Output = Result<Option<MusicVideo>, Self::Error>> + Send;
 }
 
 /// Describes behavior that is implemented now, not planned future behavior.

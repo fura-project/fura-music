@@ -7,24 +7,25 @@ use std::sync::{Arc, Mutex};
 use music_domain::{
     AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistAlbumsPage,
     ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat, AudioQuality,
-    FavoriteAlbumsPage, FavoriteArtistsPage, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage,
-    NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
-    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
-    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
-    SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage,
-    TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, MusicVideoId, MusicVideoQuality,
+    MusicVideoSource, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory,
+    NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
+    ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
+    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
+    TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem,
+    TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
     ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, CommentsError,
     FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError, LyricsProvider,
-    MediaResolutionError, MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider,
-    NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
-    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
-    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-    RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-    RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackSearchProvider,
-    UserLibraryError, UserPlaylistsProvider,
+    MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
+    NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider,
+    PlaylistSearchProvider, ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge,
+    QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+    RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider, RecommendationError,
+    RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackMusicVideoProvider,
+    TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
@@ -32,14 +33,16 @@ use qqmusic_client::{
     QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
     QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError,
     QqMusicFavoriteArtistsError, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
-    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicNewAlbumArea,
-    QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOwnedPlaylist,
-    QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError, QqMusicPlaylistSearchError,
-    QqMusicPlaylistSearchSummary, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
-    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
-    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackSummary, QrImageMediaType,
-    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMusicVideoQuality,
+    QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError,
+    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError,
+    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicRadarError,
+    QqMusicRankingSummary, QqMusicRankingsError, QqMusicRecommendedPlaylist,
+    QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackComment,
+    QqMusicTrackCommentsError, QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError,
+    QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -409,6 +412,7 @@ impl<T> MusicProvider for QqMusicProvider<T> {
                 ProviderCapability::UserLibrary,
                 ProviderCapability::Lyrics,
                 ProviderCapability::Comments,
+                ProviderCapability::MusicVideo,
                 ProviderCapability::MediaResolution,
             ],
         }
@@ -1162,6 +1166,29 @@ where
     }
 }
 
+impl<T> TrackMusicVideoProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = MusicVideoError;
+
+    async fn track_music_video(
+        &self,
+        track_id: TrackId,
+    ) -> Result<Option<MusicVideo>, Self::Error> {
+        let route =
+            parse_track_identity(&track_id).map_err(|()| MusicVideoError::InvalidResponse)?;
+        self.client()
+            .track_music_video(route.song_mid)
+            .await
+            .as_ref()
+            .map_err(map_music_video_error)?
+            .as_ref()
+            .map(map_music_video)
+            .transpose()
+    }
+}
+
 impl<T> QrAuthenticationProvider for QqMusicProvider<T>
 where
     T: HttpTransport + 'static,
@@ -1708,6 +1735,26 @@ fn map_comment(comment: &QqMusicTrackComment) -> Result<TrackComment, CommentsEr
     .map_err(|_| CommentsError::InvalidResponse)
 }
 
+fn map_music_video(video: &QqMusicTrackMusicVideo) -> Result<MusicVideo, MusicVideoError> {
+    let id = MusicVideoId::new(qq_music_provider_id(), format!("mv:{}", video.vid()))
+        .map_err(|_| MusicVideoError::InvalidResponse)?;
+    let quality = match video.quality() {
+        QqMusicMusicVideoQuality::FullHd => MusicVideoQuality::FullHd,
+        QqMusicMusicVideoQuality::Hd => MusicVideoQuality::Hd,
+        QqMusicMusicVideoQuality::Sd => MusicVideoQuality::Sd,
+        QqMusicMusicVideoQuality::Low => MusicVideoQuality::Low,
+    };
+    let source = MusicVideoSource::new(video.source_uri(), quality)
+        .map_err(|_| MusicVideoError::InvalidResponse)?;
+    MusicVideo::new(id, video.title(), video.artist_names().to_vec(), source)
+        .map(|video_domain| {
+            video_domain
+                .with_artwork_uri(video.artwork_uri().map(str::to_owned))
+                .with_duration_seconds(Some(video.duration_seconds()))
+        })
+        .map_err(|_| MusicVideoError::InvalidResponse)
+}
+
 fn album_artwork_uri(media_mid: &str) -> Option<String> {
     let safe = !media_mid.is_empty()
         && media_mid
@@ -2231,6 +2278,20 @@ fn map_comments_error<E>(error: &QqMusicTrackCommentsError<E>) -> CommentsError 
     }
 }
 
+fn map_music_video_error<E>(error: &QqMusicTrackMusicVideoError<E>) -> MusicVideoError {
+    match error {
+        QqMusicTrackMusicVideoError::Transport { .. } => MusicVideoError::Network,
+        QqMusicTrackMusicVideoError::HttpStatus { .. }
+        | QqMusicTrackMusicVideoError::Upstream { .. } => MusicVideoError::ServiceUnavailable,
+        QqMusicTrackMusicVideoError::SourceUnavailable => MusicVideoError::SourceUnavailable,
+        QqMusicTrackMusicVideoError::InvalidSongMid
+        | QqMusicTrackMusicVideoError::RandomnessUnavailable
+        | QqMusicTrackMusicVideoError::Serialize(_)
+        | QqMusicTrackMusicVideoError::InvalidJson(_)
+        | QqMusicTrackMusicVideoError::InvalidResponse { .. } => MusicVideoError::InvalidResponse,
+    }
+}
+
 fn map_media_error<E>(error: &QqMusicMediaError<E>) -> MediaResolutionError {
     match error {
         QqMusicMediaError::Transport { .. } => MediaResolutionError::Network,
@@ -2354,13 +2415,13 @@ mod tests {
         AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
         ArtistSearchProvider, ArtistTracksProvider, CatalogError, CommentsError,
         FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError, LyricsProvider,
-        MediaResolutionError, MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider,
-        NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
-        ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
-        QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-        RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-        RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackSearchProvider,
-        UserLibraryError, UserPlaylistsProvider,
+        MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
+        NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
+        PlaylistDetailsProvider, PlaylistSearchProvider, ProviderCapability,
+        QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+        RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider,
+        RecommendationError, RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider,
+        TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
@@ -2370,6 +2431,7 @@ mod tests {
         QqMusicFavoriteArtistsError, QqMusicNewAlbumsError, QqMusicNewSongsError,
         QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
         QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackCommentsError,
+        QqMusicTrackMusicVideoError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -2927,6 +2989,7 @@ mod tests {
                 ProviderCapability::UserLibrary,
                 ProviderCapability::Lyrics,
                 ProviderCapability::Comments,
+                ProviderCapability::MusicVideo,
                 ProviderCapability::MediaResolution,
             ]
         );
@@ -2996,6 +3059,105 @@ mod tests {
         assert_eq!(
             super::map_comments_error(&QqMusicTrackCommentsError::<Infallible>::InvalidJson),
             CommentsError::InvalidResponse
+        );
+    }
+
+    #[tokio::test]
+    async fn maps_exact_track_associated_mv_without_exposing_qq_shapes() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            json!({
+                "code": 0,
+                "songinfo": {
+                    "code": 0,
+                    "data": {"track_info": {
+                        "mid": "fixtureTrackMid1",
+                        "mv": {"vid": "fixtureMvVid"}
+                    }}
+                }
+            }),
+            json!({
+                "code": 0,
+                "mvinfo": {"code": 0, "data": {"fixtureMvVid": {
+                    "vid": "fixtureMvVid",
+                    "name": "Synthetic MV",
+                    "cover_pic": "https://example.invalid/synthetic-cover.jpg",
+                    "duration": 181,
+                    "singers": [{"name": "Synthetic Artist"}]
+                }}},
+                "mvurl": {"code": 0, "data": {"fixtureMvVid": {"mp4": [{
+                    "code": 0,
+                    "filetype": 30,
+                    "freeflow_url": ["https://example.invalid/private-mv.mp4"],
+                    "url": [],
+                    "comm_url": []
+                }]}}}
+            }),
+        ])));
+
+        let video = provider
+            .track_music_video(qq_track_id(
+                "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
+            ))
+            .await
+            .expect("provider MV")
+            .expect("associated MV");
+        assert_eq!(video.id().provider().as_str(), "qq-music");
+        assert_eq!(video.id().opaque(), "mv:fixtureMvVid");
+        assert_eq!(video.title(), "Synthetic MV");
+        assert_eq!(video.artist_names(), &["Synthetic Artist"]);
+        assert_eq!(video.duration_seconds(), Some(181));
+        assert_eq!(
+            video.source().quality(),
+            music_domain::MusicVideoQuality::Hd
+        );
+        assert_eq!(
+            video.source().uri(),
+            "https://example.invalid/private-mv.mp4"
+        );
+        let debug = format!("{video:?}");
+        for private in [
+            "fixtureMvVid",
+            "Synthetic MV",
+            "Synthetic Artist",
+            "private-mv",
+        ] {
+            assert!(!debug.contains(private));
+        }
+    }
+
+    #[tokio::test]
+    async fn preserves_no_mv_and_maps_mv_failures() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([json!({
+            "code": 0,
+            "songinfo": {"code": 0, "data": {"track_info": {
+                "mid": "fixtureTrackMid1",
+                "mv": {"vid": ""}
+            }}}
+        })])));
+        assert!(
+            provider
+                .track_music_video(qq_track_id(
+                    "track:41001:0:fixtureTrackMid1:fixtureFileMid1"
+                ))
+                .await
+                .expect("no MV")
+                .is_none()
+        );
+
+        let foreign = TrackId::new(
+            ProviderId::new("local").expect("provider"),
+            "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
+        )
+        .expect("track ID");
+        assert_eq!(
+            provider.track_music_video(foreign).await,
+            Err(MusicVideoError::InvalidResponse)
+        );
+        assert_eq!(
+            super::map_music_video_error(
+                &QqMusicTrackMusicVideoError::<Infallible>::SourceUnavailable
+            ),
+            MusicVideoError::SourceUnavailable
         );
     }
 

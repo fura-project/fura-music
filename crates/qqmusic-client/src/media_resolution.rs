@@ -495,7 +495,7 @@ fn extract_data<E, D>(
     })
 }
 
-fn request_guid() -> Result<String, ()> {
+pub(crate) fn request_guid() -> Result<String, ()> {
     const HEX: &[u8; 16] = b"0123456789abcdef";
 
     let mut bytes = [0_u8; 16];

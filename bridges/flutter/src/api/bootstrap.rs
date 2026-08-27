@@ -60,6 +60,7 @@ mod tests {
                 "UserLibrary",
                 "Lyrics",
                 "Comments",
+                "MusicVideo",
                 "MediaResolution"
             ]
         );

@@ -18,6 +18,7 @@ mod favorite_artists;
 mod favorite_playlists;
 mod lyrics;
 mod media_resolution;
+mod music_video;
 mod new_albums;
 mod new_songs;
 mod owned_playlists;
@@ -66,6 +67,10 @@ pub use lyrics::{
 pub use media_resolution::{
     MediaProtocolPhase, MediaResponseField, QqMusicCdnDispatch, QqMusicMediaError,
     QqMusicStandardMediaSource,
+};
+pub use music_video::{
+    MusicVideoProtocolPhase, MusicVideoResponseField, QqMusicMusicVideoQuality,
+    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError,
 };
 pub use new_albums::{
     NewAlbumField, QqMusicNewAlbumArea, QqMusicNewAlbumPage, QqMusicNewAlbumRelease,

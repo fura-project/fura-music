@@ -8,6 +8,7 @@ pub mod favorite_artists;
 pub mod library;
 pub mod lyrics;
 pub mod media;
+pub mod music_video;
 pub mod new_albums;
 pub mod new_songs;
 pub mod queue;

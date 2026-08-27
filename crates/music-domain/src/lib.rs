@@ -517,6 +517,61 @@ impl fmt::Display for InvalidTrackCommentId {
 
 impl std::error::Error for InvalidTrackCommentId {}
 
+/// Provider-scoped identity for one music video associated with a Track.
+/// The provider-owned value remains opaque outside its owning Provider.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct MusicVideoId {
+    provider: ProviderId,
+    opaque: String,
+}
+
+impl MusicVideoId {
+    /// # Errors
+    ///
+    /// Returns [`InvalidMusicVideoId`] when the provider-owned value is blank.
+    pub fn new(
+        provider: ProviderId,
+        opaque: impl Into<String>,
+    ) -> Result<Self, InvalidMusicVideoId> {
+        let opaque = opaque.into();
+        if opaque.trim().is_empty() {
+            return Err(InvalidMusicVideoId);
+        }
+        Ok(Self { provider, opaque })
+    }
+
+    #[must_use]
+    pub const fn provider(&self) -> &ProviderId {
+        &self.provider
+    }
+
+    #[must_use]
+    pub fn opaque(&self) -> &str {
+        &self.opaque
+    }
+}
+
+impl fmt::Debug for MusicVideoId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MusicVideoId")
+            .field("provider", &self.provider)
+            .field("opaque", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidMusicVideoId;
+
+impl fmt::Display for InvalidMusicVideoId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("music video identity must have a non-empty provider value")
+    }
+}
+
+impl std::error::Error for InvalidMusicVideoId {}
+
 /// Provider-scoped Album identity. The opaque value is interpreted only by
 /// the owning Provider.
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -1175,6 +1230,215 @@ impl fmt::Display for InvalidTrackSummary {
 }
 
 impl std::error::Error for InvalidTrackSummary {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MusicVideoQuality {
+    FullHd,
+    Hd,
+    Sd,
+    Low,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MusicVideoSourceField {
+    Uri,
+}
+
+/// One short-lived playable source for a music video. Provider clients must
+/// enforce any protocol-specific URI policy before constructing this value.
+#[derive(Clone, Eq, PartialEq)]
+pub struct MusicVideoSource {
+    uri: String,
+    quality: MusicVideoQuality,
+}
+
+impl MusicVideoSource {
+    /// # Errors
+    ///
+    /// Rejects blank or whitespace-padded source URIs.
+    pub fn new(
+        uri: impl Into<String>,
+        quality: MusicVideoQuality,
+    ) -> Result<Self, InvalidMusicVideoSource> {
+        let uri = uri.into();
+        if uri.trim().is_empty() || uri.trim() != uri {
+            return Err(InvalidMusicVideoSource {
+                field: MusicVideoSourceField::Uri,
+            });
+        }
+        Ok(Self { uri, quality })
+    }
+
+    #[must_use]
+    pub fn uri(&self) -> &str {
+        &self.uri
+    }
+
+    #[must_use]
+    pub const fn quality(&self) -> MusicVideoQuality {
+        self.quality
+    }
+}
+
+impl fmt::Debug for MusicVideoSource {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MusicVideoSource")
+            .field("uri", &"[REDACTED]")
+            .field("quality", &self.quality)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidMusicVideoSource {
+    field: MusicVideoSourceField,
+}
+
+impl InvalidMusicVideoSource {
+    #[must_use]
+    pub const fn field(self) -> MusicVideoSourceField {
+        self.field
+    }
+}
+
+impl fmt::Display for InvalidMusicVideoSource {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "music video source has an invalid {:?}",
+            self.field
+        )
+    }
+}
+
+impl std::error::Error for InvalidMusicVideoSource {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MusicVideoField {
+    Title,
+    ArtistName,
+}
+
+/// Provider-neutral metadata and one resolved source for the exact music
+/// video associated with a Track. Related-video catalogs remain separate.
+#[derive(Clone, Eq, PartialEq)]
+pub struct MusicVideo {
+    id: MusicVideoId,
+    title: String,
+    artist_names: Vec<String>,
+    artwork_uri: Option<String>,
+    duration_seconds: Option<u32>,
+    source: MusicVideoSource,
+}
+
+impl MusicVideo {
+    /// # Errors
+    ///
+    /// Rejects blank titles and blank artist credits.
+    pub fn new(
+        id: MusicVideoId,
+        title: impl Into<String>,
+        artist_names: Vec<String>,
+        source: MusicVideoSource,
+    ) -> Result<Self, InvalidMusicVideo> {
+        let title = title.into();
+        if title.trim().is_empty() {
+            return Err(InvalidMusicVideo {
+                field: MusicVideoField::Title,
+            });
+        }
+        if artist_names.iter().any(|name| name.trim().is_empty()) {
+            return Err(InvalidMusicVideo {
+                field: MusicVideoField::ArtistName,
+            });
+        }
+        Ok(Self {
+            id,
+            title,
+            artist_names,
+            artwork_uri: None,
+            duration_seconds: None,
+            source,
+        })
+    }
+
+    #[must_use]
+    pub fn with_artwork_uri(mut self, artwork_uri: Option<String>) -> Self {
+        self.artwork_uri = nonblank(artwork_uri);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_duration_seconds(mut self, duration_seconds: Option<u32>) -> Self {
+        self.duration_seconds = duration_seconds;
+        self
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> &MusicVideoId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    #[must_use]
+    pub fn artist_names(&self) -> &[String] {
+        &self.artist_names
+    }
+
+    #[must_use]
+    pub fn artwork_uri(&self) -> Option<&str> {
+        self.artwork_uri.as_deref()
+    }
+
+    #[must_use]
+    pub const fn duration_seconds(&self) -> Option<u32> {
+        self.duration_seconds
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &MusicVideoSource {
+        &self.source
+    }
+}
+
+impl fmt::Debug for MusicVideo {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MusicVideo")
+            .field("id", &self.id)
+            .field("title", &"[REDACTED]")
+            .field("artist_count", &self.artist_names.len())
+            .field("has_artwork", &self.artwork_uri.is_some())
+            .field("duration_seconds", &self.duration_seconds)
+            .field("source", &self.source)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidMusicVideo {
+    field: MusicVideoField,
+}
+
+impl InvalidMusicVideo {
+    #[must_use]
+    pub const fn field(self) -> MusicVideoField {
+        self.field
+    }
+}
+
+impl fmt::Display for InvalidMusicVideo {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "music video has an invalid {:?}", self.field)
+    }
+}
+
+impl std::error::Error for InvalidMusicVideo {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrackCommentField {
@@ -2303,7 +2567,8 @@ fn nonblank(value: Option<String>) -> Option<String> {
 mod tests {
     use super::{
         AlbumDetails, AlbumId, AlbumSearchPage, AlbumSummary, AlbumTracksPage, ArtistId,
-        ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, NewAlbumRegion,
+        ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, MusicVideo, MusicVideoField,
+        MusicVideoId, MusicVideoQuality, MusicVideoSource, MusicVideoSourceField, NewAlbumRegion,
         NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId,
         PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
         RankingGroup, RankingId, RankingSummary, RankingTracksPage, ResolvedMediaSource,
@@ -2842,5 +3107,64 @@ mod tests {
         )
         .expect_err("zero validity");
         assert_eq!(invalid_validity.field(), ResolvedMediaSourceField::Validity);
+    }
+
+    #[test]
+    fn music_video_keeps_provider_identity_source_and_content_out_of_diagnostics() {
+        let id = MusicVideoId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "mv:private-video-id",
+        )
+        .expect("MV ID");
+        let source = MusicVideoSource::new(
+            "https://example.invalid/private-source.mp4",
+            MusicVideoQuality::FullHd,
+        )
+        .expect("source");
+        let video = MusicVideo::new(
+            id,
+            "must-not-leak-title",
+            vec!["must-not-leak-artist".into()],
+            source,
+        )
+        .expect("MV")
+        .with_artwork_uri(Some("https://example.invalid/private-cover.jpg".into()))
+        .with_duration_seconds(Some(181));
+
+        assert_eq!(video.id().provider().as_str(), "qq-music");
+        assert_eq!(video.id().opaque(), "mv:private-video-id");
+        assert_eq!(video.source().quality(), MusicVideoQuality::FullHd);
+        assert_eq!(video.duration_seconds(), Some(181));
+        let debug = format!("{video:?}");
+        for private in [
+            "private-video-id",
+            "must-not-leak",
+            "private-source",
+            "private-cover",
+        ] {
+            assert!(!debug.contains(private));
+        }
+    }
+
+    #[test]
+    fn music_video_rejects_blank_display_and_source_values() {
+        let provider = ProviderId::new("qq-music").expect("provider");
+        assert!(MusicVideoId::new(provider.clone(), " ").is_err());
+        let invalid_source =
+            MusicVideoSource::new(" https://example.invalid/video.mp4 ", MusicVideoQuality::Hd)
+                .expect_err("padded source");
+        assert_eq!(invalid_source.field(), MusicVideoSourceField::Uri);
+
+        let video_id = || MusicVideoId::new(provider.clone(), "mv:fixture").expect("MV ID");
+        let source = || {
+            MusicVideoSource::new("https://example.invalid/video.mp4", MusicVideoQuality::Hd)
+                .expect("source")
+        };
+        let blank_title =
+            MusicVideo::new(video_id(), " ", Vec::new(), source()).expect_err("blank title");
+        assert_eq!(blank_title.field(), MusicVideoField::Title);
+        let blank_artist = MusicVideo::new(video_id(), "title", vec![String::new()], source())
+            .expect_err("blank artist");
+        assert_eq!(blank_artist.field(), MusicVideoField::ArtistName);
     }
 }
