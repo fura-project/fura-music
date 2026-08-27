@@ -222,7 +222,7 @@ M5.1 through M5.7 are implemented. The checkpoint review evaluates the completed
 
 Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope/adaptive review, technical-debt status, completeness classification, and exact live/platform/release boundaries are recorded in `docs/development/m5-checkpoint-review.md`. Future reproduced M5-class regressions remain valid bounded work. The checkpoint is not project completion, release readiness, live QQ compatibility approval, or M1 acceptance.
 
-## Active Workstream — M6 Core Compatibility Evidence
+## Completed Checkpoint — M6 Core Compatibility Evidence
 
 ### Goal
 
@@ -259,7 +259,11 @@ Reduce the highest current risk that newly completed, core QQ Music read capabil
 - Authenticated probing, reading stored credentials, downloading or playing the returned remote MV source, or retaining service content as a fixture.
 - Release identity/signing/notices, unavailable-platform emulation, or physical-device claims.
 
-M6.1 is selected from the post-M5 ranking because the M5 completeness audit already records these two live-compatibility risks, both operations are anonymous and redacted, and every competing high-value item is currently user-, environment-, evidence-, or Human-Decision-blocked.
+M6.1 through M6.3 are implemented. Live evidence required two minimal comment-parser corrections: comment identity is bounded provider-opaque text rather than necessarily numeric, and a present-but-blank newest row is an evidenced deleted/non-displayable row that does not alter raw-row pagination. The selected anonymous comments and Track-associated MV gates pass without credential or retained returned content/source.
+
+### Checkpoint
+
+Completed on 2026-08-27. Criterion-by-criterion evidence, exact redaction boundaries, the two evidence-backed comment corrections, validation results, and remaining live/platform limits are recorded in `docs/development/m6-checkpoint-review.md`. This proves selected direct-client protocol compatibility only; it is not full-application compatibility, remote MV playback, broad catalog quality, M1 acceptance, release readiness, or authorization for a new feature milestone.
 
 ## Later Direction — Evidence-Gated Work
 

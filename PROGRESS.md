@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: M6
-  current_task: M6.1_ANONYMOUS_COMMENTS_MV_COMPATIBILITY
-  next_action: DISCOVERY
+  active_workstream: EVIDENCE_GATED_LATER_DIRECTION
+  current_task: null
+  next_action: NO_LEGITIMATE_WORK
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2, M3, M4, and M5 are checkpointed. M6 Core Compatibility Evidence is active and is limited to anonymous, redacted live validation of the two unexercised M5 protocol paths.
+M1's real-account playback observation remains open; M2 through M6 are checkpointed. The post-M6 discovery found no currently executable Roadmap-derived task: the remaining candidates are user-, environment-, or Human-Decision-blocked, while later cache/fallback/theme/product directions lack the evidence or authority required to become work. Project execution remains `ACTIVE` with `global_stop: false`; `NO_LEGITIMATE_WORK` is not project completion.
 
 # Completed Recently
 
@@ -70,16 +70,18 @@ M1's real-account playback observation remains open; M2, M3, M4, and M5 are chec
 - Implemented M5.5 bounded Track-associated MV: current independent QQ implementations support the selected exact Track-detail → optional VID → combined metadata/source flow, which now maps through provider-neutral Domain/Provider contracts and one cancellable typed Bridge operation without exposing QQ identity grammar or raw protocol models to Flutter. Expanded Now Playing opens one adaptive MV surface backed by a disposable project-owned `media_kit` session and Material controls. Music remains the authoritative Queue owner: MV play/resume yields foreground audio, later music or Track replacement interrupts MV, and close/failure never auto-resumes music. Optional/no-MV, source-unavailable, retry, stale/cancel/disposal, exact correlation, HTTPS/MP4 quality selection, URI-redacted diagnostics, 360 px/desktop presentation, and audio/video ownership races have regressions. Strict Dart analysis, all 336 Flutter tests, 297 offline Rust tests with four live tests ignored, strict Clippy, Linux x64 Release, packaged Bridge cancellation, packaged synthetic local-MP4 decode/control, and an x86_64-only Android Debug APK pass without credentials or live QQ access. This does not prove live QQ MV availability, remote-source playback, physical-device decode, hardware acceleration, or Apple/Windows runtime behavior.
 - Completed M5.6 product-completeness classification and resolved its only evidenced in-scope implementation gap: Album, Artist, Ranking, Radar, and New Song rows now expose only the validated provider-neutral Album/Artist destinations applicable to each retained context through one optional shared Material menu. Missing context stays absent, collaborations stay explicit, and direct play/Queue behavior is unchanged. Focused 360 px and exact-selection tests, a retained Radar → Album → Radar regression, strict Dart analysis, all 336 Flutter tests, and Linux x64 Release pass; Rust, Bridge, protocol, Domain, Queue, dependencies, and navigation ownership were unchanged.
 - Completed the M5 checkpoint against all eleven Roadmap exit criteria. The current checkout passes 297 offline Rust tests with four live tests gated, strict Rust/Dart checks, all 336 Flutter tests, Linux x64 Release, packaged typed Bridge, disposable non-account vault, local/loopback MP3, and synthetic local-H.264 MV integrations. The review preserves the M1 user observation, live comments/MV, physical/unavailable-platform, release identity/notices, and evidence-gated later-direction limits rather than converting them into passing claims.
+- Completed M6 anonymous compatibility evidence for one public comments page and one exact Track-associated MV path. The first comments runs exposed bounded opaque nonnumeric comment IDs and one present-but-blank newest row; the client now preserves IDs opaquely and filters only that evidenced deleted/non-displayable newest-row shape while pagination advances by raw rows. Both opt-in live gates pass without credentials or persisted returned content/source. Rust formatting, 300 offline tests with six live tests ignored, strict Clippy, Dart formatting/analysis, and all 336 Flutter tests pass. This is selected client-protocol evidence, not broad content-quality, full-app, remote-playback, or long-term service compatibility.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Post-M5 ranking selected M6.1: add explicit ignored live gates for one anonymous comments page and one exact Track-associated MV flow. The task may validate coarse structure or drive a minimal evidence-backed protocol correction; it may not read stored credentials, preserve returned content/source, add product capability, or replace the offline suite.
+- No finite implementation task is active after the bounded post-M6 discovery. Resume global ranking when new user evidence, a required target environment, an accepted release/product decision, a reproduced failure, or another legitimate Roadmap provenance appears.
 
 # Next Candidates
 
-1. Complete M6.1 anonymous comments/MV compatibility discovery and gates, then reconcile only observed discrepancies.
-2. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
+1. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
+2. Validate a required physical Android or unavailable desktop/mobile target when its real environment is supplied; do not infer it from emulation or another platform.
+3. Prepare production identity/signing and exact native-video notices only after HD-001 supplies release authority and ownership.
 
 # Blockers
 
@@ -92,8 +94,8 @@ M1's real-account playback observation remains open; M2, M3, M4, and M5 are chec
 # Risks
 
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
-- The selected legacy Track-comment operation has two current independent source references and full synthetic client-to-presentation coverage, but this repository did not call QQ Music during M5.4; live application compatibility and returned-content quality are not claimed.
-- Track-associated MV has current independent protocol references, full offline client-to-presentation coverage, packaged Linux synthetic-H.264 decode/control, and Linux/Android x64 build evidence. This repository did not call QQ Music during M5.5, so live VID/source availability, expiring remote-source playback, mobile hardware decode, and unavailable-platform runtime behavior are not claimed. The new native video dependency also creates a release-time notice/compliance obligation tracked by TD-006.
+- The selected legacy Track-comment client operation passed one anonymous public-catalog live page on 2026-08-27 after evidence-backed support for opaque nonnumeric IDs and blank deleted/newest rows. No returned comment, author, identity, or response body was persisted. This does not prove broad catalog/content quality, authenticated/full-app behavior, or future service stability.
+- Track-associated MV client resolution passed one anonymous public-catalog live association/source mapping on 2026-08-27 without persisting returned identity, metadata, artwork, or source. Packaged Linux synthetic-H.264 decode/control and Linux/Android x64 build evidence remain separate; remote-source playback, expiry behavior, mobile hardware decode, unavailable-platform runtime, and broad MV availability are not claimed. The native video dependency also creates a release-time notice/compliance obligation tracked by TD-006.
 - Credential handling can create account and privacy risk; real-account probes and user-derived fixtures require deliberate, secret-safe execution.
 - Startup server verification has now accepted the authorized real account after a full process restart; no credential value or response was retained.
 - Linux and Android x64 runtime write/read/delete are verified with cleanup; Apple and Windows paths remain unbuilt and runtime-unverified here (TD-004).
