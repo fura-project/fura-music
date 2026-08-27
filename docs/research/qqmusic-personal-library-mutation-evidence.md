@@ -93,10 +93,46 @@ Bridge, generated bindings, Dart gateway, credential rejection cleanup, account
 replacement, and packaged-Bridge cancellation are covered; live acceptance
 remains explicitly maintainer-operated.
 
+## Catalog-entity mutation discovery
+
+Album favorite state has enough bounded evidence for an offline foundation:
+
+```text
+Favorite
+  -> music.musicasset.AlbumFavWrite / FavAlbum
+
+NotFavorite
+  -> music.musicasset.AlbumFavWrite / CancelFavAlbum
+```
+
+Current [L-1124/QQMusicApi at `108617f`](https://github.com/L-1124/QQMusicApi/blob/108617ffe80abefec6358717b9f4d3677550db10/qqmusic_api/modules/album.py)
+uses `v_albumId: [numeric ID]`. Its current
+[`test_album.py`](https://github.com/L-1124/QQMusicApi/blob/108617ffe80abefec6358717b9f4d3677550db10/tests/test_album.py)
+selects one current new Album, favorites it, and cancels that favorite in an
+authenticated reversible integration. Its response model treats `result == 0`
+with no `v_failedAlbumId` entries as success.
+
+[tlyanyu/multiPlatformMusicApi at `0fd583b`](https://github.com/tlyanyu/multiPlatformMusicApi/blob/0fd583b384f5d6477067ff3d29ccedd97fc3a317/platforms/qqmusic/module/album_sub.js)
+independently agrees on the module and two methods but uses `v_albumMid` plus
+`uin`. That is a real request-identity variation, not permission to put both
+shapes in one request or to retry a write. The selected first foundation uses
+the L-1124 numeric-ID form because it has the stronger current reversible-test
+evidence. QQ Album opaque identity already retains numeric ID plus MID; a row
+without a nonzero numeric ID must be rejected before transport rather than
+falling back after an uncertain write.
+
+No sanitized response is available in this checkout and no real account write
+will be issued. Offline success must require zero global, named-request, and
+mutation `result` values plus a present empty failed-ID list. A missing,
+nonempty, or malformed failed list is an unknown response outcome, not
+confirmed success. Artist follow/unfollow remains `EVIDENCE_BLOCKED`: current
+sources agree on reading `GetFollowSingerList`, but this discovery found no two
+current detailed write contracts or authenticated reversible test.
+
 ## Explicit non-goals of this slice
 
 - playlist rename or delete;
-- Album/Artist favorite mutation;
+- Artist follow/favorite mutation;
 - optimistic UI or final verification controls;
 - automatic retries after an unknown outcome;
 - reading the maintainer's stored credential;

@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: FIRST_RELEASE_CORE_CAPABILITY_COMPLETION
-  current_task: null
-  next_action: SELECT_NEXT_TASK
+  current_task: ALBUM_FAVORITE_MUTATION_FOUNDATION
+  next_action: IMPLEMENT
 ---
 
 # Current State
@@ -29,7 +29,8 @@ execution:
 - One Track add/remove operation now accepts only a structurally validated owned playlist target through Client, Provider, cancellable Bridge, and Dart gateway. Favorite, public catalog, foreign, and malformed targets fail before transport; unknown outcomes remain unconfirmed. No real account was changed.
 - Bounded owned-playlist creation now runs through Client, Provider, cancellable Bridge, generated binding, and Dart gateway. It accepts the independently observed nonzero `result.tid` or `result.id` forms, also requires `dirId` and the server-returned name, rejects invalid names before transport, and preserves unknown-outcome semantics. No real account was changed.
 - TD-007 was resolved before the third remote write: Rust now shares only single-use run/cancel state, Dart shares only explicit-rejection vault cleanup, and every operation keeps typed results plus Provider-owned identity rules.
-- Re-rank the remaining capability gaps globally before selecting another finite task; do not bundle weaker-evidence rename or destructive delete into the completed creation slice.
+- Album favorite discovery found two current implementations agreeing on `AlbumFavWrite/FavAlbum/CancelFavAlbum`. Their numeric-ID versus MID request variation is explicit; the selected finite foundation uses only the numeric-ID form backed by a current authenticated reversible test and never retries with the alternate form.
+- Implement one bounded favorite/not-favorite Album foundation without UI or real account execution. Artist mutation remains evidence-blocked; do not bundle it, playlist rename, or destructive delete.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
 - Do not automate stored-account access or real-account mutation acceptance.
 
@@ -41,7 +42,7 @@ execution:
 
 # Next Candidates
 
-1. Discover current independently supported favorite/unfavorite Album or Artist mutation semantics; do not implement from one source or issue a real account write.
+1. Implement the selected numeric-ID favorite/not-favorite Album foundation without autonomously changing the maintainer's account.
 2. Seek a second current detailed source for playlist rename; keep destructive delete separate.
 3. Discover truthful Home recommendation semantics without substituting unrelated existing data.
 
@@ -60,3 +61,4 @@ execution:
 - Liked-Track mutation request semantics have current independent and external authenticated-roundtrip evidence, but this repository has only offline fixtures. Cancellation, malformed response, network failure, or account replacement can leave the remote outcome unknown; later UI must refresh rather than guess.
 - Owned-playlist Track membership reuses that independently evidenced request with a Provider-validated owned target, but this repository still has only offline evidence and no post-write UI refresh path.
 - Playlist creation has exact offline request/result/lifecycle coverage, including the independently observed `tid`/`id` response variation, but no repository or maintainer-account live roundtrip and no post-write UI refresh path.
+- Album favorite writes have current method-level cross-validation and an external authenticated reversible test for the numeric-ID form, but this repository has not retained a response fixture or executed the maintainer account. Artist write semantics remain evidence-blocked.
