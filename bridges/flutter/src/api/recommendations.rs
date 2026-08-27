@@ -2,8 +2,8 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use provider_api::{
-    RadarRecommendationError, RadarRecommendationsProvider, RecommendationError,
-    RecommendedPlaylistsProvider,
+    DailyRecommendationError, DailyRecommendationProvider, RadarRecommendationError,
+    RadarRecommendationsProvider, RecommendationError, RecommendedPlaylistsProvider,
 };
 use tokio::sync::Notify;
 
@@ -166,6 +166,148 @@ const fn map_error(error: RecommendationError) -> QqMusicRecommendedPlaylistPage
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicDailyRecommendationLoadFailure {
+    CoreUnavailable,
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+    Cancelled,
+    AlreadyRunning,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicDailyRecommendationLoad {
+    pub playlist: Option<LibraryPlaylistSummary>,
+    pub failure: Option<QqMusicDailyRecommendationLoadFailure>,
+}
+
+impl fmt::Debug for QqMusicDailyRecommendationLoad {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicDailyRecommendationLoad")
+            .field("has_playlist", &self.playlist.is_some())
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+/// One cancellable, single-use authenticated Daily 30 summary load. QQ feed
+/// selection and credentials remain inside the Rust Provider stack.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicDailyRecommendationLoadHandle {
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl fmt::Debug for QqMusicDailyRecommendationLoadHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicDailyRecommendationLoadHandle")
+            .field("active", &self.is_active())
+            .field("running", &self.running.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl QqMusicDailyRecommendationLoadHandle {
+    pub async fn run(&self) -> QqMusicDailyRecommendationLoad {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_daily_load(QqMusicDailyRecommendationLoadFailure::Cancelled);
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_daily_load(QqMusicDailyRecommendationLoadFailure::AlreadyRunning);
+        }
+        let outcome = match native_qq_music_provider() {
+            Ok(provider) => {
+                tokio::select! {
+                    () = self.cancelled.notified() => {
+                        failed_daily_load(QqMusicDailyRecommendationLoadFailure::Cancelled)
+                    }
+                    result = provider.daily_recommendation() => {
+                        if self.active.load(Ordering::SeqCst) {
+                            map_daily_load(result)
+                        } else {
+                            failed_daily_load(QqMusicDailyRecommendationLoadFailure::Cancelled)
+                        }
+                    }
+                }
+            }
+            Err(()) => failed_daily_load(QqMusicDailyRecommendationLoadFailure::CoreUnavailable),
+        };
+        self.running.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        outcome
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_qq_music_daily_recommendation_load() -> QqMusicDailyRecommendationLoadHandle {
+    QqMusicDailyRecommendationLoadHandle {
+        active: AtomicBool::new(true),
+        running: AtomicBool::new(false),
+        cancelled: Notify::new(),
+    }
+}
+
+fn map_daily_load(
+    result: Result<Option<music_domain::PlaylistSummary>, DailyRecommendationError>,
+) -> QqMusicDailyRecommendationLoad {
+    match result {
+        Ok(playlist) => QqMusicDailyRecommendationLoad {
+            playlist: playlist.as_ref().map(bridge_playlist_summary),
+            failure: None,
+        },
+        Err(error) => failed_daily_load(map_daily_error(error)),
+    }
+}
+
+const fn failed_daily_load(
+    failure: QqMusicDailyRecommendationLoadFailure,
+) -> QqMusicDailyRecommendationLoad {
+    QqMusicDailyRecommendationLoad {
+        playlist: None,
+        failure: Some(failure),
+    }
+}
+
+const fn map_daily_error(error: DailyRecommendationError) -> QqMusicDailyRecommendationLoadFailure {
+    match error {
+        DailyRecommendationError::AuthenticationRequired => {
+            QqMusicDailyRecommendationLoadFailure::AuthenticationRequired
+        }
+        DailyRecommendationError::CredentialRejected => {
+            QqMusicDailyRecommendationLoadFailure::CredentialRejected
+        }
+        DailyRecommendationError::Network => QqMusicDailyRecommendationLoadFailure::Network,
+        DailyRecommendationError::ServiceUnavailable => {
+            QqMusicDailyRecommendationLoadFailure::ServiceUnavailable
+        }
+        DailyRecommendationError::InvalidResponse => {
+            QqMusicDailyRecommendationLoadFailure::InvalidResponse
+        }
+        DailyRecommendationError::Replaced => QqMusicDailyRecommendationLoadFailure::Replaced,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicRadarTrackPageLoadFailure {
     CoreUnavailable,
     AuthenticationRequired,
@@ -322,12 +464,13 @@ mod tests {
         PlaylistId, PlaylistSummary, ProviderId, RadarTrackPage, RecommendedPlaylistsPage, TrackId,
         TrackSummary,
     };
-    use provider_api::{RadarRecommendationError, RecommendationError};
+    use provider_api::{DailyRecommendationError, RadarRecommendationError, RecommendationError};
 
     use super::{
-        QqMusicRadarTrackPageLoadFailure, QqMusicRecommendedPlaylistPageLoadFailure,
+        QqMusicDailyRecommendationLoadFailure, QqMusicRadarTrackPageLoadFailure,
+        QqMusicRecommendedPlaylistPageLoadFailure, begin_qq_music_daily_recommendation_load,
         begin_qq_music_radar_track_page_load, begin_qq_music_recommended_playlist_page_load,
-        map_error, map_load, map_radar_error, map_radar_load,
+        map_daily_error, map_daily_load, map_error, map_load, map_radar_error, map_radar_load,
     };
 
     #[test]
@@ -397,6 +540,62 @@ mod tests {
         for (source, expected) in cases {
             assert_eq!(map_radar_error(source), expected);
         }
+
+        let daily_cases = [
+            (
+                DailyRecommendationError::AuthenticationRequired,
+                QqMusicDailyRecommendationLoadFailure::AuthenticationRequired,
+            ),
+            (
+                DailyRecommendationError::CredentialRejected,
+                QqMusicDailyRecommendationLoadFailure::CredentialRejected,
+            ),
+            (
+                DailyRecommendationError::Network,
+                QqMusicDailyRecommendationLoadFailure::Network,
+            ),
+            (
+                DailyRecommendationError::ServiceUnavailable,
+                QqMusicDailyRecommendationLoadFailure::ServiceUnavailable,
+            ),
+            (
+                DailyRecommendationError::InvalidResponse,
+                QqMusicDailyRecommendationLoadFailure::InvalidResponse,
+            ),
+            (
+                DailyRecommendationError::Replaced,
+                QqMusicDailyRecommendationLoadFailure::Replaced,
+            ),
+        ];
+        for (source, expected) in daily_cases {
+            assert_eq!(map_daily_error(source), expected);
+        }
+    }
+
+    #[test]
+    fn maps_optional_daily_playlist_without_exposing_content() {
+        let playlist = PlaylistSummary::new(
+            PlaylistId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "catalog:7251579717",
+            )
+            .expect("Playlist ID"),
+            "must-not-leak-daily",
+        )
+        .expect("Playlist summary");
+        let mapped = map_daily_load(Ok(Some(playlist)));
+        assert!(mapped.failure.is_none());
+        assert!(mapped.playlist.is_some());
+        let debug = format!(
+            "{mapped:?} {:?}",
+            mapped.playlist.as_ref().expect("playlist")
+        );
+        assert!(!debug.contains("must-not-leak-daily"));
+        assert!(!debug.contains("7251579717"));
+
+        let absent = map_daily_load(Ok(None));
+        assert!(absent.playlist.is_none());
+        assert!(absent.failure.is_none());
     }
 
     #[test]
@@ -446,6 +645,15 @@ mod tests {
         assert_eq!(
             radar.run().await.failure,
             Some(QqMusicRadarTrackPageLoadFailure::Cancelled)
+        );
+
+        let daily = begin_qq_music_daily_recommendation_load();
+        assert!(daily.is_active());
+        assert!(daily.cancel());
+        assert!(!daily.cancel());
+        assert_eq!(
+            daily.run().await.failure,
+            Some(QqMusicDailyRecommendationLoadFailure::Cancelled)
         );
     }
 }

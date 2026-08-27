@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_load`, `failed_radar_load`, `map_error`, `map_load`, `map_radar_error`, `map_radar_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_radar_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_radar_error`, `map_radar_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicRecommendedPlaylistPageLoadHandle
 beginQqMusicRecommendedPlaylistPageLoad({
@@ -23,10 +23,24 @@ beginQqMusicRecommendedPlaylistPageLoad({
       size: size,
     );
 
+QqMusicDailyRecommendationLoadHandle beginQqMusicDailyRecommendationLoad() =>
+    RustLib.instance.api
+        .crateApiRecommendationsBeginQqMusicDailyRecommendationLoad();
+
 QqMusicRadarTrackPageLoadHandle beginQqMusicRadarTrackPageLoad({
   required int page,
 }) => RustLib.instance.api
     .crateApiRecommendationsBeginQqMusicRadarTrackPageLoad(page: page);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicDailyRecommendationLoadHandle>>
+abstract class QqMusicDailyRecommendationLoadHandle
+    implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicDailyRecommendationLoad> run();
+}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRadarTrackPageLoadHandle>>
 abstract class QqMusicRadarTrackPageLoadHandle implements RustOpaqueInterface {
@@ -45,6 +59,36 @@ abstract class QqMusicRecommendedPlaylistPageLoadHandle
   bool get isActive;
 
   Future<QqMusicRecommendedPlaylistPageLoad> run();
+}
+
+class QqMusicDailyRecommendationLoad {
+  final LibraryPlaylistSummary? playlist;
+  final QqMusicDailyRecommendationLoadFailure? failure;
+
+  const QqMusicDailyRecommendationLoad({this.playlist, this.failure});
+
+  @override
+  int get hashCode => playlist.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicDailyRecommendationLoad &&
+          runtimeType == other.runtimeType &&
+          playlist == other.playlist &&
+          failure == other.failure;
+}
+
+enum QqMusicDailyRecommendationLoadFailure {
+  coreUnavailable,
+  authenticationRequired,
+  credentialRejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  cancelled,
+  alreadyRunning,
 }
 
 class QqMusicRadarTrackPageLoad {

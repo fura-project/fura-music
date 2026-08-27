@@ -84,6 +84,34 @@ pub enum RadarRecommendationError {
     Replaced,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DailyRecommendationError {
+    AuthenticationRequired,
+    CredentialRejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+}
+
+impl fmt::Display for DailyRecommendationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::AuthenticationRequired => "Daily recommendations require authentication",
+            Self::CredentialRejected => "QQ Music rejected the current credential",
+            Self::Network => "Daily recommendation network request failed",
+            Self::ServiceUnavailable => "Daily recommendations are unavailable",
+            Self::InvalidResponse => "Daily recommendations returned an invalid response",
+            Self::Replaced => {
+                "the authenticated account changed during Daily recommendation loading"
+            }
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for DailyRecommendationError {}
+
 impl fmt::Display for RadarRecommendationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
@@ -291,6 +319,17 @@ pub trait RecommendedPlaylistsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<RecommendedPlaylistsPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral authenticated daily recommendation entry. The Provider
+/// owns source-specific feed selection and may return no entry when the
+/// account is not offered a daily recommendation.
+pub trait DailyRecommendationProvider: MusicProvider + Sync {
+    type Error;
+
+    fn daily_recommendation(
+        &self,
+    ) -> impl Future<Output = Result<Option<PlaylistSummary>, Self::Error>> + Send;
 }
 
 /// Provider-neutral page-numbered QQ-native Radar Track recommendations.

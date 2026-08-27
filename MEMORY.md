@@ -1,5 +1,7 @@
 # Project Memory
 
+- QQ Daily 30 comes from authenticated `music.recommend.RecommendFeed/get_recommend_feed`, not public playlists or Radar. Select a card only when `jumptype == 10014`, `extra_info.moduleID` starts `recforyou`, and `trace` contains `#daily30:`; zero is unavailable, multiple is invalid. Keep only the mapped `catalog:<playlist-id>` summary. Anonymous feed success proves structure but may contain no Daily 30 and never proves personalization.
+
 - The repository started from a single MIT `LICENSE` commit (`f439866`) on 2026-08-25; no legacy architecture or implementation needs preservation.
 - The product contract is QQ Music-first. Additional providers are for proven fallback or local-library needs, not breadth marketing.
 - Divide Flutter and Rust by lifecycle: reusable product/domain behavior belongs in Rust; presentation-driven state belongs in Dart.

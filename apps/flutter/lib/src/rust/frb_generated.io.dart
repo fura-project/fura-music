@@ -78,6 +78,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicArtistTrackPageLoadHandlePtr;
 
   CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_QqMusicDailyRecommendationLoadHandlePtr =>
+      wire._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandlePtr;
+
+  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicFavoriteAlbumPageLoadHandlePtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandlePtr;
 
@@ -208,6 +212,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicArtistTrackPageLoadHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicArtistTrackPageLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicDailyRecommendationLoadHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
     dynamic raw,
   );
 
@@ -386,6 +396,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDailyRecommendationLoadHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     dynamic raw,
@@ -556,6 +572,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicArtistTrackPageLoadHandle
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicArtistTrackPageLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicDailyRecommendationLoadHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
     dynamic raw,
   );
 
@@ -783,6 +805,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicCredentialVerificationState
   dco_decode_box_autoadd_qq_music_credential_verification_state(dynamic raw);
+
+  @protected
+  QqMusicDailyRecommendationLoadFailure
+  dco_decode_box_autoadd_qq_music_daily_recommendation_load_failure(
+    dynamic raw,
+  );
 
   @protected
   QqMusicFavoriteAlbumPageLoadFailure
@@ -1098,6 +1126,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDailyRecommendationLoadFailure?
+  dco_decode_opt_box_autoadd_qq_music_daily_recommendation_load_failure(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadFailure?
   dco_decode_opt_box_autoadd_qq_music_favorite_album_page_load_failure(
     dynamic raw,
@@ -1359,6 +1393,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicCredentialVerificationState
   dco_decode_qq_music_credential_verification_state(dynamic raw);
+
+  @protected
+  QqMusicDailyRecommendationLoad dco_decode_qq_music_daily_recommendation_load(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicDailyRecommendationLoadFailure
+  dco_decode_qq_music_daily_recommendation_load_failure(dynamic raw);
 
   @protected
   QqMusicFavoriteAlbumPageLoad dco_decode_qq_music_favorite_album_page_load(
@@ -1656,6 +1699,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDailyRecommendationLoadHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     SseDeserializer deserializer,
@@ -1830,6 +1879,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDailyRecommendationLoadHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     SseDeserializer deserializer,
@@ -2000,6 +2055,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicArtistTrackPageLoadHandle
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicArtistTrackPageLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDailyRecommendationLoadHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
     SseDeserializer deserializer,
   );
 
@@ -2259,6 +2320,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicCredentialVerificationState
   sse_decode_box_autoadd_qq_music_credential_verification_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDailyRecommendationLoadFailure
+  sse_decode_box_autoadd_qq_music_daily_recommendation_load_failure(
     SseDeserializer deserializer,
   );
 
@@ -2648,6 +2715,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDailyRecommendationLoadFailure?
+  sse_decode_opt_box_autoadd_qq_music_daily_recommendation_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadFailure?
   sse_decode_opt_box_autoadd_qq_music_favorite_album_page_load_failure(
     SseDeserializer deserializer,
@@ -2965,6 +3038,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicCredentialVerificationState
   sse_decode_qq_music_credential_verification_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDailyRecommendationLoad sse_decode_qq_music_daily_recommendation_load(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDailyRecommendationLoadFailure
+  sse_decode_qq_music_daily_recommendation_load_failure(
     SseDeserializer deserializer,
   );
 
@@ -3342,6 +3426,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    QqMusicDailyRecommendationLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     QqMusicFavoriteAlbumPageLoadHandle self,
     SseSerializer serializer,
@@ -3545,6 +3636,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    QqMusicDailyRecommendationLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     QqMusicFavoriteAlbumPageLoadHandle self,
     SseSerializer serializer,
@@ -3743,6 +3841,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicArtistTrackPageLoadHandle(
     QqMusicArtistTrackPageLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    QqMusicDailyRecommendationLoadHandle self,
     SseSerializer serializer,
   );
 
@@ -4034,6 +4139,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_qq_music_credential_verification_state(
     QqMusicCredentialVerificationState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_daily_recommendation_load_failure(
+    QqMusicDailyRecommendationLoadFailure self,
     SseSerializer serializer,
   );
 
@@ -4459,6 +4570,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_qq_music_daily_recommendation_load_failure(
+    QqMusicDailyRecommendationLoadFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_qq_music_favorite_album_page_load_failure(
     QqMusicFavoriteAlbumPageLoadFailure? self,
     SseSerializer serializer,
@@ -4810,6 +4927,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_credential_verification_state(
     QqMusicCredentialVerificationState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_daily_recommendation_load(
+    QqMusicDailyRecommendationLoad self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_daily_recommendation_load_failure(
+    QqMusicDailyRecommendationLoadFailure self,
     SseSerializer serializer,
   );
 
@@ -5492,6 +5621,40 @@ class RustLibWire implements BaseWire {
       );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicArtistTrackPageLoadHandle =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicArtistTrackPageLoadHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle',
+      );
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle',
+      );
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandlePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void

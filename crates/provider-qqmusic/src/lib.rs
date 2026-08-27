@@ -19,8 +19,9 @@ use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
     AlbumFavoriteMutationProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
     ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, CommentsError,
-    FavoriteAlbumsProvider, FavoriteArtistsProvider, LibraryMutationError, LyricsError,
-    LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
+    DailyRecommendationError, DailyRecommendationProvider, FavoriteAlbumsProvider,
+    FavoriteArtistsProvider, LibraryMutationError, LyricsError, LyricsProvider,
+    MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
     NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PlaylistCreationProvider,
     PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
     ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
@@ -34,16 +35,16 @@ use qqmusic_client::{
     HttpTransport, QqMusicAlbumDetailsError, QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState,
     QqMusicAlbumSearchError, QqMusicAlbumSummary, QqMusicAlbumTracksError,
     QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
-    QqMusicAudioQuality, QqMusicClient, QqMusicCreatePlaylistError, QqMusicFavoriteAlbumsError,
-    QqMusicFavoriteArtistsError, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
-    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMusicVideoQuality,
-    QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError,
-    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError,
-    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError,
-    QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
-    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
-    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
-    QqMusicTrackMusicVideoError, QqMusicTrackSummary, QrImageMediaType,
+    QqMusicAudioQuality, QqMusicClient, QqMusicCreatePlaylistError, QqMusicDailyRecommendation,
+    QqMusicDailyRecommendationError, QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError,
+    QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
+    QqMusicMediaError, QqMusicMusicVideoQuality, QqMusicNewAlbumArea, QqMusicNewAlbumsError,
+    QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
+    QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
+    QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
+    QqMusicRankingsError, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
+    QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
+    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QrImageMediaType,
     WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
@@ -248,6 +249,37 @@ impl<T> QqMusicProvider<T> {
         if rejected {
             *state = QqMusicCredentialState::SignedOut;
             return Err(RadarRecommendationError::CredentialRejected);
+        }
+        Ok(())
+    }
+
+    fn authenticated_daily_credential(&self) -> Result<Credential, DailyRecommendationError> {
+        match &*credential_guard(&self.credential) {
+            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::PendingVerification(_)
+            | QqMusicCredentialState::LocallyExpired(_) => {
+                Err(DailyRecommendationError::AuthenticationRequired)
+            }
+        }
+    }
+
+    fn finish_daily_await(
+        &self,
+        candidate: &Credential,
+        rejected: bool,
+    ) -> Result<(), DailyRecommendationError> {
+        let mut state = credential_guard(&self.credential);
+        let still_current = matches!(
+            &*state,
+            QqMusicCredentialState::Authenticated(current) if current == candidate
+        );
+        if !still_current {
+            return Err(DailyRecommendationError::Replaced);
+        }
+        if rejected {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(DailyRecommendationError::CredentialRejected);
         }
         Ok(())
     }
@@ -801,6 +833,31 @@ where
             page.has_more(),
             playlists,
         ))
+    }
+}
+
+impl<T> DailyRecommendationProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = DailyRecommendationError;
+
+    async fn daily_recommendation(&self) -> Result<Option<PlaylistSummary>, Self::Error> {
+        let candidate = self.authenticated_daily_credential()?;
+        let response = self.client().daily_recommendation(&candidate).await;
+        self.finish_daily_await(
+            &candidate,
+            matches!(
+                response,
+                Err(QqMusicDailyRecommendationError::Rejected { .. })
+            ),
+        )?;
+        response
+            .as_ref()
+            .map_err(map_daily_recommendation_error)?
+            .as_ref()
+            .map(map_daily_recommendation)
+            .transpose()
     }
 }
 
@@ -1601,6 +1658,19 @@ fn map_recommended_playlist(
                 .with_track_count(playlist.track_count())
         })
         .map_err(|_| RecommendationError::InvalidResponse)
+}
+
+fn map_daily_recommendation(
+    playlist: &QqMusicDailyRecommendation,
+) -> Result<PlaylistSummary, DailyRecommendationError> {
+    let id = PlaylistId::new(
+        qq_music_provider_id(),
+        format!("catalog:{}", playlist.playlist_id()),
+    )
+    .map_err(|_| DailyRecommendationError::InvalidResponse)?;
+    PlaylistSummary::new(id, playlist.title())
+        .map(|summary| summary.with_artwork_uri(playlist.artwork_uri().map(str::to_owned)))
+        .map_err(|_| DailyRecommendationError::InvalidResponse)
 }
 
 fn map_ranking_summary(ranking: &QqMusicRankingSummary) -> Result<RankingSummary, CatalogError> {
@@ -2561,6 +2631,34 @@ fn map_recommendations_error<E>(
     }
 }
 
+fn map_daily_recommendation_error<E>(
+    error: &QqMusicDailyRecommendationError<E>,
+) -> DailyRecommendationError {
+    match error {
+        QqMusicDailyRecommendationError::Rejected { .. } => {
+            DailyRecommendationError::CredentialRejected
+        }
+        QqMusicDailyRecommendationError::Transport(_) => DailyRecommendationError::Network,
+        QqMusicDailyRecommendationError::HttpStatus(_)
+        | QqMusicDailyRecommendationError::Upstream { .. } => {
+            DailyRecommendationError::ServiceUnavailable
+        }
+        QqMusicDailyRecommendationError::Serialize
+        | QqMusicDailyRecommendationError::InvalidJson
+        | QqMusicDailyRecommendationError::MissingGlobalCode
+        | QqMusicDailyRecommendationError::MissingResult
+        | QqMusicDailyRecommendationError::MissingResultCode
+        | QqMusicDailyRecommendationError::MissingData
+        | QqMusicDailyRecommendationError::MissingDataCode
+        | QqMusicDailyRecommendationError::MissingShelves
+        | QqMusicDailyRecommendationError::InvalidFeed
+        | QqMusicDailyRecommendationError::MultipleDailyPlaylists
+        | QqMusicDailyRecommendationError::InvalidDailyPlaylist { .. } => {
+            DailyRecommendationError::InvalidResponse
+        }
+    }
+}
+
 fn map_radar_error<E>(error: &QqMusicRadarError<E>) -> RadarRecommendationError {
     match error {
         QqMusicRadarError::Rejected { .. } => RadarRecommendationError::CredentialRejected,
@@ -2779,8 +2877,9 @@ mod tests {
         AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
         AlbumFavoriteMutationProvider, AlbumSearchProvider, AlbumTracksProvider,
         ArtistAlbumsProvider, ArtistSearchProvider, ArtistTracksProvider, CatalogError,
-        CommentsError, FavoriteAlbumsProvider, FavoriteArtistsProvider, LibraryMutationError,
-        LyricsError, LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
+        CommentsError, DailyRecommendationError, DailyRecommendationProvider,
+        FavoriteAlbumsProvider, FavoriteArtistsProvider, LibraryMutationError, LyricsError,
+        LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
         MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
         PlaylistCreationProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
         PlaylistTrackMutationProvider, ProviderCapability, QrAuthenticationProgress,
@@ -2794,9 +2893,9 @@ mod tests {
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
         HttpResponse, HttpTransport, LoginType, QqMusicAlbumDetailsError, QqMusicAlbumSearchError,
         QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
-        QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError,
-        QqMusicFavoriteArtistsError, QqMusicNewAlbumsError, QqMusicNewSongsError,
-        QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
+        QqMusicArtistTracksError, QqMusicClient, QqMusicDailyRecommendationError,
+        QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError, QqMusicNewAlbumsError,
+        QqMusicNewSongsError, QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
         QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackCommentsError,
         QqMusicTrackMusicVideoError,
     };
@@ -3176,6 +3275,12 @@ mod tests {
         release_request: Arc<Notify>,
     }
 
+    #[derive(Clone)]
+    struct GatedDailyTransport {
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
     impl HttpTransport for GatedOwnedPlaylistsTransport {
         type Error = Infallible;
 
@@ -3327,6 +3432,23 @@ mod tests {
             Ok(HttpResponse::new(
                 200,
                 serde_json::to_vec(&radar_response(0, false)).expect("fixture JSON"),
+            ))
+        }
+    }
+
+    impl HttpTransport for GatedDailyTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            self.request_started.notify_one();
+            self.release_request.notified().await;
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&daily_response(&[daily_card(
+                    "7251579717",
+                    "Late Daily 30",
+                )]))
+                .expect("fixture JSON"),
             ))
         }
     }
@@ -4403,6 +4525,115 @@ mod tests {
         assert!(provider.has_authenticated_credential());
     }
 
+    fn daily_response(cards: &[Value]) -> Value {
+        json!({
+            "code": 0,
+            "feed": {"code": 0, "data": {
+                "retcode": 0,
+                "v_shelf": [{"v_niche": [{"v_card": cards}]}]
+            }}
+        })
+    }
+
+    fn daily_card(id: &str, title: &str) -> Value {
+        json!({
+            "id": id,
+            "title": title,
+            "cover": "https://example.invalid/daily.jpg",
+            "jumptype": 10014,
+            "trace": "fixture#daily30:8#private",
+            "extra_info": {"moduleID": "recforyou@0@0"}
+        })
+    }
+
+    #[tokio::test]
+    async fn authenticated_daily_recommendation_maps_only_evidenced_playlist() {
+        let signed_out = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &daily_response(&[]),
+        )));
+        assert_eq!(
+            signed_out.daily_recommendation().await,
+            Err(DailyRecommendationError::AuthenticationRequired)
+        );
+
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &daily_response(&[daily_card("7251579717", "Synthetic Daily 30")]),
+        )));
+        set_authenticated(&provider, "123456");
+        let daily = provider
+            .daily_recommendation()
+            .await
+            .expect("Daily 30 load")
+            .expect("Daily 30 playlist");
+        assert_eq!(daily.id().provider().as_str(), "qq-music");
+        assert_eq!(daily.id().opaque(), "catalog:7251579717");
+        assert_eq!(daily.title(), "Synthetic Daily 30");
+        assert_eq!(
+            daily.artwork_uri(),
+            Some("https://example.invalid/daily.jpg")
+        );
+        assert!(daily.track_count().is_none());
+        assert!(provider.has_authenticated_credential());
+        let debug = format!("{daily:?}");
+        assert!(!debug.contains("Synthetic Daily 30"));
+        assert!(!debug.contains("7251579717"));
+
+        let absent = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &daily_response(&[]),
+        )));
+        set_authenticated(&absent, "123456");
+        assert!(
+            absent
+                .daily_recommendation()
+                .await
+                .expect("valid feed without Daily 30")
+                .is_none()
+        );
+        assert!(absent.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn daily_recommendation_clears_only_rejection_and_rejects_late_account_result() {
+        let rejected = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "feed": {"code": 104_401}
+        }))));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.daily_recommendation().await,
+            Err(DailyRecommendationError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+
+        let upstream = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "feed": {"code": 50_006}
+        }))));
+        set_authenticated(&upstream, "123456");
+        assert_eq!(
+            upstream.daily_recommendation().await,
+            Err(DailyRecommendationError::ServiceUnavailable)
+        );
+        assert!(upstream.has_authenticated_credential());
+
+        let request_started = Arc::new(Notify::new());
+        let release_request = Arc::new(Notify::new());
+        let replaced = QqMusicProvider::new(QqMusicClient::new(GatedDailyTransport {
+            request_started: Arc::clone(&request_started),
+            release_request: Arc::clone(&release_request),
+        }));
+        set_authenticated(&replaced, "123456");
+        let request = replaced.daily_recommendation();
+        let replacement = async {
+            request_started.notified().await;
+            set_authenticated(&replaced, "654321");
+            release_request.notify_one();
+        };
+        let (result, ()) = tokio::join!(request, replacement);
+        assert_eq!(result, Err(DailyRecommendationError::Replaced));
+        assert!(replaced.has_authenticated_credential());
+    }
+
     #[test]
     fn maps_recommendation_failures_coarsely() {
         assert_eq!(
@@ -4424,6 +4655,18 @@ mod tests {
         assert_eq!(
             super::map_radar_error(&QqMusicRadarError::<Infallible>::InvalidPagination),
             RadarRecommendationError::InvalidResponse
+        );
+        assert_eq!(
+            super::map_daily_recommendation_error(
+                &QqMusicDailyRecommendationError::<Infallible>::HttpStatus(503)
+            ),
+            DailyRecommendationError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_daily_recommendation_error(
+                &QqMusicDailyRecommendationError::<Infallible>::MultipleDailyPlaylists
+            ),
+            DailyRecommendationError::InvalidResponse
         );
     }
 

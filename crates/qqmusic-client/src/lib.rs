@@ -14,6 +14,7 @@ mod artist_search;
 mod comments;
 mod credential;
 mod credential_verification;
+mod daily_recommendation;
 mod favorite_albums;
 mod favorite_artists;
 mod favorite_playlists;
@@ -54,6 +55,9 @@ pub use credential::{
     LocalCredentialValidity, LoginType,
 };
 pub use credential_verification::{CredentialVerificationError, QqMusicAccountSummary};
+pub use daily_recommendation::{
+    DailyRecommendationField, QqMusicDailyRecommendation, QqMusicDailyRecommendationError,
+};
 pub use favorite_albums::{
     FavoriteAlbumField, QqMusicFavoriteAlbumsError, QqMusicFavoriteAlbumsPage,
 };
