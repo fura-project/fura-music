@@ -12,12 +12,18 @@ enum PlaybackQueueFailure {
   invalidResponse,
 }
 
+enum PlaybackOrder { sequential, shuffle }
+
+enum PlaybackRepeatMode { off, all, one }
+
 class PlaybackQueueSnapshot {
   PlaybackQueueSnapshot({
     required List<PlaylistTrackSummary> tracks,
     required this.currentIndex,
     required this.hasPrevious,
     required this.hasNext,
+    this.order = PlaybackOrder.sequential,
+    this.repeatMode = PlaybackRepeatMode.off,
   }) : tracks = List.unmodifiable(tracks);
 
   factory PlaybackQueueSnapshot.empty() => PlaybackQueueSnapshot(
@@ -25,12 +31,16 @@ class PlaybackQueueSnapshot {
     currentIndex: null,
     hasPrevious: false,
     hasNext: false,
+    order: PlaybackOrder.sequential,
+    repeatMode: PlaybackRepeatMode.off,
   );
 
   final List<PlaylistTrackSummary> tracks;
   final int? currentIndex;
   final bool hasPrevious;
   final bool hasNext;
+  final PlaybackOrder order;
+  final PlaybackRepeatMode repeatMode;
 
   PlaylistTrackSummary? get current => switch (currentIndex) {
     final index? => tracks[index],
@@ -41,24 +51,24 @@ class PlaybackQueueSnapshot {
   String toString() =>
       'PlaybackQueueSnapshot(trackCount: ${tracks.length}, '
       'currentIndex: $currentIndex, hasPrevious: $hasPrevious, '
-      'hasNext: $hasNext)';
+      'hasNext: $hasNext, order: $order, repeatMode: $repeatMode)';
 }
 
 class PlaybackQueueResult {
   const PlaybackQueueResult({
     this.snapshot,
-    this.currentChanged = false,
+    this.playbackRequested = false,
     this.failure,
   });
 
   final PlaybackQueueSnapshot? snapshot;
-  final bool currentChanged;
+  final bool playbackRequested;
   final PlaybackQueueFailure? failure;
 
   @override
   String toString() =>
       'PlaybackQueueResult(hasSnapshot: ${snapshot != null}, '
-      'currentChanged: $currentChanged, failure: $failure)';
+      'playbackRequested: $playbackRequested, failure: $failure)';
 }
 
 abstract interface class PlaybackQueueGateway {
@@ -73,6 +83,8 @@ abstract interface class PlaybackQueueGateway {
   PlaybackQueueResult select(int index);
   PlaybackQueueResult advance();
   PlaybackQueueResult rewind();
+  PlaybackQueueResult setOrder(PlaybackOrder order);
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode);
   PlaybackQueueResult completeCurrent();
   PlaybackQueueResult remove(int index);
   PlaybackQueueResult clear();
@@ -92,6 +104,10 @@ abstract interface class PlaybackQueueBridge {
   bridge_queue.PlaybackQueueUpdate select(int index);
   bridge_queue.PlaybackQueueUpdate advance();
   bridge_queue.PlaybackQueueUpdate rewind();
+  bridge_queue.PlaybackQueueUpdate setOrder(bridge_queue.PlaybackOrder order);
+  bridge_queue.PlaybackQueueUpdate setRepeatMode(
+    bridge_queue.PlaybackRepeatMode repeatMode,
+  );
   bridge_queue.PlaybackQueueUpdate completeCurrent();
   bridge_queue.PlaybackQueueUpdate remove(int index);
   bridge_queue.PlaybackQueueUpdate clear();
@@ -135,6 +151,23 @@ class RustPlaybackQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult rewind() => _invoke(() => _resolvedBridge.rewind());
+
+  @override
+  PlaybackQueueResult setOrder(PlaybackOrder order) => _invoke(
+    () => _resolvedBridge.setOrder(switch (order) {
+      PlaybackOrder.sequential => bridge_queue.PlaybackOrder.sequential,
+      PlaybackOrder.shuffle => bridge_queue.PlaybackOrder.shuffle,
+    }),
+  );
+
+  @override
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) => _invoke(
+    () => _resolvedBridge.setRepeatMode(switch (repeatMode) {
+      PlaybackRepeatMode.off => bridge_queue.PlaybackRepeatMode.off,
+      PlaybackRepeatMode.all => bridge_queue.PlaybackRepeatMode.all,
+      PlaybackRepeatMode.one => bridge_queue.PlaybackRepeatMode.one,
+    }),
+  );
 
   @override
   PlaybackQueueResult completeCurrent() =>
@@ -190,6 +223,15 @@ class _RustPlaybackQueueBridge implements PlaybackQueueBridge {
   bridge_queue.PlaybackQueueUpdate rewind() => _handle.rewind();
 
   @override
+  bridge_queue.PlaybackQueueUpdate setOrder(bridge_queue.PlaybackOrder order) =>
+      _handle.setOrder(order: order);
+
+  @override
+  bridge_queue.PlaybackQueueUpdate setRepeatMode(
+    bridge_queue.PlaybackRepeatMode repeatMode,
+  ) => _handle.setRepeatMode(repeatMode: repeatMode);
+
+  @override
   bridge_queue.PlaybackQueueUpdate completeCurrent() =>
       _handle.completeCurrent();
 
@@ -237,7 +279,7 @@ PlaybackQueueResult mapBridgePlaybackQueueUpdate(
   final bridgeSnapshot = update.snapshot;
   final bridgeFailure = update.failure;
   if (bridgeFailure != null) {
-    if (bridgeSnapshot != null || update.currentChanged) {
+    if (bridgeSnapshot != null || update.playbackRequested) {
       return const PlaybackQueueResult(
         failure: PlaybackQueueFailure.invalidResponse,
       );
@@ -266,13 +308,38 @@ PlaybackQueueResult mapBridgePlaybackQueueUpdate(
       currentIndex == null &&
       !bridgeSnapshot.hasPrevious &&
       !bridgeSnapshot.hasNext;
+  final order = switch (bridgeSnapshot.order) {
+    bridge_queue.PlaybackOrder.sequential => PlaybackOrder.sequential,
+    bridge_queue.PlaybackOrder.shuffle => PlaybackOrder.shuffle,
+  };
+  final repeatMode = switch (bridgeSnapshot.repeatMode) {
+    bridge_queue.PlaybackRepeatMode.off => PlaybackRepeatMode.off,
+    bridge_queue.PlaybackRepeatMode.all => PlaybackRepeatMode.all,
+    bridge_queue.PlaybackRepeatMode.one => PlaybackRepeatMode.one,
+  };
+  final expectedWrap = repeatMode == PlaybackRepeatMode.all;
+  final sequentialHasPrevious =
+      currentIndex != null && (currentIndex > 0 || expectedWrap);
+  final sequentialHasNext =
+      currentIndex != null &&
+      (currentIndex + 1 < tracks.length || expectedWrap);
+  final validSequentialNavigation =
+      order == PlaybackOrder.sequential &&
+      bridgeSnapshot.hasPrevious == sequentialHasPrevious &&
+      bridgeSnapshot.hasNext == sequentialHasNext;
+  final validShuffleNavigation =
+      order == PlaybackOrder.shuffle &&
+      (expectedWrap
+          ? bridgeSnapshot.hasPrevious && bridgeSnapshot.hasNext
+          : tracks.length == 1
+          ? !bridgeSnapshot.hasPrevious && !bridgeSnapshot.hasNext
+          : bridgeSnapshot.hasPrevious || bridgeSnapshot.hasNext);
   final validContent =
       tracks.isNotEmpty &&
       currentIndex != null &&
       currentIndex >= 0 &&
       currentIndex < tracks.length &&
-      bridgeSnapshot.hasPrevious == (currentIndex > 0) &&
-      bridgeSnapshot.hasNext == (currentIndex + 1 < tracks.length);
+      (validSequentialNavigation || validShuffleNavigation);
   if (!validEmpty && !validContent) {
     return const PlaybackQueueResult(
       failure: PlaybackQueueFailure.invalidResponse,
@@ -284,8 +351,10 @@ PlaybackQueueResult mapBridgePlaybackQueueUpdate(
       currentIndex: currentIndex,
       hasPrevious: bridgeSnapshot.hasPrevious,
       hasNext: bridgeSnapshot.hasNext,
+      order: order,
+      repeatMode: repeatMode,
     ),
-    currentChanged: update.currentChanged,
+    playbackRequested: update.playbackRequested,
   );
 }
 

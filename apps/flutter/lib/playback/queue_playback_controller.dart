@@ -32,6 +32,8 @@ class QueuePlaybackController extends ChangeNotifier {
   int? get currentIndex => _snapshot.currentIndex;
   bool get hasPrevious => _snapshot.hasPrevious;
   bool get hasNext => _snapshot.hasNext;
+  PlaybackOrder get order => _snapshot.order;
+  PlaybackRepeatMode get repeatMode => _snapshot.repeatMode;
 
   Future<void> replaceAndPlay(
     List<PlaylistTrackSummary> tracks,
@@ -52,6 +54,24 @@ class QueuePlaybackController extends ChangeNotifier {
 
   Future<void> rewind() => _apply(_gateway.rewind(), playChangedCurrent: true);
 
+  Future<void> setOrder(PlaybackOrder order) =>
+      _apply(_gateway.setOrder(order), playChangedCurrent: false);
+
+  Future<void> toggleShuffle() => setOrder(
+    order == PlaybackOrder.shuffle
+        ? PlaybackOrder.sequential
+        : PlaybackOrder.shuffle,
+  );
+
+  Future<void> setRepeatMode(PlaybackRepeatMode repeatMode) =>
+      _apply(_gateway.setRepeatMode(repeatMode), playChangedCurrent: false);
+
+  Future<void> cycleRepeatMode() => setRepeatMode(switch (repeatMode) {
+    PlaybackRepeatMode.off => PlaybackRepeatMode.all,
+    PlaybackRepeatMode.all => PlaybackRepeatMode.one,
+    PlaybackRepeatMode.one => PlaybackRepeatMode.off,
+  });
+
   Future<void> remove(int index) =>
       _apply(_gateway.remove(index), playChangedCurrent: true);
 
@@ -65,7 +85,7 @@ class QueuePlaybackController extends ChangeNotifier {
     required bool playChangedCurrent,
   }) async {
     if (_disposed || !_accept(result)) return;
-    if (!playChangedCurrent || !result.currentChanged) return;
+    if (!playChangedCurrent || !result.playbackRequested) return;
 
     _completionHandled = false;
     final current = _snapshot.current;

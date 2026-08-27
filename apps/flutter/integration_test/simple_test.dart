@@ -283,8 +283,18 @@ void main() {
       'album:43001:fixtureAlbumMid',
     );
     expect(replacedQueue.snapshot?.currentIndex, 0);
+    final shuffledQueue = queue.setOrder(order: PlaybackOrder.shuffle);
+    expect(shuffledQueue.playbackRequested, isFalse);
+    expect(shuffledQueue.snapshot?.order, PlaybackOrder.shuffle);
+    final repeatedQueue = queue.setRepeatMode(
+      repeatMode: PlaybackRepeatMode.all,
+    );
+    expect(repeatedQueue.playbackRequested, isFalse);
+    expect(repeatedQueue.snapshot?.repeatMode, PlaybackRepeatMode.all);
+    queue.setOrder(order: PlaybackOrder.sequential);
+    queue.setRepeatMode(repeatMode: PlaybackRepeatMode.off);
     final advancedQueue = queue.advance();
-    expect(advancedQueue.currentChanged, isTrue);
+    expect(advancedQueue.playbackRequested, isTrue);
     expect(advancedQueue.snapshot?.currentIndex, 1);
     expect(advancedQueue.snapshot?.hasNext, isFalse);
     expect(

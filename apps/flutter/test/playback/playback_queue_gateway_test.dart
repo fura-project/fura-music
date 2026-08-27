@@ -18,8 +18,10 @@ void main() {
             currentIndex: 2,
             hasPrevious: true,
             hasNext: false,
+            order: bridge_queue.PlaybackOrder.sequential,
+            repeatMode: bridge_queue.PlaybackRepeatMode.off,
           ),
-          currentChanged: true,
+          playbackRequested: true,
         ),
       ]),
     );
@@ -27,7 +29,7 @@ void main() {
     final result = gateway.snapshot();
 
     expect(result.failure, isNull);
-    expect(result.currentChanged, isTrue);
+    expect(result.playbackRequested, isTrue);
     expect(result.snapshot?.tracks, hasLength(3));
     expect(result.snapshot?.tracks[0].opaqueId, 'same');
     expect(result.snapshot?.tracks[2].opaqueId, 'same');
@@ -52,8 +54,10 @@ void main() {
           currentIndex: 0,
           hasPrevious: false,
           hasNext: false,
+          order: bridge_queue.PlaybackOrder.sequential,
+          repeatMode: bridge_queue.PlaybackRepeatMode.off,
         ),
-        currentChanged: true,
+        playbackRequested: true,
       ),
     ]);
     final gateway = RustPlaybackQueueGateway(bridge: bridge);
@@ -97,6 +101,45 @@ void main() {
     expect(forwarded.durationSeconds, track.durationSeconds);
   });
 
+  test('maps authoritative mode state and forwards typed setters', () {
+    final bridge = _FakeBridge([
+      bridge_queue.PlaybackQueueUpdate(
+        snapshot: bridge_queue.PlaybackQueueSnapshot(
+          tracks: [_bridgeTrack('one'), _bridgeTrack('two')],
+          currentIndex: 0,
+          hasPrevious: false,
+          hasNext: true,
+          order: bridge_queue.PlaybackOrder.shuffle,
+          repeatMode: bridge_queue.PlaybackRepeatMode.one,
+        ),
+        playbackRequested: false,
+      ),
+      bridge_queue.PlaybackQueueUpdate(
+        snapshot: bridge_queue.PlaybackQueueSnapshot(
+          tracks: [_bridgeTrack('one'), _bridgeTrack('two')],
+          currentIndex: 0,
+          hasPrevious: true,
+          hasNext: true,
+          order: bridge_queue.PlaybackOrder.shuffle,
+          repeatMode: bridge_queue.PlaybackRepeatMode.all,
+        ),
+        playbackRequested: false,
+      ),
+    ]);
+    final gateway = RustPlaybackQueueGateway(bridge: bridge);
+
+    final order = gateway.setOrder(PlaybackOrder.shuffle);
+    final repeat = gateway.setRepeatMode(PlaybackRepeatMode.all);
+
+    expect(bridge.order, bridge_queue.PlaybackOrder.shuffle);
+    expect(bridge.repeatMode, bridge_queue.PlaybackRepeatMode.all);
+    expect(order.snapshot?.order, PlaybackOrder.shuffle);
+    expect(order.snapshot?.repeatMode, PlaybackRepeatMode.one);
+    expect(repeat.snapshot?.repeatMode, PlaybackRepeatMode.all);
+    expect(order.playbackRequested, isFalse);
+    expect(repeat.playbackRequested, isFalse);
+  });
+
   test('maps every typed failure and thrown bridge call', () {
     final variants = {
       bridge_queue.PlaybackQueueFailure.invalidTrack:
@@ -109,7 +152,7 @@ void main() {
     for (final entry in variants.entries) {
       final result = mapBridgePlaybackQueueUpdate(
         bridge_queue.PlaybackQueueUpdate(
-          currentChanged: false,
+          playbackRequested: false,
           failure: entry.key,
         ),
       );
@@ -127,22 +170,26 @@ void main() {
       currentIndex: 0,
       hasPrevious: false,
       hasNext: false,
+      order: bridge_queue.PlaybackOrder.sequential,
+      repeatMode: bridge_queue.PlaybackRepeatMode.off,
     );
     final invalid = <bridge_queue.PlaybackQueueUpdate>[
       bridge_queue.PlaybackQueueUpdate(
         snapshot: valid,
-        currentChanged: false,
+        playbackRequested: false,
         failure: bridge_queue.PlaybackQueueFailure.invalidPosition,
       ),
-      const bridge_queue.PlaybackQueueUpdate(currentChanged: false),
+      const bridge_queue.PlaybackQueueUpdate(playbackRequested: false),
       bridge_queue.PlaybackQueueUpdate(
         snapshot: bridge_queue.PlaybackQueueSnapshot(
           tracks: const [],
           currentIndex: 0,
           hasPrevious: false,
           hasNext: false,
+          order: bridge_queue.PlaybackOrder.sequential,
+          repeatMode: bridge_queue.PlaybackRepeatMode.off,
         ),
-        currentChanged: false,
+        playbackRequested: false,
       ),
       bridge_queue.PlaybackQueueUpdate(
         snapshot: bridge_queue.PlaybackQueueSnapshot(
@@ -150,8 +197,10 @@ void main() {
           currentIndex: 0,
           hasPrevious: false,
           hasNext: true,
+          order: bridge_queue.PlaybackOrder.sequential,
+          repeatMode: bridge_queue.PlaybackRepeatMode.off,
         ),
-        currentChanged: false,
+        playbackRequested: false,
       ),
       bridge_queue.PlaybackQueueUpdate(
         snapshot: bridge_queue.PlaybackQueueSnapshot(
@@ -167,8 +216,10 @@ void main() {
           currentIndex: 0,
           hasPrevious: false,
           hasNext: false,
+          order: bridge_queue.PlaybackOrder.sequential,
+          repeatMode: bridge_queue.PlaybackRepeatMode.off,
         ),
-        currentChanged: false,
+        playbackRequested: false,
       ),
     ];
 
@@ -211,6 +262,8 @@ class _FakeBridge implements PlaybackQueueBridge {
   final List<bridge_queue.PlaybackQueueUpdate> _updates;
   List<bridge_library.LibraryTrackSummary> replaceTracks = const [];
   int? replaceIndex;
+  bridge_queue.PlaybackOrder? order;
+  bridge_queue.PlaybackRepeatMode? repeatMode;
 
   bridge_queue.PlaybackQueueUpdate get _next => _updates.removeAt(0);
 
@@ -240,6 +293,22 @@ class _FakeBridge implements PlaybackQueueBridge {
 
   @override
   bridge_queue.PlaybackQueueUpdate rewind() => _next;
+
+  @override
+  bridge_queue.PlaybackQueueUpdate setOrder(
+    bridge_queue.PlaybackOrder nextOrder,
+  ) {
+    order = nextOrder;
+    return _next;
+  }
+
+  @override
+  bridge_queue.PlaybackQueueUpdate setRepeatMode(
+    bridge_queue.PlaybackRepeatMode nextRepeatMode,
+  ) {
+    repeatMode = nextRepeatMode;
+    return _next;
+  }
 
   @override
   bridge_queue.PlaybackQueueUpdate completeCurrent() => _next;
@@ -276,6 +345,15 @@ class _ThrowingBridge implements PlaybackQueueBridge {
 
   @override
   bridge_queue.PlaybackQueueUpdate rewind() => _throw();
+
+  @override
+  bridge_queue.PlaybackQueueUpdate setOrder(bridge_queue.PlaybackOrder order) =>
+      _throw();
+
+  @override
+  bridge_queue.PlaybackQueueUpdate setRepeatMode(
+    bridge_queue.PlaybackRepeatMode repeatMode,
+  ) => _throw();
 
   @override
   bridge_queue.PlaybackQueueUpdate completeCurrent() => _throw();

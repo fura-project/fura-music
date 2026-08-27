@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.3_RUST_OWNED_PLAYBACK_MODES
-  next_action: IMPLEMENT
+  current_task: M5.4_TRACK_CONTEXT_COMMENTS_DISCOVERY
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -65,16 +65,17 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 - Accepted the maintainer's post-M4 product direction and activated M5: the first-release experience is now explicitly Home-first, with Discover, Search, and Library as distinct primary destinations; Library remains first-class; common playback modes, bounded read-only comments, and bounded QQ MV work are authorized behind the existing Rust/Flutter boundaries. Focus/quiet experiences, mutations, additional Providers, background playback, downloads, and release identity remain outside this decision.
 - Implemented M5.1 Home-first authenticated shell foundation: authenticated startup now opens a small presentation-only Home with honest routes into the existing Discover, Search, and Library journeys; all four destinations remain directly reachable through adaptive Material navigation, Search/Discover retain their loaded controllers across destination and width changes, primary back returns to Home, local overlays still unwind to their retained origins, and one persistent queue/playback/lyric owner remains unchanged. Account rejection cannot be hidden behind Home. Strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, packaged Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
 - Implemented M5.2 retained adaptive Library sections: Playlists, favorite Albums, and favorite Artists are now direct section peers inside the existing authenticated shell. Favorite collections initialize only on first visit and then retain their independent controllers, results, pagination, failures, and detail routes across section and width changes; primary navigation and the single Now Playing owner stay visible. Local return unwinds detail → originating section → Playlists → Home with focused regressions for compact/desktop reachability, refresh, laziness, request stability, focus, and hidden-section back behavior. Strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, packaged Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
+- Implemented M5.3 authoritative playback modes: the provider-neutral Rust Queue now owns sequential/shuffle order and repeat off/all/one, including automatic repeat-one replay, repeat-all wrapping, deterministic shuffle-cycle tests, duplicate positions, exact public order, and mutation repair. The typed Bridge exposes mode snapshots/setters plus an explicit playback request rather than making Flutter infer movement; mode changes never restart media. The existing mini and expanded Now Playing surfaces provide accessible shuffle/repeat controls that remain reachable at 360 px, and Flutter still owns only presentation/plugin lifecycle. Strict Dart checks, all 314 Flutter tests, 273 offline Rust tests, strict Clippy, Linux x64 Release, packaged mode/Queue Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M5.3 discovery selected one complete two-axis Rust-owned playback-mode slice. Order is sequential/shuffle and repeat is off/all/one; shuffle changes traversal without reordering the public positional Queue, repeat one affects completion rather than manual navigation, and repeat all wraps the active order. Selection/replacement/membership mutation starts a new shuffle cycle anchored at the resulting current Track. Mode state remains session-local, and Flutter only maps state and triggers typed commands.
+- Whole-project ranking selects M5.4 Track context and read-only comments discovery next. This phase is explicitly authorized, but protocol-facing implementation requires current source/fixture evidence, a provider-neutral minimum model, and a bounded Track-to-comments journey before any endpoint or UI is added.
 
 # Next Candidates
 
-1. Implement deterministic playback-order/repeat semantics and mutation repair in `music-domain`, then expose the state and setters through the existing coarse Bridge, gateway, and coordinator.
-2. Add accessible compact/wide mode controls to the one existing Now Playing implementation and prove completion, manual navigation, duplicate/mutation behavior, no restart on mode change, and 360 px reachability.
+1. Inventory the Track context already preserved in Domain/Queue/presentation and the current independent QQ comment implementations or sanitized fixtures without accessing stored credentials or retaining returned content.
+2. Produce at most three finite M5.4 candidates, rank the smallest provider-neutral read-only comments journey, and explicitly classify any missing protocol evidence before implementation.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers

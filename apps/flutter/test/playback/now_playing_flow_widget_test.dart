@@ -1319,6 +1319,59 @@ void main() {
     expect(find.textContaining('Paused'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('playback modes are reachable and stable at 360 px', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final queue = _WidgetQueueGateway();
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('mode-controls')),
+    ]);
+
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+      queue: queue,
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Shuffle off. Turn on shuffle'), findsOneWidget);
+    expect(find.byTooltip('Repeat off. Set repeat all'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('now-playing-shuffle')));
+    await tester.pumpAndSettle();
+    expect(queue._snapshot.order, PlaybackOrder.shuffle);
+    expect(find.byTooltip('Shuffle on. Turn off shuffle'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('now-playing-repeat')));
+    await tester.pumpAndSettle();
+    expect(queue._snapshot.repeatMode, PlaybackRepeatMode.all);
+    expect(find.byTooltip('Repeat all. Set repeat one'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('now-playing-repeat')));
+    await tester.pumpAndSettle();
+    expect(queue._snapshot.repeatMode, PlaybackRepeatMode.one);
+    expect(find.byTooltip('Repeat one. Turn off repeat'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('now-playing-repeat')));
+    await tester.pumpAndSettle();
+    expect(queue._snapshot.repeatMode, PlaybackRepeatMode.off);
+    expect(media.requests, [('qq-music', 'first')]);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-controls')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('now-playing-shuffle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('now-playing-repeat')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 String? _nowPlayingTitle(WidgetTester tester) =>
@@ -1398,18 +1451,43 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
   }) {
     replacedTracks = List.of(tracks);
     replacedIndex = currentIndex;
-    _snapshot = _makeSnapshot(tracks, currentIndex);
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+    _snapshot = _makeSnapshot(
+      tracks,
+      currentIndex,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
   }
 
   @override
   PlaybackQueueResult completeCurrent() {
     final current = _snapshot.currentIndex;
+    if (current != null && _snapshot.repeatMode == PlaybackRepeatMode.one) {
+      return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
+    }
     if (current == null || current + 1 >= _snapshot.tracks.length) {
+      if (current != null && _snapshot.repeatMode == PlaybackRepeatMode.all) {
+        _snapshot = _makeSnapshot(
+          _snapshot.tracks,
+          0,
+          order: _snapshot.order,
+          repeatMode: _snapshot.repeatMode,
+        );
+        return PlaybackQueueResult(
+          snapshot: _snapshot,
+          playbackRequested: true,
+        );
+      }
       return PlaybackQueueResult(snapshot: _snapshot);
     }
-    _snapshot = _makeSnapshot(_snapshot.tracks, current + 1);
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+    _snapshot = _makeSnapshot(
+      _snapshot.tracks,
+      current + 1,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
   }
 
   @override
@@ -1421,8 +1499,13 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
     if (current == null || current == 0) {
       return PlaybackQueueResult(snapshot: _snapshot);
     }
-    _snapshot = _makeSnapshot(_snapshot.tracks, current - 1);
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+    _snapshot = _makeSnapshot(
+      _snapshot.tracks,
+      current - 1,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
   }
 
   @override
@@ -1433,8 +1516,13 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
       );
     }
     final changed = index != _snapshot.currentIndex;
-    _snapshot = _makeSnapshot(_snapshot.tracks, index);
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: changed);
+    _snapshot = _makeSnapshot(
+      _snapshot.tracks,
+      index,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: changed);
   }
 
   @override
@@ -1443,8 +1531,13 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
     nextClearResult = null;
     if (override != null) return override;
     final changed = _snapshot.current != null;
-    _snapshot = PlaybackQueueSnapshot.empty();
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: changed);
+    _snapshot = _makeSnapshot(
+      const [],
+      null,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: changed);
   }
 
   @override
@@ -1455,11 +1548,16 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
     pushedTracks.add(track);
     final tracks = [..._snapshot.tracks, track];
     final currentIndex = _snapshot.currentIndex ?? 0;
-    final currentChanged = _snapshot.currentIndex == null;
-    _snapshot = _makeSnapshot(tracks, currentIndex);
+    final playbackRequested = _snapshot.currentIndex == null;
+    _snapshot = _makeSnapshot(
+      tracks,
+      currentIndex,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
     return PlaybackQueueResult(
       snapshot: _snapshot,
-      currentChanged: currentChanged,
+      playbackRequested: playbackRequested,
     );
   }
 
@@ -1485,22 +1583,58 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
         : index < tracks.length
         ? index
         : tracks.length - 1;
-    _snapshot = _makeSnapshot(tracks, currentIndex);
+    _snapshot = _makeSnapshot(
+      tracks,
+      currentIndex,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
     return PlaybackQueueResult(
       snapshot: _snapshot,
-      currentChanged: removedCurrent,
+      playbackRequested: removedCurrent,
     );
+  }
+
+  @override
+  PlaybackQueueResult setOrder(PlaybackOrder order) {
+    _snapshot = _makeSnapshot(
+      _snapshot.tracks,
+      _snapshot.currentIndex,
+      order: order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot);
+  }
+
+  @override
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) {
+    _snapshot = _makeSnapshot(
+      _snapshot.tracks,
+      _snapshot.currentIndex,
+      order: _snapshot.order,
+      repeatMode: repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot);
   }
 }
 
 PlaybackQueueSnapshot _makeSnapshot(
   List<PlaylistTrackSummary> tracks,
-  int? currentIndex,
-) => PlaybackQueueSnapshot(
+  int? currentIndex, {
+  PlaybackOrder order = PlaybackOrder.sequential,
+  PlaybackRepeatMode repeatMode = PlaybackRepeatMode.off,
+}) => PlaybackQueueSnapshot(
   tracks: tracks,
   currentIndex: currentIndex,
-  hasPrevious: currentIndex != null && currentIndex > 0,
-  hasNext: currentIndex != null && currentIndex + 1 < tracks.length,
+  hasPrevious:
+      currentIndex != null &&
+      (currentIndex > 0 || repeatMode == PlaybackRepeatMode.all),
+  hasNext:
+      currentIndex != null &&
+      (currentIndex + 1 < tracks.length ||
+          repeatMode == PlaybackRepeatMode.all),
+  order: order,
+  repeatMode: repeatMode,
 );
 
 const _bootstrap = BootstrapStatus(

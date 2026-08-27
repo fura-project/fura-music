@@ -139,8 +139,8 @@ class NowPlayingBar extends StatelessWidget {
                                 _QueueButton(controller: controller),
                               ],
                             ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
+                            Wrap(
+                              alignment: WrapAlignment.end,
                               children: _transportControls(
                                 controller,
                                 authenticationFailure,
@@ -336,15 +336,20 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                     _QueueButton(controller: controller),
                   ];
                   if (constraints.maxWidth < 600) {
-                    return Row(
+                    return Column(
                       key: const ValueKey(
                         'expanded-now-playing-compact-controls',
                       ),
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        ...transport,
-                        const SizedBox(width: 8),
-                        ...utilities,
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          children: transport,
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: utilities,
+                        ),
                       ],
                     );
                   }
@@ -410,6 +415,7 @@ List<Widget> _transportControls(
           icon: Icon(_primaryIcon(playback.stage)),
         );
   return [
+    _ShuffleButton(controller: controller),
     IconButton(
       key: const ValueKey('now-playing-previous'),
       tooltip: 'Previous',
@@ -427,6 +433,7 @@ List<Widget> _transportControls(
           : null,
       icon: const Icon(Icons.skip_next_rounded),
     ),
+    _RepeatButton(controller: controller),
     if (_canStop(playback.stage))
       IconButton(
         key: const ValueKey('now-playing-stop'),
@@ -435,6 +442,68 @@ List<Widget> _transportControls(
         icon: const Icon(Icons.stop_rounded),
       ),
   ];
+}
+
+class _ShuffleButton extends StatelessWidget {
+  const _ShuffleButton({required this.controller});
+
+  final QueuePlaybackController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = controller.order == PlaybackOrder.shuffle;
+    final label = enabled
+        ? 'Shuffle on. Turn off shuffle'
+        : 'Shuffle off. Turn on shuffle';
+    return Semantics(
+      button: true,
+      toggled: enabled,
+      label: label,
+      excludeSemantics: true,
+      child: IconButton(
+        key: const ValueKey('now-playing-shuffle'),
+        tooltip: label,
+        isSelected: enabled,
+        onPressed: () => unawaited(controller.toggleShuffle()),
+        icon: const Icon(Icons.shuffle_rounded),
+        selectedIcon: const Icon(Icons.shuffle_rounded),
+      ),
+    );
+  }
+}
+
+class _RepeatButton extends StatelessWidget {
+  const _RepeatButton({required this.controller});
+
+  final QueuePlaybackController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final mode = controller.repeatMode;
+    final label = switch (mode) {
+      PlaybackRepeatMode.off => 'Repeat off. Set repeat all',
+      PlaybackRepeatMode.all => 'Repeat all. Set repeat one',
+      PlaybackRepeatMode.one => 'Repeat one. Turn off repeat',
+    };
+    return Semantics(
+      button: true,
+      selected: mode != PlaybackRepeatMode.off,
+      label: label,
+      excludeSemantics: true,
+      child: IconButton(
+        key: const ValueKey('now-playing-repeat'),
+        tooltip: label,
+        isSelected: mode != PlaybackRepeatMode.off,
+        onPressed: () => unawaited(controller.cycleRepeatMode()),
+        icon: const Icon(Icons.repeat_rounded),
+        selectedIcon: Icon(
+          mode == PlaybackRepeatMode.one
+              ? Icons.repeat_one_rounded
+              : Icons.repeat_rounded,
+        ),
+      ),
+    );
+  }
 }
 
 void _dispatchCatalogAction(

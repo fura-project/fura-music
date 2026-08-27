@@ -4416,7 +4416,7 @@ class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
       hasPrevious: true,
       hasNext: nextIndex + 1 < _snapshot.tracks.length,
     );
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
   }
 
   @override
@@ -4435,6 +4435,14 @@ class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult rewind() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult setOrder(PlaybackOrder order) =>
+      PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) =>
+      PlaybackQueueResult(snapshot: _snapshot);
 
   @override
   PlaybackQueueResult select(int index) =>

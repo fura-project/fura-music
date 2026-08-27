@@ -92,6 +92,86 @@ void main() {
     },
   );
 
+  test(
+    'repeat-one completion replays the Rust-selected position once',
+    () async {
+      final gateway = _ScriptedQueueGateway(
+        replaceResults: [
+          _result(
+            [first],
+            0,
+            changed: true,
+            repeatMode: PlaybackRepeatMode.one,
+          ),
+        ],
+        completionResults: [
+          _result(
+            [first],
+            0,
+            changed: true,
+            repeatMode: PlaybackRepeatMode.one,
+          ),
+        ],
+      );
+      final firstSession = _FakeAudioSession();
+      final controller = _controller(
+        gateway,
+        _FakeMediaGateway(['first', 'first-again']),
+        _FakeAudioEngine([firstSession, _FakeAudioSession()]),
+      );
+
+      await controller.replaceAndPlay([first], 0);
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+
+      expect(gateway.completionCalls, 1);
+      expect(controller.current, same(first));
+      expect(controller.playback.stage, TrackPlaybackStage.playing);
+      controller.dispose();
+    },
+  );
+
+  test('mode changes accept Rust state without restarting playback', () async {
+    final gateway = _ScriptedQueueGateway(
+      replaceResults: [
+        _result([first, second], 0, changed: true),
+      ],
+      orderResults: [
+        _result(
+          [first, second],
+          0,
+          changed: true,
+          order: PlaybackOrder.shuffle,
+        ),
+      ],
+      repeatResults: [
+        _result(
+          [first, second],
+          0,
+          changed: true,
+          order: PlaybackOrder.shuffle,
+          repeatMode: PlaybackRepeatMode.all,
+        ),
+      ],
+    );
+    final media = _FakeMediaGateway(['first']);
+    final controller = _controller(
+      gateway,
+      media,
+      _FakeAudioEngine([_FakeAudioSession()]),
+    );
+
+    await controller.replaceAndPlay([first, second], 0);
+    await controller.toggleShuffle();
+    await controller.cycleRepeatMode();
+
+    expect(controller.order, PlaybackOrder.shuffle);
+    expect(controller.repeatMode, PlaybackRepeatMode.all);
+    expect(media.requests, [first.opaqueId]);
+    expect(controller.playback.stage, TrackPlaybackStage.playing);
+    controller.dispose();
+  });
+
   test('queue failure retains the last valid snapshot and playback', () async {
     final gateway = _ScriptedQueueGateway(
       replaceResults: [
@@ -222,14 +302,23 @@ PlaybackQueueResult _result(
   List<PlaylistTrackSummary> tracks,
   int? currentIndex, {
   bool changed = false,
+  PlaybackOrder order = PlaybackOrder.sequential,
+  PlaybackRepeatMode repeatMode = PlaybackRepeatMode.off,
 }) => PlaybackQueueResult(
   snapshot: PlaybackQueueSnapshot(
     tracks: tracks,
     currentIndex: currentIndex,
-    hasPrevious: currentIndex != null && currentIndex > 0,
-    hasNext: currentIndex != null && currentIndex + 1 < tracks.length,
+    hasPrevious:
+        currentIndex != null &&
+        (currentIndex > 0 || repeatMode == PlaybackRepeatMode.all),
+    hasNext:
+        currentIndex != null &&
+        (currentIndex + 1 < tracks.length ||
+            repeatMode == PlaybackRepeatMode.all),
+    order: order,
+    repeatMode: repeatMode,
   ),
-  currentChanged: changed,
+  playbackRequested: changed,
 );
 
 QueuePlaybackController _controller(
@@ -253,6 +342,8 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
     this.replaceResults = const [],
     this.advanceResults = const [],
     this.rewindResults = const [],
+    this.orderResults = const [],
+    this.repeatResults = const [],
     this.completionResults = const [],
     this.removeResults = const [],
     this.clearResults = const [],
@@ -261,12 +352,16 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
   final List<PlaybackQueueResult> replaceResults;
   final List<PlaybackQueueResult> advanceResults;
   final List<PlaybackQueueResult> rewindResults;
+  final List<PlaybackQueueResult> orderResults;
+  final List<PlaybackQueueResult> repeatResults;
   final List<PlaybackQueueResult> completionResults;
   final List<PlaybackQueueResult> removeResults;
   final List<PlaybackQueueResult> clearResults;
   int _replace = 0;
   int _advance = 0;
   int _rewind = 0;
+  int _order = 0;
+  int _repeat = 0;
   int _completion = 0;
   int _remove = 0;
   int _clear = 0;
@@ -287,6 +382,13 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult rewind() => rewindResults[_rewind++];
+
+  @override
+  PlaybackQueueResult setOrder(PlaybackOrder order) => orderResults[_order++];
+
+  @override
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) =>
+      repeatResults[_repeat++];
 
   @override
   PlaybackQueueResult completeCurrent() => completionResults[_completion++];

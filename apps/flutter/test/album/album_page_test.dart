@@ -289,18 +289,18 @@ class _QueueGateway implements PlaybackQueueGateway {
     replacedTracks = List.of(tracks);
     replacedIndex = currentIndex;
     _snapshot = _queueSnapshot(tracks, currentIndex);
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
   }
 
   @override
   PlaybackQueueResult push(PlaylistTrackSummary track) {
     pushedTracks.add(track);
     final tracks = [..._snapshot.tracks, track];
-    final currentChanged = _snapshot.currentIndex == null;
+    final playbackRequested = _snapshot.currentIndex == null;
     _snapshot = _queueSnapshot(tracks, _snapshot.currentIndex ?? 0);
     return PlaybackQueueResult(
       snapshot: _snapshot,
-      currentChanged: currentChanged,
+      playbackRequested: playbackRequested,
     );
   }
 
@@ -310,7 +310,7 @@ class _QueueGateway implements PlaybackQueueGateway {
   @override
   PlaybackQueueResult clear() {
     _snapshot = PlaybackQueueSnapshot.empty();
-    return PlaybackQueueResult(snapshot: _snapshot, currentChanged: true);
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
   }
 
   @override
@@ -323,6 +323,14 @@ class _QueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult rewind() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult setOrder(PlaybackOrder order) =>
+      PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) =>
+      PlaybackQueueResult(snapshot: _snapshot);
 
   @override
   PlaybackQueueResult select(int index) =>

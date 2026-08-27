@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed`, `map_position_error`, `map_snapshot`, `with_queue`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed`, `map_position_error`, `map_snapshot`, `next_queue_seed`, `with_queue`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 PlaybackQueueHandle createPlaybackQueue() =>
     RustLib.instance.api.crateApiQueueCreatePlaybackQueue();
@@ -37,8 +37,14 @@ abstract class PlaybackQueueHandle implements RustOpaqueInterface {
 
   PlaybackQueueUpdate select({required int index});
 
+  PlaybackQueueUpdate setOrder({required PlaybackOrder order});
+
+  PlaybackQueueUpdate setRepeatMode({required PlaybackRepeatMode repeatMode});
+
   PlaybackQueueUpdate snapshot();
 }
+
+enum PlaybackOrder { sequential, shuffle }
 
 enum PlaybackQueueFailure { invalidTrack, invalidPosition, coreUnavailable }
 
@@ -47,12 +53,16 @@ class PlaybackQueueSnapshot {
   final int? currentIndex;
   final bool hasPrevious;
   final bool hasNext;
+  final PlaybackOrder order;
+  final PlaybackRepeatMode repeatMode;
 
   const PlaybackQueueSnapshot({
     required this.tracks,
     this.currentIndex,
     required this.hasPrevious,
     required this.hasNext,
+    required this.order,
+    required this.repeatMode,
   });
 
   @override
@@ -60,7 +70,9 @@ class PlaybackQueueSnapshot {
       tracks.hashCode ^
       currentIndex.hashCode ^
       hasPrevious.hashCode ^
-      hasNext.hashCode;
+      hasNext.hashCode ^
+      order.hashCode ^
+      repeatMode.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -70,23 +82,25 @@ class PlaybackQueueSnapshot {
           tracks == other.tracks &&
           currentIndex == other.currentIndex &&
           hasPrevious == other.hasPrevious &&
-          hasNext == other.hasNext;
+          hasNext == other.hasNext &&
+          order == other.order &&
+          repeatMode == other.repeatMode;
 }
 
 class PlaybackQueueUpdate {
   final PlaybackQueueSnapshot? snapshot;
-  final bool currentChanged;
+  final bool playbackRequested;
   final PlaybackQueueFailure? failure;
 
   const PlaybackQueueUpdate({
     this.snapshot,
-    required this.currentChanged,
+    required this.playbackRequested,
     this.failure,
   });
 
   @override
   int get hashCode =>
-      snapshot.hashCode ^ currentChanged.hashCode ^ failure.hashCode;
+      snapshot.hashCode ^ playbackRequested.hashCode ^ failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -94,6 +108,8 @@ class PlaybackQueueUpdate {
       other is PlaybackQueueUpdate &&
           runtimeType == other.runtimeType &&
           snapshot == other.snapshot &&
-          currentChanged == other.currentChanged &&
+          playbackRequested == other.playbackRequested &&
           failure == other.failure;
 }
+
+enum PlaybackRepeatMode { off, all, one }

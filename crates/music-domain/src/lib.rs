@@ -9,7 +9,9 @@ pub use lyrics::{
     InvalidLyricTiming, InvalidSynchronizedLyrics, LyricTimingField, SynchronizedLyricLine,
     SynchronizedLyrics, TimedLyricSegment,
 };
-pub use playback_queue::{InvalidPlaybackQueue, PlaybackQueue, PlaybackQueueRemoval};
+pub use playback_queue::{
+    InvalidPlaybackQueue, PlaybackOrder, PlaybackQueue, PlaybackQueueRemoval, PlaybackRepeatMode,
+};
 
 /// Stable provider identity used by core domain objects.
 ///

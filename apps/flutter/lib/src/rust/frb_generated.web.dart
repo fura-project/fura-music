@@ -952,6 +952,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  PlaybackOrder dco_decode_playback_order(dynamic raw);
+
+  @protected
   PlaybackQueueFailure dco_decode_playback_queue_failure(dynamic raw);
 
   @protected
@@ -959,6 +962,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaybackQueueUpdate dco_decode_playback_queue_update(dynamic raw);
+
+  @protected
+  PlaybackRepeatMode dco_decode_playback_repeat_mode(dynamic raw);
 
   @protected
   ProviderStatus dco_decode_provider_status(dynamic raw);
@@ -2149,6 +2155,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  PlaybackOrder sse_decode_playback_order(SseDeserializer deserializer);
+
+  @protected
   PlaybackQueueFailure sse_decode_playback_queue_failure(
     SseDeserializer deserializer,
   );
@@ -2160,6 +2169,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaybackQueueUpdate sse_decode_playback_queue_update(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PlaybackRepeatMode sse_decode_playback_repeat_mode(
     SseDeserializer deserializer,
   );
 
@@ -3538,6 +3552,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_playback_order(PlaybackOrder self, SseSerializer serializer);
+
+  @protected
   void sse_encode_playback_queue_failure(
     PlaybackQueueFailure self,
     SseSerializer serializer,
@@ -3552,6 +3569,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_playback_queue_update(
     PlaybackQueueUpdate self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playback_repeat_mode(
+    PlaybackRepeatMode self,
     SseSerializer serializer,
   );
 
