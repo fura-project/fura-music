@@ -51,13 +51,13 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Implemented before pause:** a deliberate desktop sidebar/top Search shell; a real-data Home using existing Library/recommendation state; shared Library framing and dense desktop Playlists; and clearer desktop persistent-player grouping. Search and Discover were audited but not changed without a bounded failure.
 
-**Why paused:** HD-005 froze visual redesign and feature expansion. The maintenance pass is complete, but M7 is not checkpointed and automated layout tests do not establish product-complete visual results.
+**Why paused:** the complexity and first-release Core-capability passes are complete, but M7 is not checkpointed and automated layout tests do not establish product-complete visual results. The current Home snapshot still needs maintainer visual acceptance before another page changes.
 
-**Resume condition:** an explicit post-maintenance product decision plus representative running-app evidence. Resumption must preserve retained state, accessibility, and the existing Flutter/Rust/music ownership boundaries.
+**Resume condition:** maintainer visual acceptance or specific correction direction for the current Home, followed by separate page-level visual direction. Resumption must preserve retained state, accessibility, and the existing Flutter/Rust/music ownership boundaries.
 
 **Home-only review gate:** HD-006 and HD-007 authorized one focused Home pass without resuming other M7 pages. Wide desktop now uses a full-height Sidebar beside a Main Region containing the Top Bar, Home, and active player. The ordered Home composition uses real public recommendations and personal playlists; unsupported program and listening-history sections remain explicit unavailable states. That presentation snapshot is now paused by HD-008 before maintainer visual acceptance.
 
-## Active Workstream — First-Release Core Capability Completion
+## Completed Checkpoint — First-Release Core Capability Completion
 
 **Goal:** freeze page-level visual redesign and complete the smallest truthful Account, Home-data, Library, Playback/media, Catalog, Settings, Platform, and Track-related capability foundation needed by the already authorized QQ Music-first first release.
 
@@ -66,6 +66,10 @@ This local evidence gap does not block independently authorized maintenance. No 
 **Exit criteria:** every required capability in `docs/development/first-release-capability-audit.md` is `VERIFIED` or carries an exact `EVIDENCE_BLOCKED`, `ENVIRONMENT_BLOCKED`, or `HUMAN_DECISION_REQUIRED` boundary, with no untracked executable `MISSING` first-release capability. A checkpoint proves core readiness for later UI wiring, not user-visible product completion.
 
 **Non-goals:** page redesign, Settings-page design, all QQ APIs, social/video or download expansion, another Provider, background-service architecture without product authority, real-account mutation automation, or a generic capability, settings, paging, or dependency-injection framework.
+
+**Outcome:** the repository-wide audit contains no required executable `MISSING` capability. Account summary, truthful Home-data contracts, bounded library mutations, two-quality media, typed Settings, and related Track foundations are available through their intended layers. Playlist rename, Artist mutation, authenticated M1 playback/lyrics, unavailable target runtimes, Popular Programs, background playback, and release work retain exact local blockers.
+
+**Checkpoint:** 2026-08-28 — [Core capability review](docs/development/first-release-core-capability-checkpoint.md).
 
 ## Completed Maintenance Pass — Complexity Paydown
 
@@ -88,6 +92,6 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 ## Later Evidence-Gated Direction
 
-M7 and its authenticated compact/desktop visual review remain paused until the core-capability checkpoint or an explicit maintainer override. Automated tests do not establish visual product completion.
+The Core-capability checkpoint is complete. M7 and its authenticated compact/desktop visual review remain paused until the maintainer accepts or redirects the current Home snapshot and supplies separate page-level visual direction. Automated tests do not establish visual product completion.
 
 Offline/cache behavior, a narrow local-library capability, or media fallback require demonstrated user value and separate Roadmap authority. They must not turn the product into a multi-service aggregator. Release identity/signing and external distribution remain governed by HD-001 and the linked technical debt.
