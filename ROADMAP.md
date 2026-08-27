@@ -222,6 +222,45 @@ M5.1 through M5.7 are implemented. The checkpoint review evaluates the completed
 
 Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope/adaptive review, technical-debt status, completeness classification, and exact live/platform/release boundaries are recorded in `docs/development/m5-checkpoint-review.md`. Future reproduced M5-class regressions remain valid bounded work. The checkpoint is not project completion, release readiness, live QQ compatibility approval, or M1 acceptance.
 
+## Active Workstream — M6 Core Compatibility Evidence
+
+### Goal
+
+Reduce the highest current risk that newly completed, core QQ Music read capabilities are structurally correct offline but incompatible with the live anonymous service. M6 validates only the bounded comments and Track-associated MV protocol paths that M5 introduced without a direct live application observation; it adds no product feature and uses no account credential.
+
+### Authorized direction
+
+- Opt-in ignored live tests over public catalog identity and direct `QQMusicClient` operations.
+- Coarse structural assertions that retain or print no comment content, author identity, MV identity, artwork, source URI, response body, or request identifier.
+- Minimal protocol corrections only when a repeatable live discrepancy supplies new evidence, always with offline regression coverage.
+- Default Rust and Flutter suites remain fully offline.
+- Resume the M1 real-account playback/Queue/Lyrics observation immediately when the maintainer supplies a coarse result; M6 does not substitute for it.
+
+### Progressive phases
+
+1. M6.1 — Anonymous read-compatibility gates for one comments page and one Track-associated MV flow.
+2. M6.2 — Evidence reconciliation and bounded regression/fix only if a live gate proves a discrepancy.
+3. M6.3 — Checkpoint review and whole-project reranking.
+
+### Exit criteria
+
+1. Comments and Track-associated MV each have an explicit environment-gated, default-ignored live test using only public catalog identity.
+2. A successful comments probe validates pagination/count invariants without logging or retaining user-generated content or author identity.
+3. A successful MV probe validates exact Track association plus a supported HTTPS MP4 result without logging or retaining Track/MV identity, metadata, artwork, or source URI.
+4. Live-test diagnostics and failure output remain coarse and redacted.
+5. No stored credential, Cookie, account endpoint, personal fixture, or platform vault entry is read or changed.
+6. The offline Rust/Flutter baseline remains independent of the live service and passes after any evidence-backed correction.
+7. Unsupported live outcomes are recorded truthfully; three failures without materially new evidence become a local blocker rather than speculative endpoint iteration.
+
+### Explicit non-goals
+
+- New Home, Search, Discover, comments, MV, social, playback, cache, download, or Provider capabilities.
+- Comment or favorite mutation, related-video discovery, MV Search, fullscreen/PiP, quality selection UI, or generic video infrastructure.
+- Authenticated probing, reading stored credentials, downloading or playing the returned remote MV source, or retaining service content as a fixture.
+- Release identity/signing/notices, unavailable-platform emulation, or physical-device claims.
+
+M6.1 is selected from the post-M5 ranking because the M5 completeness audit already records these two live-compatibility risks, both operations are anonymous and redacted, and every competing high-value item is currently user-, environment-, evidence-, or Human-Decision-blocked.
+
 ## Later Direction — Evidence-Gated Work
 
 After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.

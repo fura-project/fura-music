@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: M5
-  current_task: POST_M5_GLOBAL_RANKING
-  next_action: RANK
+  active_workstream: M6
+  current_task: M6.1_ANONYMOUS_COMMENTS_MV_COMPATIBILITY
+  next_action: DISCOVERY
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2, M3, M4, and M5 are checkpointed. Post-M5 whole-project ranking is active and must not promote blocked or deferred work into implementation.
+M1's real-account playback observation remains open; M2, M3, M4, and M5 are checkpointed. M6 Core Compatibility Evidence is active and is limited to anonymous, redacted live validation of the two unexercised M5 protocol paths.
 
 # Completed Recently
 
@@ -74,11 +74,11 @@ M1's real-account playback observation remains open; M2, M3, M4, and M5 are chec
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Post-M5 whole-project ranking is active. It must re-read the evidence-gated Later Direction, current blockers/risks, debt triggers, available environments, and accepted Human Decisions before deciding whether any finite task remains legitimate.
+- Post-M5 ranking selected M6.1: add explicit ignored live gates for one anonymous comments page and one exact Track-associated MV flow. The task may validate coarse structure or drive a minimal evidence-backed protocol correction; it may not read stored credentials, preserve returned content/source, add product capability, or replace the offline suite.
 
 # Next Candidates
 
-1. Finish the post-M5 global ranking without manufacturing a feature, refactor, platform claim, or protocol change.
+1. Complete M6.1 anonymous comments/MV compatibility discovery and gates, then reconcile only observed discrepancies.
 2. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
