@@ -5,8 +5,10 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
+import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class FavoriteAlbumsPage extends StatefulWidget {
   const FavoriteAlbumsPage({
@@ -56,22 +58,27 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
             duration: const Duration(milliseconds: 240),
             child: _body(context),
           );
-          if (!widget.embedded) return body;
           return Column(
             children: [
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 12),
-                  child: IconButton(
-                    key: const ValueKey('favorite-albums-refresh'),
-                    tooltip: _controller.isLoading
-                        ? 'Refreshing favorite albums'
-                        : 'Refresh favorite albums',
-                    onPressed: _controller.isLoading ? null : _controller.load,
-                    icon: const Icon(Icons.refresh_rounded),
-                  ),
-                ),
+              LibraryCollectionHeader(
+                key: const ValueKey('library-albums-header'),
+                title: 'Your favorite albums',
+                subtitle: switch (_controller.stage) {
+                  FavoriteAlbumStage.content || FavoriteAlbumStage.empty =>
+                    '${_controller.total} saved on QQ Music',
+                  _ => 'Saved on QQ Music',
+                },
+                refreshKey: widget.embedded
+                    ? const ValueKey('favorite-albums-refresh')
+                    : null,
+                refreshTooltip: widget.embedded
+                    ? _controller.isLoading
+                          ? 'Refreshing favorite albums'
+                          : 'Refresh favorite albums'
+                    : null,
+                onRefresh: widget.embedded && !_controller.isLoading
+                    ? _controller.load
+                    : null,
               ),
               Expanded(child: body),
             ],
@@ -124,7 +131,6 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
     FavoriteAlbumStage.content => _AlbumCollection(
       key: const ValueKey('favorite-albums-content'),
       albums: _controller.albums,
-      total: _controller.total,
       isLoadingMore: _controller.isLoadingMore,
       appendFailure: _controller.appendFailure,
       canLoadMore: _controller.canLoadMore,
@@ -178,7 +184,6 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
 class _AlbumCollection extends StatelessWidget {
   const _AlbumCollection({
     required this.albums,
-    required this.total,
     required this.isLoadingMore,
     required this.appendFailure,
     required this.canLoadMore,
@@ -190,7 +195,6 @@ class _AlbumCollection extends StatelessWidget {
   });
 
   final List<AlbumSummary> albums;
-  final int total;
   final bool isLoadingMore;
   final FavoriteAlbumFailure? appendFailure;
   final bool canLoadMore;
@@ -201,7 +205,6 @@ class _AlbumCollection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 760;
@@ -215,67 +218,39 @@ class _AlbumCollection extends StatelessWidget {
         );
         return Padding(
           padding: EdgeInsets.fromLTRB(
-            desktop ? 48 : 20,
-            desktop ? 28 : 16,
-            desktop ? 48 : 20,
-            20,
+            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
+            0,
+            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
+            MusicSpacing.pageCompact,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your favorite albums',
-                style:
-                    (desktop
-                            ? theme.textTheme.headlineMedium
-                            : theme.textTheme.headlineSmall)
-                        ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '$total from QQ Music',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          child: desktop
+              ? GridView.builder(
+                  key: const PageStorageKey<String>('favorite-album-grid'),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    mainAxisExtent: 255,
+                    crossAxisSpacing: 24,
+                    mainAxisSpacing: 28,
+                  ),
+                  itemCount: albums.length + 1,
+                  itemBuilder: (context, index) => index == albums.length
+                      ? footer
+                      : _AlbumGridItem(
+                          album: albums[index],
+                          onTap: () => onOpenAlbum(albums[index]),
+                        ),
+                )
+              : ListView.separated(
+                  key: const PageStorageKey<String>('favorite-album-list'),
+                  itemCount: albums.length + 1,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) => index == albums.length
+                      ? footer
+                      : _AlbumListItem(
+                          album: albums[index],
+                          onTap: () => onOpenAlbum(albums[index]),
+                        ),
                 ),
-              ),
-              SizedBox(height: desktop ? 28 : 20),
-              Expanded(
-                child: desktop
-                    ? GridView.builder(
-                        key: const PageStorageKey<String>(
-                          'favorite-album-grid',
-                        ),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 220,
-                              mainAxisExtent: 255,
-                              crossAxisSpacing: 24,
-                              mainAxisSpacing: 28,
-                            ),
-                        itemCount: albums.length + 1,
-                        itemBuilder: (context, index) => index == albums.length
-                            ? footer
-                            : _AlbumGridItem(
-                                album: albums[index],
-                                onTap: () => onOpenAlbum(albums[index]),
-                              ),
-                      )
-                    : ListView.separated(
-                        key: const PageStorageKey<String>(
-                          'favorite-album-list',
-                        ),
-                        itemCount: albums.length + 1,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => index == albums.length
-                            ? footer
-                            : _AlbumListItem(
-                                album: albums[index],
-                                onTap: () => onOpenAlbum(albums[index]),
-                              ),
-                      ),
-              ),
-            ],
-          ),
         );
       },
     );

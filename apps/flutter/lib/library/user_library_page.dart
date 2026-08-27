@@ -26,6 +26,7 @@ import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artists_page.dart';
 import 'package:flutterustmusic/library/library_section_selector.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
+import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -1147,6 +1148,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           onSelected: _selectLibrarySection,
         ),
       ),
+      if (_librarySection == LibrarySection.playlists)
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => LibraryCollectionHeader(
+            key: const ValueKey('library-playlists-header'),
+            title: 'Your playlists',
+            subtitle: switch (_controller.stage) {
+              UserLibraryStage.content || UserLibraryStage.empty =>
+                '${_controller.playlists.length} saved on QQ Music',
+              _ => 'Saved on QQ Music',
+            },
+            refreshKey: const ValueKey('user-playlists-refresh'),
+            refreshTooltip: _controller.isRefreshing
+                ? 'Refreshing playlists'
+                : 'Refresh playlists',
+            onRefresh: _controller.isLoading ? null : _controller.refresh,
+          ),
+        ),
       Expanded(
         child: IndexedStack(
           index: _librarySection.index,
@@ -1299,10 +1318,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 _selectPrimaryDestination(_PrimaryDestination.search),
           ),
           titleSpacing: compactActions ? 8 : 16,
-          actions: _primaryActions(
-            compactActions: compactActions,
-            destination: destination,
-          ),
+          actions: _primaryActions(compactActions: compactActions),
         ),
         body: body,
         bottomNavigationBar: wide
@@ -1426,22 +1442,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     child: Icon(icon),
   );
 
-  List<Widget> _primaryActions({
-    required bool compactActions,
-    required _PrimaryDestination destination,
-  }) => [
-    if (destination == _PrimaryDestination.library &&
-        _librarySection == LibrarySection.playlists)
-      AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) => IconButton(
-          tooltip: _controller.isRefreshing
-              ? 'Refreshing playlists'
-              : 'Refresh playlists',
-          onPressed: _controller.isLoading ? null : _controller.refresh,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ),
+  List<Widget> _primaryActions({required bool compactActions}) => [
     IconButton(
       key: const ValueKey('sign-out'),
       tooltip: 'Sign out',
@@ -1677,72 +1678,43 @@ class _PlaylistCollection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 760;
         return Padding(
           padding: EdgeInsets.fromLTRB(
             desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
-            desktop ? MusicSpacing.section : MusicSpacing.contentGap,
+            0,
             desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
             MusicSpacing.pageCompact,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your playlists',
-                style:
-                    (desktop
-                            ? theme.textTheme.headlineMedium
-                            : theme.textTheme.headlineSmall)
-                        ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${playlists.length} from QQ Music',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          child: desktop
+              ? GridView.builder(
+                  key: const PageStorageKey<String>('user-playlist-grid'),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    mainAxisExtent: 270,
+                    crossAxisSpacing: 24,
+                    mainAxisSpacing: 28,
+                  ),
+                  itemCount: playlists.length,
+                  itemBuilder: (context, index) => _PlaylistGridItem(
+                    playlist: playlists[index],
+                    onTap: () => onSelected(playlists[index]),
+                    focusNode: _focusNodeFor(playlists[index]),
+                  ),
+                )
+              : ListView.separated(
+                  key: const PageStorageKey<String>('user-playlist-list'),
+                  itemCount: playlists.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: MusicSpacing.itemGap),
+                  itemBuilder: (context, index) => _PlaylistListItem(
+                    playlist: playlists[index],
+                    onTap: () => onSelected(playlists[index]),
+                    focusNode: _focusNodeFor(playlists[index]),
+                  ),
                 ),
-              ),
-              SizedBox(
-                height: desktop
-                    ? MusicSpacing.section
-                    : MusicSpacing.pageCompact,
-              ),
-              Expanded(
-                child: desktop
-                    ? GridView.builder(
-                        key: const PageStorageKey<String>('user-playlist-grid'),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 220,
-                              mainAxisExtent: 270,
-                              crossAxisSpacing: 24,
-                              mainAxisSpacing: 28,
-                            ),
-                        itemCount: playlists.length,
-                        itemBuilder: (context, index) => _PlaylistGridItem(
-                          playlist: playlists[index],
-                          onTap: () => onSelected(playlists[index]),
-                          focusNode: _focusNodeFor(playlists[index]),
-                        ),
-                      )
-                    : ListView.separated(
-                        key: const PageStorageKey<String>('user-playlist-list'),
-                        itemCount: playlists.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: MusicSpacing.itemGap),
-                        itemBuilder: (context, index) => _PlaylistListItem(
-                          playlist: playlists[index],
-                          onTap: () => onSelected(playlists[index]),
-                          focusNode: _focusNodeFor(playlists[index]),
-                        ),
-                      ),
-              ),
-            ],
-          ),
         );
       },
     );

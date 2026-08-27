@@ -439,6 +439,17 @@ void main() {
 
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('Your playlists'), findsOneWidget);
+    final playlistsHeader = find.byKey(
+      const ValueKey('library-playlists-header'),
+    );
+    expect(playlistsHeader, findsOneWidget);
+    expect(
+      find.descendant(
+        of: playlistsHeader,
+        matching: find.byTooltip('Refresh playlists'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Synthetic favorites'), findsOneWidget);
     expect(find.text('Synthetic saved mix'), findsOneWidget);
     expect(find.text('42 tracks'), findsOneWidget);
@@ -1438,12 +1449,17 @@ void main() {
         find.byKey(const ValueKey('favorite-albums-content')),
         findsOneWidget,
       );
+      final albumsHeader = find.byKey(const ValueKey('library-albums-header'));
+      expect(albumsHeader, findsOneWidget);
       expect(find.text('Saved Album'), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
       expect(find.byType(GridView), findsNothing);
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('favorite-albums-refresh')),
+        find.descendant(
+          of: albumsHeader,
+          matching: find.byKey(const ValueKey('favorite-albums-refresh')),
+        ),
         findsOneWidget,
       );
 
@@ -1586,6 +1602,17 @@ void main() {
       await _selectLibrarySection(tester, 'artists');
       expect(
         find.byKey(const ValueKey('favorite-artists-content')),
+        findsOneWidget,
+      );
+      final artistsHeader = find.byKey(
+        const ValueKey('library-artists-header'),
+      );
+      expect(artistsHeader, findsOneWidget);
+      expect(
+        find.descendant(
+          of: artistsHeader,
+          matching: find.byKey(const ValueKey('favorite-artists-refresh')),
+        ),
         findsOneWidget,
       );
       expect(find.byType(GridView), findsNothing);

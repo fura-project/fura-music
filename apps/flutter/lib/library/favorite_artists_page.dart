@@ -5,8 +5,10 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/favorite_artist_controller.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
+import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class FavoriteArtistsPage extends StatefulWidget {
   const FavoriteArtistsPage({
@@ -56,22 +58,27 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
             duration: const Duration(milliseconds: 240),
             child: _body(context),
           );
-          if (!widget.embedded) return body;
           return Column(
             children: [
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 12),
-                  child: IconButton(
-                    key: const ValueKey('favorite-artists-refresh'),
-                    tooltip: _controller.isLoading
-                        ? 'Refreshing favorite artists'
-                        : 'Refresh favorite artists',
-                    onPressed: _controller.isLoading ? null : _controller.load,
-                    icon: const Icon(Icons.refresh_rounded),
-                  ),
-                ),
+              LibraryCollectionHeader(
+                key: const ValueKey('library-artists-header'),
+                title: 'Your favorite artists',
+                subtitle: switch (_controller.stage) {
+                  FavoriteArtistStage.content || FavoriteArtistStage.empty =>
+                    '${_controller.total} saved on QQ Music',
+                  _ => 'Saved on QQ Music',
+                },
+                refreshKey: widget.embedded
+                    ? const ValueKey('favorite-artists-refresh')
+                    : null,
+                refreshTooltip: widget.embedded
+                    ? _controller.isLoading
+                          ? 'Refreshing favorite artists'
+                          : 'Refresh favorite artists'
+                    : null,
+                onRefresh: widget.embedded && !_controller.isLoading
+                    ? _controller.load
+                    : null,
               ),
               Expanded(child: body),
             ],
@@ -124,7 +131,6 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
     FavoriteArtistStage.content => _ArtistCollection(
       key: const ValueKey('favorite-artists-content'),
       artists: _controller.artists,
-      total: _controller.total,
       isLoadingMore: _controller.isLoadingMore,
       appendFailure: _controller.appendFailure,
       canLoadMore: _controller.canLoadMore,
@@ -178,7 +184,6 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
 class _ArtistCollection extends StatelessWidget {
   const _ArtistCollection({
     required this.artists,
-    required this.total,
     required this.isLoadingMore,
     required this.appendFailure,
     required this.canLoadMore,
@@ -190,7 +195,6 @@ class _ArtistCollection extends StatelessWidget {
   });
 
   final List<ArtistSummary> artists;
-  final int total;
   final bool isLoadingMore;
   final FavoriteArtistFailure? appendFailure;
   final bool canLoadMore;
@@ -201,7 +205,6 @@ class _ArtistCollection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 760;
@@ -215,69 +218,41 @@ class _ArtistCollection extends StatelessWidget {
         );
         return Padding(
           padding: EdgeInsets.fromLTRB(
-            desktop ? 48 : 20,
-            desktop ? 28 : 16,
-            desktop ? 48 : 20,
-            20,
+            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
+            0,
+            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
+            MusicSpacing.pageCompact,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your favorite artists',
-                style:
-                    (desktop
-                            ? theme.textTheme.headlineMedium
-                            : theme.textTheme.headlineSmall)
-                        ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '$total from QQ Music',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          child: desktop
+              ? GridView.builder(
+                  key: const PageStorageKey<String>('favorite-artist-grid'),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    mainAxisExtent: 210,
+                    crossAxisSpacing: 24,
+                    mainAxisSpacing: 28,
+                  ),
+                  itemCount: artists.length + 1,
+                  itemBuilder: (context, index) => index == artists.length
+                      ? footer
+                      : _ArtistGridItem(
+                          index: index,
+                          artist: artists[index],
+                          onTap: () => onOpenArtist(artists[index]),
+                        ),
+                )
+              : ListView.separated(
+                  key: const PageStorageKey<String>('favorite-artist-list'),
+                  itemCount: artists.length + 1,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) => index == artists.length
+                      ? footer
+                      : _ArtistListItem(
+                          index: index,
+                          artist: artists[index],
+                          onTap: () => onOpenArtist(artists[index]),
+                        ),
                 ),
-              ),
-              SizedBox(height: desktop ? 28 : 20),
-              Expanded(
-                child: desktop
-                    ? GridView.builder(
-                        key: const PageStorageKey<String>(
-                          'favorite-artist-grid',
-                        ),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 220,
-                              mainAxisExtent: 210,
-                              crossAxisSpacing: 24,
-                              mainAxisSpacing: 28,
-                            ),
-                        itemCount: artists.length + 1,
-                        itemBuilder: (context, index) => index == artists.length
-                            ? footer
-                            : _ArtistGridItem(
-                                index: index,
-                                artist: artists[index],
-                                onTap: () => onOpenArtist(artists[index]),
-                              ),
-                      )
-                    : ListView.separated(
-                        key: const PageStorageKey<String>(
-                          'favorite-artist-list',
-                        ),
-                        itemCount: artists.length + 1,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => index == artists.length
-                            ? footer
-                            : _ArtistListItem(
-                                index: index,
-                                artist: artists[index],
-                                onTap: () => onOpenArtist(artists[index]),
-                              ),
-                      ),
-              ),
-            ],
-          ),
         );
       },
     );
