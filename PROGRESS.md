@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.4_READ_ONLY_TRACK_COMMENTS
-  next_action: IMPLEMENT
+  current_task: M5.5_QQ_MV_DISCOVERY
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -66,15 +66,16 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 - Implemented M5.1 Home-first authenticated shell foundation: authenticated startup now opens a small presentation-only Home with honest routes into the existing Discover, Search, and Library journeys; all four destinations remain directly reachable through adaptive Material navigation, Search/Discover retain their loaded controllers across destination and width changes, primary back returns to Home, local overlays still unwind to their retained origins, and one persistent queue/playback/lyric owner remains unchanged. Account rejection cannot be hidden behind Home. Strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, packaged Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
 - Implemented M5.2 retained adaptive Library sections: Playlists, favorite Albums, and favorite Artists are now direct section peers inside the existing authenticated shell. Favorite collections initialize only on first visit and then retain their independent controllers, results, pagination, failures, and detail routes across section and width changes; primary navigation and the single Now Playing owner stay visible. Local return unwinds detail → originating section → Playlists → Home with focused regressions for compact/desktop reachability, refresh, laziness, request stability, focus, and hidden-section back behavior. Strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, packaged Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
 - Implemented M5.3 authoritative playback modes: the provider-neutral Rust Queue now owns sequential/shuffle order and repeat off/all/one, including automatic repeat-one replay, repeat-all wrapping, deterministic shuffle-cycle tests, duplicate positions, exact public order, and mutation repair. The typed Bridge exposes mode snapshots/setters plus an explicit playback request rather than making Flutter infer movement; mode changes never restart media. The existing mini and expanded Now Playing surfaces provide accessible shuffle/repeat controls that remain reachable at 360 px, and Flutter still owns only presentation/plugin lifecycle. Strict Dart checks, all 314 Flutter tests, 273 offline Rust tests, strict Clippy, Linux x64 Release, packaged mode/Queue Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
+- Implemented M5.4 bounded read-only Track comments: two current independent clients cross-validate the selected anonymous legacy operation and first-page hot/newest fields. QQ protocol and numeric song identity stay in Rust; a small provider-neutral Domain/Provider capability, cancellable typed Bridge, and Flutter gateway/controller present bounded plain-text comments from expanded Now Playing without changing the existing Queue/playback/lyric owner. Fixed page-number continuation advances by the requested page size even when QQ returns a short page, while zero-row pages terminate and append failures retry independently. Initial/loading/empty/error/retry, cancellation/stale/disposal, redacted diagnostics, immutable mapping, deduplication, compact bottom sheet, desktop dialog, playback-context preservation, and packaged Bridge cancellation have regressions. Strict Dart checks, all 325 Flutter tests, 285 offline Rust tests, four explicitly ignored live tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without account or live QQ access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Completed the bounded M5.4 Track-context audit. Album, credited Artists, lyrics, Queue, playback availability, and playback modes already have focused current-Track paths; the missing product slice is read-only comments rather than a generic Track-detail framework. Two independent maintained clients cross-validate the selected anonymous legacy song-comment request and its hot/newest fields, while a newer musicu cursor operation remains evidence-blocked. The selected finite task adds separate first-page hot comments plus paged newest comments from expanded Now Playing, with a small provider-neutral model, content-safe fixtures, cancellation/stale handling, failure isolation, and no social mutation.
+- M5.5 bounded QQ MV discovery is active. It must first establish a coherent Track-to-MV product journey, current protocol evidence, media/metadata boundaries, and a safe cross-platform playback strategy before any implementation is selected; M5 does not authorize a generic video platform, downloads, comments mutation, or a second audio/playback owner.
 
 # Next Candidates
 
-1. Implement the selected M5.4 read-only Track comments vertical slice through Domain, QQ client, Provider, cancellable Bridge, controller, and an adaptive expanded-Now-Playing surface; prove hot/newest separation, pagination, cancellation/stale disposal, failure isolation, 360 px/wide reachability, and playback-state preservation offline.
+1. Perform the bounded M5.5 QQ MV discovery pass: audit current Track identity and Now Playing/catalog journeys, cross-validate maintained direct QQ MV metadata/source implementations, evaluate whether the existing foreground media edge can safely compose video without a second music owner, rank at most three finite candidates, and implement only if the selected request and product path have sufficient evidence.
 2. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
@@ -88,6 +89,7 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 # Risks
 
 - QQ Music endpoints and authentication behavior are external and unstable; protocol work needs evidence and sanitized fixtures.
+- The selected legacy Track-comment operation has two current independent source references and full synthetic client-to-presentation coverage, but this repository did not call QQ Music during M5.4; live application compatibility and returned-content quality are not claimed.
 - Credential handling can create account and privacy risk; real-account probes and user-derived fixtures require deliberate, secret-safe execution.
 - Startup server verification has now accepted the authorized real account after a full process restart; no credential value or response was retained.
 - Linux and Android x64 runtime write/read/delete are verified with cleanup; Apple and Windows paths remain unbuilt and runtime-unverified here (TD-004).

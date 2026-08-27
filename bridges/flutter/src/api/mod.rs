@@ -2,6 +2,7 @@ pub mod album;
 pub mod artist;
 pub mod authentication;
 pub mod bootstrap;
+pub mod comments;
 pub mod favorite_albums;
 pub mod favorite_artists;
 pub mod library;

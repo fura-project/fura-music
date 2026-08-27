@@ -10,6 +10,7 @@ import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -55,6 +56,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.lyricGateway,
     required this.playbackQueueGateway,
     required this.audioEngine,
+    required this.trackCommentGateway,
     required this.onSignInAgain,
     required this.onSignOut,
     this.searchGateway,
@@ -81,6 +83,7 @@ class UserLibraryPage extends StatefulWidget {
   final LyricGateway lyricGateway;
   final PlaybackQueueGateway playbackQueueGateway;
   final ForegroundAudioEngine audioEngine;
+  final TrackCommentGateway trackCommentGateway;
   final VoidCallback onSignInAgain;
   final Future<CredentialSignOutResult> Function() onSignOut;
   final TrackSearchGateway? searchGateway;
@@ -580,6 +583,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             controller: _queuePlaybackController,
             onBack: _closeExpandedNowPlaying,
             onSignInAgain: widget.onSignInAgain,
+            commentsGateway: widget.trackCommentGateway,
           ),
       ],
     );

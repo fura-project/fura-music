@@ -10,6 +10,7 @@ import 'api/album.dart';
 import 'api/artist.dart';
 import 'api/authentication.dart';
 import 'api/bootstrap.dart';
+import 'api/comments.dart';
 import 'api/favorite_albums.dart';
 import 'api/favorite_artists.dart';
 import 'api/library.dart';
@@ -116,6 +117,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicRecommendedPlaylistPageLoadHandlePtr =>
       wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_QqMusicTrackCommentPageLoadHandlePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle;
 
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicTrackSearchPageLoadHandlePtr => wire
@@ -242,6 +247,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicRecommendedPlaylistPageLoadHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicTrackCommentPageLoadHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
     dynamic raw,
   );
 
@@ -378,6 +389,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicTrackCommentPageLoadHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicTrackSearchPageLoadHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackSearchPageLoadHandle(
     dynamic raw,
@@ -506,6 +523,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicRecommendedPlaylistPageLoadHandle
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicTrackCommentPageLoadHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
     dynamic raw,
   );
 
@@ -678,6 +701,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicTrackCommentPageLoadFailure
+  dco_decode_box_autoadd_qq_music_track_comment_page_load_failure(dynamic raw);
+
+  @protected
   QqMusicTrackSearchPageLoadFailure
   dco_decode_box_autoadd_qq_music_track_search_page_load_failure(dynamic raw);
 
@@ -763,6 +790,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<QqMusicTrackSearchItem> dco_decode_list_qq_music_track_search_item(
     dynamic raw,
   );
+
+  @protected
+  List<TrackCommentSummary> dco_decode_list_track_comment_summary(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -934,6 +964,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicSynchronizedLyrics?
   dco_decode_opt_box_autoadd_qq_music_synchronized_lyrics(dynamic raw);
+
+  @protected
+  QqMusicTrackCommentPageLoadFailure?
+  dco_decode_opt_box_autoadd_qq_music_track_comment_page_load_failure(
+    dynamic raw,
+  );
 
   @protected
   QqMusicTrackSearchPageLoadFailure?
@@ -1199,6 +1235,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QqMusicTimedLyricSegment dco_decode_qq_music_timed_lyric_segment(dynamic raw);
 
   @protected
+  QqMusicTrackCommentPageLoad dco_decode_qq_music_track_comment_page_load(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicTrackCommentPageLoadFailure
+  dco_decode_qq_music_track_comment_page_load_failure(dynamic raw);
+
+  @protected
   QqMusicTrackSearchItem dco_decode_qq_music_track_search_item(dynamic raw);
 
   @protected
@@ -1217,6 +1262,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QqMusicUserPlaylistLoadFailure dco_decode_qq_music_user_playlist_load_failure(
     dynamic raw,
   );
+
+  @protected
+  TrackCommentSummary dco_decode_track_comment_summary(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -1347,6 +1395,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicRecommendedPlaylistPageLoadHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicTrackCommentPageLoadHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
     SseDeserializer deserializer,
   );
 
@@ -1483,6 +1537,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicTrackCommentPageLoadHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicTrackSearchPageLoadHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackSearchPageLoadHandle(
     SseDeserializer deserializer,
@@ -1611,6 +1671,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicRecommendedPlaylistPageLoadHandle
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicTrackCommentPageLoadHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
     SseDeserializer deserializer,
   );
 
@@ -1829,6 +1895,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicTrackCommentPageLoadFailure
+  sse_decode_box_autoadd_qq_music_track_comment_page_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicTrackSearchPageLoadFailure
   sse_decode_box_autoadd_qq_music_track_search_page_load_failure(
     SseDeserializer deserializer,
@@ -1940,6 +2012,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<QqMusicTrackSearchItem> sse_decode_list_qq_music_track_search_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TrackCommentSummary> sse_decode_list_track_comment_summary(
     SseDeserializer deserializer,
   );
 
@@ -2133,6 +2210,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicSynchronizedLyrics?
   sse_decode_opt_box_autoadd_qq_music_synchronized_lyrics(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicTrackCommentPageLoadFailure?
+  sse_decode_opt_box_autoadd_qq_music_track_comment_page_load_failure(
     SseDeserializer deserializer,
   );
 
@@ -2476,6 +2559,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicTrackCommentPageLoad sse_decode_qq_music_track_comment_page_load(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicTrackCommentPageLoadFailure
+  sse_decode_qq_music_track_comment_page_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicTrackSearchItem sse_decode_qq_music_track_search_item(
     SseDeserializer deserializer,
   );
@@ -2498,6 +2592,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   QqMusicUserPlaylistLoadFailure sse_decode_qq_music_user_playlist_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TrackCommentSummary sse_decode_track_comment_summary(
     SseDeserializer deserializer,
   );
 
@@ -2650,6 +2749,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
     QqMusicRecommendedPlaylistPageLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    QqMusicTrackCommentPageLoadHandle self,
     SseSerializer serializer,
   );
 
@@ -2809,6 +2915,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    QqMusicTrackCommentPageLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackSearchPageLoadHandle(
     QqMusicTrackSearchPageLoadHandle self,
     SseSerializer serializer,
@@ -2958,6 +3071,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
     QqMusicRecommendedPlaylistPageLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    QqMusicTrackCommentPageLoadHandle self,
     SseSerializer serializer,
   );
 
@@ -3193,6 +3313,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_qq_music_track_comment_page_load_failure(
+    QqMusicTrackCommentPageLoadFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_qq_music_track_search_page_load_failure(
     QqMusicTrackSearchPageLoadFailure self,
     SseSerializer serializer,
@@ -3324,6 +3450,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_qq_music_track_search_item(
     List<QqMusicTrackSearchItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_track_comment_summary(
+    List<TrackCommentSummary> self,
     SseSerializer serializer,
   );
 
@@ -3527,6 +3659,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_qq_music_synchronized_lyrics(
     QqMusicSynchronizedLyrics? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_track_comment_page_load_failure(
+    QqMusicTrackCommentPageLoadFailure? self,
     SseSerializer serializer,
   );
 
@@ -3927,6 +4065,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_qq_music_track_comment_page_load(
+    QqMusicTrackCommentPageLoad self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_track_comment_page_load_failure(
+    QqMusicTrackCommentPageLoadFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_qq_music_track_search_item(
     QqMusicTrackSearchItem self,
     SseSerializer serializer,
@@ -3953,6 +4103,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_user_playlist_load_failure(
     QqMusicUserPlaylistLoadFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_track_comment_summary(
+    TrackCommentSummary self,
     SseSerializer serializer,
   );
 
@@ -4295,6 +4451,22 @@ class RustLibWire implements BaseWire {
       );
 
   void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+        ptr,
+      );
+
+  void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackSearchPageLoadHandle(
     int ptr,
   ) => wasmModule
@@ -4530,6 +4702,16 @@ extension type RustLibWasmModule._(JSObject _) implements JSObject {
 
   external void
   rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicTrackCommentPageLoadHandle(
     int ptr,
   );
 

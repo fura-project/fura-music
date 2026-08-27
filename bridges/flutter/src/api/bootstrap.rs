@@ -59,6 +59,7 @@ mod tests {
                 "Authentication",
                 "UserLibrary",
                 "Lyrics",
+                "Comments",
                 "MediaResolution"
             ]
         );

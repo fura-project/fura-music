@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/comments/track_comment_gateway.dart';
+import 'package:flutterustmusic/comments/track_comments_surface.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_panel.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -11,12 +14,14 @@ class ExpandedNowPlayingPage extends StatelessWidget {
     required this.controller,
     required this.onBack,
     required this.onSignInAgain,
+    this.commentsGateway = const RustTrackCommentGateway(),
     super.key,
   });
 
   final QueuePlaybackController controller;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
+  final TrackCommentGateway commentsGateway;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -34,6 +39,7 @@ class ExpandedNowPlayingPage extends StatelessWidget {
       controller: controller,
       onBack: onBack,
       onSignInAgain: onSignInAgain,
+      commentsGateway: commentsGateway,
     ),
     bottomNavigationBar: NowPlayingBar.expanded(
       controller: controller,
@@ -47,11 +53,13 @@ class _ExpandedNowPlayingBody extends StatefulWidget {
     required this.controller,
     required this.onBack,
     required this.onSignInAgain,
+    required this.commentsGateway,
   });
 
   final QueuePlaybackController controller;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
+  final TrackCommentGateway commentsGateway;
 
   @override
   State<_ExpandedNowPlayingBody> createState() =>
@@ -98,7 +106,12 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
           return Row(
             key: const ValueKey('expanded-now-playing-wide-layout'),
             children: [
-              Expanded(child: _ExpandedTrackHero(track: track)),
+              Expanded(
+                child: _ExpandedTrackHero(
+                  track: track,
+                  onOpenComments: () => _openComments(context, track),
+                ),
+              ),
               VerticalDivider(
                 width: 1,
                 color: Theme.of(context).colorScheme.outlineVariant,
@@ -117,7 +130,11 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
             SizedBox(
               width: double.infinity,
               height: heroHeight,
-              child: _ExpandedTrackHero(track: track, compact: true),
+              child: _ExpandedTrackHero(
+                track: track,
+                compact: true,
+                onOpenComments: () => _openComments(context, track),
+              ),
             ),
             Divider(
               height: 1,
@@ -147,6 +164,17 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
     );
   }
 
+  void _openComments(BuildContext context, PlaylistTrackSummary track) {
+    unawaited(
+      showTrackCommentsSurface(
+        context: context,
+        gateway: widget.commentsGateway,
+        track: track,
+        playbackController: widget.controller,
+      ),
+    );
+  }
+
   void _readCurrent() {
     _track = widget.controller.current;
     _currentIndex = widget.controller.currentIndex;
@@ -164,9 +192,14 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
 }
 
 class _ExpandedTrackHero extends StatelessWidget {
-  const _ExpandedTrackHero({required this.track, this.compact = false});
+  const _ExpandedTrackHero({
+    required this.track,
+    required this.onOpenComments,
+    this.compact = false,
+  });
 
   final PlaylistTrackSummary track;
+  final VoidCallback onOpenComments;
   final bool compact;
 
   @override
@@ -241,6 +274,13 @@ class _ExpandedTrackHero extends StatelessWidget {
                         color: colors.onSurfaceVariant,
                       ),
                     ),
+                  SizedBox(height: compact ? 8 : 16),
+                  OutlinedButton.icon(
+                    key: const ValueKey('expanded-now-playing-comments'),
+                    onPressed: onOpenComments,
+                    icon: const Icon(Icons.mode_comment_outlined),
+                    label: const Text('Comments'),
+                  ),
                 ],
               ),
             ),

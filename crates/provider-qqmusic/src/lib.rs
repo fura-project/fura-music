@@ -11,19 +11,20 @@ use music_domain::{
     NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
     PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
     RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
-    SynchronizedLyrics, TimedLyricSegment, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage,
+    TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
-    ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError,
+    ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, CommentsError,
     FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError, LyricsProvider,
     MediaResolutionError, MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider,
     NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
     ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationProgress,
     QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
     RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-    RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
-    UserPlaylistsProvider,
+    RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackSearchProvider,
+    UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
@@ -36,9 +37,9 @@ use qqmusic_client::{
     QqMusicOwnedPlaylistsError, QqMusicPlaylistDetailError, QqMusicPlaylistSearchError,
     QqMusicPlaylistSearchSummary, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
     QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
-    QqMusicTrackSummary, QrImageMediaType, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
-    WechatQrLoginSession,
+    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackSummary, QrImageMediaType,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -407,6 +408,7 @@ impl<T> MusicProvider for QqMusicProvider<T> {
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
                 ProviderCapability::Lyrics,
+                ProviderCapability::Comments,
                 ProviderCapability::MediaResolution,
             ],
         }
@@ -1119,6 +1121,47 @@ where
     }
 }
 
+impl<T> TrackCommentsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = CommentsError;
+
+    async fn track_comments(
+        &self,
+        track_id: TrackId,
+        offset: u32,
+        size: u32,
+    ) -> Result<TrackCommentsPage, Self::Error> {
+        let route = parse_track_identity(&track_id).map_err(|()| CommentsError::InvalidResponse)?;
+        let response = self
+            .client()
+            .track_comments(route.song_id, offset, size)
+            .await;
+        let page = response.as_ref().map_err(map_comments_error)?;
+        if page.has_more() && page.latest_comments().is_empty() {
+            return Err(CommentsError::InvalidResponse);
+        }
+        let hot_comments = page
+            .hot_comments()
+            .iter()
+            .map(map_comment)
+            .collect::<Result<Vec<_>, _>>()?;
+        let latest_comments = page
+            .latest_comments()
+            .iter()
+            .map(map_comment)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(TrackCommentsPage::new(
+            page.offset(),
+            page.total(),
+            page.has_more(),
+            hot_comments,
+            latest_comments,
+        ))
+    }
+}
+
 impl<T> QrAuthenticationProvider for QqMusicProvider<T>
 where
     T: HttpTransport + 'static,
@@ -1365,6 +1408,7 @@ struct QqMusicLyricTrack<'a> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct QqMusicTrackIdentity<'a> {
+    song_id: u64,
     song_mid: &'a str,
     file_media_mid: Option<&'a str>,
     primary_song_type: u32,
@@ -1386,7 +1430,7 @@ fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, 
     if prefix != Some("track") || extra.is_some() {
         return Err(());
     }
-    raw_id
+    let numeric_song_id = raw_id
         .and_then(|value| value.parse::<u64>().ok())
         .filter(|value| *value != 0)
         .ok_or(())?;
@@ -1402,6 +1446,7 @@ fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, 
         _ => return Err(()),
     };
     Ok(QqMusicTrackIdentity {
+        song_id: numeric_song_id,
         song_mid,
         file_media_mid,
         primary_song_type,
@@ -1645,6 +1690,22 @@ fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
                 .with_duration_seconds(Some(track.duration_seconds()))
         })
         .map_err(|_| ())
+}
+
+fn map_comment(comment: &QqMusicTrackComment) -> Result<TrackComment, CommentsError> {
+    let id = TrackCommentId::new(
+        qq_music_provider_id(),
+        format!("comment:{}", comment.comment_id()),
+    )
+    .map_err(|_| CommentsError::InvalidResponse)?;
+    TrackComment::new(
+        id,
+        comment.author_display_name(),
+        comment.content(),
+        comment.published_at_unix_seconds(),
+        comment.praise_count(),
+    )
+    .map_err(|_| CommentsError::InvalidResponse)
 }
 
 fn album_artwork_uri(media_mid: &str) -> Option<String> {
@@ -2153,6 +2214,23 @@ fn map_rankings_error<E>(error: &QqMusicRankingsError<E>) -> CatalogError {
     }
 }
 
+fn map_comments_error<E>(error: &QqMusicTrackCommentsError<E>) -> CommentsError {
+    match error {
+        QqMusicTrackCommentsError::Transport(_) => CommentsError::Network,
+        QqMusicTrackCommentsError::HttpStatus(_) | QqMusicTrackCommentsError::Upstream { .. } => {
+            CommentsError::ServiceUnavailable
+        }
+        QqMusicTrackCommentsError::InvalidSongId
+        | QqMusicTrackCommentsError::InvalidPageSize { .. }
+        | QqMusicTrackCommentsError::InvalidOffset { .. }
+        | QqMusicTrackCommentsError::InvalidJson
+        | QqMusicTrackCommentsError::MissingLatestComments
+        | QqMusicTrackCommentsError::MissingTotal
+        | QqMusicTrackCommentsError::InvalidPagination
+        | QqMusicTrackCommentsError::InvalidComment { .. } => CommentsError::InvalidResponse,
+    }
+}
+
 fn map_media_error<E>(error: &QqMusicMediaError<E>) -> MediaResolutionError {
     match error {
         QqMusicMediaError::Transport { .. } => MediaResolutionError::Network,
@@ -2274,15 +2352,15 @@ mod tests {
     };
     use provider_api::{
         AlbumDetailsProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
-        ArtistSearchProvider, ArtistTracksProvider, CatalogError, FavoriteAlbumsProvider,
-        FavoriteArtistsProvider, LyricsError, LyricsProvider, MediaResolutionError,
-        MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider, NewSongsProvider,
-        OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
+        ArtistSearchProvider, ArtistTracksProvider, CatalogError, CommentsError,
+        FavoriteAlbumsProvider, FavoriteArtistsProvider, LyricsError, LyricsProvider,
+        MediaResolutionError, MediaResolutionProvider, MusicProvider, NewAlbumReleasesProvider,
+        NewSongsProvider, OwnedPlaylistsProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
         ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
         QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
         RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-        RecommendedPlaylistsProvider, SearchError, TrackSearchProvider, UserLibraryError,
-        UserPlaylistsProvider,
+        RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider, TrackSearchProvider,
+        UserLibraryError, UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
@@ -2291,7 +2369,7 @@ mod tests {
         QqMusicArtistTracksError, QqMusicClient, QqMusicFavoriteAlbumsError,
         QqMusicFavoriteArtistsError, QqMusicNewAlbumsError, QqMusicNewSongsError,
         QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
-        QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+        QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackCommentsError,
     };
     use serde_json::{Value, json};
     use tokio::sync::Notify;
@@ -2848,8 +2926,76 @@ mod tests {
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
                 ProviderCapability::Lyrics,
+                ProviderCapability::Comments,
                 ProviderCapability::MediaResolution,
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn maps_opaque_track_to_provider_neutral_read_only_comments() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "hot_comment": {"commentlist": [{
+                "commentid": "91001",
+                "nick": "Synthetic hot author",
+                "rootcommentcontent": "Synthetic hot comment",
+                "praisenum": 41,
+                "time": 1_700_000_001
+            }]},
+            "comment": {
+                "commenttotal": 21,
+                "commentlist": [{
+                    "commentid": 92001,
+                    "nick": "Synthetic latest author",
+                    "rootcommentcontent": "Synthetic latest comment",
+                    "praisenum": 7,
+                    "time": 1_700_000_002
+                }]
+            }
+        }))));
+
+        let page = provider
+            .track_comments(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                0,
+                20,
+            )
+            .await
+            .expect("provider comments");
+
+        assert_eq!(page.total(), 21);
+        assert!(page.has_more());
+        assert_eq!(page.hot_comments()[0].id().provider().as_str(), "qq-music");
+        assert_eq!(page.hot_comments()[0].id().opaque(), "comment:91001");
+        assert_eq!(
+            page.latest_comments()[0].author_display_name(),
+            "Synthetic latest author"
+        );
+        let debug = format!("{page:?} {:?}", page.latest_comments()[0]);
+        assert!(!debug.contains("Synthetic latest"));
+        assert!(!debug.contains("92001"));
+    }
+
+    #[tokio::test]
+    async fn rejects_foreign_comment_identity_and_maps_comment_failures() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({}))));
+        let foreign = TrackId::new(
+            ProviderId::new("local").expect("provider"),
+            "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
+        )
+        .expect("track ID");
+        assert_eq!(
+            provider.track_comments(foreign, 0, 20).await,
+            Err(CommentsError::InvalidResponse)
+        );
+        assert_eq!(
+            super::map_comments_error(&QqMusicTrackCommentsError::<Infallible>::HttpStatus(503)),
+            CommentsError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_comments_error(&QqMusicTrackCommentsError::<Infallible>::InvalidJson),
+            CommentsError::InvalidResponse
         );
     }
 

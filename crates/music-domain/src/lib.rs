@@ -461,6 +461,62 @@ impl fmt::Display for InvalidTrackId {
 
 impl std::error::Error for InvalidTrackId {}
 
+/// Provider-scoped identity for one comment attached to a Track. Presentation
+/// and generic Domain code must treat the provider-owned value as opaque.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct TrackCommentId {
+    provider: ProviderId,
+    opaque: String,
+}
+
+impl TrackCommentId {
+    /// # Errors
+    ///
+    /// Returns [`InvalidTrackCommentId`] when the provider-owned value is
+    /// empty or whitespace-only.
+    pub fn new(
+        provider: ProviderId,
+        opaque: impl Into<String>,
+    ) -> Result<Self, InvalidTrackCommentId> {
+        let opaque = opaque.into();
+        if opaque.trim().is_empty() {
+            return Err(InvalidTrackCommentId);
+        }
+        Ok(Self { provider, opaque })
+    }
+
+    #[must_use]
+    pub const fn provider(&self) -> &ProviderId {
+        &self.provider
+    }
+
+    #[must_use]
+    pub fn opaque(&self) -> &str {
+        &self.opaque
+    }
+}
+
+impl fmt::Debug for TrackCommentId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TrackCommentId")
+            .field("provider", &self.provider)
+            .field("opaque", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidTrackCommentId;
+
+impl fmt::Display for InvalidTrackCommentId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Track comment identity must have a non-empty provider value")
+    }
+}
+
+impl std::error::Error for InvalidTrackCommentId {}
+
 /// Provider-scoped Album identity. The opaque value is interpreted only by
 /// the owning Provider.
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -1119,6 +1175,189 @@ impl fmt::Display for InvalidTrackSummary {
 }
 
 impl std::error::Error for InvalidTrackSummary {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TrackCommentField {
+    AuthorDisplayName,
+    Content,
+    PublishedAt,
+}
+
+/// Minimum provider-neutral display data for one read-only Track comment.
+/// Account identity, replies, badges, rich media, and mutation state remain
+/// outside this first bounded capability.
+#[derive(Clone, Eq, PartialEq)]
+pub struct TrackComment {
+    id: TrackCommentId,
+    author_display_name: String,
+    content: String,
+    published_at_unix_seconds: u64,
+    praise_count: u64,
+}
+
+impl TrackComment {
+    /// # Errors
+    ///
+    /// Rejects blank author/content values and a missing publish timestamp.
+    pub fn new(
+        id: TrackCommentId,
+        author_display_name: impl Into<String>,
+        content: impl Into<String>,
+        published_at_unix_seconds: u64,
+        praise_count: u64,
+    ) -> Result<Self, InvalidTrackComment> {
+        let author_display_name = author_display_name.into();
+        if author_display_name.trim().is_empty() {
+            return Err(InvalidTrackComment {
+                field: TrackCommentField::AuthorDisplayName,
+            });
+        }
+        let content = content.into();
+        if content.trim().is_empty() {
+            return Err(InvalidTrackComment {
+                field: TrackCommentField::Content,
+            });
+        }
+        if published_at_unix_seconds == 0 {
+            return Err(InvalidTrackComment {
+                field: TrackCommentField::PublishedAt,
+            });
+        }
+        Ok(Self {
+            id,
+            author_display_name,
+            content,
+            published_at_unix_seconds,
+            praise_count,
+        })
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> &TrackCommentId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn author_display_name(&self) -> &str {
+        &self.author_display_name
+    }
+
+    #[must_use]
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    #[must_use]
+    pub const fn published_at_unix_seconds(&self) -> u64 {
+        self.published_at_unix_seconds
+    }
+
+    #[must_use]
+    pub const fn praise_count(&self) -> u64 {
+        self.praise_count
+    }
+}
+
+impl fmt::Debug for TrackComment {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TrackComment")
+            .field("id", &self.id)
+            .field("author_display_name", &"[REDACTED]")
+            .field("content", &"[REDACTED]")
+            .field("published_at_unix_seconds", &self.published_at_unix_seconds)
+            .field("praise_count", &self.praise_count)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidTrackComment {
+    field: TrackCommentField,
+}
+
+impl InvalidTrackComment {
+    #[must_use]
+    pub const fn field(self) -> TrackCommentField {
+        self.field
+    }
+}
+
+impl fmt::Display for InvalidTrackComment {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "Track comment has an invalid {:?}", self.field)
+    }
+}
+
+impl std::error::Error for InvalidTrackComment {}
+
+/// One bounded page of read-only comments for a Track. Hot comments are
+/// returned only for the initial page; continuation applies to latest comments.
+#[derive(Clone, Eq, PartialEq)]
+pub struct TrackCommentsPage {
+    offset: u32,
+    total: u32,
+    has_more: bool,
+    hot_comments: Vec<TrackComment>,
+    latest_comments: Vec<TrackComment>,
+}
+
+impl TrackCommentsPage {
+    #[must_use]
+    pub const fn new(
+        offset: u32,
+        total: u32,
+        has_more: bool,
+        hot_comments: Vec<TrackComment>,
+        latest_comments: Vec<TrackComment>,
+    ) -> Self {
+        Self {
+            offset,
+            total,
+            has_more,
+            hot_comments,
+            latest_comments,
+        }
+    }
+
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub fn hot_comments(&self) -> &[TrackComment] {
+        &self.hot_comments
+    }
+
+    #[must_use]
+    pub fn latest_comments(&self) -> &[TrackComment] {
+        &self.latest_comments
+    }
+}
+
+impl fmt::Debug for TrackCommentsPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TrackCommentsPage")
+            .field("offset", &self.offset)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("hot_comment_count", &self.hot_comments.len())
+            .field("latest_comment_count", &self.latest_comments.len())
+            .finish()
+    }
+}
 
 /// One bounded page of playlist tracks. Source-specific route and pagination
 /// rules remain in the provider implementation.
@@ -2068,7 +2307,8 @@ mod tests {
         NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId,
         PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
         RankingGroup, RankingId, RankingSummary, RankingTracksPage, ResolvedMediaSource,
-        ResolvedMediaSourceField, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+        ResolvedMediaSourceField, TrackComment, TrackCommentField, TrackCommentId,
+        TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
         TrackSummaryField,
     };
 
@@ -2173,6 +2413,68 @@ mod tests {
         assert!(!debug.contains("41001"));
         assert!(!debug.contains("42001"));
         assert!(!debug.contains("43001"));
+    }
+
+    #[test]
+    fn track_comments_keep_provider_identity_and_user_content_out_of_diagnostics() {
+        let provider = ProviderId::new("qq-music").expect("provider");
+        let comment = TrackComment::new(
+            TrackCommentId::new(provider, "comment:private-41001").expect("comment ID"),
+            "must-not-leak-author",
+            "must-not-leak-comment",
+            1_700_000_001,
+            42,
+        )
+        .expect("comment");
+        let page = TrackCommentsPage::new(0, 2, true, vec![comment.clone()], vec![comment]);
+
+        assert_eq!(
+            page.hot_comments()[0].author_display_name(),
+            "must-not-leak-author"
+        );
+        assert_eq!(page.latest_comments()[0].content(), "must-not-leak-comment");
+        assert_eq!(
+            page.latest_comments()[0].published_at_unix_seconds(),
+            1_700_000_001
+        );
+        assert_eq!(page.latest_comments()[0].praise_count(), 42);
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.total(), 2);
+        assert!(page.has_more());
+        let debug = format!("{page:?} {:?}", page.hot_comments()[0]);
+        for private in ["must-not-leak", "private-41001"] {
+            assert!(!debug.contains(private));
+        }
+    }
+
+    #[test]
+    fn track_comment_rejects_blank_display_values_and_missing_time() {
+        let make_id = || {
+            TrackCommentId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "comment:fixture",
+            )
+            .expect("comment ID")
+        };
+        assert_eq!(
+            TrackComment::new(make_id(), " ", "content", 1, 0)
+                .expect_err("blank author")
+                .field(),
+            TrackCommentField::AuthorDisplayName
+        );
+        assert_eq!(
+            TrackComment::new(make_id(), "author", " ", 1, 0)
+                .expect_err("blank content")
+                .field(),
+            TrackCommentField::Content
+        );
+        assert_eq!(
+            TrackComment::new(make_id(), "author", "content", 0, 0)
+                .expect_err("missing time")
+                .field(),
+            TrackCommentField::PublishedAt
+        );
+        assert!(TrackCommentId::new(ProviderId::new("qq-music").expect("provider"), " ").is_err());
     }
 
     #[test]

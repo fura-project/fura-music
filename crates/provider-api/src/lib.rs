@@ -8,8 +8,8 @@ use music_domain::{
     ArtistSearchPage, ArtistTracksPage, FavoriteAlbumsPage, FavoriteArtistsPage, NewAlbumRegion,
     NewAlbumReleasesPage, NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage,
     PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId,
-    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackId,
-    TrackSearchPage,
+    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics,
+    TrackCommentsPage, TrackId, TrackSearchPage,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -21,6 +21,7 @@ pub enum ProviderCapability {
     UserLibrary,
     PlaylistMutation,
     Lyrics,
+    Comments,
     MediaResolution,
 }
 
@@ -109,6 +110,26 @@ impl fmt::Display for RecommendationError {
 }
 
 impl std::error::Error for RecommendationError {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CommentsError {
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+}
+
+impl fmt::Display for CommentsError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::Network => "comment network request failed",
+            Self::ServiceUnavailable => "comments are unavailable",
+            Self::InvalidResponse => "comment service returned an invalid response",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for CommentsError {}
 
 /// Provider-neutral Track search. Query ranking and page conversion remain
 /// owned by the concrete Provider.
@@ -273,6 +294,20 @@ pub trait RankingsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<RankingTracksPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral offset-paged read-only comments for one Track. The owning
+/// Provider keeps opaque Track parsing and source-specific hot/new pagination
+/// behind this boundary; comment mutation remains a separate capability.
+pub trait TrackCommentsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn track_comments(
+        &self,
+        track_id: TrackId,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<TrackCommentsPage, Self::Error>> + Send;
 }
 
 /// Describes behavior that is implemented now, not planned future behavior.

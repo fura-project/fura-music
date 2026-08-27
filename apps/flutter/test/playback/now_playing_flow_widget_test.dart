@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -1372,6 +1373,81 @@ void main() {
     expect(find.byKey(const ValueKey('now-playing-repeat')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Track comments keep playback context across compact and wide surfaces',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final comments = _FakeCommentGateway([
+        _ImmediateCommentOperation(
+          TrackCommentPageResult(
+            total: 1,
+            hotComments: [_comment('hot', 'A hot comment')],
+            latestComments: [_comment('latest', 'A newest comment')],
+          ),
+        ),
+        _ImmediateCommentOperation(
+          TrackCommentPageResult(
+            total: 1,
+            latestComments: [_comment('wide', 'A wide comment')],
+          ),
+        ),
+      ]);
+
+      await _openDetail(
+        tester,
+        media: _FakeMediaGateway([
+          _ImmediateMediaOperation(_success('comments')),
+        ]),
+        audio: _FakeAudioEngine([_FakeAudioSession()]),
+        comments: comments,
+      );
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pumpAndSettle();
+      final commentsButton = find.byKey(
+        const ValueKey('expanded-now-playing-comments'),
+      );
+      await tester.ensureVisible(commentsButton);
+      await tester.tap(commentsButton);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('track-comments-compact-surface')),
+        findsOneWidget,
+      );
+      expect(find.text('Hot comments'), findsOneWidget);
+      expect(find.text('A newest comment'), findsOneWidget);
+      expect(comments.requests, [('first', 0, 20)]);
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-compact-layout')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('track-comments-close')));
+      await tester.pumpAndSettle();
+      expect(find.text('First track'), findsWidgets);
+
+      tester.view.physicalSize = const Size(1100, 844);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('expanded-now-playing-comments')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('track-comments-wide-surface')),
+        findsOneWidget,
+      );
+      expect(find.text('A wide comment'), findsOneWidget);
+      expect(comments.requests, [('first', 0, 20), ('first', 0, 20)]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 String? _nowPlayingTitle(WidgetTester tester) =>
@@ -1400,6 +1476,7 @@ Future<void> _openDetail(
   String? artworkUri,
   String? albumTitle,
   QqMusicAuthenticationGateway? authenticationGateway,
+  TrackCommentGateway? comments,
 }) async {
   await tester.pumpWidget(
     MusicApp(
@@ -1422,6 +1499,7 @@ Future<void> _openDetail(
             const LyricLoadResult(failure: LyricFailure.unavailable),
           ),
       playbackQueueGateway: queue ?? _WidgetQueueGateway(),
+      trackCommentGateway: comments,
       audioEngine: audio,
     ),
   );
@@ -1776,6 +1854,45 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
       ),
     ],
   );
+}
+
+TrackCommentSummary _comment(String id, String content) => TrackCommentSummary(
+  providerId: 'qq-music',
+  opaqueId: 'comment:$id',
+  authorDisplayName: 'Author $id',
+  content: content,
+  publishedAtUnixSeconds: 1700000000,
+  praiseCount: 8,
+);
+
+class _FakeCommentGateway implements TrackCommentGateway {
+  _FakeCommentGateway(this.operations);
+
+  final List<_ImmediateCommentOperation> operations;
+  final List<(String, int, int)> requests = [];
+  int next = 0;
+
+  @override
+  TrackCommentPageLoadOperation beginLoad({
+    required PlaylistTrackSummary track,
+    required int offset,
+    required int size,
+  }) {
+    requests.add((track.opaqueId, offset, size));
+    return operations[next++];
+  }
+}
+
+class _ImmediateCommentOperation implements TrackCommentPageLoadOperation {
+  const _ImmediateCommentOperation(this.result);
+
+  final TrackCommentPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<TrackCommentPageResult> run() async => result;
 }
 
 MediaResolutionResult _success(String vkey) => MediaResolutionResult(

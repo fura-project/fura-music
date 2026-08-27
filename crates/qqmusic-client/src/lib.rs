@@ -10,6 +10,7 @@ mod album_search;
 mod artist;
 mod artist_albums;
 mod artist_search;
+mod comments;
 mod credential;
 mod credential_verification;
 mod favorite_albums;
@@ -38,6 +39,10 @@ pub use album_search::{AlbumSearchField, QqMusicAlbumSearchError, QqMusicAlbumSe
 pub use artist::{ArtistTrackField, QqMusicArtistTrackPage, QqMusicArtistTracksError};
 pub use artist_albums::{ArtistAlbumField, QqMusicArtistAlbumPage, QqMusicArtistAlbumsError};
 pub use artist_search::{ArtistSearchField, QqMusicArtistSearchError, QqMusicArtistSearchPage};
+pub use comments::{
+    CommentField, CommentSection, QqMusicTrackComment, QqMusicTrackCommentsError,
+    QqMusicTrackCommentsPage,
+};
 pub use credential::{
     Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
     CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,

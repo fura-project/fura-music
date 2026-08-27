@@ -4,6 +4,7 @@ import 'package:flutterustmusic/src/rust/api/artist.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
+import 'package:flutterustmusic/src/rust/api/comments.dart';
 import 'package:flutterustmusic/src/rust/api/favorite_albums.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart';
@@ -31,6 +32,7 @@ void main() {
       'Authentication',
       'UserLibrary',
       'Lyrics',
+      'Comments',
       'MediaResolution',
     ]);
     final restore = restoreQqMusicCredentialFromSecureStorage();
@@ -249,6 +251,19 @@ void main() {
     expect(unusedLyricLoad.cancel(), isTrue);
     final cancelledLyricLoad = await unusedLyricLoad.run();
     expect(cancelledLyricLoad.failure, QqMusicLyricLoadFailure.cancelled);
+    final unusedCommentLoad = beginQqMusicTrackCommentPageLoad(
+      providerId: 'qq-music',
+      opaqueTrackId: 'track:41001:0:fixtureTrackMid1:fixtureFileMid1',
+      offset: 0,
+      size: 20,
+    );
+    expect(unusedCommentLoad.isActive, isTrue);
+    expect(unusedCommentLoad.cancel(), isTrue);
+    final cancelledCommentLoad = await unusedCommentLoad.run();
+    expect(
+      cancelledCommentLoad.failure,
+      QqMusicTrackCommentPageLoadFailure.cancelled,
+    );
     final queue = createPlaybackQueue();
     final queueTrack = LibraryTrackSummary(
       providerId: 'qq-music',
