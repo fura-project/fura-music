@@ -11,6 +11,7 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
+import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -126,6 +127,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final RadarGateway _radarGateway;
   late final FavoriteAlbumGateway _favoriteAlbumGateway;
   late final FavoriteArtistGateway _favoriteArtistGateway;
+  late final RecommendedPlaylistController _recommendedPlaylistController;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -134,6 +136,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   );
   final FocusNode _recommendationsReturnFocusNode = FocusNode(
     debugLabel: 'recommendations entry',
+  );
+  final FocusNode _homePlaylistReturnFocusNode = FocusNode(
+    debugLabel: 'last Home playlist',
+  );
+  final FocusNode _homeRecommendationReturnFocusNode = FocusNode(
+    debugLabel: 'last Home recommendation',
   );
   final FocusScopeNode _librarySectionFocusScopeNode = FocusScopeNode(
     debugLabel: 'library section selector',
@@ -157,6 +165,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
   RankingSummary? _selectedRanking;
   UserPlaylistSummary? _lastOpenedPlaylist;
+  UserPlaylistSummary? _lastOpenedHomePlaylist;
+  RecommendedPlaylistSummary? _lastOpenedHomeRecommendation;
   _PrimaryDestination _selectedPrimaryDestination = _PrimaryDestination.home;
   bool _searchVisited = false;
   bool _recommendationsVisited = false;
@@ -199,6 +209,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         widget.favoriteAlbumGateway ?? RustFavoriteAlbumGateway();
     _favoriteArtistGateway =
         widget.favoriteArtistGateway ?? RustFavoriteArtistGateway();
+    _recommendedPlaylistController = RecommendedPlaylistController(
+      _recommendedPlaylistGateway,
+    );
     _queuePlaybackController = QueuePlaybackController(
       widget.playbackQueueGateway,
       TrackPlaybackController(
@@ -209,6 +222,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     _queuePlaybackController.addListener(_onQueuePlaybackChanged);
     unawaited(_controller.load());
+    unawaited(_recommendedPlaylistController.load());
   }
 
   void _onQueuePlaybackChanged() {
@@ -226,11 +240,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   @override
   void dispose() {
     _controller.dispose();
+    _recommendedPlaylistController.dispose();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _queuePlaybackController.dispose();
     _playlistReturnFocusNode.dispose();
     _searchReturnFocusNode.dispose();
     _recommendationsReturnFocusNode.dispose();
+    _homePlaylistReturnFocusNode.dispose();
+    _homeRecommendationReturnFocusNode.dispose();
     _librarySectionFocusScopeNode.dispose();
     _backShortcutFallbackFocusNode.dispose();
     super.dispose();
@@ -302,7 +319,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               ),
             ],
           )
-        : _recommendationsOpen
+        : _recommendationsOpen || selectedRecommendedPlaylist != null
         ? IndexedStack(
             index: selectedRecommendedPlaylist != null
                 ? 1
@@ -625,14 +642,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _returnToLibrary() {
     if (_selectedPlaylist == null) return;
+    final returnToHome = _primaryDestination == _PrimaryDestination.home;
     setState(() => _selectedPlaylist = null);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          _selectedPlaylist != null ||
-          _playlistReturnFocusNode.context == null) {
+      if (!mounted || _selectedPlaylist != null) {
         return;
       }
-      _playlistReturnFocusNode.requestFocus();
+      final focusNode = returnToHome
+          ? _homePlaylistReturnFocusNode
+          : _playlistReturnFocusNode;
+      if (focusNode.context != null) focusNode.requestFocus();
     });
   }
 
@@ -975,7 +994,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _returnToRecommendations() {
     if (_selectedRecommendedPlaylist == null) return;
+    final returnToHome = _primaryDestination == _PrimaryDestination.home;
     setState(() => _selectedRecommendedPlaylist = null);
+    if (returnToHome) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _selectedRecommendedPlaylist == null &&
+            _homeRecommendationReturnFocusNode.context != null) {
+          _homeRecommendationReturnFocusNode.requestFocus();
+        }
+      });
+    }
   }
 
   void _openRanking(RankingSummary ranking) {
@@ -1085,6 +1114,30 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     });
   }
 
+  void _openHomePlaylist(UserPlaylistSummary playlist) {
+    if (_primaryDestination != _PrimaryDestination.home ||
+        _selectedPlaylist != null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _lastOpenedHomePlaylist = playlist;
+      _selectedPlaylist = playlist;
+    });
+  }
+
+  void _openHomeRecommendation(RecommendedPlaylistSummary playlist) {
+    if (_primaryDestination != _PrimaryDestination.home ||
+        _selectedRecommendedPlaylist != null) {
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _lastOpenedHomeRecommendation = playlist;
+      _selectedRecommendedPlaylist = playlist;
+    });
+  }
+
   Widget _libraryDestinationBody() => Column(
     children: [
       FocusScope(
@@ -1140,17 +1193,26 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         children: [
           HomePage(
             key: const ValueKey('home-page'),
+            libraryController: _controller,
+            recommendationController: _recommendedPlaylistController,
             onOpenDiscover: () =>
                 _selectPrimaryDestination(_PrimaryDestination.discover),
             onOpenSearch: () =>
                 _selectPrimaryDestination(_PrimaryDestination.search),
             onOpenLibrary: () =>
                 _selectPrimaryDestination(_PrimaryDestination.library),
+            onOpenPlaylist: _openHomePlaylist,
+            onOpenRecommendation: _openHomeRecommendation,
+            lastOpenedPlaylist: _lastOpenedHomePlaylist,
+            playlistReturnFocusNode: _homePlaylistReturnFocusNode,
+            lastOpenedRecommendation: _lastOpenedHomeRecommendation,
+            recommendationReturnFocusNode: _homeRecommendationReturnFocusNode,
           ),
           if (_recommendationsVisited)
             RecommendedPlaylistsPage(
               key: const ValueKey('recommended-playlists-page'),
               gateway: _recommendedPlaylistGateway,
+              controller: _recommendedPlaylistController,
               newAlbumGateway: _newAlbumGateway,
               newSongGateway: _newSongGateway,
               rankingGateway: _rankingGateway,

@@ -282,6 +282,7 @@ Make the existing application immediately read as a mature, cross-platform QQ Mu
 - A green-accented light/dark baseline, restrained surface hierarchy, artwork-led browsing, and music-appropriate dense Track presentation.
 - A truthful Home made only from existing Discover, Search, Library, and playback capabilities; no invented personalization or promotional catalog content.
 - Manual visual evidence at representative compact and desktop sizes in addition to widget/accessibility regressions.
+- A temporary freeze on horizontal QQ capability expansion while obvious product-integration gaps remain; backend work requires a proven blocker in an existing journey.
 
 ### Progressive phases
 
@@ -293,7 +294,7 @@ Make the existing application immediately read as a mature, cross-platform QQ Mu
 
 Each phase is elaborated through a bounded discovery and finite slice. Existing retained state, controller ownership, playback ownership, and Flutter/Rust boundaries remain constraints rather than refactor targets.
 
-M7.1 is implemented under automated evidence: the wide shell now has an extended labeled sidebar and top Search affordance, while Home establishes a responsive primary-Library/secondary-catalog hierarchy without invented feed data. Compact and desktop widget regressions plus Linux Release pass; representative authenticated visual approval remains open before this composition is propagated through M7.2.
+M7.1 is implemented under automated evidence: the wide shell has an extended labeled sidebar and top Search affordance, while Home presents bounded real recommended and personal-playlist content through existing controllers and detail routes. The earlier decorative launcher Hero was explicitly rejected and removed. Compact/desktop widget regressions plus Linux Release pass; representative authenticated visual approval remains open while independent consolidation continues.
 
 ### Exit criteria
 

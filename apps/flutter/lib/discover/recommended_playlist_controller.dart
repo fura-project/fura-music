@@ -43,7 +43,20 @@ class RecommendedPlaylistController extends ChangeNotifier {
   Future<void> _loadFirstPage() async {
     final generation = ++_generation;
     _operation?.cancel();
-    final operation = _gateway.beginLoad(offset: 0, size: pageSize);
+    RecommendedPlaylistPageLoadOperation operation;
+    try {
+      operation = _gateway.beginLoad(offset: 0, size: pageSize);
+    } on Object {
+      _playlists = const [];
+      _failure = RecommendedPlaylistFailure.coreUnavailable;
+      _appendFailure = null;
+      _nextOffset = 0;
+      _hasMore = false;
+      _isLoadingMore = false;
+      _stage = RecommendedPlaylistStage.error;
+      _notify();
+      return;
+    }
     _operation = operation;
     _playlists = const [];
     _failure = null;

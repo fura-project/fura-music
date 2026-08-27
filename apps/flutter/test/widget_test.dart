@@ -404,19 +404,36 @@ void main() {
             ],
           ),
         ]),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(
+            playlists: [
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:81001',
+                title: 'Synthetic recommendation',
+                trackCount: 20,
+              ),
+            ],
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
-    expect(find.byKey(const ValueKey('home-hero')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-recommendations-section')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('home-library-section')), findsOneWidget);
+    expect(find.text('Synthetic recommendation'), findsOneWidget);
+    expect(find.text('Synthetic favorites'), findsOneWidget);
     expect(find.byKey(const ValueKey('music-sidebar-brand')), findsOneWidget);
     expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
     expect(
       tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
       isTrue,
     );
-    expect(find.text('Your playlists'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('home-open-library')));
     await tester.pumpAndSettle();
 
@@ -466,6 +483,101 @@ void main() {
     await _openLibrary(tester);
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('No playlists yet'), findsOneWidget);
+  });
+
+  testWidgets('opens real Home content and restores its exact entry', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const recommendation = RecommendedPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'catalog:81001',
+      title: 'Home recommendation',
+      trackCount: 12,
+    );
+    const personal = UserPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'owned:7001:201',
+      title: 'Home personal playlist',
+      trackCount: 2,
+    );
+    final detail = _WidgetDetailGateway([
+      const PlaylistTrackPageResult(
+        total: 1,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:41001:0:fixtureMid:-',
+            title: 'Recommended Home track',
+            artistNames: ['Discovery artist'],
+          ),
+        ],
+      ),
+      const PlaylistTrackPageResult(
+        total: 1,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:41002:0:fixtureMid:-',
+            title: 'Personal Home track',
+            artistNames: ['Library artist'],
+          ),
+        ],
+      ),
+    ]);
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(playlists: [personal]),
+        ]),
+        playlistDetailGateway: detail,
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(playlists: [recommendation]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home recommendation'), findsOneWidget);
+    expect(find.text('Home personal playlist'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-recommendation-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('Recommended Home track'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'last Home recommendation',
+    );
+
+    final personalEntry = find.byKey(const ValueKey('home-library-playlist-0'));
+    await tester.ensureVisible(personalEntry);
+    await tester.pumpAndSettle();
+    await tester.tap(personalEntry);
+    await tester.pumpAndSettle();
+    expect(find.text('Personal Home track'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'last Home playlist',
+    );
+    expect(detail.requests.map((request) => request.playlist.opaqueId), [
+      'catalog:81001',
+      'owned:7001:201',
+    ]);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('returns from Search to Home and restores entry focus', (
@@ -550,7 +662,11 @@ void main() {
         hasLength(4),
       );
       expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-hero')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('home-recommendations-section')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('home-library-empty')), findsOneWidget);
       expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
       expect(tester.takeException(), isNull);
 

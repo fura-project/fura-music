@@ -33,6 +33,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
     required this.onOpenRanking,
     required this.onOpenAlbum,
     required this.onSignInAgain,
+    this.controller,
     this.onOpenTrackAlbum,
     this.onOpenTrackArtist,
     this.embedded = false,
@@ -50,6 +51,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
   final ValueChanged<RankingSummary> onOpenRanking;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
+  final RecommendedPlaylistController? controller;
   final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
   final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final bool embedded;
@@ -65,6 +67,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   late final NewSongController _newSongController;
   late final RankingGroupController _rankingController;
   late final RadarController _radarController;
+  late final bool _ownsPlaylistController;
   _DiscoverType _type = _DiscoverType.playlists;
   bool _rankingsVisited = false;
   bool _radarVisited = false;
@@ -74,17 +77,19 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
   @override
   void initState() {
     super.initState();
-    _controller = RecommendedPlaylistController(widget.gateway);
+    _ownsPlaylistController = widget.controller == null;
+    _controller =
+        widget.controller ?? RecommendedPlaylistController(widget.gateway);
     _newAlbumController = NewAlbumController(widget.newAlbumGateway);
     _newSongController = NewSongController(widget.newSongGateway);
     _rankingController = RankingGroupController(widget.rankingGateway);
     _radarController = RadarController(widget.radarGateway);
-    unawaited(_controller.load());
+    if (_ownsPlaylistController) unawaited(_controller.load());
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (_ownsPlaylistController) _controller.dispose();
     _newAlbumController.dispose();
     _newSongController.dispose();
     _rankingController.dispose();

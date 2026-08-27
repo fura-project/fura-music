@@ -41,6 +41,17 @@ void main() {
     controller.dispose();
   });
 
+  test('maps a synchronous gateway startup failure without escaping', () async {
+    final controller = RecommendedPlaylistController(const _ThrowingGateway());
+
+    await controller.load();
+
+    expect(controller.stage, RecommendedPlaylistStage.error);
+    expect(controller.failure, RecommendedPlaylistFailure.coreUnavailable);
+    expect(controller.canRetry, isTrue);
+    controller.dispose();
+  });
+
   test('paginates by raw page length and deduplicates display rows', () async {
     final gateway = _ScriptedGateway([
       const _ImmediateOperation(
@@ -152,6 +163,16 @@ class _ScriptedGateway implements RecommendedPlaylistGateway {
     requests.add((offset, size));
     return operations[_next++];
   }
+}
+
+class _ThrowingGateway implements RecommendedPlaylistGateway {
+  const _ThrowingGateway();
+
+  @override
+  RecommendedPlaylistPageLoadOperation beginLoad({
+    required int offset,
+    required int size,
+  }) => throw StateError('bridge unavailable');
 }
 
 class _ImmediateOperation implements RecommendedPlaylistPageLoadOperation {

@@ -5,13 +5,13 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M7
-  current_task: M7.1_MANUAL_VISUAL_REVIEW
-  next_action: USER_VISUAL_OBSERVATION
+  current_task: M7.2_LIBRARY_DISCOVERY
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2 through M6 are checkpointed. The maintainer has explicitly activated M7 QQ Music-familiar Material 3 Product UI after manual review found that prior structural checkpoints did not produce enough visible product change. M7.1 now has an automated-green Shell/Home implementation and requires one representative authenticated visual review before its direction is propagated through Library and core browsing.
+M1's real-account playback observation remains open; M2 through M6 are checkpointed. M7 is now explicitly a UI/Product Consolidation workstream: horizontal feature expansion is paused while the existing Home, Library, Discover, Search, catalog, playback, Queue, Lyrics, Comments, and MV capabilities are organized into one mainstream Material 3 music product. The corrected real Home slice is automated-green; Library/core-browsing discovery is next.
 
 # Completed Recently
 
@@ -72,16 +72,17 @@ M1's real-account playback observation remains open; M2 through M6 are checkpoin
 - Completed the M5 checkpoint against all eleven Roadmap exit criteria. The current checkout passes 297 offline Rust tests with four live tests gated, strict Rust/Dart checks, all 336 Flutter tests, Linux x64 Release, packaged typed Bridge, disposable non-account vault, local/loopback MP3, and synthetic local-H.264 MV integrations. The review preserves the M1 user observation, live comments/MV, physical/unavailable-platform, release identity/notices, and evidence-gated later-direction limits rather than converting them into passing claims.
 - Completed M6 anonymous compatibility evidence for one public comments page and one exact Track-associated MV path. The first comments runs exposed bounded opaque nonnumeric comment IDs and one present-but-blank newest row; the client now preserves IDs opaquely and filters only that evidenced deleted/non-displayable newest-row shape while pagination advances by raw rows. Both opt-in live gates pass without credentials or persisted returned content/source. Rust formatting, 300 offline tests with six live tests ignored, strict Clippy, Dart formatting/analysis, and all 336 Flutter tests pass. This is selected client-protocol evidence, not broad content-quality, full-app, remote-playback, or long-term service compatibility.
 - Implemented the first M7 visual slice: wide authenticated layouts now use a deliberate 232 px labeled sidebar with a generic music mark and persistent top Search shortcut, while compact layouts retain the 72 px bottom navigation. Home now has a responsive green Material hero, one primary Library action, secondary Discover/Search routes, a generic decorative music motif, bounded content width, and truthful direct-to-QQ/session copy without fabricated recommendations or copied QQ assets. A focused regression exposed and fixed the initially unbounded sidebar-leading layout; 360 px, 1100/1200 px, keyboard, retained navigation, sign-out, light/dark theme, strict Dart analysis, all 336 Flutter tests, and Linux x64 Release pass. Real authenticated visual approval is intentionally still open.
+- Corrected M7.1 after the maintainer's product-consolidation review rejected launcher-style Home acceptance. The decorative Hero is gone: Home now renders up to eight real public recommended playlists and eight already-loaded personal playlists with artwork, counts, loading/empty/error/retry states, Search/Library/Discover actions, direct existing detail navigation, exact Home return, and focus restoration. Home and Discover share one recommendation controller and request rather than duplicating protocol work. No endpoint, fake content, Provider, playback rule, or navigation framework was added. Strict Dart checks, all 338 Flutter tests, and Linux x64 Release pass; real-account visual acceptance remains separate.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- M7.1 implementation is complete under automated evidence. One desktop authenticated screenshot/observation is needed to decide whether its visible hierarchy is the right QQ Music-familiar baseline before applying it across Library and core browsing; no credential or account response needs to be shared.
+- M7.2 bounded discovery is active for Library and shared Playlist/Album/Artist hierarchy. The target is one coherent, dense personal-music grammar over existing controllers and routes, not a generic controller or navigation rewrite.
 
 # Next Candidates
 
-1. Review M7.1 on an authenticated wide desktop and record only coarse visual feedback; automated compact/wide behavior is already green.
-2. Elaborate and implement M7.2 Library/core-browsing hierarchy and density only after the M7.1 visual direction is accepted or corrected.
+1. Audit and implement the highest-value bounded Library/core-browsing cohesion failure from the five-item M7 product audit.
+2. Consolidate Discover/Search presentation only after the Library slice establishes shared content hierarchy without erasing typed controller state.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
