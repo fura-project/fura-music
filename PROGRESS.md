@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M5
-  current_task: M5.1_HOME_FIRST_AUTHENTICATED_SHELL_FOUNDATION
-  next_action: IMPLEMENT
+  current_task: M5.2_COHERENT_LIBRARY_SECTIONS_DISCOVERY
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
@@ -63,16 +63,17 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 - Implemented the twelfth M4 slice: Favorite Albums and Favorite Artists now use the shared bounded Material loading/content-state panels for their initial states. Loading is collection-labeled, empty copy is type-specific, retry remains limited to eligible service failures, rejected sessions retain their distinct cleanup-failure detail and sign-in-only recovery, and each asynchronous failure/account state owns one live region. Collection content, append footers, refresh, paging, retained navigation, controllers, and playback ownership remain unchanged. Direct 360 px loading/empty/retry/rejection regressions, strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Completed the M4 deliberate Material product checkpoint against all seven Roadmap exit criteria. The review found no Provider/UI leakage, duplicate player/navigation/state owner, sidecar, unapproved dependency/Provider/product expansion, accessibility/adaptive blocker, or changed debt trigger. The default Material baseline is stable within current automated Linux evidence; manual all-platform visual approval, live QQ compatibility, release readiness, deferred theme personas, and the M1 user observation are not claimed.
 - Accepted the maintainer's post-M4 product direction and activated M5: the first-release experience is now explicitly Home-first, with Discover, Search, and Library as distinct primary destinations; Library remains first-class; common playback modes, bounded read-only comments, and bounded QQ MV work are authorized behind the existing Rust/Flutter boundaries. Focus/quiet experiences, mutations, additional Providers, background playback, downloads, and release identity remain outside this decision.
+- Implemented M5.1 Home-first authenticated shell foundation: authenticated startup now opens a small presentation-only Home with honest routes into the existing Discover, Search, and Library journeys; all four destinations remain directly reachable through adaptive Material navigation, Search/Discover retain their loaded controllers across destination and width changes, primary back returns to Home, local overlays still unwind to their retained origins, and one persistent queue/playback/lyric owner remains unchanged. Account rejection cannot be hidden behind Home. Strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, packaged Bridge, disposable non-account vault, and local/loopback audio integrations pass without live-account access.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- The bounded M5 discovery ranked Home-first shell, coherent Library sections, and authoritative playback modes. M5.1 Home-first authenticated shell foundation is selected because it establishes the explicitly authorized first-release default over existing stable capabilities without new protocol work; the dated post-M4 `NO_LEGITIMATE_WORK` ranking remains historical evidence.
+- Whole-project ranking after M5.1 selects bounded M5.2 Library-section discovery next: Playlists, favorite Albums, and favorite Artists are already capable retained collections, but the latter two remain toolbar utilities instead of obvious Library sections. Discovery must preserve their independent controllers, failure/paging/scroll/focus state, and nested return paths rather than merging them into a giant controller.
 
 # Next Candidates
 
-1. Implement M5.1 Home as the authenticated default and fourth primary destination, using only honest entry points into existing stable capabilities.
-2. Preserve retained Search/Discover/local-detail state, primary/local back behavior, focus, accessibility, 360 px reachability, and the one existing playback owner with focused regressions.
+1. Run the bounded M5.2 discovery pass over the three existing Library collections and select one finite presentation slice with explicit retained-state acceptance criteria.
+2. Implement the selected Library section slice without changing Provider contracts, merging controllers, or replacing the current local navigation architecture.
 3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers

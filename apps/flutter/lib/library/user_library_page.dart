@@ -17,6 +17,7 @@ import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
+import 'package:flutterustmusic/home/home_page.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
@@ -103,7 +104,7 @@ class UserLibraryPage extends StatefulWidget {
 
 enum _FavoriteCollection { artists, albums }
 
-enum _PrimaryDestination { library, discover, search }
+enum _PrimaryDestination { home, discover, search, library }
 
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
@@ -141,6 +142,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final FocusNode _favoriteCollectionsReturnFocusNode = FocusNode(
     debugLabel: 'favorite collections entry',
   );
+  final FocusNode _backShortcutFallbackFocusNode = FocusNode(
+    debugLabel: 'authenticated back shortcut fallback',
+  );
   final GlobalKey<PopupMenuButtonState<_FavoriteCollection>>
   _favoriteCollectionsMenuKey = GlobalKey();
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
@@ -159,8 +163,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   RecommendedPlaylistSummary? _selectedRecommendedPlaylist;
   RankingSummary? _selectedRanking;
   UserPlaylistSummary? _lastOpenedPlaylist;
-  bool _searchOpen = false;
-  bool _recommendationsOpen = false;
+  _PrimaryDestination _selectedPrimaryDestination = _PrimaryDestination.home;
   bool _searchVisited = false;
   bool _recommendationsVisited = false;
   bool _favoriteAlbumsOpen = false;
@@ -168,6 +171,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool _expandedNowPlayingOpen = false;
   bool _handledLyricCredentialRejection = false;
   bool _signingOut = false;
+  bool _overlayPageActive = false;
 
   @override
   void initState() {
@@ -234,6 +238,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _favoriteAlbumsReturnFocusNode.dispose();
     _favoriteArtistsReturnFocusNode.dispose();
     _favoriteCollectionsReturnFocusNode.dispose();
+    _backShortcutFallbackFocusNode.dispose();
     super.dispose();
   }
 
@@ -612,40 +617,23 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           ),
       ],
     );
-    final playbackPage = PlaybackShortcuts(
+    final hasOverlayPage = _hasOverlayPage;
+    final hasPrimaryPeer = _primaryDestination != _PrimaryDestination.home;
+    final hasLocalPage = hasOverlayPage || hasPrimaryPeer;
+    if (hasOverlayPage && !_overlayPageActive) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        _restoreBackShortcutFallbackFocus,
+      );
+    }
+    _overlayPageActive = hasOverlayPage;
+    final shortcutPage = PlaybackShortcuts(
       controller: _queuePlaybackController,
-      child: expandedNowPlayingPage,
-    );
-    final hasLocalPage =
-        expandedNowPlayingOpen ||
-        nowPlayingContextAlbum != null ||
-        nowPlayingContextArtist != null ||
-        selectedPlaylist != null ||
-        trackContextAlbum != null ||
-        trackContextArtist != null ||
-        albumContextArtist != null ||
-        albumArtistContextAlbum != null ||
-        _favoriteArtistsOpen ||
-        selectedFavoriteArtist != null ||
-        favoriteArtistAlbum != null ||
-        _favoriteAlbumsOpen ||
-        _recommendationsOpen ||
-        selectedRecommendedPlaylist != null ||
-        selectedRanking != null ||
-        _searchOpen ||
-        selectedAlbum != null ||
-        selectedArtist != null ||
-        selectedSearchPlaylist != null;
-    final shortcutPage = CallbackShortcuts(
-      bindings: hasLocalPage
-          ? <ShortcutActivator, VoidCallback>{
-              const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
-                  _returnFromLocalPage,
-              const SingleActivator(LogicalKeyboardKey.browserBack):
-                  _returnFromLocalPage,
-            }
-          : const <ShortcutActivator, VoidCallback>{},
-      child: playbackPage,
+      child: Focus(
+        focusNode: _backShortcutFallbackFocusNode,
+        skipTraversal: true,
+        onKeyEvent: _handleBackKey,
+        child: expandedNowPlayingPage,
+      ),
     );
     return PageStorage(
       bucket: _pageStorageBucket,
@@ -715,23 +703,76 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _returnToSearch();
     } else if (_searchOpen) {
       _closeSearch();
-    } else {
+    } else if (_selectedPlaylist != null) {
       _returnToLibrary();
+    } else if (_primaryDestination != _PrimaryDestination.home) {
+      _selectPrimaryDestination(_PrimaryDestination.home);
     }
   }
 
-  _PrimaryDestination get _primaryDestination {
-    if (_searchOpen) return _PrimaryDestination.search;
-    if (_recommendationsOpen) return _PrimaryDestination.discover;
-    return _PrimaryDestination.library;
+  bool get _hasOverlayPage =>
+      _expandedNowPlayingOpen ||
+      _nowPlayingContextAlbum != null ||
+      _nowPlayingContextArtist != null ||
+      _selectedPlaylist != null ||
+      _trackContextAlbum != null ||
+      _trackContextArtist != null ||
+      _albumContextArtist != null ||
+      _albumArtistContextAlbum != null ||
+      _favoriteArtistsOpen ||
+      _selectedFavoriteArtist != null ||
+      _favoriteArtistAlbum != null ||
+      _favoriteAlbumsOpen ||
+      _selectedRecommendedPlaylist != null ||
+      _selectedRanking != null ||
+      _selectedAlbum != null ||
+      _selectedArtist != null ||
+      _selectedSearchPlaylist != null;
+
+  void _restoreBackShortcutFallbackFocus(Duration _) {
+    if (!mounted ||
+        ModalRoute.of(context)?.isCurrent != true ||
+        !_hasOverlayPage) {
+      return;
+    }
+    _backShortcutFallbackFocusNode.requestFocus();
   }
+
+  KeyEventResult _handleBackKey(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent || ModalRoute.of(context)?.isCurrent != true) {
+      return KeyEventResult.ignored;
+    }
+    final isBack = event.logicalKey == LogicalKeyboardKey.browserBack;
+    final isAltLeft =
+        event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+        HardwareKeyboard.instance.isAltPressed &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isMetaPressed &&
+        !HardwareKeyboard.instance.isShiftPressed;
+    if (!isBack && !isAltLeft) return KeyEventResult.ignored;
+    if (_hasOverlayPage) {
+      _returnFromLocalPage();
+      return KeyEventResult.handled;
+    }
+    if (_primaryDestination != _PrimaryDestination.home) {
+      _selectPrimaryDestination(_PrimaryDestination.home);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  _PrimaryDestination get _primaryDestination => _selectedPrimaryDestination;
+
+  bool get _searchOpen => _primaryDestination == _PrimaryDestination.search;
+
+  bool get _recommendationsOpen =>
+      _primaryDestination == _PrimaryDestination.discover;
 
   void _selectPrimaryDestination(_PrimaryDestination destination) {
     if (_primaryDestination == destination) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      _searchOpen = destination == _PrimaryDestination.search;
-      _recommendationsOpen = destination == _PrimaryDestination.discover;
+      _selectedPrimaryDestination = destination;
       _searchVisited |= destination == _PrimaryDestination.search;
       _recommendationsVisited |= destination == _PrimaryDestination.discover;
     });
@@ -740,8 +781,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _openFavoriteAlbums() {
     if (_favoriteAlbumsOpen ||
         _favoriteArtistsOpen ||
-        _recommendationsOpen ||
-        _searchOpen ||
+        _primaryDestination != _PrimaryDestination.library ||
         _selectedPlaylist != null) {
       return;
     }
@@ -751,8 +791,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _openFavoriteArtists() {
     if (_favoriteArtistsOpen ||
         _favoriteAlbumsOpen ||
-        _recommendationsOpen ||
-        _searchOpen ||
+        _primaryDestination != _PrimaryDestination.library ||
         _selectedPlaylist != null) {
       return;
     }
@@ -924,7 +963,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _selectedRecommendedPlaylist = null;
       _selectedRanking = null;
       _selectedAlbum = null;
-      _recommendationsOpen = false;
+      _selectedPrimaryDestination = _PrimaryDestination.home;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted &&
@@ -987,7 +1026,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _selectedAlbum = null;
       _selectedArtist = null;
       _selectedSearchPlaylist = null;
-      _searchOpen = false;
+      _selectedPrimaryDestination = _PrimaryDestination.home;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_searchOpen && _searchReturnFocusNode.context != null) {
@@ -1065,7 +1104,15 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final primaryContent = IndexedStack(
         index: destination.index,
         children: [
-          _libraryBody(),
+          HomePage(
+            key: const ValueKey('home-page'),
+            onOpenDiscover: () =>
+                _selectPrimaryDestination(_PrimaryDestination.discover),
+            onOpenSearch: () =>
+                _selectPrimaryDestination(_PrimaryDestination.search),
+            onOpenLibrary: () =>
+                _selectPrimaryDestination(_PrimaryDestination.library),
+          ),
           if (_recommendationsVisited)
             RecommendedPlaylistsPage(
               key: const ValueKey('recommended-playlists-page'),
@@ -1101,6 +1148,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             )
           else
             const SizedBox.shrink(),
+          _libraryBody(),
         ],
       );
       final body = Row(
@@ -1118,32 +1166,27 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             const VerticalDivider(width: 1)
           else
             const SizedBox.shrink(),
-          Expanded(child: primaryContent),
+          Expanded(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) => switch (_controller.stage) {
+                UserLibraryStage.authenticationRequired ||
+                UserLibraryStage.credentialRejected => _libraryBody(),
+                _ => primaryContent,
+              },
+            ),
+          ),
         ],
       );
       return Scaffold(
         key: const ValueKey('authenticated-primary-shell'),
         appBar: AppBar(
-          leading: switch (destination) {
-            _PrimaryDestination.library => null,
-            _PrimaryDestination.discover => IconButton(
-              key: const ValueKey('recommendations-back'),
-              tooltip: 'Back to your music',
-              onPressed: _closeRecommendations,
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
-            _PrimaryDestination.search => IconButton(
-              key: const ValueKey('track-search-back'),
-              tooltip: 'Back to your music',
-              onPressed: _closeSearch,
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
-          },
           title: Text(
             switch (destination) {
-              _PrimaryDestination.library => 'Your music',
+              _PrimaryDestination.home => 'Home',
               _PrimaryDestination.discover => 'Discover',
               _PrimaryDestination.search => 'Search QQ Music',
+              _PrimaryDestination.library => 'Your music',
             },
             style: compactActions
                 ? Theme.of(context).textTheme.titleMedium
@@ -1186,11 +1229,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   List<NavigationRailDestination> _navigationRailDestinations() => [
     const NavigationRailDestination(
       icon: Icon(
-        Icons.library_music_outlined,
-        key: ValueKey('primary-library-destination'),
+        Icons.home_outlined,
+        key: ValueKey('primary-home-destination'),
       ),
-      selectedIcon: Icon(Icons.library_music_rounded),
-      label: Text('Library'),
+      selectedIcon: Icon(Icons.home_rounded),
+      label: Text('Home'),
     ),
     NavigationRailDestination(
       icon: _destinationFocusIcon(
@@ -1210,16 +1253,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       ),
       label: const Text('Search'),
     ),
-  ];
-
-  List<NavigationDestination> _navigationBarDestinations() => [
-    const NavigationDestination(
+    const NavigationRailDestination(
       icon: Icon(
         Icons.library_music_outlined,
         key: ValueKey('primary-library-destination'),
       ),
       selectedIcon: Icon(Icons.library_music_rounded),
-      label: 'Library',
+      label: Text('Library'),
+    ),
+  ];
+
+  List<NavigationDestination> _navigationBarDestinations() => [
+    const NavigationDestination(
+      icon: Icon(
+        Icons.home_outlined,
+        key: ValueKey('primary-home-destination'),
+      ),
+      selectedIcon: Icon(Icons.home_rounded),
+      label: 'Home',
     ),
     NavigationDestination(
       icon: _destinationFocusIcon(
@@ -1238,6 +1289,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         icon: Icons.search_rounded,
       ),
       label: 'Search',
+    ),
+    const NavigationDestination(
+      icon: Icon(
+        Icons.library_music_outlined,
+        key: ValueKey('primary-library-destination'),
+      ),
+      selectedIcon: Icon(Icons.library_music_rounded),
+      label: 'Library',
     ),
   ];
 

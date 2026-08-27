@@ -67,6 +67,11 @@ Future<void> _selectAdaptiveSection(
   await tester.pumpAndSettle();
 }
 
+Future<void> _openLibrary(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('primary-library-destination')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('renders truthful bootstrap state', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
@@ -186,6 +191,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsWidgets);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    await _openLibrary(tester);
 
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
@@ -347,7 +356,7 @@ void main() {
     expect(find.text('This code expired'), findsNothing);
   });
 
-  testWidgets('routes an authenticated account into its user playlists', (
+  testWidgets('routes an authenticated account through Home into playlists', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
@@ -384,6 +393,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.text('Your playlists'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('home-open-library')));
+    await tester.pumpAndSettle();
+
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('Your playlists'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
@@ -402,7 +416,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('routes fresh QR authentication into the library', (
+  testWidgets('routes fresh QR authentication through Home to Library', (
     tester,
   ) async {
     final session = _WaitingSession();
@@ -426,11 +440,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    await _openLibrary(tester);
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('No playlists yet'), findsOneWidget);
   });
 
-  testWidgets('opens search from the library and restores entry focus', (
+  testWidgets('returns from Search to Home and restores entry focus', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -452,9 +468,10 @@ void main() {
     expect(find.text('Search QQ Music'), findsOneWidget);
     expect(find.byKey(const ValueKey('track-search-field')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('track-search-back')));
+    final handled = await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('No playlists yet'), findsOneWidget);
+    expect(handled, isTrue);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
     expect(tester.widget<Focus>(searchEntry).focusNode?.hasFocus, isTrue);
   });
 
@@ -506,9 +523,17 @@ void main() {
 
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.byType(NavigationRail), findsNothing);
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).destinations,
+        hasLength(4),
+      );
+      expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      final homeSearch = find.byKey(const ValueKey('home-open-search'));
+      await tester.ensureVisible(homeSearch);
+      await tester.pumpAndSettle();
+      await tester.tap(homeSearch);
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('track-search-field')),
@@ -845,9 +870,10 @@ void main() {
       expect(find.text('Synthetic discovery'), findsOneWidget);
       expect(recommendations.requests, [(0, 20)]);
 
-      await tester.tap(find.byKey(const ValueKey('recommendations-back')));
+      final handled = await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('No playlists yet'), findsOneWidget);
+      expect(handled, isTrue);
+      expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
       expect(tester.widget<Focus>(discoverEntry).focusNode?.hasFocus, isTrue);
       expect(tester.takeException(), isNull);
     },
@@ -1044,6 +1070,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _openLibrary(tester);
       await tester.tap(find.byTooltip('Open saved collections'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Favorite albums'));
@@ -1123,6 +1150,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _openLibrary(tester);
       await tester.tap(find.byTooltip('Open saved collections'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Favorite albums'));
@@ -1226,6 +1254,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _openLibrary(tester);
       final compactEntry = find.byKey(
         const ValueKey('open-favorite-collections'),
       );
@@ -1353,6 +1382,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _openLibrary(tester);
       expect(favorites.requests, isEmpty);
       expect(find.text('Your music'), findsOneWidget);
       expect(compactEntry, findsOneWidget);
@@ -2815,9 +2845,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('routes verified startup restore into the library', (
-    tester,
-  ) async {
+  testWidgets('routes verified startup restore into Home', (tester) async {
     await tester.pumpWidget(
       MusicApp(
         bootstrap: _bootstrap,
@@ -2833,8 +2861,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('No playlists yet'), findsOneWidget);
+    expect(find.text('Home'), findsWidgets);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.text('No playlists yet'), findsNothing);
   });
 
   testWidgets('renders user playlists without overflow on a narrow screen', (
@@ -2868,6 +2897,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openLibrary(tester);
     expect(find.text('Narrow playlist'), findsOneWidget);
     final playlistSemantics = tester.getSemantics(find.text('Narrow playlist'));
     expect(playlistSemantics.label, 'Narrow playlist');
@@ -2999,6 +3029,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openLibrary(tester);
     await tester.tap(find.text('Open me').last);
     await tester.pumpAndSettle();
 
@@ -3153,6 +3184,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openLibrary(tester);
     await tester.tap(find.text('System back playlist').last);
     await tester.pumpAndSettle();
     expect(find.text('System back track'), findsOneWidget);
@@ -3227,6 +3259,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openLibrary(tester);
     final grid = find.byType(GridView);
     final scrollable = find.descendant(
       of: grid,
@@ -3288,6 +3321,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openLibrary(tester);
     final list = find.byType(ListView);
     final scrollable = find.descendant(
       of: list,
@@ -3368,6 +3402,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openLibrary(tester);
     await tester.tap(find.text('Refresh me').last);
     await tester.pumpAndSettle();
 
@@ -3422,6 +3457,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openLibrary(tester);
     expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
     expect(find.text('Sign in again'), findsNothing);
     final failureSemantics = tester.getSemantics(
@@ -3470,6 +3506,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openLibrary(tester);
     await tester.tap(find.text('Transient detail').last);
     await tester.pumpAndSettle();
 
@@ -3532,6 +3569,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openLibrary(tester);
     await tester.tap(find.byTooltip('Refresh playlists'));
     await tester.pumpAndSettle();
 

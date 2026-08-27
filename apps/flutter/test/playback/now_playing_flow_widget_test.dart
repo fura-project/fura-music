@@ -1373,6 +1373,8 @@ Future<void> _openDetail(
     ),
   );
   await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('primary-library-destination')));
+  await tester.pumpAndSettle();
   await tester.tap(find.text('Fixture playlist').last);
   await tester.pumpAndSettle();
 }
