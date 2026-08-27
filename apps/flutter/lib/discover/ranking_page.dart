@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
@@ -17,6 +18,8 @@ class RankingPage extends StatefulWidget {
     required this.queuePlaybackController,
     required this.onBack,
     required this.onSignInAgain,
+    this.onOpenAlbum,
+    this.onOpenArtist,
     super.key,
   });
 
@@ -25,6 +28,8 @@ class RankingPage extends StatefulWidget {
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   State<RankingPage> createState() => _RankingPageState();
@@ -127,6 +132,8 @@ class _RankingPageState extends State<RankingPage> {
       onRetryMore: _controller.retryMore,
       onPlay: _play,
       onQueue: _queue,
+      onOpenAlbum: widget.onOpenAlbum,
+      onOpenArtist: widget.onOpenArtist,
       desktop: desktop,
     ),
   };
@@ -197,6 +204,8 @@ class _RankingTracks extends StatelessWidget {
     required this.onRetryMore,
     required this.onPlay,
     required this.onQueue,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
     required this.desktop,
     super.key,
   });
@@ -210,6 +219,8 @@ class _RankingTracks extends StatelessWidget {
   final VoidCallback onRetryMore;
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
   final bool desktop;
 
   @override
@@ -241,11 +252,14 @@ class _RankingTracks extends StatelessWidget {
           return MusicTrackTile(
             itemKey: ValueKey('ranking-track-$index'),
             queueKey: ValueKey('ranking-queue-$index'),
+            contextKey: ValueKey('ranking-context-$index'),
             track: track,
             position: index + 1,
             desktop: desktop,
             onPlay: () => onPlay(index),
             onQueue: () => onQueue(track),
+            onOpenAlbum: onOpenAlbum,
+            onOpenArtist: onOpenArtist,
           );
         },
       ),

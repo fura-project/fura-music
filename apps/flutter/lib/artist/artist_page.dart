@@ -190,6 +190,7 @@ class _ArtistPageState extends State<ArtistPage> {
       onRetryMore: _controller.retryMore,
       onPlay: _play,
       onQueue: _queue,
+      onOpenAlbum: widget.onOpenAlbum,
       desktop: desktop,
     ),
   };
@@ -524,6 +525,7 @@ class _ArtistTracks extends StatelessWidget {
     required this.onRetryMore,
     required this.onPlay,
     required this.onQueue,
+    required this.onOpenAlbum,
     required this.desktop,
     super.key,
   });
@@ -536,6 +538,7 @@ class _ArtistTracks extends StatelessWidget {
   final VoidCallback onRetryMore;
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
   final bool desktop;
 
   @override
@@ -565,11 +568,13 @@ class _ArtistTracks extends StatelessWidget {
           return MusicTrackTile(
             itemKey: ValueKey('artist-track-$index'),
             queueKey: ValueKey('artist-queue-$index'),
+            contextKey: ValueKey('artist-context-$index'),
             track: track,
             position: index + 1,
             desktop: desktop,
             onPlay: () => onPlay(index),
             onQueue: () => onQueue(track),
+            onOpenAlbum: onOpenAlbum,
           );
         },
       ),

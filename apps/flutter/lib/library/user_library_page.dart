@@ -338,6 +338,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   gateway: _rankingGateway,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnFromRanking,
+                  onOpenAlbum: _openTrackContextAlbum,
+                  onOpenArtist: _openTrackContextArtist,
                   onSignInAgain: widget.onSignInAgain,
                 ),
               if (selectedAlbum == null)
@@ -1157,6 +1159,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               onOpenPlaylist: _openRecommendedPlaylist,
               onOpenRanking: _openRanking,
               onOpenAlbum: _openRecommendedAlbum,
+              onOpenTrackAlbum: _openTrackContextAlbum,
+              onOpenTrackArtist: _openTrackContextArtist,
               onSignInAgain: widget.onSignInAgain,
               embedded: true,
             )

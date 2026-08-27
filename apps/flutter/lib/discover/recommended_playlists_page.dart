@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutterustmusic/album/album_gateway.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
@@ -33,6 +33,8 @@ class RecommendedPlaylistsPage extends StatefulWidget {
     required this.onOpenRanking,
     required this.onOpenAlbum,
     required this.onSignInAgain,
+    this.onOpenTrackAlbum,
+    this.onOpenTrackArtist,
     this.embedded = false,
     super.key,
   });
@@ -48,6 +50,8 @@ class RecommendedPlaylistsPage extends StatefulWidget {
   final ValueChanged<RankingSummary> onOpenRanking;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
+  final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
+  final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final bool embedded;
 
   @override
@@ -282,6 +286,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       onSignInAgain: widget.onSignInAgain,
       onPlay: _playRadar,
       onQueue: _queueRadar,
+      onOpenAlbum: widget.onOpenTrackAlbum,
+      onOpenArtist: widget.onOpenTrackArtist,
     ),
   };
 
@@ -374,6 +380,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       onCategorySelected: _newSongController.selectCategory,
       onPlay: _playNewSong,
       onQueue: _queueNewSong,
+      onOpenAlbum: widget.onOpenTrackAlbum,
+      onOpenArtist: widget.onOpenTrackArtist,
     ),
   };
 
@@ -495,6 +503,8 @@ class _NewSongCollection extends StatelessWidget {
     required this.onCategorySelected,
     required this.onPlay,
     required this.onQueue,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
     super.key,
   });
 
@@ -503,6 +513,8 @@ class _NewSongCollection extends StatelessWidget {
   final ValueChanged<NewSongCategory> onCategorySelected;
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -561,11 +573,14 @@ class _NewSongCollection extends StatelessWidget {
                     return MusicTrackTile(
                       itemKey: ValueKey('new-song-track-$index'),
                       queueKey: ValueKey('new-song-queue-$index'),
+                      contextKey: ValueKey('new-song-context-$index'),
                       track: track,
                       position: index + 1,
                       desktop: desktop,
                       onPlay: () => onPlay(index),
                       onQueue: () => onQueue(track),
+                      onOpenAlbum: onOpenAlbum,
+                      onOpenArtist: onOpenArtist,
                     );
                   },
                 ),
@@ -1071,6 +1086,8 @@ class _RadarCollection extends StatelessWidget {
     required this.onSignInAgain,
     required this.onPlay,
     required this.onQueue,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
     super.key,
   });
 
@@ -1085,6 +1102,8 @@ class _RadarCollection extends StatelessWidget {
   final VoidCallback onSignInAgain;
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -1145,11 +1164,14 @@ class _RadarCollection extends StatelessWidget {
               return MusicTrackTile(
                 itemKey: ValueKey('radar-track-$trackIndex'),
                 queueKey: ValueKey('radar-queue-$trackIndex'),
+                contextKey: ValueKey('radar-context-$trackIndex'),
                 track: track,
                 position: trackIndex + 1,
                 desktop: desktop,
                 onPlay: () => onPlay(trackIndex),
                 onQueue: () => onQueue(track),
+                onOpenAlbum: onOpenAlbum,
+                onOpenArtist: onOpenArtist,
               );
             },
           ),

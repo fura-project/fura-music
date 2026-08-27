@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 class MusicTrackTile extends StatelessWidget {
@@ -10,6 +11,9 @@ class MusicTrackTile extends StatelessWidget {
     required this.onQueue,
     required this.itemKey,
     required this.queueKey,
+    this.contextKey,
+    this.onOpenAlbum,
+    this.onOpenArtist,
     super.key,
   });
 
@@ -20,22 +24,30 @@ class MusicTrackTile extends StatelessWidget {
   final VoidCallback onQueue;
   final Key itemKey;
   final Key queueKey;
+  final Key? contextKey;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final duration = formatTrackDuration(track.durationSeconds);
-    final artists = track.artistNames.isEmpty
+    final artistCopy = track.artistNames.isEmpty
         ? 'Unknown artist'
         : track.artistNames.join(' · ');
     final metadata = [
-      artists,
+      artistCopy,
       ?track.albumTitle,
       if (!desktop) duration,
     ].join(' · ');
     final title = track.subtitle == null
         ? track.title
         : '${track.title} · ${track.subtitle}';
+    final album = onOpenAlbum == null ? null : track.album;
+    final contextArtists = onOpenArtist == null
+        ? const <ArtistSummary>[]
+        : track.artists;
+    final hasContext = album != null || contextArtists.isNotEmpty;
 
     return ListTile(
       key: itemKey,
@@ -96,6 +108,45 @@ class MusicTrackTile extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ],
+          if (hasContext)
+            PopupMenuButton<_TrackContextDestination>(
+              key: contextKey,
+              tooltip: 'Browse context for ${track.title}',
+              onSelected: _openContext,
+              itemBuilder: (context) => [
+                if (album != null)
+                  PopupMenuItem(
+                    key: const ValueKey('track-context-album'),
+                    value: _TrackContextDestination(album: album),
+                    child: ListTile(
+                      leading: const Icon(Icons.album_rounded),
+                      title: const Text('Open album'),
+                      subtitle: Text(
+                        album.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                for (var index = 0; index < contextArtists.length; index++)
+                  PopupMenuItem(
+                    key: ValueKey('track-context-artist-$index'),
+                    value: _TrackContextDestination(
+                      artist: contextArtists[index],
+                    ),
+                    child: ListTile(
+                      leading: const Icon(Icons.person_rounded),
+                      title: const Text('Open artist'),
+                      subtitle: Text(
+                        contextArtists[index].name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+              ],
+              icon: const Icon(Icons.more_vert_rounded),
+            ),
           IconButton(
             key: queueKey,
             tooltip: 'Add ${track.title} to queue',
@@ -106,6 +157,24 @@ class MusicTrackTile extends StatelessWidget {
       ),
     );
   }
+
+  void _openContext(_TrackContextDestination destination) {
+    final album = destination.album;
+    if (album != null) {
+      onOpenAlbum?.call(album);
+      return;
+    }
+    final artist = destination.artist;
+    if (artist != null) onOpenArtist?.call(artist);
+  }
+}
+
+class _TrackContextDestination {
+  const _TrackContextDestination({this.album, this.artist})
+    : assert((album == null) != (artist == null));
+
+  final AlbumSummary? album;
+  final ArtistSummary? artist;
 }
 
 class _TrackArtwork extends StatelessWidget {

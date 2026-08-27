@@ -1,17 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 void main() {
+  const album = AlbumSummary(
+    providerId: 'qq-music',
+    opaqueId: 'album:43001:fixtureAlbumMid',
+    title: 'Fixture Album',
+  );
+  const firstArtist = ArtistSummary(
+    providerId: 'qq-music',
+    opaqueId: 'artist:42001:firstArtistMid',
+    name: 'First Artist',
+  );
+  const secondArtist = ArtistSummary(
+    providerId: 'qq-music',
+    opaqueId: 'artist:42002:secondArtistMid',
+    name: 'Second Artist',
+  );
   const track = PlaylistTrackSummary(
     providerId: 'qq-music',
     opaqueId: 'track:41001:0:fixtureMid:-',
     title: 'Fixture Track',
     subtitle: 'Live',
     artistNames: ['First Artist', 'Second Artist'],
+    artists: [firstArtist, secondArtist],
     albumTitle: 'Fixture Album',
+    album: album,
     durationSeconds: 185,
   );
 
@@ -19,12 +38,14 @@ void main() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
-    tester.view.physicalSize = const Size(360, 160);
+    tester.view.physicalSize = const Size(360, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     var playCount = 0;
     var queueCount = 0;
+    AlbumSummary? openedAlbum;
+    ArtistSummary? openedArtist;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -33,11 +54,14 @@ void main() {
           body: MusicTrackTile(
             itemKey: const ValueKey('compact-track'),
             queueKey: const ValueKey('compact-queue'),
+            contextKey: const ValueKey('compact-context'),
             track: track,
             position: 12,
             desktop: false,
             onPlay: () => playCount++,
             onQueue: () => queueCount++,
+            onOpenAlbum: (album) => openedAlbum = album,
+            onOpenArtist: (artist) => openedArtist = artist,
           ),
         ),
       ),
@@ -53,6 +77,41 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+
+    final contextAction = find.byKey(const ValueKey('compact-context'));
+    var contextFocused = false;
+    for (var attempt = 0; attempt < 8; attempt += 1) {
+      final focusedContext = FocusManager.instance.primaryFocus?.context;
+      if (focusedContext != null &&
+          find
+              .ancestor(
+                of: find.byElementPredicate(
+                  (element) => identical(element, focusedContext),
+                ),
+                matching: contextAction,
+              )
+              .evaluate()
+              .isNotEmpty) {
+        contextFocused = true;
+        break;
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(contextFocused, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Open album'), findsOneWidget);
+    expect(find.text('Open artist'), findsNWidgets(2));
+    await tester.tap(find.byKey(const ValueKey('track-context-album')));
+    await tester.pumpAndSettle();
+    expect(openedAlbum, same(album));
+
+    await tester.tap(find.byKey(const ValueKey('compact-context')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('track-context-artist-1')));
+    await tester.pumpAndSettle();
+    expect(openedArtist, same(secondArtist));
 
     await tester.tap(find.byKey(const ValueKey('compact-track')));
     await tester.tap(find.byKey(const ValueKey('compact-queue')));
@@ -87,6 +146,7 @@ void main() {
               MusicTrackTile(
                 itemKey: const ValueKey('unknown-duration-track'),
                 queueKey: const ValueKey('unknown-duration-queue'),
+                contextKey: const ValueKey('unknown-duration-context'),
                 track: const PlaylistTrackSummary(
                   providerId: 'qq-music',
                   opaqueId: 'track:41002:0:fixtureMid2:-',
@@ -97,6 +157,8 @@ void main() {
                 desktop: true,
                 onPlay: () {},
                 onQueue: () {},
+                onOpenAlbum: (_) {},
+                onOpenArtist: (_) {},
               ),
             ],
           ),
@@ -111,6 +173,10 @@ void main() {
     expect(find.text('3:05'), findsOneWidget);
     expect(find.text('Unknown artist'), findsOneWidget);
     expect(find.text('—'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('unknown-duration-context')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 

@@ -990,16 +990,31 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:fixtureRadarAlbumMid',
+        title: 'Radar Album',
+      );
+      const artist = ArtistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'artist:42001:fixtureRadarArtistMid',
+        name: 'Radar artist',
+      );
       const track = PlaylistTrackSummary(
         providerId: 'qq-music',
         opaqueId: 'track:41001:0:fixtureRadarMid:-',
         title: 'Radar Track',
         artistNames: ['Radar artist'],
+        artists: [artist],
         albumTitle: 'Radar Album',
+        album: album,
         durationSeconds: 185,
       );
       final radar = _WidgetRadarGateway(
         const RadarTrackPageResult(page: 1, tracks: [track]),
+      );
+      final albums = _WidgetAlbumGateway(
+        const AlbumTrackPageResult(total: 1, tracks: [track]),
       );
       final queue = _WidgetPlaybackQueueGateway();
       await tester.pumpWidget(
@@ -1014,6 +1029,8 @@ void main() {
             const RecommendedPlaylistPageResult(),
           ),
           radarGateway: radar,
+          albumTrackGateway: albums,
+          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
           playbackQueueGateway: queue,
           lyricGateway: const _WidgetLyricGateway(),
         ),
@@ -1032,6 +1049,20 @@ void main() {
       expect(find.byKey(const ValueKey('radar-content')), findsOneWidget);
       expect(find.text('Radar Track'), findsOneWidget);
       expect(find.text('Radar artist · Radar Album · 3:05'), findsOneWidget);
+      expect(radar.pages, [1]);
+
+      await tester.tap(find.byKey(const ValueKey('radar-context-0')));
+      await tester.pumpAndSettle();
+      expect(find.text('Open album'), findsOneWidget);
+      expect(find.text('Open artist'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('track-context-album')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
+      expect(albums.requests, [(album, 0, 30)]);
+
+      await tester.tap(find.byKey(const ValueKey('album-back')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('radar-content')), findsOneWidget);
       expect(radar.pages, [1]);
 
       await tester.tap(find.byKey(const ValueKey('radar-queue-0')));
