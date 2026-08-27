@@ -596,6 +596,17 @@ pub trait PlaylistTrackMutationProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
+/// Provider-neutral creation of one owned playlist. The Provider owns the
+/// source-specific write and returns its confirmed opaque playlist identity.
+pub trait PlaylistCreationProvider: MusicProvider + Sync {
+    type Error;
+
+    fn create_playlist(
+        &self,
+        name: String,
+    ) -> impl Future<Output = Result<PlaylistSummary, Self::Error>> + Send;
+}
+
 /// Narrow first user-library capability. Favorited playlists deliberately use
 /// a separate future operation instead of being implied by this owned list.
 pub trait OwnedPlaylistsProvider: MusicProvider + Sync {

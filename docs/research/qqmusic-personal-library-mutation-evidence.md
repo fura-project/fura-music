@@ -1,8 +1,8 @@
 # QQ Music personal-library mutation evidence
 
-- **Status:** Liked and owned-playlist Track desired-state foundations implemented; maintainer-operated acceptance pending
-- **Last checked:** 2026-08-27
-- **Scope:** One reversible single-Track like/unlike operation and one Track add/remove operation for a structurally validated owned playlist. Playlist-container and catalog-entity mutations remain separate work.
+- **Status:** Liked Track, owned-playlist Track, and playlist-creation foundations implemented; maintainer-operated acceptance pending
+- **Last checked:** 2026-08-28
+- **Scope:** One reversible single-Track like/unlike operation, one Track add/remove operation for a structurally validated owned playlist, and one bounded owned-playlist creation. Rename/delete and catalog-entity mutations remain separate work.
 
 This note is the durable evidence base for bounded personal-library writes. No
 stored project credential was read, no request was sent with a real account,
@@ -65,9 +65,37 @@ without an authenticated persistent account mutation, which remains explicitly
 maintainer-operated. The current third-party authenticated roundtrip is useful
 protocol evidence, not acceptance evidence for this repository or account.
 
+## Playlist-container creation
+
+The implemented bounded non-destructive write is playlist creation:
+
+```text
+music.musicasset.PlaylistBaseWrite / AddPlaylist
+param: { dirName: bounded nonblank name }
+```
+
+Current [L-1124/QQMusicApi at `108617f`](https://github.com/L-1124/QQMusicApi/blob/108617ffe80abefec6358717b9f4d3677550db10/qqmusic_api/modules/songlist.py)
+and [tlyanyu/multiPlatformMusicApi at `0fd583b`](https://github.com/tlyanyu/multiPlatformMusicApi/blob/0fd583b384f5d6477067ff3d29ccedd97fc3a317/platforms/qqmusic/module/playlist_create.js)
+independently agree on that module, method, and input. L-1124 maps the created
+playlist identity from `result.tid`, while the second implementation reads
+`result.id`; the client must accept either nonzero field and reject conflicting
+values. Both use `result.dirId`; the returned server name matters because
+L-1124 records that duplicate input names may receive a server-added suffix.
+
+L-1124 and tlyanyu also agree on `DelPlaylist` with `dirId`, but deletion is a
+separate destructive slice. Only tlyanyu currently provides a sufficiently
+detailed `EditPlaylist` shape, so rename is not selected from one source alone.
+Neither repository provides this checkout with a sanitized create response
+fixture or a current authenticated create/delete roundtrip. This repository
+therefore verifies the exact request and both independently observed response
+field forms with synthetic offline fixtures only. Client, Provider, cancellable
+Bridge, generated bindings, Dart gateway, credential rejection cleanup, account
+replacement, and packaged-Bridge cancellation are covered; live acceptance
+remains explicitly maintainer-operated.
+
 ## Explicit non-goals of this slice
 
-- playlist create, rename, or delete;
+- playlist rename or delete;
 - Album/Artist favorite mutation;
 - optimistic UI or final verification controls;
 - automatic retries after an unknown outcome;

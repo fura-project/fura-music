@@ -5,8 +5,8 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: FIRST_RELEASE_CORE_CAPABILITY_COMPLETION
-  current_task: PLAYLIST_CONTAINER_MUTATION_DISCOVERY
-  next_action: DISCOVER
+  current_task: null
+  next_action: SELECT_NEXT_TASK
 ---
 
 # Current State
@@ -27,7 +27,9 @@ execution:
 - Standard/High MP3 preference now flows from the versioned local Settings document through a typed cancellable Bridge into Rust-owned negotiation. High retries Standard only after an unavailable item, and the returned source reports actual quality; FLAC, encrypted media, and VIP inference remain out of scope.
 - Liked/not-liked Track is now a bounded typed remote-mutation foundation from Client through Dart gateway. It uses current independently evidenced playlist-write semantics, rejects invalid identity before transport, and never turns network/response/cancellation/replacement uncertainty into a false confirmed result. No real account was changed.
 - One Track add/remove operation now accepts only a structurally validated owned playlist target through Client, Provider, cancellable Bridge, and Dart gateway. Favorite, public catalog, foreign, and malformed targets fail before transport; unknown outcomes remain unconfirmed. No real account was changed.
-- Discover the smallest safe playlist-container mutation from current independent evidence; do not bundle create, rename, and destructive delete or execute the maintainer's account.
+- Bounded owned-playlist creation now runs through Client, Provider, cancellable Bridge, generated binding, and Dart gateway. It accepts the independently observed nonzero `result.tid` or `result.id` forms, also requires `dirId` and the server-returned name, rejects invalid names before transport, and preserves unknown-outcome semantics. No real account was changed.
+- TD-007 was resolved before the third remote write: Rust now shares only single-use run/cancel state, Dart shares only explicit-rejection vault cleanup, and every operation keeps typed results plus Provider-owned identity rules.
+- Re-rank the remaining capability gaps globally before selecting another finite task; do not bundle weaker-evidence rename or destructive delete into the completed creation slice.
 - Keep Home, Library, Discover, Search, catalog, Queue, Now Playing, authentication, and global M7 visual work paused. Capability work may add only the smallest verification control when genuinely required.
 - Do not automate stored-account access or real-account mutation acceptance.
 
@@ -39,8 +41,9 @@ execution:
 
 # Next Candidates
 
-1. Discover one bounded playlist-container mutation without autonomously changing the maintainer's account.
-2. Discover truthful Home recommendation semantics without substituting unrelated existing data.
+1. Discover current independently supported favorite/unfavorite Album or Artist mutation semantics; do not implement from one source or issue a real account write.
+2. Seek a second current detailed source for playlist rename; keep destructive delete separate.
+3. Discover truthful Home recommendation semantics without substituting unrelated existing data.
 
 # Pending Human Decisions
 
@@ -56,3 +59,4 @@ execution:
 - The credential-free media gate accepts both M500 and M800 request schemas, but this does not prove the maintainer account's high-quality entitlement, actual playback, or the specific reason for any unavailable result.
 - Liked-Track mutation request semantics have current independent and external authenticated-roundtrip evidence, but this repository has only offline fixtures. Cancellation, malformed response, network failure, or account replacement can leave the remote outcome unknown; later UI must refresh rather than guess.
 - Owned-playlist Track membership reuses that independently evidenced request with a Provider-validated owned target, but this repository still has only offline evidence and no post-write UI refresh path.
+- Playlist creation has exact offline request/result/lifecycle coverage, including the independently observed `tid`/`id` response variation, but no repository or maintainer-account live roundtrip and no post-write UI refresh path.

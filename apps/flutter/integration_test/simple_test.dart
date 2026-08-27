@@ -12,6 +12,7 @@ import 'package:flutterustmusic/src/rust/api/media.dart';
 import 'package:flutterustmusic/src/rust/api/music_video.dart';
 import 'package:flutterustmusic/src/rust/api/new_albums.dart';
 import 'package:flutterustmusic/src/rust/api/new_songs.dart';
+import 'package:flutterustmusic/src/rust/api/playlist_creation.dart';
 import 'package:flutterustmusic/src/rust/api/playlist_tracks.dart';
 import 'package:flutterustmusic/src/rust/api/queue.dart';
 import 'package:flutterustmusic/src/rust/api/rankings.dart';
@@ -273,6 +274,16 @@ void main() {
     expect(
       cancelledPlaylistTrack.failure,
       QqMusicPlaylistTrackMutationFailure.cancelledOutcomeUnknown,
+    );
+    final unusedPlaylistCreation = beginQqMusicPlaylistCreation(
+      name: 'synthetic playlist',
+    );
+    expect(unusedPlaylistCreation.isActive, isTrue);
+    expect(unusedPlaylistCreation.cancel(), isTrue);
+    final cancelledPlaylistCreation = await unusedPlaylistCreation.run();
+    expect(
+      cancelledPlaylistCreation.failure,
+      QqMusicPlaylistCreationFailure.cancelledOutcomeUnknown,
     );
     final unusedLyricLoad = beginQqMusicLyricLoad(
       providerId: 'qq-music',

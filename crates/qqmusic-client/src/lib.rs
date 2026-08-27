@@ -22,6 +22,7 @@ mod music_video;
 mod new_albums;
 mod new_songs;
 mod owned_playlists;
+mod playlist_containers;
 mod playlist_detail;
 mod playlist_search;
 mod qrc_cipher;
@@ -83,6 +84,7 @@ pub use new_songs::{
 pub use owned_playlists::{
     OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,
 };
+pub use playlist_containers::{QqMusicCreatePlaylistError, QqMusicCreatedPlaylist};
 pub use playlist_detail::{
     PlaylistDetailTrackField, QqMusicAlbumSummary, QqMusicArtistSummary,
     QqMusicPlaylistDetailError, QqMusicPlaylistTracksPage, QqMusicTrackSummary,

@@ -39,7 +39,8 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 | Favorite Albums and Artists | Users can browse saved catalog entities. | `VERIFIED`: authenticated paged Client → Provider → Bridge → Dart paths and retained pages have offline regressions. | Broad live-account compatibility is not established. | authenticated read | Required | Typed pages preserve opaque identity, continuation, credential rejection, and replacement. |
 | Like/unlike Track | A listener can keep or remove the current Track in the built-in liked-song collection. | `IMPLEMENTED`: three current implementations agree on the playlist-detail write protocol, and one has an authenticated reversible roundtrip. This repository has exact offline Client, Provider, cancellable Bridge, Dart-gateway, credential-rejection, and account-replacement coverage only. | Minimal later verification control, refresh integration, and maintainer-operated live acceptance. | remote mutation | Required | One desired liked/not-liked state maps from opaque Track identity; invalid input is rejected before transport; uncertain network/response/replacement/cancellation outcomes require refresh and are never reported as confirmed. |
 | Add/remove Track from owned playlist | Users can organize saved music beyond the built-in liked collection. | `IMPLEMENTED`: the same independently evidenced write protocol now accepts exactly one structurally validated owned-playlist target and one opaque Track through Client, Provider, cancellable Bridge, and Dart gateway. Public catalog, favorite, foreign, and malformed playlist targets are rejected before transport. | Minimal later verification control, post-write refresh integration, and maintainer-operated live acceptance. | remote mutation | Required | One desired present/absent state preserves exact directory/Track identity, typed failure, cancellation, replacement, and unknown-outcome semantics offline; live acceptance remains maintainer-operated. |
-| Create/rename/delete playlist | Users can manage their own playlist containers. | `MISSING`: no mutation implementation exists. | Protocol evidence and every reusable layer; destructive confirmation remains Flutter-owned later. | remote mutation | Required | Typed create/edit/delete results and refresh consistency are covered offline; destructive live acceptance is maintainer-operated only. |
+| Create playlist | Users can start a new collection before adding Tracks. | `IMPLEMENTED`: two independent implementations agree on `PlaylistBaseWrite/AddPlaylist` plus `dirName`; exact offline Client, Provider, cancellable Bridge, generated binding, Dart-gateway, packaged-Bridge, rejection-cleanup, and account-replacement coverage accepts their evidenced `tid`/`id` result variation. | Minimal later refresh/verification control and maintainer-operated live acceptance. | remote mutation | Required | A bounded nonblank name produces one exact request and a typed owned-playlist identity from a nonzero `tid` or `id`, `dirId`, and returned name; unknown outcomes are never retried or reported as confirmed; live acceptance remains maintainer-operated. |
+| Rename/delete playlist | Users can maintain or remove owned playlist containers. | `MISSING`: delete has two implementation references but is destructive; rename has only one sufficiently detailed current source. | Stronger rename evidence; typed layers; Flutter-owned destructive confirmation later. | remote mutation | Required | Only an owned target is accepted; rename and confirmed destructive delete remain separate finite slices with offline lifecycle/refresh coverage and maintainer-operated live acceptance. |
 | Favorite/unfavorite Album or Artist | Browsing can update the same saved collections shown by Library. | `MISSING`: read paths exist but mutation paths do not. | Protocol evidence and Client through Bridge. | remote mutation | Required | Exact entity identity, idempotent outcome, account replacement, and subsequent collection refresh are covered offline; live acceptance is maintainer-operated. |
 
 ## D — Playback and media
@@ -90,17 +91,20 @@ and `platform-local`. First-release decisions are `Required`, `Later`,
 
 ## Ranked immediate candidates
 
-1. **Playlist-container mutation discovery** — determine the smallest safe,
-   independently evidenced create/rename/delete slice without treating the
-   destructive operations as one bulk implementation. Real-account acceptance
-   and destructive confirmation remain maintainer-operated.
-2. **Home recommendation capability discovery** — needed by the accepted Home
-   composition, but must establish each section's semantics rather than reuse
-   public recommendations or personal playlists under misleading names. Popular
-   Programs remains product-authority-sensitive.
+1. **Favorite Album/Artist mutation discovery** — both saved collections and
+   opaque catalog identities already exist, and this is the remaining
+   non-container Personal Library write gap. Discovery must independently
+   establish exact entity and desired-state semantics before implementation.
+2. **Playlist rename evidence discovery** — first-release maintenance value is
+   clear, but only one sufficiently detailed current request source is recorded.
+3. **Home recommendation capability discovery** — needed by the accepted Home
+   composition, but each section must be truthful rather than relabeling public
+   recommendations or personal playlists. Popular Programs remains
+   product-authority-sensitive.
 
-The Settings, signed-in account-summary, two-quality media, liked-Track, and
-owned-playlist Track-mutation foundations are complete within their stated
-platform/live-evidence boundaries. The next selected task is bounded discovery
-for playlist-container mutation; it may not execute the maintainer's stored
-account, perform a real write, or fabricate mutation success.
+The Settings, signed-in account-summary, two-quality media, liked-Track,
+owned-playlist Track-mutation, and create-playlist foundations are complete
+within their stated platform/live-evidence boundaries. Destructive playlist
+delete remains separate even though two current sources agree on its request.
+No remaining mutation may execute the maintainer's stored account, perform a
+real write, or fabricate mutation success.
