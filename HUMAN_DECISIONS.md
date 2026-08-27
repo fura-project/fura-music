@@ -36,4 +36,14 @@
 
 **Consequences:** Theme, adaptive shell, page hierarchy, component consistency, interaction states, accessibility, and daily-use product cohesion are authorized M4 work. Theme-plugin infrastructure, speculative design-system frameworks, navigation/state-management replacement, and experimental identity effects are not authorized by this decision.
 
+## HD-003 — Home-first mainstream first-release experience
+
+**Status:** Accepted on 2026-08-27
+
+**Context:** The post-M4 client had a deliberate Material baseline but still opened into Library and treated Discover and Search as peer destinations. The maintainer has decided that the first release should be a familiar mainstream QQ Music product rather than a deliberately Library-first or focus-oriented variant.
+
+**Decision:** M5 establishes Home as the authenticated default, with Home, Discover, Search, and Library as distinct first-class destinations and Now Playing as persistent context. Home must stay small and truthful, composed only from stable capabilities. Library remains prominent and exposes Playlists, favorite Albums, and favorite Artists as product sections. M5 also authorizes common playback modes, a bounded Track-context audit, read-only song comments, and bounded QQ MV support after current protocol/product discovery.
+
+**Consequences:** The agent may autonomously execute bounded Home/shell, Library-coherence, queue-mode, read-only comment, Track-context, and QQ MV slices within `PROJECT.md`, `ROADMAP.md`, and the accepted architecture. This decision does not authorize other Providers, aggregation, podcasts, downloads, social or collection mutations, background-playback lifecycle, persistent recent-history semantics, new state/navigation frameworks, or release identity/signing. A later Focus/quiet experience may reuse the mature product baseline, but it is neither implemented nor anticipated with infrastructure during M5.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

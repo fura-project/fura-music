@@ -1,5 +1,7 @@
 # Post-M4 Global Ranking — 2026-08-27
 
+> **Execution status note:** This document records the evidence and authorization available when the post-M4 ranking was performed. HD-003 and the active M5 Roadmap were accepted later on 2026-08-27, so the `NO_LEGITIMATE_WORK` result below is historical evidence rather than current scheduling authority. Current execution is governed by `AGENTS.md`, `ROADMAP.md`, and `PROGRESS.md`.
+
 ## Ranking boundary
 
 This ranking was performed after the M4 checkpoint, not as part of the checkpoint itself. It re-read the Roadmap's evidence-gated later direction, current user-reported behavior, M1 blocker, risks, technical-debt triggers, Human Decisions, available platform evidence, and repository status. It did not access stored credentials, call live QQ/WeChat services, infer unavailable hardware, or treat deferred ideas as authorized features.

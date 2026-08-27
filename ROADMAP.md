@@ -168,6 +168,54 @@ Each phase is elaborated only through bounded discovery and finite, evidence-bac
 
 Completed on 2026-08-27. Criterion-by-criterion evidence, architecture/scope review, adaptive/accessibility limits, debt review, and exact live/platform boundaries are recorded in `docs/development/m4-checkpoint-review.md`. Future reproduced Material/adaptive regressions remain valid bounded work; theme personas and signature visual experiments still require separate Roadmap authorization. The checkpoint is not project completion, release readiness, or M1 acceptance.
 
-## Active Direction — Evidence-Gated Later Work
+## Active Workstream — M5 Mainstream QQ Music Product Experience & Core Feature Completion
+
+### Goal
+
+Turn the checkpointed Material client into a familiar, complete first-release QQ Music product: Home is the authenticated default, Discover, Search, and Library remain distinct first-class destinations, Now Playing remains persistent context, and the most important bounded gaps in playback and QQ-native track context are completed without changing the accepted architecture.
+
+### Authorized direction
+
+- A small, truthful Home composed from stable existing Library, catalog, recommendation, Search, and playback capabilities; no raw heterogeneous feed or unsupported personalization claim.
+- A coherent Library whose Playlists, favorite Albums, and favorite Artists are obvious sections rather than toolbar utilities, while preserving independent loading, error, pagination, retained state, and detail navigation.
+- Common playback modes: sequential, repeat all, repeat one, and shuffle. Rust owns authoritative queue-mode semantics; Flutter owns presentation and interaction.
+- A bounded Track context audit, provider-neutral read-only song comments, and initial QQ MV support after protocol/product discovery supplies current evidence.
+- A final product-completeness audit that classifies remaining gaps as agent-authorized, evidence-blocked, environment-blocked, human-decision work, or out of scope.
+
+### Progressive phases
+
+1. M5.1 — Mainstream adaptive shell and bounded useful Home.
+2. M5.2 — Coherent Library sections and retained navigation.
+3. M5.3 — Authoritative queue playback modes.
+4. M5.4 — Track context and read-only comments.
+5. M5.5 — Bounded QQ Music MV experience.
+6. M5.6 — Product-completeness audit and classified remaining gaps.
+7. M5.7 — Checkpoint review.
+
+Each phase begins with bounded discovery and a finite slice. Protocol-facing comments and MV work require current evidence before implementation. The user-operated M1 playback/Queue/Lyrics observation remains the highest-priority acceptance evidence when the maintainer supplies a coarse secret-safe result, but it does not block independent M5 work.
+
+### Exit criteria
+
+1. Home is the authenticated default and provides useful, truthful entry points from stable capabilities rather than an empty destination or speculative feed.
+2. Home, Discover, Search, and Library are distinct, predictable primary destinations on desktop and compact layouts, with Now Playing remaining persistent context.
+3. Library exposes Playlists, favorite Albums, and favorite Artists as obvious user-facing sections while preserving their independent controller, paging, failure, scroll, focus, and detail-return behavior.
+4. Sequential, repeat-all, repeat-one, and shuffle behavior has one authoritative Rust queue owner, provider-neutral tests, and accessible Flutter controls.
+5. Read-only song comments map through a bounded provider-neutral Domain/Provider/Bridge contract with pagination, cancellation, truthful states, and no social mutation.
+6. Initial QQ MV support follows a bounded discovery decision, starts from a coherent Track-to-MV journey, and does not become a generic video platform.
+7. Existing Search, Discover, browsing, playback, Queue, synchronized/word-timed Lyrics, adaptive behavior, accessibility, and retained state do not regress.
+8. Flutter remains presentation-only; QQ protocol, credentials, Provider mapping, opaque identity, queue semantics, comments mapping, and MV protocol remain in Rust behind the thin typed Bridge.
+9. No additional Provider, sidecar, download platform, social mutation, playlist/favorite mutation, background-playback architecture, state/navigation framework, speculative theme system, or deferred Focus experience is introduced.
+10. Relevant focused regressions and the repository validation baseline pass; live QQ, unavailable platform, release, and M1 user-operated evidence limits remain explicit.
+11. The completeness audit records every material remaining first-release gap in exactly one actionable evidence/authority class and finds no untracked high-value authorized gap before checkpoint.
+
+### Explicit non-goals
+
+- Other Providers, aggregation, podcasts, downloads, local/fallback Provider work, or a generic video/social platform.
+- Comment, follow, playlist, favorite, or other remote mutations.
+- Background-playback lifecycle, persistent recent-history semantics, or release identity/signing without a separate accepted Human Decision.
+- Quiet, Focus, Luminous, Temporal, theme personas, signature motion, or infrastructure built in anticipation of them.
+- Replacing the existing state-management, navigation, audio, Provider, or Bridge architecture without a concrete blocker and separate authority.
+
+## Later Direction — Evidence-Gated Work
 
 After coherent QQ Music core coverage, evaluate deeper platform integration and evidence-backed offline/cache behavior. Narrow local-library or media-fallback capabilities come later and require demonstrated user value; they must not turn the product into a multi-source aggregator.

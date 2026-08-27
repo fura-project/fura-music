@@ -4,14 +4,14 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: EVIDENCE_GATED_LATER_DIRECTION
+  active_workstream: M5
   current_task: null
-  next_action: NO_LEGITIMATE_WORK
+  next_action: DISCOVERY_PASS
 ---
 
 # Current Milestone
 
-M1's real-account playback observation remains open; M2, M3, and M4 are checkpointed, and evidence-gated whole-project ranking is active.
+M1's real-account playback observation remains open; M2, M3, and M4 are checkpointed; M5 Mainstream QQ Music Product Experience & Core Feature Completion is active.
 
 # Completed Recently
 
@@ -62,17 +62,18 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 - Implemented the eleventh M4 slice: Expanded Now Playing now uses a dedicated presentation mode of the existing `NowPlayingBar` implementation. The hero is the single Track identity hierarchy; a separate surface retains the exact status live region, progress, previous/primary/next/stop, sign-in recovery, volume, Queue, keys, enabled states, and shortcut callbacks while making the 56 px filled primary action prominent and omitting duplicated mini-player artwork/title and modal Lyrics entry. Compact and wide end-to-end regressions, strict Dart checks, all 308 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Implemented the twelfth M4 slice: Favorite Albums and Favorite Artists now use the shared bounded Material loading/content-state panels for their initial states. Loading is collection-labeled, empty copy is type-specific, retry remains limited to eligible service failures, rejected sessions retain their distinct cleanup-failure detail and sign-in-only recovery, and each asynchronous failure/account state owns one live region. Collection content, append footers, refresh, paging, retained navigation, controllers, and playback ownership remain unchanged. Direct 360 px loading/empty/retry/rejection regressions, strict Dart checks, all 310 Flutter tests, 267 offline Rust tests, strict Clippy, Linux x64 Release, and packaged Bridge integration pass without live account access.
 - Completed the M4 deliberate Material product checkpoint against all seven Roadmap exit criteria. The review found no Provider/UI leakage, duplicate player/navigation/state owner, sidecar, unapproved dependency/Provider/product expansion, accessibility/adaptive blocker, or changed debt trigger. The default Material baseline is stable within current automated Linux evidence; manual all-platform visual approval, live QQ compatibility, release readiness, deferred theme personas, and the M1 user observation are not claimed.
+- Accepted the maintainer's post-M4 product direction and activated M5: the first-release experience is now explicitly Home-first, with Discover, Search, and Library as distinct primary destinations; Library remains first-class; common playback modes, bounded read-only comments, and bounded QQ MV work are authorized behind the existing Rust/Flutter boundaries. Focus/quiet experiences, mutations, additional Providers, background playback, downloads, and release identity remain outside this decision.
 
 # In Progress
 
 - M1's corrected authenticated playback path still needs one user-operated observation, but that is a local acceptance-evidence blocker rather than a global development stop.
-- Post-M4 global ranking found no current agent-executable task with both evidence and authorization. Execution remains ACTIVE rather than complete: M1 needs user operation, unavailable target evidence needs its target, release work needs HD-001, and offline/cache, another Provider, unavailable-Track modeling, exact breakpoint matrices, and theme personas remain trigger- or authorization-gated.
+- M5 is newly authorized. The next action is a bounded discovery pass over the authenticated shell/Home, Library coherence, and playback modes, followed by selection of one finite high-value slice. The dated post-M4 `NO_LEGITIMATE_WORK` ranking remains historical evidence, not current scheduling authority.
 
 # Next Candidates
 
-1. Resume the M1 acceptance path when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
-2. Select a bounded task when a reproduced bug, dependency/API breakage, target environment, debt trigger, or newly authorized Roadmap phase supplies provenance.
-3. Re-run whole-project ranking on new evidence; do not manufacture cache, Provider, theme, breakpoint, release, or product work meanwhile.
+1. Run the bounded M5 discovery pass and rank at most three finite candidates from Home-first shell, coherent Library, and authoritative playback modes.
+2. Select and implement the highest-value candidate without introducing a second playback owner, generic feed, navigation framework, or speculative protocol work.
+3. Resume the M1 acceptance path immediately when the user supplies a coarse secret-safe playback/Queue/Lyrics result; do not automate stored-credential access.
 
 # Blockers
 
@@ -80,7 +81,7 @@ M1's real-account playback observation remains open; M2, M3, and M4 are checkpoi
 
 # Pending Human Decisions
 
-- HD-001: final product/display name, platform application identifiers, and signing-key ownership/custody are required before external distribution. This does not block development-signed builds, M1 acceptance testing, or M4 product UI work.
+- HD-001: final product/display name, platform application identifiers, and signing-key ownership/custody are required before external distribution. This does not block development-signed builds, M1 acceptance testing, or M5 product work.
 
 # Risks
 
