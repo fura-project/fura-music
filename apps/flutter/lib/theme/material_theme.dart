@@ -12,7 +12,7 @@ abstract final class MusicSpacing {
 
 abstract final class MusicSizes {
   static const double desktopRail = 80;
-  static const double desktopSidebar = 232;
+  static const double desktopSidebar = 240;
   static const double contentMaxWidth = 1180;
 }
 

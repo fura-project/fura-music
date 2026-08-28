@@ -765,6 +765,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             onOpenLibrary: () => _selectPrimaryDestination(
               AuthenticatedPrimaryDestination.library,
             ),
+            onSignOut: _confirmSignOut,
             onOpenRecommendation: _openHomeRecommendation,
             lastOpenedRecommendation: _lastOpenedHomeRecommendation,
             recommendationReturnFocusNode: _homeRecommendationReturnFocusNode,
@@ -878,7 +879,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             if (!wide) const SizedBox.shrink(),
             Expanded(
               child: Scaffold(
-                appBar: mainAppBar,
+                appBar:
+                    compactActions &&
+                        destination == AuthenticatedPrimaryDestination.home
+                    ? null
+                    : mainAppBar,
                 body: mainBody,
                 bottomNavigationBar: wide
                     ? NowPlayingBar(
@@ -888,11 +893,23 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                     : Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          NowPlayingBar(
-                            controller: _queuePlaybackController,
-                            onSignInAgain: widget.onSignInAgain,
-                          ),
+                          if (destination ==
+                              AuthenticatedPrimaryDestination.home)
+                            NowPlayingBar.compact(
+                              controller: _queuePlaybackController,
+                              onSignInAgain: widget.onSignInAgain,
+                            )
+                          else
+                            NowPlayingBar(
+                              controller: _queuePlaybackController,
+                              onSignInAgain: widget.onSignInAgain,
+                            ),
                           NavigationBar(
+                            height:
+                                destination ==
+                                    AuthenticatedPrimaryDestination.home
+                                ? 64
+                                : null,
                             selectedIndex: destination.index,
                             onDestinationSelected:
                                 _selectPrimaryDestinationByIndex,
@@ -1427,9 +1444,11 @@ class _PrimaryShellTitle extends StatelessWidget {
         ],
         Expanded(
           child: Align(
-            alignment: Alignment.centerRight,
+            alignment: titleText == null
+                ? Alignment.center
+                : Alignment.centerRight,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
+              constraints: const BoxConstraints(maxWidth: 448),
               child: SearchBar(
                 key: const ValueKey('top-search-shortcut'),
                 onTap: onOpenSearch,

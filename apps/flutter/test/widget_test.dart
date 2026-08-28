@@ -481,11 +481,19 @@ void main() {
     );
     expect(find.byKey(const ValueKey('home-library-section')), findsOneWidget);
     expect(find.text('Synthetic recommendation'), findsOneWidget);
-    expect(find.text('For Synthetic listener today'), findsOneWidget);
+    expect(find.text('For Synthetic listener today'), findsNothing);
     expect(find.text('Synthetic Daily 30'), findsOneWidget);
     expect(find.text('Synthetic song pick'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
     expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
+    final heroRect = tester.getRect(
+      find.byKey(const ValueKey('home-recommendation-0')),
+    );
+    expect(heroRect.height, 280);
+    final secondaryRecommendationRect = tester.getRect(
+      find.byKey(const ValueKey('home-recommendation-1')),
+    );
+    expect(heroRect.width / secondaryRecommendationRect.width, closeTo(2, 0.1));
     expect(find.byKey(const ValueKey('home-daily-heading')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-programs-heading')), findsOneWidget);
     expect(
@@ -744,6 +752,12 @@ void main() {
         title: 'Retained search result',
         artistNames: ['Artist'],
       );
+      const homeTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41002:0:homeFixtureMid:-',
+        title: 'Compact Home song',
+        artistNames: ['Home artist'],
+      );
       const compactPlaylist = UserPlaylistSummary(
         providerId: 'qq-music',
         opaqueId: 'owned:7001:201',
@@ -769,6 +783,7 @@ void main() {
           ],
         ),
       );
+      final queue = _WidgetPlaybackQueueGateway();
       await tester.pumpWidget(
         MusicApp(
           bootstrap: _bootstrap,
@@ -791,8 +806,14 @@ void main() {
               ],
             ),
           ),
+          personalizedTracksGateway: const _WidgetPersonalizedTracksGateway(
+            PersonalizedTracksResult(tracks: [homeTrack]),
+          ),
           searchGateway: search,
           recommendedPlaylistGateway: recommendations,
+          playbackQueueGateway: queue,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
         ),
       );
       await tester.pumpAndSettle();
@@ -811,7 +832,34 @@ void main() {
       expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
       expect(find.text('Compact Home playlist'), findsOneWidget);
       expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
+      expect(find.byType(AppBar), findsNothing);
+      expect(tester.getSize(find.byType(NavigationBar)).height, 64);
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('home-recommendation-0')))
+            .height,
+        256,
+      );
+      expect(
+        find.byKey(const ValueKey('home-compact-actions')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
+
+      final personalizedTrack = find.byKey(
+        const ValueKey('home-personalized-track-1'),
+      );
+      await tester.ensureVisible(personalizedTrack);
+      await tester.pumpAndSettle();
+      await tester.tap(personalizedTrack);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('now-playing-compact-layout')))
+            .height,
+        64,
+      );
+      expect(queue.replacements.single.$1, [homeTrack]);
 
       final homeSearch = find.byKey(const ValueKey('open-track-search'));
       await tester.ensureVisible(homeSearch);

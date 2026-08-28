@@ -41,17 +41,27 @@ class NowPlayingBar extends StatelessWidget {
     required this.controller,
     required this.onSignInAgain,
     super.key,
-  }) : _expanded = false;
+  }) : _expanded = false,
+       _compact = false;
+
+  const NowPlayingBar.compact({
+    required this.controller,
+    required this.onSignInAgain,
+    super.key,
+  }) : _expanded = false,
+       _compact = true;
 
   const NowPlayingBar.expanded({
     required this.controller,
     required this.onSignInAgain,
     super.key,
-  }) : _expanded = true;
+  }) : _expanded = true,
+       _compact = false;
 
   final QueuePlaybackController controller;
   final VoidCallback onSignInAgain;
   final bool _expanded;
+  final bool _compact;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +105,19 @@ class NowPlayingBar extends StatelessWidget {
             playback.stage == TrackPlaybackStage.resolutionError ||
             playback.stage == TrackPlaybackStage.engineError;
 
+        if (_compact) {
+          return _CompactNowPlayingBar(
+            controller: controller,
+            track: track,
+            authenticationFailure: authenticationFailure,
+            error: error,
+            onSignInAgain: onSignInAgain,
+            onOpenCatalog: openCatalog,
+            catalogLabel: catalogLabel,
+            onOpenExpanded: expandedNavigation?.onOpen,
+          );
+        }
+
         return SafeArea(
           top: false,
           child: Material(
@@ -104,8 +127,17 @@ class NowPlayingBar extends StatelessWidget {
               builder: (context, constraints) {
                 final narrow = constraints.maxWidth < 520;
                 final desktop = constraints.maxWidth >= 900;
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(16, narrow ? 8 : 10, 12, 4),
+                final content = Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    desktop
+                        ? 0
+                        : narrow
+                        ? 8
+                        : 10,
+                    12,
+                    desktop ? 0 : 4,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -200,6 +232,7 @@ class NowPlayingBar extends StatelessWidget {
                     ],
                   ),
                 );
+                return desktop ? SizedBox(height: 80, child: content) : content;
               },
             ),
           ),
@@ -284,6 +317,93 @@ class NowPlayingBar extends StatelessWidget {
   }
 }
 
+class _CompactNowPlayingBar extends StatelessWidget {
+  const _CompactNowPlayingBar({
+    required this.controller,
+    required this.track,
+    required this.authenticationFailure,
+    required this.error,
+    required this.onSignInAgain,
+    required this.onOpenCatalog,
+    required this.catalogLabel,
+    required this.onOpenExpanded,
+  });
+
+  final QueuePlaybackController controller;
+  final PlaylistTrackSummary track;
+  final bool authenticationFailure;
+  final bool error;
+  final VoidCallback onSignInAgain;
+  final VoidCallback? onOpenCatalog;
+  final String? catalogLabel;
+  final VoidCallback? onOpenExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final playback = controller.playback;
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+        child: Material(
+          key: const ValueKey('now-playing-compact-layout'),
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          elevation: 3,
+          shape: const StadiumBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            height: 64,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  _NowPlayingArtwork(
+                    track: track,
+                    stage: playback.stage,
+                    dimension: 48,
+                    onOpenCatalog: onOpenCatalog,
+                    catalogLabel: catalogLabel,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _TrackInfo(
+                      track: track,
+                      status: _statusCopy(controller),
+                      error: error,
+                      onOpenExpanded: onOpenExpanded,
+                    ),
+                  ),
+                  if (authenticationFailure)
+                    TextButton(
+                      key: const ValueKey('now-playing-sign-in-again'),
+                      onPressed: onSignInAgain,
+                      child: const Text('Sign in'),
+                    )
+                  else
+                    IconButton.filled(
+                      key: const ValueKey('now-playing-primary-action'),
+                      tooltip: _primaryTooltip(playback.stage),
+                      onPressed: playback.canActivate
+                          ? () => unawaited(playback.activate())
+                          : null,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 40,
+                        height: 40,
+                      ),
+                      icon: Icon(_primaryIcon(playback.stage)),
+                    ),
+                  _QueueButton(controller: controller),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DesktopNowPlayingLayout extends StatelessWidget {
   const _DesktopNowPlayingLayout({
     required this.controller,
@@ -351,6 +471,7 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
                   authenticationFailure,
                   onSignInAgain,
                   prominentPrimary: true,
+                  prominentPrimarySize: 48,
                 ),
               ),
               _PlaybackProgress(controller: playback, track: track),
@@ -495,6 +616,7 @@ List<Widget> _transportControls(
   bool authenticationFailure,
   VoidCallback onSignInAgain, {
   bool prominentPrimary = false,
+  double prominentPrimarySize = 56,
 }) {
   final playback = controller.playback;
   final primaryAction = authenticationFailure
@@ -510,8 +632,13 @@ List<Widget> _transportControls(
           onPressed: playback.canActivate
               ? () => unawaited(playback.activate())
               : null,
-          style: IconButton.styleFrom(minimumSize: const Size.square(56)),
-          icon: Icon(_primaryIcon(playback.stage), size: 30),
+          style: IconButton.styleFrom(
+            minimumSize: Size.square(prominentPrimarySize),
+          ),
+          icon: Icon(
+            _primaryIcon(playback.stage),
+            size: prominentPrimarySize == 48 ? 28 : 30,
+          ),
         )
       : IconButton(
           key: const ValueKey('now-playing-primary-action'),
