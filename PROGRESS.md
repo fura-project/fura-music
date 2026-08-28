@@ -14,7 +14,7 @@ execution:
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
 - M2 through M6 are checkpointed. HD-009 resumes M7 one page at a time after the Core-capability checkpoint; the approved desktop/compact Home implementation is ready for maintainer visual review but is not accepted or checkpointed.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
-- Current full gates pass: 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, 389 Flutter tests, Linux x64 Release packaging, and all five required Linux integration targets.
+- Current full gates pass: 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, 391 Flutter tests, Linux x64 Release packaging, and all five required Linux integration targets.
 
 # Current Capability Boundary
 

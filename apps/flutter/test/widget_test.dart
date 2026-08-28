@@ -489,11 +489,21 @@ void main() {
     final heroRect = tester.getRect(
       find.byKey(const ValueKey('home-recommendation-0')),
     );
-    expect(heroRect.height, 280);
-    final secondaryRecommendationRect = tester.getRect(
-      find.byKey(const ValueKey('home-recommendation-1')),
+    final dailyRect = tester.getRect(
+      find.byKey(const ValueKey('home-daily-recommendation')),
     );
-    expect(heroRect.width / secondaryRecommendationRect.width, closeTo(2, 0.1));
+    expect(heroRect.height, 280);
+    expect(heroRect.width / dailyRect.width, closeTo(2, 0.1));
+    expect(
+      heroRect.overlaps(tester.getRect(find.text('Synthetic recommendation'))),
+      isTrue,
+    );
+    expect(
+      dailyRect.overlaps(tester.getRect(find.text('Synthetic Daily 30'))),
+      isTrue,
+    );
+    expect(find.text('Daily recommendation'), findsOneWidget);
+    expect(find.text('MADE FOR YOU'), findsNothing);
     expect(find.byKey(const ValueKey('home-daily-heading')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-programs-heading')), findsOneWidget);
     expect(
@@ -584,6 +594,312 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('keeps an unavailable Daily slot separate from public picks', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        accountSummaryGateway: const _WidgetAccountSummaryGateway(
+          AccountSummaryLoadResult(
+            summary: AuthenticatedAccountSummary(displayName: 'Listener'),
+          ),
+        ),
+        dailyRecommendationGateway: const _WidgetDailyRecommendationGateway(
+          DailyRecommendationResult(),
+        ),
+        personalizedPlaylistsGateway: const _WidgetPersonalizedPlaylistsGateway(
+          PersonalizedPlaylistsResult(),
+        ),
+        personalizedTracksGateway: const _WidgetPersonalizedTracksGateway(
+          PersonalizedTracksResult(),
+        ),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(
+            playlists: [
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:81001',
+                title: 'Public hero pick',
+              ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:81002',
+                title: 'Public secondary pick',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final heroRect = tester.getRect(
+      find.byKey(const ValueKey('home-recommendation-0')),
+    );
+    final secondaryRect = tester.getRect(
+      find.byKey(const ValueKey('home-recommendation-1')),
+    );
+    final dailyStateRect = tester.getRect(
+      find.byKey(const ValueKey('home-daily-recommendation-state')),
+    );
+    expect(
+      heroRect.overlaps(tester.getRect(find.text('Public hero pick'))),
+      isTrue,
+    );
+    expect(
+      secondaryRect.overlaps(
+        tester.getRect(find.text('Public secondary pick')),
+      ),
+      isTrue,
+    );
+    expect(dailyStateRect.overlaps(heroRect), isFalse);
+    expect(dailyStateRect.overlaps(secondaryRect), isFalse);
+    expect(find.text('Daily recommendation'), findsOneWidget);
+    expect(find.text('Daily 30 is unavailable right now.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-daily-recommendation')),
+      findsNothing,
+    );
+    expect(find.text('MADE FOR YOU'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('canonical synthetic Home review fixture is complete', (
+    tester,
+  ) async {
+    const captureReviewImages = bool.fromEnvironment('HOME_VISUAL_REVIEW');
+    final publicPlaylists = List.generate(
+      10,
+      (index) => RecommendedPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'catalog:${81000 + index}',
+        title: const [
+          'Ambient Landscapes',
+          'Private Radar',
+          'Fresh electronic focus',
+          'Late-night city pop',
+          'Warm acoustic mornings',
+          'Independent favorites',
+          'Weekend road songs',
+          'Quiet piano rooms',
+          'Modern R&B selection',
+          'Mandopop essentials',
+        ][index],
+        trackCount: 18 + index,
+      ),
+    );
+    final personalPlaylists = List.generate(
+      6,
+      (index) => RecommendedPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'owned:${7000 + index}:201',
+        title: const [
+          'Piano Classics',
+          'Morning Acoustic',
+          'Deep Focus',
+          'Jazz Vibes',
+          'Chill Lo-Fi',
+          'Night Drive',
+        ][index],
+        trackCount: 24 + index * 7,
+      ),
+    );
+    final tracks = List.generate(
+      6,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:${41000 + index}:0:syntheticMid:-',
+        title: const [
+          'Silver Lines',
+          'Night Transit',
+          'Violet Morning',
+          'Moving Quietly',
+          'Green Signal',
+          'Clouds Over Water',
+        ][index],
+        artistNames: [
+          const [
+            'North Harbor',
+            'Cinder Avenue',
+            'Mira Vale',
+            'Juniper',
+            'Signal Coast',
+            'Aster Field',
+          ][index],
+        ],
+        durationSeconds: 184 + index * 13,
+      ),
+    );
+
+    MusicApp fixture() {
+      final queue = _WidgetPlaybackQueueGateway()
+        ..replace(tracks: tracks, currentIndex: 0);
+      return MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          UserLibraryResult(
+            playlists: personalPlaylists
+                .map((playlist) => playlist.toPlaylistSummary())
+                .toList(growable: false),
+          ),
+        ]),
+        accountSummaryGateway: const _WidgetAccountSummaryGateway(
+          AccountSummaryLoadResult(
+            summary: AuthenticatedAccountSummary(
+              displayName: 'Synthetic listener',
+            ),
+          ),
+        ),
+        dailyRecommendationGateway: const _WidgetDailyRecommendationGateway(
+          DailyRecommendationResult(
+            playlist: RecommendedPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'daily:30',
+              title: 'Daily 30',
+              trackCount: 30,
+            ),
+          ),
+        ),
+        personalizedPlaylistsGateway: _WidgetPersonalizedPlaylistsGateway(
+          PersonalizedPlaylistsResult(playlists: personalPlaylists),
+        ),
+        personalizedTracksGateway: _WidgetPersonalizedTracksGateway(
+          PersonalizedTracksResult(tracks: tracks),
+        ),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          RecommendedPlaylistPageResult(playlists: publicPlaylists),
+        ),
+        playbackQueueGateway: queue,
+        mediaResolutionGateway: const _UnavailableMediaGateway(),
+        lyricGateway: const _WidgetLyricGateway(),
+      );
+    }
+
+    Future<void> pumpFixture(Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(fixture());
+      await tester.pumpAndSettle();
+      expect(find.text('Daily recommendation'), findsOneWidget);
+      expect(find.text('Daily 30'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('home-personalized-tracks')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('home-public-playlists-shelf')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('home-hot-programs-unavailable')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('home-listening-two-unavailable')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('home-open-library')), findsOneWidget);
+      expect(find.text('MADE FOR YOU'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await pumpFixture(const Size(1440, 960));
+    expect(
+      find.byKey(const ValueKey('now-playing-desktop-layout')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-desktop-canonical.png'),
+        ),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-personalized-track-1')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-desktop-content.png'),
+        ),
+      );
+    }
+
+    await pumpFixture(const Size(390, 844));
+    expect(
+      find.byKey(const ValueKey('now-playing-compact-layout')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-mobile-canonical.png'),
+        ),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-library-shelf')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-mobile-library.png'),
+        ),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-hot-programs-unavailable')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-mobile-middle.png'),
+        ),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-personalized-track-1')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-mobile-content.png'),
+        ),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-listening-two-unavailable')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-mobile-lower.png'),
+        ),
+      );
+    }
+  });
+
   testWidgets('routes fresh QR authentication through Home to Library', (
     tester,
   ) async {
@@ -609,6 +925,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.text('Open library'), findsOneWidget);
     await _openLibrary(tester);
     expect(find.text('Your music'), findsOneWidget);
     expect(find.text('No playlists yet'), findsOneWidget);

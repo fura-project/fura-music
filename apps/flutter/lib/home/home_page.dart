@@ -142,7 +142,6 @@ class _HomeWideLayout extends StatelessWidget {
           onSelected: onOpenRecommendation,
           lastOpened: lastOpenedRecommendation,
           returnFocusNode: recommendationReturnFocusNode,
-          onOpenLibrary: onOpenLibrary,
         ),
         const SizedBox(height: _HomeGeometry.sectionGap),
         const _HomeSectionHeader(
@@ -173,7 +172,7 @@ class _HomeWideLayout extends StatelessWidget {
         const SizedBox(height: _HomeGeometry.itemGap),
         _MoreRecommendationsSection(
           controller: recommendationController,
-          skippedItems: homeController.dailyPlaylist == null ? 3 : 2,
+          skippedItems: 2,
           compact: false,
           onSelected: onOpenRecommendation,
           lastOpened: lastOpenedRecommendation,
@@ -268,7 +267,6 @@ class _HomeCompactLayout extends StatelessWidget {
                 onSelected: onOpenRecommendation,
                 lastOpened: lastOpenedRecommendation,
                 returnFocusNode: recommendationReturnFocusNode,
-                onOpenLibrary: onOpenLibrary,
               ),
               const SizedBox(height: _HomeGeometry.sectionGap),
               const _HomeSectionHeader(
@@ -302,7 +300,7 @@ class _HomeCompactLayout extends StatelessWidget {
               const SizedBox(height: _HomeGeometry.itemGap),
               _MoreRecommendationsSection(
                 controller: recommendationController,
-                skippedItems: homeController.dailyPlaylist == null ? 3 : 2,
+                skippedItems: 2,
                 compact: true,
                 onSelected: onOpenRecommendation,
                 lastOpened: lastOpenedRecommendation,
@@ -528,78 +526,51 @@ class _DailyRecommendationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final daily = homeController.dailyPlaylist;
-    final items = <RecommendedPlaylistSummary>[
-      ?daily,
-      ...controller.playlists.where((item) => !_samePlaylist(item, daily)),
-    ].take(3).toList(growable: false);
-    final Widget content;
-    if (items.isNotEmpty) {
-      content = _DailyRecommendationContent(
-        key: const ValueKey('home-recommendations-section'),
-        items: items,
-        dailyPlaylist: daily,
-        compact: compact,
-        onSelected: onSelected,
-        lastOpened: lastOpened,
-        returnFocusNode: returnFocusNode,
-      );
-    } else if (homeController.dailyStage == HomeResourceStage.loading ||
-        controller.stage == RecommendedPlaylistStage.loading) {
-      content = _DailyRecommendationLoading(compact: compact);
-    } else if (homeController.dailyStage == HomeResourceStage.empty &&
-        controller.stage == RecommendedPlaylistStage.empty) {
-      content = const _HomeInlineState(
-        key: ValueKey('home-recommendations-empty'),
-        icon: Icons.explore_off_outlined,
-        title: 'No recommendations right now',
-        detail: 'Your Library and Search remain available.',
-      );
-    } else {
-      content = _HomeInlineState(
-        key: const ValueKey('home-recommendations-error'),
-        icon: Icons.cloud_off_rounded,
-        title: 'Recommendations are unavailable',
-        detail: 'Your Library and Search are still available.',
-        liveRegion: true,
-        action: FilledButton.tonal(
-          onPressed: () {
-            homeController.retryDaily();
-            controller.retry();
-          },
-          child: const Text('Try again'),
-        ),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Semantics(
-          key: const ValueKey('home-daily-heading'),
-          header: true,
-          label: 'Daily recommendations',
-          child: const SizedBox.shrink(),
-        ),
-        content,
-      ],
+    final publicItems = controller.stage == RecommendedPlaylistStage.content
+        ? controller.playlists.take(2).toList(growable: false)
+        : const <RecommendedPlaylistSummary>[];
+    return _DailyRecommendationContent(
+      key: const ValueKey('home-recommendations-section'),
+      featuredPlaylist: publicItems.isEmpty ? null : publicItems.first,
+      secondaryPlaylist: publicItems.length < 2 ? null : publicItems[1],
+      publicStage: controller.stage,
+      dailyPlaylist: daily,
+      dailyStage: homeController.dailyStage,
+      compact: compact,
+      onSelected: onSelected,
+      onRetryPublic: controller.retry,
+      onRetryDaily: homeController.retryDaily,
+      lastOpened: lastOpened,
+      returnFocusNode: returnFocusNode,
     );
   }
 }
 
 class _DailyRecommendationContent extends StatelessWidget {
   const _DailyRecommendationContent({
-    required this.items,
+    required this.featuredPlaylist,
+    required this.secondaryPlaylist,
+    required this.publicStage,
     required this.dailyPlaylist,
+    required this.dailyStage,
     required this.compact,
     required this.onSelected,
+    required this.onRetryPublic,
+    required this.onRetryDaily,
     required this.lastOpened,
     required this.returnFocusNode,
     super.key,
   });
 
-  final List<RecommendedPlaylistSummary> items;
+  final RecommendedPlaylistSummary? featuredPlaylist;
+  final RecommendedPlaylistSummary? secondaryPlaylist;
+  final RecommendedPlaylistStage publicStage;
   final RecommendedPlaylistSummary? dailyPlaylist;
+  final HomeResourceStage dailyStage;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
+  final VoidCallback onRetryPublic;
+  final VoidCallback onRetryDaily;
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
 
@@ -607,43 +578,108 @@ class _DailyRecommendationContent extends StatelessWidget {
       lastOpened?.providerId == playlist.providerId &&
       lastOpened?.opaqueId == playlist.opaqueId;
 
+  Widget _featuredSlot() {
+    final playlist = featuredPlaylist;
+    if (playlist != null) {
+      return _FeaturedRecommendationCard(
+        playlist: playlist,
+        eyebrow: "TODAY'S PICK",
+        height: compact ? _HomeGeometry.compactHeroHeight : null,
+        itemKey: const ValueKey('home-recommendation-0'),
+        onSelected: onSelected,
+        focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+      );
+    }
+    return _RecommendationSlotState(
+      key: const ValueKey('home-recommendation-hero-state'),
+      title: "Today's pick",
+      detail: _publicStateDetail(publicStage),
+      loading: publicStage == RecommendedPlaylistStage.loading,
+      onRetry: publicStage == RecommendedPlaylistStage.error
+          ? onRetryPublic
+          : null,
+      compact: compact,
+      featured: true,
+    );
+  }
+
+  Widget _dailySlot() {
+    final playlist = dailyPlaylist;
+    if (playlist != null) {
+      return compact
+          ? _CompactRecommendationCard(
+              playlist: playlist,
+              eyebrow: 'Daily recommendation',
+              eyebrowKey: const ValueKey('home-daily-heading'),
+              itemKey: const ValueKey('home-daily-recommendation'),
+              onSelected: onSelected,
+              focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+            )
+          : _WideRecommendationCard(
+              playlist: playlist,
+              eyebrow: 'Daily recommendation',
+              eyebrowKey: const ValueKey('home-daily-heading'),
+              itemKey: const ValueKey('home-daily-recommendation'),
+              onSelected: onSelected,
+              focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+            );
+    }
+    return _RecommendationSlotState(
+      key: const ValueKey('home-daily-recommendation-state'),
+      headingKey: const ValueKey('home-daily-heading'),
+      title: 'Daily recommendation',
+      detail: _dailyStateDetail(dailyStage),
+      loading: dailyStage == HomeResourceStage.loading,
+      onRetry: dailyStage == HomeResourceStage.error ? onRetryDaily : null,
+      compact: compact,
+    );
+  }
+
+  Widget _secondaryPublicSlot() {
+    final playlist = secondaryPlaylist;
+    if (playlist != null) {
+      return compact
+          ? _CompactRecommendationCard(
+              playlist: playlist,
+              itemKey: const ValueKey('home-recommendation-1'),
+              onSelected: onSelected,
+              focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+            )
+          : _WideRecommendationCard(
+              playlist: playlist,
+              itemKey: const ValueKey('home-recommendation-1'),
+              onSelected: onSelected,
+              focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+            );
+    }
+    return _RecommendationSlotState(
+      key: const ValueKey('home-recommendation-secondary-state'),
+      title: 'Another public pick',
+      detail: _publicStateDetail(publicStage),
+      loading: publicStage == RecommendedPlaylistStage.loading,
+      onRetry: publicStage == RecommendedPlaylistStage.error
+          ? onRetryPublic
+          : null,
+      compact: compact,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hero = items.first;
-    final secondary = items.skip(1).toList(growable: false);
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FeaturedRecommendationCard(
-            playlist: hero,
-            eyebrow: _recommendationEyebrow(hero, dailyPlaylist),
-            height: _HomeGeometry.compactHeroHeight,
-            itemKey: const ValueKey('home-recommendation-0'),
-            onSelected: onSelected,
-            focusNode: _focusMatches(hero) ? returnFocusNode : null,
+          _featuredSlot(),
+          const SizedBox(height: _HomeGeometry.itemGap),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _dailySlot()),
+              const SizedBox(width: _HomeGeometry.itemGap),
+              Expanded(child: _secondaryPublicSlot()),
+            ],
           ),
-          if (secondary.isNotEmpty) ...[
-            const SizedBox(height: _HomeGeometry.itemGap),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var index = 0; index < secondary.length; index++) ...[
-                  if (index > 0) const SizedBox(width: _HomeGeometry.itemGap),
-                  Expanded(
-                    child: _CompactRecommendationCard(
-                      playlist: secondary[index],
-                      itemKey: ValueKey('home-recommendation-${index + 1}'),
-                      onSelected: onSelected,
-                      focusNode: _focusMatches(secondary[index])
-                          ? returnFocusNode
-                          : null,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
         ],
       );
     }
@@ -653,39 +689,17 @@ class _DailyRecommendationContent extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Expanded(flex: 2, child: _featuredSlot()),
+          const SizedBox(width: _HomeGeometry.itemGap),
           Expanded(
-            flex: 2,
-            child: _FeaturedRecommendationCard(
-              playlist: hero,
-              eyebrow: _recommendationEyebrow(hero, dailyPlaylist),
-              itemKey: const ValueKey('home-recommendation-0'),
-              onSelected: onSelected,
-              focusNode: _focusMatches(hero) ? returnFocusNode : null,
+            child: Column(
+              children: [
+                Expanded(child: _dailySlot()),
+                const SizedBox(height: _HomeGeometry.itemGap),
+                Expanded(child: _secondaryPublicSlot()),
+              ],
             ),
           ),
-          if (secondary.isNotEmpty) ...[
-            const SizedBox(width: _HomeGeometry.itemGap),
-            Expanded(
-              child: Column(
-                children: [
-                  for (var index = 0; index < secondary.length; index++) ...[
-                    if (index > 0)
-                      const SizedBox(height: _HomeGeometry.itemGap),
-                    Expanded(
-                      child: _WideRecommendationCard(
-                        playlist: secondary[index],
-                        itemKey: ValueKey('home-recommendation-${index + 1}'),
-                        onSelected: onSelected,
-                        focusNode: _focusMatches(secondary[index])
-                            ? returnFocusNode
-                            : null,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -824,12 +838,16 @@ class _WideRecommendationCard extends StatelessWidget {
     required this.itemKey,
     required this.onSelected,
     required this.focusNode,
+    this.eyebrow,
+    this.eyebrowKey,
   });
 
   final RecommendedPlaylistSummary playlist;
   final Key itemKey;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final FocusNode? focusNode;
+  final String? eyebrow;
+  final Key? eyebrowKey;
 
   @override
   Widget build(BuildContext context) {
@@ -862,6 +880,20 @@ class _WideRecommendationCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (eyebrow != null) ...[
+                          Text(
+                            eyebrow!,
+                            key: eyebrowKey,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                        ],
                         Text(
                           playlist.title,
                           maxLines: 2,
@@ -906,12 +938,16 @@ class _CompactRecommendationCard extends StatelessWidget {
     required this.itemKey,
     required this.onSelected,
     required this.focusNode,
+    this.eyebrow,
+    this.eyebrowKey,
   });
 
   final RecommendedPlaylistSummary playlist;
   final Key itemKey;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final FocusNode? focusNode;
+  final String? eyebrow;
+  final Key? eyebrowKey;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -946,6 +982,19 @@ class _CompactRecommendationCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
+        if (eyebrow != null) ...[
+          Text(
+            eyebrow!,
+            key: eyebrowKey,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+        ],
         Text(
           playlist.title,
           maxLines: 1,
@@ -957,6 +1006,135 @@ class _CompactRecommendationCard extends StatelessWidget {
   );
 }
 
+class _RecommendationSlotState extends StatelessWidget {
+  const _RecommendationSlotState({
+    required this.title,
+    required this.detail,
+    required this.loading,
+    required this.onRetry,
+    required this.compact,
+    this.featured = false,
+    this.headingKey,
+    super.key,
+  });
+
+  final String title;
+  final String detail;
+  final bool loading;
+  final VoidCallback? onRetry;
+  final bool compact;
+  final bool featured;
+  final Key? headingKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final icon = Icon(
+      loading
+          ? Icons.hourglass_top_rounded
+          : onRetry == null
+          ? Icons.music_off_outlined
+          : Icons.cloud_off_rounded,
+      color: colors.onSurfaceVariant,
+    );
+    final retry = onRetry == null
+        ? null
+        : IconButton(
+            tooltip: 'Retry $title',
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+          );
+
+    if (compact && !featured) {
+      return Semantics(
+        label: '$title. $detail',
+        liveRegion: onRetry != null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: Material(
+                color: colors.surfaceContainerLow,
+                borderRadius: _HomeGeometry.heroRadius,
+                child: Center(child: retry ?? icon),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              key: headingKey,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              detail,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final content = Material(
+      color: featured
+          ? colors.surfaceContainerHigh
+          : colors.surfaceContainerLow,
+      borderRadius: _HomeGeometry.heroRadius,
+      child: Padding(
+        padding: const EdgeInsets.all(_HomeGeometry.itemGap),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: featured ? 48 : 44,
+              child: Center(child: icon),
+            ),
+            const SizedBox(width: _HomeGeometry.itemGap),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    key: headingKey,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: featured
+                        ? Theme.of(context).textTheme.titleLarge
+                        : Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    detail,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: colors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            ?retry,
+          ],
+        ),
+      ),
+    );
+    return Semantics(
+      label: '$title. $detail',
+      liveRegion: onRetry != null,
+      child: compact && featured
+          ? SizedBox(height: _HomeGeometry.compactHeroHeight, child: content)
+          : content,
+    );
+  }
+}
+
 class _PersonalizedPlaylistSection extends StatelessWidget {
   const _PersonalizedPlaylistSection({
     required this.controller,
@@ -964,7 +1142,6 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
     required this.onSelected,
     required this.lastOpened,
     required this.returnFocusNode,
-    required this.onOpenLibrary,
   });
 
   final HomeController controller;
@@ -972,7 +1149,6 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
-  final VoidCallback onOpenLibrary;
 
   @override
   Widget build(BuildContext context) =>
@@ -987,10 +1163,6 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
           icon: Icons.library_music_outlined,
           title: 'No personalized playlists right now',
           detail: 'Open Library to browse the playlists you saved.',
-          action: FilledButton.tonal(
-            onPressed: onOpenLibrary,
-            child: const Text('Open library'),
-          ),
         ),
         HomeResourceStage.error => _HomeInlineState(
           key: const ValueKey('home-library-error'),
@@ -1558,7 +1730,7 @@ class _UnavailablePrograms extends StatelessWidget {
     key: const ValueKey('home-hot-programs-unavailable'),
     icon: Icons.podcasts_outlined,
     message: 'Popular programs are unavailable because the verified client data has no program catalog.',
-    compactHeight: compact ? 144 : 112,
+    maxWidth: compact ? double.infinity : 560,
   );
 }
 
@@ -1566,61 +1738,65 @@ class _UnavailableHomeSection extends StatelessWidget {
   const _UnavailableHomeSection({
     required this.icon,
     required this.message,
-    this.compactHeight,
+    this.maxWidth = 560,
     super.key,
   });
 
   final IconData icon;
   final String message;
-  final double? compactHeight;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      label: '$message Unavailable.',
-      child: Container(
-        width: double.infinity,
-        constraints: BoxConstraints(minHeight: compactHeight ?? 72),
-        padding: const EdgeInsets.all(_HomeGeometry.itemGap),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLow,
-          borderRadius: _HomeGeometry.heroRadius,
-          border: Border.all(color: colors.outlineVariant),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: compactHeight == null ? 44 : 80,
-              height: compactHeight == null ? 44 : 80,
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerHighest,
-                borderRadius: _HomeGeometry.artworkRadius,
-              ),
-              child: Icon(icon, color: colors.onSurfaceVariant),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Semantics(
+          label: '$message Unavailable.',
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: _HomeGeometry.heroRadius,
+              border: Border.all(color: colors.outlineVariant),
             ),
-            const SizedBox(width: _HomeGeometry.itemGap),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Unavailable',
-                    style: Theme.of(context).textTheme.titleMedium,
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerHighest,
+                    borderRadius: _HomeGeometry.artworkRadius,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    message,
-                    maxLines: compactHeight == null ? 2 : 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: colors.onSurfaceVariant),
+                  child: Icon(icon, size: 20, color: colors.onSurfaceVariant),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Unavailable',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: colors.onSurfaceVariant),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1663,87 +1839,6 @@ class _HomeArtwork extends StatelessWidget {
             ),
     );
   }
-}
-
-class _DailyRecommendationLoading extends StatelessWidget {
-  const _DailyRecommendationLoading({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Loading Home recommendations',
-    child: compact
-        ? Column(
-            children: [
-              Container(
-                height: _HomeGeometry.compactHeroHeight,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  borderRadius: _HomeGeometry.heroRadius,
-                ),
-              ),
-              const SizedBox(height: _HomeGeometry.itemGap),
-              Row(
-                children: [
-                  for (var index = 0; index < 2; index++) ...[
-                    if (index > 0) const SizedBox(width: _HomeGeometry.itemGap),
-                    Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerLow,
-                            borderRadius: _HomeGeometry.heroRadius,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          )
-        : SizedBox(
-            height: _HomeGeometry.wideHeroHeight,
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                      borderRadius: _HomeGeometry.heroRadius,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: _HomeGeometry.itemGap),
-                Expanded(
-                  child: Column(
-                    children: [
-                      for (var index = 0; index < 2; index++) ...[
-                        if (index > 0)
-                          const SizedBox(height: _HomeGeometry.itemGap),
-                        Expanded(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerLow,
-                              borderRadius: _HomeGeometry.heroRadius,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-  );
 }
 
 class _HomeLoadingShelf extends StatelessWidget {
@@ -1862,10 +1957,22 @@ class _HomeInlineState extends StatelessWidget {
   );
 }
 
-String _recommendationEyebrow(
-  RecommendedPlaylistSummary playlist,
-  RecommendedPlaylistSummary? daily,
-) => _samePlaylist(playlist, daily) ? 'MADE FOR YOU' : 'QQ MUSIC PICK';
+String _publicStateDetail(RecommendedPlaylistStage stage) => switch (stage) {
+  RecommendedPlaylistStage.loading => 'Loading public recommendations…',
+  RecommendedPlaylistStage.content =>
+    'No additional public recommendation is available right now.',
+  RecommendedPlaylistStage.empty =>
+    'QQ Music has no public recommendation available right now.',
+  RecommendedPlaylistStage.error =>
+    'Public recommendations could not be loaded.',
+};
+
+String _dailyStateDetail(HomeResourceStage stage) => switch (stage) {
+  HomeResourceStage.loading => 'Loading your Daily 30…',
+  HomeResourceStage.content => 'Daily 30 is unavailable right now.',
+  HomeResourceStage.empty => 'Daily 30 is unavailable right now.',
+  HomeResourceStage.error => 'Daily 30 could not be loaded.',
+};
 
 String _recommendationDetail(RecommendedPlaylistSummary playlist) =>
     playlist.trackCount == null
@@ -1882,14 +1989,6 @@ String _durationLabel(int seconds) {
   final remainder = seconds % 60;
   return '$minutes:${remainder.toString().padLeft(2, '0')}';
 }
-
-bool _samePlaylist(
-  RecommendedPlaylistSummary playlist,
-  RecommendedPlaylistSummary? other,
-) =>
-    other != null &&
-    playlist.providerId == other.providerId &&
-    playlist.opaqueId == other.opaqueId;
 
 bool _sameTrack(PlaylistTrackSummary? track, PlaylistTrackSummary other) =>
     track != null &&
