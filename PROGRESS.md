@@ -4,15 +4,15 @@ execution:
   state: ACTIVE
   global_stop: false
   acceptance_milestone: M1
-  active_workstream: EVIDENCE_GATED_PRODUCT_REVIEW
-  current_task: null
-  next_action: MAINTAINER_REVIEW
+  active_workstream: M7_PAGE_BY_PAGE_UI
+  current_task: HOME_FROM_APPROVED_STITCH_DESIGN
+  next_action: IMPLEMENT
 ---
 
 # Current State
 
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
-- M2 through M6 are checkpointed. M7 is authorized but not checkpointed; its bounded Home/Library/persistent-player work remains paused pending maintainer visual acceptance of the current Home and separate page-level visual direction.
+- M2 through M6 are checkpointed. HD-009 resumes M7 one page at a time after the Core-capability checkpoint; Home is the only active visual scope and is not yet accepted or checkpointed.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
 - Current full gates pass: 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, 385 Flutter tests, Linux x64 Release packaging, and all five required Linux integration targets.
 
@@ -26,8 +26,8 @@ execution:
 # Current Scheduling
 
 - There is no remaining safe agent-only Core capability task supported by the audit. Do not invent another endpoint, Provider, framework, or refactor to keep producing commits.
-- The next product action is maintainer review of the current authenticated Home snapshot. UI code must not resume automatically from this Core checkpoint.
-- If Home is accepted or redirected, subsequent UI work proceeds one page at a time under separate human visual direction while preserving retained state, accessibility, and the existing Flutter/Rust/music boundaries.
+- Home implementation is active against the Human-approved Stitch desktop and mobile frames. The design source governs composition; production data remains truthful and the existing Flutter/Rust/music boundaries remain intact.
+- No other page may begin before the maintainer visually accepts Home. Automated checks and the bounded Material 3 review cannot supply that acceptance.
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
 
 # Blockers
@@ -47,5 +47,5 @@ execution:
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback, personalized recommendation quality, or broad live catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, unavailable operating systems, or release readiness.
-- The current Home is a paused presentation snapshot, not accepted product completion. Automated layout tests cannot supply its required visual review.
+- The current Home implementation is active visual work, not accepted product completion. Automated layout tests cannot supply its required visual review.
 - Historical research/checkpoint documents remain evidence snapshots. Current scheduling is governed by `AGENTS.md`, `ROADMAP.md`, and this file.

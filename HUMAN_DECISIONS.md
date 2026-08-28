@@ -88,4 +88,14 @@
 
 **Consequences:** M7 remains paused without being rejected. The active workstream may implement one evidenced capability at a time within the existing Flutter/Rust/Bridge boundaries. A first-release capability checkpoint is core readiness for later product UI, not visual acceptance or release readiness. Background playback remains a separate product decision because it would add a material lifecycle/platform architecture; Popular Programs also requires boundary confirmation if it would turn the client into a podcast/general-media product.
 
+**Fulfilled condition:** The first-release Core capability checkpoint on 2026-08-28 satisfied this decision's finite readiness purpose. HD-008 remains historical evidence; it no longer pauses the separately authorized page-by-page UI work in HD-009.
+
+## HD-009 — Design-source-driven page-by-page UI implementation
+
+**Status:** Accepted on 2026-08-28
+
+**Decision:** The first-release Core capability checkpoint is sufficient to resume M7 one page at a time. For each page, a Human-approved Stitch/Figma design defines the visual composition; Codex implements it over truthful production data and the existing architecture, applies a bounded Material 3 quality review, and then stops for maintainer visual acceptance. Home is the first active page, and no other page starts before Home is accepted.
+
+**Consequences:** Human-approved design sources are valid presentation-task provenance and must not be replaced with a generic layout merely because it is easier to implement or test. Clearly synthetic design fixtures are permitted, but production UI must remain truthful. This decision authorizes no new Provider, state or navigation framework, speculative visual framework, product category, or change to Flutter/Rust ownership.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

@@ -45,17 +45,17 @@ This local evidence gap does not block independently authorized maintenance. No 
 - **Evidence boundary:** this is selected direct-client compatibility, not full-application behavior, authenticated playback, remote MV playback, broad catalog quality, or release readiness.
 - **Checkpoint:** 2026-08-27 — [M6 review](docs/development/m6-checkpoint-review.md).
 
-## Paused Workstream — M7 QQ Music-familiar Material 3 Product UI
+## Active Workstream — M7 Page-by-Page Product UI Integration
 
-**Authorized goal:** make the existing product read more clearly as a mature QQ Music-familiar Material 3 client, using only existing truthful capabilities and no copied branding, proprietary assets, fake personalization, or new framework.
+**Goal:** integrate the existing product one page at a time against Human-approved Stitch/Figma sources so it reads as a mature QQ Music-familiar Material 3 client, using only truthful capabilities and no copied branding, proprietary assets, fake personalization, or new framework.
 
-**Implemented before pause:** a deliberate desktop sidebar/top Search shell; a real-data Home using existing Library/recommendation state; shared Library framing and dense desktop Playlists; and clearer desktop persistent-player grouping. Search and Discover were audited but not changed without a bounded failure.
+**Current sequence:** Home → Library → Discover → Search → Playlist → Album → Artist → Player/Queue → Now Playing → Lyrics/Comments/MV. Each arrow requires separate Human visual acceptance or direction; it is not an autonomous implementation queue.
 
-**Why paused:** the complexity and first-release Core-capability passes are complete, but M7 is not checkpointed and automated layout tests do not establish product-complete visual results. The current Home snapshot still needs maintainer visual acceptance before another page changes.
+**Current scope:** Home is active against the approved Stitch desktop and mobile frames. No other page begins until Home receives Human visual acceptance. Automated tests establish correctness and accessibility boundaries, not visual acceptance.
 
-**Resume condition:** maintainer visual acceptance or specific correction direction for the current Home, followed by separate page-level visual direction. Resumption must preserve retained state, accessibility, and the existing Flutter/Rust/music ownership boundaries.
+**Boundaries:** approved frames are visual sources of truth, while implementation must preserve retained state, accessibility, truthful Provider semantics, and the existing Flutter/Rust/music ownership. M7 is product integration, not a design-framework, navigation-framework, or architecture-rewrite project.
 
-**Home-only review gate:** HD-006 and HD-007 authorized one focused Home pass without resuming other M7 pages. Wide desktop now uses a full-height Sidebar beside a Main Region containing the Top Bar, Home, and active player. The ordered Home composition uses real public recommendations and personal playlists; unsupported program and listening-history sections remain explicit unavailable states. That presentation snapshot is now paused by HD-008 before maintainer visual acceptance.
+**Prior Home evidence:** HD-006 and HD-007 produced the current full-height desktop Sidebar/Main Region and a truthful six-section Home snapshot. HD-008 then paused presentation while the Core capability audit completed; HD-009 supersedes that scheduling pause and authorizes the approved Stitch-driven Home replacement.
 
 ## Completed Checkpoint — First-Release Core Capability Completion
 
@@ -92,6 +92,6 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 ## Later Evidence-Gated Direction
 
-The Core-capability checkpoint is complete. M7 and its authenticated compact/desktop visual review remain paused until the maintainer accepts or redirects the current Home snapshot and supplies separate page-level visual direction. Automated tests do not establish visual product completion.
+The Core-capability checkpoint is complete. M7 is active only for the current Human-approved page; the next page remains gated on acceptance and separate visual direction. Automated tests do not establish visual product completion.
 
 Offline/cache behavior, a narrow local-library capability, or media fallback require demonstrated user value and separate Roadmap authority. They must not turn the product into a multi-service aggregator. Release identity/signing and external distribution remain governed by HD-001 and the linked technical debt.

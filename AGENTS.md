@@ -42,6 +42,12 @@ Task, commit, review, checkpoint, milestone, report, and green-test completion a
 - Do not introduce a localhost/hosted sidecar, raw JSON boundary, service locator, new state/navigation framework, or speculative plugin/runtime abstraction.
 - Refactor only from concrete duplication, blocked changeability/testability, a broken boundary, triggered debt, or measured performance—not file size or architectural aesthetics alone.
 
+## Human-approved UI work
+
+A Human-approved Stitch or Figma frame, explicit visual specification, annotated screenshot, or maintainer visual review is valid presentation-task provenance. When one exists, it defines the visual composition and product hierarchy; Codex remains responsible for maintainable Flutter implementation, accessibility, adaptive behavior, tests, and the accepted architecture boundaries. Do not downgrade an approved visual change merely because it is aesthetic, or replace it autonomously with a different style. Deviate only for a concrete accessibility, platform, responsive, or architecture constraint, and report each material deviation.
+
+Production UI must use truthful Provider, Domain, account, recommendation, and availability semantics. Widgetbook, design-preview, and visual-test fixtures may use clearly identified synthetic non-production data, but must never imply real QQ Music recommendations or account content. Visual authority does not override credential safety, Flutter/Rust ownership, Provider isolation, or accepted product boundaries.
+
 ## Security and external evidence
 
 - Never commit or print credentials, cookies, tokens, QIMEI values, personal responses, expiring media URLs, user content, build output, or unrelated generated artifacts.
