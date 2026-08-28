@@ -98,4 +98,6 @@
 
 **Consequences:** Human-approved design sources are valid presentation-task provenance and must not be replaced with a generic layout merely because it is easier to implement or test. Clearly synthetic design fixtures are permitted, but production UI must remain truthful. This decision authorizes no new Provider, state or navigation framework, speculative visual framework, product category, or change to Flutter/Rust ownership.
 
+**Authority model note:** HD-009 uses the domain-specific model routed by `AGENTS.md`: Core work retains high implementation autonomy under evidence and architecture, while UI work uses controlled, design-source-driven implementation autonomy under `docs/agent/ui-development.md`.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.
