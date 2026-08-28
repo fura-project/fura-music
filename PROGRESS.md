@@ -5,16 +5,16 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M7_PAGE_BY_PAGE_UI
-  current_task: HOME_VISUAL_ACCEPTANCE
-  next_action: HOME_READY_FOR_HUMAN_VISUAL_REVIEW
+  current_task: LIKED_SONGS_VISUAL_ACCEPTANCE
+  next_action: HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
 
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
-- M2 through M6 are checkpointed. HD-009 resumes M7 one page at a time after the Core-capability checkpoint; the approved desktop/compact Home implementation is ready for maintainer visual review but is not accepted or checkpointed.
+- M2 through M6 are checkpointed. HD-010 leaves the unaccepted Home candidate intact but pauses its visual iteration; the Human-approved Liked Songs desktop design is now implemented as the active M7 visual-review candidate.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
-- Current full gates pass: 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, 391 Flutter tests, Linux x64 Release packaging, and all five required Linux integration targets.
+- The current Liked Songs candidate passes 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, and 393 Flutter tests. A temporary secret-free Linux integration fixture also built and rendered the 1440 × 960 and 390 × 844 candidate with real fonts; the fixture was removed after capture. Linux x64 Release packaging and the five required Linux integration targets remain last-checkpoint evidence and are rerun only after Human visual acceptance.
 
 # Current Capability Boundary
 
@@ -26,9 +26,10 @@ execution:
 # Current Scheduling
 
 - There is no remaining safe agent-only Core capability task supported by the audit. Do not invent another endpoint, Provider, framework, or refactor to keep producing commits.
-- Home now follows the approved Stitch desktop/mobile composition with an account-aware heading, Daily 30/public hero, personalized Playlist and Track capabilities, high-density desktop Sidebar, compact shortcuts, and existing persistent player/navigation ownership. Unsupported Popular Programs and a second personalized Track set remain explicit unavailable states rather than fabricated content.
-- Final 1440×960 and 390×844 full-shell review screenshots use synthetic, non-account fixtures. They prove layout and composition only; stored-account access was not automated, so real artwork/content quality remains part of maintainer visual review.
-- No other page may begin before the maintainer visually accepts Home. Automated checks and the bounded Material 3 review cannot supply that acceptance.
+- The Home candidate and its truthful Daily/public/personalized slot corrections remain unaccepted and deferred; do not reinterpret the pause as visual acceptance or discard its implementation.
+- Liked Songs now uses the Human-approved Stitch desktop composition over a typed provider-neutral built-in-liked semantic, the retained Library state, positional Queue, dense desktop rows, compact Track rows, and the persistent desktop/mobile player. The supplied official-client image is information-architecture reference only.
+- The current candidate intentionally omits unsupported download, batch-edit, audiobook, and video-library controls. Synthetic review content does not enter production and no account data was accessed.
+- No page after Liked Songs may begin before maintainer visual acceptance or another explicit Human redirect. Automated checks and the bounded Material 3 review cannot supply that acceptance.
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
 
 # Blockers
@@ -48,5 +49,5 @@ execution:
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback, personalized recommendation quality, or broad live catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, unavailable operating systems, or release readiness.
-- The current Home implementation is active visual work, not accepted product completion. Automated layout tests cannot supply its required visual review.
+- Home remains deferred and unaccepted. Liked Songs is implemented and verified as a visual-review candidate, not accepted product completion; the attached rendered output requires maintainer visual review.
 - Historical research/checkpoint documents remain evidence snapshots. Current scheduling is governed by `AGENTS.md`, `ROADMAP.md`, and this file.

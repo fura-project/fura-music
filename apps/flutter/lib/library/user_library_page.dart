@@ -23,6 +23,7 @@ import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
+import 'package:flutterustmusic/library/liked_songs_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/navigation/authenticated_navigation_state.dart';
@@ -502,6 +503,28 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     }
   }
 
+  void _openLikedSongs() {
+    if (_navigation.hasLocalRoute) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _navigation.selectPrimaryDestination(
+        AuthenticatedPrimaryDestination.library,
+      );
+      _navigation.selectLibrarySection(LibrarySection.likedSongs);
+    });
+  }
+
+  void _openLibraryPlaylists() {
+    if (_navigation.hasLocalRoute) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _navigation.selectPrimaryDestination(
+        AuthenticatedPrimaryDestination.library,
+      );
+      _navigation.selectLibrarySection(LibrarySection.playlists);
+    });
+  }
+
   void _restoreLibrarySectionFocus() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
@@ -685,13 +708,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   Widget _libraryDestinationBody() => Column(
     children: [
-      FocusScope(
-        node: _librarySectionFocusScopeNode,
-        child: LibrarySectionSelector(
-          selected: _librarySection,
-          onSelected: _selectLibrarySection,
+      if (_librarySection != LibrarySection.likedSongs)
+        FocusScope(
+          node: _librarySectionFocusScopeNode,
+          child: LibrarySectionSelector(
+            selected: _librarySection,
+            onSelected: _selectLibrarySection,
+          ),
         ),
-      ),
       if (_librarySection == LibrarySection.playlists)
         AnimatedBuilder(
           animation: _controller,
@@ -739,11 +763,45 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               )
             else
               const SizedBox.shrink(),
+            if (_navigation.visitedLibrarySection(LibrarySection.likedSongs))
+              _likedSongsBody()
+            else
+              const SizedBox.shrink(),
           ],
         ),
       ),
     ],
   );
+
+  Widget _likedSongsBody() {
+    final playlist = _controller.likedSongsPlaylist;
+    if (playlist != null) {
+      return LikedSongsPage(
+        key: ValueKey('liked-songs-${playlist.providerId}'),
+        playlist: playlist,
+        gateway: _library.playlistDetailGateway,
+        queuePlaybackController: _queuePlaybackController,
+        onOpenAlbums: () => _selectLibrarySection(LibrarySection.albums),
+        onOpenArtists: () => _selectLibrarySection(LibrarySection.artists),
+        onOpenAlbum: _openTrackContextAlbum,
+        onOpenArtist: _openTrackContextArtist,
+        onSignInAgain: widget.onSignInAgain,
+      );
+    }
+    return switch (_controller.stage) {
+      UserLibraryStage.loading => const _LibraryLoading(),
+      UserLibraryStage.content ||
+      UserLibraryStage.empty => const _CenteredLibraryMessage(
+        icon: Icons.favorite_border_rounded,
+        title: '暂时无法找到喜欢歌单',
+        detail: 'QQ Music 未返回内建喜欢歌单，不会用其他歌单代替。',
+        actions: [],
+      ),
+      UserLibraryStage.error ||
+      UserLibraryStage.authenticationRequired ||
+      UserLibraryStage.credentialRejected => _libraryBody(),
+    };
+  }
 
   Widget _primaryScaffold() => LayoutBuilder(
     builder: (context, constraints) {
@@ -751,6 +809,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final wide = constraints.maxWidth >= 840;
       final extendedSidebar = constraints.maxWidth >= 1100;
       final compactActions = constraints.maxWidth < 520;
+      final likedSongsOpen =
+          destination == AuthenticatedPrimaryDestination.library &&
+          _librarySection == LibrarySection.likedSongs;
       final primaryContent = IndexedStack(
         index: destination.index,
         children: [
@@ -833,8 +894,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           },
           compact: compactActions,
           showTitle:
-              destination != AuthenticatedPrimaryDestination.home ||
-              !extendedSidebar,
+              !likedSongsOpen &&
+              (destination != AuthenticatedPrimaryDestination.home ||
+                  !extendedSidebar),
           showSearchShortcut:
               extendedSidebar &&
               destination != AuthenticatedPrimaryDestination.search,
@@ -851,11 +913,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             if (extendedSidebar)
               _DesktopMusicSidebar(
                 destination: destination,
+                librarySection: _librarySection,
                 homeController: _homeController,
                 libraryController: _controller,
                 recommendationsFocusNode: _recommendationsReturnFocusNode,
                 searchFocusNode: _searchReturnFocusNode,
                 onDestinationSelected: _selectPrimaryDestination,
+                onOpenLikedSongs: _openLikedSongs,
+                onOpenLibrary: _openLibraryPlaylists,
                 onOpenPlaylist: (playlist) {
                   _selectPrimaryDestination(
                     AuthenticatedPrimaryDestination.library,
@@ -894,7 +959,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (destination ==
-                              AuthenticatedPrimaryDestination.home)
+                                  AuthenticatedPrimaryDestination.home ||
+                              likedSongsOpen)
                             NowPlayingBar.compact(
                               controller: _queuePlaybackController,
                               onSignInAgain: widget.onSignInAgain,
@@ -907,7 +973,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                           NavigationBar(
                             height:
                                 destination ==
-                                    AuthenticatedPrimaryDestination.home
+                                        AuthenticatedPrimaryDestination.home ||
+                                    likedSongsOpen
                                 ? 64
                                 : null,
                             selectedIndex: destination.index,
@@ -1132,20 +1199,26 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 class _DesktopMusicSidebar extends StatelessWidget {
   const _DesktopMusicSidebar({
     required this.destination,
+    required this.librarySection,
     required this.homeController,
     required this.libraryController,
     required this.recommendationsFocusNode,
     required this.searchFocusNode,
     required this.onDestinationSelected,
+    required this.onOpenLikedSongs,
+    required this.onOpenLibrary,
     required this.onOpenPlaylist,
   });
 
   final AuthenticatedPrimaryDestination destination;
+  final LibrarySection librarySection;
   final HomeController homeController;
   final UserLibraryController libraryController;
   final FocusNode recommendationsFocusNode;
   final FocusNode searchFocusNode;
   final ValueChanged<AuthenticatedPrimaryDestination> onDestinationSelected;
+  final VoidCallback onOpenLikedSongs;
+  final VoidCallback onOpenLibrary;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
 
   @override
@@ -1209,21 +1282,35 @@ class _DesktopMusicSidebar extends StatelessWidget {
                   const SizedBox(height: MusicSpacing.contentGap),
                   const _SidebarSectionLabel('MY MUSIC'),
                   _SidebarDestinationTile(
+                    key: const ValueKey('open-liked-songs'),
+                    selected:
+                        destination ==
+                            AuthenticatedPrimaryDestination.library &&
+                        librarySection == LibrarySection.likedSongs,
+                    icon: Icons.favorite_border_rounded,
+                    selectedIcon: Icons.favorite_rounded,
+                    label: '喜欢',
+                    onTap: onOpenLikedSongs,
+                  ),
+                  _SidebarDestinationTile(
                     key: const ValueKey('primary-library-destination'),
                     selected:
-                        destination == AuthenticatedPrimaryDestination.library,
+                        destination ==
+                            AuthenticatedPrimaryDestination.library &&
+                        librarySection != LibrarySection.likedSongs,
                     icon: Icons.library_music_outlined,
                     selectedIcon: Icons.library_music_rounded,
                     label: 'Library',
-                    onTap: () => onDestinationSelected(
-                      AuthenticatedPrimaryDestination.library,
-                    ),
+                    onTap: onOpenLibrary,
                   ),
                   if (libraryController.stage == UserLibraryStage.content &&
                       libraryController.playlists.isNotEmpty) ...[
                     const SizedBox(height: MusicSpacing.contentGap),
                     const _SidebarSectionLabel('YOUR PLAYLISTS'),
-                    for (final playlist in libraryController.playlists.take(7))
+                    for (final playlist
+                        in libraryController.playlists
+                            .where((playlist) => !playlist.isLikedSongs)
+                            .take(7))
                       ListTile(
                         dense: true,
                         minTileHeight: 44,

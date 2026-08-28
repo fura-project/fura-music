@@ -8307,12 +8307,14 @@ impl SseDecode for crate::api::library::LibraryPlaylistSummary {
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_artworkUri = <Option<String>>::sse_decode(deserializer);
         let mut var_trackCount = <Option<u32>>::sse_decode(deserializer);
+        let mut var_isLikedSongs = <bool>::sse_decode(deserializer);
         return crate::api::library::LibraryPlaylistSummary {
             provider_id: var_providerId,
             opaque_id: var_opaqueId,
             title: var_title,
             artwork_uri: var_artworkUri,
             track_count: var_trackCount,
+            is_liked_songs: var_isLikedSongs,
         };
     }
 }
@@ -12181,6 +12183,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::library::LibraryPlaylistSumma
             self.title.into_into_dart().into_dart(),
             self.artwork_uri.into_into_dart().into_dart(),
             self.track_count.into_into_dart().into_dart(),
+            self.is_liked_songs.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15603,6 +15606,7 @@ impl SseEncode for crate::api::library::LibraryPlaylistSummary {
         <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.artwork_uri, serializer);
         <Option<u32>>::sse_encode(self.track_count, serializer);
+        <bool>::sse_encode(self.is_liked_songs, serializer);
     }
 }
 

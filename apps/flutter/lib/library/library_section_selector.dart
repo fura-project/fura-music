@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/navigation/music_section_selector.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
-enum LibrarySection { playlists, albums, artists }
+enum LibrarySection { playlists, albums, artists, likedSongs }
 
 const _destinations = [
+  MusicSectionDestination(
+    value: LibrarySection.likedSongs,
+    icon: Icons.favorite_rounded,
+    label: '喜欢',
+    itemKey: ValueKey('library-section-liked-songs'),
+  ),
   MusicSectionDestination(
     value: LibrarySection.playlists,
     icon: Icons.queue_music_rounded,

@@ -15,6 +15,7 @@ pub struct LibraryPlaylistSummary {
     pub title: String,
     pub artwork_uri: Option<String>,
     pub track_count: Option<u32>,
+    pub is_liked_songs: bool,
 }
 
 impl fmt::Debug for LibraryPlaylistSummary {
@@ -26,6 +27,7 @@ impl fmt::Debug for LibraryPlaylistSummary {
             .field("title", &"[REDACTED]")
             .field("has_artwork", &self.artwork_uri.is_some())
             .field("track_count", &self.track_count)
+            .field("is_liked_songs", &self.is_liked_songs)
             .finish()
     }
 }
@@ -39,6 +41,7 @@ pub(super) fn bridge_playlist_summary(
         title: playlist.title().to_owned(),
         artwork_uri: playlist.artwork_uri().map(str::to_owned),
         track_count: playlist.track_count(),
+        is_liked_songs: playlist.purpose() == music_domain::PlaylistPurpose::LikedSongs,
     }
 }
 
@@ -458,8 +461,8 @@ const fn map_track_page_error(error: UserLibraryError) -> QqMusicPlaylistTrackPa
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        AlbumId, AlbumSummary, ArtistId, ArtistSummary, PlaylistId, PlaylistSummary,
-        PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
+        AlbumId, AlbumSummary, ArtistId, ArtistSummary, PlaylistId, PlaylistPurpose,
+        PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
     };
     use provider_api::UserLibraryError;
 
@@ -478,7 +481,8 @@ mod tests {
         .expect("playlist ID");
         let summary = PlaylistSummary::new(id, "must-not-leak")
             .expect("summary")
-            .with_track_count(Some(42));
+            .with_track_count(Some(42))
+            .with_purpose(PlaylistPurpose::LikedSongs);
         let favorite_id = PlaylistId::new(
             ProviderId::new("qq-music").expect("provider"),
             "favorite:8001",
@@ -493,8 +497,10 @@ mod tests {
         assert_eq!(mapped.playlists[0].provider_id, "qq-music");
         assert_eq!(mapped.playlists[0].opaque_id, "owned:7001:201");
         assert_eq!(mapped.playlists[0].title, "must-not-leak");
+        assert!(mapped.playlists[0].is_liked_songs);
         assert_eq!(mapped.playlists[1].opaque_id, "favorite:8001");
         assert_eq!(mapped.playlists[1].title, "favorite-must-not-leak");
+        assert!(!mapped.playlists[1].is_liked_songs);
         assert!(!format!("{mapped:?}").contains("must-not-leak"));
         assert!(!format!("{:?}", mapped.playlists[0]).contains("7001"));
         assert!(!format!("{:?}", mapped.playlists[1]).contains("8001"));

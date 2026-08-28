@@ -12,6 +12,7 @@ void main() {
         hasMore: true,
         playlists: [
           bridge_library.LibraryPlaylistSummary(
+            isLikedSongs: false,
             providerId: 'qq-music',
             opaqueId: 'catalog:81001',
             title: 'Synthetic Playlist',
@@ -68,6 +69,7 @@ void main() {
         hasMore: false,
         playlists: [
           bridge_library.LibraryPlaylistSummary(
+            isLikedSongs: false,
             providerId: 'qq-music',
             opaqueId: '',
             title: 'Synthetic Playlist',

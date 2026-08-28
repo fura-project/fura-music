@@ -28,6 +28,13 @@ class UserLibraryController extends ChangeNotifier {
 
   UserLibraryStage get stage => _stage;
   List<UserPlaylistSummary> get playlists => _playlists;
+  UserPlaylistSummary? get likedSongsPlaylist {
+    for (final playlist in _playlists) {
+      if (playlist.isLikedSongs) return playlist;
+    }
+    return null;
+  }
+
   UserLibraryFailure? get failure => _failure;
   UserLibraryFailure? get refreshFailure => _refreshFailure;
   bool get isLoading => _operation != null;

@@ -21,6 +21,7 @@ class UserPlaylistSummary {
     required this.title,
     this.artworkUri,
     this.trackCount,
+    this.isLikedSongs = false,
   });
 
   final String providerId;
@@ -28,6 +29,7 @@ class UserPlaylistSummary {
   final String title;
   final String? artworkUri;
   final int? trackCount;
+  final bool isLikedSongs;
 }
 
 class UserLibraryResult {
@@ -91,6 +93,7 @@ class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
                       title: playlist.title,
                       artworkUri: playlist.artworkUri,
                       trackCount: playlist.trackCount,
+                      isLikedSongs: playlist.isLikedSongs,
                     ),
                   )
                   .toList(growable: false)

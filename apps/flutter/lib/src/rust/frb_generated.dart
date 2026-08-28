@@ -8207,14 +8207,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LibraryPlaylistSummary dco_decode_library_playlist_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return LibraryPlaylistSummary(
       providerId: dco_decode_String(arr[0]),
       opaqueId: dco_decode_String(arr[1]),
       title: dco_decode_String(arr[2]),
       artworkUri: dco_decode_opt_String(arr[3]),
       trackCount: dco_decode_opt_box_autoadd_u_32(arr[4]),
+      isLikedSongs: dco_decode_bool(arr[5]),
     );
   }
 
@@ -11887,12 +11888,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_title = sse_decode_String(deserializer);
     var var_artworkUri = sse_decode_opt_String(deserializer);
     var var_trackCount = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_isLikedSongs = sse_decode_bool(deserializer);
     return LibraryPlaylistSummary(
       providerId: var_providerId,
       opaqueId: var_opaqueId,
       title: var_title,
       artworkUri: var_artworkUri,
       trackCount: var_trackCount,
+      isLikedSongs: var_isLikedSongs,
     );
   }
 
@@ -16380,6 +16383,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.title, serializer);
     sse_encode_opt_String(self.artworkUri, serializer);
     sse_encode_opt_box_autoadd_u_32(self.trackCount, serializer);
+    sse_encode_bool(self.isLikedSongs, serializer);
   }
 
   @protected

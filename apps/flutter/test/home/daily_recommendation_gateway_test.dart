@@ -11,6 +11,7 @@ void main() {
     final available = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
         playlist: bridge_library.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'catalog:7251579717',
           title: 'Daily 30',
@@ -61,6 +62,7 @@ void main() {
     final conflict = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
         playlist: bridge_library.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'catalog:1',
           title: 'must not coexist',
@@ -75,21 +77,25 @@ void main() {
   test('rejects malformed playlist fields', () {
     for (final playlist in [
       const bridge_library.LibraryPlaylistSummary(
+        isLikedSongs: false,
         providerId: ' ',
         opaqueId: 'catalog:1',
         title: 'Daily',
       ),
       const bridge_library.LibraryPlaylistSummary(
+        isLikedSongs: false,
         providerId: 'qq-music',
         opaqueId: '',
         title: 'Daily',
       ),
       const bridge_library.LibraryPlaylistSummary(
+        isLikedSongs: false,
         providerId: 'qq-music',
         opaqueId: 'catalog:1',
         title: ' ',
       ),
       const bridge_library.LibraryPlaylistSummary(
+        isLikedSongs: false,
         providerId: 'qq-music',
         opaqueId: 'catalog:1',
         title: 'Daily',

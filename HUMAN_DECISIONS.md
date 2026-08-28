@@ -100,4 +100,12 @@
 
 **Authority model note:** HD-009 uses the domain-specific model routed by `AGENTS.md`: Core work retains high implementation autonomy under evidence and architecture, while UI work uses controlled, design-source-driven implementation autonomy under `docs/agent/ui-development.md`.
 
+## HD-010 — Defer Home and activate Liked Songs visual integration
+
+**Status:** Accepted on 2026-08-28
+
+**Decision:** Keep the current Home candidate implemented but unaccepted, pause further Home correction, and make the Human-approved Stitch Liked Songs desktop screen the active M7 page. The maintainer's accompanying official QQ Music screenshot is information-architecture reference only. The approved Material 3 reinterpretation controls visual composition.
+
+**Consequences:** This decision supersedes only HD-009's local requirement to accept Home before another page starts. Liked Songs may use the existing built-in liked-song capability and the smallest typed provider-neutral semantic needed to identify it without parsing QQ identity in Flutter. No new QQ endpoint, download/audiobook/video collection, navigation framework, state framework, Provider, or product category is authorized. With no approved compact frame, Codex may derive a bounded adaptive Material 3 translation that still requires maintainer visual acceptance. Home remains pending rather than accepted, rejected, deleted, or checkpointed.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

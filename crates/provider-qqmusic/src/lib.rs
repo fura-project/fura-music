@@ -9,11 +9,11 @@ use music_domain::{
     ArtistAlbumsPage, ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat,
     AudioQuality, FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, MusicVideoId,
     MusicVideoQuality, MusicVideoSource, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage,
-    NewSongCategory, NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
-    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
-    RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine,
-    SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage,
-    TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    NewSongCategory, NewSongCollection, PlaylistId, PlaylistPurpose, PlaylistSearchPage,
+    PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId,
+    RankingSummary, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
+    SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId,
+    TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
 };
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
@@ -1772,6 +1772,11 @@ fn map_owned_playlist(
             summary
                 .with_artwork_uri(playlist.cover_url().map(str::to_owned))
                 .with_track_count(playlist.track_count())
+                .with_purpose(if playlist.directory_id() == 201 {
+                    PlaylistPurpose::LikedSongs
+                } else {
+                    PlaylistPurpose::Standard
+                })
         })
         .map_err(|_| UserLibraryError::InvalidResponse)
 }
@@ -3118,7 +3123,7 @@ mod tests {
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use music_domain::{
         AlbumId, ArtistId, AudioFormat, AudioQuality, NewAlbumRegion, NewSongCategory, PlaylistId,
-        ProviderId, RankingId, TrackId,
+        PlaylistPurpose, ProviderId, RankingId, TrackId,
     };
     use provider_api::{
         AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
@@ -5442,6 +5447,7 @@ mod tests {
         assert_eq!(playlists[0].id().opaque(), "owned:7001:201");
         assert_eq!(playlists[0].title(), "Synthetic liked songs");
         assert_eq!(playlists[0].track_count(), Some(42));
+        assert_eq!(playlists[0].purpose(), PlaylistPurpose::LikedSongs);
         assert!(!format!("{playlists:?}").contains("Synthetic liked songs"));
     }
 

@@ -35,6 +35,36 @@ void main() {
     controller.dispose();
   });
 
+  test('identifies the built-in liked playlist from typed semantics', () async {
+    final gateway = _FakeGateway();
+    final controller = UserLibraryController(gateway);
+
+    final load = controller.load();
+    gateway.complete(
+      0,
+      const UserLibraryResult(
+        playlists: [
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'owned:7001:201',
+            title: 'A regular playlist with a misleading identity',
+          ),
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'opaque-liked-identity',
+            title: 'Localized built-in collection',
+            isLikedSongs: true,
+          ),
+        ],
+      ),
+    );
+    await load;
+
+    expect(controller.likedSongsPlaylist?.opaqueId, 'opaque-liked-identity');
+
+    controller.dispose();
+  });
+
   test('keeps transient failure retryable', () async {
     final gateway = _FakeGateway();
     final controller = UserLibraryController(gateway);

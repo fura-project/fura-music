@@ -192,6 +192,14 @@ impl fmt::Display for InvalidPlaylistId {
 
 impl std::error::Error for InvalidPlaylistId {}
 
+/// Provider-independent product purpose of a playlist collection.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PlaylistPurpose {
+    #[default]
+    Standard,
+    LikedSongs,
+}
+
 /// Minimum provider-independent data required to present a playlist row.
 #[derive(Clone, Eq, PartialEq)]
 pub struct PlaylistSummary {
@@ -199,6 +207,7 @@ pub struct PlaylistSummary {
     title: String,
     artwork_uri: Option<String>,
     track_count: Option<u32>,
+    purpose: PlaylistPurpose,
 }
 
 impl PlaylistSummary {
@@ -216,6 +225,7 @@ impl PlaylistSummary {
             title,
             artwork_uri: None,
             track_count: None,
+            purpose: PlaylistPurpose::Standard,
         })
     }
 
@@ -228,6 +238,12 @@ impl PlaylistSummary {
     #[must_use]
     pub const fn with_track_count(mut self, track_count: Option<u32>) -> Self {
         self.track_count = track_count;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_purpose(mut self, purpose: PlaylistPurpose) -> Self {
+        self.purpose = purpose;
         self
     }
 
@@ -250,6 +266,11 @@ impl PlaylistSummary {
     pub const fn track_count(&self) -> Option<u32> {
         self.track_count
     }
+
+    #[must_use]
+    pub const fn purpose(&self) -> PlaylistPurpose {
+        self.purpose
+    }
 }
 
 impl fmt::Debug for PlaylistSummary {
@@ -260,6 +281,7 @@ impl fmt::Debug for PlaylistSummary {
             .field("title", &"[REDACTED]")
             .field("has_artwork", &self.artwork_uri.is_some())
             .field("track_count", &self.track_count)
+            .field("purpose", &self.purpose)
             .finish()
     }
 }
@@ -2644,8 +2666,8 @@ mod tests {
         ArtistId, ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, MusicVideo,
         MusicVideoField, MusicVideoId, MusicVideoQuality, MusicVideoSource, MusicVideoSourceField,
         NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory, NewSongCollection,
-        PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId,
-        RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
+        PlaylistId, PlaylistPurpose, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
+        ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
         ResolvedMediaSource, ResolvedMediaSourceField, TrackComment, TrackCommentField,
         TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
         TrackSummaryField,
@@ -2711,10 +2733,12 @@ mod tests {
         let summary = PlaylistSummary::new(id, "Synthetic favorites")
             .expect("summary")
             .with_artwork_uri(Some("https://example.invalid/cover.jpg".into()))
-            .with_track_count(Some(42));
+            .with_track_count(Some(42))
+            .with_purpose(PlaylistPurpose::LikedSongs);
 
         assert_eq!(summary.title(), "Synthetic favorites");
         assert_eq!(summary.track_count(), Some(42));
+        assert_eq!(summary.purpose(), PlaylistPurpose::LikedSongs);
         assert_eq!(
             summary.artwork_uri(),
             Some("https://example.invalid/cover.jpg")

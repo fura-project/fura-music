@@ -12,6 +12,7 @@ void main() {
     final result = mapBridgePlaylistCreation(
       const bridge.QqMusicPlaylistCreationResult(
         createdPlaylist: library_bridge.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'owned:7002:902',
           title: 'Server playlist',
@@ -62,6 +63,7 @@ void main() {
       const bridge.QqMusicPlaylistCreationResult(),
       const bridge.QqMusicPlaylistCreationResult(
         createdPlaylist: library_bridge.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'owned:7002:902',
           title: 'Server playlist',

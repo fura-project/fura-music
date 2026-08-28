@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' show PointerDeviceKind, SemanticsAction, Size;
+import 'dart:ui' show PointerDeviceKind, SemanticsAction, Size, Tristate;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/gestures.dart' show kSecondaryButton;
@@ -23,6 +23,7 @@ import 'package:flutter/material.dart'
         Scrollable,
         ScrollableState,
         Semantics,
+        SizedBox,
         TextField,
         TextInputAction,
         Theme;
@@ -57,6 +58,7 @@ import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 Future<void> _selectAdaptiveSection(
@@ -4421,6 +4423,227 @@ void main() {
       findsOneWidget,
     );
     expect(authentication.signOutCalls, 1);
+  });
+
+  testWidgets('canonical synthetic Liked Songs review fixture is complete', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    const captureReviewImages = bool.fromEnvironment(
+      'LIKED_SONGS_VISUAL_REVIEW',
+    );
+    const likedPlaylist = UserPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'synthetic-liked-songs',
+      title: 'Synthetic liked songs',
+      trackCount: 1029,
+      isLikedSongs: true,
+    );
+    const tracks = [
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked:1',
+        title: 'Evening Shore',
+        artistNames: ['Sergei Parkin'],
+        albumTitle: 'Evening Shore',
+        durationSeconds: 261,
+      ),
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked:2',
+        title: 'Mercury',
+        artistNames: ['DASHI DANCE'],
+        albumTitle: 'Spectacle.',
+        durationSeconds: 404,
+      ),
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked:3',
+        title: 'Take me hand',
+        artistNames: ['Cecile Corbel'],
+        albumTitle: 'Take me hand',
+        durationSeconds: 215,
+      ),
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked:4',
+        title: 'Messy',
+        artistNames: ['ROSÉ'],
+        albumTitle: 'F1 The Album',
+        durationSeconds: 239,
+      ),
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked:5',
+        title: 'Violet Memory',
+        artistNames: ['North Harbor'],
+        albumTitle: 'City after rain',
+        durationSeconds: 198,
+      ),
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked:6',
+        title: 'Night Transit',
+        artistNames: ['Cinder Avenue'],
+        albumTitle: 'Moving Quietly',
+        durationSeconds: 226,
+      ),
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked:7',
+        title: 'Green Signal',
+        artistNames: ['Signal Coast'],
+        albumTitle: 'After Hours',
+        durationSeconds: 187,
+      ),
+    ];
+
+    late _WidgetPlaybackQueueGateway reviewQueue;
+    MusicApp fixture() {
+      final queue = reviewQueue = _WidgetPlaybackQueueGateway()
+        ..replace(tracks: tracks, currentIndex: 1);
+      return MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(
+            playlists: [
+              likedPlaylist,
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'synthetic-playlist',
+                title: 'A dream',
+                trackCount: 18,
+              ),
+            ],
+          ),
+        ]),
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(
+            total: 1029,
+            hasMore: true,
+            tracks: tracks,
+          ),
+        ]),
+        playbackQueueGateway: queue,
+        mediaResolutionGateway: const _UnavailableMediaGateway(),
+        lyricGateway: const _WidgetLyricGateway(),
+        initialSettings: const AppSettings(theme: AppThemePreference.light),
+      );
+    }
+
+    Future<void> pumpLikedSongs(Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(fixture());
+      await tester.pumpAndSettle();
+      if (size.width >= 1100) {
+        await tester.tap(find.byKey(const ValueKey('open-liked-songs')));
+        await tester.pumpAndSettle();
+      } else {
+        await _openLibrary(tester);
+        await _selectLibrarySection(tester, 'liked-songs');
+      }
+      expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('liked-songs-title')), findsOneWidget);
+      expect(find.text('播放全部'), findsOneWidget);
+      expect(find.text('Mercury'), findsWidgets);
+      expect(find.text('下载'), findsNothing);
+      expect(find.text('批量操作'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpLikedSongs(const Size(1440, 960));
+    expect(
+      find.byKey(const ValueKey('liked-songs-table-header')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('now-playing-desktop-layout')),
+      findsOneWidget,
+    );
+    final currentRowSemantics = tester
+        .getSemantics(find.byKey(const ValueKey('liked-track-row-2')))
+        .getSemanticsData();
+    expect(currentRowSemantics.label, contains('Mercury'));
+    expect(currentRowSemantics.flagsCollection.isSelected, Tristate.isTrue);
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-desktop-canonical.png'),
+        ),
+      );
+    }
+    await tester.tap(find.byKey(const ValueKey('liked-songs-play-all')));
+    await tester.pumpAndSettle();
+    expect(reviewQueue.replacements, hasLength(2));
+    expect(reviewQueue.replacements.last.$2, 0);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('liked-songs-search')),
+      'Messy',
+    );
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('liked-track-row-1')),
+        matching: find.text('Messy'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('liked-songs-page')),
+        matching: find.text('Evening Shore'),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('liked-track-row-1')),
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('添加到队列'), findsOneWidget);
+    await tester.tap(find.text('添加到队列'));
+    await tester.pumpAndSettle();
+    expect(reviewQueue.pushed.single.title, 'Messy');
+
+    await pumpLikedSongs(const Size(390, 844));
+    expect(
+      find.byKey(const ValueKey('liked-songs-table-header')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('now-playing-compact-layout')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-mobile-canonical.png'),
+        ),
+      );
+    }
+    await tester.tap(find.byTooltip('更多操作').first);
+    await tester.pumpAndSettle();
+    expect(find.text('从这里播放'), findsOneWidget);
+    expect(find.text('添加到队列'), findsOneWidget);
+    await tester.tap(find.text('添加到队列'));
+    await tester.pumpAndSettle();
+    expect(reviewQueue.pushed, hasLength(1));
+    semantics.dispose();
   });
 
   testWidgets('returns rejected library credentials to sign-in', (

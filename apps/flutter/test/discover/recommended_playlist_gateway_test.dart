@@ -11,6 +11,7 @@ void main() {
         hasMore: true,
         playlists: [
           bridge_library.LibraryPlaylistSummary(
+            isLikedSongs: false,
             providerId: 'qq-music',
             opaqueId: 'catalog:81001',
             title: 'Synthetic discovery',
@@ -58,6 +59,7 @@ void main() {
         hasMore: false,
         playlists: [
           bridge_library.LibraryPlaylistSummary(
+            isLikedSongs: false,
             providerId: 'qq-music',
             opaqueId: 'catalog:81001',
             title: 'must not coexist',
@@ -85,6 +87,7 @@ void main() {
         hasMore: false,
         playlists: [
           bridge_library.LibraryPlaylistSummary(
+            isLikedSongs: false,
             providerId: 'qq-music',
             opaqueId: 'catalog:81001',
             title: 'Synthetic',

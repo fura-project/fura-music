@@ -52,6 +52,7 @@ class LibraryPlaylistSummary {
   final String title;
   final String? artworkUri;
   final int? trackCount;
+  final bool isLikedSongs;
 
   const LibraryPlaylistSummary({
     required this.providerId,
@@ -59,6 +60,7 @@ class LibraryPlaylistSummary {
     required this.title,
     this.artworkUri,
     this.trackCount,
+    required this.isLikedSongs,
   });
 
   @override
@@ -67,7 +69,8 @@ class LibraryPlaylistSummary {
       opaqueId.hashCode ^
       title.hashCode ^
       artworkUri.hashCode ^
-      trackCount.hashCode;
+      trackCount.hashCode ^
+      isLikedSongs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -78,7 +81,8 @@ class LibraryPlaylistSummary {
           opaqueId == other.opaqueId &&
           title == other.title &&
           artworkUri == other.artworkUri &&
-          trackCount == other.trackCount;
+          trackCount == other.trackCount &&
+          isLikedSongs == other.isLikedSongs;
 }
 
 class LibraryTrackSummary {

@@ -12,6 +12,7 @@ void main() {
       const bridge.QqMusicPersonalizedPlaylistsLoad(
         playlists: [
           bridge_library.LibraryPlaylistSummary(
+            isLikedSongs: false,
             providerId: 'qq-music',
             opaqueId: 'catalog:91001',
             title: 'Personalized playlist',
@@ -60,6 +61,7 @@ void main() {
       const bridge.QqMusicPersonalizedPlaylistsLoad(
         playlists: [
           bridge_library.LibraryPlaylistSummary(
+            isLikedSongs: false,
             providerId: 'qq-music',
             opaqueId: 'catalog:1',
             title: 'must not coexist',
@@ -76,6 +78,7 @@ void main() {
     for (final playlists in [
       const [
         bridge_library.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: ' ',
           opaqueId: 'catalog:1',
           title: 'Playlist',
@@ -83,6 +86,7 @@ void main() {
       ],
       const [
         bridge_library.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'catalog:1',
           title: ' ',
@@ -90,11 +94,13 @@ void main() {
       ],
       const [
         bridge_library.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'catalog:1',
           title: 'One',
         ),
         bridge_library.LibraryPlaylistSummary(
+          isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'catalog:1',
           title: 'Duplicate',
