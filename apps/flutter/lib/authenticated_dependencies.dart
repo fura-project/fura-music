@@ -3,12 +3,16 @@ import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
+import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -21,6 +25,21 @@ import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
+
+@immutable
+class AuthenticatedHomeDependencies {
+  const AuthenticatedHomeDependencies({
+    required this.accountSummaryGateway,
+    required this.dailyRecommendationGateway,
+    required this.personalizedPlaylistsGateway,
+    required this.personalizedTracksGateway,
+  });
+
+  final AccountSummaryGateway accountSummaryGateway;
+  final DailyRecommendationGateway dailyRecommendationGateway;
+  final PersonalizedPlaylistsGateway personalizedPlaylistsGateway;
+  final PersonalizedTracksGateway personalizedTracksGateway;
+}
 
 @immutable
 class AuthenticatedLibraryDependencies {

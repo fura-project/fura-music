@@ -15,6 +15,7 @@ import 'package:flutter/material.dart'
         GridView,
         InkWell,
         ListView,
+        ListTile,
         NavigationBar,
         NavigationRail,
         OutlinedButton,
@@ -33,6 +34,7 @@ import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -40,6 +42,9 @@ import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
+import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
+import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -406,6 +411,36 @@ void main() {
             ],
           ),
         ]),
+        accountSummaryGateway: const _WidgetAccountSummaryGateway(
+          AccountSummaryLoadResult(
+            summary: AuthenticatedAccountSummary(
+              displayName: 'Synthetic listener',
+            ),
+          ),
+        ),
+        dailyRecommendationGateway: const _WidgetDailyRecommendationGateway(
+          DailyRecommendationResult(
+            playlist: RecommendedPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'daily:30',
+              title: 'Synthetic Daily 30',
+              trackCount: 30,
+            ),
+          ),
+        ),
+        personalizedTracksGateway: const _WidgetPersonalizedTracksGateway(
+          PersonalizedTracksResult(
+            tracks: [
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:41003:0:fixtureMid:-',
+                title: 'Synthetic song pick',
+                artistNames: ['Synthetic artist'],
+                durationSeconds: 202,
+              ),
+            ],
+          ),
+        ),
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
           const RecommendedPlaylistPageResult(
             playlists: [
@@ -414,6 +449,23 @@ void main() {
                 opaqueId: 'catalog:81001',
                 title: 'Synthetic recommendation',
                 trackCount: 20,
+              ),
+            ],
+          ),
+        ),
+        personalizedPlaylistsGateway: _WidgetPersonalizedPlaylistsGateway(
+          const PersonalizedPlaylistsResult(
+            playlists: [
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'owned:7001:201',
+                title: 'Synthetic favorites',
+                trackCount: 42,
+              ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'favorite:8001',
+                title: 'Synthetic saved mix',
               ),
             ],
           ),
@@ -429,6 +481,9 @@ void main() {
     );
     expect(find.byKey(const ValueKey('home-library-section')), findsOneWidget);
     expect(find.text('Synthetic recommendation'), findsOneWidget);
+    expect(find.text('For Synthetic listener today'), findsOneWidget);
+    expect(find.text('Synthetic Daily 30'), findsOneWidget);
+    expect(find.text('Synthetic song pick'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
     expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-daily-heading')), findsOneWidget);
@@ -462,11 +517,10 @@ void main() {
     expect(find.byKey(const ValueKey('home-open-search')), findsNothing);
     expect(find.byKey(const ValueKey('music-sidebar-brand')), findsOneWidget);
     expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
-    expect(
-      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
-      isTrue,
-    );
-    final railRect = tester.getRect(find.byType(NavigationRail));
+    expect(find.byType(NavigationRail), findsNothing);
+    final sidebar = find.byKey(const ValueKey('desktop-music-sidebar'));
+    expect(sidebar, findsOneWidget);
+    final railRect = tester.getRect(sidebar);
     final appBarRect = tester.getRect(find.byType(AppBar));
     expect(railRect.top, 0);
     expect(railRect.height, 900);
@@ -494,12 +548,24 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Synthetic favorites'), findsOneWidget);
-    expect(find.text('Synthetic saved mix'), findsOneWidget);
-    expect(find.text('42 tracks'), findsOneWidget);
-    final playlistSemantics = tester.getSemantics(
-      find.text('Synthetic favorites'),
+    final libraryContent = find.byKey(const ValueKey('user-library-content'));
+    final favoriteTitle = find.descendant(
+      of: libraryContent,
+      matching: find.text('Synthetic favorites'),
     );
+    expect(favoriteTitle, findsOneWidget);
+    expect(
+      find.descendant(
+        of: libraryContent,
+        matching: find.text('Synthetic saved mix'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: libraryContent, matching: find.text('42 tracks')),
+      findsOneWidget,
+    );
+    final playlistSemantics = tester.getSemantics(favoriteTitle);
     expect(playlistSemantics.label, 'Synthetic favorites, 42 tracks');
     expect(
       playlistSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
@@ -553,7 +619,7 @@ void main() {
       title: 'Home recommendation',
       trackCount: 12,
     );
-    const personal = UserPlaylistSummary(
+    const personal = RecommendedPlaylistSummary(
       providerId: 'qq-music',
       opaqueId: 'owned:7001:201',
       title: 'Home personal playlist',
@@ -590,9 +656,10 @@ void main() {
           _WaitingSession(),
           authenticated: true,
         ),
-        libraryGateway: _WidgetLibraryGateway([
-          const UserLibraryResult(playlists: [personal]),
-        ]),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        personalizedPlaylistsGateway: _WidgetPersonalizedPlaylistsGateway(
+          const PersonalizedPlaylistsResult(playlists: [personal]),
+        ),
         playlistDetailGateway: detail,
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
           const RecommendedPlaylistPageResult(playlists: [recommendation]),
@@ -626,7 +693,7 @@ void main() {
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
     expect(
       FocusManager.instance.primaryFocus?.debugLabel,
-      'last Home playlist',
+      'last Home recommendation',
     );
     expect(detail.requests.map((request) => request.playlist.opaqueId), [
       'catalog:81001',
@@ -712,6 +779,18 @@ void main() {
           libraryGateway: _WidgetLibraryGateway([
             const UserLibraryResult(playlists: [compactPlaylist]),
           ]),
+          personalizedPlaylistsGateway: _WidgetPersonalizedPlaylistsGateway(
+            const PersonalizedPlaylistsResult(
+              playlists: [
+                RecommendedPlaylistSummary(
+                  providerId: 'qq-music',
+                  opaqueId: 'owned:7001:201',
+                  title: 'Compact Home playlist',
+                  trackCount: 8,
+                ),
+              ],
+            ),
+          ),
           searchGateway: search,
           recommendedPlaylistGateway: recommendations,
         ),
@@ -781,7 +860,11 @@ void main() {
       tester.view.physicalSize = const Size(1100, 760);
       await tester.pumpAndSettle();
       expect(find.byType(NavigationBar), findsNothing);
-      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(
+        find.byKey(const ValueKey('desktop-music-sidebar')),
+        findsOneWidget,
+      );
       expect(find.text('Retained discovery result'), findsOneWidget);
       expect(recommendations.requests, [(0, 20)]);
       expect(tester.takeException(), isNull);
@@ -980,15 +1063,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
-    expect(
-      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
-      isTrue,
-    );
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsOneWidget);
     expect(find.byKey(const ValueKey('music-sidebar-brand')), findsOneWidget);
     expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
     final searchEntry = find.byKey(const ValueKey('open-track-search'));
-    tester.widget<Focus>(searchEntry).focusNode?.requestFocus();
+    final searchTile = find.descendant(
+      of: searchEntry,
+      matching: find.byType(ListTile),
+    );
+    tester.widget<ListTile>(searchTile).focusNode?.requestFocus();
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -4333,6 +4417,98 @@ class _WidgetArtistAlbumOperation implements ArtistAlbumPageLoadOperation {
 
   @override
   Future<ArtistAlbumPageResult> run() async => result;
+}
+
+class _WidgetAccountSummaryGateway implements AccountSummaryGateway {
+  const _WidgetAccountSummaryGateway(this.result);
+
+  final AccountSummaryLoadResult result;
+
+  @override
+  AccountSummaryLoadOperation beginLoad() =>
+      _WidgetAccountSummaryOperation(result);
+}
+
+class _WidgetAccountSummaryOperation implements AccountSummaryLoadOperation {
+  const _WidgetAccountSummaryOperation(this.result);
+
+  final AccountSummaryLoadResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<AccountSummaryLoadResult> run() async => result;
+}
+
+class _WidgetDailyRecommendationGateway implements DailyRecommendationGateway {
+  const _WidgetDailyRecommendationGateway(this.result);
+
+  final DailyRecommendationResult result;
+
+  @override
+  DailyRecommendationLoadOperation beginLoad() =>
+      _WidgetDailyRecommendationOperation(result);
+}
+
+class _WidgetDailyRecommendationOperation
+    implements DailyRecommendationLoadOperation {
+  const _WidgetDailyRecommendationOperation(this.result);
+
+  final DailyRecommendationResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<DailyRecommendationResult> run() async => result;
+}
+
+class _WidgetPersonalizedPlaylistsGateway
+    implements PersonalizedPlaylistsGateway {
+  const _WidgetPersonalizedPlaylistsGateway(this.result);
+
+  final PersonalizedPlaylistsResult result;
+
+  @override
+  PersonalizedPlaylistsLoadOperation beginLoad() =>
+      _WidgetPersonalizedPlaylistsOperation(result);
+}
+
+class _WidgetPersonalizedPlaylistsOperation
+    implements PersonalizedPlaylistsLoadOperation {
+  const _WidgetPersonalizedPlaylistsOperation(this.result);
+
+  final PersonalizedPlaylistsResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PersonalizedPlaylistsResult> run() async => result;
+}
+
+class _WidgetPersonalizedTracksGateway implements PersonalizedTracksGateway {
+  const _WidgetPersonalizedTracksGateway(this.result);
+
+  final PersonalizedTracksResult result;
+
+  @override
+  PersonalizedTracksLoadOperation beginLoad() =>
+      _WidgetPersonalizedTracksOperation(result);
+}
+
+class _WidgetPersonalizedTracksOperation
+    implements PersonalizedTracksLoadOperation {
+  const _WidgetPersonalizedTracksOperation(this.result);
+
+  final PersonalizedTracksResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PersonalizedTracksResult> run() async => result;
 }
 
 class _WidgetRecommendedPlaylistGateway implements RecommendedPlaylistGateway {

@@ -1,39 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
-import 'package:flutterustmusic/library/library_controller.dart';
-import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/home/home_controller.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({
-    required this.libraryController,
+    required this.homeController,
     required this.recommendationController,
+    required this.queuePlaybackController,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
-    required this.onOpenPlaylist,
     required this.onOpenRecommendation,
-    this.lastOpenedPlaylist,
-    this.playlistReturnFocusNode,
     this.lastOpenedRecommendation,
     this.recommendationReturnFocusNode,
     super.key,
   });
 
-  final UserLibraryController libraryController;
+  final HomeController homeController;
   final RecommendedPlaylistController recommendationController;
+  final QueuePlaybackController queuePlaybackController;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
-  final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
-  final UserPlaylistSummary? lastOpenedPlaylist;
-  final FocusNode? playlistReturnFocusNode;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: Listenable.merge([libraryController, recommendationController]),
+    animation: Listenable.merge([
+      homeController,
+      recommendationController,
+      queuePlaybackController,
+    ]),
     builder: (context, _) => SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -61,18 +63,22 @@ class HomePage extends StatelessWidget {
                     Semantics(
                       header: true,
                       child: Text(
-                        'For you today',
+                        homeController.account == null
+                            ? 'For you today'
+                            : 'For ${homeController.account!.displayName} today',
                         key: const ValueKey('home-heading'),
                         style:
                             (compact
-                                    ? Theme.of(context).textTheme.titleMedium
-                                    : Theme.of(context).textTheme.titleLarge)
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                                    ? Theme.of(context).textTheme.headlineSmall
+                                    : Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium)
+                                ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Current QQ Music picks and the playlists you saved.',
+                      'Personalized QQ Music picks, grounded in your account.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -88,31 +94,39 @@ class HomePage extends StatelessWidget {
                       onAction: onOpenDiscover,
                       compact: compact,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: MusicSpacing.contentGap),
                     _DailyRecommendationSection(
+                      homeController: homeController,
                       controller: recommendationController,
                       compact: compact,
                       onSelected: onOpenRecommendation,
                       lastOpened: lastOpenedRecommendation,
                       returnFocusNode: recommendationReturnFocusNode,
                     ),
+                    if (compact) ...[
+                      const SizedBox(height: MusicSpacing.contentGap),
+                      _CompactHomeActions(
+                        onOpenDiscover: onOpenDiscover,
+                        onOpenLibrary: onOpenLibrary,
+                      ),
+                    ],
                     const SizedBox(height: MusicSpacing.pageWide),
                     _HomeSectionHeader(
                       titleKey: const ValueKey('home-library-heading'),
                       title: 'Your playlist treasures',
-                      supportingText: 'Saved in your QQ Music library',
+                      supportingText: 'Personalized playlists from QQ Music',
                       actionKey: const ValueKey('home-open-library'),
                       actionLabel: 'Open library',
                       onAction: onOpenLibrary,
                       compact: compact,
                     ),
-                    const SizedBox(height: 12),
-                    _LibrarySection(
-                      controller: libraryController,
+                    const SizedBox(height: MusicSpacing.contentGap),
+                    _PersonalizedPlaylistSection(
+                      controller: homeController,
                       compact: compact,
-                      onSelected: onOpenPlaylist,
-                      lastOpened: lastOpenedPlaylist,
-                      returnFocusNode: playlistReturnFocusNode,
+                      onSelected: onOpenRecommendation,
+                      lastOpened: lastOpenedRecommendation,
+                      returnFocusNode: recommendationReturnFocusNode,
                       onOpenLibrary: onOpenLibrary,
                     ),
                     const SizedBox(height: MusicSpacing.pageWide),
@@ -122,7 +136,7 @@ class HomePage extends StatelessWidget {
                       supportingText: 'Editorial and spoken-audio picks',
                       compact: compact,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: MusicSpacing.contentGap),
                     const _UnavailableHomeSection(
                       key: ValueKey('home-hot-programs-unavailable'),
                       icon: Icons.podcasts_outlined,
@@ -131,16 +145,16 @@ class HomePage extends StatelessWidget {
                     const SizedBox(height: MusicSpacing.pageWide),
                     _HomeSectionHeader(
                       titleKey: const ValueKey('home-listening-one-heading'),
-                      title: 'Based on your listening',
+                      title: 'Songs picked for you',
                       supportingText:
                           'Song recommendations shaped by listening',
                       compact: compact,
                     ),
-                    const SizedBox(height: 12),
-                    const _UnavailableHomeSection(
-                      key: ValueKey('home-listening-one-unavailable'),
-                      icon: Icons.auto_awesome_outlined,
-                      message: 'Listening-based song picks aren’t available through a verified capability yet.',
+                    const SizedBox(height: MusicSpacing.contentGap),
+                    _PersonalizedTrackSection(
+                      controller: homeController,
+                      queueController: queuePlaybackController,
+                      compact: compact,
                     ),
                     const SizedBox(height: MusicSpacing.pageWide),
                     _HomeSectionHeader(
@@ -156,9 +170,12 @@ class HomePage extends StatelessWidget {
                       onAction: onOpenDiscover,
                       compact: compact,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: MusicSpacing.contentGap),
                     _MoreRecommendationsSection(
                       controller: recommendationController,
+                      skippedItems: homeController.dailyPlaylist == null
+                          ? 4
+                          : 3,
                       compact: compact,
                       onSelected: onOpenRecommendation,
                       lastOpened: lastOpenedRecommendation,
@@ -172,7 +189,7 @@ class HomePage extends StatelessWidget {
                           'Another focused set of song recommendations',
                       compact: compact,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: MusicSpacing.contentGap),
                     const _UnavailableHomeSection(
                       key: ValueKey('home-listening-two-unavailable'),
                       icon: Icons.music_note_outlined,
@@ -225,9 +242,9 @@ class _HomeSectionHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style:
                     (compact
-                            ? Theme.of(context).textTheme.titleLarge
-                            : Theme.of(context).textTheme.headlineSmall)
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                            ? Theme.of(context).textTheme.titleMedium
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -254,6 +271,7 @@ class _HomeSectionHeader extends StatelessWidget {
 
 class _DailyRecommendationSection extends StatelessWidget {
   const _DailyRecommendationSection({
+    required this.homeController,
     required this.controller,
     required this.compact,
     required this.onSelected,
@@ -261,6 +279,7 @@ class _DailyRecommendationSection extends StatelessWidget {
     required this.returnFocusNode,
   });
 
+  final HomeController homeController;
   final RecommendedPlaylistController controller;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
@@ -268,43 +287,57 @@ class _DailyRecommendationSection extends StatelessWidget {
   final FocusNode? returnFocusNode;
 
   @override
-  Widget build(BuildContext context) => switch (controller.stage) {
-    RecommendedPlaylistStage.loading => _DailyRecommendationLoading(
-      compact: compact,
-    ),
-    RecommendedPlaylistStage.empty => const _HomeInlineState(
-      key: ValueKey('home-recommendations-empty'),
-      icon: Icons.explore_off_outlined,
-      title: 'No public recommendations right now',
-      detail: 'Your saved playlists remain available below.',
-    ),
-    RecommendedPlaylistStage.error => _HomeInlineState(
+  Widget build(BuildContext context) {
+    final daily = homeController.dailyPlaylist;
+    final items = <RecommendedPlaylistSummary>[
+      ?daily,
+      ...controller.playlists.where((item) => !_samePlaylist(item, daily)),
+    ].take(4).toList(growable: false);
+    if (items.isNotEmpty) {
+      return _DailyRecommendationContent(
+        key: const ValueKey('home-recommendations-section'),
+        items: items,
+        dailyPlaylist: daily,
+        compact: compact,
+        onSelected: onSelected,
+        lastOpened: lastOpened,
+        returnFocusNode: returnFocusNode,
+      );
+    }
+    if (homeController.dailyStage == HomeResourceStage.loading ||
+        controller.stage == RecommendedPlaylistStage.loading) {
+      return _DailyRecommendationLoading(compact: compact);
+    }
+    if (homeController.dailyStage == HomeResourceStage.empty &&
+        controller.stage == RecommendedPlaylistStage.empty) {
+      return const _HomeInlineState(
+        key: ValueKey('home-recommendations-empty'),
+        icon: Icons.explore_off_outlined,
+        title: 'No recommendations right now',
+        detail: 'Your Library and Search remain available.',
+      );
+    }
+    return _HomeInlineState(
       key: const ValueKey('home-recommendations-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Recommendations are unavailable',
       detail: 'Your Library and Search are still available.',
       liveRegion: true,
-      action: controller.canRetry
-          ? FilledButton.tonal(
-              onPressed: controller.retry,
-              child: const Text('Try again'),
-            )
-          : null,
-    ),
-    RecommendedPlaylistStage.content => _DailyRecommendationContent(
-      key: const ValueKey('home-recommendations-section'),
-      items: controller.playlists.take(4).toList(growable: false),
-      compact: compact,
-      onSelected: onSelected,
-      lastOpened: lastOpened,
-      returnFocusNode: returnFocusNode,
-    ),
-  };
+      action: FilledButton.tonal(
+        onPressed: () {
+          homeController.retryDaily();
+          controller.retry();
+        },
+        child: const Text('Try again'),
+      ),
+    );
+  }
 }
 
 class _DailyRecommendationContent extends StatelessWidget {
   const _DailyRecommendationContent({
     required this.items,
+    required this.dailyPlaylist,
     required this.compact,
     required this.onSelected,
     required this.lastOpened,
@@ -313,6 +346,7 @@ class _DailyRecommendationContent extends StatelessWidget {
   });
 
   final List<RecommendedPlaylistSummary> items;
+  final RecommendedPlaylistSummary? dailyPlaylist;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
@@ -337,6 +371,9 @@ class _DailyRecommendationContent extends StatelessWidget {
             return index == 0
                 ? _FeaturedRecommendationCard(
                     playlist: item,
+                    eyebrow: _samePlaylist(item, dailyPlaylist)
+                        ? 'DAILY 30'
+                        : 'PUBLIC PICK',
                     width: 284,
                     itemKey: const ValueKey('home-recommendation-0'),
                     onSelected: onSelected,
@@ -370,6 +407,9 @@ class _DailyRecommendationContent extends StatelessWidget {
             children: [
               _FeaturedRecommendationCard(
                 playlist: items.first,
+                eyebrow: _samePlaylist(items.first, dailyPlaylist)
+                    ? 'DAILY 30'
+                    : 'PUBLIC PICK',
                 width: featuredWidth,
                 itemKey: const ValueKey('home-recommendation-0'),
                 onSelected: onSelected,
@@ -412,6 +452,7 @@ class _DailyRecommendationContent extends StatelessWidget {
 class _FeaturedRecommendationCard extends StatelessWidget {
   const _FeaturedRecommendationCard({
     required this.playlist,
+    required this.eyebrow,
     required this.width,
     required this.itemKey,
     required this.onSelected,
@@ -419,6 +460,7 @@ class _FeaturedRecommendationCard extends StatelessWidget {
   });
 
   final RecommendedPlaylistSummary playlist;
+  final String eyebrow;
   final double width;
   final Key itemKey;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
@@ -441,63 +483,73 @@ class _FeaturedRecommendationCard extends StatelessWidget {
             color: colors.surfaceContainerHigh,
             borderRadius: MusicRadii.content,
             clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: itemKey,
-              onTap: () => onSelected(playlist),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: artworkWidth,
-                    height: double.infinity,
-                    child: _HomeArtwork(
-                      uri: playlist.artworkUri,
-                      placeholderIcon: Icons.auto_awesome_rounded,
-                      radius: BorderRadius.zero,
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(MusicSpacing.contentGap),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'PUBLIC PICK',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: colors.primary,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.8,
-                                ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            playlist.title,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _recommendationDetail(playlist),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: colors.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 14),
-                          Icon(
-                            Icons.arrow_forward_rounded,
-                            color: colors.primary,
-                          ),
-                        ],
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      width: artworkWidth,
+                      height: double.infinity,
+                      child: _HomeArtwork(
+                        uri: playlist.artworkUri,
+                        placeholderIcon: Icons.auto_awesome_rounded,
+                        radius: BorderRadius.zero,
                       ),
                     ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(MusicSpacing.contentGap),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              eyebrow,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: colors.primary,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              playlist.title,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _recommendationDetail(playlist),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: colors.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 14),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              color: colors.primary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Positioned.fill(
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: itemKey,
+                      onTap: () => onSelected(playlist),
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -506,8 +558,8 @@ class _FeaturedRecommendationCard extends StatelessWidget {
   }
 }
 
-class _LibrarySection extends StatelessWidget {
-  const _LibrarySection({
+class _PersonalizedPlaylistSection extends StatelessWidget {
+  const _PersonalizedPlaylistSection({
     required this.controller,
     required this.compact,
     required this.onSelected,
@@ -516,73 +568,248 @@ class _LibrarySection extends StatelessWidget {
     required this.onOpenLibrary,
   });
 
-  final UserLibraryController controller;
+  final HomeController controller;
   final bool compact;
-  final ValueChanged<UserPlaylistSummary> onSelected;
-  final UserPlaylistSummary? lastOpened;
+  final ValueChanged<RecommendedPlaylistSummary> onSelected;
+  final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
   final VoidCallback onOpenLibrary;
 
   @override
-  Widget build(BuildContext context) => switch (controller.stage) {
-    UserLibraryStage.loading => _HomeLoadingShelf(
-      key: const ValueKey('home-library-loading'),
-      compact: compact,
-      semanticLabel: 'Loading your playlists',
-    ),
-    UserLibraryStage.empty => _HomeInlineState(
-      key: const ValueKey('home-library-empty'),
-      icon: Icons.library_music_outlined,
-      title: 'Your playlist library is empty',
-      detail: 'Open Library to browse favorite Albums and Artists.',
-      action: FilledButton.tonal(
-        onPressed: onOpenLibrary,
-        child: const Text('Open library'),
+  Widget build(BuildContext context) =>
+      switch (controller.personalizedPlaylistsStage) {
+        HomeResourceStage.loading => _HomeLoadingShelf(
+          key: const ValueKey('home-library-loading'),
+          compact: compact,
+          semanticLabel: 'Loading your playlists',
+        ),
+        HomeResourceStage.empty => _HomeInlineState(
+          key: const ValueKey('home-library-empty'),
+          icon: Icons.library_music_outlined,
+          title: 'No personalized playlists right now',
+          detail: 'Open Library to browse the playlists you saved.',
+          action: FilledButton.tonal(
+            onPressed: onOpenLibrary,
+            child: const Text('Open library'),
+          ),
+        ),
+        HomeResourceStage.error => _HomeInlineState(
+          key: const ValueKey('home-library-error'),
+          icon: Icons.cloud_off_rounded,
+          title: 'Couldn’t load personalized playlists',
+          detail: 'Public recommendations and Search are still available.',
+          liveRegion: true,
+          action: FilledButton.tonal(
+            onPressed: controller.retryPersonalizedPlaylists,
+            child: const Text('Try again'),
+          ),
+        ),
+        HomeResourceStage.content => _PlaylistShelf<RecommendedPlaylistSummary>(
+          key: const ValueKey('home-library-section'),
+          layoutKey: const ValueKey('home-library-shelf'),
+          items: controller.personalizedPlaylists
+              .take(compact ? 6 : 8)
+              .toList(growable: false),
+          compact: compact,
+          title: (playlist) => playlist.title,
+          artworkUri: (playlist) => playlist.artworkUri,
+          detail: (playlist) => playlist.trackCount == null
+              ? 'Personalized playlist'
+              : '${playlist.trackCount} tracks',
+          semanticLabel: (playlist) => playlist.trackCount == null
+              ? '${playlist.title}, personalized playlist'
+              : '${playlist.title}, ${playlist.trackCount} tracks',
+          itemKey: (index) => ValueKey('home-library-playlist-$index'),
+          onSelected: onSelected,
+          focusNode: (playlist) =>
+              lastOpened?.providerId == playlist.providerId &&
+                  lastOpened?.opaqueId == playlist.opaqueId
+              ? returnFocusNode
+              : null,
+          placeholderIcon: Icons.auto_awesome_rounded,
+        ),
+      };
+}
+
+class _CompactHomeActions extends StatelessWidget {
+  const _CompactHomeActions({
+    required this.onOpenDiscover,
+    required this.onOpenLibrary,
+  });
+
+  final VoidCallback onOpenDiscover;
+  final VoidCallback onOpenLibrary;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: FilledButton.tonalIcon(
+          key: const ValueKey('home-compact-open-discover'),
+          onPressed: onOpenDiscover,
+          icon: const Icon(Icons.explore_outlined),
+          label: const Text('Discover'),
+        ),
       ),
+      const SizedBox(width: MusicSpacing.itemGap),
+      Expanded(
+        child: FilledButton.tonalIcon(
+          key: const ValueKey('home-compact-open-library'),
+          onPressed: onOpenLibrary,
+          icon: const Icon(Icons.library_music_outlined),
+          label: const Text('Library'),
+        ),
+      ),
+    ],
+  );
+}
+
+class _PersonalizedTrackSection extends StatelessWidget {
+  const _PersonalizedTrackSection({
+    required this.controller,
+    required this.queueController,
+    required this.compact,
+  });
+
+  final HomeController controller;
+  final QueuePlaybackController queueController;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) =>
+      switch (controller.personalizedTracksStage) {
+        HomeResourceStage.loading => const _HomeTrackLoading(),
+        HomeResourceStage.empty => const _HomeInlineState(
+          key: ValueKey('home-personalized-tracks-empty'),
+          icon: Icons.music_note_outlined,
+          title: 'No personalized songs right now',
+          detail: 'Public playlists and your Library remain available.',
+        ),
+        HomeResourceStage.error => _HomeInlineState(
+          key: const ValueKey('home-personalized-tracks-error'),
+          icon: Icons.cloud_off_rounded,
+          title: 'Couldn’t load personalized songs',
+          detail: 'Other Home sections are still available.',
+          liveRegion: true,
+          action: FilledButton.tonal(
+            onPressed: controller.retryPersonalizedTracks,
+            child: const Text('Try again'),
+          ),
+        ),
+        HomeResourceStage.content => _PersonalizedTrackContent(
+          tracks: controller.personalizedTracks.take(6).toList(growable: false),
+          queueController: queueController,
+          compact: compact,
+        ),
+      };
+}
+
+class _PersonalizedTrackContent extends StatelessWidget {
+  const _PersonalizedTrackContent({
+    required this.tracks,
+    required this.queueController,
+    required this.compact,
+  });
+
+  final List<PlaylistTrackSummary> tracks;
+  final QueuePlaybackController queueController;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = compact || constraints.maxWidth < 820 ? 1 : 2;
+      final width = columns == 1
+          ? constraints.maxWidth
+          : (constraints.maxWidth - MusicSpacing.contentGap) / 2;
+      return Wrap(
+        key: const ValueKey('home-personalized-tracks'),
+        spacing: MusicSpacing.contentGap,
+        runSpacing: 2,
+        children: [
+          for (var index = 0; index < tracks.length; index++)
+            SizedBox(
+              width: width,
+              child: _HomeTrackTile(
+                track: tracks[index],
+                position: index + 1,
+                desktop: columns > 1,
+                playing: _sameTrack(queueController.current, tracks[index]),
+                onPlay: () => queueController.replaceAndPlay(tracks, index),
+                onQueue: () => queueController.push(tracks[index]),
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _HomeTrackTile extends StatelessWidget {
+  const _HomeTrackTile({
+    required this.track,
+    required this.position,
+    required this.desktop,
+    required this.playing,
+    required this.onPlay,
+    required this.onQueue,
+  });
+
+  final PlaylistTrackSummary track;
+  final int position;
+  final bool desktop;
+  final bool playing;
+  final VoidCallback onPlay;
+  final VoidCallback onQueue;
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 180),
+    decoration: BoxDecoration(
+      color: playing
+          ? Theme.of(context).colorScheme.secondaryContainer
+          : Colors.transparent,
+      borderRadius: MusicRadii.control,
     ),
-    UserLibraryStage.error => _HomeInlineState(
-      key: const ValueKey('home-library-error'),
-      icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load your playlists',
-      detail: 'Public recommendations and Search are still available.',
-      liveRegion: true,
-      action: controller.canRetry
-          ? FilledButton.tonal(
-              onPressed: controller.retry,
-              child: const Text('Try again'),
-            )
-          : null,
+    child: MusicTrackTile(
+      track: track,
+      position: position,
+      desktop: desktop,
+      onPlay: onPlay,
+      onQueue: onQueue,
+      itemKey: ValueKey('home-personalized-track-$position'),
+      queueKey: ValueKey('home-personalized-track-queue-$position'),
     ),
-    UserLibraryStage.content => _PlaylistShelf<UserPlaylistSummary>(
-      key: const ValueKey('home-library-section'),
-      layoutKey: const ValueKey('home-library-shelf'),
-      items: controller.playlists.take(compact ? 6 : 8).toList(growable: false),
-      compact: compact,
-      title: (playlist) => playlist.title,
-      artworkUri: (playlist) => playlist.artworkUri,
-      detail: (playlist) => playlist.trackCount == null
-          ? 'Saved playlist'
-          : '${playlist.trackCount} tracks',
-      semanticLabel: (playlist) => playlist.trackCount == null
-          ? '${playlist.title}, saved playlist'
-          : '${playlist.title}, ${playlist.trackCount} tracks',
-      itemKey: (index) => ValueKey('home-library-playlist-$index'),
-      onSelected: onSelected,
-      focusNode: (playlist) =>
-          lastOpened?.providerId == playlist.providerId &&
-              lastOpened?.opaqueId == playlist.opaqueId
-          ? returnFocusNode
-          : null,
-      placeholderIcon: Icons.library_music_rounded,
+  );
+}
+
+class _HomeTrackLoading extends StatelessWidget {
+  const _HomeTrackLoading();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Loading personalized songs',
+    child: Column(
+      children: [
+        for (var index = 0; index < 3; index++) ...[
+          Container(
+            height: 64,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: MusicRadii.control,
+            ),
+          ),
+          if (index < 2) const SizedBox(height: 2),
+        ],
+      ],
     ),
-    UserLibraryStage.authenticationRequired ||
-    UserLibraryStage.credentialRejected => const SizedBox.shrink(),
-  };
+  );
 }
 
 class _MoreRecommendationsSection extends StatelessWidget {
   const _MoreRecommendationsSection({
     required this.controller,
+    required this.skippedItems,
     required this.compact,
     required this.onSelected,
     required this.lastOpened,
@@ -590,6 +817,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
   });
 
   final RecommendedPlaylistController controller;
+  final int skippedItems;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
@@ -605,7 +833,10 @@ class _MoreRecommendationsSection extends StatelessWidget {
         detail: 'The primary recommendation state is shown above.',
       );
     }
-    final items = controller.playlists.skip(4).take(8).toList(growable: false);
+    final items = controller.playlists
+        .skip(skippedItems)
+        .take(8)
+        .toList(growable: false);
     if (items.isEmpty) {
       return const _HomeInlineState(
         key: ValueKey('home-more-recommendations-empty'),
@@ -623,7 +854,8 @@ class _MoreRecommendationsSection extends StatelessWidget {
       artworkUri: (playlist) => playlist.artworkUri,
       detail: _recommendationDetail,
       semanticLabel: _recommendationSemanticLabel,
-      itemKey: (index) => ValueKey('home-recommendation-${index + 4}'),
+      itemKey: (index) =>
+          ValueKey('home-recommendation-${index + skippedItems}'),
       onSelected: onSelected,
       focusNode: (playlist) =>
           lastOpened?.providerId == playlist.providerId &&
@@ -726,39 +958,48 @@ class _PlaylistArtworkCard<T> extends StatelessWidget {
         label: semanticLabel(item),
         excludeSemantics: true,
         onTap: () => onSelected(item),
-        child: InkWell(
-          key: itemKey,
-          borderRadius: MusicRadii.content,
-          onTap: () => onSelected(item),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox.square(
-                dimension: width,
-                child: _HomeArtwork(
-                  uri: artworkUri(item),
-                  placeholderIcon: placeholderIcon,
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox.square(
+                  dimension: width,
+                  child: _HomeArtwork(
+                    uri: artworkUri(item),
+                    placeholderIcon: placeholderIcon,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  title(item),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail(item),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: itemKey,
+                  borderRadius: MusicRadii.content,
+                  onTap: () => onSelected(item),
                 ),
               ),
-              const SizedBox(height: 9),
-              Text(
-                title(item),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                detail(item),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     ),
@@ -998,3 +1239,16 @@ String _recommendationSemanticLabel(RecommendedPlaylistSummary playlist) =>
     playlist.trackCount == null
     ? '${playlist.title}, QQ Music playlist'
     : '${playlist.title}, ${playlist.trackCount} tracks';
+
+bool _samePlaylist(
+  RecommendedPlaylistSummary playlist,
+  RecommendedPlaylistSummary? other,
+) =>
+    other != null &&
+    playlist.providerId == other.providerId &&
+    playlist.opaqueId == other.opaqueId;
+
+bool _sameTrack(PlaylistTrackSummary? track, PlaylistTrackSummary other) =>
+    track != null &&
+    track.providerId == other.providerId &&
+    track.opaqueId == other.opaqueId;

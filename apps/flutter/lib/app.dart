@@ -6,6 +6,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authenticated_dependencies.dart';
+import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -15,6 +16,9 @@ import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
+import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
+import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -54,6 +58,10 @@ class MusicApp extends StatelessWidget {
     NewSongGateway? newSongGateway,
     RankingGateway? rankingGateway,
     RadarGateway? radarGateway,
+    AccountSummaryGateway? accountSummaryGateway,
+    DailyRecommendationGateway? dailyRecommendationGateway,
+    PersonalizedPlaylistsGateway? personalizedPlaylistsGateway,
+    PersonalizedTracksGateway? personalizedTracksGateway,
     FavoriteAlbumGateway? favoriteAlbumGateway,
     FavoriteArtistGateway? favoriteArtistGateway,
     TrackCommentGateway? trackCommentGateway,
@@ -69,6 +77,10 @@ class MusicApp extends StatelessWidget {
         mediaResolutionGateway == null ||
         lyricGateway == null ||
         radarGateway == null ||
+        accountSummaryGateway == null ||
+        dailyRecommendationGateway == null ||
+        personalizedPlaylistsGateway == null ||
+        personalizedTracksGateway == null ||
         favoriteAlbumGateway == null ||
         favoriteArtistGateway == null) {
       final fallbackCredentialVault = SerializedCredentialVault(
@@ -98,6 +110,18 @@ class MusicApp extends StatelessWidget {
       radarGateway ??= RustRadarGateway(
         credentialVault: fallbackCredentialVault,
       );
+      accountSummaryGateway ??= RustAccountSummaryGateway(
+        credentialVault: fallbackCredentialVault,
+      );
+      dailyRecommendationGateway ??= RustDailyRecommendationGateway(
+        credentialVault: fallbackCredentialVault,
+      );
+      personalizedPlaylistsGateway ??= RustPersonalizedPlaylistsGateway(
+        credentialVault: fallbackCredentialVault,
+      );
+      personalizedTracksGateway ??= RustPersonalizedTracksGateway(
+        credentialVault: fallbackCredentialVault,
+      );
       favoriteAlbumGateway ??= RustFavoriteAlbumGateway(
         credentialVault: fallbackCredentialVault,
       );
@@ -108,6 +132,12 @@ class MusicApp extends StatelessWidget {
     return MusicApp._(
       bootstrap: bootstrap,
       authenticationGateway: authenticationGateway,
+      homeDependencies: AuthenticatedHomeDependencies(
+        accountSummaryGateway: accountSummaryGateway,
+        dailyRecommendationGateway: dailyRecommendationGateway,
+        personalizedPlaylistsGateway: personalizedPlaylistsGateway,
+        personalizedTracksGateway: personalizedTracksGateway,
+      ),
       libraryDependencies: AuthenticatedLibraryDependencies(
         libraryGateway: libraryGateway,
         playlistDetailGateway: playlistDetailGateway,
@@ -155,6 +185,7 @@ class MusicApp extends StatelessWidget {
   const MusicApp._({
     required this.bootstrap,
     required this.authenticationGateway,
+    required this.homeDependencies,
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
@@ -165,6 +196,7 @@ class MusicApp extends StatelessWidget {
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
+  final AuthenticatedHomeDependencies homeDependencies;
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
@@ -182,6 +214,7 @@ class MusicApp extends StatelessWidget {
       home: LoginPage(
         bootstrap: bootstrap,
         authenticationGateway: authenticationGateway,
+        homeDependencies: homeDependencies,
         libraryDependencies: libraryDependencies,
         discoveryDependencies: discoveryDependencies,
         playbackDependencies: playbackDependencies,
@@ -195,6 +228,7 @@ class LoginPage extends StatefulWidget {
   const LoginPage({
     required this.bootstrap,
     required this.authenticationGateway,
+    required this.homeDependencies,
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
@@ -204,6 +238,7 @@ class LoginPage extends StatefulWidget {
 
   final BootstrapStatus bootstrap;
   final QqMusicAuthenticationGateway authenticationGateway;
+  final AuthenticatedHomeDependencies homeDependencies;
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
@@ -243,6 +278,7 @@ class _LoginPageState extends State<LoginPage> {
         if (_controller.stage == LoginStage.authenticated) {
           return UserLibraryPage(
             key: const ValueKey('user-library-page'),
+            homeDependencies: widget.homeDependencies,
             libraryDependencies: widget.libraryDependencies,
             discoveryDependencies: widget.discoveryDependencies,
             playbackDependencies: widget.playbackDependencies,

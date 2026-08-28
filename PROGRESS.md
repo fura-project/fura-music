@@ -5,16 +5,16 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M7_PAGE_BY_PAGE_UI
-  current_task: HOME_FROM_APPROVED_STITCH_DESIGN
-  next_action: IMPLEMENT
+  current_task: HOME_VISUAL_ACCEPTANCE
+  next_action: HOME_READY_FOR_HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
 
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
-- M2 through M6 are checkpointed. HD-009 resumes M7 one page at a time after the Core-capability checkpoint; Home is the only active visual scope and is not yet accepted or checkpointed.
+- M2 through M6 are checkpointed. HD-009 resumes M7 one page at a time after the Core-capability checkpoint; the approved desktop/compact Home implementation is ready for maintainer visual review but is not accepted or checkpointed.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
-- Current full gates pass: 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, 385 Flutter tests, Linux x64 Release packaging, and all five required Linux integration targets.
+- Current full gates pass: 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, 389 Flutter tests, Linux x64 Release packaging, and all five required Linux integration targets.
 
 # Current Capability Boundary
 
@@ -26,7 +26,8 @@ execution:
 # Current Scheduling
 
 - There is no remaining safe agent-only Core capability task supported by the audit. Do not invent another endpoint, Provider, framework, or refactor to keep producing commits.
-- Home implementation is active against the Human-approved Stitch desktop and mobile frames. The design source governs composition; production data remains truthful and the existing Flutter/Rust/music boundaries remain intact.
+- Home now follows the approved Stitch desktop/mobile composition with an account-aware heading, Daily 30/public hero, personalized Playlist and Track capabilities, high-density desktop Sidebar, compact shortcuts, and existing persistent player/navigation ownership. Unsupported Popular Programs and a second personalized Track set remain explicit unavailable states rather than fabricated content.
+- Final 1440×960 and 390×844 full-shell review screenshots use synthetic, non-account fixtures. They prove layout and composition only; stored-account access was not automated, so real artwork/content quality remains part of maintainer visual review.
 - No other page may begin before the maintainer visually accepts Home. Automated checks and the bounded Material 3 review cannot supply that acceptance.
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
 
