@@ -44,11 +44,11 @@ Visual authority never overrides security, truthful Provider/Domain semantics, F
 - Before implementation, inspect structured MCP/HTML design and extract at least Sidebar width, Top Bar and persistent-player heights, content maximum width and padding, section spacing, Hero and card geometry, artwork ratio, Track-row height, responsive breakpoints, mobile Mini Player height, and Bottom Navigation height.
 - Derive semantic layout constraints from the design. Do not invent arbitrary proportional formulas unless the design demonstrates fluid proportional behavior.
 
-## Truthful production and complete fixtures
+## Visual truth
 
-Production UI uses truthful Provider results, Domain state, account data, recommendation semantics, and availability behavior. When data is unavailable, show an honest empty, error, or unavailable state.
+Production UI uses truthful Provider results, Domain state, account data, recommendation semantics, and availability behavior. A design slot with specific product semantics binds to that exact capability: changing its label does not change its meaning, and adjacent or generic data must not silently substitute for it. When matching data is unavailable, preserve the slot's honest empty, error, or unavailable state.
 
-Widgetbook, visual fixtures, and design previews may use clearly synthetic content such as `Example Playlist` or `Synthetic Track` so all intended states can be reviewed. Synthetic fixtures never authorize fabricated production recommendations or account content.
+Canonical visual-review fixtures should use clearly synthetic, semantically matching content to exercise every already-supported, design-critical surface needed to judge the approved composition. A screenshot that omits such a surface is incomplete visual evidence. Unsupported capabilities remain explicitly unavailable, and synthetic fixtures never authorize fabricated production recommendations, account content, or behavior.
 
 ## Acceptance model
 
@@ -65,13 +65,19 @@ Human visual acceptance
 
 Automated tests alone do not establish visual completion. Compare approved design and actual Flutter output concretely: Sidebar and player geometry, content origin, Hero ratio, card dimensions, shelf density, section spacing, typography scale, mobile navigation, light/dark state, and responsive behavior—not merely “approximately similar.”
 
+Rendered output is the visual evidence; implementation intent, numeric constants, test assertions, and the agent's prose are supporting evidence only. Before requesting Human visual acceptance, inspect the canonical Desktop and Mobile renders and confirm that required supported surfaces are visible, obvious overflow or clipping is absent, the intended change is perceptible, and the output can actually be compared with the approved design. Do not self-approve aesthetic quality.
+
 Work one page at a time. The current accepted sequence and active page are recorded in `ROADMAP.md` and `PROGRESS.md`. Do not begin the next page until the maintainer accepts the current page. This is a local UI gate, not permission to redefine the project's global execution state.
+
+After a shared Shell surface receives explicit Human visual acceptance, preserve its accepted user-visible geometry and behavior on later pages. Do not materially redesign the Sidebar, Top Bar, persistent desktop Player, mobile Mini Player, Bottom Navigation, or shared primary-navigation composition unless a newly approved design requires it or a concrete accessibility, responsive, platform, or correctness defect proves a correction is needed. This stabilizes the product frame without freezing implementation internals.
 
 ## Material 3 review and refactoring
 
 Local `agy` is a Material Design 3 QA reviewer, not the product designer. Ask it only about surface hierarchy, `ColorScheme`, typography, state layers, focus/hover/selected treatment, component appropriateness, shape consistency, and Material authenticity. The approved composition remains fixed.
 
 Prefer page-specific widgets and small semantic components. Share a component only after two real pages demonstrate the same semantic grammar. Do not create a generic dashboard runtime, UI DSL, design renderer, or speculative design infrastructure.
+
+For new M7 page-specific regressions, prefer an existing page- or domain-specific test location when one naturally exists instead of continuously expanding a monolithic test file. Do not split the existing suite solely for this preference or introduce a new test framework.
 
 ## Mixed work
 
@@ -86,7 +92,28 @@ Do not fake production data, delete the section, silently alter the design, or r
 
 ## Validation
 
-Run targeted Widget/controller/adaptive/accessibility tests for every affected surface. The normal full Flutter gate is:
+Use two validation stages so a visually rejectable candidate reaches Human review quickly without weakening accepted-page correctness.
+
+### Visual iteration
+
+Before Human visual acceptance, normally:
+
+- format affected Dart files;
+- run `dart analyze`;
+- run targeted Widget/controller/adaptive/accessibility tests for the changed surface;
+- render and inspect the canonical Desktop and Mobile screenshots.
+
+The loop is:
+
+```text
+implement -> targeted verification -> render -> Human visual review
+```
+
+Do not routinely run the entire Flutter suite, Linux release packaging, unrelated integration targets, or Rust workspace tests for every visual correction. Run a broader check at this stage only when the changed layer or shared component could regress the behavior that check proves. Mixed Core/Bridge changes follow the Core guide for that bounded subtask. If a candidate is rejected visually, iterate from the rendered result without first running an unrelated release gate. Do not create an autonomous visual-correction loop.
+
+### Accepted-page validation
+
+After the maintainer explicitly accepts the page visually, run the full applicable Flutter gate once before the accepted-page checkpoint or final accepted commit:
 
 ```bash
 cd apps/flutter
@@ -101,4 +128,4 @@ flutter test integration_test/playback_engine_test.dart -d linux
 flutter test integration_test/music_video_engine_test.dart -d linux
 ```
 
-Use `dart analyze`, not `flutter analyze`, for this checkout as explained in `AGENTS.md` and `MEMORY.md`. Validation establishes implementation behavior and accessibility boundaries; the approved-design comparison and Human review establish visual acceptance.
+Use `dart analyze`, not `flutter analyze`, for this checkout as explained in `AGENTS.md` and `MEMORY.md`. Run a specific integration target only when the accepted change touches or could regress the behavior it proves; unrelated platform integration is not required as ceremony. Human visual acceptance changes when expensive validation runs, not the correctness requirement. Validation establishes implementation behavior and accessibility boundaries; the approved-design comparison and Human review establish visual acceptance.
