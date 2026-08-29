@@ -446,10 +446,14 @@ impl<'a> DailyRecommendationRequest<'a> {
             comm: DailyRecommendationComm {
                 account_id: credential.music_id(),
                 format: "json",
-                client_type: 19,
-                client_version: 0,
-                auth_key: credential.music_key(),
-                login_type: credential.login_type().value(),
+                client_type: 20,
+                client_version: 1770,
+                csrf_token: 5381,
+                input_charset: "utf-8",
+                output_charset: "utf-8",
+                platform: "wk_v17",
+                user_id: "",
+                guid: "",
             },
             feed: DailyRecommendationRpc {
                 module: "music.recommend.RecommendFeed",
@@ -459,6 +463,7 @@ impl<'a> DailyRecommendationRequest<'a> {
                     page: 1,
                     shelf_count: 0,
                     cache: [],
+                    unique_items: [],
                 },
             },
         }
@@ -474,10 +479,16 @@ struct DailyRecommendationComm<'a> {
     client_type: u32,
     #[serde(rename = "cv")]
     client_version: u32,
-    #[serde(rename = "authst")]
-    auth_key: &'a str,
-    #[serde(rename = "tmeLoginType")]
-    login_type: u32,
+    #[serde(rename = "g_tk")]
+    csrf_token: u32,
+    #[serde(rename = "inCharset")]
+    input_charset: &'static str,
+    #[serde(rename = "outCharset")]
+    output_charset: &'static str,
+    platform: &'static str,
+    #[serde(rename = "uid")]
+    user_id: &'static str,
+    guid: &'static str,
 }
 
 #[derive(Serialize)]
@@ -495,6 +506,8 @@ struct DailyRecommendationParam {
     shelf_count: u32,
     #[serde(rename = "v_cache")]
     cache: [&'static str; 0],
+    #[serde(rename = "v_uniq")]
+    unique_items: [&'static str; 0],
 }
 
 #[derive(Deserialize)]
@@ -862,8 +875,18 @@ mod tests {
         assert_eq!(body["feed"]["param"]["page"], 1);
         assert_eq!(body["feed"]["param"]["s_num"], 0);
         assert_eq!(body["feed"]["param"]["v_cache"], json!([]));
+        assert_eq!(body["feed"]["param"]["v_uniq"], json!([]));
         assert_eq!(body["comm"]["uin"], "123456");
-        assert_eq!(body["comm"]["authst"], "W_X_private-key");
+        assert_eq!(body["comm"]["ct"], 20);
+        assert_eq!(body["comm"]["cv"], 1770);
+        assert_eq!(body["comm"]["g_tk"], 5381);
+        assert_eq!(body["comm"]["platform"], "wk_v17");
+        assert_eq!(body["comm"]["inCharset"], "utf-8");
+        assert_eq!(body["comm"]["outCharset"], "utf-8");
+        assert_eq!(body["comm"]["uid"], "");
+        assert_eq!(body["comm"]["guid"], "");
+        assert!(body["comm"].get("authst").is_none());
+        assert!(body["comm"].get("tmeLoginType").is_none());
         let cookie = request
             .headers()
             .iter()
@@ -970,6 +993,10 @@ mod tests {
             serde_json::from_slice(requests[0].body_bytes().expect("body")).expect("request JSON");
         assert_eq!(body["feed"]["module"], "music.recommend.RecommendFeed");
         assert_eq!(body["feed"]["method"], "get_recommend_feed");
+        assert_eq!(body["feed"]["param"]["v_uniq"], json!([]));
+        assert_eq!(body["comm"]["ct"], 20);
+        assert_eq!(body["comm"]["cv"], 1770);
+        assert_eq!(body["comm"]["platform"], "wk_v17");
         let debug = format!("{playlists:?} {:?}", requests[0]);
         assert!(!debug.contains("W_X_private-key"));
         assert!(!debug.contains("First private playlist"));

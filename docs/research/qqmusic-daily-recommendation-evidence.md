@@ -34,23 +34,32 @@ The two current implementations use different module aliases. The project
 selects the newer `music.recommend.RecommendFeed` name from L-1124, not the
 older `recommend.RecommendFeedServer` alias.
 
-## Bounded structural check
+## Bounded structural checks
 
-A credential-free probe sent the same first-page parameter shape to both
-current aliases. Both returned successful global and named codes, eight
-shelves, and three playlist-jump cards. Neither returned a `recforyou` plus
-`#daily30:` match without an account.
+The initial credential-free probe used the project's former hybrid desktop
+profile (`ct: 19`, `cv: 0`). It returned successful codes, eight shelves, three
+playlist-jump cards, and no `recforyou` or `#daily30:` match. A maintainer-run
+authenticated Home later reproduced the same empty Daily result while other
+credential-bearing QQ capabilities remained available.
 
-Only aggregate shape and marker counts were observed; the response body was
-not saved or printed. This proves current endpoint structure and also confirms
-that anonymous success must not be presented as personalized Daily 30. It does
-not prove authenticated availability, content quality, or broad account
+On 2026-08-29 a second credential-free comparison kept the endpoint and
+first-page semantics fixed but used FeelUOwn's evidenced `wk_v17` request
+profile (`ct: 20`, `cv: 1770`, `platform: wk_v17`, plus empty `v_uniq`). It
+returned successful codes, four shelves, five `recforyou` cards, one
+`#daily30:` marker, and thirteen playlist-jump cards. The former profile still
+returned zero Daily markers in the same comparison.
+
+Only codes, counts, and marker booleans were observed; no title, identifier,
+trace value, response body, credential, or account content was printed or
+saved. This proves the former request profile selected the wrong feed shape.
+It does not prove authenticated personalization quality or broad account
 compatibility.
 
 ## Implemented contract
 
-- `QQMusicClient` sends one bounded credential-bearing first-page request with
-  `direction: 0`, `page: 1`, `s_num: 0`, and empty `v_cache`.
+- `QQMusicClient` sends one bounded credential-cookie-bearing `wk_v17`
+  first-page request with `direction: 0`, `page: 1`, `s_num: 0`, and empty
+  `v_cache` / `v_uniq`.
 - A Daily candidate must simultaneously have playlist jump type `10014`, a
   module ID beginning `recforyou`, and a trace containing `#daily30:`.
 - Zero matches is a successful unavailable result. More than one match is an
