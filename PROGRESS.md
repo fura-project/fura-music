@@ -5,16 +5,16 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M7_PAGE_BY_PAGE_UI
-  current_task: LIKED_SONGS_VISUAL_ACCEPTANCE
+  current_task: HOME_REAL_DATA_VISUAL_ACCEPTANCE
   next_action: HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
 
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
-- M2 through M6 are checkpointed. HD-010 leaves the unaccepted Home candidate intact but pauses its visual iteration; the Human-approved Liked Songs desktop design is now implemented as the active M7 visual-review candidate.
+- M2 through M6 are checkpointed. HD-011 resumes the unaccepted Home candidate for one truthful real-data integration pass; the implemented Liked Songs candidate remains intact but is no longer the active visual-review surface.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
-- The current Liked Songs candidate passes 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, and 394 Flutter tests. A temporary secret-free Linux integration fixture also built and rendered the 1440 × 960 and 390 × 844 candidate with real fonts; the fixture was removed after capture. Linux x64 Release packaging is current; the five required Linux integration targets remain last-checkpoint evidence and are rerun only after Human visual acceptance.
+- The current Home candidate binds public recommendations, Daily 30, personalized Playlists, personalized Tracks, and Radar to their exact existing data paths. Its targeted Desktop/Mobile renders and 395 Flutter tests pass with Dart format/analyze. Synthetic review content remains test-only; no stored account or live account data was accessed. Accepted-page Linux packaging and integration gates remain deferred until Human visual acceptance.
 
 # Current Capability Boundary
 
@@ -26,10 +26,10 @@ execution:
 # Current Scheduling
 
 - There is no remaining safe agent-only Core capability task supported by the audit. Do not invent another endpoint, Provider, framework, or refactor to keep producing commits.
-- The Home candidate and its truthful Daily/public/personalized slot corrections remain unaccepted and deferred; do not reinterpret the pause as visual acceptance or discard its implementation.
-- Liked Songs now uses the Human-approved Stitch desktop composition over a typed provider-neutral built-in-liked semantic, the retained Library state, positional Queue, dense desktop rows, compact Track rows, and the persistent desktop/mobile player. The supplied official-client image is information-architecture reference only.
+- Home is the active unaccepted candidate after the maintainer explicitly clarified that grey artwork in the Stitch reference represented missing design assets, not production unavailability. Supported slots now use live Provider results; public recommendations no longer occupy the Radar slot, and the existing Radar Track set is independently loaded, rendered, retried, and playable through the existing Queue.
+- Liked Songs remains implemented and unaccepted, using the Human-approved Stitch desktop composition over a typed provider-neutral built-in-liked semantic, retained Library state, positional Queue, dense desktop rows, compact Track rows, and the persistent desktop/mobile player.
 - The current candidate intentionally omits unsupported download, batch-edit, audiobook, and video-library controls. Synthetic review content does not enter production and no account data was accessed.
-- No page after Liked Songs may begin before maintainer visual acceptance or another explicit Human redirect. Automated checks and the bounded Material 3 review cannot supply that acceptance.
+- No other page may begin before maintainer visual acceptance or another explicit Human redirect. Automated checks and the bounded Material 3 review cannot supply that acceptance.
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
 
 # Blockers
@@ -49,5 +49,5 @@ execution:
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback, personalized recommendation quality, or broad live catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, unavailable operating systems, or release readiness.
-- Home remains deferred and unaccepted. Liked Songs is implemented and verified as a visual-review candidate, not accepted product completion; the attached rendered output requires maintainer visual review.
+- Home and Liked Songs remain unaccepted. Home is the current visual-review candidate; automated and synthetic evidence does not prove authenticated recommendation availability, artwork completeness, or Human visual acceptance.
 - Historical research/checkpoint documents remain evidence snapshots. Current scheduling is governed by `AGENTS.md`, `ROADMAP.md`, and this file.

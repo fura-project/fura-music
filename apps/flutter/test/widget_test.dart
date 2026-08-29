@@ -443,6 +443,20 @@ void main() {
             ],
           ),
         ),
+        radarGateway: _WidgetRadarGateway(
+          const RadarTrackPageResult(
+            page: 1,
+            tracks: [
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:41004:0:radarMid:-',
+                title: 'Synthetic Radar pick',
+                artistNames: ['Radar artist'],
+                durationSeconds: 196,
+              ),
+            ],
+          ),
+        ),
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
           const RecommendedPlaylistPageResult(
             playlists: [
@@ -485,6 +499,11 @@ void main() {
     expect(find.text('Synthetic recommendation'), findsOneWidget);
     expect(find.text('For Synthetic listener today'), findsNothing);
     expect(find.text('Synthetic Daily 30'), findsOneWidget);
+    expect(find.text('Synthetic Radar pick'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-radar-recommendation')),
+      findsOneWidget,
+    );
     expect(find.text('Synthetic song pick'), findsOneWidget);
     expect(find.text('Synthetic favorites'), findsOneWidget);
     expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
@@ -599,6 +618,7 @@ void main() {
   testWidgets('keeps an unavailable Daily slot separate from public picks', (
     tester,
   ) async {
+    final queue = _WidgetPlaybackQueueGateway();
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -642,6 +662,22 @@ void main() {
             ],
           ),
         ),
+        radarGateway: _WidgetRadarGateway(
+          const RadarTrackPageResult(
+            page: 1,
+            tracks: [
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:41004:0:radarMid:-',
+                title: 'Real Radar slot',
+                artistNames: ['Radar artist'],
+              ),
+            ],
+          ),
+        ),
+        playbackQueueGateway: queue,
+        mediaResolutionGateway: const _UnavailableMediaGateway(),
+        lyricGateway: const _WidgetLyricGateway(),
       ),
     );
     await tester.pumpAndSettle();
@@ -649,8 +685,8 @@ void main() {
     final heroRect = tester.getRect(
       find.byKey(const ValueKey('home-recommendation-0')),
     );
-    final secondaryRect = tester.getRect(
-      find.byKey(const ValueKey('home-recommendation-1')),
+    final radarRect = tester.getRect(
+      find.byKey(const ValueKey('home-radar-recommendation')),
     );
     final dailyStateRect = tester.getRect(
       find.byKey(const ValueKey('home-daily-recommendation-state')),
@@ -660,13 +696,12 @@ void main() {
       isTrue,
     );
     expect(
-      secondaryRect.overlaps(
-        tester.getRect(find.text('Public secondary pick')),
-      ),
+      radarRect.overlaps(tester.getRect(find.text('Real Radar slot'))),
       isTrue,
     );
     expect(dailyStateRect.overlaps(heroRect), isFalse);
-    expect(dailyStateRect.overlaps(secondaryRect), isFalse);
+    expect(dailyStateRect.overlaps(radarRect), isFalse);
+    expect(find.text('Public secondary pick'), findsOneWidget);
     expect(find.text('Daily recommendation'), findsOneWidget);
     expect(find.text('Daily 30 is unavailable right now.'), findsOneWidget);
     expect(
@@ -674,6 +709,9 @@ void main() {
       findsNothing,
     );
     expect(find.text('MADE FOR YOU'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('home-radar-recommendation')));
+    await tester.pumpAndSettle();
+    expect(queue.snapshot().snapshot?.current?.title, 'Real Radar slot');
     expect(tester.takeException(), isNull);
   });
 
@@ -688,7 +726,6 @@ void main() {
         opaqueId: 'catalog:${81000 + index}',
         title: const [
           'Ambient Landscapes',
-          'Private Radar',
           'Fresh electronic focus',
           'Late-night city pop',
           'Warm acoustic mornings',
@@ -697,6 +734,7 @@ void main() {
           'Quiet piano rooms',
           'Modern R&B selection',
           'Mandopop essentials',
+          'Acoustic discoveries',
         ][index],
         trackCount: 18 + index,
       ),
@@ -783,6 +821,9 @@ void main() {
         personalizedTracksGateway: _WidgetPersonalizedTracksGateway(
           PersonalizedTracksResult(tracks: tracks),
         ),
+        radarGateway: _WidgetRadarGateway(
+          RadarTrackPageResult(page: 1, tracks: [tracks.first]),
+        ),
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
           RecommendedPlaylistPageResult(playlists: publicPlaylists),
         ),
@@ -795,10 +836,16 @@ void main() {
     Future<void> pumpFixture(Size size) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpWidget(fixture());
       await tester.pumpAndSettle();
       expect(find.text('Daily recommendation'), findsOneWidget);
       expect(find.text('Daily 30'), findsOneWidget);
+      expect(find.text('Silver Lines'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('home-radar-recommendation')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('home-personalized-tracks')),
@@ -1376,9 +1423,10 @@ void main() {
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
           const RecommendedPlaylistPageResult(),
         ),
-        radarGateway: _WidgetRadarGateway(
+        radarGateway: _ScriptedWidgetRadarGateway([
+          const RadarTrackPageResult(page: 1),
           const RadarTrackPageResult(failure: RadarFailure.credentialRejected),
-        ),
+        ]),
       ),
     );
     await tester.pumpAndSettle();
@@ -1630,7 +1678,7 @@ void main() {
   );
 
   testWidgets(
-    'loads Radar lazily and hands Tracks to the existing queue on narrow screens',
+    'loads Home Radar and keeps Discover Radar queue behavior on narrow screens',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -1685,7 +1733,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('open-recommendations')));
       await tester.pumpAndSettle();
-      expect(radar.pages, isEmpty);
+      expect(radar.pages, [1]);
 
       await _selectAdaptiveSection(
         tester,
@@ -1695,7 +1743,7 @@ void main() {
       expect(find.byKey(const ValueKey('radar-content')), findsOneWidget);
       expect(find.text('Radar Track'), findsOneWidget);
       expect(find.text('Radar artist · Radar Album · 3:05'), findsOneWidget);
-      expect(radar.pages, [1]);
+      expect(radar.pages, [1, 1]);
 
       await tester.tap(find.byKey(const ValueKey('radar-context-0')));
       await tester.pumpAndSettle();
@@ -1709,7 +1757,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('album-back')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('radar-content')), findsOneWidget);
-      expect(radar.pages, [1]);
+      expect(radar.pages, [1, 1]);
 
       await tester.tap(find.byKey(const ValueKey('radar-queue-0')));
       await tester.pump();
@@ -1732,7 +1780,7 @@ void main() {
         item: 'discover-type-radar',
       );
       expect(find.byKey(const ValueKey('radar-track-0')), findsOneWidget);
-      expect(radar.pages, [1]);
+      expect(radar.pages, [1, 1]);
       expect(tester.takeException(), isNull);
     },
   );
@@ -5331,6 +5379,19 @@ class _WidgetRadarOperation implements RadarTrackPageLoadOperation {
 
   @override
   Future<RadarTrackPageResult> run() async => result;
+}
+
+class _ScriptedWidgetRadarGateway implements RadarGateway {
+  _ScriptedWidgetRadarGateway(this.results);
+
+  final List<RadarTrackPageResult> results;
+  var _next = 0;
+
+  @override
+  RadarTrackPageLoadOperation beginLoad({required int page}) {
+    final index = _next < results.length ? _next++ : results.length - 1;
+    return _WidgetRadarOperation(results[index]);
+  }
 }
 
 class _WidgetLyricGateway implements LyricGateway {

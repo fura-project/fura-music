@@ -6,6 +6,17 @@ import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 void main() {
+  test('maps an operation start failure into a retryable error', () async {
+    final controller = RadarController(_ThrowingGateway());
+    addTearDown(controller.dispose);
+
+    await controller.load();
+
+    expect(controller.stage, RadarStage.error);
+    expect(controller.failure, RadarFailure.coreUnavailable);
+    expect(controller.canRetry, isTrue);
+  });
+
   const first = PlaylistTrackSummary(
     providerId: 'qq-music',
     opaqueId: 'track:first',
@@ -166,4 +177,10 @@ class _PendingOperation implements RadarTrackPageLoadOperation {
     started.complete();
     return result;
   }
+}
+
+class _ThrowingGateway implements RadarGateway {
+  @override
+  RadarTrackPageLoadOperation beginLoad({required int page}) =>
+      throw StateError('bridge unavailable');
 }

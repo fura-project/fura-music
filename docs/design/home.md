@@ -18,6 +18,7 @@ These frames are the visual source of truth for the current Home implementation.
 - Mobile uses a separate Mini Player and Bottom Navigation composition rather than compressing the desktop Shell.
 - Material 3 remains the component language while the approved composition controls visual hierarchy and geometry.
 - Production content must remain truthful to Provider, Domain, account, recommendation, and availability semantics.
+- Grey or missing artwork in the approved frames reflects unavailable design assets only. Supported production slots render the exact Provider result and its artwork when supplied; the application uses a neutral fallback only when a real result has no usable artwork.
 - Unsupported Popular Programs and a second distinct personalized Track set remain explicit unavailable states; unrelated data must not substitute for them.
 - No QQ Music branding, proprietary artwork, promotional content, or exact trade dress is copied into the project.
 

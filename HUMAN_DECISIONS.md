@@ -108,4 +108,12 @@
 
 **Consequences:** This decision supersedes only HD-009's local requirement to accept Home before another page starts. Liked Songs may use the existing built-in liked-song capability and the smallest typed provider-neutral semantic needed to identify it without parsing QQ identity in Flutter. No new QQ endpoint, download/audiobook/video collection, navigation framework, state framework, Provider, or product category is authorized. With no approved compact frame, Codex may derive a bounded adaptive Material 3 translation that still requires maintainer visual acceptance. Home remains pending rather than accepted, rejected, deleted, or checkpointed.
 
+## HD-011 — Resume Home for truthful real-data integration
+
+**Status:** Accepted on 2026-08-29
+
+**Decision:** Resume the pending Home candidate for a bounded real-data integration pass. Grey or missing artwork in the approved Stitch reference reflects unavailable design assets, not intended production placeholders. Every supported production slot must use its exact existing QQ Music capability and returned artwork/content: public recommendations, Daily 30, personalized Playlists, personalized Tracks, and Radar. Generic recommendations must not masquerade as Daily or Radar.
+
+**Consequences:** Home becomes the active visual-review candidate and the implemented Liked Songs candidate remains intact but unaccepted. Popular Programs and a second independent personalized Track set remain unsupported and may not be fabricated, copied, or replaced with unrelated data. This decision authorizes no new endpoint, podcast capability, Provider, navigation/state framework, Shell redesign, or Core redesign.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

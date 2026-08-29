@@ -41,8 +41,6 @@ class RadarController extends ChangeNotifier {
   Future<void> _loadFirstPage() async {
     final generation = ++_generation;
     _operation?.cancel();
-    final operation = _gateway.beginLoad(page: 1);
-    _operation = operation;
     _tracks = const [];
     _failure = null;
     _appendFailure = null;
@@ -51,6 +49,19 @@ class RadarController extends ChangeNotifier {
     _isLoadingMore = false;
     _stage = RadarStage.loading;
     _notify();
+
+    late final RadarTrackPageLoadOperation operation;
+    try {
+      operation = _gateway.beginLoad(page: 1);
+    } on Object {
+      if (_isCurrent(generation)) {
+        _failure = RadarFailure.coreUnavailable;
+        _stage = RadarStage.error;
+        _notify();
+      }
+      return;
+    }
+    _operation = operation;
 
     final result = await operation.run();
     if (identical(_operation, operation)) _operation = null;

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/discover/radar_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/home/home_controller.dart';
@@ -26,6 +29,7 @@ class HomePage extends StatelessWidget {
   const HomePage({
     required this.homeController,
     required this.recommendationController,
+    required this.radarController,
     required this.queuePlaybackController,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
@@ -38,6 +42,7 @@ class HomePage extends StatelessWidget {
 
   final HomeController homeController;
   final RecommendedPlaylistController recommendationController;
+  final RadarController radarController;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
@@ -51,6 +56,7 @@ class HomePage extends StatelessWidget {
     animation: Listenable.merge([
       homeController,
       recommendationController,
+      radarController,
       queuePlaybackController,
     ]),
     builder: (context, _) => SafeArea(
@@ -60,6 +66,7 @@ class HomePage extends StatelessWidget {
             return _HomeCompactLayout(
               homeController: homeController,
               recommendationController: recommendationController,
+              radarController: radarController,
               queuePlaybackController: queuePlaybackController,
               onOpenDiscover: onOpenDiscover,
               onOpenLibrary: onOpenLibrary,
@@ -72,6 +79,7 @@ class HomePage extends StatelessWidget {
           return _HomeWideLayout(
             homeController: homeController,
             recommendationController: recommendationController,
+            radarController: radarController,
             queuePlaybackController: queuePlaybackController,
             onOpenDiscover: onOpenDiscover,
             onOpenLibrary: onOpenLibrary,
@@ -89,6 +97,7 @@ class _HomeWideLayout extends StatelessWidget {
   const _HomeWideLayout({
     required this.homeController,
     required this.recommendationController,
+    required this.radarController,
     required this.queuePlaybackController,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
@@ -99,6 +108,7 @@ class _HomeWideLayout extends StatelessWidget {
 
   final HomeController homeController;
   final RecommendedPlaylistController recommendationController;
+  final RadarController radarController;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
@@ -122,6 +132,8 @@ class _HomeWideLayout extends StatelessWidget {
         _DailyRecommendationSection(
           homeController: homeController,
           controller: recommendationController,
+          radarController: radarController,
+          queueController: queuePlaybackController,
           compact: false,
           onSelected: onOpenRecommendation,
           lastOpened: lastOpenedRecommendation,
@@ -172,7 +184,7 @@ class _HomeWideLayout extends StatelessWidget {
         const SizedBox(height: _HomeGeometry.itemGap),
         _MoreRecommendationsSection(
           controller: recommendationController,
-          skippedItems: 2,
+          skippedItems: 1,
           compact: false,
           onSelected: onOpenRecommendation,
           lastOpened: lastOpenedRecommendation,
@@ -198,6 +210,7 @@ class _HomeCompactLayout extends StatelessWidget {
   const _HomeCompactLayout({
     required this.homeController,
     required this.recommendationController,
+    required this.radarController,
     required this.queuePlaybackController,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
@@ -209,6 +222,7 @@ class _HomeCompactLayout extends StatelessWidget {
 
   final HomeController homeController;
   final RecommendedPlaylistController recommendationController;
+  final RadarController radarController;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
@@ -241,6 +255,8 @@ class _HomeCompactLayout extends StatelessWidget {
               _DailyRecommendationSection(
                 homeController: homeController,
                 controller: recommendationController,
+                radarController: radarController,
+                queueController: queuePlaybackController,
                 compact: true,
                 onSelected: onOpenRecommendation,
                 lastOpened: lastOpenedRecommendation,
@@ -300,7 +316,7 @@ class _HomeCompactLayout extends StatelessWidget {
               const SizedBox(height: _HomeGeometry.itemGap),
               _MoreRecommendationsSection(
                 controller: recommendationController,
-                skippedItems: 2,
+                skippedItems: 1,
                 compact: true,
                 onSelected: onOpenRecommendation,
                 lastOpened: lastOpenedRecommendation,
@@ -510,6 +526,8 @@ class _DailyRecommendationSection extends StatelessWidget {
   const _DailyRecommendationSection({
     required this.homeController,
     required this.controller,
+    required this.radarController,
+    required this.queueController,
     required this.compact,
     required this.onSelected,
     required this.lastOpened,
@@ -518,6 +536,8 @@ class _DailyRecommendationSection extends StatelessWidget {
 
   final HomeController homeController;
   final RecommendedPlaylistController controller;
+  final RadarController radarController;
+  final QueuePlaybackController queueController;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
@@ -526,16 +546,19 @@ class _DailyRecommendationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final daily = homeController.dailyPlaylist;
-    final publicItems = controller.stage == RecommendedPlaylistStage.content
-        ? controller.playlists.take(2).toList(growable: false)
-        : const <RecommendedPlaylistSummary>[];
+    final featured =
+        controller.stage == RecommendedPlaylistStage.content &&
+            controller.playlists.isNotEmpty
+        ? controller.playlists.first
+        : null;
     return _DailyRecommendationContent(
       key: const ValueKey('home-recommendations-section'),
-      featuredPlaylist: publicItems.isEmpty ? null : publicItems.first,
-      secondaryPlaylist: publicItems.length < 2 ? null : publicItems[1],
+      featuredPlaylist: featured,
       publicStage: controller.stage,
       dailyPlaylist: daily,
       dailyStage: homeController.dailyStage,
+      radarController: radarController,
+      queueController: queueController,
       compact: compact,
       onSelected: onSelected,
       onRetryPublic: controller.retry,
@@ -549,10 +572,11 @@ class _DailyRecommendationSection extends StatelessWidget {
 class _DailyRecommendationContent extends StatelessWidget {
   const _DailyRecommendationContent({
     required this.featuredPlaylist,
-    required this.secondaryPlaylist,
     required this.publicStage,
     required this.dailyPlaylist,
     required this.dailyStage,
+    required this.radarController,
+    required this.queueController,
     required this.compact,
     required this.onSelected,
     required this.onRetryPublic,
@@ -563,10 +587,11 @@ class _DailyRecommendationContent extends StatelessWidget {
   });
 
   final RecommendedPlaylistSummary? featuredPlaylist;
-  final RecommendedPlaylistSummary? secondaryPlaylist;
   final RecommendedPlaylistStage publicStage;
   final RecommendedPlaylistSummary? dailyPlaylist;
   final HomeResourceStage dailyStage;
+  final RadarController radarController;
+  final QueuePlaybackController queueController;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final VoidCallback onRetryPublic;
@@ -635,31 +660,22 @@ class _DailyRecommendationContent extends StatelessWidget {
     );
   }
 
-  Widget _secondaryPublicSlot() {
-    final playlist = secondaryPlaylist;
-    if (playlist != null) {
-      return compact
-          ? _CompactRecommendationCard(
-              playlist: playlist,
-              itemKey: const ValueKey('home-recommendation-1'),
-              onSelected: onSelected,
-              focusNode: _focusMatches(playlist) ? returnFocusNode : null,
-            )
-          : _WideRecommendationCard(
-              playlist: playlist,
-              itemKey: const ValueKey('home-recommendation-1'),
-              onSelected: onSelected,
-              focusNode: _focusMatches(playlist) ? returnFocusNode : null,
-            );
+  Widget _radarSlot() {
+    if (radarController.stage == RadarStage.content &&
+        radarController.tracks.isNotEmpty) {
+      final tracks = radarController.tracks;
+      return _RadarRecommendationCard(
+        track: tracks.first,
+        compact: compact,
+        onPlay: () => unawaited(queueController.replaceAndPlay(tracks, 0)),
+      );
     }
     return _RecommendationSlotState(
-      key: const ValueKey('home-recommendation-secondary-state'),
-      title: 'Another public pick',
-      detail: _publicStateDetail(publicStage),
-      loading: publicStage == RecommendedPlaylistStage.loading,
-      onRetry: publicStage == RecommendedPlaylistStage.error
-          ? onRetryPublic
-          : null,
+      key: const ValueKey('home-radar-state'),
+      title: 'Radar',
+      detail: _radarStateDetail(radarController.stage),
+      loading: radarController.stage == RadarStage.loading,
+      onRetry: radarController.canRetry ? radarController.retry : null,
       compact: compact,
     );
   }
@@ -677,7 +693,7 @@ class _DailyRecommendationContent extends StatelessWidget {
             children: [
               Expanded(child: _dailySlot()),
               const SizedBox(width: _HomeGeometry.itemGap),
-              Expanded(child: _secondaryPublicSlot()),
+              Expanded(child: _radarSlot()),
             ],
           ),
         ],
@@ -696,11 +712,159 @@ class _DailyRecommendationContent extends StatelessWidget {
               children: [
                 Expanded(child: _dailySlot()),
                 const SizedBox(height: _HomeGeometry.itemGap),
-                Expanded(child: _secondaryPublicSlot()),
+                Expanded(child: _radarSlot()),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RadarRecommendationCard extends StatelessWidget {
+  const _RadarRecommendationCard({
+    required this.track,
+    required this.compact,
+    required this.onPlay,
+  });
+
+  final PlaylistTrackSummary track;
+  final bool compact;
+  final VoidCallback onPlay;
+
+  String get _artists => track.artistNames.isEmpty
+      ? 'QQ Music recommendation'
+      : track.artistNames.join(' · ');
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final semanticsLabel = 'Radar, ${track.title}, $_artists. Play Radar';
+    if (compact) {
+      return Semantics(
+        button: true,
+        label: semanticsLabel,
+        onTap: onPlay,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _HomeArtwork(
+                    uri: track.artworkUri,
+                    placeholderIcon: Icons.radar_rounded,
+                    radius: _HomeGeometry.heroRadius,
+                  ),
+                  Positioned.fill(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        key: const ValueKey('home-radar-recommendation'),
+                        borderRadius: _HomeGeometry.heroRadius,
+                        onTap: onPlay,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Radar',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      onTap: onPlay,
+      child: Material(
+        color: colors.surfaceContainerLow,
+        borderRadius: _HomeGeometry.heroRadius,
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 64,
+                    child: _HomeArtwork(
+                      uri: track.artworkUri,
+                      placeholderIcon: Icons.radar_rounded,
+                      radius: _HomeGeometry.artworkRadius,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Radar',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: colors.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _artists,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.play_arrow_rounded, color: colors.primary),
+                ],
+              ),
+            ),
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: const ValueKey('home-radar-recommendation'),
+                  onTap: onPlay,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1972,6 +2136,13 @@ String _dailyStateDetail(HomeResourceStage stage) => switch (stage) {
   HomeResourceStage.content => 'Daily 30 is unavailable right now.',
   HomeResourceStage.empty => 'Daily 30 is unavailable right now.',
   HomeResourceStage.error => 'Daily 30 could not be loaded.',
+};
+
+String _radarStateDetail(RadarStage stage) => switch (stage) {
+  RadarStage.loading => 'Loading your Radar recommendations…',
+  RadarStage.content => 'Radar is unavailable right now.',
+  RadarStage.empty => 'QQ Music has no Radar recommendation right now.',
+  RadarStage.error => 'Radar recommendations could not be loaded.',
 };
 
 String _recommendationDetail(RecommendedPlaylistSummary playlist) =>
