@@ -116,4 +116,12 @@
 
 **Consequences:** Home becomes the active visual-review candidate and the implemented Liked Songs candidate remains intact but unaccepted. Popular Programs and a second independent personalized Track set remain unsupported and may not be fabricated, copied, or replaced with unrelated data. This decision authorizes no new endpoint, podcast capability, Provider, navigation/state framework, Shell redesign, or Core redesign.
 
+## HD-012 — Redirect visual integration to artwork-led Now Playing
+
+**Status:** Accepted on 2026-08-29
+
+**Decision:** Leave Home and Liked Songs implemented but unaccepted, and make Expanded Now Playing the active M7 visual-review page. The maintainer-supplied frame is composition reference rather than a pixel-copy target. The page may derive a page-local official Material 3 color scheme from the current album artwork for both light and dark modes, while preserving the existing playback, Queue, lyrics, Comments, and Track-associated MV paths.
+
+**Consequences:** Artwork color is limited to the active Expanded Now Playing subtree and does not establish a global theme persona or override HD-002's deferral of artwork-derived global color. This decision authorizes no Core/protocol change, second player, navigation/state framework change, Home/Shell redesign, or unrelated page work. The candidate remains pending maintainer visual acceptance.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

@@ -70,6 +70,7 @@ class LyricPanel extends StatelessWidget {
     this.canSeek,
     this.onSeek,
     this.showCloseButton = true,
+    this.immersive = false,
     super.key,
   });
 
@@ -80,6 +81,7 @@ class LyricPanel extends StatelessWidget {
   final bool Function()? canSeek;
   final Future<void> Function(int positionMs)? onSeek;
   final bool showCloseButton;
+  final bool immersive;
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +98,12 @@ class LyricPanel extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 8, 12),
+                padding: EdgeInsets.fromLTRB(
+                  immersive ? 28 : 24,
+                  immersive ? 20 : 8,
+                  immersive ? 20 : 8,
+                  immersive ? 16 : 12,
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -131,7 +138,7 @@ class LyricPanel extends StatelessWidget {
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              if (!immersive) const Divider(height: 1),
               Expanded(child: _body(canSeek?.call() ?? false)),
             ],
           ),
@@ -152,6 +159,7 @@ class LyricPanel extends StatelessWidget {
       key: const ValueKey('lyrics-content'),
       controller: controller,
       onSeek: seekEnabled ? onSeek : null,
+      immersive: immersive,
     ),
     LyricStage.unavailable => const _LyricMessage(
       key: ValueKey('lyrics-unavailable'),
@@ -202,9 +210,15 @@ class LyricPanel extends StatelessWidget {
 }
 
 class _LyricContent extends StatefulWidget {
-  const _LyricContent({required this.controller, this.onSeek, super.key});
+  const _LyricContent({
+    required this.controller,
+    required this.immersive,
+    this.onSeek,
+    super.key,
+  });
 
   final LyricController controller;
+  final bool immersive;
   final Future<void> Function(int positionMs)? onSeek;
 
   @override
@@ -247,7 +261,12 @@ class _LyricContentState extends State<_LyricContent> {
           child: ListView.builder(
             key: const ValueKey('lyrics-line-list'),
             controller: _scrollController,
-            padding: EdgeInsets.fromLTRB(16, 20, 16, _following ? 20 : 88),
+            padding: EdgeInsets.fromLTRB(
+              widget.immersive ? 20 : 16,
+              widget.immersive ? 12 : 20,
+              widget.immersive ? 20 : 16,
+              _following ? 20 : 88,
+            ),
             itemCount: lines.length,
             itemBuilder: (context, index) {
               final line = _LyricLine(
@@ -255,6 +274,7 @@ class _LyricContentState extends State<_LyricContent> {
                 line: lines[index],
                 lineIndex: index,
                 active: index == activeLineIndex,
+                immersive: widget.immersive,
                 positionMs: widget.controller.positionMs,
                 onSeek: widget.onSeek == null
                     ? null
@@ -361,6 +381,7 @@ class _LyricLine extends StatelessWidget {
     required this.line,
     required this.lineIndex,
     required this.active,
+    required this.immersive,
     required this.positionMs,
     this.onSeek,
     super.key,
@@ -369,19 +390,26 @@ class _LyricLine extends StatelessWidget {
   final SynchronizedLyricLine line;
   final int lineIndex;
   final bool active;
+  final bool immersive;
   final int positionMs;
   final VoidCallback? onSeek;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-      color: active
-          ? theme.colorScheme.onSurface
-          : theme.colorScheme.onSurfaceVariant,
-      height: 1.35,
-    );
+    final textStyle =
+        (immersive
+                ? active
+                      ? theme.textTheme.headlineSmall
+                      : theme.textTheme.titleLarge
+                : theme.textTheme.titleMedium)
+            ?.copyWith(
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              color: active
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onSurfaceVariant,
+              height: 1.35,
+            );
     final segmentsComposeLine =
         line.segments.isNotEmpty &&
         line.segments.map((segment) => segment.text).join() == line.text;
@@ -393,17 +421,20 @@ class _LyricLine extends StatelessWidget {
       child: InkWell(
         onTap: onSeek,
         excludeFromSemantics: true,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(immersive ? 22 : 18),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          margin: EdgeInsets.symmetric(vertical: immersive ? 6 : 4),
+          padding: EdgeInsets.symmetric(
+            horizontal: immersive ? 18 : 16,
+            vertical: immersive ? 16 : 14,
+          ),
           decoration: BoxDecoration(
             color: active
                 ? theme.colorScheme.primaryContainer.withValues(alpha: 0.52)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(immersive ? 22 : 18),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,15 +485,30 @@ class _LyricLine extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   translation,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  key: ValueKey('lyrics-translation-$lineIndex'),
+                  softWrap: true,
+                  maxLines: null,
+                  overflow: TextOverflow.visible,
+                  textWidthBasis: TextWidthBasis.parent,
+                  style:
+                      (immersive
+                              ? theme.textTheme.bodyLarge
+                              : theme.textTheme.bodyMedium)
+                          ?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            height: 1.4,
+                          ),
                 ),
               ],
               if (line.romanization case final romanization?) ...[
                 const SizedBox(height: 4),
                 Text(
                   romanization,
+                  key: ValueKey('lyrics-romanization-$lineIndex'),
+                  softWrap: true,
+                  maxLines: null,
+                  overflow: TextOverflow.visible,
+                  textWidthBasis: TextWidthBasis.parent,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     fontStyle: FontStyle.italic,

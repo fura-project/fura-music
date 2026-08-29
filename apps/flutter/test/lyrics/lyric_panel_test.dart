@@ -50,6 +50,41 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets('keeps a long translation fully visible on a narrow display', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 480);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final controller = LyricController(
+      _ScriptedGateway([_ImmediateOperation(_longTranslation())]),
+    );
+    await controller.load(_track);
+    controller.updatePositionMs(1250);
+
+    await _pumpPanel(tester, controller);
+    await tester.pumpAndSettle();
+
+    final translation = find.byKey(const ValueKey('lyrics-translation-0'));
+    final text = tester.widget<Text>(translation);
+    expect(text.softWrap, isTrue);
+    expect(text.maxLines, isNull);
+    expect(text.overflow, TextOverflow.visible);
+    expect(tester.getSize(translation).height, greaterThan(40));
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('lyrics-line-0')))
+          .contains(tester.getRect(translation).bottomRight),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+
+    controller.dispose();
+  });
+
   testWidgets(
     'follows active lines until manual scrolling and resets per track',
     (tester) async {
@@ -267,6 +302,21 @@ LyricLoadResult _success() => LyricLoadResult(
         TimedLyricSegment(text: 'timed ', startMs: 1000, durationMs: 500),
         TimedLyricSegment(text: 'line', startMs: 1500, durationMs: 500),
       ],
+    ),
+  ]),
+);
+
+LyricLoadResult _longTranslation() => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    SynchronizedLyricLine(
+      text: 'A deliberately long original lyric line',
+      startMs: 1000,
+      durationMs: 2500,
+      translation:
+          '这是一条用于验证窄屏和放大字体时仍能完整换行显示，'
+          '不会被固定行数或溢出策略截断的长翻译。',
+      romanization: 'A complete romanization remains available as well.',
+      segments: const [],
     ),
   ]),
 );

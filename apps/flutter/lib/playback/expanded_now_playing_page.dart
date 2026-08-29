@@ -11,8 +11,18 @@ import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
 import 'package:flutterustmusic/music_video/track_music_video_surface.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
-class ExpandedNowPlayingPage extends StatelessWidget {
+typedef ArtworkImageProviderBuilder = ImageProvider<Object> Function(
+  String artworkUri,
+);
+
+typedef ArtworkColorSchemeLoader = Future<ColorScheme> Function({
+  required ImageProvider<Object> provider,
+  required Brightness brightness,
+});
+
+class ExpandedNowPlayingPage extends StatefulWidget {
   const ExpandedNowPlayingPage({
     required this.controller,
     required this.onBack,
@@ -20,6 +30,8 @@ class ExpandedNowPlayingPage extends StatelessWidget {
     this.commentsGateway = const RustTrackCommentGateway(),
     this.musicVideoGateway = const RustTrackMusicVideoGateway(),
     this.musicVideoEngine = const MediaKitTrackMusicVideoEngine(),
+    this.artworkImageProviderBuilder = _networkArtworkProvider,
+    this.artworkColorSchemeLoader = _materialArtworkColorScheme,
     super.key,
   });
 
@@ -29,32 +41,193 @@ class ExpandedNowPlayingPage extends StatelessWidget {
   final TrackCommentGateway commentsGateway;
   final TrackMusicVideoGateway musicVideoGateway;
   final TrackMusicVideoEngine musicVideoEngine;
+  final ArtworkImageProviderBuilder artworkImageProviderBuilder;
+  final ArtworkColorSchemeLoader artworkColorSchemeLoader;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    key: const ValueKey('expanded-now-playing-page'),
-    appBar: AppBar(
-      leading: IconButton(
-        key: const ValueKey('expanded-now-playing-back'),
-        tooltip: 'Back to previous page',
-        onPressed: onBack,
-        icon: const Icon(Icons.arrow_back_rounded),
+  State<ExpandedNowPlayingPage> createState() => _ExpandedNowPlayingPageState();
+}
+
+class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
+  String? _resolvedArtworkUri;
+  Brightness? _resolvedBrightness;
+  ColorScheme? _artworkColorScheme;
+  int _colorRequestGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveArtworkColors(notify: false);
+  }
+
+  @override
+  void didUpdateWidget(ExpandedNowPlayingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleControllerChanged);
+      widget.controller.addListener(_handleControllerChanged);
+    }
+    if (oldWidget.controller != widget.controller ||
+        oldWidget.artworkImageProviderBuilder !=
+            widget.artworkImageProviderBuilder ||
+        oldWidget.artworkColorSchemeLoader != widget.artworkColorSchemeLoader) {
+      _resolvedArtworkUri = null;
+      _resolvedBrightness = null;
+      _resolveArtworkColors(notify: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _colorRequestGeneration += 1;
+    widget.controller.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final colors = _artworkColorScheme ?? baseTheme.colorScheme;
+    final pageTheme = baseTheme.copyWith(
+      colorScheme: colors,
+      scaffoldBackgroundColor: colors.surface,
+      appBarTheme: baseTheme.appBarTheme.copyWith(
+        backgroundColor: colors.surface,
+        foregroundColor: colors.onSurface,
+        surfaceTintColor: Colors.transparent,
       ),
-      title: const Text('Now playing'),
-    ),
-    body: _ExpandedNowPlayingBody(
-      controller: controller,
-      onBack: onBack,
-      onSignInAgain: onSignInAgain,
-      commentsGateway: commentsGateway,
-      musicVideoGateway: musicVideoGateway,
-      musicVideoEngine: musicVideoEngine,
-    ),
-    bottomNavigationBar: NowPlayingBar.expanded(
-      controller: controller,
-      onSignInAgain: onSignInAgain,
-    ),
-  );
+      dividerTheme: baseTheme.dividerTheme.copyWith(
+        color: colors.outlineVariant,
+      ),
+      progressIndicatorTheme: baseTheme.progressIndicatorTheme.copyWith(
+        color: colors.primary,
+        linearTrackColor: colors.surfaceContainerHighest,
+        circularTrackColor: colors.surfaceContainerHighest,
+      ),
+    );
+    return AnimatedTheme(
+      data: pageTheme,
+      duration: MusicMotion.stateChange,
+      curve: Curves.easeOutCubic,
+      child: Builder(
+        builder: (context) => Scaffold(
+          key: const ValueKey('expanded-now-playing-page'),
+          appBar: AppBar(
+            leading: IconButton(
+              key: const ValueKey('expanded-now-playing-back'),
+              tooltip: 'Back to previous page',
+              onPressed: widget.onBack,
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            title: const Text('Now playing'),
+          ),
+          body: _ExpandedNowPlayingBackdrop(
+            child: _ExpandedNowPlayingBody(
+              controller: widget.controller,
+              onBack: widget.onBack,
+              onSignInAgain: widget.onSignInAgain,
+              commentsGateway: widget.commentsGateway,
+              musicVideoGateway: widget.musicVideoGateway,
+              musicVideoEngine: widget.musicVideoEngine,
+              artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
+            ),
+          ),
+          bottomNavigationBar: NowPlayingBar.expanded(
+            controller: widget.controller,
+            onSignInAgain: widget.onSignInAgain,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleControllerChanged() => _resolveArtworkColors();
+
+  void _resolveArtworkColors({bool notify = true}) {
+    if (!mounted) return;
+    final brightness = Theme.of(context).brightness;
+    final artworkUri = widget.controller.current?.artworkUri;
+    if (_resolvedArtworkUri == artworkUri &&
+        _resolvedBrightness == brightness) {
+      return;
+    }
+    final generation = ++_colorRequestGeneration;
+    _resolvedArtworkUri = artworkUri;
+    _resolvedBrightness = brightness;
+    _artworkColorScheme = null;
+    if (notify) setState(() {});
+    if (artworkUri == null) return;
+
+    late final ImageProvider<Object> provider;
+    try {
+      provider = widget.artworkImageProviderBuilder(artworkUri);
+    } on Object {
+      return;
+    }
+    widget
+        .artworkColorSchemeLoader(provider: provider, brightness: brightness)
+        .then((scheme) {
+          if (!mounted || generation != _colorRequestGeneration) return;
+          setState(() => _artworkColorScheme = scheme);
+        })
+        .onError((Object _, StackTrace _) {
+          // A missing or undecodable cover keeps the normal app color scheme.
+          // Do not surface the remote artwork URI through error diagnostics.
+        });
+  }
+}
+
+ImageProvider<Object> _networkArtworkProvider(String artworkUri) =>
+    NetworkImage(artworkUri);
+
+Future<ColorScheme> _materialArtworkColorScheme({
+  required ImageProvider<Object> provider,
+  required Brightness brightness,
+}) => ColorScheme.fromImageProvider(
+  provider: provider,
+  brightness: brightness,
+  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+);
+
+class _ExpandedNowPlayingBackdrop extends StatelessWidget {
+  const _ExpandedNowPlayingBackdrop({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = colors.brightness == Brightness.dark;
+    final surface = colors.surface;
+    return DecoratedBox(
+      key: const ValueKey('expanded-now-playing-artwork-backdrop'),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              colors.primaryContainer.withValues(alpha: dark ? 0.34 : 0.52),
+              surface,
+            ),
+            Color.alphaBlend(
+              colors.tertiaryContainer.withValues(alpha: dark ? 0.18 : 0.3),
+              surface,
+            ),
+            surface,
+          ],
+          stops: const [0, 0.48, 1],
+        ),
+      ),
+      child: child,
+    );
+  }
 }
 
 class _ExpandedNowPlayingBody extends StatefulWidget {
@@ -65,6 +238,7 @@ class _ExpandedNowPlayingBody extends StatefulWidget {
     required this.commentsGateway,
     required this.musicVideoGateway,
     required this.musicVideoEngine,
+    required this.artworkImageProviderBuilder,
   });
 
   final QueuePlaybackController controller;
@@ -73,6 +247,7 @@ class _ExpandedNowPlayingBody extends StatefulWidget {
   final TrackCommentGateway commentsGateway;
   final TrackMusicVideoGateway musicVideoGateway;
   final TrackMusicVideoEngine musicVideoEngine;
+  final ArtworkImageProviderBuilder artworkImageProviderBuilder;
 
   @override
   State<_ExpandedNowPlayingBody> createState() =>
@@ -116,27 +291,38 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
         final wide = constraints.maxWidth >= 900;
         final lyrics = _lyrics();
         if (wide) {
-          return Row(
-            key: const ValueKey('expanded-now-playing-wide-layout'),
-            children: [
-              Expanded(
-                child: _ExpandedTrackHero(
-                  track: track,
-                  onOpenComments: () => _openComments(context, track),
-                  onOpenMusicVideo: () => _openMusicVideo(context, track),
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(32, 20, 32, 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1320),
+                child: Row(
+                  key: const ValueKey('expanded-now-playing-wide-layout'),
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: _ExpandedTrackHero(
+                        track: track,
+                        artworkImageProviderBuilder:
+                            widget.artworkImageProviderBuilder,
+                        onOpenComments: () => _openComments(context, track),
+                        onOpenMusicVideo: () => _openMusicVideo(context, track),
+                      ),
+                    ),
+                    const SizedBox(width: 40),
+                    Expanded(
+                      flex: 6,
+                      child: _ExpandedLyricsSurface(child: lyrics),
+                    ),
+                  ],
                 ),
               ),
-              VerticalDivider(
-                width: 1,
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-              Expanded(child: lyrics),
-            ],
+            ),
           );
         }
         final heroHeight = math
-            .min(constraints.maxWidth - 24, constraints.maxHeight * 0.46)
-            .clamp(200.0, 360.0)
+            .min(constraints.maxWidth * 0.52, constraints.maxHeight * 0.38)
+            .clamp(176.0, 240.0)
             .toDouble();
         return Column(
           key: const ValueKey('expanded-now-playing-compact-layout'),
@@ -147,15 +333,17 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
               child: _ExpandedTrackHero(
                 track: track,
                 compact: true,
+                artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
                 onOpenComments: () => _openComments(context, track),
                 onOpenMusicVideo: () => _openMusicVideo(context, track),
               ),
             ),
-            Divider(
-              height: 1,
-              color: Theme.of(context).colorScheme.outlineVariant,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: _ExpandedLyricsSurface(child: lyrics),
+              ),
             ),
-            Expanded(child: lyrics),
           ],
         );
       },
@@ -176,6 +364,7 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
       canSeek: () => widget.controller.playback.canSeek,
       onSeek: widget.controller.playback.seekToMs,
       showCloseButton: false,
+      immersive: true,
     );
   }
 
@@ -218,15 +407,38 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
   }
 }
 
+class _ExpandedLyricsSurface extends StatelessWidget {
+  const _ExpandedLyricsSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      key: const ValueKey('expanded-now-playing-lyrics-surface'),
+      color: colors.surfaceContainerLowest.withValues(alpha: 0.7),
+      shape: RoundedRectangleBorder(
+        borderRadius: MusicRadii.panel,
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.55)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
 class _ExpandedTrackHero extends StatelessWidget {
   const _ExpandedTrackHero({
     required this.track,
+    required this.artworkImageProviderBuilder,
     required this.onOpenComments,
     required this.onOpenMusicVideo,
     this.compact = false,
   });
 
   final PlaylistTrackSummary track;
+  final ArtworkImageProviderBuilder artworkImageProviderBuilder;
   final VoidCallback onOpenComments;
   final VoidCallback onOpenMusicVideo;
   final bool compact;
@@ -238,106 +450,172 @@ class _ExpandedTrackHero extends StatelessWidget {
     final artists = track.artistNames.isEmpty
         ? 'Unknown artist'
         : track.artistNames.join(' · ');
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.primaryContainer.withValues(alpha: 0.78),
-            colors.tertiaryContainer.withValues(alpha: 0.56),
-            colors.surface,
-          ],
-        ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final textReserve = compact ? 92.0 : 150.0;
-          final maximum = compact ? 220.0 : 440.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (compact) {
           final artworkDimension = math
-              .min(
-                constraints.maxWidth - (compact ? 48 : 96),
-                constraints.maxHeight - textReserve,
-              )
-              .clamp(88.0, maximum)
+              .min(136.0, constraints.maxHeight - 32)
+              .clamp(96.0, 136.0)
               .toDouble();
-          return Center(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(compact ? 16 : 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ExpandedArtwork(track: track, dimension: artworkDimension),
-                  SizedBox(height: compact ? 12 : 24),
-                  Text(
-                    track.title,
-                    key: const ValueKey('expanded-now-playing-title'),
-                    maxLines: compact ? 1 : 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style:
-                        (compact
-                                ? theme.textTheme.titleLarge
-                                : theme.textTheme.headlineMedium)
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    artists,
-                    key: const ValueKey('expanded-now-playing-artists'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                  if (track.albumTitle case final albumTitle?)
-                    Text(
-                      albumTitle,
-                      key: const ValueKey('expanded-now-playing-album'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  SizedBox(height: compact ? 8 : 16),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Row(
+              children: [
+                _ExpandedArtwork(
+                  track: track,
+                  dimension: artworkDimension,
+                  imageProviderBuilder: artworkImageProviderBuilder,
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      OutlinedButton.icon(
-                        key: const ValueKey('expanded-now-playing-mv'),
-                        onPressed: onOpenMusicVideo,
-                        icon: const Icon(Icons.music_video_outlined),
-                        label: const Text('MV'),
+                      Text(
+                        track.title,
+                        key: const ValueKey('expanded-now-playing-title'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                      OutlinedButton.icon(
-                        key: const ValueKey('expanded-now-playing-comments'),
-                        onPressed: onOpenComments,
-                        icon: const Icon(Icons.mode_comment_outlined),
-                        label: const Text('Comments'),
+                      const SizedBox(height: 4),
+                      Text(
+                        artists,
+                        key: const ValueKey('expanded-now-playing-artists'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                      if (track.albumTitle case final albumTitle?)
+                        Text(
+                          albumTitle,
+                          key: const ValueKey('expanded-now-playing-album'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          IconButton.filledTonal(
+                            key: const ValueKey('expanded-now-playing-mv'),
+                            tooltip: 'Open music video',
+                            onPressed: onOpenMusicVideo,
+                            icon: const Icon(Icons.music_video_outlined),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.filledTonal(
+                            key: const ValueKey(
+                              'expanded-now-playing-comments',
+                            ),
+                            tooltip: 'Open comments',
+                            onPressed: onOpenComments,
+                            icon: const Icon(Icons.mode_comment_outlined),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
-        },
-      ),
+        }
+
+        final artworkDimension = math
+            .min(constraints.maxWidth - 96, constraints.maxHeight * 0.58)
+            .clamp(160.0, 420.0)
+            .toDouble();
+        return Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ExpandedArtwork(
+                  track: track,
+                  dimension: artworkDimension,
+                  imageProviderBuilder: artworkImageProviderBuilder,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  track.title,
+                  key: const ValueKey('expanded-now-playing-title'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  artists,
+                  key: const ValueKey('expanded-now-playing-artists'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+                if (track.albumTitle case final albumTitle?)
+                  Text(
+                    albumTitle,
+                    key: const ValueKey('expanded-now-playing-album'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                      key: const ValueKey('expanded-now-playing-mv'),
+                      onPressed: onOpenMusicVideo,
+                      icon: const Icon(Icons.music_video_outlined),
+                      label: const Text('MV'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('expanded-now-playing-comments'),
+                      onPressed: onOpenComments,
+                      icon: const Icon(Icons.mode_comment_outlined),
+                      label: const Text('Comments'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
 class _ExpandedArtwork extends StatelessWidget {
-  const _ExpandedArtwork({required this.track, required this.dimension});
+  const _ExpandedArtwork({
+    required this.track,
+    required this.dimension,
+    required this.imageProviderBuilder,
+  });
 
   final PlaylistTrackSummary track;
   final double dimension;
+  final ArtworkImageProviderBuilder imageProviderBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -358,25 +636,46 @@ class _ExpandedArtwork extends StatelessWidget {
         color: Theme.of(context).colorScheme.onPrimaryContainer,
       ),
     );
-    return Semantics(
-      image: true,
-      label: 'Artwork for ${track.title}',
-      child: SizedBox.square(
-        key: const ValueKey('expanded-now-playing-artwork'),
-        dimension: dimension,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(_compactRadius(dimension)),
-          child: track.artworkUri == null
-              ? placeholder
-              : Image.network(
-                  track.artworkUri!,
-                  fit: BoxFit.cover,
-                  excludeFromSemantics: true,
-                  gaplessPlayback: true,
-                  loadingBuilder: (context, child, progress) =>
-                      progress == null ? child : placeholder,
-                  errorBuilder: (context, error, stackTrace) => placeholder,
-                ),
+    final artworkUri = track.artworkUri;
+    ImageProvider<Object>? provider;
+    if (artworkUri != null) {
+      try {
+        provider = imageProviderBuilder(artworkUri);
+      } on Object {
+        provider = null;
+      }
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(_compactRadius(dimension) + 2),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.22),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Semantics(
+        image: true,
+        label: 'Artwork for ${track.title}',
+        child: SizedBox.square(
+          key: const ValueKey('expanded-now-playing-artwork'),
+          dimension: dimension,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(_compactRadius(dimension)),
+            child: provider == null
+                ? placeholder
+                : Image(
+                    image: provider,
+                    fit: BoxFit.cover,
+                    excludeFromSemantics: true,
+                    gaplessPlayback: true,
+                    frameBuilder: (context, child, frame, synchronous) =>
+                        synchronous || frame != null ? child : placeholder,
+                    errorBuilder: (context, error, stackTrace) => placeholder,
+                  ),
+          ),
         ),
       ),
     );

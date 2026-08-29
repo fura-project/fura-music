@@ -5,16 +5,16 @@ execution:
   global_stop: false
   acceptance_milestone: M1
   active_workstream: M7_PAGE_BY_PAGE_UI
-  current_task: HOME_REAL_DATA_VISUAL_ACCEPTANCE
-  next_action: MAINTAINER_RECHECK_HOME_RECOMMEND_FEED
+  current_task: NOW_PLAYING_ARTWORK_COLOR_VISUAL_ACCEPTANCE
+  next_action: MAINTAINER_REVIEW_NOW_PLAYING
 ---
 
 # Current State
 
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
-- M2 through M6 are checkpointed. HD-011 resumes the unaccepted Home candidate for one truthful real-data integration pass; the implemented Liked Songs candidate remains intact but is no longer the active visual-review surface.
+- M2 through M6 are checkpointed. HD-012 redirects the active M7 visual-review surface to Expanded Now Playing; the implemented Home and Liked Songs candidates remain intact and unaccepted.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
-- The current Home candidate binds public recommendations, Daily 30, personalized Playlists, personalized Tracks, and Radar to their exact existing data paths. A maintainer screenshot proved the old `ct: 19` / `cv: 0` RecommendFeed profile returned an anonymous-shaped feed and left Daily plus personalized Playlists empty. A secret-free live shape comparison reproduced that profile dependence, and the Client now uses the evidenced `wk_v17` profile. Full Rust checks, targeted Home tests, Dart analysis, and a Linux Debug build pass; authenticated Home re-observation is still pending. Synthetic review content remains test-only, and no stored account data was accessed.
+- Expanded Now Playing now derives a page-local official Material 3 color scheme from the current artwork in light and dark modes, preserves the existing player/Queue/lyrics/Comments/MV ownership, and uses separate wide and compact compositions. Long translations and romanization explicitly wrap without a line cap; targeted narrow/text-scale coverage and synthetic light/dark page renders pass. This is implementation evidence, not maintainer visual acceptance or proof that unmatched upstream translation timestamps are available.
 
 # Current Capability Boundary
 
@@ -26,8 +26,8 @@ execution:
 # Current Scheduling
 
 - There is no remaining safe agent-only Core capability task supported by the audit. Do not invent another endpoint, Provider, framework, or refactor to keep producing commits.
-- Home is the active unaccepted candidate after the maintainer explicitly clarified that grey artwork in the Stitch reference represented missing design assets, not production unavailability. Supported slots use live Provider results; public recommendations no longer occupy the Radar slot, and the existing Radar Track set is independently loaded, rendered, retried, and playable through the existing Queue. Daily and personalized Playlists now use the live-evidenced `wk_v17` feed profile and need one maintainer rerun to confirm authenticated content replaces the former empty states.
-- Liked Songs remains implemented and unaccepted, using the Human-approved Stitch desktop composition over a typed provider-neutral built-in-liked semantic, retained Library state, positional Queue, dense desktop rows, compact Track rows, and the persistent desktop/mobile player.
+- Expanded Now Playing is the active unaccepted candidate under HD-012. Artwork-derived color remains inside the page and safely falls back to the normal app scheme when a cover is absent or cannot be decoded. The supplied frame is reference-only; supported playback, Queue, Comments, MV, synchronized lyrics, and word timing remain reachable.
+- Home and Liked Songs remain implemented and unaccepted. Home still needs a maintainer authenticated rerun for Daily/personalized recommendation availability; Liked Songs retains its typed built-in-liked semantic, dense desktop rows, compact Track rows, and persistent player.
 - The current candidate intentionally omits unsupported download, batch-edit, audiobook, and video-library controls. Synthetic review content does not enter production and no account data was accessed.
 - No other page may begin before maintainer visual acceptance or another explicit Human redirect. Automated checks and the bounded Material 3 review cannot supply that acceptance.
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
@@ -49,5 +49,5 @@ execution:
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback, personalized recommendation quality, or broad live catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, unavailable operating systems, or release readiness.
-- Home and Liked Songs remain unaccepted. Home is the current visual-review candidate; automated and synthetic evidence does not prove authenticated recommendation availability, artwork completeness, or Human visual acceptance.
+- Home, Liked Songs, and Expanded Now Playing remain unaccepted. Expanded Now Playing is the current visual-review candidate; synthetic light/dark renders and widget tests do not prove Human visual acceptance or live catalog artwork/translation coverage.
 - Historical research/checkpoint documents remain evidence snapshots. Current scheduling is governed by `AGENTS.md`, `ROADMAP.md`, and this file.
