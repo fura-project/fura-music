@@ -5,7 +5,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -144,6 +146,68 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'desktop artwork catalog chooser lays out with Semantics enabled',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(1440, 960);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:43001:dialogAlbumMid',
+        title: 'Dialog Album',
+      );
+      const artist = ArtistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'artist:42001:dialogArtistMid',
+        name: 'Dialog Artist',
+      );
+
+      await _openDetail(
+        tester,
+        media: _FakeMediaGateway([
+          _ImmediateMediaOperation(_success('desktop-dialog')),
+        ]),
+        audio: _FakeAudioEngine([_FakeAudioSession()]),
+        albumTitle: album.title,
+        album: album,
+        artists: const [artist],
+      );
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('now-playing-catalog-action')),
+      );
+      await tester.pumpAndSettle();
+
+      final selection = find.byKey(
+        const ValueKey('now-playing-catalog-selection'),
+      );
+      expect(selection, findsOneWidget);
+      expect(
+        find.descendant(of: selection, matching: find.text('Dialog Album')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: selection, matching: find.text('Dialog Artist')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('now-playing-catalog-selection')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
     },
   );
 
@@ -1554,6 +1618,8 @@ Future<void> _openDetail(
   int? durationSeconds = 120,
   String? artworkUri,
   String? albumTitle,
+  AlbumSummary? album,
+  List<ArtistSummary> artists = const [],
   QqMusicAuthenticationGateway? authenticationGateway,
   TrackCommentGateway? comments,
 }) async {
@@ -1570,6 +1636,8 @@ Future<void> _openDetail(
         durationSeconds,
         artworkUri,
         albumTitle,
+        album,
+        artists,
       ),
       mediaResolutionGateway: media,
       lyricGateway:
@@ -1865,6 +1933,8 @@ class _DetailGateway implements PlaylistDetailGateway {
     this.durationSeconds,
     this.artworkUri,
     this.albumTitle,
+    this.album,
+    this.artists,
   );
 
   final String firstOpaqueId;
@@ -1873,6 +1943,8 @@ class _DetailGateway implements PlaylistDetailGateway {
   final int? durationSeconds;
   final String? artworkUri;
   final String? albumTitle;
+  final AlbumSummary? album;
+  final List<ArtistSummary> artists;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
@@ -1886,6 +1958,8 @@ class _DetailGateway implements PlaylistDetailGateway {
     durationSeconds,
     artworkUri,
     albumTitle,
+    album,
+    artists,
   );
 }
 
@@ -1897,6 +1971,8 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
     this.durationSeconds,
     this.artworkUri,
     this.albumTitle,
+    this.album,
+    this.artists,
   );
 
   final String firstOpaqueId;
@@ -1905,6 +1981,8 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
   final int? durationSeconds;
   final String? artworkUri;
   final String? albumTitle;
+  final AlbumSummary? album;
+  final List<ArtistSummary> artists;
 
   @override
   bool cancel() => true;
@@ -1918,7 +1996,9 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         opaqueId: firstOpaqueId,
         title: 'First track',
         artistNames: const ['Fixture artist'],
+        artists: artists,
         albumTitle: albumTitle,
+        album: album,
         durationSeconds: durationSeconds,
         artworkUri: artworkUri,
       ),
@@ -1927,7 +2007,9 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
         opaqueId: secondOpaqueId,
         title: secondTitle,
         artistNames: const ['Fixture artist'],
+        artists: artists,
         albumTitle: albumTitle,
+        album: album,
         durationSeconds: durationSeconds,
         artworkUri: artworkUri,
       ),

@@ -14,7 +14,7 @@ execution:
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
 - M2 through M6 are checkpointed. HD-010 leaves the unaccepted Home candidate intact but pauses its visual iteration; the Human-approved Liked Songs desktop design is now implemented as the active M7 visual-review candidate.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
-- The current Liked Songs candidate passes 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, and 393 Flutter tests. A temporary secret-free Linux integration fixture also built and rendered the 1440 × 960 and 390 × 844 candidate with real fonts; the fixture was removed after capture. Linux x64 Release packaging and the five required Linux integration targets remain last-checkpoint evidence and are rerun only after Human visual acceptance.
+- The current Liked Songs candidate passes 372 offline Rust tests with 6 live tests default-ignored, strict Clippy, Dart format/analyze, and 394 Flutter tests. A temporary secret-free Linux integration fixture also built and rendered the 1440 × 960 and 390 × 844 candidate with real fonts; the fixture was removed after capture. Linux x64 Release packaging is current; the five required Linux integration targets remain last-checkpoint evidence and are rerun only after Human visual acceptance.
 
 # Current Capability Boundary
 

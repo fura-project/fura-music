@@ -807,36 +807,36 @@ class _NowPlayingCatalogSelection extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: BoxConstraints(
-      maxWidth: compact ? double.infinity : 440,
-      maxHeight: 420,
-    ),
-    child: ListView.builder(
-      key: const ValueKey('now-playing-catalog-selection'),
-      shrinkWrap: true,
-      itemCount: actions.length,
-      itemBuilder: (context, index) {
-        final action = actions[index];
-        final album = action.album;
-        final title = album?.title ?? action.artist!.name;
-        final kind = album == null ? 'Artist' : 'Album';
-        return ListTile(
-          key: ValueKey(
-            album == null
-                ? 'now-playing-open-artist-$index'
-                : 'now-playing-open-album',
-          ),
-          leading: Icon(
-            album == null ? Icons.person_rounded : Icons.album_rounded,
-          ),
-          title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-          subtitle: Text(kind),
-          onTap: () => Navigator.pop(context, action),
-        );
-      },
-    ),
-  );
+  Widget build(BuildContext context) {
+    final height = (actions.length * 72.0).clamp(72.0, 420.0).toDouble();
+    return SizedBox(
+      width: compact ? double.infinity : 440,
+      height: height,
+      child: ListView.builder(
+        key: const ValueKey('now-playing-catalog-selection'),
+        itemCount: actions.length,
+        itemBuilder: (context, index) {
+          final action = actions[index];
+          final album = action.album;
+          final title = album?.title ?? action.artist!.name;
+          final kind = album == null ? 'Artist' : 'Album';
+          return ListTile(
+            key: ValueKey(
+              album == null
+                  ? 'now-playing-open-artist-$index'
+                  : 'now-playing-open-album',
+            ),
+            leading: Icon(
+              album == null ? Icons.person_rounded : Icons.album_rounded,
+            ),
+            title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+            subtitle: Text(kind),
+            onTap: () => Navigator.pop(context, action),
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _PlaybackProgress extends StatefulWidget {
