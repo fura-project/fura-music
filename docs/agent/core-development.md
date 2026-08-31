@@ -1,20 +1,38 @@
-# Core / Backend Development Mode
+# Core / Backend Development
 
-Use this mode for QQ Music protocol, Provider and Domain behavior, authentication and credential semantics, media resolution, Queue rules, lyric parsing/timing, remote mutation semantics, recommendation capability, Settings persistence/business models, reusable non-visual logic, Rust platform-neutral behavior, and typed Bridge contracts. A small Flutter adapter needed to expose a capability remains Core work; visual design does not.
+Use this guide for QQ Music protocol, Provider and Domain behavior, authentication and credential semantics, media resolution, Queue rules, lyric parsing/timing, remote mutation semantics, recommendation capability, Settings business models, reusable non-visual logic, Rust platform-neutral behavior, and typed Bridge contracts. A small Flutter adapter needed to expose a capability remains Core work; visual design does not.
 
-The shared rules in [`AGENTS.md`](../../AGENTS.md) always apply.
+The shared authority, execution-mode, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply.
 
-## Authority model
+## Ownership and authority
 
 ```text
-Human defines product boundary and required capability.
+Human defines product boundary and execution mode.
 Evidence plus architecture define correctness.
-Codex designs the implementation.
+The Agent designs the bounded implementation.
 ```
 
-Inside an already authorized capability area, Codex may autonomously determine protocol implementation, Rust model structure, Provider contract shape, Domain representation, Bridge DTOs, cancellation and stale-result rules, error semantics, test structure, internal factoring, and the next finite evidenced Core task. Ordinary implementation choices do not require Human approval.
+Inside an authorized capability, implementation details such as Rust models, Provider contracts, Domain representation, Bridge DTOs, cancellation, stale-result rules, error semantics, tests, and internal factoring normally do not require Human approval. This does not authorize a new product category, Provider, stored-account automation, real-account mutation, speculative framework, or visual redesign.
 
-Core authority does not permit a new product category, Provider, stored-account automation, real-account mutation, speculative framework, or visual redesign.
+Keep raw QQ models and protocol behavior inside `QQMusicClient`; keep Provider identity opaque outside `QQMusicProvider`; keep reusable business behavior in Rust; keep the Bridge typed, coarse, cancellable, provider-neutral, and free of product business rules.
+
+## Execution-mode interpretation
+
+### CORE + AUTONOMOUS_DEVELOPMENT
+
+Core may use the evidence-driven loop that supports forward development:
+
+```text
+implement -> test/evidence -> fix -> verify -> next finite authorized task
+```
+
+The next task still needs current product authority and concrete evidence. Do not manufacture capability work to continue.
+
+### CORE + HUMAN_GATED_REGRESSION
+
+Assume existing Core behavior is the baseline. Investigate only reproduced bugs, compatibility failures, Human-reported incorrect behavior, failing regressions, and evidence-backed correctness defects.
+
+Start with targeted reproduction and evidence. Fix the smallest proven cause and verify that exact behavior. Do not expand capability coverage, redesign APIs, perform speculative architecture work, or clean up nearby code while fixing the regression. Completion of the bounded regression is a valid `COMPLETE` gate.
 
 ## Evidence and correctness
 
@@ -25,35 +43,24 @@ Prefer evidence in this order:
 3. repository fixtures and existing integration evidence;
 4. older wrappers or historical evidence as secondary sources.
 
-Do not trust one third-party wrapper blindly. Cross-validate conflicting protocol behavior, keep raw QQ models inside `QQMusicClient`, and preserve Provider-owned identity as opaque outside `QQMusicProvider`.
-
-For Core work, automated correctness evidence is a valid completion mechanism:
-
-```text
-implemented -> the bounded code path exists
-verified    -> tests, protocol, integration, or platform evidence supports the claim
-```
-
-Visual acceptance is not required for a protocol or Domain claim. Conversely, an offline fixture does not prove a live service or real-account path.
+Cross-validate conflicting protocol behavior. Automated tests, protocol evidence, integration, or platform evidence may verify a bounded Core claim, but an offline fixture does not prove a live service or real-account path.
 
 ## Live evidence and remote writes
 
-- Live tests must be bounded, redacted, ignored by default where appropriate, secret-safe, and failure-budget limited.
+- Live tests are bounded, redacted, ignored by default where appropriate, secret-safe, and failure-budget limited.
 - Never automate stored credentials or persist returned personal content.
-- Do not autonomously mutate the maintainer's account. Remote-write foundations may be implemented and verified offline without performing a real persistent write.
-- Once a remote write may have been sent, preserve unknown-outcome semantics; cancellation or transport failure cannot be relabeled as a definitive remote failure.
+- Do not autonomously mutate the maintainer's account. Remote-write foundations may be verified offline without performing a persistent write.
+- Once a remote write may have been sent, preserve unknown-outcome semantics; cancellation or transport failure cannot become a definitive remote failure.
 
-## Refactoring
+## Refactoring and Mixed work
 
-Refactor only from proven duplication, a correctness problem, blocked testability/changeability, a boundary violation, repeated lifecycle mechanics, triggered debt, or measured maintenance friction. File size, aesthetics, and hypothetical future Providers are not sufficient evidence.
+Refactor only for proven duplication, correctness, blocked testability/changeability, a boundary violation, repeated lifecycle mechanics, triggered debt, or measured maintenance friction. File size, aesthetics, and hypothetical future Providers are not evidence.
 
-## Mixed work
+If UI work exposes a genuine missing capability, define and verify one bounded Core subtask, then return to the approved UI task. Do not fabricate production data, delete the approved section, or let the Core subtask choose a new composition.
 
-If a UI implementation exposes a genuine missing capability, define a bounded Core subtask, implement and verify it here, then return to the approved UI design. Do not fabricate production data, delete the approved section, or let the Core subtask choose a new composition.
+## Validation
 
-## Validation and continuation
-
-Run the affected package tests plus the relevant workspace checks. The normal full Core gate is:
+Run affected package tests and checks. The normal full Core gate, when the task's risk or checkpoint requires it, is:
 
 ```bash
 cargo fmt --all -- --check
@@ -61,12 +68,4 @@ cargo test --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Bridge changes also require the code-generation and orphan-file check in `AGENTS.md`, followed by affected Dart/Flutter validation from the UI guide.
-
-After a Core task:
-
-```text
-test -> self-review -> inspect diff -> commit -> rank remaining authorized Core gaps
-```
-
-Task completion is not a stop condition. Codex may select the next finite Core task when current product scope and evidence already authorize it; it must not invent a capability to continue producing work.
+Bridge changes also require the code-generation and orphan-file checks in `AGENTS.md`, followed by affected Dart/Flutter validation from the UI guide. Targeted regression work does not require unrelated full-suite ceremony unless its changed boundary could regress what that suite proves.

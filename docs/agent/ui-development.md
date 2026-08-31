@@ -1,17 +1,17 @@
-# UI / Product Development Mode
+# UI / Product Development
 
-Use this mode for Flutter page composition, visual hierarchy, layout, adaptive behavior, Material 3 presentation, spacing, typography, surfaces, visual states, desktop/mobile translation, and implementation of approved Stitch/Figma designs.
+Use this guide for Flutter page composition, visual hierarchy, layout, adaptive behavior, Material 3 presentation, visual states, interaction, accessibility, and implementation of approved Stitch/Figma designs.
 
-The shared rules in [`AGENTS.md`](../../AGENTS.md) always apply.
+The shared authority, execution-mode, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply.
 
-## Authority model
+## Visual authority
 
 ```text
 Human or approved design defines visual WHAT and visual HOW.
-Codex decides implementation HOW.
+The Agent decides implementation HOW.
 ```
 
-Use this visual authority order:
+Use this order:
 
 1. Human product decision;
 2. latest Human-approved Stitch/Figma frame;
@@ -19,15 +19,11 @@ Use this visual authority order:
 4. approved reference screenshot;
 5. Material Design 3 rules;
 6. existing implementation;
-7. Codex visual preference.
+7. Agent visual preference.
 
-A Human-approved Stitch/Figma frame, MCP design, annotated screenshot, or explicit visual specification is executable UI provenance. Do not downgrade it because it is aesthetic. Codex's aesthetic preference is the lowest authority.
+An approved design is executable UI provenance. Do not replace its composition with a generic Material layout, change hierarchy because another structure is easier, or silently reduce visual requirements. Implementation mechanics such as `Row` versus `Flex`, breakpoints, widget decomposition, focus behavior, animation, and state wiring remain implementation choices.
 
-## Faithful implementation
-
-When an approved design exists, do not redesign its composition, replace it with a generic Material layout, change hierarchy because another structure is easier, invent another style, reinterpret page proportions, or silently reduce visual requirements. Codex may choose implementation details such as `Row` versus `Flex`, `LayoutBuilder`, semantic breakpoints, widget decomposition, focus behavior, animation mechanics, and state wiring.
-
-Material deviation is allowed only for a concrete accessibility, responsive, platform, production-data, architecture, or measured performance constraint. Report every material deviation explicitly:
+Material deviation requires a concrete accessibility, responsive, platform, production-data, architecture, or measured performance constraint and must be reported explicitly:
 
 ```text
 Design expected: ...
@@ -35,85 +31,56 @@ Implementation differs: ...
 Reason: ...
 ```
 
-Visual authority never overrides security, truthful Provider/Domain semantics, Flutter/Rust ownership, or Provider isolation.
+## Design source and truthful data
 
-## Design-source discipline
+- Record durable design identifiers, approval status/date, and important Human constraints under `docs/design/`; temporary Stitch/Figma exports stay outside Git.
+- Inspect structured design evidence and extract its relevant geometry, density, spacing, responsive behavior, player/navigation heights, and artwork ratios before implementation. Derive semantic constraints rather than arbitrary proportional formulas.
+- A semantic design slot binds only to its matching capability. Generic or adjacent data must not silently substitute for unavailable data; preserve truthful empty, error, or unavailable states.
+- Canonical synthetic fixtures must exercise every already-supported design-critical surface needed for review. Unsupported capabilities remain truthful, and synthetic content never enters production behavior.
 
-- Record durable Project/Screen identifiers, approval status/date, and important Human constraints under `docs/design/`.
-- Stitch/Figma PNG or HTML exports may remain temporary under `/tmp`; do not commit generated exports merely for permanence.
-- Before implementation, inspect structured MCP/HTML design and extract at least Sidebar width, Top Bar and persistent-player heights, content maximum width and padding, section spacing, Hero and card geometry, artwork ratio, Track-row height, responsive breakpoints, mobile Mini Player height, and Bottom Navigation height.
-- Derive semantic layout constraints from the design. Do not invent arbitrary proportional formulas unless the design demonstrates fluid proportional behavior.
+## Acceptance and stable product structure
 
-## Visual truth
+UI product completion requires implementation, responsive behavior, accessibility, automated checks, approved-design comparison, and Human visual acceptance. Rendered output is the visual evidence; constants, assertions, and implementation intent are supporting evidence only.
 
-Production UI uses truthful Provider results, Domain state, account data, recommendation semantics, and availability behavior. A design slot with specific product semantics binds to that exact capability: changing its label does not change its meaning, and adjacent or generic data must not silently substitute for it. When matching data is unavailable, preserve the slot's honest empty, error, or unavailable state.
+Before requesting review, inspect canonical desktop and compact renders for required supported surfaces, obvious overflow/clipping, perceptible intended changes, and comparability with the approved design. Do not self-approve aesthetics.
 
-Canonical visual-review fixtures should use clearly synthetic, semantically matching content to exercise every already-supported, design-critical surface needed to judge the approved composition. A screenshot that omits such a surface is incomplete visual evidence. Unsupported capabilities remain explicitly unavailable, and synthetic fixtures never authorize fabricated production recommendations, account content, or behavior.
+Work one approved page at a time. Do not begin an adjacent page while the current page awaits Human visual acceptance. Preserve accepted shared Shell geometry and behavior—including Sidebar, Top Bar, persistent desktop Player, mobile Mini Player, Bottom Navigation, and primary navigation—unless the Human requests a change or a concrete accessibility, responsive, platform, or correctness defect proves it necessary.
 
-## Acceptance model
+## Execution-mode interpretation
 
-UI Product completion requires all of:
+### UI + AUTONOMOUS_DEVELOPMENT
 
-```text
-Flutter implementation
-responsive behavior
-accessibility
-automated tests
-approved-design comparison
-Human visual acceptance
-```
-
-Automated tests alone do not establish visual completion. Compare approved design and actual Flutter output concretely: Sidebar and player geometry, content origin, Hero ratio, card dimensions, shelf density, section spacing, typography scale, mobile navigation, light/dark state, and responsive behavior—not merely “approximately similar.”
-
-Rendered output is the visual evidence; implementation intent, numeric constants, test assertions, and the agent's prose are supporting evidence only. Before requesting Human visual acceptance, inspect the canonical Desktop and Mobile renders and confirm that required supported surfaces are visible, obvious overflow or clipping is absent, the intended change is perceptible, and the output can actually be compared with the approved design. Do not self-approve aesthetic quality.
-
-Work one page at a time. The current accepted sequence and active page are recorded in `ROADMAP.md` and `PROGRESS.md`. Do not begin the next page until the maintainer accepts the current page. This is a local UI gate, not permission to redefine the project's global execution state.
-
-After a shared Shell surface receives explicit Human visual acceptance, preserve its accepted user-visible geometry and behavior on later pages. Do not materially redesign the Sidebar, Top Bar, persistent desktop Player, mobile Mini Player, Bottom Navigation, or shared primary-navigation composition unless a newly approved design requires it or a concrete accessibility, responsive, platform, or correctness defect proves a correction is needed. This stabilizes the product frame without freezing implementation internals.
-
-## Material 3 review and refactoring
-
-Local `agy` is a Material Design 3 QA reviewer, not the product designer. Ask it only about surface hierarchy, `ColorScheme`, typography, state layers, focus/hover/selected treatment, component appropriateness, shape consistency, and Material authenticity. The approved composition remains fixed.
-
-Prefer page-specific widgets and small semantic components. Share a component only after two real pages demonstrate the same semantic grammar. Do not create a generic dashboard runtime, UI DSL, design renderer, or speculative design infrastructure.
-
-For new M7 page-specific regressions, prefer an existing page- or domain-specific test location when one naturally exists instead of continuously expanding a monolithic test file. Do not split the existing suite solely for this preference or introduce a new test framework.
-
-## Mixed work
-
-When an approved page needs a genuine missing Core capability:
+The Agent may implement and machine-verify an approved visual task, but aesthetics remain Human-gated. The loop ends at a canonical candidate:
 
 ```text
-identify the exact blocker -> switch to a bounded Core subtask
--> implement and verify under Core rules -> return to the approved UI task
+implement -> targeted verification -> render -> HUMAN_REVIEW
 ```
 
-Do not fake production data, delete the section, silently alter the design, or redesign backend architecture from the UI task.
+Do not autonomously correct the render, accept it, or begin another page.
+
+### UI + HUMAN_GATED_REGRESSION
+
+Assume accepted visual structure is stable. Regression work may address only reproduced overflow/clipping, broken responsive behavior, incorrect visual state, a missing supported surface, wrong semantic data binding, interaction/focus/keyboard failures, or exact Human-reported visual differences.
+
+- For **M** defects: reproduce, make the smallest correction, and run targeted verification.
+- For **H** differences: render actual evidence, batch small findings where practical, stop for Human review, then apply only the exact requested correction and render again.
+- For **D** questions: stop the affected scope and request the exact product decision.
+
+Do not reopen an entire page or accepted shared Shell area because one local defect exists.
+
+## Material 3 and implementation discipline
+
+Local `agy` is a Material Design 3 QA reviewer, not the product designer. Use it only for Material surface, color, typography, state, focus/hover/selected, component, and shape questions; approved composition remains fixed.
+
+Prefer page-specific widgets and small semantic components. Share only after real pages demonstrate the same semantic grammar. Do not create a generic visual framework, dashboard runtime, UI DSL, design renderer, autonomous visual scorer, or new test framework.
+
+If an approved page needs a genuine missing Core capability, define a bounded Core subtask, verify it under the Core guide, and return to the unchanged UI task. Do not fake data, delete the section, change its semantic meaning, or redesign backend architecture.
 
 ## Validation
 
-Use two validation stages so a visually rejectable candidate reaches Human review quickly without weakening accepted-page correctness.
+Before Human visual acceptance, normally format affected Dart files, run `dart analyze`, run targeted Widget/controller/adaptive/accessibility tests, and render/inspect canonical desktop and compact screenshots. Broader checks are required only when the changed shared layer could regress the behavior they prove.
 
-### Visual iteration
-
-Before Human visual acceptance, normally:
-
-- format affected Dart files;
-- run `dart analyze`;
-- run targeted Widget/controller/adaptive/accessibility tests for the changed surface;
-- render and inspect the canonical Desktop and Mobile screenshots.
-
-The loop is:
-
-```text
-implement -> targeted verification -> render -> Human visual review
-```
-
-Do not routinely run the entire Flutter suite, Linux release packaging, unrelated integration targets, or Rust workspace tests for every visual correction. Run a broader check at this stage only when the changed layer or shared component could regress the behavior that check proves. Mixed Core/Bridge changes follow the Core guide for that bounded subtask. If a candidate is rejected visually, iterate from the rendered result without first running an unrelated release gate. Do not create an autonomous visual-correction loop.
-
-### Accepted-page validation
-
-After the maintainer explicitly accepts the page visually, run the full applicable Flutter gate once before the accepted-page checkpoint or final accepted commit:
+After explicit Human visual acceptance, run the applicable full Flutter gate once before an accepted-page checkpoint or final accepted commit:
 
 ```bash
 cd apps/flutter
@@ -128,4 +95,4 @@ flutter test integration_test/playback_engine_test.dart -d linux
 flutter test integration_test/music_video_engine_test.dart -d linux
 ```
 
-Use `dart analyze`, not `flutter analyze`, for this checkout as explained in `AGENTS.md` and `MEMORY.md`. Run a specific integration target only when the accepted change touches or could regress the behavior it proves; unrelated platform integration is not required as ceremony. Human visual acceptance changes when expensive validation runs, not the correctness requirement. Validation establishes implementation behavior and accessibility boundaries; the approved-design comparison and Human review establish visual acceptance.
+Run only applicable integration targets. Mixed Core/Bridge work follows the Core guide for that bounded subtask. Human acceptance changes when expensive validation runs, not the correctness requirement.

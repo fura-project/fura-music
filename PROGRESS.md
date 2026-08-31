@@ -1,8 +1,7 @@
 ---
 execution:
-  mode: CONTINUOUS_AUTONOMOUS
+  mode: HUMAN_GATED_REGRESSION
   state: ACTIVE
-  global_stop: false
   acceptance_milestone: M1
   active_workstream: M7_PAGE_BY_PAGE_UI
   current_task: NOW_PLAYING_ARTWORK_COLOR_VISUAL_ACCEPTANCE
