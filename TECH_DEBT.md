@@ -130,4 +130,20 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Schedule when a Windows build environment becomes available or before any Windows system-playback/release claim. Reassess immediately if the platform package changes ownership, compatibility, or API surface.
 
+## TD-009 — Linux MPRIS protocol edge is project-owned
+
+**Status:** Open
+
+**Problem:** The stable generic MPRIS adapter retained only a static playback-position sample and left relative seek, shuffle, and repeat unavailable despite the application's shared handler supporting them. Linux therefore owns a bounded D-Bus/MPRIS `AudioServicePlatform` implementation instead of delegating that protocol edge to `audio_service_mpris`.
+
+**Why accepted:** The defect was reproduced by the maintainer and confirmed in the pinned adapter source. Its current prerelease still lacked the complete timestamped position, relative seek, and required Track identity behavior. Adding timers or duplicate mode state to the playback controller would hide the protocol defect and violate the single-owner boundary; a localized adapter with protocol and real session-bus tests fixes the root layer.
+
+**Impact:** Linux progress, seek, shuffle, repeat, and volume can map to the existing handler without a second player or Queue, but the repository now maintains MPRIS introspection, properties, methods, and signal behavior.
+
+**Risk:** A future MPRIS specification or desktop-shell expectation could diverge from the local edge, while an upstream adapter may eventually make this code unnecessary. A session-bus test cannot prove every KDE/GNOME presentation behavior.
+
+**Suggested solution:** Keep the edge isolated and regression-tested against the current MPRIS contract. Prefer replacing it with an upstream stable implementation when that implementation demonstrably supports timestamp-projected position, required `mpris:trackid`, absolute and relative seek, truthful capabilities, and bidirectional shuffle/repeat without changing Queue ownership.
+
+**Trigger condition:** Reassess when `audio_service_mpris` publishes a stable compatible release, the MPRIS specification changes, or a KDE/GNOME runtime retest exposes behavior not covered by the current protocol/session-bus gates.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

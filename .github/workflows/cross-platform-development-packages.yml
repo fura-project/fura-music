@@ -160,7 +160,7 @@ jobs:
         working-directory: apps/flutter
         run: flutter pub get
 
-      - name: Verify Linux system-media initialization
+      - name: Verify Linux MPRIS session-bus contract
         working-directory: apps/flutter
         run: dbus-run-session -- xvfb-run -a flutter test integration_test/system_playback_service_test.dart -d linux
 

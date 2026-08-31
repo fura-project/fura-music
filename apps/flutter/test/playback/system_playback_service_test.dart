@@ -40,6 +40,14 @@ void main() {
         handler.playbackState.value.controls.map((control) => control.action),
         containsAll([MediaAction.pause, MediaAction.skipToNext]),
       );
+      expect(
+        handler.playbackState.value.systemActions,
+        containsAll([
+          MediaAction.seek,
+          MediaAction.setRepeatMode,
+          MediaAction.setShuffleMode,
+        ]),
+      );
 
       handler.detach(controller);
       expect(handler.queue.value, isEmpty);
@@ -80,6 +88,9 @@ void main() {
       await handler.setRepeatMode(AudioServiceRepeatMode.one);
       expect(controller.order, PlaybackOrder.shuffle);
       expect(controller.repeatMode, PlaybackRepeatMode.one);
+
+      await handler.customAction('projectMprisVolume', {'value': 0.35});
+      expect(audio.sessions.last.volumeValues.last, 0.35);
 
       await handler.skipToPrevious();
       expect(controller.current, same(first));
@@ -278,6 +289,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   int playCalls = 0;
   int pauseCalls = 0;
   final List<int> seekPositions = [];
+  final List<double> volumeValues = [];
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -307,7 +319,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   }
 
   @override
-  Future<void> setVolume(double volume) async {}
+  Future<void> setVolume(double volume) async => volumeValues.add(volume);
 
   @override
   Future<void> stop() async => _states.add(ForegroundAudioState.stopped);

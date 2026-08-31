@@ -33,16 +33,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.18.19"
-  audio_service_mpris:
-    dependency: "direct main"
-    description:
-      name: audio_service_mpris
-      sha256: "8cb2ff2237f4cd2fd27f16451ed35b3aedc12df8a384435327c67a9f4d557ef4"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.1"
   audio_service_platform_interface:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: audio_service_platform_interface
       sha256: "6283782851f6c8b501b60904a32fc7199dc631172da0629d7301e66f672ab777"
@@ -186,7 +178,7 @@ packages:
     source: hosted
     version: "3.0.7"
   dbus:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: dbus
       sha256: a48d5da28e89bd02196e80d81ed8d7954923d00a0f4a68cc20b575038f023383

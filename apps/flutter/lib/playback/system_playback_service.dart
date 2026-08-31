@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
@@ -58,6 +59,7 @@ class AudioServiceSystemPlaybackBinding implements SystemPlaybackBinding {
 Future<SystemPlaybackBinding> initializeSystemPlaybackBinding() async {
   final handler = ProjectSystemAudioHandler();
   try {
+    registerProjectLinuxMprisAudioService();
     await AudioService.init(
       builder: () => handler,
       config: const AudioServiceConfig(
@@ -212,6 +214,23 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
     );
   }
 
+  @override
+  Future<dynamic> customAction(
+    String name, [
+    Map<String, dynamic>? extras,
+  ]) async {
+    if (name != projectMprisVolumeAction) {
+      return super.customAction(name, extras);
+    }
+    final rawValue = extras?['value'];
+    if (rawValue is! num || !rawValue.isFinite) return null;
+    final controller = _controller;
+    if (controller == null) return null;
+    await controller.playback.setVolume(rawValue.toDouble().clamp(0, 1));
+    _synchronize(force: true);
+    return null;
+  }
+
   void _synchronize({bool force = false}) {
     final controller = _controller;
     if (controller == null) return;
@@ -267,9 +286,13 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
     playbackState.add(
       PlaybackState(
         controls: _controls(controller),
-        systemActions: controller.playback.canSeek
-            ? const {MediaAction.seek}
-            : const {},
+        systemActions: {
+          if (controller.playback.canSeek) MediaAction.seek,
+          if (currentItem != null) ...{
+            MediaAction.setRepeatMode,
+            MediaAction.setShuffleMode,
+          },
+        },
         androidCompactActionIndices: _compactActionIndices(controller),
         processingState: _processingState(stage),
         playing: stage == TrackPlaybackStage.playing,
