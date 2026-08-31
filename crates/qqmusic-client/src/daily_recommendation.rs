@@ -774,16 +774,11 @@ fn map_personalized_playlist<E>(
             field: PersonalizedPlaylistField::Title,
         },
     )?;
-    let artwork_uri = match card.cover.as_deref() {
-        None => None,
-        Some(value) if value.trim().is_empty() => None,
-        Some(value) if value.len() <= MAX_TEXT_BYTES && https_uri(value) => Some(value.to_owned()),
-        Some(_) => {
-            return Err(QqMusicPersonalizedPlaylistsError::InvalidPlaylist {
-                field: PersonalizedPlaylistField::ArtworkUri,
-            });
-        }
-    };
+    let artwork_uri = card
+        .cover
+        .as_deref()
+        .filter(|value| value.len() <= MAX_TEXT_BYTES && https_uri(value))
+        .map(str::to_owned);
     Ok(QqMusicPersonalizedPlaylist {
         playlist_id,
         title,
@@ -1036,6 +1031,23 @@ mod tests {
             Err(QqMusicPersonalizedPlaylistsError::DuplicatePlaylistId)
         ));
         assert!(!format!("{duplicate:?}").contains("Private duplicate"));
+
+        let mut insecure_artwork = personalized_card("9002", "Private insecure artwork");
+        insecure_artwork["cover"] = json!("http://example.invalid/personalized.jpg");
+        let with_insecure_artwork =
+            QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&[
+                personalized_card("9001", "Private secure artwork"),
+                insecure_artwork,
+            ])))
+            .personalized_playlists(&credential())
+            .await
+            .expect("playlist data survives unusable optional artwork");
+        assert_eq!(with_insecure_artwork.len(), 2);
+        assert_eq!(
+            with_insecure_artwork[0].artwork_uri(),
+            Some("https://example.invalid/personalized.jpg")
+        );
+        assert_eq!(with_insecure_artwork[1].artwork_uri(), None);
 
         let invalid = QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&[
             personalized_card("not-a-number", "Private invalid"),
