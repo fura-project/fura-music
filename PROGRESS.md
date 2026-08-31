@@ -4,8 +4,8 @@ execution:
   state: ACTIVE
   acceptance_milestone: M1
   active_workstream: SYSTEM_PLAYBACK_PLATFORM_ADAPTATION
-  current_task: LINUX_MPRIS_RUNTIME_RETEST
-  next_action: MAINTAINER_RETEST_LINUX_MPRIS
+  current_task: CROSS_PLATFORM_PACKAGE_REGRESSION
+  next_action: PUSH_RERUN_AND_ANDROID_RUNTIME_RETEST
 ---
 
 # Current State
@@ -17,7 +17,7 @@ execution:
 - The maintainer redirected the current UI task to keep the normal adaptive product Shell visible while signed out and present authentication in a modal. That modal now offers QQ Web QR, the already verified WeChat QR path, and phone plus one-time SMS code without collecting a password. Public Home/Discover/Search remain reachable; account-only Home and Library surfaces show explicit sign-in states instead of launching account reads. The multi-method implementation is offline-verified; anonymous QQ QR bootstrap/poll also passed, while confirmed QQ QR and phone delivery/login still require maintainer operation. The signed-out Shell candidate still awaits desktop/mobile visual review.
 - Guest media resolution no longer fails before transport. Signed-out playback now requests only anonymous M500 standard quality with `uin=0` and no Cookie or fabricated credential; a bounded live gate found a playable source among ten public Search results. Tracks for which QQ returns no anonymous source still offer sign-in without claiming a restriction reason. Authenticated high-to-standard fallback is unchanged.
 - HD-014 now authorizes system playback over the existing single Flutter playback owner. One thin `audio_service` handler publishes provider-neutral current metadata, Queue mode and position, delegates system transport/seek/mode commands to the existing Rust-backed Queue/controller, and configures music audio focus plus interruption/noisy-device pause. A maintainer Linux run reproduced stale/non-seekable system progress plus unavailable shuffle/repeat controls: the pinned generic MPRIS adapter stored only one position sample and left those commands incomplete. Linux now uses a project-owned MPRIS edge with projected position, typed Track identity, absolute/relative seek, truthful capabilities, and bidirectional shuffle/repeat/volume. Unit regressions and a real session-bus integration pass; KDE/GNOME shell retest remains required. Other platform evidence is unchanged.
-- HD-015 authorizes a manual GitHub Actions packaging gate for maintainer runtime testing. The workflow runs the locked offline Rust/Flutter gate, then builds seven-day development artifacts for Android ARM64/x64, Linux x64, Windows x64, the hosted macOS architecture, and the hosted iOS Simulator architecture. The workflow is implemented locally but cannot become remote platform evidence until these changes are committed, pushed, and the named jobs pass.
+- HD-015 authorizes a manual GitHub Actions packaging gate for maintainer runtime testing. Run 33395804013 passed the offline quality, Android, iOS Simulator, and macOS jobs; Linux failed during apt dependency installation and Windows failed during the Release build. The Android ARM64 artifact exposed a separate packaging defect: its Release manifest lacked Internet permission even though the Rust bridge library compiled and loaded. The main manifest now declares normal network permissions, the workflow verifies both Internet permission and the ARM64 Rust payload, Linux dependency installation has bounded transient-failure retries, and Windows is pinned to the stable `windows-2022` runner instead of the moving `windows-latest` label. A new remote run and physical Android retest remain required; these local changes do not establish either result.
 
 # Current Capability Boundary
 
@@ -36,7 +36,7 @@ execution:
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
 - QQ Web QR approval/credential restore and phone-code delivery/authorization remain maintainer-operated compatibility observations; the agent may not scan, authorize, or submit a real phone number autonomously. Phone authorization is a reverse-engineered private-client protocol, not an official public API, and remains visibly experimental until live compatibility is established.
 - System playback now needs bounded maintainer/runtime checks: Android notification/lock-screen controls, media buttons, audio focus and task-background continuity; Linux KDE/GNOME should recheck that progress advances, scrubbing seeks the current Track, and shell shuffle/repeat round-trip to the app; and later iOS/macOS Control Center plus Windows SMTC when those hosts are available. Platform gaps must remain separate rather than being inferred from another target.
-- The immediate packaging action is to commit/push the current coherent source plus workflow, manually run `Cross-platform development packages`, and preserve each job's exact result. A failed platform job is a target-specific build regression, not evidence that another artifact works or that the whole project is release-ready.
+- The immediate packaging action is to commit/push the Android/CI correction, manually rerun `Cross-platform development packages`, and preserve each job's exact result. Install the newly produced ARM64 APK on a physical Android target and confirm that signed-out Search/Home data loads before broader account or system-media testing. A failed platform job is a target-specific build regression, not evidence that another artifact works or that the whole project is release-ready.
 
 # Blockers
 
@@ -53,6 +53,7 @@ execution:
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback, personalized recommendation quality, or broad live catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, unavailable operating systems, or release readiness.
+- The locally rebuilt ARM64 Release APK proves the final package declares Internet access and contains the ARM64 Rust bridge library. It does not prove physical-device DNS/TLS reachability, current QQ compatibility, authenticated behavior, or that rerun 33395804013's successor will pass Linux/Windows.
 - Linux MPRIS unit and real session-bus integrations prove service registration, property signatures, progressing position calculation, Track-bound absolute/relative seek dispatch, and shuffle/repeat round trips through the existing handler. They do not prove a particular KDE/GNOME shell renders or invokes every supported control correctly. Android packaging still does not prove lock-screen/notification behavior, task-removal continuity, or headset controls; Apple/Windows runtime behavior remains unverified.
 - Home, Liked Songs, and Expanded Now Playing remain unaccepted. Home is the current visual-review candidate; canonical synthetic renders and targeted tests do not prove Human visual acceptance, authenticated personalization availability, or related-song quality across the catalog.
 - Historical research/checkpoint documents remain evidence snapshots. Current scheduling is governed by `AGENTS.md`, `ROADMAP.md`, and this file.

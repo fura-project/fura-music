@@ -19,7 +19,7 @@ There is no Web artifact because the product's Rust core, secure-storage, native
 
 ## What CI proves
 
-Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. Linux additionally runs the isolated system-media initialization integration under a temporary D-Bus/X11 session.
+Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The Android job additionally verifies that the ARM64 Release APK declares Internet access and contains the expected ARM64 Rust bridge library. Linux additionally runs the isolated system-media initialization integration under a temporary D-Bus/X11 session.
 
 A green workflow does not prove real-account QQ Music behavior, physical Android or Apple behavior, Windows SMTC usability, Linux desktop-shell integration, codecs on another machine, signing, notarization, store acceptance, or release readiness. Those observations remain per-target maintainer tests.
 
