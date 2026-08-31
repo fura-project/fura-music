@@ -46,6 +46,7 @@ import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
+import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -81,6 +82,17 @@ Future<void> _openLibrary(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _openSignInDialog(WidgetTester tester) async {
+  final sidebarAccount = find.byKey(const ValueKey('sidebar-account'));
+  if (sidebarAccount.evaluate().isNotEmpty) {
+    await tester.tap(sidebarAccount);
+  } else {
+    await tester.tap(find.byKey(const ValueKey('sign-in')).first);
+  }
+  await tester.pumpAndSettle();
+  expect(find.byKey(const ValueKey('authentication-dialog')), findsOneWidget);
+}
+
 Future<void> _selectLibrarySection(WidgetTester tester, String section) async {
   final control = find.byKey(const ValueKey('library-section-selector'));
   final itemFinder = find.byKey(ValueKey('library-section-$section'));
@@ -97,7 +109,9 @@ Future<void> _selectLibrarySection(WidgetTester tester, String section) async {
 }
 
 void main() {
-  testWidgets('renders truthful bootstrap state', (tester) async {
+  testWidgets('keeps the main shell visible while sign-in uses a dialog', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -117,24 +131,46 @@ void main() {
       MusicApp(
         bootstrap: bootstrap,
         authenticationGateway: _WidgetGateway(session),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(
+            playlists: [
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:signed-out-home',
+                title: 'Signed-out public recommendation',
+                trackCount: 24,
+              ),
+            ],
+          ),
+        ),
       ),
     );
-
-    expect(find.text('QQ Music connected'), findsOneWidget);
-    expect(find.text('qq-music'), findsOneWidget);
-    expect(find.text('0.1.0-test'), findsOneWidget);
-    expect(find.text('Continue with WeChat'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('Continue with WeChat'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue with WeChat'));
+
+    expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.text('Not signed in'), findsOneWidget);
+    expect(find.text('Signed-out public recommendation'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-daily-sign-in')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-personalized-tracks-sign-in')),
+      findsOneWidget,
+    );
+    expect(find.text('Scan with WeChat'), findsNothing);
+
+    await _openSignInDialog(tester);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
+
+    await tester.tap(find.text('Scan with WeChat'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Scan with WeChat'), findsOneWidget);
 
-    await tester.tap(find.text('Cancel'));
+    await tester.tap(find.byKey(const ValueKey('close-authentication-dialog')));
     await tester.pumpAndSettle();
-    expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+    expect(find.text('Scan with WeChat'), findsNothing);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
     expect(session.cancelCalls, 1);
   });
 
@@ -162,9 +198,91 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    await tester.ensureVisible(find.text('Continue with WeChat'));
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsNothing);
+    await _openSignInDialog(tester);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('offers QQ QR, WeChat QR, and phone-code authorization', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final phoneSession = _WidgetPhoneSession();
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          phoneStart: PhoneLoginStart(
+            session: phoneSession,
+            state: PhoneCodeState.sent,
+          ),
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Continue with WeChat'), findsOneWidget);
+    await _openSignInDialog(tester);
+
+    expect(find.text('Scan with QQ'), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
+    await tester.tap(find.text('Use phone and SMS code (experimental)'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('phone-number-field')),
+      '13000000000',
+    );
+    await tester.tap(find.byKey(const ValueKey('send-phone-code-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter the SMS code'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('phone-verification-code-field')),
+      '123456',
+    );
+    await tester.tap(find.byKey(const ValueKey('authorize-phone-button')));
+    await tester.pumpAndSettle();
+    expect(phoneSession.codes, ['123456']);
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+    expect(find.byKey(const ValueKey('user-library-page')), findsOneWidget);
+  });
+
+  testWidgets('signed-out Library keeps the shell and opens sign-in in place', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final library = _WidgetLibraryGateway([]);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+        libraryGateway: library,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _openLibrary(tester);
+    expect(find.byKey(const ValueKey('signed-out-library')), findsOneWidget);
+    expect(find.text('Sign in to see your music'), findsOneWidget);
+    expect(library._next, 0);
+    expect(
+      find.byKey(const ValueKey('authenticated-primary-shell')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('signed-out-library-sign-in')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -186,9 +304,8 @@ void main() {
       ),
     );
 
-    final authTheme = Theme.of(
-      tester.element(find.text('Continue with WeChat')),
-    );
+    await _openSignInDialog(tester);
+    final authTheme = Theme.of(tester.element(find.text('Scan with WeChat')));
     expect(authTheme.brightness, Brightness.dark);
     expect(tester.takeException(), isNull);
 
@@ -221,7 +338,7 @@ void main() {
     await _openLibrary(tester);
 
     expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('Synthetic favorites'), findsOneWidget);
+    expect(find.text('Synthetic favorites'), findsWidgets);
     expect(
       Theme.of(tester.element(find.text('Your music'))).brightness,
       Brightness.dark,
@@ -246,12 +363,17 @@ void main() {
       ),
     );
 
-    expect(find.text('Checking your saved session…'), findsOneWidget);
-    expect(find.text('Use a new code'), findsOneWidget);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+    expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
     expect(find.text('You’re signed in'), findsNothing);
 
     verification.complete(CredentialVerificationResult.network);
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+
+    await _openSignInDialog(tester);
     expect(find.text('Couldn’t reach QQ Music'), findsOneWidget);
     expect(find.text('Try verification again'), findsOneWidget);
     expect(find.text('You’re signed in'), findsNothing);
@@ -277,9 +399,8 @@ void main() {
       ),
     );
 
-    await tester.ensureVisible(find.text('Continue with WeChat'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue with WeChat'));
+    await _openSignInDialog(tester);
+    await tester.tap(find.text('Scan with WeChat'));
     await tester.pump();
     session.complete(
       const LoginUpdate(
@@ -290,7 +411,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('QQ Music is unavailable'), findsOneWidget);
-    expect(find.text('Get a new code'), findsOneWidget);
+    expect(find.text('Choose a sign-in method'), findsOneWidget);
     final failureSemantics = tester.getSemantics(
       find.bySemanticsLabel(RegExp('QQ Music is unavailable')),
     );
@@ -315,9 +436,8 @@ void main() {
       ),
     );
 
-    await tester.ensureVisible(find.text('Continue with WeChat'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue with WeChat'));
+    await _openSignInDialog(tester);
+    await tester.tap(find.text('Scan with WeChat'));
     await tester.pumpAndSettle();
     session.complete(
       const LoginUpdate(
@@ -358,6 +478,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+    await _openSignInDialog(tester);
     expect(find.text('Saved session was rejected'), findsOneWidget);
     expect(find.text('Try verification again'), findsNothing);
     expect(find.text('Sign in again'), findsOneWidget);
@@ -375,6 +497,10 @@ void main() {
       ),
     );
 
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+    await _openSignInDialog(tester);
     expect(find.text('Saved session expired'), findsOneWidget);
     expect(find.text('Sign in again'), findsOneWidget);
     expect(find.text('This code expired'), findsNothing);
@@ -505,7 +631,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Synthetic song pick'), findsOneWidget);
-    expect(find.text('Synthetic favorites'), findsOneWidget);
+    expect(find.text('Synthetic favorites'), findsWidgets);
     expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
     final heroRect = tester.getRect(
       find.byKey(const ValueKey('home-recommendation-0')),
@@ -526,7 +652,7 @@ void main() {
     expect(find.text('Daily recommendation'), findsOneWidget);
     expect(find.text('MADE FOR YOU'), findsNothing);
     expect(find.byKey(const ValueKey('home-daily-heading')), findsOneWidget);
-    expect(find.byKey(const ValueKey('home-programs-heading')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-programs-heading')), findsNothing);
     expect(
       find.byKey(const ValueKey('home-listening-one-heading')),
       findsOneWidget,
@@ -543,7 +669,6 @@ void main() {
         [
               'home-daily-heading',
               'home-library-heading',
-              'home-programs-heading',
               'home-listening-one-heading',
               'home-recommended-playlists-heading',
               'home-listening-two-heading',
@@ -641,7 +766,9 @@ void main() {
           DailyRecommendationResult(),
         ),
         personalizedPlaylistsGateway: const _WidgetPersonalizedPlaylistsGateway(
-          PersonalizedPlaylistsResult(),
+          PersonalizedPlaylistsResult(
+            failure: PersonalizedPlaylistsFailure.invalidResponse,
+          ),
         ),
         personalizedTracksGateway: const _WidgetPersonalizedTracksGateway(
           PersonalizedTracksResult(),
@@ -709,6 +836,14 @@ void main() {
       findsNothing,
     );
     expect(find.text('MADE FOR YOU'), findsNothing);
+    expect(
+      find.text('Personalized playlist response not recognized'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('No account content was recorded.'),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const ValueKey('home-radar-recommendation')));
     await tester.pumpAndSettle();
     expect(queue.snapshot().snapshot?.current?.title, 'Real Radar slot');
@@ -781,6 +916,32 @@ void main() {
         durationSeconds: 184 + index * 13,
       ),
     );
+    final relatedTracks = List.generate(
+      6,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:${51000 + index}:0:syntheticRelatedMid:-',
+        title: const [
+          'Harbor Echo',
+          'City After Rain',
+          'Quiet Signals',
+          'Distant Windows',
+          'Parallel Skies',
+          'Last Train Home',
+        ][index],
+        artistNames: [
+          const [
+            'Coastline',
+            'Lantern District',
+            'Low Tide',
+            'Night Letters',
+            'Luma Field',
+            'Northern Line',
+          ][index],
+        ],
+        durationSeconds: 176 + index * 11,
+      ),
+    );
 
     MusicApp fixture() {
       final queue = _WidgetPlaybackQueueGateway()
@@ -821,6 +982,9 @@ void main() {
         personalizedTracksGateway: _WidgetPersonalizedTracksGateway(
           PersonalizedTracksResult(tracks: tracks),
         ),
+        relatedTracksGateway: _WidgetRelatedTracksGateway(
+          RelatedTracksResult(tracks: relatedTracks),
+        ),
         radarGateway: _WidgetRadarGateway(
           RadarTrackPageResult(page: 1, tracks: [tracks.first]),
         ),
@@ -857,12 +1021,10 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('home-hot-programs-unavailable')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(
-        find.byKey(const ValueKey('home-listening-two-unavailable')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('home-related-tracks')), findsOneWidget);
+      expect(find.text('Based on “Silver Lines”'), findsOneWidget);
       expect(find.byKey(const ValueKey('home-open-library')), findsOneWidget);
       expect(find.text('MADE FOR YOU'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -892,6 +1054,16 @@ void main() {
           Uri.file('/tmp/flutterustmusic-home-desktop-content.png'),
         ),
       );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-related-track-1')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-desktop-lower.png'),
+        ),
+      );
     }
 
     await pumpFixture(const Size(390, 844));
@@ -917,16 +1089,6 @@ void main() {
         ),
       );
       await tester.ensureVisible(
-        find.byKey(const ValueKey('home-hot-programs-unavailable')),
-      );
-      await tester.pumpAndSettle();
-      await expectLater(
-        find.byType(MusicApp),
-        matchesGoldenFile(
-          Uri.file('/tmp/flutterustmusic-home-mobile-middle.png'),
-        ),
-      );
-      await tester.ensureVisible(
         find.byKey(const ValueKey('home-personalized-track-1')),
       );
       await tester.pumpAndSettle();
@@ -937,7 +1099,7 @@ void main() {
         ),
       );
       await tester.ensureVisible(
-        find.byKey(const ValueKey('home-listening-two-unavailable')),
+        find.byKey(const ValueKey('home-related-track-1')),
       );
       await tester.pumpAndSettle();
       await expectLater(
@@ -961,9 +1123,8 @@ void main() {
       ),
     );
 
-    await tester.ensureVisible(find.text('Continue with WeChat'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue with WeChat'));
+    await _openSignInDialog(tester);
+    await tester.tap(find.text('Scan with WeChat'));
     await tester.pump();
     session.complete(
       const LoginUpdate(
@@ -1124,6 +1285,12 @@ void main() {
         title: 'Compact Home song',
         artistNames: ['Home artist'],
       );
+      const relatedTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:51002:0:relatedFixtureMid:-',
+        title: 'Related Home song',
+        artistNames: ['Related artist'],
+      );
       const compactPlaylist = UserPlaylistSummary(
         providerId: 'qq-music',
         opaqueId: 'owned:7001:201',
@@ -1150,6 +1317,7 @@ void main() {
         ),
       );
       final queue = _WidgetPlaybackQueueGateway();
+      final relatedSeeds = <PlaylistTrackSummary>[];
       await tester.pumpWidget(
         MusicApp(
           bootstrap: _bootstrap,
@@ -1174,6 +1342,10 @@ void main() {
           ),
           personalizedTracksGateway: const _WidgetPersonalizedTracksGateway(
             PersonalizedTracksResult(tracks: [homeTrack]),
+          ),
+          relatedTracksGateway: _WidgetRelatedTracksGateway(
+            const RelatedTracksResult(tracks: [relatedTrack]),
+            seeds: relatedSeeds,
           ),
           searchGateway: search,
           recommendedPlaylistGateway: recommendations,
@@ -1226,6 +1398,9 @@ void main() {
         64,
       );
       expect(queue.replacements.single.$1, [homeTrack]);
+      expect(relatedSeeds.single.opaqueId, homeTrack.opaqueId);
+      expect(find.text('Based on “Compact Home song”'), findsOneWidget);
+      expect(find.text('Related Home song'), findsOneWidget);
 
       final homeSearch = find.byKey(const ValueKey('open-track-search'));
       await tester.ensureVisible(homeSearch);
@@ -1455,7 +1630,7 @@ void main() {
 
     await tester.tap(find.text('Sign in again'));
     await tester.pumpAndSettle();
-    expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
   });
 
   testWidgets('activates desktop primary navigation from the keyboard', (
@@ -1932,7 +2107,7 @@ void main() {
 
       await tester.tap(find.text('Sign in again'));
       await tester.pumpAndSettle();
-      expect(find.text('Continue with WeChat'), findsOneWidget);
+      expect(find.text('Scan with WeChat'), findsOneWidget);
     },
   );
 
@@ -3617,7 +3792,48 @@ void main() {
 
     expect(find.text('Home'), findsWidgets);
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
     expect(find.text('No playlists yet'), findsNothing);
+  });
+
+  testWidgets('updates desktop sidebar when the library load completes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final library = _PendingWidgetLibraryGateway();
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: library,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Appears without another click'), findsNothing);
+    library.complete(
+      const UserLibraryResult(
+        playlists: [
+          UserPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'owned:7002:202',
+            title: 'Appears without another click',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Appears without another click'), findsOneWidget);
+    expect(library.loadCalls, 1);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('renders user playlists without overflow on a narrow screen', (
@@ -4353,7 +4569,7 @@ void main() {
     );
   });
 
-  testWidgets('sign out requires confirmation and returns to QR login', (
+  testWidgets('sign out requires confirmation and keeps the signed-out shell', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -4395,8 +4611,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
     await tester.pumpAndSettle();
     expect(authentication.signOutCalls, 1);
-    expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsNothing);
     expect(find.byKey(const ValueKey('user-library-page')), findsNothing);
+
+    await _openSignInDialog(tester);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
   });
 
   testWidgets('failed sign-out vault cleanup remains explicit and retryable', (
@@ -4435,13 +4656,18 @@ void main() {
     expect(authentication.signOutCalls, 2);
     expect(find.text('Removing saved session…'), findsOneWidget);
     expect(
-      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('retry-sign-out-storage-cleanup')),
+          )
+          .onPressed,
       isNull,
     );
 
     retry.complete(CredentialSignOutResult.signedOut);
     await tester.pumpAndSettle();
-    expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsNothing);
   });
 
   testWidgets('core sign-out failure keeps the authenticated library', (
@@ -4486,6 +4712,12 @@ void main() {
       title: 'Synthetic liked songs',
       trackCount: 1029,
       isLikedSongs: true,
+      ownership: UserPlaylistOwnership.owned,
+    );
+    const favoriteAlbum = AlbumSummary(
+      providerId: 'qq-music',
+      opaqueId: 'album:43001:likedFixtureAlbum',
+      title: 'Midnight Letters',
     );
     const tracks = [
       PlaylistTrackSummary(
@@ -4565,6 +4797,14 @@ void main() {
                 opaqueId: 'synthetic-playlist',
                 title: 'A dream',
                 trackCount: 18,
+                ownership: UserPlaylistOwnership.owned,
+              ),
+              UserPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'synthetic-saved-playlist',
+                title: 'Collected evenings',
+                trackCount: 24,
+                ownership: UserPlaylistOwnership.saved,
               ),
             ],
           ),
@@ -4576,6 +4816,9 @@ void main() {
             tracks: tracks,
           ),
         ]),
+        favoriteAlbumGateway: _WidgetFavoriteAlbumGateway(
+          const FavoriteAlbumPageResult(total: 1, albums: [favoriteAlbum]),
+        ),
         playbackQueueGateway: queue,
         mediaResolutionGateway: const _UnavailableMediaGateway(),
         lyricGateway: const _WidgetLyricGateway(),
@@ -4618,6 +4861,125 @@ void main() {
       find.byKey(const ValueKey('now-playing-desktop-layout')),
       findsOneWidget,
     );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('liked-songs-title'))).dx,
+      closeTo(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('liked-songs-table-header')))
+            .dx,
+        1,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('liked-tab-playlists')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('liked-playlists-search')),
+      findsOneWidget,
+    );
+    expect(find.text('自创歌单 1'), findsOneWidget);
+    expect(find.text('收藏歌单 1'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('liked-playlist-synthetic-playlist')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('liked-playlist-synthetic-saved-playlist')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-playlists-desktop.png'),
+        ),
+      );
+    }
+
+    await tester.enterText(
+      find.byKey(const ValueKey('liked-playlists-search')),
+      'Collected',
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('liked-playlist-synthetic-saved-playlist')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('liked-playlist-synthetic-playlist')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('liked-tab-albums')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('liked-albums-search')), findsOneWidget);
+    expect(find.text('Midnight Letters'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('favorite-albums-content')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-albums-desktop.png'),
+        ),
+      );
+    }
+
+    await tester.enterText(
+      find.byKey(const ValueKey('liked-albums-search')),
+      'Missing',
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('favorite-albums-search-empty')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('liked-tab-programs')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('liked-programs-search')),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(
+      find.byKey(const ValueKey('liked-programs-unavailable')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-programs-desktop.png'),
+        ),
+      );
+    }
+    await tester.tap(find.byKey(const ValueKey('liked-tab-videos')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('liked-videos-search')))
+          .enabled,
+      isFalse,
+    );
+    expect(
+      find.byKey(const ValueKey('liked-videos-unavailable')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-videos-desktop.png'),
+        ),
+      );
+    }
+    await tester.tap(find.byKey(const ValueKey('liked-tab-songs')));
+    await tester.pumpAndSettle();
     final currentRowSemantics = tester
         .getSemantics(find.byKey(const ValueKey('liked-track-row-2')))
         .getSemanticsData();
@@ -4684,6 +5046,26 @@ void main() {
         ),
       );
     }
+    await tester.tap(find.byKey(const ValueKey('liked-tab-playlists')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('liked-playlists-search')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('liked-playlist-synthetic-playlist')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-playlists-mobile.png'),
+        ),
+      );
+    }
+    await tester.tap(find.byKey(const ValueKey('liked-tab-songs')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('更多操作').first);
     await tester.pumpAndSettle();
     expect(find.text('从这里播放'), findsOneWidget);
@@ -4716,7 +5098,7 @@ void main() {
     expect(find.text('Your saved session was rejected'), findsOneWidget);
     await tester.tap(find.text('Sign in again'));
     await tester.pumpAndSettle();
-    expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
   });
 }
 
@@ -4729,7 +5111,10 @@ const _bootstrap = BootstrapStatus(
   ),
 );
 
-class _WidgetGateway implements QqMusicAuthenticationGateway {
+class _WidgetGateway
+    implements
+        QqMusicAuthenticationGateway,
+        MultiMethodQqMusicAuthenticationGateway {
   _WidgetGateway(
     this.session, {
     this.authenticated = false,
@@ -4737,6 +5122,9 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
     List<FutureOr<CredentialSignOutResult>> signOutResults = const [
       CredentialSignOutResult.signedOut,
     ],
+    this.phoneStart = const PhoneLoginStart(
+      failure: LoginFailure.coreUnavailable,
+    ),
   }) : _verificationOperation =
            verificationOperation ??
            const _ImmediateWidgetVerification(
@@ -4747,6 +5135,7 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
   final _WaitingSession session;
   bool authenticated;
   final CredentialVerificationOperation _verificationOperation;
+  final PhoneLoginStart phoneStart;
   final List<FutureOr<CredentialSignOutResult>> _signOutResults;
   int signOutCalls = 0;
 
@@ -4770,6 +5159,15 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
   );
 
   @override
+  LoginStartOperation beginQrStart(LoginQrChannel channel) => beginStart();
+
+  @override
+  PhoneLoginStartOperation beginPhoneStart({
+    required String countryCode,
+    required String phoneNumber,
+  }) => _WidgetPhoneStartOperation(phoneStart);
+
+  @override
   CredentialVerificationOperation beginCredentialVerification() =>
       _verificationOperation;
 
@@ -4791,6 +5189,40 @@ class _WidgetGateway implements QqMusicAuthenticationGateway {
   }
 }
 
+class _WidgetPhoneStartOperation implements PhoneLoginStartOperation {
+  const _WidgetPhoneStartOperation(this.result);
+
+  final PhoneLoginStart result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PhoneLoginStart> run() async => result;
+}
+
+class _WidgetPhoneSession implements PhoneLoginSession {
+  bool active = true;
+  final List<String> codes = [];
+
+  @override
+  bool get isActive => active;
+
+  @override
+  Future<LoginFailure?> authorize(String verificationCode) async {
+    codes.add(verificationCode);
+    active = false;
+    return null;
+  }
+
+  @override
+  bool cancel() {
+    final wasActive = active;
+    active = false;
+    return wasActive;
+  }
+}
+
 class _WidgetLibraryGateway implements UserLibraryGateway {
   _WidgetLibraryGateway(this.results);
 
@@ -4800,6 +5232,31 @@ class _WidgetLibraryGateway implements UserLibraryGateway {
   @override
   UserLibraryLoadOperation beginLoad() =>
       _WidgetLibraryOperation(results[_next++]);
+}
+
+class _PendingWidgetLibraryGateway implements UserLibraryGateway {
+  final Completer<UserLibraryResult> _result = Completer<UserLibraryResult>();
+  int loadCalls = 0;
+
+  void complete(UserLibraryResult result) => _result.complete(result);
+
+  @override
+  UserLibraryLoadOperation beginLoad() {
+    loadCalls += 1;
+    return _PendingWidgetLibraryOperation(_result.future);
+  }
+}
+
+class _PendingWidgetLibraryOperation implements UserLibraryLoadOperation {
+  const _PendingWidgetLibraryOperation(this.result);
+
+  final Future<UserLibraryResult> result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<UserLibraryResult> run() => result;
 }
 
 class _WidgetLibraryOperation implements UserLibraryLoadOperation {
@@ -5145,6 +5602,31 @@ class _WidgetPersonalizedTracksOperation
 
   @override
   Future<PersonalizedTracksResult> run() async => result;
+}
+
+class _WidgetRelatedTracksGateway implements RelatedTracksGateway {
+  const _WidgetRelatedTracksGateway(this.result, {this.seeds});
+
+  final RelatedTracksResult result;
+  final List<PlaylistTrackSummary>? seeds;
+
+  @override
+  RelatedTracksLoadOperation beginLoad(PlaylistTrackSummary seed) {
+    seeds?.add(seed);
+    return _WidgetRelatedTracksOperation(result);
+  }
+}
+
+class _WidgetRelatedTracksOperation implements RelatedTracksLoadOperation {
+  const _WidgetRelatedTracksOperation(this.result);
+
+  final RelatedTracksResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<RelatedTracksResult> run() async => result;
 }
 
 class _WidgetRecommendedPlaylistGateway implements RecommendedPlaylistGateway {

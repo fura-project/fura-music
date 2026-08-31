@@ -1045,11 +1045,13 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "getrandom 0.4.3",
+ "md-5",
  "quick-xml",
  "reqwest",
  "serde",
  "serde_json",
  "tokio",
+ "url",
 ]
 
 [[package]]

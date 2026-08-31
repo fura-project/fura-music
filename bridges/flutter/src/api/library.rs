@@ -8,6 +8,13 @@ use super::album::{CatalogAlbumSummary, bridge_album_summary};
 use super::artist::{CatalogArtistSummary, bridge_artist_summary};
 use super::authentication::native_qq_music_provider;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LibraryPlaylistOwnership {
+    Unspecified,
+    Owned,
+    Saved,
+}
+
 #[derive(Clone, Eq, PartialEq)]
 pub struct LibraryPlaylistSummary {
     pub provider_id: String,
@@ -16,6 +23,7 @@ pub struct LibraryPlaylistSummary {
     pub artwork_uri: Option<String>,
     pub track_count: Option<u32>,
     pub is_liked_songs: bool,
+    pub ownership: Option<LibraryPlaylistOwnership>,
 }
 
 impl fmt::Debug for LibraryPlaylistSummary {
@@ -28,6 +36,7 @@ impl fmt::Debug for LibraryPlaylistSummary {
             .field("has_artwork", &self.artwork_uri.is_some())
             .field("track_count", &self.track_count)
             .field("is_liked_songs", &self.is_liked_songs)
+            .field("ownership", &self.ownership)
             .finish()
     }
 }
@@ -42,6 +51,11 @@ pub(super) fn bridge_playlist_summary(
         artwork_uri: playlist.artwork_uri().map(str::to_owned),
         track_count: playlist.track_count(),
         is_liked_songs: playlist.purpose() == music_domain::PlaylistPurpose::LikedSongs,
+        ownership: Some(match playlist.ownership() {
+            music_domain::PlaylistOwnership::Unspecified => LibraryPlaylistOwnership::Unspecified,
+            music_domain::PlaylistOwnership::Owned => LibraryPlaylistOwnership::Owned,
+            music_domain::PlaylistOwnership::Saved => LibraryPlaylistOwnership::Saved,
+        }),
     }
 }
 
@@ -461,8 +475,8 @@ const fn map_track_page_error(error: UserLibraryError) -> QqMusicPlaylistTrackPa
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        AlbumId, AlbumSummary, ArtistId, ArtistSummary, PlaylistId, PlaylistPurpose,
-        PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
+        AlbumId, AlbumSummary, ArtistId, ArtistSummary, PlaylistId, PlaylistOwnership,
+        PlaylistPurpose, PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
     };
     use provider_api::UserLibraryError;
 
@@ -482,14 +496,16 @@ mod tests {
         let summary = PlaylistSummary::new(id, "must-not-leak")
             .expect("summary")
             .with_track_count(Some(42))
-            .with_purpose(PlaylistPurpose::LikedSongs);
+            .with_purpose(PlaylistPurpose::LikedSongs)
+            .with_ownership(PlaylistOwnership::Owned);
         let favorite_id = PlaylistId::new(
             ProviderId::new("qq-music").expect("provider"),
             "favorite:8001",
         )
         .expect("favorite playlist ID");
-        let favorite =
-            PlaylistSummary::new(favorite_id, "favorite-must-not-leak").expect("favorite summary");
+        let favorite = PlaylistSummary::new(favorite_id, "favorite-must-not-leak")
+            .expect("favorite summary")
+            .with_ownership(PlaylistOwnership::Saved);
 
         let mapped = map_load(Ok(vec![summary, favorite]));
 
@@ -498,9 +514,17 @@ mod tests {
         assert_eq!(mapped.playlists[0].opaque_id, "owned:7001:201");
         assert_eq!(mapped.playlists[0].title, "must-not-leak");
         assert!(mapped.playlists[0].is_liked_songs);
+        assert_eq!(
+            mapped.playlists[0].ownership,
+            Some(super::LibraryPlaylistOwnership::Owned)
+        );
         assert_eq!(mapped.playlists[1].opaque_id, "favorite:8001");
         assert_eq!(mapped.playlists[1].title, "favorite-must-not-leak");
         assert!(!mapped.playlists[1].is_liked_songs);
+        assert_eq!(
+            mapped.playlists[1].ownership,
+            Some(super::LibraryPlaylistOwnership::Saved)
+        );
         assert!(!format!("{mapped:?}").contains("must-not-leak"));
         assert!(!format!("{:?}", mapped.playlists[0]).contains("7001"));
         assert!(!format!("{:?}", mapped.playlists[1]).contains("8001"));

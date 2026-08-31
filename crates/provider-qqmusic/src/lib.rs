@@ -9,11 +9,12 @@ use music_domain::{
     ArtistAlbumsPage, ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat,
     AudioQuality, FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, MusicVideoId,
     MusicVideoQuality, MusicVideoSource, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage,
-    NewSongCategory, NewSongCollection, PlaylistId, PlaylistPurpose, PlaylistSearchPage,
-    PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId,
-    RankingSummary, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId,
-    TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
+    NewSongCategory, NewSongCollection, PlaylistId, PlaylistOwnership, PlaylistPurpose,
+    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
+    RankingGroup, RankingId, RankingSummary, RankingTracksPage, RecommendedPlaylistsPage,
+    ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment,
+    TrackComment, TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage,
+    TrackSummary,
 };
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
@@ -24,17 +25,20 @@ use provider_api::{
     MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
     NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PersonalizedPlaylistsError,
     PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
+    PhoneAuthenticationCodeState, PhoneAuthenticationProvider, PhoneAuthenticationSession,
     PlaylistCreationProvider, PlaylistDeletionProvider, PlaylistDetailsProvider,
     PlaylistSearchProvider, PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
-    QrAuthenticationChallenge, QrAuthenticationProgress, QrAuthenticationProvider,
-    QrAuthenticationSession, QrImageFormat, RadarRecommendationError, RadarRecommendationsProvider,
-    RankingsProvider, RecommendationError, RecommendedPlaylistsProvider, SearchError,
+    QrAuthenticationChallenge, QrAuthenticationChannel, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
+    RadarRecommendationsProvider, RankingsProvider, RecommendationError,
+    RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider, SearchError,
     TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider,
     UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
-    HttpTransport, QqMusicAlbumDetailsError, QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState,
+    HttpTransport, PhoneAuthCodeResult, PhoneAuthorizationSession, PhoneLoginError,
+    QqMusicAlbumDetailsError, QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState,
     QqMusicAlbumSearchError, QqMusicAlbumSummary, QqMusicAlbumTracksError,
     QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
     QqMusicAudioQuality, QqMusicClient, QqMusicCreatePlaylistError, QqMusicDailyRecommendation,
@@ -46,11 +50,12 @@ use qqmusic_client::{
     QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError, QqMusicPlaylistDetailError,
     QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError,
     QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
-    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
-    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
-    QqMusicTrackMusicVideoError, QqMusicTrackSummary, QrImageMediaType,
-    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError,
+    QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
+    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError,
+    QrImageMediaType, QrLoginChannel, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -78,6 +83,8 @@ pub struct QqMusicProvider<T> {
     credential: Arc<Mutex<QqMusicCredentialState>>,
     next_restore_verification: AtomicU32,
     active_restore_verification: Mutex<Option<u32>>,
+    next_phone_authentication: AtomicU32,
+    active_phone_authentication: Arc<Mutex<Option<u32>>>,
 }
 
 impl<T> QqMusicProvider<T> {
@@ -88,6 +95,8 @@ impl<T> QqMusicProvider<T> {
             credential: Arc::new(Mutex::new(QqMusicCredentialState::SignedOut)),
             next_restore_verification: AtomicU32::new(1),
             active_restore_verification: Mutex::new(None),
+            next_phone_authentication: AtomicU32::new(1),
+            active_phone_authentication: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -166,11 +175,11 @@ impl<T> QqMusicProvider<T> {
         Ok(())
     }
 
-    fn authenticated_media_credential(&self) -> Result<Credential, MediaResolutionError> {
+    fn media_credential(&self) -> Result<Option<Credential>, MediaResolutionError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
-            QqMusicCredentialState::SignedOut
-            | QqMusicCredentialState::PendingVerification(_)
+            QqMusicCredentialState::Authenticated(credential) => Ok(Some(credential.clone())),
+            QqMusicCredentialState::SignedOut => Ok(None),
+            QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
                 Err(MediaResolutionError::AuthenticationRequired)
             }
@@ -410,7 +419,11 @@ impl<T> QqMusicProvider<T> {
     /// handle after QR creation completes.
     #[must_use]
     pub fn cancel_active_authentication(&self) -> bool {
-        self.login.cancel_active()
+        let qr_cancelled = self.login.cancel_active();
+        let phone_cancelled = phone_authentication_guard(&self.active_phone_authentication)
+            .take()
+            .is_some();
+        qr_cancelled || phone_cancelled
     }
 
     /// Cancels local authentication work and removes every retained QQ Music
@@ -418,6 +431,7 @@ impl<T> QqMusicProvider<T> {
     /// responsibility of the application edge.
     pub fn sign_out(&self) {
         self.login.cancel_active();
+        *phone_authentication_guard(&self.active_phone_authentication) = None;
         let mut credential = credential_guard(&self.credential);
         let mut verification = restore_verification_guard(&self.active_restore_verification);
         *credential = QqMusicCredentialState::SignedOut;
@@ -983,6 +997,28 @@ where
     }
 }
 
+impl<T> RelatedTracksProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = RelatedTracksError;
+
+    async fn related_tracks(&self, seed: TrackId) -> Result<Vec<TrackSummary>, Self::Error> {
+        let identity =
+            parse_track_identity(&seed).map_err(|()| RelatedTracksError::InvalidTrack)?;
+        self.client()
+            .related_tracks(identity.song_id)
+            .await
+            .as_ref()
+            .map_err(map_related_tracks_error)?
+            .tracks()
+            .iter()
+            .map(map_track_summary)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| RelatedTracksError::InvalidResponse)
+    }
+}
+
 impl<T> RadarRecommendationsProvider for QqMusicProvider<T>
 where
     T: HttpTransport + 'static,
@@ -1452,35 +1488,53 @@ where
         track_id: TrackId,
         preferred_quality: AudioQuality,
     ) -> Result<ResolvedMediaSource, Self::Error> {
-        let candidate = self.authenticated_media_credential()?;
+        let candidate = self.media_credential()?;
         let route = parse_media_track(&track_id)?;
 
         let dispatch_response = self.client().cdn_dispatch().await;
-        self.finish_media_await(
-            &candidate,
-            matches!(dispatch_response, Err(QqMusicMediaError::Rejected { .. })),
-        )?;
+        if let Some(candidate) = candidate.as_ref() {
+            self.finish_media_await(
+                candidate,
+                matches!(dispatch_response, Err(QqMusicMediaError::Rejected { .. })),
+            )?;
+        }
         let dispatch = dispatch_response.as_ref().map_err(map_media_error)?;
 
-        let qualities: &[QqMusicAudioQuality] = match preferred_quality {
-            AudioQuality::Standard => &[QqMusicAudioQuality::Standard],
-            AudioQuality::High => &[QqMusicAudioQuality::High, QqMusicAudioQuality::Standard],
+        let qualities: &[QqMusicAudioQuality] = match (candidate.as_ref(), preferred_quality) {
+            (None, _) | (Some(_), AudioQuality::Standard) => &[QqMusicAudioQuality::Standard],
+            (Some(_), AudioQuality::High) => {
+                &[QqMusicAudioQuality::High, QqMusicAudioQuality::Standard]
+            }
         };
         for (index, quality) in qualities.iter().copied().enumerate() {
-            let source_response = self
-                .client()
-                .mp3_source(
-                    &candidate,
-                    route.song_mid,
-                    route.file_media_mid,
-                    quality,
-                    dispatch,
-                )
-                .await;
-            self.finish_media_await(
-                &candidate,
-                matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
-            )?;
+            let source_response = match candidate.as_ref() {
+                Some(candidate) => {
+                    self.client()
+                        .mp3_source(
+                            candidate,
+                            route.song_mid,
+                            route.file_media_mid,
+                            quality,
+                            dispatch,
+                        )
+                        .await
+                }
+                None => {
+                    self.client()
+                        .anonymous_standard_mp3_source(
+                            route.song_mid,
+                            route.file_media_mid,
+                            dispatch,
+                        )
+                        .await
+                }
+            };
+            if let Some(candidate) = candidate.as_ref() {
+                self.finish_media_await(
+                    candidate,
+                    matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
+                )?;
+            }
             match source_response {
                 Ok(source) => {
                     let actual_quality = match source.quality() {
@@ -1497,6 +1551,9 @@ where
                     .map_err(|_| MediaResolutionError::InvalidResponse);
                 }
                 Err(QqMusicMediaError::Unavailable { .. }) if index + 1 < qualities.len() => {}
+                Err(QqMusicMediaError::Unavailable { .. }) if candidate.is_none() => {
+                    return Err(MediaResolutionError::AuthenticationRequired);
+                }
                 Err(error) => return Err(map_media_error(&error)),
             }
         }
@@ -1599,7 +1656,10 @@ where
     type Error = AuthenticationError;
     type Session = QqMusicQrAuthenticationSession<T>;
 
-    async fn begin_qr_authentication(&self) -> Result<Self::Session, Self::Error> {
+    async fn begin_qr_authentication(
+        &self,
+        channel: QrAuthenticationChannel,
+    ) -> Result<Self::Session, Self::Error> {
         {
             let mut credential = credential_guard(&self.credential);
             if matches!(
@@ -1611,7 +1671,15 @@ where
             }
         }
         *restore_verification_guard(&self.active_restore_verification) = None;
-        let session = self.login.begin().await.map_err(map_login_error)?;
+        *phone_authentication_guard(&self.active_phone_authentication) = None;
+        let session = self
+            .login
+            .begin_channel(match channel {
+                QrAuthenticationChannel::Qq => QrLoginChannel::Qq,
+                QrAuthenticationChannel::Wechat => QrLoginChannel::Wechat,
+            })
+            .await
+            .map_err(map_login_error)?;
         Ok(QqMusicQrAuthenticationSession {
             cancellation: QqMusicQrAuthenticationCancellation {
                 inner: session.cancellation_handle(),
@@ -1627,6 +1695,129 @@ where
 
     fn sign_out(&self) {
         QqMusicProvider::sign_out(self);
+    }
+}
+
+impl<T> PhoneAuthenticationProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = AuthenticationError;
+    type Session = QqMusicPhoneAuthenticationSession<T>;
+
+    fn begin_phone_authentication(
+        &self,
+        country_code: String,
+        phone_number: String,
+    ) -> Result<Self::Session, Self::Error> {
+        let session = PhoneAuthorizationSession::new(&country_code, &phone_number)
+            .map_err(|_| AuthenticationError::InvalidResponse)?;
+        self.login.cancel_active();
+        *restore_verification_guard(&self.active_restore_verification) = None;
+        {
+            let mut credential = credential_guard(&self.credential);
+            if matches!(
+                *credential,
+                QqMusicCredentialState::PendingVerification(_)
+                    | QqMusicCredentialState::LocallyExpired(_)
+            ) {
+                *credential = QqMusicCredentialState::SignedOut;
+            }
+        }
+        let attempt_id = self
+            .next_phone_authentication
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+                Some(if current == u32::MAX { 1 } else { current + 1 })
+            })
+            .unwrap_or_else(std::convert::identity);
+        *phone_authentication_guard(&self.active_phone_authentication) = Some(attempt_id);
+        Ok(QqMusicPhoneAuthenticationSession {
+            client: self.login.client_handle(),
+            session,
+            attempt_id,
+            active: Arc::clone(&self.active_phone_authentication),
+            credential: Arc::clone(&self.credential),
+        })
+    }
+}
+
+pub struct QqMusicPhoneAuthenticationSession<T> {
+    client: Arc<QqMusicClient<T>>,
+    session: PhoneAuthorizationSession,
+    attempt_id: u32,
+    active: Arc<Mutex<Option<u32>>>,
+    credential: Arc<Mutex<QqMusicCredentialState>>,
+}
+
+impl<T> std::fmt::Debug for QqMusicPhoneAuthenticationSession<T> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("QqMusicPhoneAuthenticationSession")
+            .field("active", &self.is_current())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T> QqMusicPhoneAuthenticationSession<T> {
+    fn is_current(&self) -> bool {
+        *phone_authentication_guard(&self.active) == Some(self.attempt_id)
+    }
+
+    fn clear_if_current(&self) -> bool {
+        let mut active = phone_authentication_guard(&self.active);
+        if *active != Some(self.attempt_id) {
+            return false;
+        }
+        *active = None;
+        true
+    }
+}
+
+impl<T> PhoneAuthenticationSession for QqMusicPhoneAuthenticationSession<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = AuthenticationError;
+
+    fn is_active(&self) -> bool {
+        self.is_current()
+    }
+
+    fn cancel(&self) -> bool {
+        self.clear_if_current()
+    }
+
+    async fn send_code(&self) -> Result<PhoneAuthenticationCodeState, Self::Error> {
+        if !self.is_current() {
+            return Err(AuthenticationError::Replaced);
+        }
+        let result = self.client.send_phone_auth_code(&self.session).await;
+        if !self.is_current() {
+            return Err(AuthenticationError::Replaced);
+        }
+        match result.map_err(|error| map_phone_login_error(&error))? {
+            PhoneAuthCodeResult::Sent => Ok(PhoneAuthenticationCodeState::Sent),
+            PhoneAuthCodeResult::CaptchaRequired { security_url } => {
+                Ok(PhoneAuthenticationCodeState::CaptchaRequired { security_url })
+            }
+            PhoneAuthCodeResult::RateLimited => Ok(PhoneAuthenticationCodeState::RateLimited),
+        }
+    }
+
+    async fn authorize(&self, verification_code: String) -> Result<(), Self::Error> {
+        if !self.is_current() {
+            return Err(AuthenticationError::Replaced);
+        }
+        let credential = self
+            .client
+            .authorize_phone(&self.session, &verification_code)
+            .await
+            .map_err(|error| map_phone_login_error(&error))?;
+        if !self.clear_if_current() {
+            return Err(AuthenticationError::Replaced);
+        }
+        *credential_guard(&self.credential) = QqMusicCredentialState::Authenticated(credential);
+        Ok(())
     }
 }
 
@@ -1701,7 +1892,7 @@ where
     type Error = AuthenticationError;
 
     fn challenge(&self) -> QrAuthenticationChallenge {
-        let image = self.session.qr().image();
+        let image = self.session.image();
         let format = match image.media_type() {
             QrImageMediaType::Png => QrImageFormat::Png,
             QrImageMediaType::Jpeg => QrImageFormat::Jpeg,
@@ -1751,6 +1942,14 @@ fn restore_verification_guard(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+fn phone_authentication_guard(
+    attempt: &Mutex<Option<u32>>,
+) -> std::sync::MutexGuard<'_, Option<u32>> {
+    attempt
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn qq_music_provider_id() -> ProviderId {
     ProviderId::new("qq-music").expect("static provider id is valid")
 }
@@ -1772,6 +1971,7 @@ fn map_owned_playlist(
             summary
                 .with_artwork_uri(playlist.cover_url().map(str::to_owned))
                 .with_track_count(playlist.track_count())
+                .with_ownership(PlaylistOwnership::Owned)
                 .with_purpose(if playlist.directory_id() == 201 {
                     PlaylistPurpose::LikedSongs
                 } else {
@@ -1794,6 +1994,7 @@ fn map_favorite_playlist(
             summary
                 .with_artwork_uri(playlist.cover_url().map(str::to_owned))
                 .with_track_count(playlist.track_count())
+                .with_ownership(PlaylistOwnership::Saved)
         })
         .map_err(|_| UserLibraryError::InvalidResponse)
 }
@@ -2911,6 +3112,28 @@ fn map_personalized_tracks_error<E>(
     }
 }
 
+fn map_related_tracks_error<E>(error: &QqMusicRelatedTracksError<E>) -> RelatedTracksError {
+    match error {
+        QqMusicRelatedTracksError::Transport(_) => RelatedTracksError::Network,
+        QqMusicRelatedTracksError::HttpStatus(_) | QqMusicRelatedTracksError::Upstream { .. } => {
+            RelatedTracksError::ServiceUnavailable
+        }
+        QqMusicRelatedTracksError::InvalidSongId
+        | QqMusicRelatedTracksError::Serialize
+        | QqMusicRelatedTracksError::Signing
+        | QqMusicRelatedTracksError::InvalidJson
+        | QqMusicRelatedTracksError::MissingGlobalCode
+        | QqMusicRelatedTracksError::MissingResult
+        | QqMusicRelatedTracksError::MissingResultCode
+        | QqMusicRelatedTracksError::MissingData
+        | QqMusicRelatedTracksError::MissingTracks
+        | QqMusicRelatedTracksError::TooManyTracks { .. }
+        | QqMusicRelatedTracksError::DuplicateTrackIdentity
+        | QqMusicRelatedTracksError::InvalidTrack { .. }
+        | QqMusicRelatedTracksError::InvalidArtist { .. } => RelatedTracksError::InvalidResponse,
+    }
+}
+
 fn map_radar_error<E>(error: &QqMusicRadarError<E>) -> RadarRecommendationError {
     match error {
         QqMusicRadarError::Rejected { .. } => RadarRecommendationError::CredentialRejected,
@@ -3031,6 +3254,7 @@ fn map_lyrics_error<E>(error: &QqMusicLyricsError<E>) -> LyricsError {
 fn map_login_error<E>(error: WechatQrLoginError<E>) -> AuthenticationError {
     match error {
         WechatQrLoginError::Protocol(error) => map_qr_error(&error),
+        WechatQrLoginError::QqProtocol(error) => map_qq_qr_error(&error),
         WechatQrLoginError::CredentialExchange(error) => map_exchange_error(&error),
         WechatQrLoginError::Cancelled => AuthenticationError::Cancelled,
         WechatQrLoginError::Superseded => AuthenticationError::Replaced,
@@ -3040,6 +3264,46 @@ fn map_login_error<E>(error: WechatQrLoginError<E>) -> AuthenticationError {
         WechatQrLoginError::TransportFailureLimitReached { .. } => {
             AuthenticationError::TooManyNetworkFailures
         }
+    }
+}
+
+fn map_qq_qr_error<E>(error: &QqQrError<E>) -> AuthenticationError {
+    match error {
+        QqQrError::Transport(_) => AuthenticationError::Network,
+        QqQrError::HttpStatus { .. } => AuthenticationError::ServiceUnavailable,
+        QqQrError::Credential(qqmusic_client::LoginCredentialError::Upstream { .. }) => {
+            AuthenticationError::Rejected
+        }
+        QqQrError::InvalidImage
+        | QqQrError::MissingQrsig
+        | QqQrError::InvalidCookie
+        | QqQrError::ClockBeforeUnixEpoch
+        | QqQrError::RandomnessUnavailable
+        | QqQrError::ResponseNotUtf8
+        | QqQrError::InvalidPollResponse
+        | QqQrError::UnrecognizedPollStatus(_)
+        | QqQrError::MissingAuthorization
+        | QqQrError::MissingPSkey
+        | QqQrError::MissingRedirect
+        | QqQrError::MissingAuthorizationCode
+        | QqQrError::Serialize
+        | QqQrError::Credential(_) => AuthenticationError::InvalidResponse,
+    }
+}
+
+fn map_phone_login_error<E>(error: &PhoneLoginError<E>) -> AuthenticationError {
+    match error {
+        PhoneLoginError::Transport(_) => AuthenticationError::Network,
+        PhoneLoginError::HttpStatus(_) => AuthenticationError::ServiceUnavailable,
+        PhoneLoginError::Upstream(_)
+        | PhoneLoginError::Credential(qqmusic_client::LoginCredentialError::Upstream { .. }) => {
+            AuthenticationError::Rejected
+        }
+        PhoneLoginError::Invalid(_)
+        | PhoneLoginError::Serialize
+        | PhoneLoginError::InvalidJson
+        | PhoneLoginError::MissingResult
+        | PhoneLoginError::Credential(_) => AuthenticationError::InvalidResponse,
     }
 }
 
@@ -3123,7 +3387,7 @@ mod tests {
     use super::{QqMusicCredentialRestoreState, QqMusicProvider};
     use music_domain::{
         AlbumId, ArtistId, AudioFormat, AudioQuality, NewAlbumRegion, NewSongCategory, PlaylistId,
-        PlaylistPurpose, ProviderId, RankingId, TrackId,
+        PlaylistOwnership, PlaylistPurpose, ProviderId, RankingId, TrackId,
     };
     use provider_api::{
         AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
@@ -3134,14 +3398,15 @@ mod tests {
         LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
         MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
         PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
-        PersonalizedTracksProvider, PlaylistCreationProvider, PlaylistDeletionProvider,
+        PersonalizedTracksProvider, PhoneAuthenticationCodeState, PhoneAuthenticationProvider,
+        PhoneAuthenticationSession, PlaylistCreationProvider, PlaylistDeletionProvider,
         PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
-        ProviderCapability, QrAuthenticationProgress, QrAuthenticationProvider,
-        QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
+        ProviderCapability, QrAuthenticationChannel, QrAuthenticationProgress,
+        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
         RadarRecommendationsProvider, RankingsProvider, RecommendationError,
-        RecommendedPlaylistsProvider, SearchError, TrackCommentsProvider,
-        TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError,
-        UserPlaylistsProvider,
+        RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider, SearchError,
+        TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider,
+        TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
@@ -3159,8 +3424,46 @@ mod tests {
 
     struct SuccessfulAuthenticationTransport;
 
+    struct PhoneAuthenticationTransport {
+        responses: Mutex<VecDeque<HttpResponse>>,
+    }
+
     struct VerificationTransport {
         response: HttpResponse,
+    }
+
+    impl PhoneAuthenticationTransport {
+        fn successful() -> Self {
+            Self {
+                responses: Mutex::new(
+                    [
+                        json!({
+                            "code": 0,
+                            "req_0": {"code": 0, "data": {}}
+                        }),
+                        json!({
+                            "code": 0,
+                            "req_0": {
+                                "code": 0,
+                                "data": {
+                                    "str_musicid": "123456",
+                                    "musickey": "private-phone-key",
+                                    "loginType": 2
+                                }
+                            }
+                        }),
+                    ]
+                    .into_iter()
+                    .map(|value| {
+                        HttpResponse::new(
+                            200,
+                            serde_json::to_vec(&value).expect("phone fixture JSON"),
+                        )
+                    })
+                    .collect(),
+                ),
+            }
+        }
     }
 
     struct OwnedPlaylistsTransport {
@@ -3771,6 +4074,19 @@ mod tests {
                 }"#
                 .to_vec(),
             ))
+        }
+    }
+
+    impl HttpTransport for PhoneAuthenticationTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            Ok(self
+                .responses
+                .lock()
+                .expect("phone response lock")
+                .pop_front()
+                .expect("phone fixture response"))
         }
     }
 
@@ -4830,6 +5146,15 @@ mod tests {
         })
     }
 
+    fn related_tracks_response(code: i64, tracks: &[Value]) -> Value {
+        json!({
+            "code": 0,
+            "simsongs": {"code": code, "data": {
+                "songInfoList": tracks
+            }}
+        })
+    }
+
     fn personalized_track(id: u64, mid: &str, title: &str) -> Value {
         json!({
             "id": id,
@@ -5049,6 +5374,46 @@ mod tests {
         let debug = format!("{tracks:?}");
         assert!(!debug.contains("Synthetic personalized Track"));
         assert!(!debug.contains("fixtureTrackMid"));
+    }
+
+    #[tokio::test]
+    async fn related_tracks_parse_only_the_provider_owned_seed_identity() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(
+            &related_tracks_response(
+                0,
+                &[personalized_track(
+                    51_001,
+                    "relatedFixtureMid",
+                    "Synthetic related Track",
+                )],
+            ),
+        )));
+        let seed = TrackId::new(
+            ProviderId::new("qq-music").expect("Provider"),
+            "track:41001:0:seedFixtureMid:-",
+        )
+        .expect("seed Track");
+
+        let tracks = provider.related_tracks(seed).await.expect("related Tracks");
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].title(), "Synthetic related Track");
+        assert_eq!(
+            tracks[0].id().opaque(),
+            "track:51001:0:relatedFixtureMid:relatedFixtureMid"
+        );
+        let debug = format!("{tracks:?}");
+        assert!(!debug.contains("Synthetic related Track"));
+        assert!(!debug.contains("relatedFixtureMid"));
+
+        let foreign_seed = TrackId::new(
+            ProviderId::new("local").expect("Provider"),
+            "track:41001:0:seedFixtureMid:-",
+        )
+        .expect("foreign seed");
+        assert_eq!(
+            provider.related_tracks(foreign_seed).await,
+            Err(RelatedTracksError::InvalidTrack)
+        );
     }
 
     #[tokio::test]
@@ -5448,6 +5813,7 @@ mod tests {
         assert_eq!(playlists[0].title(), "Synthetic liked songs");
         assert_eq!(playlists[0].track_count(), Some(42));
         assert_eq!(playlists[0].purpose(), PlaylistPurpose::LikedSongs);
+        assert_eq!(playlists[0].ownership(), PlaylistOwnership::Owned);
         assert!(!format!("{playlists:?}").contains("Synthetic liked songs"));
     }
 
@@ -5524,8 +5890,12 @@ mod tests {
         assert_eq!(playlists[0].id().opaque(), "owned:7001:201");
         assert_eq!(playlists[1].id().opaque(), "owned:7002:202");
         assert_eq!(playlists[2].id().opaque(), "favorite:8001");
+        assert_eq!(playlists[0].ownership(), PlaylistOwnership::Owned);
+        assert_eq!(playlists[1].ownership(), PlaylistOwnership::Owned);
+        assert_eq!(playlists[2].ownership(), PlaylistOwnership::Saved);
         assert_eq!(playlists[2].track_count(), Some(9));
         assert_eq!(playlists[3].id().opaque(), "favorite:8002");
+        assert_eq!(playlists[3].ownership(), PlaylistOwnership::Saved);
 
         let requests = provider.client().transport().requests();
         assert_eq!(requests.len(), 3);
@@ -6543,6 +6913,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn signed_out_media_uses_anonymous_standard_quality_without_cookie() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=public-source"),
+        ])));
+        let track_id = qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1");
+
+        let source = provider
+            .resolve_media(track_id, AudioQuality::High)
+            .await
+            .expect("anonymous standard source");
+
+        assert_eq!(source.quality(), AudioQuality::Standard);
+        assert!(!provider.has_authenticated_credential());
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 2);
+        assert!(
+            !requests[1]
+                .headers()
+                .iter()
+                .any(|(name, _)| name == "Cookie")
+        );
+        let body: Value =
+            serde_json::from_slice(requests[1].body_bytes().expect("vkey request body"))
+                .expect("vkey request JSON");
+        assert_eq!(body["comm"]["uid"], json!("0"));
+        assert!(body["comm"].get("authst").is_none());
+        assert_eq!(
+            body["req_0"]["param"]["filename"],
+            json!(["M500fixtureFileMid1.mp3"])
+        );
+    }
+
+    #[tokio::test]
+    async fn signed_out_unavailable_media_invites_authentication_without_claiming_why() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            media_vkey_json(104_003, ""),
+        ])));
+
+        assert_eq!(
+            provider
+                .resolve_media(
+                    qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                    AudioQuality::Standard,
+                )
+                .await,
+            Err(MediaResolutionError::AuthenticationRequired)
+        );
+        assert!(!provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
     async fn high_quality_reports_actual_source_and_falls_back_only_when_unavailable() {
         let high = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
             media_dispatch_json(),
@@ -7027,7 +7450,7 @@ mod tests {
         let replacement = async {
             verification_started.notified().await;
             let session = provider
-                .begin_qr_authentication()
+                .begin_qr_authentication(QrAuthenticationChannel::Wechat)
                 .await
                 .expect("replacement QR session");
             release_verification.notify_one();
@@ -7155,7 +7578,7 @@ mod tests {
 
         let qr = QqMusicProvider::new(QqMusicClient::new(SuccessfulAuthenticationTransport));
         let session = qr
-            .begin_qr_authentication()
+            .begin_qr_authentication(QrAuthenticationChannel::Wechat)
             .await
             .expect("active QR session");
         assert!(session.is_active());
@@ -7190,7 +7613,7 @@ mod tests {
     async fn provider_maps_qr_flow_and_retains_credential_inside_the_provider() {
         let provider = QqMusicProvider::new(QqMusicClient::new(SuccessfulAuthenticationTransport));
         let mut session = provider
-            .begin_qr_authentication()
+            .begin_qr_authentication(QrAuthenticationChannel::Wechat)
             .await
             .expect("provider QR session");
         let challenge = session.challenge();
@@ -7213,5 +7636,39 @@ mod tests {
         let decoded = Credential::decode_from_secure_storage(&encoded)
             .expect("provider emits a valid credential document");
         assert_eq!(decoded.music_id(), "123456");
+    }
+
+    #[tokio::test]
+    async fn provider_maps_phone_flow_and_retains_credential_inside_the_provider() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(
+            PhoneAuthenticationTransport::successful(),
+        ));
+        let session = provider
+            .begin_phone_authentication("86".into(), "13000000000".into())
+            .expect("provider phone session");
+
+        assert!(session.is_active());
+        assert_eq!(
+            session.send_code().await.expect("phone-code mapping"),
+            PhoneAuthenticationCodeState::Sent
+        );
+        assert!(!provider.has_authenticated_credential());
+
+        session
+            .authorize("123456".into())
+            .await
+            .expect("phone authorization mapping");
+
+        assert!(!session.is_active());
+        assert!(provider.has_authenticated_credential());
+        assert!(!format!("{session:?}").contains("13000000000"));
+        let encoded = provider
+            .encode_authenticated_credential()
+            .expect("encode credential")
+            .expect("authenticated credential");
+        let decoded = Credential::decode_from_secure_storage(&encoded)
+            .expect("provider emits a valid credential document");
+        assert_eq!(decoded.music_id(), "123456");
+        assert_eq!(decoded.login_type(), LoginType::QQ);
     }
 }

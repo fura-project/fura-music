@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart';
 import 'package:flutterustmusic/src/rust/api/album_favorites.dart';
@@ -49,6 +50,10 @@ void main() {
     expect(qqMusicHasAuthenticatedCredential(), isFalse);
     final unusedStart = reserveQqMusicWechatQrLoginStart();
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
+    final unusedQrStart = reserveQqMusicQrLoginStart();
+    expect(cancelQqMusicQrLoginStart(attemptId: unusedQrStart), isFalse);
+    final unusedPhoneStart = reserveQqMusicPhoneLoginStart();
+    expect(cancelQqMusicPhoneLoginStart(attemptId: unusedPhoneStart), isFalse);
     final unusedLibraryLoad = beginQqMusicUserPlaylistLoad();
     expect(unusedLibraryLoad.isActive, isTrue);
     expect(unusedLibraryLoad.cancel(), isTrue);
@@ -427,6 +432,7 @@ void main() {
     expect(queue.clear().snapshot?.tracks, isEmpty);
 
     await tester.pumpWidget(MusicApp(bootstrap: status));
-    expect(find.text('QQ Music connected'), findsOneWidget);
+    expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
   });
 }

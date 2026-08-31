@@ -19,7 +19,8 @@ These frames are the visual source of truth for the current Home implementation.
 - Material 3 remains the component language while the approved composition controls visual hierarchy and geometry.
 - Production content must remain truthful to Provider, Domain, account, recommendation, and availability semantics.
 - Grey or missing artwork in the approved frames reflects unavailable design assets only. Supported production slots render the exact Provider result and its artwork when supplied; the application uses a neutral fallback only when a real result has no usable artwork.
-- Unsupported Popular Programs and a second distinct personalized Track set remain explicit unavailable states; unrelated data must not substitute for them.
+- Popular Programs is intentionally absent from the first-release Home; no unavailable placeholder, podcast surface, or unrelated substitute is shown.
+- `More from your listening` is distinct from the authenticated personalized Track shelf. It uses only the current QQ Music queue Track as a seed for related Tracks, identifies that seed visibly, and shows a compact truthful state when no seed/result is available.
 - No QQ Music branding, proprietary artwork, promotional content, or exact trade dress is copied into the project.
 
 Home remains pending maintainer visual acceptance. This record preserves source identity; it does not itself establish visual completion.

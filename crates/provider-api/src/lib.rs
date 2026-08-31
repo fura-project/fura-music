@@ -114,6 +114,28 @@ pub enum PersonalizedTracksError {
     Replaced,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RelatedTracksError {
+    InvalidTrack,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+}
+
+impl fmt::Display for RelatedTracksError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::InvalidTrack => "related Tracks require a valid Provider Track",
+            Self::Network => "related-Track network request failed",
+            Self::ServiceUnavailable => "related Tracks are unavailable",
+            Self::InvalidResponse => "related Tracks returned an invalid response",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for RelatedTracksError {}
+
 impl fmt::Display for PersonalizedTracksError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
@@ -408,6 +430,17 @@ pub trait PersonalizedTracksProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
 }
 
+/// Provider-neutral bounded Tracks related to one exact seed Track. The
+/// Provider owns source identity parsing; presentation owns section wording.
+pub trait RelatedTracksProvider: MusicProvider + Sync {
+    type Error;
+
+    fn related_tracks(
+        &self,
+        seed: TrackId,
+    ) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
+}
+
 /// Provider-neutral page-numbered QQ-native Radar Track recommendations.
 /// Personalization inputs and service continuation stay with the Provider.
 pub trait RadarRecommendationsProvider: MusicProvider + Sync {
@@ -478,6 +511,12 @@ pub trait MusicProvider {
 pub enum QrImageFormat {
     Png,
     Jpeg,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QrAuthenticationChannel {
+    Qq,
+    Wechat,
 }
 
 /// Provider-neutral QR authentication material safe for presentation.
@@ -585,9 +624,50 @@ pub trait QrAuthenticationProvider: MusicProvider + Sync {
 
     fn begin_qr_authentication(
         &self,
+        channel: QrAuthenticationChannel,
     ) -> impl Future<Output = Result<Self::Session, Self::Error>> + Send;
     fn has_authenticated_credential(&self) -> bool;
     fn sign_out(&self);
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PhoneAuthenticationCodeState {
+    Sent,
+    CaptchaRequired { security_url: Option<String> },
+    RateLimited,
+}
+
+pub trait PhoneAuthenticationSession: Send {
+    type Error;
+
+    fn is_active(&self) -> bool;
+    fn cancel(&self) -> bool;
+    fn send_code(
+        &self,
+    ) -> impl Future<Output = Result<PhoneAuthenticationCodeState, Self::Error>> + Send;
+    fn authorize(
+        &self,
+        verification_code: String,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
+/// Provider-neutral phone-number plus one-time-code authentication.
+/// Password collection is deliberately outside this capability.
+pub trait PhoneAuthenticationProvider: MusicProvider + Sync {
+    type Error;
+    type Session: PhoneAuthenticationSession<Error = Self::Error>;
+
+    /// Creates an isolated phone authorization session without sending a code.
+    ///
+    /// # Errors
+    ///
+    /// Returns a provider-defined validation or lifecycle error when the
+    /// process-local session cannot be created safely.
+    fn begin_phone_authentication(
+        &self,
+        country_code: String,
+        phone_number: String,
+    ) -> Result<Self::Session, Self::Error>;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

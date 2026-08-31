@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/library/favorite_album_gateway.dart';
+import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
@@ -13,10 +15,11 @@ import 'package:flutterustmusic/theme/material_theme.dart';
 class LikedSongsPage extends StatefulWidget {
   const LikedSongsPage({
     required this.playlist,
+    required this.playlists,
     required this.gateway,
+    required this.favoriteAlbumGateway,
     required this.queuePlaybackController,
-    required this.onOpenAlbums,
-    required this.onOpenArtists,
+    required this.onOpenPlaylist,
     required this.onSignInAgain,
     this.onOpenAlbum,
     this.onOpenArtist,
@@ -24,10 +27,11 @@ class LikedSongsPage extends StatefulWidget {
   });
 
   final UserPlaylistSummary playlist;
+  final List<UserPlaylistSummary> playlists;
   final PlaylistDetailGateway gateway;
+  final FavoriteAlbumGateway favoriteAlbumGateway;
   final QueuePlaybackController queuePlaybackController;
-  final VoidCallback onOpenAlbums;
-  final VoidCallback onOpenArtists;
+  final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final VoidCallback onSignInAgain;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
@@ -41,6 +45,8 @@ class _LikedSongsPageState extends State<LikedSongsPage> {
   late final Listenable _pageListenable;
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  _LikedCollectionSection _section = _LikedCollectionSection.songs;
+  bool _albumsVisited = false;
 
   @override
   void initState() {
@@ -84,6 +90,25 @@ class _LikedSongsPageState extends State<LikedSongsPage> {
         .toList(growable: false);
   }
 
+  List<UserPlaylistSummary> get _visiblePlaylists {
+    final playlists = widget.playlists
+        .where((playlist) => !playlist.isLikedSongs)
+        .toList(growable: false);
+    if (_query.isEmpty) return playlists;
+    return playlists
+        .where((playlist) => playlist.title.toLowerCase().contains(_query))
+        .toList(growable: false);
+  }
+
+  void _selectSection(_LikedCollectionSection section) {
+    if (_section == section) return;
+    _searchController.clear();
+    setState(() {
+      _section = section;
+      if (section == _LikedCollectionSection.albums) _albumsVisited = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
@@ -95,6 +120,7 @@ class _LikedSongsPageState extends State<LikedSongsPage> {
           final tracks = _visibleTracks;
           return Column(
             key: const ValueKey('liked-songs-page'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _LikedSongsHeader(
                 total: switch (_controller.stage) {
@@ -108,22 +134,66 @@ class _LikedSongsPageState extends State<LikedSongsPage> {
                 searchController: _searchController,
                 onPlayAll: tracks.isEmpty ? null : () => _playAll(tracks),
                 onRefresh: _controller.isLoading ? null : _controller.refresh,
-                onOpenAlbums: widget.onOpenAlbums,
-                onOpenArtists: widget.onOpenArtists,
+                selectedSection: _section,
+                playlistCount: widget.playlists
+                    .where((playlist) => !playlist.isLikedSongs)
+                    .length,
+                onSectionSelected: _selectSection,
               ),
-              if (_controller.isRefreshing)
+              if (_section == _LikedCollectionSection.songs &&
+                  _controller.isRefreshing)
                 const LinearProgressIndicator(
                   key: ValueKey('liked-songs-refresh-progress'),
                 ),
-              if (_controller.refreshFailure case final failure?)
+              if (_section == _LikedCollectionSection.songs &&
+                  _controller.refreshFailure != null)
                 LibraryRefreshFailureBanner(
                   key: const ValueKey('liked-songs-refresh-failure'),
-                  message: _refreshFailureCopy(failure),
+                  message: _refreshFailureCopy(_controller.refreshFailure!),
                   canRetry: _controller.canRetryRefresh,
                   onRetry: _controller.retryRefresh,
                   onDismiss: _controller.dismissRefreshFailure,
                 ),
-              Expanded(child: _body(desktop, tracks)),
+              Expanded(
+                child: IndexedStack(
+                  index: _section.index,
+                  children: [
+                    _body(desktop, tracks),
+                    _LikedPlaylistsCollection(
+                      playlists: _visiblePlaylists,
+                      searching: _query.isNotEmpty,
+                      onOpenPlaylist: widget.onOpenPlaylist,
+                    ),
+                    if (_albumsVisited)
+                      FavoriteAlbumsPage(
+                        key: const ValueKey('liked-favorite-albums'),
+                        gateway: widget.favoriteAlbumGateway,
+                        queuePlaybackController: widget.queuePlaybackController,
+                        onBack: () =>
+                            _selectSection(_LikedCollectionSection.songs),
+                        onOpenAlbum: (album) => widget.onOpenAlbum?.call(album),
+                        onSignInAgain: widget.onSignInAgain,
+                        embedded: true,
+                        showHeader: false,
+                        filterQuery: _query,
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    const _UnavailableLikedCollection(
+                      key: ValueKey('liked-programs-unavailable'),
+                      icon: Icons.podcasts_rounded,
+                      title: '有声节目收藏尚未接入',
+                      detail: '当前 Core 没有经过验证的 QQ Music 有声节目收藏读取能力。',
+                    ),
+                    const _UnavailableLikedCollection(
+                      key: ValueKey('liked-videos-unavailable'),
+                      icon: Icons.video_library_outlined,
+                      title: '视频收藏尚未接入',
+                      detail: '歌曲关联 MV 不等同于账号的视频收藏，不会在这里混用。',
+                    ),
+                  ],
+                ),
+              ),
             ],
           );
         },
@@ -213,8 +283,9 @@ class _LikedSongsHeader extends StatelessWidget {
     required this.searchController,
     required this.onPlayAll,
     required this.onRefresh,
-    required this.onOpenAlbums,
-    required this.onOpenArtists,
+    required this.selectedSection,
+    required this.playlistCount,
+    required this.onSectionSelected,
   });
 
   final int? total;
@@ -224,8 +295,9 @@ class _LikedSongsHeader extends StatelessWidget {
   final TextEditingController searchController;
   final VoidCallback? onPlayAll;
   final VoidCallback? onRefresh;
-  final VoidCallback onOpenAlbums;
-  final VoidCallback onOpenArtists;
+  final _LikedCollectionSection selectedSection;
+  final int playlistCount;
+  final ValueChanged<_LikedCollectionSection> onSectionSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -244,37 +316,51 @@ class _LikedSongsHeader extends StatelessWidget {
           const SizedBox(height: 18),
           _LikedCategoryTabs(
             total: total,
-            onOpenAlbums: onOpenAlbums,
-            onOpenArtists: onOpenArtists,
+            playlistCount: playlistCount,
+            selected: selectedSection,
+            onSelected: onSectionSelected,
           ),
           const SizedBox(height: 18),
           if (desktop)
             Row(
               children: [
-                _PlayAllButton(onPressed: onPlayAll),
-                const SizedBox(width: 10),
-                _RefreshButton(refreshing: isRefreshing, onPressed: onRefresh),
+                if (selectedSection == _LikedCollectionSection.songs) ...[
+                  _PlayAllButton(onPressed: onPlayAll),
+                  const SizedBox(width: 10),
+                  _RefreshButton(
+                    refreshing: isRefreshing,
+                    onPressed: onRefresh,
+                  ),
+                ],
                 const Spacer(),
                 SizedBox(
                   width: 220,
-                  child: _LikedSongsSearch(controller: searchController),
+                  child: _LikedCollectionSearch(
+                    controller: searchController,
+                    section: selectedSection,
+                  ),
                 ),
               ],
             )
           else ...[
-            Row(
-              children: [
-                Expanded(child: _PlayAllButton(onPressed: onPlayAll)),
-                const SizedBox(width: 10),
-                _RefreshButton(
-                  refreshing: isRefreshing,
-                  onPressed: onRefresh,
-                  compact: true,
-                ),
-              ],
+            if (selectedSection == _LikedCollectionSection.songs) ...[
+              Row(
+                children: [
+                  Expanded(child: _PlayAllButton(onPressed: onPlayAll)),
+                  const SizedBox(width: 10),
+                  _RefreshButton(
+                    refreshing: isRefreshing,
+                    onPressed: onRefresh,
+                    compact: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+            _LikedCollectionSearch(
+              controller: searchController,
+              section: selectedSection,
             ),
-            const SizedBox(height: 12),
-            _LikedSongsSearch(controller: searchController),
           ],
         ],
       ),
@@ -285,13 +371,15 @@ class _LikedSongsHeader extends StatelessWidget {
 class _LikedCategoryTabs extends StatelessWidget {
   const _LikedCategoryTabs({
     required this.total,
-    required this.onOpenAlbums,
-    required this.onOpenArtists,
+    required this.playlistCount,
+    required this.selected,
+    required this.onSelected,
   });
 
   final int? total;
-  final VoidCallback onOpenAlbums;
-  final VoidCallback onOpenArtists;
+  final int playlistCount;
+  final _LikedCollectionSection selected;
+  final ValueChanged<_LikedCollectionSection> onSelected;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -299,15 +387,256 @@ class _LikedCategoryTabs extends StatelessWidget {
     scrollDirection: Axis.horizontal,
     child: Row(
       children: [
-        _LikedCategoryTab(
-          label: total == null ? '歌曲' : '歌曲 $total',
-          selected: true,
-        ),
-        const SizedBox(width: 28),
-        _LikedCategoryTab(label: '专辑', onTap: onOpenAlbums),
-        const SizedBox(width: 28),
-        _LikedCategoryTab(label: '歌手', onTap: onOpenArtists),
+        for (final section in _LikedCollectionSection.values) ...[
+          _LikedCategoryTab(
+            key: ValueKey('liked-tab-${section.name}'),
+            label: switch (section) {
+              _LikedCollectionSection.songs =>
+                total == null ? '歌曲' : '歌曲 $total',
+              _LikedCollectionSection.playlists => '歌单 $playlistCount',
+              _LikedCollectionSection.albums => '专辑',
+              _LikedCollectionSection.programs => '有声节目',
+              _LikedCollectionSection.videos => '视频',
+            },
+            selected: selected == section,
+            onTap: () => onSelected(section),
+          ),
+          if (section != _LikedCollectionSection.values.last)
+            const SizedBox(width: 28),
+        ],
       ],
+    ),
+  );
+}
+
+enum _LikedCollectionSection { songs, playlists, albums, programs, videos }
+
+class _LikedPlaylistsCollection extends StatelessWidget {
+  const _LikedPlaylistsCollection({
+    required this.playlists,
+    required this.searching,
+    required this.onOpenPlaylist,
+  });
+
+  final List<UserPlaylistSummary> playlists;
+  final bool searching;
+  final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = playlists
+        .where((playlist) => !playlist.isLikedSongs)
+        .toList(growable: false);
+    final owned = visible
+        .where((playlist) => playlist.ownership == UserPlaylistOwnership.owned)
+        .toList(growable: false);
+    final saved = visible
+        .where((playlist) => playlist.ownership == UserPlaylistOwnership.saved)
+        .toList(growable: false);
+    final unclassified = visible
+        .where(
+          (playlist) => playlist.ownership == UserPlaylistOwnership.unspecified,
+        )
+        .toList(growable: false);
+    if (visible.isEmpty) {
+      return _UnavailableLikedCollection(
+        key: const ValueKey('liked-playlists-empty'),
+        icon: searching ? Icons.search_off_rounded : Icons.queue_music_rounded,
+        title: searching ? '未找到匹配的歌单' : '还没有其他歌单',
+        detail: searching ? '请尝试其他关键词。' : '你创建或收藏的 QQ Music 歌单会显示在这里。',
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        var columns = constraints.maxWidth ~/ 188;
+        if (columns < 2) columns = 2;
+        if (columns > 6) columns = 6;
+        final horizontal = constraints.maxWidth >= 820
+            ? MusicSpacing.page
+            : MusicSpacing.pageCompact;
+        return CustomScrollView(
+          key: const PageStorageKey<String>('liked-playlists-grid'),
+          slivers: [
+            ..._playlistSection(
+              context,
+              title: '自创歌单',
+              playlists: owned,
+              columns: columns,
+              horizontal: horizontal,
+            ),
+            ..._playlistSection(
+              context,
+              title: '收藏歌单',
+              playlists: saved,
+              columns: columns,
+              horizontal: horizontal,
+            ),
+            ..._playlistSection(
+              context,
+              title: '其他歌单',
+              playlists: unclassified,
+              columns: columns,
+              horizontal: horizontal,
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
+        );
+      },
+    );
+  }
+
+  List<Widget> _playlistSection(
+    BuildContext context, {
+    required String title,
+    required List<UserPlaylistSummary> playlists,
+    required int columns,
+    required double horizontal,
+  }) {
+    if (playlists.isEmpty) return const [];
+    return [
+      SliverPadding(
+        padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 12),
+        sliver: SliverToBoxAdapter(
+          child: Text(
+            '$title ${playlists.length}',
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+      SliverPadding(
+        padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
+        sliver: SliverGrid(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisSpacing: 20,
+            crossAxisSpacing: 18,
+            childAspectRatio: 0.78,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _LikedPlaylistCard(
+              playlist: playlists[index],
+              onTap: () => onOpenPlaylist(playlists[index]),
+            ),
+            childCount: playlists.length,
+          ),
+        ),
+      ),
+    ];
+  }
+}
+
+class _LikedPlaylistCard extends StatelessWidget {
+  const _LikedPlaylistCard({required this.playlist, required this.onTap});
+
+  final UserPlaylistSummary playlist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final artwork = ColoredBox(
+      color: colors.secondaryContainer,
+      child: Icon(
+        Icons.queue_music_rounded,
+        size: 42,
+        color: colors.onSecondaryContainer,
+      ),
+    );
+    return Semantics(
+      label: '${playlist.title}, 歌单',
+      button: true,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: InkWell(
+        key: ValueKey('liked-playlist-${playlist.opaqueId}'),
+        onTap: onTap,
+        borderRadius: MusicRadii.artwork,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: MusicRadii.artwork,
+                child: SizedBox.expand(
+                  child: playlist.artworkUri == null
+                      ? artwork
+                      : Image.network(
+                          playlist.artworkUri!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => artwork,
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              playlist.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            if (playlist.trackCount case final count?) ...[
+              const SizedBox(height: 3),
+              Text(
+                '$count 首歌曲',
+                maxLines: 1,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnavailableLikedCollection extends StatelessWidget {
+  const _UnavailableLikedCollection({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: Padding(
+        padding: const EdgeInsets.all(MusicSpacing.page),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -317,6 +646,7 @@ class _LikedCategoryTab extends StatelessWidget {
     required this.label,
     this.selected = false,
     this.onTap,
+    super.key,
   });
 
   final String label;
@@ -402,33 +732,58 @@ class _RefreshButton extends StatelessWidget {
         );
 }
 
-class _LikedSongsSearch extends StatelessWidget {
-  const _LikedSongsSearch({required this.controller});
+class _LikedCollectionSearch extends StatelessWidget {
+  const _LikedCollectionSearch({
+    required this.controller,
+    required this.section,
+  });
 
   final TextEditingController controller;
+  final _LikedCollectionSection section;
 
   @override
-  Widget build(BuildContext context) => TextField(
-    key: const ValueKey('liked-songs-search'),
-    controller: controller,
-    textInputAction: TextInputAction.search,
-    decoration: InputDecoration(
-      hintText: '搜索已加载歌曲',
-      prefixIcon: const Icon(Icons.search_rounded, size: 20),
-      suffixIcon: ValueListenableBuilder<TextEditingValue>(
-        valueListenable: controller,
-        builder: (context, value, _) => value.text.isEmpty
-            ? const SizedBox.shrink()
-            : IconButton(
-                tooltip: '清除搜索',
-                onPressed: controller.clear,
-                icon: const Icon(Icons.close_rounded, size: 18),
-              ),
+  Widget build(BuildContext context) {
+    final enabled =
+        section == _LikedCollectionSection.songs ||
+        section == _LikedCollectionSection.playlists ||
+        section == _LikedCollectionSection.albums;
+    final hint = switch (section) {
+      _LikedCollectionSection.songs => '搜索已加载歌曲',
+      _LikedCollectionSection.playlists => '搜索歌单',
+      _LikedCollectionSection.albums => '搜索已加载专辑',
+      _LikedCollectionSection.programs => '有声节目收藏尚未接入',
+      _LikedCollectionSection.videos => '视频收藏尚未接入',
+    };
+    return TextField(
+      key: ValueKey(
+        section == _LikedCollectionSection.songs
+            ? 'liked-songs-search'
+            : 'liked-${section.name}-search',
       ),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    ),
-  );
+      controller: controller,
+      enabled: enabled,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        suffixIcon: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, _) => value.text.isEmpty
+              ? const SizedBox.shrink()
+              : IconButton(
+                  tooltip: '清除搜索',
+                  onPressed: controller.clear,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+        ),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 10,
+        ),
+      ),
+    );
+  }
 }
 
 class _LikedTrackCollection extends StatelessWidget {

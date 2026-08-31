@@ -18,6 +18,7 @@ mod daily_recommendation;
 mod favorite_albums;
 mod favorite_artists;
 mod favorite_playlists;
+mod login_credential;
 mod lyrics;
 mod media_resolution;
 mod music_video;
@@ -25,9 +26,11 @@ mod new_albums;
 mod new_songs;
 mod owned_playlists;
 mod personalized_tracks;
+mod phone_login;
 mod playlist_containers;
 mod playlist_detail;
 mod playlist_search;
+mod qq_qr;
 mod qrc_cipher;
 mod radar_recommendations;
 mod rankings;
@@ -71,6 +74,7 @@ pub use favorite_playlists::{
     FavoritePlaylistField, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
     QqMusicFavoritePlaylistsPage,
 };
+pub use login_credential::LoginCredentialError;
 pub use lyrics::{
     QqMusicAuxiliaryLyricLine, QqMusicLyricDocumentField, QqMusicLyricTrack, QqMusicLyrics,
     QqMusicLyricsError, QqMusicTimedLyricLine, QqMusicTimedLyricSegment,
@@ -95,6 +99,10 @@ pub use owned_playlists::{
 };
 pub use personalized_tracks::{
     PersonalizedTrackField, QqMusicPersonalizedTracks, QqMusicPersonalizedTracksError,
+    QqMusicRelatedTracks, QqMusicRelatedTracksError,
+};
+pub use phone_login::{
+    InvalidPhoneAuthorization, PhoneAuthCodeResult, PhoneAuthorizationSession, PhoneLoginError,
 };
 pub use playlist_containers::{
     QqMusicCreatePlaylistError, QqMusicCreatedPlaylist, QqMusicDeletePlaylistError,
@@ -107,6 +115,7 @@ pub use playlist_search::{
     PlaylistSearchField, QqMusicPlaylistSearchError, QqMusicPlaylistSearchPage,
     QqMusicPlaylistSearchSummary,
 };
+pub use qq_qr::{QqQrAuthorization, QqQrError, QqQrPollResult, QqQrSession};
 pub use radar_recommendations::{QqMusicRadarError, QqMusicRadarTrackPage, RadarTrackField};
 pub use rankings::{
     QqMusicRankingGroup, QqMusicRankingSummary, QqMusicRankingTrackPage, QqMusicRankingsError,
@@ -126,8 +135,9 @@ pub use transport::{
 };
 pub use wechat_exchange::WechatCredentialExchangeError;
 pub use wechat_login::{
-    InvalidWechatQrLoginPolicy, WechatQrLoginCancellation, WechatQrLoginCoordinator,
-    WechatQrLoginError, WechatQrLoginPolicy, WechatQrLoginProgress, WechatQrLoginSession,
+    InvalidWechatQrLoginPolicy, QrLoginChannel, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginPolicy, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 pub use wechat_qr::{
     QrImage, QrImageMediaType, WechatAuthorizationCode, WechatQrError, WechatQrPollResult,

@@ -49,13 +49,25 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Goal:** integrate the existing product one page at a time against Human-approved Stitch/Figma sources so it reads as a mature QQ Music-familiar Material 3 client, using only truthful capabilities and no copied branding, proprietary assets, fake personalization, or new framework.
 
-**Current sequence:** HD-012 explicitly redirects the active visual-review page to artwork-led Expanded Now Playing. Home and Liked Songs remain implemented and unaccepted. The remaining page order is a direction, not an autonomous implementation queue; each transition requires separate Human visual acceptance or direction.
+**Current sequence:** HD-013 redirects the active visual-review candidate back to Home for one bounded recommendation-compatibility and data-slot correction. Expanded Now Playing and Liked Songs remain implemented and unaccepted. After canonical wide and compact Home renders, work stops for maintainer visual review; another page does not start autonomously.
 
-**Current scope:** Expanded Now Playing keeps one existing playback owner, Rust positional Queue, lyric controller, Comments, and Track-associated MV paths. Its current Track artwork may generate a page-local official Material 3 light/dark scheme; missing or undecodable artwork falls back to the normal app scheme. The reference controls the artwork-and-lyrics hierarchy without requiring pixel copying or removal of supported actions. No other page begins until this candidate receives Human visual acceptance or the maintainer redirects the sequence again. Automated tests establish correctness and accessibility boundaries, not visual acceptance.
+**Current scope:** Preserve the approved Home composition and Shell while removing Popular Programs, retaining exact public/Daily/personalized/Radar slots, exposing personalized-playlist failure classification without account content, and backing `More from your listening` with a distinct current-Track related read. No generic recommendation may substitute for another slot. After targeted Core/Flutter checks plus canonical desktop and mobile renders, implementation stops for Human visual review.
 
 **Boundaries:** approved frames are visual sources of truth, while implementation must preserve retained state, accessibility, truthful Provider semantics, and the existing Flutter/Rust/music ownership. M7 is product integration, not a design-framework, navigation-framework, or architecture-rewrite project.
 
 **Prior Home evidence:** HD-006 and HD-007 produced the current full-height desktop Sidebar/Main Region and a truthful six-section Home snapshot. HD-008 then paused presentation while the Core capability audit completed; HD-009 supersedes that scheduling pause and authorizes the approved Stitch-driven Home replacement.
+
+## Authorized Capability Workstream — Cross-Platform System Playback Adaptation
+
+**Goal:** integrate the existing single music playback owner with native operating-system media surfaces on Android, iOS, macOS, Linux, and Windows without replacing `audioplayers`, duplicating the Rust Queue, or exposing QQ media URLs and credentials.
+
+**Phases:** (1) one platform-neutral Flutter adapter for provider-neutral metadata/state and command delegation; (2) Android media foreground service plus audio focus, lock-screen/notification and headset controls; (3) iOS/macOS remote-command and background-audio wiring; (4) Linux MPRIS and Windows SMTC wiring; (5) manual GitHub Actions development packaging on each native build host; (6) per-target runtime acceptance wherever a real environment is available.
+
+**Bounded exit criteria:** all platform shells package the appropriate adapter; current Track metadata, play/pause/stop, previous/next and supported seek/mode state remain projections of the existing controller; interruptions and audio-route loss pause safely; stale system state is cleared when the owner detaches; relevant unit/integration/build gates pass; each runtime claim is accepted independently. Windows timeline/seek cannot be claimed until TD-008 is resolved or the chosen adapter proves it.
+
+**Boundaries:** no second player, Queue, resolver, background download, persistent Queue/history, autoplay radio, sidecar, raw QQ data, stored-account automation, or release identity decision. A system surface is another input/output adapter over the same owner, not a new playback domain.
+
+**Current evidence:** the shared adapter and all five platform registrations are implemented. Unit regressions prove command/state delegation and terminal clearing; the current Linux session initializes MPRIS and produces a Release build; Android x64 Debug packages. HD-015 authorizes a manual, development-only CI workflow for the remaining native build hosts; its committed workflow must still run successfully before it becomes platform build evidence. Android device behavior and Apple/Windows runtimes remain human/environment gated.
 
 ## Completed Checkpoint — First-Release Core Capability Completion
 
@@ -67,7 +79,7 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Non-goals:** page redesign, Settings-page design, all QQ APIs, social/video or download expansion, another Provider, background-service architecture without product authority, real-account mutation automation, or a generic capability, settings, paging, or dependency-injection framework.
 
-**Outcome:** the repository-wide audit contains no required executable `MISSING` capability. Account summary, truthful Home-data contracts, bounded library mutations, two-quality media, typed Settings, and related Track foundations are available through their intended layers. Playlist rename, Artist mutation, authenticated M1 playback/lyrics, unavailable target runtimes, Popular Programs, background playback, and release work retain exact local blockers.
+**Outcome:** the repository-wide audit contains no required executable `MISSING` capability. Account summary, truthful Home-data contracts, bounded library mutations, two-quality media, typed Settings, and related Track foundations are available through their intended layers. At that checkpoint, playlist rename, Artist mutation, authenticated M1 playback/lyrics, unavailable target runtimes, Popular Programs, background playback, and release work retained exact local blockers; HD-013 and HD-014 later resolved the product decisions for Popular Programs and system playback without rewriting this historical result.
 
 **Checkpoint:** 2026-08-28 — [Core capability review](docs/development/first-release-core-capability-checkpoint.md).
 

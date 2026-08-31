@@ -5,7 +5,7 @@ use provider_api::{
     DailyRecommendationError, DailyRecommendationProvider, PersonalizedPlaylistsError,
     PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
     RadarRecommendationError, RadarRecommendationsProvider, RecommendationError,
-    RecommendedPlaylistsProvider,
+    RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider,
 };
 use tokio::sync::Notify;
 
@@ -618,6 +618,152 @@ const fn map_personalized_tracks_error(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicRelatedTracksLoadFailure {
+    CoreUnavailable,
+    InvalidTrack,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Cancelled,
+    AlreadyRunning,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicRelatedTracksLoad {
+    pub tracks: Vec<LibraryTrackSummary>,
+    pub failure: Option<QqMusicRelatedTracksLoadFailure>,
+}
+
+impl fmt::Debug for QqMusicRelatedTracksLoad {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRelatedTracksLoad")
+            .field("track_count", &self.tracks.len())
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+/// One cancellable, single-use seed-Track related recommendation load. QQ
+/// identity parsing and protocol fields remain in Rust Core.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicRelatedTracksLoadHandle {
+    provider_id: String,
+    opaque_id: String,
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl fmt::Debug for QqMusicRelatedTracksLoadHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRelatedTracksLoadHandle")
+            .field("seed", &"[REDACTED]")
+            .field("active", &self.is_active())
+            .field("running", &self.running.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl QqMusicRelatedTracksLoadHandle {
+    pub async fn run(&self) -> QqMusicRelatedTracksLoad {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::Cancelled);
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::AlreadyRunning);
+        }
+        let seed = music_domain::ProviderId::new(self.provider_id.clone())
+            .ok()
+            .and_then(|provider| music_domain::TrackId::new(provider, self.opaque_id.clone()).ok());
+        let outcome = match (native_qq_music_provider(), seed) {
+            (Ok(provider), Some(seed)) => {
+                tokio::select! {
+                    () = self.cancelled.notified() => {
+                        failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::Cancelled)
+                    }
+                    result = provider.related_tracks(seed) => {
+                        if self.active.load(Ordering::SeqCst) {
+                            map_related_tracks_load(result)
+                        } else {
+                            failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::Cancelled)
+                        }
+                    }
+                }
+            }
+            (Err(()), _) => {
+                failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::CoreUnavailable)
+            }
+            (_, None) => failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::InvalidTrack),
+        };
+        self.running.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        outcome
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_qq_music_related_tracks_load(
+    provider_id: String,
+    opaque_id: String,
+) -> QqMusicRelatedTracksLoadHandle {
+    QqMusicRelatedTracksLoadHandle {
+        provider_id,
+        opaque_id,
+        active: AtomicBool::new(true),
+        running: AtomicBool::new(false),
+        cancelled: Notify::new(),
+    }
+}
+
+fn map_related_tracks_load(
+    result: Result<Vec<music_domain::TrackSummary>, RelatedTracksError>,
+) -> QqMusicRelatedTracksLoad {
+    match result {
+        Ok(tracks) => QqMusicRelatedTracksLoad {
+            tracks: tracks.iter().map(bridge_track_summary).collect(),
+            failure: None,
+        },
+        Err(error) => failed_related_tracks_load(map_related_tracks_error(error)),
+    }
+}
+
+const fn failed_related_tracks_load(
+    failure: QqMusicRelatedTracksLoadFailure,
+) -> QqMusicRelatedTracksLoad {
+    QqMusicRelatedTracksLoad {
+        tracks: Vec::new(),
+        failure: Some(failure),
+    }
+}
+
+const fn map_related_tracks_error(error: RelatedTracksError) -> QqMusicRelatedTracksLoadFailure {
+    match error {
+        RelatedTracksError::InvalidTrack => QqMusicRelatedTracksLoadFailure::InvalidTrack,
+        RelatedTracksError::Network => QqMusicRelatedTracksLoadFailure::Network,
+        RelatedTracksError::ServiceUnavailable => {
+            QqMusicRelatedTracksLoadFailure::ServiceUnavailable
+        }
+        RelatedTracksError::InvalidResponse => QqMusicRelatedTracksLoadFailure::InvalidResponse,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicRadarTrackPageLoadFailure {
     CoreUnavailable,
     AuthenticationRequired,
@@ -776,18 +922,20 @@ mod tests {
     };
     use provider_api::{
         DailyRecommendationError, PersonalizedPlaylistsError, PersonalizedTracksError,
-        RadarRecommendationError, RecommendationError,
+        RadarRecommendationError, RecommendationError, RelatedTracksError,
     };
 
     use super::{
         QqMusicDailyRecommendationLoadFailure, QqMusicPersonalizedPlaylistsLoadFailure,
         QqMusicPersonalizedTracksLoadFailure, QqMusicRadarTrackPageLoadFailure,
-        QqMusicRecommendedPlaylistPageLoadFailure, begin_qq_music_daily_recommendation_load,
-        begin_qq_music_personalized_playlists_load, begin_qq_music_personalized_tracks_load,
-        begin_qq_music_radar_track_page_load, begin_qq_music_recommended_playlist_page_load,
+        QqMusicRecommendedPlaylistPageLoadFailure, QqMusicRelatedTracksLoadFailure,
+        begin_qq_music_daily_recommendation_load, begin_qq_music_personalized_playlists_load,
+        begin_qq_music_personalized_tracks_load, begin_qq_music_radar_track_page_load,
+        begin_qq_music_recommended_playlist_page_load, begin_qq_music_related_tracks_load,
         map_daily_error, map_daily_load, map_error, map_load, map_personalized_playlists_error,
         map_personalized_playlists_load, map_personalized_tracks_error,
-        map_personalized_tracks_load, map_radar_error, map_radar_load,
+        map_personalized_tracks_load, map_radar_error, map_radar_load, map_related_tracks_error,
+        map_related_tracks_load,
     };
 
     #[test]
@@ -947,6 +1095,28 @@ mod tests {
         for (source, expected) in personalized_track_cases {
             assert_eq!(map_personalized_tracks_error(source), expected);
         }
+
+        let related_track_cases = [
+            (
+                RelatedTracksError::InvalidTrack,
+                QqMusicRelatedTracksLoadFailure::InvalidTrack,
+            ),
+            (
+                RelatedTracksError::Network,
+                QqMusicRelatedTracksLoadFailure::Network,
+            ),
+            (
+                RelatedTracksError::ServiceUnavailable,
+                QqMusicRelatedTracksLoadFailure::ServiceUnavailable,
+            ),
+            (
+                RelatedTracksError::InvalidResponse,
+                QqMusicRelatedTracksLoadFailure::InvalidResponse,
+            ),
+        ];
+        for (source, expected) in related_track_cases {
+            assert_eq!(map_related_tracks_error(source), expected);
+        }
     }
 
     #[test]
@@ -1057,6 +1227,37 @@ mod tests {
         assert!(empty.tracks.is_empty());
     }
 
+    #[test]
+    fn maps_related_tracks_without_exposing_identity_or_content() {
+        let track = TrackSummary::new(
+            TrackId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "track:51001:0:private-related-mid:-",
+            )
+            .expect("Track ID"),
+            "must-not-leak-related-track",
+            vec!["private-related-artist".into()],
+        )
+        .expect("Track");
+        let mapped = map_related_tracks_load(Ok(vec![track]));
+
+        assert!(mapped.failure.is_none());
+        assert_eq!(mapped.tracks.len(), 1);
+        let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
+        for private in [
+            "must-not-leak-related-track",
+            "private-related-artist",
+            "private-related-mid",
+            "51001",
+        ] {
+            assert!(!debug.contains(private));
+        }
+
+        let empty = map_related_tracks_load(Ok(Vec::new()));
+        assert!(empty.failure.is_none());
+        assert!(empty.tracks.is_empty());
+    }
+
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
         let handle = begin_qq_music_recommended_playlist_page_load(0, 20);
@@ -1103,6 +1304,18 @@ mod tests {
         assert_eq!(
             personalized_tracks.run().await.failure,
             Some(QqMusicPersonalizedTracksLoadFailure::Cancelled)
+        );
+
+        let related_tracks = begin_qq_music_related_tracks_load(
+            "qq-music".to_owned(),
+            "track:51001:0:private-related-mid:-".to_owned(),
+        );
+        assert!(related_tracks.is_active());
+        assert!(related_tracks.cancel());
+        assert!(!related_tracks.cancel());
+        assert_eq!(
+            related_tracks.run().await.failure,
+            Some(QqMusicRelatedTracksLoadFailure::Cancelled)
         );
     }
 }

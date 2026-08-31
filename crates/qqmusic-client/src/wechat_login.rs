@@ -7,9 +7,44 @@ use tokio::sync::watch;
 use tokio::time::{Instant, sleep_until};
 
 use crate::{
-    Credential, HttpTransport, QqMusicClient, WechatAuthorizationCode,
-    WechatCredentialExchangeError, WechatQrError, WechatQrPollResult, WechatQrSession,
+    Credential, HttpTransport, QqMusicClient, QqQrAuthorization, QqQrError, QqQrPollResult,
+    QqQrSession, QrImage, WechatAuthorizationCode, WechatCredentialExchangeError, WechatQrError,
+    WechatQrPollResult, WechatQrSession,
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QrLoginChannel {
+    Qq,
+    Wechat,
+}
+
+enum ProtocolSession {
+    Qq(QqQrSession),
+    Wechat(WechatQrSession),
+}
+
+impl ProtocolSession {
+    const fn image(&self) -> &QrImage {
+        match self {
+            Self::Qq(session) => session.image(),
+            Self::Wechat(session) => session.image(),
+        }
+    }
+}
+
+impl fmt::Debug for ProtocolSession {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Qq(session) => formatter.debug_tuple("Qq").field(session).finish(),
+            Self::Wechat(session) => formatter.debug_tuple("Wechat").field(session).finish(),
+        }
+    }
+}
+
+enum PendingAuthorization {
+    Qq(QqQrAuthorization),
+    Wechat(WechatAuthorizationCode),
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AttemptState {
@@ -84,6 +119,7 @@ impl std::error::Error for InvalidWechatQrLoginPolicy {}
 
 pub enum WechatQrLoginError<E> {
     Protocol(WechatQrError<E>),
+    QqProtocol(QqQrError<E>),
     CredentialExchange(WechatCredentialExchangeError<E>),
     Cancelled,
     Superseded,
@@ -97,6 +133,7 @@ impl<E> fmt::Debug for WechatQrLoginError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Protocol(error) => formatter.debug_tuple("Protocol").field(error).finish(),
+            Self::QqProtocol(error) => formatter.debug_tuple("QqProtocol").field(error).finish(),
             Self::CredentialExchange(error) => formatter
                 .debug_tuple("CredentialExchange")
                 .field(error)
@@ -118,6 +155,7 @@ impl<E> fmt::Display for WechatQrLoginError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Protocol(error) => error.fmt(formatter),
+            Self::QqProtocol(error) => error.fmt(formatter),
             Self::CredentialExchange(error) => error.fmt(formatter),
             Self::Cancelled => formatter.write_str("WeChat QR login was cancelled"),
             Self::Superseded => {
@@ -143,6 +181,7 @@ where
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Protocol(error) => Some(error),
+            Self::QqProtocol(error) => Some(error),
             Self::CredentialExchange(error) => Some(error),
             _ => None,
         }
@@ -213,6 +252,11 @@ impl<T> WechatQrLoginCoordinator<T> {
     }
 
     #[must_use]
+    pub fn client_handle(&self) -> Arc<QqMusicClient<T>> {
+        Arc::clone(&self.client)
+    }
+
+    #[must_use]
     pub fn has_active_session(&self) -> bool {
         matches!(*self.state.borrow(), AttemptState::Active(_))
     }
@@ -249,6 +293,20 @@ where
     /// Returns a protocol error or a lifecycle error when the attempt is
     /// cancelled, replaced, or closed while QR creation is in flight.
     pub async fn begin(&self) -> Result<WechatQrLoginSession<T>, WechatQrLoginError<T::Error>> {
+        self.begin_channel(QrLoginChannel::Wechat).await
+    }
+
+    /// Creates a new QR session for the selected first-party authorization
+    /// channel and atomically supersedes any older attempt.
+    ///
+    /// # Errors
+    ///
+    /// Returns a channel protocol error or a lifecycle error when the attempt
+    /// is cancelled, replaced, or closed while QR creation is in flight.
+    pub async fn begin_channel(
+        &self,
+        channel: QrLoginChannel,
+    ) -> Result<WechatQrLoginSession<T>, WechatQrLoginError<T::Error>> {
         let generation = self.allocate_generation();
         let deadline = Instant::now() + self.policy.session_lifetime();
         self.state.send_replace(AttemptState::Active(generation));
@@ -263,7 +321,7 @@ where
                 clear_if_current(&self.state, generation);
                 return Err(WechatQrLoginError::SessionTimedOut);
             }
-            result = self.client.create_wechat_qr() => {
+            result = create_protocol_session(&self.client, channel) => {
                 result
             }
         };
@@ -271,7 +329,7 @@ where
             Ok(qr) => qr,
             Err(error) => {
                 clear_if_current(&self.state, generation);
-                return Err(WechatQrLoginError::Protocol(error));
+                return Err(error);
             }
         };
         ensure_current(&state, generation)?;
@@ -300,11 +358,11 @@ impl<T> Drop for WechatQrLoginCoordinator<T> {
 /// A single cancellable QR generation returned by [`WechatQrLoginCoordinator`].
 pub struct WechatQrLoginSession<T> {
     client: Arc<QqMusicClient<T>>,
-    qr: WechatQrSession,
+    qr: ProtocolSession,
     generation: u64,
     state: watch::Receiver<AttemptState>,
     sender: watch::Sender<AttemptState>,
-    pending_authorization: Option<WechatAuthorizationCode>,
+    pending_authorization: Option<PendingAuthorization>,
     deadline: Instant,
     max_consecutive_transport_failures: u32,
     consecutive_transport_failures: u32,
@@ -366,8 +424,8 @@ impl<T> fmt::Debug for WechatQrLoginSession<T> {
 
 impl<T> WechatQrLoginSession<T> {
     #[must_use]
-    pub const fn qr(&self) -> &WechatQrSession {
-        &self.qr
+    pub const fn image(&self) -> &QrImage {
+        self.qr.image()
     }
 
     #[must_use]
@@ -430,7 +488,7 @@ where
                 self.finish();
                 return Ok(WechatQrLoginProgress::TimedOut);
             }
-            result = self.client.poll_wechat_qr(&self.qr) => {
+            result = poll_protocol_session(&self.client, &mut self.qr) => {
                 result
             }
         };
@@ -440,30 +498,34 @@ where
                 self.consecutive_transport_failures = 0;
                 result
             }
-            Err(WechatQrError::Transport(error)) => {
+            Err(WechatQrLoginError::Protocol(WechatQrError::Transport(error))) => {
                 let error = WechatQrLoginError::Protocol(WechatQrError::Transport(error));
+                return Err(self.record_transport_failure(error));
+            }
+            Err(WechatQrLoginError::QqProtocol(QqQrError::Transport(error))) => {
+                let error = WechatQrLoginError::QqProtocol(QqQrError::Transport(error));
                 return Err(self.record_transport_failure(error));
             }
             Err(error) => {
                 self.consecutive_transport_failures = 0;
-                return Err(WechatQrLoginError::Protocol(error));
+                return Err(error);
             }
         };
 
         match result {
-            WechatQrPollResult::WaitingForScan => Ok(WechatQrLoginProgress::WaitingForScan),
-            WechatQrPollResult::ScannedAwaitingConfirmation => {
+            ProtocolPollResult::WaitingForScan => Ok(WechatQrLoginProgress::WaitingForScan),
+            ProtocolPollResult::ScannedAwaitingConfirmation => {
                 Ok(WechatQrLoginProgress::ScannedAwaitingConfirmation)
             }
-            WechatQrPollResult::Authorized(code) => {
-                self.pending_authorization = Some(code);
+            ProtocolPollResult::Authorized(authorization) => {
+                self.pending_authorization = Some(authorization);
                 self.exchange_pending_authorization().await
             }
-            WechatQrPollResult::Expired => {
+            ProtocolPollResult::Expired => {
                 self.finish();
                 Ok(WechatQrLoginProgress::Expired)
             }
-            WechatQrPollResult::Refused => {
+            ProtocolPollResult::Refused => {
                 self.finish();
                 Ok(WechatQrLoginProgress::Refused)
             }
@@ -473,7 +535,7 @@ where
     async fn exchange_pending_authorization(
         &mut self,
     ) -> Result<WechatQrLoginProgress, WechatQrLoginError<T::Error>> {
-        let code = self
+        let authorization = self
             .pending_authorization
             .as_ref()
             .expect("called only while authorization is pending");
@@ -486,7 +548,7 @@ where
                 self.finish();
                 return Ok(WechatQrLoginProgress::TimedOut);
             }
-            result = self.client.exchange_wechat_code(code) => {
+            result = exchange_protocol_authorization(&self.client, authorization) => {
                 result
             }
         };
@@ -496,15 +558,21 @@ where
                 self.consecutive_transport_failures = 0;
                 credential
             }
-            Err(WechatCredentialExchangeError::Transport(error)) => {
+            Err(WechatQrLoginError::CredentialExchange(
+                WechatCredentialExchangeError::Transport(error),
+            )) => {
                 let error = WechatQrLoginError::CredentialExchange(
                     WechatCredentialExchangeError::Transport(error),
                 );
                 return Err(self.record_transport_failure(error));
             }
+            Err(WechatQrLoginError::QqProtocol(QqQrError::Transport(error))) => {
+                let error = WechatQrLoginError::QqProtocol(QqQrError::Transport(error));
+                return Err(self.record_transport_failure(error));
+            }
             Err(error) => {
                 self.consecutive_transport_failures = 0;
-                return Err(WechatQrLoginError::CredentialExchange(error));
+                return Err(error);
             }
         };
         self.pending_authorization = None;
@@ -529,6 +597,99 @@ where
     fn finish(&mut self) {
         self.finished = true;
         clear_if_current(&self.sender, self.generation);
+    }
+}
+
+enum ProtocolPollResult {
+    WaitingForScan,
+    ScannedAwaitingConfirmation,
+    Authorized(PendingAuthorization),
+    Expired,
+    Refused,
+}
+
+async fn create_protocol_session<T>(
+    client: &QqMusicClient<T>,
+    channel: QrLoginChannel,
+) -> Result<ProtocolSession, WechatQrLoginError<T::Error>>
+where
+    T: HttpTransport,
+{
+    match channel {
+        QrLoginChannel::Qq => client
+            .create_qq_qr()
+            .await
+            .map(ProtocolSession::Qq)
+            .map_err(WechatQrLoginError::QqProtocol),
+        QrLoginChannel::Wechat => client
+            .create_wechat_qr()
+            .await
+            .map(ProtocolSession::Wechat)
+            .map_err(WechatQrLoginError::Protocol),
+    }
+}
+
+async fn poll_protocol_session<T>(
+    client: &QqMusicClient<T>,
+    session: &mut ProtocolSession,
+) -> Result<ProtocolPollResult, WechatQrLoginError<T::Error>>
+where
+    T: HttpTransport,
+{
+    match session {
+        ProtocolSession::Qq(session) => match client
+            .poll_qq_qr(session)
+            .await
+            .map_err(WechatQrLoginError::QqProtocol)?
+        {
+            QqQrPollResult::WaitingForScan => Ok(ProtocolPollResult::WaitingForScan),
+            QqQrPollResult::ScannedAwaitingConfirmation => {
+                Ok(ProtocolPollResult::ScannedAwaitingConfirmation)
+            }
+            QqQrPollResult::Authorized => session
+                .take_authorization()
+                .map(PendingAuthorization::Qq)
+                .map(ProtocolPollResult::Authorized)
+                .ok_or(WechatQrLoginError::QqProtocol(
+                    QqQrError::MissingAuthorization,
+                )),
+            QqQrPollResult::Expired => Ok(ProtocolPollResult::Expired),
+            QqQrPollResult::Refused => Ok(ProtocolPollResult::Refused),
+        },
+        ProtocolSession::Wechat(session) => match client
+            .poll_wechat_qr(session)
+            .await
+            .map_err(WechatQrLoginError::Protocol)?
+        {
+            WechatQrPollResult::WaitingForScan => Ok(ProtocolPollResult::WaitingForScan),
+            WechatQrPollResult::ScannedAwaitingConfirmation => {
+                Ok(ProtocolPollResult::ScannedAwaitingConfirmation)
+            }
+            WechatQrPollResult::Authorized(code) => Ok(ProtocolPollResult::Authorized(
+                PendingAuthorization::Wechat(code),
+            )),
+            WechatQrPollResult::Expired => Ok(ProtocolPollResult::Expired),
+            WechatQrPollResult::Refused => Ok(ProtocolPollResult::Refused),
+        },
+    }
+}
+
+async fn exchange_protocol_authorization<T>(
+    client: &QqMusicClient<T>,
+    authorization: &PendingAuthorization,
+) -> Result<Credential, WechatQrLoginError<T::Error>>
+where
+    T: HttpTransport,
+{
+    match authorization {
+        PendingAuthorization::Qq(authorization) => client
+            .exchange_qq_qr(authorization)
+            .await
+            .map_err(WechatQrLoginError::QqProtocol),
+        PendingAuthorization::Wechat(code) => client
+            .exchange_wechat_code(code)
+            .await
+            .map_err(WechatQrLoginError::CredentialExchange),
     }
 }
 

@@ -14,6 +14,8 @@ enum UserLibraryFailure {
   alreadyRunning,
 }
 
+enum UserPlaylistOwnership { unspecified, owned, saved }
+
 class UserPlaylistSummary {
   const UserPlaylistSummary({
     required this.providerId,
@@ -22,6 +24,7 @@ class UserPlaylistSummary {
     this.artworkUri,
     this.trackCount,
     this.isLikedSongs = false,
+    this.ownership = UserPlaylistOwnership.unspecified,
   });
 
   final String providerId;
@@ -30,6 +33,7 @@ class UserPlaylistSummary {
   final String? artworkUri;
   final int? trackCount;
   final bool isLikedSongs;
+  final UserPlaylistOwnership ownership;
 }
 
 class UserLibraryResult {
@@ -94,6 +98,15 @@ class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
                       artworkUri: playlist.artworkUri,
                       trackCount: playlist.trackCount,
                       isLikedSongs: playlist.isLikedSongs,
+                      ownership: switch (playlist.ownership) {
+                        null => UserPlaylistOwnership.unspecified,
+                        bridge.LibraryPlaylistOwnership.unspecified =>
+                          UserPlaylistOwnership.unspecified,
+                        bridge.LibraryPlaylistOwnership.owned =>
+                          UserPlaylistOwnership.owned,
+                        bridge.LibraryPlaylistOwnership.saved =>
+                          UserPlaylistOwnership.saved,
+                      },
                     ),
                   )
                   .toList(growable: false)

@@ -4,7 +4,7 @@
 
 **Status:** Pending
 
-**Context:** M1 packaging has produced development Android and Linux artifacts, so TD-002's packaging trigger is satisfied. Android release builds still use development signing and the platform shells still use generated identity. No artifact has been authorized for external distribution.
+**Context:** M1 packaging has produced development Android and Linux artifacts, so TD-002's packaging trigger is satisfied. Android release builds still use development signing and the platform shells still use generated identity. HD-015 permits only short-lived, manually requested GitHub Actions test artifacts; no production artifact or release channel has been authorized.
 
 **Decision needed:** The human maintainer defines the final product/display name, per-platform application identifiers, and the secret-safe ownership and custody workflow for release signing keys before external distribution.
 
@@ -17,13 +17,14 @@
 
 - Resolving TD-002.
 - Production release identity and signing setup.
-- Distribution of artifacts outside development.
+- Production release or distribution outside HD-015's bounded development-test workflow.
 
 **Not blocked:**
 
 - The remaining M1 real-account playback, queue, and lyric acceptance observation.
 - Evidence-backed post-M4 reliability, accessibility, and daily-use work within the Roadmap.
 - Development-signed local builds and tests.
+- The short-lived maintainer-test artifacts explicitly authorized by HD-015.
 - Evidence-backed QQ Music Provider/Core work within the Roadmap.
 
 **Current agent action:** Continue any independently evidenced Roadmap work when available and keep generated or development-signed artifacts development-only.
@@ -123,5 +124,33 @@
 **Decision:** Leave Home and Liked Songs implemented but unaccepted, and make Expanded Now Playing the active M7 visual-review page. The maintainer-supplied frame is composition reference rather than a pixel-copy target. The page may derive a page-local official Material 3 color scheme from the current album artwork for both light and dark modes, while preserving the existing playback, Queue, lyrics, Comments, and Track-associated MV paths.
 
 **Consequences:** Artwork color is limited to the active Expanded Now Playing subtree and does not establish a global theme persona or override HD-002's deferral of artwork-derived global color. This decision authorizes no Core/protocol change, second player, navigation/state framework change, Home/Shell redesign, or unrelated page work. The candidate remains pending maintainer visual acceptance.
+
+## HD-013 — Remove programs from Home and use current-Track related listening
+
+**Status:** Accepted on 2026-08-29
+
+**Decision:** Popular Programs is outside the first-release Home and is removed rather than represented by an unavailable placeholder or a podcast/program capability. `More from your listening` remains a distinct Home slot, seeded only by the current QQ Music Track and backed by a narrow related-Track read; the existing authenticated personalized Track set may not be reused or relabeled for it.
+
+**Consequences:** This supersedes HD-007 and HD-011 only where they required an explicit Popular Programs placeholder or treated the second Track slot as necessarily unavailable. A missing seed, empty related result, or typed failure stays truthful and compact. This decision does not authorize podcasts, persistent listening-history semantics, autoplay radio, a second personalized feed, another Provider, Shell/navigation redesign, or work on another page. Home must render a canonical wide and compact candidate and then stop for maintainer visual review.
+
+## HD-014 — Cross-platform system playback adaptation
+
+**Status:** Accepted on 2026-08-31
+
+**Context:** Foreground music playback, one Rust positional Queue, transport modes, seek, and focused-window media shortcuts already exist, but lock-screen/notification, desktop media-session, headset-button, audio-focus, and background-lifecycle integration were intentionally deferred for separate product authority.
+
+**Decision:** Authorize one bounded system-playback capability for Android, iOS, macOS, Linux, and Windows. Native media surfaces must remain thin adapters over the existing Flutter playback controller and Rust Queue; they may publish provider-neutral current metadata/state and delegate native transport, seek, shuffle, and repeat commands only where the target supports them. Android/iOS may keep active music alive through their standard media background facilities. Audio focus/interruption and unplugged-output events must pause safely rather than inventing resume policy.
+
+**Consequences:** This supersedes earlier background/system-playback deferrals only for music playback. It does not authorize a second player, duplicate Queue/resolver, persistent Queue/history, background downloading, autoplay radio, background MV/video, raw QQ protocol in Dart, a sidecar, release identity/signing, or claims about an untested target. Per-platform packaging and runtime evidence remain independent, and current adapter limitations must stay visible.
+
+## HD-015 — Short-lived cross-platform CI test artifacts
+
+**Status:** Accepted on 2026-08-31
+
+**Context:** Linux and Android development packaging can be exercised locally, but macOS, iOS, and Windows need their matching build hosts before the maintainer can test the application and system-playback integrations on those platforms.
+
+**Decision:** Authorize one manual GitHub Actions workflow to run the offline quality gate and upload seven-day development test artifacts for Android ARM64/x64, Linux x64, Windows x64, the hosted macOS architecture, and the hosted iOS Simulator architecture. Artifacts must retain an explicit development-only boundary and toolchain record. The workflow may not create a GitHub Release, publish to a store, use production signing secrets, automate account access, or run on every push.
+
+**Consequences:** This supersedes HD-001 only for the narrow, short-lived maintainer testing channel above. It does not decide final product identity, application identifiers, signing custody, notarization, physical iOS provisioning, public release distribution, or the native-video notice work in TD-006. A successful job proves only the named build/test boundary; runtime acceptance remains independent on each target.
 
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

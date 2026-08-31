@@ -26,6 +26,7 @@ void main() {
     expect(result.createdPlaylist?.opaqueId, 'owned:7002:902');
     expect(result.createdPlaylist?.title, 'Server playlist');
     expect(result.createdPlaylist?.trackCount, 0);
+    expect(result.createdPlaylist?.ownership, UserPlaylistOwnership.owned);
   });
 
   test('maps every typed failure and rejects contradictory results', () {

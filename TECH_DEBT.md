@@ -26,13 +26,13 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Why accepted:** Development builds were needed to prove the in-process architecture and target packaging without distributing binaries. Inventing release identity, signing custody, and store metadata would expand scope and introduce credential risk.
 
-**Impact:** Locally built artifacts are development artifacts only and must not be published as releases.
+**Impact:** Locally built artifacts and HD-015's seven-day manual GitHub Actions artifacts are development artifacts only and must not be published as releases.
 
 **Risk:** An accidental release build could look production-like while carrying development identity or debug signatures.
 
 **Suggested solution:** After HD-001 is decided, define project-owned application icons, display names, identifiers, and a secret-safe per-platform signing workflow.
 
-**Trigger condition:** Triggered on 2026-08-26 when M1 packaging produced and inspected Android ARM64/x64 APKs and continued Linux release bundles. No artifact has been authorized for external distribution. Resolution is locally blocked on HD-001; unrelated development continues.
+**Trigger condition:** Triggered on 2026-08-26 when M1 packaging produced and inspected Android ARM64/x64 APKs and continued Linux release bundles. HD-015 later authorized only short-lived manual CI test artifacts; production resolution remains blocked on HD-001 and unrelated development continues.
 
 ## TD-003 — Persisted credential restore lacked server verification
 
@@ -113,5 +113,21 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 **Suggested solution:** Implemented as one private Bridge lifecycle and one narrow Dart cleanup helper. Keep operation-specific typed inputs/results and Provider-owned identity parsing separate.
 
 **Trigger condition:** Triggered and resolved on 2026-08-28 before the selected create-playlist operation entered implementation. Reopen only if another proven lifecycle rule starts being copied across remote mutations.
+
+## TD-008 — Windows SMTC adapter lacks mature timeline and seek support
+
+**Status:** Open
+
+**Problem:** Windows system playback currently uses `audio_service_win` 0.0.3. It implements SMTC registration, metadata, play/pause/stop/previous/next callbacks and coarse playing state, but its platform adapter does not publish a playback timeline, accept seek, or expose the Queue. The package is young and has not been built or run on a Windows host in this checkout.
+
+**Why accepted:** The package preserves the shared `audio_service` handler and single playback owner, provides the bounded transport surface already requested, and avoids inventing a second Windows-only playback architecture. No Windows runtime or release claim is being made.
+
+**Impact:** Windows can be wired for basic SMTC transport and metadata, but this repository cannot yet claim system progress scrubbing, timeline accuracy, Queue selection, or runtime compatibility there.
+
+**Risk:** A Windows build may expose plugin or lifecycle defects, and users could see controls whose capabilities differ from Android, Apple, or Linux. A dependency update could also change native behavior without a Dart compile error.
+
+**Suggested solution:** Before Windows system playback acceptance, run a native Windows integration against the existing handler, verify metadata and every advertised command, and either contribute/consume an evidence-backed timeline/seek implementation or keep those actions explicitly unsupported. Review the exact package/native license inventory with release preparation.
+
+**Trigger condition:** Schedule when a Windows build environment becomes available or before any Windows system-playback/release claim. Reassess immediately if the platform package changes ownership, compatibility, or API surface.
 
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

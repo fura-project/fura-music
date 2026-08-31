@@ -359,6 +359,52 @@ where
         quality: QqMusicAudioQuality,
         dispatch: &QqMusicCdnDispatch,
     ) -> Result<QqMusicMediaSource, QqMusicMediaError<T::Error>> {
+        self.mp3_source_with_authorization(
+            MediaAuthorization::Authenticated(credential),
+            song_mid,
+            file_media_mid,
+            quality,
+            dispatch,
+        )
+        .await
+    }
+
+    /// Resolves one public standard-quality MP3 without account material.
+    ///
+    /// The request uses QQ Music's anonymous `uin=0` context, sends no Cookie,
+    /// and succeeds only when the service returns a playable source for the
+    /// exact Track. An unavailable source remains explicit and must not be
+    /// interpreted as a subscription, copyright, or region decision.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed identities before transport and preserves transport,
+    /// service, unavailable, and response-shape failures without manufacturing
+    /// a credential.
+    pub async fn anonymous_standard_mp3_source(
+        &self,
+        song_mid: &str,
+        file_media_mid: Option<&str>,
+        dispatch: &QqMusicCdnDispatch,
+    ) -> Result<QqMusicMediaSource, QqMusicMediaError<T::Error>> {
+        self.mp3_source_with_authorization(
+            MediaAuthorization::Anonymous,
+            song_mid,
+            file_media_mid,
+            QqMusicAudioQuality::Standard,
+            dispatch,
+        )
+        .await
+    }
+
+    async fn mp3_source_with_authorization(
+        &self,
+        authorization: MediaAuthorization<'_>,
+        song_mid: &str,
+        file_media_mid: Option<&str>,
+        quality: QqMusicAudioQuality,
+        dispatch: &QqMusicCdnDispatch,
+    ) -> Result<QqMusicMediaSource, QqMusicMediaError<T::Error>> {
         let phase = MediaProtocolPhase::Vkey;
         if !is_safe_media_mid(song_mid) {
             return Err(QqMusicMediaError::InvalidSongMid);
@@ -368,17 +414,31 @@ where
         }
         let filename = mp3_filename(song_mid, file_media_mid, quality);
         let guid = request_guid().map_err(|()| QqMusicMediaError::RandomnessUnavailable)?;
-        let body = serde_json::to_vec(&StandardVkeyRequest::new(
-            credential,
-            song_mid,
-            filename.clone(),
-            &guid,
-        ))
-        .map_err(|_| QqMusicMediaError::Serialize(phase))?;
-        let cookie = credential.musicu_cookie_header();
+        let (body, cookie, credential_aware) = match authorization {
+            MediaAuthorization::Anonymous => (
+                serde_json::to_vec(&StandardVkeyRequest::anonymous(
+                    song_mid,
+                    filename.clone(),
+                    &guid,
+                )),
+                None,
+                false,
+            ),
+            MediaAuthorization::Authenticated(credential) => (
+                serde_json::to_vec(&StandardVkeyRequest::authenticated(
+                    credential,
+                    song_mid,
+                    filename.clone(),
+                    &guid,
+                )),
+                Some(credential.musicu_cookie_header()),
+                true,
+            ),
+        };
+        let body = body.map_err(|_| QqMusicMediaError::Serialize(phase))?;
         let response = self
             .transport()
-            .execute(musicu_request(body, Some(&cookie)))
+            .execute(musicu_request(body, cookie.as_deref()))
             .await
             .map_err(|source| QqMusicMediaError::Transport { phase, source })?;
         if !(200..300).contains(&response.status()) {
@@ -387,77 +447,103 @@ where
                 status: response.status(),
             });
         }
-        let envelope: MusicuEnvelope<StandardVkeyData> = serde_json::from_slice(response.body())
-            .map_err(|_| QqMusicMediaError::InvalidJson(phase))?;
-        let data = extract_data(envelope, phase, true)?;
-        if let Some(code) = data
+        parse_standard_vkey_source(
+            response.body(),
+            credential_aware,
+            song_mid,
+            &filename,
+            quality,
+            dispatch,
+        )
+    }
+}
+
+#[derive(Clone, Copy)]
+enum MediaAuthorization<'a> {
+    Anonymous,
+    Authenticated(&'a Credential),
+}
+
+fn parse_standard_vkey_source<E>(
+    body: &[u8],
+    credential_aware: bool,
+    song_mid: &str,
+    filename: &str,
+    quality: QqMusicAudioQuality,
+    dispatch: &QqMusicCdnDispatch,
+) -> Result<QqMusicMediaSource, QqMusicMediaError<E>> {
+    let phase = MediaProtocolPhase::Vkey;
+    let envelope: MusicuEnvelope<StandardVkeyData> =
+        serde_json::from_slice(body).map_err(|_| QqMusicMediaError::InvalidJson(phase))?;
+    let data = extract_data(envelope, phase, credential_aware)?;
+    if credential_aware
+        && let Some(code) = data
             .retcode
             .filter(|code| is_credential_rejection_code(*code))
-        {
-            return Err(QqMusicMediaError::Rejected { code });
-        }
-        if data.retcode.is_some_and(|code| code != 0) {
-            return Err(QqMusicMediaError::Upstream {
-                phase,
-                global_code: 0,
-                result_code: Some(0),
-                data_code: data.retcode,
-            });
-        }
-        let expiration_seconds =
-            positive_seconds(data.expiration).ok_or(QqMusicMediaError::InvalidResponse {
-                phase,
-                field: MediaResponseField::Expiration,
-            })?;
-        let items = data.midurlinfo.ok_or(QqMusicMediaError::InvalidResponse {
+    {
+        return Err(QqMusicMediaError::Rejected { code });
+    }
+    if data.retcode.is_some_and(|code| code != 0) {
+        return Err(QqMusicMediaError::Upstream {
+            phase,
+            global_code: 0,
+            result_code: Some(0),
+            data_code: data.retcode,
+        });
+    }
+    let expiration_seconds =
+        positive_seconds(data.expiration).ok_or(QqMusicMediaError::InvalidResponse {
+            phase,
+            field: MediaResponseField::Expiration,
+        })?;
+    let items = data.midurlinfo.ok_or(QqMusicMediaError::InvalidResponse {
+        phase,
+        field: MediaResponseField::Items,
+    })?;
+    let [item] = items.as_slice() else {
+        return Err(QqMusicMediaError::InvalidResponse {
             phase,
             field: MediaResponseField::Items,
-        })?;
-        let [item] = items.as_slice() else {
-            return Err(QqMusicMediaError::InvalidResponse {
-                phase,
-                field: MediaResponseField::Items,
-            });
-        };
-        if item.song_mid.as_deref() != Some(song_mid) {
-            return Err(QqMusicMediaError::InvalidResponse {
-                phase,
-                field: MediaResponseField::ItemSongMid,
-            });
-        }
-        if item.filename.as_deref() != Some(filename.as_str()) {
-            return Err(QqMusicMediaError::InvalidResponse {
-                phase,
-                field: MediaResponseField::ItemFilename,
-            });
-        }
-        let result_code = item.result.ok_or(QqMusicMediaError::InvalidResponse {
+        });
+    };
+    if item.song_mid.as_deref() != Some(song_mid) {
+        return Err(QqMusicMediaError::InvalidResponse {
             phase,
-            field: MediaResponseField::ItemResult,
-        })?;
-        if result_code != 0 {
-            return Err(QqMusicMediaError::Unavailable { result_code });
-        }
-        let path = item
-            .purl
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or(QqMusicMediaError::InvalidResponse {
-                phase,
-                field: MediaResponseField::SourcePath,
-            })?;
-        let uri = join_source_path(&dispatch.bases, path, &filename).ok_or(
-            QqMusicMediaError::InvalidResponse {
-                phase,
-                field: MediaResponseField::SourcePath,
-            },
-        )?;
-        Ok(QqMusicMediaSource {
-            uri,
-            quality,
-            valid_for_seconds: expiration_seconds.min(dispatch.expiration_seconds),
-        })
+            field: MediaResponseField::ItemSongMid,
+        });
     }
+    if item.filename.as_deref() != Some(filename) {
+        return Err(QqMusicMediaError::InvalidResponse {
+            phase,
+            field: MediaResponseField::ItemFilename,
+        });
+    }
+    let result_code = item.result.ok_or(QqMusicMediaError::InvalidResponse {
+        phase,
+        field: MediaResponseField::ItemResult,
+    })?;
+    if result_code != 0 {
+        return Err(QqMusicMediaError::Unavailable { result_code });
+    }
+    let path = item
+        .purl
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(QqMusicMediaError::InvalidResponse {
+            phase,
+            field: MediaResponseField::SourcePath,
+        })?;
+    let uri = join_source_path(&dispatch.bases, path, filename).ok_or(
+        QqMusicMediaError::InvalidResponse {
+            phase,
+            field: MediaResponseField::SourcePath,
+        },
+    )?;
+    Ok(QqMusicMediaSource {
+        uri,
+        quality,
+        valid_for_seconds: expiration_seconds.min(dispatch.expiration_seconds),
+    })
 }
 
 fn musicu_request(body: Vec<u8>, cookie: Option<&str>) -> HttpRequest {
@@ -648,15 +734,38 @@ struct CdnDispatchParam<'a> {
 
 #[derive(Serialize)]
 struct StandardVkeyRequest<'a> {
-    comm: AuthenticatedComm<'a>,
+    comm: StandardVkeyComm<'a>,
     #[serde(rename = "req_0")]
     request: StandardVkeyRpc<'a>,
 }
 
 impl<'a> StandardVkeyRequest<'a> {
-    fn new(credential: &'a Credential, song_mid: &'a str, filename: String, guid: &'a str) -> Self {
+    fn anonymous(song_mid: &'a str, filename: String, guid: &'a str) -> Self {
         Self {
-            comm: AuthenticatedComm::new(credential),
+            comm: StandardVkeyComm::Anonymous(AnonymousComm::new()),
+            request: StandardVkeyRpc {
+                module: "music.vkey.GetVkey",
+                method: "UrlGetVkey",
+                param: StandardVkeyParam {
+                    user_id: "0",
+                    filename: [filename],
+                    guid,
+                    song_mid: [song_mid],
+                    song_type: [0],
+                    context: 0,
+                },
+            },
+        }
+    }
+
+    fn authenticated(
+        credential: &'a Credential,
+        song_mid: &'a str,
+        filename: String,
+        guid: &'a str,
+    ) -> Self {
+        Self {
+            comm: StandardVkeyComm::Authenticated(AuthenticatedComm::new(credential)),
             request: StandardVkeyRpc {
                 module: "music.vkey.GetVkey",
                 method: "UrlGetVkey",
@@ -671,6 +780,13 @@ impl<'a> StandardVkeyRequest<'a> {
             },
         }
     }
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum StandardVkeyComm<'a> {
+    Anonymous(AnonymousComm),
+    Authenticated(AuthenticatedComm<'a>),
 }
 
 #[derive(Serialize)]
@@ -948,6 +1064,40 @@ mod tests {
             Some(32)
         );
         assert!(!format!("{:?}", requests[1]).contains("private-key"));
+    }
+
+    #[tokio::test]
+    async fn resolves_anonymous_standard_mp3_without_cookie_or_fake_credential() {
+        let client = QqMusicClient::new(FakeTransport::new([vkey_fixture(
+            "M500fixtureFileMid1.mp3?vkey=fixture-secret-vkey",
+        )]));
+
+        let source = client
+            .anonymous_standard_mp3_source(
+                "fixtureMid1",
+                Some("fixtureFileMid1"),
+                &valid_dispatch(),
+            )
+            .await
+            .expect("anonymous source");
+
+        assert_eq!(source.quality(), QqMusicAudioQuality::Standard);
+        let requests = client.transport().requests();
+        assert_eq!(requests.len(), 1);
+        let request = &requests[0];
+        assert!(!request.headers().iter().any(|(name, _)| name == "Cookie"));
+        let body: Value =
+            serde_json::from_slice(request.body_bytes().expect("anonymous request body"))
+                .expect("anonymous request JSON");
+        assert_eq!(body["comm"]["uid"], json!("0"));
+        assert_eq!(body["comm"]["qq"], json!("0"));
+        assert!(body["comm"].get("authst").is_none());
+        assert!(body["comm"].get("tmeLoginType").is_none());
+        assert_eq!(body["req_0"]["param"]["uin"], json!("0"));
+        assert_eq!(
+            body["req_0"]["param"]["filename"],
+            json!(["M500fixtureFileMid1.mp3"])
+        );
     }
 
     #[tokio::test]

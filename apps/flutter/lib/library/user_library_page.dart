@@ -50,6 +50,8 @@ class UserLibraryPage extends StatefulWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.authenticated,
+    required this.onRequestSignIn,
     required this.onSignInAgain,
     required this.onSignOut,
     super.key,
@@ -59,6 +61,8 @@ class UserLibraryPage extends StatefulWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final bool authenticated;
+  final VoidCallback onRequestSignIn;
   final VoidCallback onSignInAgain;
   final Future<CredentialSignOutResult> Function() onSignOut;
 
@@ -109,6 +113,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _home.dailyRecommendationGateway,
       _home.personalizedPlaylistsGateway,
       _home.personalizedTracksGateway,
+      _home.relatedTracksGateway,
     );
     _recommendedPlaylistController = RecommendedPlaylistController(
       _discovery.recommendedPlaylistGateway,
@@ -122,13 +127,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       ),
       lyrics: LyricController(_playback.lyricGateway),
     );
+    _playback.systemPlaybackBinding.attach(_queuePlaybackController);
     _queuePlaybackController.addListener(_onQueuePlaybackChanged);
+    _homeController.updateRelatedSeed(_queuePlaybackController.current);
     _homeController.addListener(_onHomeChanged);
     _homeRadarController.addListener(_onHomeChanged);
-    unawaited(_controller.load());
-    unawaited(_homeController.load());
     unawaited(_recommendedPlaylistController.load());
-    unawaited(_homeRadarController.load());
+    if (widget.authenticated) {
+      unawaited(_controller.load());
+      unawaited(_homeController.load());
+      unawaited(_homeRadarController.load());
+    }
   }
 
   AuthenticatedHomeDependencies get _home => widget.homeDependencies;
@@ -140,6 +149,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _onQueuePlaybackChanged() {
     if (!mounted) return;
+    _homeController.updateRelatedSeed(_queuePlaybackController.current);
     if (_queuePlaybackController.lyrics?.stage !=
         LyricStage.credentialRejected) {
       _handledLyricCredentialRejection = false;
@@ -171,6 +181,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _homeRadarController.removeListener(_onHomeChanged);
     _homeRadarController.dispose();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
+    _playback.systemPlaybackBinding.detach(_queuePlaybackController);
     _queuePlaybackController.dispose();
     _playlistReturnFocusNode.dispose();
     _searchReturnFocusNode.dispose();
@@ -720,72 +731,88 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     setState(() => _navigation.push(route));
   }
 
-  Widget _libraryDestinationBody() => Column(
-    children: [
-      if (_librarySection != LibrarySection.likedSongs)
-        FocusScope(
-          node: _librarySectionFocusScopeNode,
-          child: LibrarySectionSelector(
-            selected: _librarySection,
-            onSelected: _selectLibrarySection,
+  Widget _libraryDestinationBody() {
+    if (!widget.authenticated) {
+      return Column(
+        children: [
+          FocusScope(
+            node: _librarySectionFocusScopeNode,
+            child: LibrarySectionSelector(
+              selected: _librarySection,
+              onSelected: _selectLibrarySection,
+            ),
+          ),
+          Expanded(child: _signedOutLibraryBody()),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        if (_librarySection != LibrarySection.likedSongs)
+          FocusScope(
+            node: _librarySectionFocusScopeNode,
+            child: LibrarySectionSelector(
+              selected: _librarySection,
+              onSelected: _selectLibrarySection,
+            ),
+          ),
+        if (_librarySection == LibrarySection.playlists)
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) => LibraryCollectionHeader(
+              key: const ValueKey('library-playlists-header'),
+              title: 'Your playlists',
+              subtitle: switch (_controller.stage) {
+                UserLibraryStage.content || UserLibraryStage.empty =>
+                  '${_controller.playlists.length} saved on QQ Music',
+                _ => 'Saved on QQ Music',
+              },
+              refreshKey: const ValueKey('user-playlists-refresh'),
+              refreshTooltip: _controller.isRefreshing
+                  ? 'Refreshing playlists'
+                  : 'Refresh playlists',
+              onRefresh: _controller.isLoading ? null : _controller.refresh,
+            ),
+          ),
+        Expanded(
+          child: IndexedStack(
+            index: _librarySection.index,
+            children: [
+              _libraryBody(),
+              if (_navigation.visitedLibrarySection(LibrarySection.albums))
+                FavoriteAlbumsPage(
+                  key: const ValueKey('favorite-albums-page'),
+                  gateway: _library.favoriteAlbumGateway,
+                  queuePlaybackController: _queuePlaybackController,
+                  onBack: _returnFromLocalPage,
+                  onOpenAlbum: _openFavoriteAlbum,
+                  onSignInAgain: widget.onSignInAgain,
+                  embedded: true,
+                )
+              else
+                const SizedBox.shrink(),
+              if (_navigation.visitedLibrarySection(LibrarySection.artists))
+                FavoriteArtistsPage(
+                  key: const ValueKey('favorite-artists-page'),
+                  gateway: _library.favoriteArtistGateway,
+                  queuePlaybackController: _queuePlaybackController,
+                  onBack: _returnFromLocalPage,
+                  onOpenArtist: _openFavoriteArtist,
+                  onSignInAgain: widget.onSignInAgain,
+                  embedded: true,
+                )
+              else
+                const SizedBox.shrink(),
+              if (_navigation.visitedLibrarySection(LibrarySection.likedSongs))
+                _likedSongsBody()
+              else
+                const SizedBox.shrink(),
+            ],
           ),
         ),
-      if (_librarySection == LibrarySection.playlists)
-        AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) => LibraryCollectionHeader(
-            key: const ValueKey('library-playlists-header'),
-            title: 'Your playlists',
-            subtitle: switch (_controller.stage) {
-              UserLibraryStage.content || UserLibraryStage.empty =>
-                '${_controller.playlists.length} saved on QQ Music',
-              _ => 'Saved on QQ Music',
-            },
-            refreshKey: const ValueKey('user-playlists-refresh'),
-            refreshTooltip: _controller.isRefreshing
-                ? 'Refreshing playlists'
-                : 'Refresh playlists',
-            onRefresh: _controller.isLoading ? null : _controller.refresh,
-          ),
-        ),
-      Expanded(
-        child: IndexedStack(
-          index: _librarySection.index,
-          children: [
-            _libraryBody(),
-            if (_navigation.visitedLibrarySection(LibrarySection.albums))
-              FavoriteAlbumsPage(
-                key: const ValueKey('favorite-albums-page'),
-                gateway: _library.favoriteAlbumGateway,
-                queuePlaybackController: _queuePlaybackController,
-                onBack: _returnFromLocalPage,
-                onOpenAlbum: _openFavoriteAlbum,
-                onSignInAgain: widget.onSignInAgain,
-                embedded: true,
-              )
-            else
-              const SizedBox.shrink(),
-            if (_navigation.visitedLibrarySection(LibrarySection.artists))
-              FavoriteArtistsPage(
-                key: const ValueKey('favorite-artists-page'),
-                gateway: _library.favoriteArtistGateway,
-                queuePlaybackController: _queuePlaybackController,
-                onBack: _returnFromLocalPage,
-                onOpenArtist: _openFavoriteArtist,
-                onSignInAgain: widget.onSignInAgain,
-                embedded: true,
-              )
-            else
-              const SizedBox.shrink(),
-            if (_navigation.visitedLibrarySection(LibrarySection.likedSongs))
-              _likedSongsBody()
-            else
-              const SizedBox.shrink(),
-          ],
-        ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 
   Widget _likedSongsBody() {
     final playlist = _controller.likedSongsPlaylist;
@@ -793,10 +820,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       return LikedSongsPage(
         key: ValueKey('liked-songs-${playlist.providerId}'),
         playlist: playlist,
+        playlists: _controller.playlists,
         gateway: _library.playlistDetailGateway,
+        favoriteAlbumGateway: _library.favoriteAlbumGateway,
         queuePlaybackController: _queuePlaybackController,
-        onOpenAlbums: () => _selectLibrarySection(LibrarySection.albums),
-        onOpenArtists: () => _selectLibrarySection(LibrarySection.artists),
+        onOpenPlaylist: _openPlaylist,
         onOpenAlbum: _openTrackContextAlbum,
         onOpenArtist: _openTrackContextArtist,
         onSignInAgain: widget.onSignInAgain,
@@ -835,13 +863,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             recommendationController: _recommendedPlaylistController,
             radarController: _homeRadarController,
             queuePlaybackController: _queuePlaybackController,
+            authenticated: widget.authenticated,
+            onRequestSignIn: widget.onRequestSignIn,
             onOpenDiscover: () => _selectPrimaryDestination(
               AuthenticatedPrimaryDestination.discover,
             ),
             onOpenLibrary: () => _selectPrimaryDestination(
               AuthenticatedPrimaryDestination.library,
             ),
-            onSignOut: _confirmSignOut,
+            onAccountAction: widget.authenticated
+                ? _confirmSignOut
+                : widget.onRequestSignIn,
             onOpenRecommendation: _openHomeRecommendation,
             lastOpenedRecommendation: _lastOpenedHomeRecommendation,
             recommendationReturnFocusNode: _homeRecommendationReturnFocusNode,
@@ -893,11 +925,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       );
       final mainBody = AnimatedBuilder(
         animation: _controller,
-        builder: (context, _) => switch (_controller.stage) {
-          UserLibraryStage.authenticationRequired ||
-          UserLibraryStage.credentialRejected => _libraryBody(),
-          _ => primaryContent,
-        },
+        builder: (context, _) => !widget.authenticated
+            ? primaryContent
+            : switch (_controller.stage) {
+                UserLibraryStage.authenticationRequired ||
+                UserLibraryStage.credentialRejected => _libraryBody(),
+                _ => primaryContent,
+              },
       );
       final mainAppBar = AppBar(
         title: _PrimaryShellTitle(
@@ -926,22 +960,27 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         body: Row(
           children: [
             if (extendedSidebar)
-              _DesktopMusicSidebar(
-                destination: destination,
-                librarySection: _librarySection,
-                homeController: _homeController,
-                libraryController: _controller,
-                recommendationsFocusNode: _recommendationsReturnFocusNode,
-                searchFocusNode: _searchReturnFocusNode,
-                onDestinationSelected: _selectPrimaryDestination,
-                onOpenLikedSongs: _openLikedSongs,
-                onOpenLibrary: _openLibraryPlaylists,
-                onOpenPlaylist: (playlist) {
-                  _selectPrimaryDestination(
-                    AuthenticatedPrimaryDestination.library,
-                  );
-                  _openPlaylist(playlist);
-                },
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => _DesktopMusicSidebar(
+                  destination: destination,
+                  librarySection: _librarySection,
+                  homeController: _homeController,
+                  libraryController: _controller,
+                  authenticated: widget.authenticated,
+                  recommendationsFocusNode: _recommendationsReturnFocusNode,
+                  searchFocusNode: _searchReturnFocusNode,
+                  onRequestSignIn: widget.onRequestSignIn,
+                  onDestinationSelected: _selectPrimaryDestination,
+                  onOpenLikedSongs: _openLikedSongs,
+                  onOpenLibrary: _openLibraryPlaylists,
+                  onOpenPlaylist: (playlist) {
+                    _selectPrimaryDestination(
+                      AuthenticatedPrimaryDestination.library,
+                    );
+                    _openPlaylist(playlist);
+                  },
+                ),
               )
             else if (wide)
               NavigationRail(
@@ -1107,10 +1146,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   List<Widget> _primaryActions({required bool compactActions}) => [
     IconButton(
-      key: const ValueKey('sign-out'),
-      tooltip: 'Sign out',
-      onPressed: _signingOut ? null : _confirmSignOut,
-      icon: const Icon(Icons.logout_rounded),
+      key: ValueKey(widget.authenticated ? 'sign-out' : 'sign-in'),
+      tooltip: widget.authenticated ? 'Sign out' : 'Sign in to QQ Music',
+      onPressed: widget.authenticated
+          ? (_signingOut ? null : _confirmSignOut)
+          : widget.onRequestSignIn,
+      icon: Icon(
+        widget.authenticated ? Icons.logout_rounded : Icons.login_rounded,
+      ),
     ),
     if (!compactActions) const SizedBox(width: 8),
   ];
@@ -1143,6 +1186,26 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         ],
       ),
     ),
+  );
+
+  Widget _signedOutLibraryBody() => _CenteredLibraryMessage(
+    key: const ValueKey('signed-out-library'),
+    icon: switch (_librarySection) {
+      LibrarySection.playlists => Icons.library_music_outlined,
+      LibrarySection.albums => Icons.album_outlined,
+      LibrarySection.artists => Icons.person_outline_rounded,
+      LibrarySection.likedSongs => Icons.favorite_border_rounded,
+    },
+    title: 'Sign in to see your music',
+    detail: 'Your QQ Music playlists, liked songs, albums, and artists will appear here.',
+    actions: [
+      FilledButton.icon(
+        key: const ValueKey('signed-out-library-sign-in'),
+        onPressed: widget.onRequestSignIn,
+        icon: const Icon(Icons.login_rounded),
+        label: const Text('Sign in'),
+      ),
+    ],
   );
 
   Future<void> _confirmSignOut() async {
@@ -1217,8 +1280,10 @@ class _DesktopMusicSidebar extends StatelessWidget {
     required this.librarySection,
     required this.homeController,
     required this.libraryController,
+    required this.authenticated,
     required this.recommendationsFocusNode,
     required this.searchFocusNode,
+    required this.onRequestSignIn,
     required this.onDestinationSelected,
     required this.onOpenLikedSongs,
     required this.onOpenLibrary,
@@ -1229,8 +1294,10 @@ class _DesktopMusicSidebar extends StatelessWidget {
   final LibrarySection librarySection;
   final HomeController homeController;
   final UserLibraryController libraryController;
+  final bool authenticated;
   final FocusNode recommendationsFocusNode;
   final FocusNode searchFocusNode;
+  final VoidCallback onRequestSignIn;
   final ValueChanged<AuthenticatedPrimaryDestination> onDestinationSelected;
   final VoidCallback onOpenLikedSongs;
   final VoidCallback onOpenLibrary;
@@ -1249,8 +1316,10 @@ class _DesktopMusicSidebar extends StatelessWidget {
             AnimatedBuilder(
               animation: homeController,
               builder: (context, _) => _SidebarAccount(
+                authenticated: authenticated,
                 displayName: homeController.account?.displayName,
                 avatarUri: homeController.account?.avatarUri,
+                onRequestSignIn: onRequestSignIn,
               ),
             ),
             const Divider(height: MusicSpacing.section),
@@ -1355,10 +1424,17 @@ class _DesktopMusicSidebar extends StatelessWidget {
 }
 
 class _SidebarAccount extends StatelessWidget {
-  const _SidebarAccount({required this.displayName, required this.avatarUri});
+  const _SidebarAccount({
+    required this.authenticated,
+    required this.displayName,
+    required this.avatarUri,
+    required this.onRequestSignIn,
+  });
 
+  final bool authenticated;
   final String? displayName;
   final String? avatarUri;
+  final VoidCallback onRequestSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -1368,41 +1444,59 @@ class _SidebarAccount extends StatelessWidget {
       child: Icon(Icons.person_rounded, color: colors.onPrimaryContainer),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          SizedBox.square(
-            dimension: 40,
-            child: ClipOval(
-              child: avatarUri == null
-                  ? fallback
-                  : Image.network(
-                      avatarUri!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => fallback,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: InkWell(
+        key: const ValueKey('sidebar-account'),
+        onTap: authenticated ? null : onRequestSignIn,
+        borderRadius: MusicRadii.control,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 40,
+                child: ClipOval(
+                  child: avatarUri == null
+                      ? fallback
+                      : Image.network(
+                          avatarUri!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => fallback,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      authenticated
+                          ? displayName ?? 'QQ Music listener'
+                          : 'Not signed in',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
                     ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName ?? 'QQ Music listener',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall,
+                    Text(
+                      authenticated
+                          ? displayName == null
+                                ? 'Loading account…'
+                                : 'QQ Music'
+                          : 'Sign in to QQ Music',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: colors.onSurfaceVariant),
+                    ),
+                  ],
                 ),
-                Text(
-                  displayName == null ? 'Loading account…' : 'QQ Music',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: colors.onSurfaceVariant),
-                ),
+              ),
+              if (!authenticated) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.login_rounded, color: colors.primary),
               ],
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1902,6 +1996,7 @@ class _CenteredLibraryMessage extends StatelessWidget {
     required this.detail,
     required this.actions,
     this.announce = false,
+    super.key,
   });
 
   final IconData icon;

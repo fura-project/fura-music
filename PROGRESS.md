@@ -3,50 +3,56 @@ execution:
   mode: HUMAN_GATED_REGRESSION
   state: ACTIVE
   acceptance_milestone: M1
-  active_workstream: M7_PAGE_BY_PAGE_UI
-  current_task: NOW_PLAYING_ARTWORK_COLOR_VISUAL_ACCEPTANCE
-  next_action: MAINTAINER_REVIEW_NOW_PLAYING
+  active_workstream: SYSTEM_PLAYBACK_PLATFORM_ADAPTATION
+  current_task: CROSS_PLATFORM_CI_PACKAGING
+  next_action: PUSH_AND_RUN_GITHUB_ACTIONS
 ---
 
 # Current State
 
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
-- M2 through M6 are checkpointed. HD-012 redirects the active M7 visual-review surface to Expanded Now Playing; the implemented Home and Liked Songs candidates remain intact and unaccepted.
+- M2 through M6 are checkpointed. HD-013 redirects the active M7 visual-review surface to a bounded Home data-slot correction; Liked Songs and Expanded Now Playing remain implemented and unaccepted.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
-- Expanded Now Playing now derives a page-local official Material 3 color scheme from the current artwork in light and dark modes, preserves the existing player/Queue/lyrics/Comments/MV ownership, and uses separate wide and compact compositions. Long translations and romanization explicitly wrap without a line cap; targeted narrow/text-scale coverage and synthetic light/dark page renders pass. This is implementation evidence, not maintainer visual acceptance or proof that unmatched upstream translation timestamps are available.
+- Home no longer presents Popular Programs. `More from your listening` uses a distinct, cancellable current-Track related read rather than relabeling personalized Tracks. Public Feed evidence showed valid personalized playlists with `http://qpic.y.qq.com` artwork; the Client now upgrades only that verified QQ image host to HTTPS and still rejects other cleartext artwork. The previous anonymous modern related request returned successful empty envelopes for bounded public seeds; the Client now uses the independently implemented signed route whose ignored live regression returned a non-empty bounded Track set. Offline and live protocol regressions pass; an authenticated Home rerun is still needed to confirm visible production recovery.
+- The maintainer redirected the current UI task to keep the normal adaptive product Shell visible while signed out and present authentication in a modal. That modal now offers QQ Web QR, the already verified WeChat QR path, and phone plus one-time SMS code without collecting a password. Public Home/Discover/Search remain reachable; account-only Home and Library surfaces show explicit sign-in states instead of launching account reads. The multi-method implementation is offline-verified; anonymous QQ QR bootstrap/poll also passed, while confirmed QQ QR and phone delivery/login still require maintainer operation. The signed-out Shell candidate still awaits desktop/mobile visual review.
+- Guest media resolution no longer fails before transport. Signed-out playback now requests only anonymous M500 standard quality with `uin=0` and no Cookie or fabricated credential; a bounded live gate found a playable source among ten public Search results. Tracks for which QQ returns no anonymous source still offer sign-in without claiming a restriction reason. Authenticated high-to-standard fallback is unchanged.
+- HD-014 now authorizes system playback over the existing single Flutter playback owner. One thin `audio_service` adapter publishes provider-neutral current metadata, Queue mode and position, delegates system transport/seek/mode commands to the existing Rust-backed Queue/controller, and configures music audio focus plus interruption/noisy-device pause. Android has the required media foreground service manifest and a passing x64 Debug package; iOS declares background audio; macOS registers the official Darwin implementation; Linux has a passing host MPRIS initialization integration and Release build; Windows registers an SMTC implementation. These are implementation/packaging claims, not physical-device or unavailable-host runtime acceptance.
+- HD-015 authorizes a manual GitHub Actions packaging gate for maintainer runtime testing. The workflow runs the locked offline Rust/Flutter gate, then builds seven-day development artifacts for Android ARM64/x64, Linux x64, Windows x64, the hosted macOS architecture, and the hosted iOS Simulator architecture. The workflow is implemented locally but cannot become remote platform evidence until these changes are committed, pushed, and the named jobs pass.
 
 # Current Capability Boundary
 
 - Later UI can reuse typed Account, Home recommendation, Library read/mutation, Search, Discover, foreground playback/Queue/mode, Lyrics, Comments, MV, and Settings foundations without raw QQ responses or fabricated semantics.
-- Popular Programs and background/system playback require human product decisions. Playlist rename and Artist mutation remain protocol-evidence-blocked. Physical Android and Apple/Windows runtime claims remain environment-blocked.
+- Popular Programs is excluded by HD-013. System playback is authorized by HD-014 without changing the single-player/Rust-Queue ownership. Playlist rename and Artist mutation remain protocol-evidence-blocked. Physical Android and Apple/Windows system-playback runtime claims remain environment-blocked.
 - Remote-write foundations have independent protocol evidence and strict offline lifecycle coverage, but this repository did not mutate the maintainer's account. Confirmation, refresh, and maintainer-operated live acceptance remain later UI/evidence work.
-- Personalized recommendation availability and quality are not authenticated-account verified. One personalized Track set may be reused transparently, but it cannot be relabeled as two distinct recommendation products.
+- Personalized recommendation availability and quality are not authenticated-account verified. The authenticated personalized Track set and anonymous current-Track related set are distinct and may not substitute for each other.
 
 # Current Scheduling
 
 - There is no remaining safe agent-only Core capability task supported by the audit. Do not invent another endpoint, Provider, framework, or refactor to keep producing commits.
-- Expanded Now Playing is the active unaccepted candidate under HD-012. Artwork-derived color remains inside the page and safely falls back to the normal app scheme when a cover is absent or cannot be decoded. The supplied frame is reference-only; supported playback, Queue, Comments, MV, synchronized lyrics, and word timing remain reachable.
-- Home and Liked Songs remain implemented and unaccepted. Home still needs a maintainer authenticated rerun for Daily/personalized recommendation availability; Liked Songs retains its typed built-in-liked semantic, dense desktop rows, compact Track rows, and persistent player.
-- The current candidate intentionally omits unsupported download, batch-edit, audiobook, and video-library controls. Synthetic review content does not enter production and no account data was accessed.
+- The maintainer redirected the current bounded regression candidate to the Liked collection tabs. Songs retain the approved dense table/list presentation; real user playlists are split by typed owned/saved semantics; favorite Albums reuse the existing typed collection; and unsupported program/video account collections remain explicit rather than being fabricated from playlists or Track-associated MV.
+- Home still needs a maintainer authenticated rerun for Daily/personalized recommendation availability and the corrected personalized/related recommendation presentation. Liked Songs and Expanded Now Playing remain implemented and unaccepted.
+- The current candidate intentionally omits unsupported download and batch-edit controls. Program and video tabs expose the requested information architecture, but real collection content remains capability-blocked in the current Human-gated regression mode; synthetic review content does not enter production and no account data was accessed.
 - No other page may begin before maintainer visual acceptance or another explicit Human redirect. Automated checks and the bounded Material 3 review cannot supply that acceptance.
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
+- QQ Web QR approval/credential restore and phone-code delivery/authorization remain maintainer-operated compatibility observations; the agent may not scan, authorize, or submit a real phone number autonomously. Phone authorization is a reverse-engineered private-client protocol, not an official public API, and remains visibly experimental until live compatibility is established.
+- System playback now needs bounded maintainer/runtime checks: Android notification/lock-screen controls, media buttons, audio focus and task-background continuity; Linux KDE/GNOME MPRIS controls; and later iOS/macOS Control Center plus Windows SMTC when those hosts are available. Platform gaps must remain separate rather than being inferred from another target.
+- The immediate packaging action is to commit/push the current coherent source plus workflow, manually run `Cross-platform development packages`, and preserve each job's exact result. A failed platform job is a target-specific build regression, not evidence that another artifact works or that the whole project is release-ready.
 
 # Blockers
 
 - **M1 evidence:** maintainer-operated ordinary QQ Track playback → Queue navigation → synchronized lyrics → word timing.
 - **Protocol evidence:** playlist rename and Artist follow/unfollow need independent current request/success evidence before Client work.
-- **Product authority:** Popular Programs and background/system playback remain undecided.
-- **Target environments:** physical Android and Apple/Windows secure-storage/media behavior cannot be established on this host.
+- **Target environments:** physical Android and Apple/Windows secure-storage/system-media behavior cannot be established on this host. Windows SMTC timeline/seek also remains limited by TD-008.
 - **Release:** production identity, signing, external distribution, and native-video notices remain blocked by HD-001 and TD-002/TD-006.
 
 # Pending Human Decisions
 
 - **HD-001:** final product/display name, platform identifiers, signing custody, and distribution ownership.
-- Popular Programs' product boundary and background/system playback remain explicitly `HUMAN_DECISION_REQUIRED` in the first-release audit; they are not promoted to numbered decisions until the maintainer chooses to address them.
 
 # Important Evidence Limits
 
 - Offline and Widget tests prove implemented rules and retained presentation behavior, not current authenticated QQ CDN playback, personalized recommendation quality, or broad live catalog compatibility.
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, unavailable operating systems, or release readiness.
-- Home, Liked Songs, and Expanded Now Playing remain unaccepted. Expanded Now Playing is the current visual-review candidate; synthetic light/dark renders and widget tests do not prove Human visual acceptance or live catalog artwork/translation coverage.
+- Linux MPRIS initialization and Android x64 packaging prove their platform adapters can initialize/build in the named environments; they do not prove desktop-shell buttons, Android lock-screen/notification behavior, task-removal continuity, headset controls, or Apple/Windows runtime behavior.
+- Home, Liked Songs, and Expanded Now Playing remain unaccepted. Home is the current visual-review candidate; canonical synthetic renders and targeted tests do not prove Human visual acceptance, authenticated personalization availability, or related-song quality across the catalog.
 - Historical research/checkpoint documents remain evidence snapshots. Current scheduling is governed by `AGENTS.md`, `ROADMAP.md`, and this file.

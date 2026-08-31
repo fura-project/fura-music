@@ -200,6 +200,19 @@ pub enum PlaylistPurpose {
     LikedSongs,
 }
 
+/// Provider-independent relationship between a user and a playlist.
+///
+/// Catalog/search playlists stay [`Unspecified`](PlaylistOwnership::Unspecified);
+/// user-library providers set an explicit value without exposing provider-owned
+/// routing identity to presentation layers.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PlaylistOwnership {
+    #[default]
+    Unspecified,
+    Owned,
+    Saved,
+}
+
 /// Minimum provider-independent data required to present a playlist row.
 #[derive(Clone, Eq, PartialEq)]
 pub struct PlaylistSummary {
@@ -208,6 +221,7 @@ pub struct PlaylistSummary {
     artwork_uri: Option<String>,
     track_count: Option<u32>,
     purpose: PlaylistPurpose,
+    ownership: PlaylistOwnership,
 }
 
 impl PlaylistSummary {
@@ -226,6 +240,7 @@ impl PlaylistSummary {
             artwork_uri: None,
             track_count: None,
             purpose: PlaylistPurpose::Standard,
+            ownership: PlaylistOwnership::Unspecified,
         })
     }
 
@@ -244,6 +259,12 @@ impl PlaylistSummary {
     #[must_use]
     pub const fn with_purpose(mut self, purpose: PlaylistPurpose) -> Self {
         self.purpose = purpose;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_ownership(mut self, ownership: PlaylistOwnership) -> Self {
+        self.ownership = ownership;
         self
     }
 
@@ -271,6 +292,11 @@ impl PlaylistSummary {
     pub const fn purpose(&self) -> PlaylistPurpose {
         self.purpose
     }
+
+    #[must_use]
+    pub const fn ownership(&self) -> PlaylistOwnership {
+        self.ownership
+    }
 }
 
 impl fmt::Debug for PlaylistSummary {
@@ -282,6 +308,7 @@ impl fmt::Debug for PlaylistSummary {
             .field("has_artwork", &self.artwork_uri.is_some())
             .field("track_count", &self.track_count)
             .field("purpose", &self.purpose)
+            .field("ownership", &self.ownership)
             .finish()
     }
 }
@@ -2666,11 +2693,11 @@ mod tests {
         ArtistId, ArtistSearchPage, ArtistSummary, AudioFormat, AudioQuality, MusicVideo,
         MusicVideoField, MusicVideoId, MusicVideoQuality, MusicVideoSource, MusicVideoSourceField,
         NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage, NewSongCategory, NewSongCollection,
-        PlaylistId, PlaylistPurpose, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
-        ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary, RankingTracksPage,
-        ResolvedMediaSource, ResolvedMediaSourceField, TrackComment, TrackCommentField,
-        TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage, TrackSummary,
-        TrackSummaryField,
+        PlaylistId, PlaylistOwnership, PlaylistPurpose, PlaylistSearchPage, PlaylistSummary,
+        PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingSummary,
+        RankingTracksPage, ResolvedMediaSource, ResolvedMediaSourceField, TrackComment,
+        TrackCommentField, TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem,
+        TrackSearchPage, TrackSummary, TrackSummaryField,
     };
 
     #[test]
@@ -2734,11 +2761,13 @@ mod tests {
             .expect("summary")
             .with_artwork_uri(Some("https://example.invalid/cover.jpg".into()))
             .with_track_count(Some(42))
-            .with_purpose(PlaylistPurpose::LikedSongs);
+            .with_purpose(PlaylistPurpose::LikedSongs)
+            .with_ownership(PlaylistOwnership::Owned);
 
         assert_eq!(summary.title(), "Synthetic favorites");
         assert_eq!(summary.track_count(), Some(42));
         assert_eq!(summary.purpose(), PlaylistPurpose::LikedSongs);
+        assert_eq!(summary.ownership(), PlaylistOwnership::Owned);
         assert_eq!(
             summary.artwork_uri(),
             Some("https://example.invalid/cover.jpg")

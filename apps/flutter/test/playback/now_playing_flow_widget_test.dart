@@ -257,7 +257,7 @@ void main() {
 
     expect(lyrics.requests, [('qq-music', 'first')]);
     expect(find.textContaining('Playing'), findsOneWidget);
-    expect(find.text('Continue with WeChat'), findsNothing);
+    expect(find.text('Scan with WeChat'), findsNothing);
   });
 
   testWidgets('retries media resolution for the same queue position', (
@@ -436,7 +436,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Continue with WeChat'), findsOneWidget);
+      expect(find.text('Scan with WeChat'), findsOneWidget);
       expect(find.byKey(const ValueKey('user-library-page')), findsNothing);
     });
   }
@@ -458,7 +458,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('user-library-page')), findsOneWidget);
     expect(find.textContaining('Playing'), findsOneWidget);
-    expect(find.text('Continue with WeChat'), findsNothing);
+    expect(find.text('Scan with WeChat'), findsNothing);
   });
 
   testWidgets('switches tracks and keeps the coordinator across local back', (
@@ -541,7 +541,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.byKey(const ValueKey('now-playing-sign-in-again')));
       await tester.pumpAndSettle();
-      expect(find.text('Continue with WeChat'), findsOneWidget);
+      expect(find.text('Scan with WeChat'), findsOneWidget);
     },
   );
 
@@ -683,7 +683,9 @@ void main() {
 
     signOut.complete(CredentialSignOutResult.signedOut);
     await tester.pumpAndSettle();
-    expect(find.text('Continue with WeChat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsNothing);
   });
 
   testWidgets('track action semantics do not repeat visible metadata', (

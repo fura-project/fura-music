@@ -1365,7 +1365,8 @@ String _resolutionFailureCopy(MediaResolutionFailure? failure) =>
     switch (failure) {
       MediaResolutionFailure.authenticationRequired ||
       MediaResolutionFailure.replaced ||
-      MediaResolutionFailure.cancelled => 'Sign in to play this track.',
+      MediaResolutionFailure.cancelled =>
+        'Sign in to try account-authorized playback.',
       MediaResolutionFailure.credentialRejected =>
         'Your QQ Music session was rejected and removed.',
       MediaResolutionFailure.credentialRejectedStorageCleanupFailed =>

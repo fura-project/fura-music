@@ -6,6 +6,75 @@ import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 
 void main() {
+  test(
+    'authorizes a phone code and persists the resulting credential',
+    () async {
+      final phoneSession = _FakePhoneLoginSession();
+      final gateway = _FakeGateway.immediate(
+        const LoginStart(failure: LoginFailure.coreUnavailable),
+        phoneStart: PhoneLoginStart(
+          session: phoneSession,
+          state: PhoneCodeState.sent,
+        ),
+      );
+      final controller = LoginController(gateway);
+
+      await controller.sendPhoneCode(
+        countryCode: '86',
+        phoneNumber: '13000000000',
+      );
+      expect(controller.stage, LoginStage.phoneCodeSent);
+
+      await controller.authorizePhone('123456');
+      expect(phoneSession.codes, ['123456']);
+      expect(controller.stage, LoginStage.authenticated);
+      expect(controller.credentialSaveState, CredentialSaveState.saved);
+      expect(gateway.persistCalls, 1);
+
+      controller.dispose();
+    },
+  );
+
+  test('keeps CAPTCHA and SMS rate limiting explicit', () async {
+    for (final entry in <PhoneCodeState, LoginStage>{
+      PhoneCodeState.captchaRequired: LoginStage.phoneCaptchaRequired,
+      PhoneCodeState.rateLimited: LoginStage.phoneRateLimited,
+    }.entries) {
+      final gateway = _FakeGateway.immediate(
+        const LoginStart(failure: LoginFailure.coreUnavailable),
+        phoneStart: PhoneLoginStart(
+          state: entry.key,
+          securityUrl: entry.key == PhoneCodeState.captchaRequired
+              ? 'https://example.test/security'
+              : null,
+        ),
+      );
+      final controller = LoginController(gateway);
+      await controller.sendPhoneCode(
+        countryCode: '86',
+        phoneNumber: '13000000000',
+      );
+      expect(controller.stage, entry.value);
+      if (entry.key == PhoneCodeState.captchaRequired) {
+        expect(controller.phoneSecurityUrl, 'https://example.test/security');
+      }
+      controller.dispose();
+    }
+  });
+
+  test('forwards the selected QQ QR channel', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(gateway);
+
+    await controller.startQr(LoginQrChannel.qq);
+
+    expect(gateway.qrChannels, [LoginQrChannel.qq]);
+    expect(controller.qrChannel, LoginQrChannel.qq);
+    expect(controller.stage, LoginStage.waitingForScan);
+    controller.dispose();
+  });
+
   test('maps waiting, scanned, and authenticated updates in order', () async {
     final session = _FakeLoginSession();
     final gateway = _FakeGateway.immediate(_successfulStart(session));
@@ -417,7 +486,10 @@ LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
   ),
 );
 
-class _FakeGateway implements QqMusicAuthenticationGateway {
+class _FakeGateway
+    implements
+        QqMusicAuthenticationGateway,
+        MultiMethodQqMusicAuthenticationGateway {
   _FakeGateway.immediate(
     LoginStart result, {
     this.persistenceResult = CredentialPersistenceResult.stored,
@@ -425,12 +497,16 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
     List<FutureOr<CredentialSignOutResult>> signOutResults = const [
       CredentialSignOutResult.signedOut,
     ],
+    this.phoneStart = const PhoneLoginStart(
+      failure: LoginFailure.coreUnavailable,
+    ),
   }) : _immediateResult = result,
        _pendingStarts = null,
        _signOutResults = List.of(signOutResults);
 
   _FakeGateway.pending()
     : persistenceResult = CredentialPersistenceResult.stored,
+      phoneStart = const PhoneLoginStart(failure: LoginFailure.coreUnavailable),
       authenticated = false,
       _immediateResult = null,
       _pendingStarts = <Completer<LoginStart>>[],
@@ -439,6 +515,7 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
   final LoginStart? _immediateResult;
   final List<Completer<LoginStart>>? _pendingStarts;
   final CredentialPersistenceResult persistenceResult;
+  final PhoneLoginStart phoneStart;
   bool authenticated;
   final List<FutureOr<CredentialSignOutResult>> _signOutResults;
   final List<_FakeStartOperation> operations = <_FakeStartOperation>[];
@@ -446,6 +523,7 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
       <Completer<CredentialVerificationResult>>[];
   final List<_FakeVerificationOperation> verificationOperations =
       <_FakeVerificationOperation>[];
+  final List<LoginQrChannel> qrChannels = <LoginQrChannel>[];
   int persistCalls = 0;
   int signOutCalls = 0;
 
@@ -468,6 +546,18 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
     operations.add(operation);
     return operation;
   }
+
+  @override
+  LoginStartOperation beginQrStart(LoginQrChannel channel) {
+    qrChannels.add(channel);
+    return beginStart();
+  }
+
+  @override
+  PhoneLoginStartOperation beginPhoneStart({
+    required String countryCode,
+    required String phoneNumber,
+  }) => _FakePhoneStartOperation(phoneStart);
 
   @override
   CredentialVerificationOperation beginCredentialVerification() {
@@ -503,6 +593,40 @@ class _FakeGateway implements QqMusicAuthenticationGateway {
 
   void completeVerification(int index, CredentialVerificationResult result) {
     _pendingVerifications[index].complete(result);
+  }
+}
+
+class _FakePhoneStartOperation implements PhoneLoginStartOperation {
+  const _FakePhoneStartOperation(this.result);
+
+  final PhoneLoginStart result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PhoneLoginStart> run() async => result;
+}
+
+class _FakePhoneLoginSession implements PhoneLoginSession {
+  bool active = true;
+  final List<String> codes = [];
+
+  @override
+  bool get isActive => active;
+
+  @override
+  Future<LoginFailure?> authorize(String verificationCode) async {
+    codes.add(verificationCode);
+    active = false;
+    return null;
+  }
+
+  @override
+  bool cancel() {
+    final wasActive = active;
+    active = false;
+    return wasActive;
   }
 }
 

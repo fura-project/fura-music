@@ -10,8 +10,8 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_personalized_tracks_load`, `failed_radar_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_personalized_tracks_error`, `map_personalized_tracks_load`, `map_radar_error`, `map_radar_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_personalized_tracks_load`, `failed_radar_load`, `failed_related_tracks_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_personalized_tracks_error`, `map_personalized_tracks_load`, `map_radar_error`, `map_radar_load`, `map_related_tracks_error`, `map_related_tracks_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicRecommendedPlaylistPageLoadHandle
 beginQqMusicRecommendedPlaylistPageLoad({
@@ -34,6 +34,14 @@ beginQqMusicPersonalizedPlaylistsLoad() => RustLib.instance.api
 QqMusicPersonalizedTracksLoadHandle beginQqMusicPersonalizedTracksLoad() =>
     RustLib.instance.api
         .crateApiRecommendationsBeginQqMusicPersonalizedTracksLoad();
+
+QqMusicRelatedTracksLoadHandle beginQqMusicRelatedTracksLoad({
+  required String providerId,
+  required String opaqueId,
+}) => RustLib.instance.api.crateApiRecommendationsBeginQqMusicRelatedTracksLoad(
+  providerId: providerId,
+  opaqueId: opaqueId,
+);
 
 QqMusicRadarTrackPageLoadHandle beginQqMusicRadarTrackPageLoad({
   required int page,
@@ -87,6 +95,15 @@ abstract class QqMusicRecommendedPlaylistPageLoadHandle
   bool get isActive;
 
   Future<QqMusicRecommendedPlaylistPageLoad> run();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRelatedTracksLoadHandle>>
+abstract class QqMusicRelatedTracksLoadHandle implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicRelatedTracksLoad> run();
 }
 
 class QqMusicDailyRecommendationLoad {
@@ -255,6 +272,34 @@ class QqMusicRecommendedPlaylistPageLoad {
 
 enum QqMusicRecommendedPlaylistPageLoadFailure {
   coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  cancelled,
+  alreadyRunning,
+}
+
+class QqMusicRelatedTracksLoad {
+  final List<LibraryTrackSummary> tracks;
+  final QqMusicRelatedTracksLoadFailure? failure;
+
+  const QqMusicRelatedTracksLoad({required this.tracks, this.failure});
+
+  @override
+  int get hashCode => tracks.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicRelatedTracksLoad &&
+          runtimeType == other.runtimeType &&
+          tracks == other.tracks &&
+          failure == other.failure;
+}
+
+enum QqMusicRelatedTracksLoadFailure {
+  coreUnavailable,
+  invalidTrack,
   network,
   serviceUnavailable,
   invalidResponse,

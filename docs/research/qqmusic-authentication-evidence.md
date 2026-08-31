@@ -1,8 +1,8 @@
 # QQ Music authentication evidence
 
 - **Status:** Active research for M1 authentication
-- **Last checked:** 2026-08-27
-- **Scope:** Credential lifecycle, restore semantics, bounded signed-in account identity, and the first WeChat QR protocol slices.
+- **Last checked:** 2026-08-31
+- **Scope:** Credential lifecycle, restore semantics, bounded signed-in account identity, QQ/WeChat QR authorization, and phone plus one-time-code authorization.
 
 This note records behavioral evidence, not source code. Reference implementations have different licenses, so implementation in this repository must be independent.
 
@@ -84,6 +84,55 @@ The first credential model contains only the cross-validated core fields plus op
 
 Credential debug output redacts account identity and `musickey`. Persistence and server verification are implemented; credential refresh remains outside the current slice.
 
+### QQ Web QR authorization
+
+L-1124's current QQ Web flow uses `ptqrshow` with QQ Connect application
+`100497308`, retains only the short-lived `qrsig`, and polls `ptqrlogin`. The
+poll token uses QQ's additive Hash33 with seed `0`; the later OAuth `g_tk`
+uses the same additive algorithm with seed `5381`. These are distinct inputs,
+not interchangeable variants of a generic hash. An initial implementation
+using the wrong seed/operator produced a repeatable HTTP 403 on polling; a
+known-answer regression now locks both values.
+
+After a confirmed QR, the bounded flow follows `check_sig` without automatic
+redirects, carries only response cookies into QQ Connect authorization, and
+exchanges the returned code through `QQConnectLogin.LoginServer.QQLogin` with
+QQ login type `2`. Authorization cookies, redirect codes, account identity,
+and credentials stay inside redacted Rust session types and never cross the
+typed Bridge.
+
+On 2026-08-31 the ignored, environment-gated `live_qq_qr` test fetched a new
+QQ Web QR and received the unconfirmed waiting state from one poll. It did not
+display or scan the QR, approve authorization, access an account, or retain
+the image or session values. This proves current anonymous bootstrap and poll
+compatibility only; the confirmed redirect and credential exchange remain
+offline fixture-verified and require maintainer-operated acceptance.
+
+### Phone plus one-time-code authorization
+
+This is not a documented Tencent public login API. The only current direct
+implementation found for this exact phone flow is the independently inspected
+L-1124 reverse-engineered QQ Music client implementation. Its Android-profile flow uses
+`music.login.LoginServer.SendPhoneAuthCode` followed by
+`music.login.LoginServer.Login`, with `tmeLoginMethod: 3`, an area code and
+plain phone number for the send operation, and `loginMode: 1` plus the
+one-time code for authorization. The current source also distinguishes
+CAPTCHA code `20276` and frequency-limit code `100001` from successful code
+delivery.
+
+The project models this as one process-local, cancellable session with a
+random per-session device identity. Phone number and SMS code never implement
+`Debug`, cross the Bridge after authorization, or enter persistence. Flutter
+collects country code, phone number, and the six-digit one-time code; it never
+asks for a QQ password. CAPTCHA and rate limiting remain explicit UI states
+instead of being guessed as success or generic network failure.
+
+Request shape, error mapping, replacement/cancellation, credential
+installation, secure-vault persistence, and the adaptive sign-in dialog are
+offline tested. No SMS was sent and no phone/account was accessed in this
+checkout. The product therefore labels this method experimental: live delivery,
+successful phone authorization, and release compatibility are not yet claimed.
+
 ### First network slice: WeChat QR bootstrap
 
 The first concrete request is the unconfirmed WeChat web QR bootstrap. L-1124 and ylw1997 independently agree on:
@@ -155,5 +204,6 @@ The Provider layer now maps raw protocol image/state/error types into provider-n
 
 Before claiming M1 authentication acceptance:
 
-1. Capture a sanitized successful response fixture or run a controlled real-account integration before claiming live login compatibility; the current evidence proves request acceptance and failure mapping only.
-2. Run the existing disposable secure-vault pattern on each distribution target; Linux passed on 2026-08-25, but plugin linkage alone does not prove the remaining platform implementations.
+1. Perform a maintainer-operated QQ Web QR approval and confirm that credential exchange and restore succeed without retaining secret-bearing evidence.
+2. Perform a maintainer-operated phone-code attempt if that channel is to be claimed for the first release; offline request fixtures do not prove SMS delivery or current account acceptance.
+3. Run the existing disposable secure-vault pattern on each distribution target; Linux passed on 2026-08-25, but plugin linkage alone does not prove the remaining platform implementations.

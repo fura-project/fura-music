@@ -7,6 +7,8 @@ import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
 import 'package:flutterustmusic/home/home_controller.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
+import 'package:flutterustmusic/home/related_track_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 void main() {
   test('keeps independent Home resources truthful when one fails', () async {
@@ -31,6 +33,7 @@ void main() {
           failure: PersonalizedTracksFailure.network,
         ),
       ),
+      _RelatedGateway(const RelatedTracksResult()),
     );
     addTearDown(controller.dispose);
 
@@ -75,6 +78,7 @@ void main() {
           ),
         ),
         _TracksGateway(const PersonalizedTracksResult()),
+        _RelatedGateway(const RelatedTracksResult()),
       );
       addTearDown(controller.dispose);
 
@@ -100,7 +104,13 @@ void main() {
     );
     final playlists = _PlaylistsGateway(const PersonalizedPlaylistsResult());
     final tracks = _TracksGateway(const PersonalizedTracksResult());
-    final controller = HomeController(account, daily, playlists, tracks);
+    final controller = HomeController(
+      account,
+      daily,
+      playlists,
+      tracks,
+      _RelatedGateway(const RelatedTracksResult()),
+    );
     addTearDown(controller.dispose);
 
     await controller.load();
@@ -132,6 +142,7 @@ void main() {
       daily,
       _PlaylistsGateway(const PersonalizedPlaylistsResult()),
       _TracksGateway(const PersonalizedTracksResult()),
+      _RelatedGateway(const RelatedTracksResult()),
     );
 
     final load = controller.load();
@@ -152,6 +163,47 @@ void main() {
 
     expect(controller.dailyPlaylist, isNull);
     expect(controller.dailyStage, HomeResourceStage.loading);
+  });
+
+  test('loads a distinct related set from the current queue seed', () async {
+    final related = _RelatedGateway(
+      const RelatedTracksResult(
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:22:0:related-mid:-',
+            title: 'Related',
+            artistNames: ['Artist'],
+          ),
+        ],
+      ),
+    );
+    final controller = HomeController(
+      _AccountGateway(const AccountSummaryLoadResult()),
+      _DailyGateway(const DailyRecommendationResult()),
+      _PlaylistsGateway(const PersonalizedPlaylistsResult()),
+      _TracksGateway(const PersonalizedTracksResult()),
+      related,
+    );
+    addTearDown(controller.dispose);
+    const seed = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:11:0:seed-mid:-',
+      title: 'Seed',
+      artistNames: ['Artist'],
+    );
+
+    controller.updateRelatedSeed(seed);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(related.seeds, [same(seed)]);
+    expect(controller.relatedSeed, same(seed));
+    expect(controller.relatedTracksStage, HomeResourceStage.content);
+    expect(controller.relatedTracks.single.title, 'Related');
+
+    controller.updateRelatedSeed(null);
+    expect(controller.relatedTracksStage, HomeResourceStage.empty);
+    expect(controller.relatedTracks, isEmpty);
   });
 }
 
@@ -276,4 +328,29 @@ class _TracksOperation implements PersonalizedTracksLoadOperation {
 
   @override
   Future<PersonalizedTracksResult> run() async => result;
+}
+
+class _RelatedGateway implements RelatedTracksGateway {
+  _RelatedGateway(this.result);
+
+  final RelatedTracksResult result;
+  final List<PlaylistTrackSummary> seeds = [];
+
+  @override
+  RelatedTracksLoadOperation beginLoad(PlaylistTrackSummary seed) {
+    seeds.add(seed);
+    return _RelatedOperation(result);
+  }
+}
+
+class _RelatedOperation implements RelatedTracksLoadOperation {
+  const _RelatedOperation(this.result);
+
+  final RelatedTracksResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<RelatedTracksResult> run() async => result;
 }

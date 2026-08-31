@@ -18,6 +18,8 @@ class FavoriteAlbumsPage extends StatefulWidget {
     required this.onOpenAlbum,
     required this.onSignInAgain,
     this.embedded = false,
+    this.showHeader = true,
+    this.filterQuery = '',
     super.key,
   });
 
@@ -27,6 +29,8 @@ class FavoriteAlbumsPage extends StatefulWidget {
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
   final bool embedded;
+  final bool showHeader;
+  final String filterQuery;
 
   @override
   State<FavoriteAlbumsPage> createState() => _FavoriteAlbumsPageState();
@@ -60,26 +64,27 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
           );
           return Column(
             children: [
-              LibraryCollectionHeader(
-                key: const ValueKey('library-albums-header'),
-                title: 'Your favorite albums',
-                subtitle: switch (_controller.stage) {
-                  FavoriteAlbumStage.content || FavoriteAlbumStage.empty =>
-                    '${_controller.total} saved on QQ Music',
-                  _ => 'Saved on QQ Music',
-                },
-                refreshKey: widget.embedded
-                    ? const ValueKey('favorite-albums-refresh')
-                    : null,
-                refreshTooltip: widget.embedded
-                    ? _controller.isLoading
-                          ? 'Refreshing favorite albums'
-                          : 'Refresh favorite albums'
-                    : null,
-                onRefresh: widget.embedded && !_controller.isLoading
-                    ? _controller.load
-                    : null,
-              ),
+              if (widget.showHeader)
+                LibraryCollectionHeader(
+                  key: const ValueKey('library-albums-header'),
+                  title: 'Your favorite albums',
+                  subtitle: switch (_controller.stage) {
+                    FavoriteAlbumStage.content || FavoriteAlbumStage.empty =>
+                      '${_controller.total} saved on QQ Music',
+                    _ => 'Saved on QQ Music',
+                  },
+                  refreshKey: widget.embedded
+                      ? const ValueKey('favorite-albums-refresh')
+                      : null,
+                  refreshTooltip: widget.embedded
+                      ? _controller.isLoading
+                            ? 'Refreshing favorite albums'
+                            : 'Refresh favorite albums'
+                      : null,
+                  onRefresh: widget.embedded && !_controller.isLoading
+                      ? _controller.load
+                      : null,
+                ),
               Expanded(child: body),
             ],
           );
@@ -117,6 +122,14 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
     );
   }
 
+  List<AlbumSummary> get _visibleAlbums {
+    final query = widget.filterQuery.trim().toLowerCase();
+    if (query.isEmpty) return _controller.albums;
+    return _controller.albums
+        .where((album) => album.title.toLowerCase().contains(query))
+        .toList(growable: false);
+  }
+
   Widget _body(BuildContext context) => switch (_controller.stage) {
     FavoriteAlbumStage.loading => const MusicLoadingPanel(
       key: ValueKey('favorite-albums-loading'),
@@ -128,9 +141,17 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       title: 'No favorite albums yet',
       detail: 'Albums you save in QQ Music will appear here.',
     ),
+    FavoriteAlbumStage.content
+        when _visibleAlbums.isEmpty && widget.filterQuery.trim().isNotEmpty =>
+      const MusicContentStatePanel(
+        key: ValueKey('favorite-albums-search-empty'),
+        icon: Icons.search_off_rounded,
+        title: '未找到匹配的专辑',
+        detail: '请尝试其他关键词，搜索范围为已加载的收藏专辑。',
+      ),
     FavoriteAlbumStage.content => _AlbumCollection(
       key: const ValueKey('favorite-albums-content'),
-      albums: _controller.albums,
+      albums: _visibleAlbums,
       isLoadingMore: _controller.isLoadingMore,
       appendFailure: _controller.appendFailure,
       canLoadMore: _controller.canLoadMore,

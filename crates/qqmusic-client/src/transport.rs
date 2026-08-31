@@ -23,6 +23,7 @@ pub struct HttpRequest {
     body: Option<Vec<u8>>,
     response_body_limit: usize,
     timeout: Option<Duration>,
+    follow_redirects: bool,
 }
 
 impl HttpRequest {
@@ -36,6 +37,7 @@ impl HttpRequest {
             body: None,
             response_body_limit: DEFAULT_RESPONSE_BODY_LIMIT,
             timeout: None,
+            follow_redirects: true,
         }
     }
 
@@ -49,6 +51,7 @@ impl HttpRequest {
             body: None,
             response_body_limit: DEFAULT_RESPONSE_BODY_LIMIT,
             timeout: None,
+            follow_redirects: true,
         }
     }
 
@@ -79,6 +82,12 @@ impl HttpRequest {
     #[must_use]
     pub const fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
+        self
+    }
+
+    #[must_use]
+    pub const fn follow_redirects(mut self, follow_redirects: bool) -> Self {
+        self.follow_redirects = follow_redirects;
         self
     }
 
@@ -118,6 +127,11 @@ impl HttpRequest {
     pub const fn request_timeout(&self) -> Option<Duration> {
         self.timeout
     }
+
+    #[must_use]
+    pub const fn redirects_are_followed(&self) -> bool {
+        self.follow_redirects
+    }
 }
 
 impl fmt::Debug for HttpRequest {
@@ -142,6 +156,7 @@ impl fmt::Debug for HttpRequest {
             .field("body_bytes", &self.body.as_ref().map(Vec::len))
             .field("response_body_limit", &self.response_body_limit)
             .field("timeout", &self.timeout)
+            .field("follow_redirects", &self.follow_redirects)
             .finish()
     }
 }
@@ -149,13 +164,24 @@ impl fmt::Debug for HttpRequest {
 #[derive(Clone, Eq, PartialEq)]
 pub struct HttpResponse {
     status: u16,
+    headers: Vec<(String, String)>,
     body: Vec<u8>,
 }
 
 impl HttpResponse {
     #[must_use]
     pub const fn new(status: u16, body: Vec<u8>) -> Self {
-        Self { status, body }
+        Self {
+            status,
+            headers: Vec::new(),
+            body,
+        }
+    }
+
+    #[must_use]
+    pub fn with_headers(mut self, headers: Vec<(String, String)>) -> Self {
+        self.headers = headers;
+        self
     }
 
     #[must_use]
@@ -167,6 +193,18 @@ impl HttpResponse {
     pub fn body(&self) -> &[u8] {
         &self.body
     }
+
+    #[must_use]
+    pub fn headers(&self) -> &[(String, String)] {
+        &self.headers
+    }
+
+    pub fn header_values<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a str> {
+        self.headers
+            .iter()
+            .filter(move |(candidate, _)| candidate.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+    }
 }
 
 impl fmt::Debug for HttpResponse {
@@ -174,8 +212,40 @@ impl fmt::Debug for HttpResponse {
         formatter
             .debug_struct("HttpResponse")
             .field("status", &self.status)
+            .field(
+                "header_names",
+                &self
+                    .headers
+                    .iter()
+                    .map(|(name, _)| name)
+                    .collect::<Vec<_>>(),
+            )
             .field("body_bytes", &self.body.len())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::HttpResponse;
+
+    #[test]
+    fn response_headers_are_queryable_but_values_are_debug_redacted() {
+        let response = HttpResponse::new(302, Vec::new()).with_headers(vec![
+            ("Set-Cookie".into(), "qrsig=secret-session".into()),
+            (
+                "Location".into(),
+                "https://example.test/?code=secret".into(),
+            ),
+        ]);
+        assert_eq!(
+            response.header_values("set-cookie").collect::<Vec<_>>(),
+            ["qrsig=secret-session"]
+        );
+        let debug = format!("{response:?}");
+        assert!(debug.contains("Set-Cookie"));
+        assert!(!debug.contains("secret-session"));
+        assert!(!debug.contains("code=secret"));
     }
 }
 
@@ -192,6 +262,7 @@ pub trait HttpTransport: Send + Sync {
 #[derive(Clone, Debug)]
 pub struct ReqwestTransport {
     client: reqwest::Client,
+    no_redirect_client: reqwest::Client,
 }
 
 pub enum ReqwestTransportError {
@@ -240,7 +311,15 @@ impl ReqwestTransport {
             .timeout(Duration::from_secs(30))
             .user_agent(concat!("flutterustmusic/", env!("CARGO_PKG_VERSION")))
             .build()?;
-        Ok(Self { client })
+        let no_redirect_client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .user_agent(concat!("flutterustmusic/", env!("CARGO_PKG_VERSION")))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
+        Ok(Self {
+            client,
+            no_redirect_client,
+        })
     }
 }
 
@@ -248,9 +327,14 @@ impl HttpTransport for ReqwestTransport {
     type Error = ReqwestTransportError;
 
     async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+        let client = if request.follow_redirects {
+            &self.client
+        } else {
+            &self.no_redirect_client
+        };
         let mut builder = match request.method {
-            HttpMethod::Get => self.client.get(&request.url),
-            HttpMethod::Post => self.client.post(&request.url),
+            HttpMethod::Get => client.get(&request.url),
+            HttpMethod::Post => client.post(&request.url),
         };
         builder = builder.query(&request.query);
         if let Some(timeout) = request.timeout {
@@ -269,6 +353,18 @@ impl HttpTransport for ReqwestTransport {
             .map_err(reqwest::Error::without_url)
             .map_err(ReqwestTransportError::Request)?;
         let status = response.status().as_u16();
+        let headers = response
+            .headers()
+            .keys()
+            .flat_map(|name| {
+                response
+                    .headers()
+                    .get_all(name)
+                    .iter()
+                    .filter_map(|value| value.to_str().ok())
+                    .map(|value| (name.as_str().to_owned(), value.to_owned()))
+            })
+            .collect();
         let limit = request.response_body_limit;
         if response
             .content_length()
@@ -290,7 +386,7 @@ impl HttpTransport for ReqwestTransport {
         {
             extend_bounded(&mut body, &chunk, limit)?;
         }
-        Ok(HttpResponse::new(status, body))
+        Ok(HttpResponse::new(status, body).with_headers(headers))
     }
 }
 

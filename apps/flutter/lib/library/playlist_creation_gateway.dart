@@ -134,6 +134,7 @@ PlaylistCreationResult mapBridgePlaylistCreation(
       title: created.title,
       artworkUri: created.artworkUri,
       trackCount: created.trackCount,
+      ownership: UserPlaylistOwnership.owned,
     ),
   );
 }

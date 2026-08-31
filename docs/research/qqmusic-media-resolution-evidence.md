@@ -1,8 +1,8 @@
 # QQ Music media-resolution evidence
 
-- **Status:** Standard/high MP3 selection and explicit fallback implemented; authenticated playback retest pending
-- **Last checked:** 2026-08-27
-- **Scope:** Authenticated standard MP3, high MP3, actual-quality reporting, and one bounded fallback policy.
+- **Status:** Anonymous standard plus authenticated standard/high MP3 selection implemented; authenticated playback retest pending
+- **Last checked:** 2026-08-31
+- **Scope:** Anonymous standard MP3, authenticated standard/high MP3, actual-quality reporting, and one bounded fallback policy.
 
 This note records independently implemented protocol behavior and two bounded no-account probes. It does not copy reusable third-party code. No account credential, user library, media URL, vkey, or response content was retained.
 
@@ -79,7 +79,7 @@ The resolved provider-neutral source needs only:
 - MP3 format plus the actual standard/high quality that produced the source;
 - the response validity in seconds.
 
-It does not expose QQ filename, vkey, result code, CDN list, payment payload, or raw response models. Authentication absence is rejected before transport. Global or request-level credential rejection follows the existing explicit rejection rules; transport and unrelated upstream failures do not sign the user out. Account state is rechecked after every await.
+It does not expose QQ filename, vkey, result code, CDN list, payment payload, or raw response models. When signed out, the Provider requests only M500 standard quality with QQ Music's anonymous `uin=0` comm, sends no Cookie or synthetic credential, and accepts only an exact correlated source. If that source is unavailable, the product offers sign-in without claiming a subscription, copyright, or region reason. Authenticated global or request-level credential rejection follows the existing explicit rejection rules; transport and unrelated upstream failures do not sign the user out. Authenticated account state is rechecked after every await.
 
 The reusable fallback rule is intentionally narrower than a generic quality
 ladder. A `Standard` preference requests only `M500`. A `High` preference
@@ -98,6 +98,15 @@ On 2026-08-26 a lightweight no-account `UrlGetVkey` request for one public song 
 A separate no-account CDN-dispatch probe returned zero global, request, and dispatch codes; four `sip` entries; `expiration: 86400`; `refreshTime: 1800`; and `cacheTime: 86400`. The returned bases used cleartext HTTP. No host or path was retained. This proves current dispatch structure, not that every returned node will serve an authenticated source or that HTTPS substitution is valid.
 
 After the standard implementation, the opt-in `live_media_resolution` test ran the actual bounded Rust client path against the same non-account boundary. On 2026-08-27 the gate was expanded and passed for both exact M500 and M800 requests after one CDN dispatch. Each vkey call produced an accepted non-account outcome without printing or retaining its body, URL, or vkey. This confirms both implemented request/response schemas at the unauthenticated boundary; it still does not prove authenticated playback, entitlement, or source quality.
+
+On 2026-08-31 the gate stopped using a fake credential and instead loaded one
+bounded anonymous Search page, then requested M500 with `uin=0` and no Cookie.
+At least one of the ten public results returned a correlated playable source;
+the remaining rows were allowed to remain unavailable. The test retained no
+query result content, Track identity, source URL, vkey, or response body. This
+proves that current guest playback is possible for some public catalog results,
+not that every search result is anonymously playable or that authentication
+would make every unavailable Track playable.
 
 The first authorized Linux product smoke restored the user's real account and loaded playlist/detail data, but every attempted ordinary or VIP track mapped to unavailable before reaching the audio engine. The anonymous batch probe above reproduced the exact all-`101404` behavior from the forwarded `songtype: 13`, establishing a protocol-mapping root cause without inspecting the user's credential, identifiers, source URLs, or response bodies. The correction has offline regressions and a passing anonymous live client probe; a fresh authorized product retest is still required before claiming playback success.
 

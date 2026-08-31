@@ -13,12 +13,14 @@ import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
+import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
@@ -33,12 +35,14 @@ class AuthenticatedHomeDependencies {
     required this.dailyRecommendationGateway,
     required this.personalizedPlaylistsGateway,
     required this.personalizedTracksGateway,
+    required this.relatedTracksGateway,
   });
 
   final AccountSummaryGateway accountSummaryGateway;
   final DailyRecommendationGateway dailyRecommendationGateway;
   final PersonalizedPlaylistsGateway personalizedPlaylistsGateway;
   final PersonalizedTracksGateway personalizedTracksGateway;
+  final RelatedTracksGateway relatedTracksGateway;
 }
 
 @immutable
@@ -97,6 +101,7 @@ class AuthenticatedPlaybackDependencies {
     required this.playbackQueueGateway,
     required this.trackCommentGateway,
     required this.audioEngine,
+    this.systemPlaybackBinding = const NoopSystemPlaybackBinding(),
   });
 
   final MediaResolutionGateway mediaResolutionGateway;
@@ -104,4 +109,5 @@ class AuthenticatedPlaybackDependencies {
   final PlaybackQueueGateway playbackQueueGateway;
   final TrackCommentGateway trackCommentGateway;
   final ForegroundAudioEngine audioEngine;
+  final SystemPlaybackBinding systemPlaybackBinding;
 }

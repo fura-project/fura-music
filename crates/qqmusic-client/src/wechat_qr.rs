@@ -41,6 +41,10 @@ pub struct QrImage {
 }
 
 impl QrImage {
+    pub(crate) const fn new_for_protocol(media_type: QrImageMediaType, bytes: Vec<u8>) -> Self {
+        Self { media_type, bytes }
+    }
+
     #[must_use]
     pub const fn media_type(&self) -> QrImageMediaType {
         self.media_type
