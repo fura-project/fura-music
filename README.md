@@ -10,6 +10,8 @@ The project has a working M1 implementation with offline regression coverage and
 
 No release is available yet.
 
+For maintainer-operated testing on native systems that are unavailable locally, the manual `Cross-platform development packages` GitHub Actions workflow produces seven-day development artifacts for Android, Linux, Windows, macOS, and iOS Simulator after the full offline quality gate passes. These are not releases and do not resolve production identity, signing, notarization, physical iOS provisioning, or native-video notice requirements. See [the artifact guide](docs/development/cross-platform-test-packages.md) for exact targets and claim boundaries.
+
 ## Repository layout
 
 The layout is created progressively. Only modules with a current responsibility should exist.
