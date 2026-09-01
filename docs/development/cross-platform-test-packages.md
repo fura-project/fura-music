@@ -10,7 +10,7 @@ These artifacts are not releases. They retain the current generated application 
 | --- | --- | --- |
 | `flutterustmusic-android-arm64-development.apk` | Physical ARM64 Android phone or tablet | Built in Release mode but signed with the repository's development/debug key. It is not a production APK. |
 | `flutterustmusic-android-x64-debug.apk` | x64 Android Emulator | Debug-only emulator package; it does not prove ARM64 physical-device behavior. |
-| `flutterustmusic-linux-x64-development.tar.gz` | x64 Linux desktop | Extract the complete `bundle/` directory and run `bundle/flutterustmusic`. The target still needs compatible GTK, libsecret, GStreamer, and desktop-session libraries. |
+| `flutterustmusic-linux-x64-development.tar.gz` | x64 Linux desktop | Extract the complete `bundle/` directory and run `bundle/flutterustmusic`. The target still needs compatible GTK, libsecret, GStreamer, libmpv, and desktop-session libraries. On Ubuntu 24.04 the build host uses `libmpv-dev`, whose `libmpv2` dependency supplies the runtime library. |
 | `flutterustmusic-windows-x64-development.zip` | x64 Windows 10 or 11 | Extract the whole directory before launching `flutterustmusic.exe`; individual DLLs must remain beside the executable. It is not MSIX-signed or Store-packaged. |
 | `flutterustmusic-macos-development.zip` | macOS architecture(s) listed in `MACOS_ARCHITECTURES.txt` | The `.app` is neither Developer ID signed nor notarized. It is a compile/test artifact, not a distributable macOS release. |
 | `flutterustmusic-ios-simulator-development.zip` | Xcode iOS Simulator architecture(s) listed in `IOS_SIMULATOR_ARCHITECTURES.txt` | Debug-mode Simulator package. Flutter does not support mobile Release mode on a simulator. It cannot be installed on a physical iPhone or iPad and does not prove physical-device background audio, lock-screen controls, or Keychain behavior. |
@@ -19,7 +19,7 @@ There is no Web artifact because the product's Rust core, secure-storage, native
 
 ## What CI proves
 
-Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The Android job additionally verifies that the ARM64 Release APK declares Internet access and contains the expected ARM64 Rust bridge library. Linux additionally runs the isolated system-media initialization integration under a temporary D-Bus/X11 session.
+Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The Android job additionally verifies that the ARM64 Release APK declares Internet access and contains the expected ARM64 Rust bridge library. Linux additionally verifies its libmpv build dependency, runs the isolated system-media initialization integration under a temporary D-Bus/X11 session, and rejects a bundle whose executable has an unresolved shared-library dependency on that build host.
 
 A green workflow does not prove real-account QQ Music behavior, physical Android or Apple behavior, Windows SMTC usability, Linux desktop-shell integration, codecs on another machine, signing, notarization, store acceptance, or release readiness. Those observations remain per-target maintainer tests.
 

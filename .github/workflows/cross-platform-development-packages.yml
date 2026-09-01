@@ -153,7 +153,7 @@ jobs:
       - name: Install Linux build and runtime dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libgtk-3-dev libsecret-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+          sudo apt-get install --yes --no-install-recommends libgtk-3-dev libsecret-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good libmpv-dev
 
       - name: Report Linux build toolchain
         run: |
@@ -161,6 +161,7 @@ jobs:
           cmake --version
           ninja --version
           pkg-config --version
+          pkg-config --modversion mpv
           g++ --version
           dbus-run-session --version
           xvfb-run --help >/dev/null
@@ -181,7 +182,7 @@ jobs:
         working-directory: apps/flutter
         run: flutter pub get
 
-      - name: Verify Linux MPRIS session-bus contract
+      - name: Verify Linux native build and MPRIS session-bus contract
         working-directory: apps/flutter
         run: dbus-run-session -- xvfb-run -a flutter test integration_test/system_playback_service_test.dart -d linux
 
@@ -195,7 +196,8 @@ jobs:
           mkdir -p build/test-packages
           tar -C build/linux/x64/release -czf build/test-packages/flutterustmusic-linux-x64-development.tar.gz bundle
           cp ../../docs/development/cross-platform-test-packages.md build/test-packages/README.md
-          ldd build/linux/x64/release/bundle/flutterustmusic > build/test-packages/LINUX_RUNTIME_DEPENDENCIES.txt
+          ldd build/linux/x64/release/bundle/flutterustmusic | tee build/test-packages/LINUX_RUNTIME_DEPENDENCIES.txt
+          ! grep -q "not found" build/test-packages/LINUX_RUNTIME_DEPENDENCIES.txt
           flutter --version > build/test-packages/FLUTTER_VERSION.txt
           rustc --version > build/test-packages/RUST_VERSION.txt
 
