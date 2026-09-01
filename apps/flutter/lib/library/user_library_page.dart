@@ -70,10 +70,111 @@ class UserLibraryPage extends StatefulWidget {
   State<UserLibraryPage> createState() => _UserLibraryPageState();
 }
 
+class _ExpandedNowPlayingRouteTransition extends StatefulWidget {
+  const _ExpandedNowPlayingRouteTransition({
+    required this.open,
+    required this.base,
+    required this.detail,
+  });
+
+  final bool open;
+  final Widget base;
+  final Widget detail;
+
+  @override
+  State<_ExpandedNowPlayingRouteTransition> createState() =>
+      _ExpandedNowPlayingRouteTransitionState();
+}
+
+class _ExpandedNowPlayingRouteTransitionState
+    extends State<_ExpandedNowPlayingRouteTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Offset> _position;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      value: widget.open ? 1 : 0,
+      duration: const Duration(milliseconds: 360),
+      reverseDuration: const Duration(milliseconds: 280),
+    );
+    _position = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: Easing.emphasizedDecelerate,
+            reverseCurve: Easing.emphasizedAccelerate,
+          ),
+        );
+  }
+
+  @override
+  void didUpdateWidget(_ExpandedNowPlayingRouteTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.open == widget.open) return;
+    if (widget.open) {
+      unawaited(_controller.forward());
+    } else {
+      unawaited(_controller.reverse());
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    key: const ValueKey('expanded-now-playing-transition'),
+    animation: _controller,
+    builder: (context, _) {
+      final detailVisible = !_controller.isDismissed;
+      final baseCovered = _controller.isCompleted;
+      return Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Offstage(
+            offstage: baseCovered,
+            child: ExcludeSemantics(
+              excluding: widget.open,
+              child: ExcludeFocus(
+                excluding: widget.open,
+                child: IgnorePointer(ignoring: widget.open, child: widget.base),
+              ),
+            ),
+          ),
+          if (detailVisible)
+            ExcludeSemantics(
+              excluding: !widget.open,
+              child: ExcludeFocus(
+                excluding: !widget.open,
+                child: IgnorePointer(
+                  ignoring: !widget.open,
+                  child: SlideTransition(
+                    key: const ValueKey('expanded-now-playing-transition-page'),
+                    position: _position,
+                    child: widget.detail,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final HomeController _homeController;
   late final QueuePlaybackController _queuePlaybackController;
+  late final ArtworkColorSchemeCache _expandedNowPlayingPalette;
   late final RecommendedPlaylistController _recommendedPlaylistController;
   late final RadarController _homeRadarController;
   final FocusNode _playlistReturnFocusNode = FocusNode(
@@ -103,6 +204,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool _handledHomeCredentialRejection = false;
   bool _signingOut = false;
   bool _overlayPageActive = false;
+  String? _prefetchedArtworkUri;
+  Brightness? _prefetchedArtworkBrightness;
 
   @override
   void initState() {
@@ -127,6 +230,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       ),
       lyrics: LyricController(_playback.lyricGateway),
     );
+    _expandedNowPlayingPalette = ArtworkColorSchemeCache();
     _playback.systemPlaybackBinding.attach(_queuePlaybackController);
     _queuePlaybackController.addListener(_onQueuePlaybackChanged);
     _homeController.updateRelatedSeed(_queuePlaybackController.current);
@@ -149,6 +253,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _onQueuePlaybackChanged() {
     if (!mounted) return;
+    _prefetchExpandedNowPlayingPalette();
     _homeController.updateRelatedSeed(_queuePlaybackController.current);
     if (_queuePlaybackController.lyrics?.stage !=
         LyricStage.credentialRejected) {
@@ -158,6 +263,35 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (_handledLyricCredentialRejection) return;
     _handledLyricCredentialRejection = true;
     widget.onSignInAgain();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _prefetchExpandedNowPlayingPalette();
+  }
+
+  void _prefetchExpandedNowPlayingPalette() {
+    if (!mounted) return;
+    final artworkUri = _queuePlaybackController.current?.artworkUri;
+    if (artworkUri == null) {
+      _prefetchedArtworkUri = null;
+      _prefetchedArtworkBrightness = null;
+      return;
+    }
+    final brightness = Theme.of(context).brightness;
+    if (_prefetchedArtworkUri == artworkUri &&
+        _prefetchedArtworkBrightness == brightness) {
+      return;
+    }
+    _prefetchedArtworkUri = artworkUri;
+    _prefetchedArtworkBrightness = brightness;
+    unawaited(
+      _expandedNowPlayingPalette.resolve(
+        artworkUri: artworkUri,
+        brightness: brightness,
+      ),
+    );
   }
 
   void _onHomeChanged() {
@@ -227,23 +361,20 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       index: nowPlayingPages.length - 1,
       children: nowPlayingPages,
     );
-    final expandedNowPlayingPage = IndexedStack(
-      index: expandedNowPlayingOpen ? 1 : 0,
-      children: [
-        ExpandedNowPlayingNavigation(
-          onOpen: _openExpandedNowPlaying,
-          child: retainedRoutePage,
-        ),
-        if (!expandedNowPlayingOpen)
-          const SizedBox.shrink()
-        else
-          ExpandedNowPlayingPage(
-            controller: _queuePlaybackController,
-            onBack: _closeExpandedNowPlaying,
-            onSignInAgain: widget.onSignInAgain,
-            commentsGateway: _playback.trackCommentGateway,
-          ),
-      ],
+    final retainedRouteSurface = ExpandedNowPlayingNavigation(
+      onOpen: _openExpandedNowPlaying,
+      child: retainedRoutePage,
+    );
+    final expandedNowPlayingPage = _ExpandedNowPlayingRouteTransition(
+      open: expandedNowPlayingOpen,
+      base: retainedRouteSurface,
+      detail: ExpandedNowPlayingPage(
+        controller: _queuePlaybackController,
+        onBack: _closeExpandedNowPlaying,
+        onSignInAgain: widget.onSignInAgain,
+        commentsGateway: _playback.trackCommentGateway,
+        artworkColorSchemeCache: _expandedNowPlayingPalette,
+      ),
     );
     final hasOverlayPage = _hasOverlayPage;
     final hasLibrarySubsection = _hasLibrarySubsection;

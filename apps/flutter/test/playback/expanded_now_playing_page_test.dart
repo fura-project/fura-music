@@ -16,6 +16,42 @@ import 'package:flutterustmusic/playback/track_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 void main() {
+  test('artwork palette cache reuses and bounds resolved schemes', () async {
+    var loads = 0;
+    final cache = ArtworkColorSchemeCache(
+      maximumEntries: 1,
+      artworkImageProviderBuilder: (_) => _artwork(),
+      artworkColorSchemeLoader:
+          ({required provider, required brightness}) async {
+            loads += 1;
+            return ColorScheme.fromSeed(
+              seedColor: brightness == Brightness.light
+                  ? const Color(0xff4f5f92)
+                  : const Color(0xff84546d),
+              brightness: brightness,
+            );
+          },
+    );
+
+    final light = await cache.resolve(
+      artworkUri: 'artwork:one',
+      brightness: Brightness.light,
+    );
+    final lightAgain = await cache.resolve(
+      artworkUri: 'artwork:one',
+      brightness: Brightness.light,
+    );
+    expect(lightAgain, same(light));
+    expect(loads, 1);
+
+    await cache.resolve(artworkUri: 'artwork:one', brightness: Brightness.dark);
+    expect(loads, 2);
+    expect(
+      cache.lookup(artworkUri: 'artwork:one', brightness: Brightness.light),
+      isNull,
+    );
+  });
+
   testWidgets(
     'uses artwork-derived Material colors in light and dark layouts',
     (tester) async {
@@ -180,7 +216,7 @@ void main() {
     controller.dispose();
   });
 
-  testWidgets('does not paint track content with a stale palette', (
+  testWidgets('keeps content visible while artwork colors resolve', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1100, 800);
@@ -208,26 +244,29 @@ void main() {
     await tester.pump();
 
     expect(
-      find.byKey(const ValueKey('expanded-now-playing-palette-loading')),
+      find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
-      findsNothing,
+      find.byKey(const ValueKey('expanded-now-playing-palette-ready')),
+      findsOneWidget,
+    );
+    expect(
+      Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('expanded-now-playing-artwork-backdrop')),
+        ),
+      ).colorScheme.primary,
+      MusicMaterialTheme.light().colorScheme.primary,
     );
 
-    palette.complete(
-      ColorScheme.fromSeed(
-        seedColor: const Color(0xff4f5f92),
-        brightness: Brightness.light,
-      ),
+    final resolved = ColorScheme.fromSeed(
+      seedColor: const Color(0xff4f5f92),
+      brightness: Brightness.light,
     );
+    palette.complete(resolved);
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('expanded-now-playing-palette-loading')),
-      findsNothing,
-    );
     expect(
       find.byKey(const ValueKey('expanded-now-playing-palette-ready')),
       findsOneWidget,
@@ -236,9 +275,71 @@ void main() {
       find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
       findsOneWidget,
     );
+    expect(
+      Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('expanded-now-playing-artwork-backdrop')),
+        ),
+      ).colorScheme.primary,
+      resolved.primary,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
+  });
+
+  testWidgets('reuses a resolved palette after the page is reopened', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1100, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var loads = 0;
+    final cache = ArtworkColorSchemeCache(
+      artworkImageProviderBuilder: (_) => _artwork(),
+      artworkColorSchemeLoader:
+          ({required provider, required brightness}) async {
+            loads += 1;
+            return ColorScheme.fromSeed(
+              seedColor: const Color(0xff4f5f92),
+              brightness: brightness,
+            );
+          },
+    );
+
+    Future<QueuePlaybackController> pumpPage() async {
+      final controller = _controller();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: MusicMaterialTheme.light(),
+          home: ExpandedNowPlayingPage(
+            controller: controller,
+            onBack: () {},
+            onSignInAgain: () {},
+            artworkImageProviderBuilder: (_) => _artwork(),
+            artworkColorSchemeCache: cache,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return controller;
+    }
+
+    final firstController = await pumpPage();
+    expect(loads, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    firstController.dispose();
+
+    final secondController = await pumpPage();
+    expect(loads, 1);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    secondController.dispose();
   });
 }
 

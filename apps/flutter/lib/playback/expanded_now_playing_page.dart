@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,78 @@ typedef ArtworkColorSchemeLoader = Future<ColorScheme> Function({
   required Brightness brightness,
 });
 
+class ArtworkColorSchemeCache {
+  ArtworkColorSchemeCache({
+    this.maximumEntries = 8,
+    this.artworkImageProviderBuilder = _networkArtworkProvider,
+    this.artworkColorSchemeLoader = _materialArtworkColorScheme,
+  }) : assert(maximumEntries > 0);
+
+  final int maximumEntries;
+  final ArtworkImageProviderBuilder artworkImageProviderBuilder;
+  final ArtworkColorSchemeLoader artworkColorSchemeLoader;
+  final LinkedHashMap<_ArtworkPaletteKey, ColorScheme> _resolved =
+      LinkedHashMap<_ArtworkPaletteKey, ColorScheme>();
+  final Map<_ArtworkPaletteKey, Future<ColorScheme?>> _pending =
+      <_ArtworkPaletteKey, Future<ColorScheme?>>{};
+
+  ColorScheme? lookup({
+    required String artworkUri,
+    required Brightness brightness,
+  }) {
+    final key = _ArtworkPaletteKey(artworkUri, brightness);
+    final scheme = _resolved.remove(key);
+    if (scheme != null) _resolved[key] = scheme;
+    return scheme;
+  }
+
+  Future<ColorScheme?> resolve({
+    required String artworkUri,
+    required Brightness brightness,
+  }) {
+    final cached = lookup(artworkUri: artworkUri, brightness: brightness);
+    if (cached != null) return Future<ColorScheme?>.value(cached);
+    final key = _ArtworkPaletteKey(artworkUri, brightness);
+    return _pending[key] ??= _load(key);
+  }
+
+  Future<ColorScheme?> _load(_ArtworkPaletteKey key) async {
+    try {
+      final provider = artworkImageProviderBuilder(key.artworkUri);
+      final scheme = await artworkColorSchemeLoader(
+        provider: provider,
+        brightness: key.brightness,
+      );
+      _resolved[key] = scheme;
+      while (_resolved.length > maximumEntries) {
+        _resolved.remove(_resolved.keys.first);
+      }
+      return scheme;
+    } on Object {
+      return null;
+    } finally {
+      _pending.remove(key);
+    }
+  }
+}
+
+@immutable
+class _ArtworkPaletteKey {
+  const _ArtworkPaletteKey(this.artworkUri, this.brightness);
+
+  final String artworkUri;
+  final Brightness brightness;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ArtworkPaletteKey &&
+      other.artworkUri == artworkUri &&
+      other.brightness == brightness;
+
+  @override
+  int get hashCode => Object.hash(artworkUri, brightness);
+}
+
 class ExpandedNowPlayingPage extends StatefulWidget {
   const ExpandedNowPlayingPage({
     required this.controller,
@@ -32,6 +105,7 @@ class ExpandedNowPlayingPage extends StatefulWidget {
     this.musicVideoEngine = const MediaKitTrackMusicVideoEngine(),
     this.artworkImageProviderBuilder = _networkArtworkProvider,
     this.artworkColorSchemeLoader = _materialArtworkColorScheme,
+    this.artworkColorSchemeCache,
     super.key,
   });
 
@@ -43,6 +117,7 @@ class ExpandedNowPlayingPage extends StatefulWidget {
   final TrackMusicVideoEngine musicVideoEngine;
   final ArtworkImageProviderBuilder artworkImageProviderBuilder;
   final ArtworkColorSchemeLoader artworkColorSchemeLoader;
+  final ArtworkColorSchemeCache? artworkColorSchemeCache;
 
   @override
   State<ExpandedNowPlayingPage> createState() => _ExpandedNowPlayingPageState();
@@ -52,12 +127,13 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
   String? _resolvedArtworkUri;
   Brightness? _resolvedBrightness;
   ColorScheme? _artworkColorScheme;
-  _ArtworkPaletteStage _paletteStage = _ArtworkPaletteStage.resolving;
+  late ArtworkColorSchemeCache _paletteCache;
   int _colorRequestGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+    _paletteCache = _cacheFor(widget);
     widget.controller.addListener(_handleControllerChanged);
   }
 
@@ -74,10 +150,13 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
       oldWidget.controller.removeListener(_handleControllerChanged);
       widget.controller.addListener(_handleControllerChanged);
     }
-    if (oldWidget.controller != widget.controller ||
+    final paletteSourceChanged =
+        oldWidget.artworkColorSchemeCache != widget.artworkColorSchemeCache ||
         oldWidget.artworkImageProviderBuilder !=
             widget.artworkImageProviderBuilder ||
-        oldWidget.artworkColorSchemeLoader != widget.artworkColorSchemeLoader) {
+        oldWidget.artworkColorSchemeLoader != widget.artworkColorSchemeLoader;
+    if (paletteSourceChanged) _paletteCache = _cacheFor(widget);
+    if (oldWidget.controller != widget.controller || paletteSourceChanged) {
       _resolvedArtworkUri = null;
       _resolvedBrightness = null;
       _resolveArtworkColors(notify: false);
@@ -128,27 +207,17 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
             ),
             title: const Text('Now playing'),
           ),
-          body: AnimatedSwitcher(
-            duration: MusicMotion.stateChange,
-            switchInCurve: Easing.emphasizedDecelerate,
-            switchOutCurve: Easing.emphasizedAccelerate,
-            child: _paletteStage == _ArtworkPaletteStage.resolving
-                ? const _ArtworkPaletteLoading(
-                    key: ValueKey('expanded-now-playing-palette-loading'),
-                  )
-                : _ExpandedNowPlayingBackdrop(
-                    key: const ValueKey('expanded-now-playing-palette-ready'),
-                    child: _ExpandedNowPlayingBody(
-                      controller: widget.controller,
-                      onBack: widget.onBack,
-                      onSignInAgain: widget.onSignInAgain,
-                      commentsGateway: widget.commentsGateway,
-                      musicVideoGateway: widget.musicVideoGateway,
-                      musicVideoEngine: widget.musicVideoEngine,
-                      artworkImageProviderBuilder:
-                          widget.artworkImageProviderBuilder,
-                    ),
-                  ),
+          body: _ExpandedNowPlayingBackdrop(
+            key: const ValueKey('expanded-now-playing-palette-ready'),
+            child: _ExpandedNowPlayingBody(
+              controller: widget.controller,
+              onBack: widget.onBack,
+              onSignInAgain: widget.onSignInAgain,
+              commentsGateway: widget.commentsGateway,
+              musicVideoGateway: widget.musicVideoGateway,
+              musicVideoEngine: widget.musicVideoEngine,
+              artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
+            ),
           ),
           bottomNavigationBar: NowPlayingBar.expanded(
             controller: widget.controller,
@@ -161,6 +230,13 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
 
   void _handleControllerChanged() => _resolveArtworkColors();
 
+  ArtworkColorSchemeCache _cacheFor(ExpandedNowPlayingPage page) =>
+      page.artworkColorSchemeCache ??
+      ArtworkColorSchemeCache(
+        artworkImageProviderBuilder: page.artworkImageProviderBuilder,
+        artworkColorSchemeLoader: page.artworkColorSchemeLoader,
+      );
+
   void _resolveArtworkColors({bool notify = true}) {
     if (!mounted) return;
     final brightness = Theme.of(context).brightness;
@@ -172,54 +248,21 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
     final generation = ++_colorRequestGeneration;
     _resolvedArtworkUri = artworkUri;
     _resolvedBrightness = brightness;
-    _artworkColorScheme = null;
-    _paletteStage = artworkUri == null
-        ? _ArtworkPaletteStage.fallback
-        : _ArtworkPaletteStage.resolving;
+    _artworkColorScheme = artworkUri == null
+        ? null
+        : _paletteCache.lookup(artworkUri: artworkUri, brightness: brightness);
     if (notify) setState(() {});
-    if (artworkUri == null) return;
+    if (artworkUri == null || _artworkColorScheme != null) return;
 
-    late final ImageProvider<Object> provider;
-    try {
-      provider = widget.artworkImageProviderBuilder(artworkUri);
-    } on Object {
-      _paletteStage = _ArtworkPaletteStage.fallback;
-      if (notify) setState(() {});
-      return;
-    }
-    widget
-        .artworkColorSchemeLoader(provider: provider, brightness: brightness)
-        .then((scheme) {
-          if (!mounted || generation != _colorRequestGeneration) return;
-          setState(() {
-            _artworkColorScheme = scheme;
-            _paletteStage = _ArtworkPaletteStage.resolved;
-          });
-        })
-        .onError((Object _, StackTrace _) {
-          // A missing or undecodable cover keeps the normal app color scheme.
-          // Do not surface the remote artwork URI through error diagnostics.
-          if (!mounted || generation != _colorRequestGeneration) return;
-          setState(() => _paletteStage = _ArtworkPaletteStage.fallback);
-        });
+    _paletteCache.resolve(artworkUri: artworkUri, brightness: brightness).then((
+      scheme,
+    ) {
+      if (!mounted || generation != _colorRequestGeneration || scheme == null) {
+        return;
+      }
+      setState(() => _artworkColorScheme = scheme);
+    });
   }
-}
-
-enum _ArtworkPaletteStage { resolving, resolved, fallback }
-
-class _ArtworkPaletteLoading extends StatelessWidget {
-  const _ArtworkPaletteLoading({super.key});
-
-  @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: Theme.of(context).colorScheme.surface,
-    child: const Center(
-      child: SizedBox.square(
-        dimension: 28,
-        child: CircularProgressIndicator(strokeWidth: 3),
-      ),
-    ),
-  );
 }
 
 ImageProvider<Object> _networkArtworkProvider(String artworkUri) =>

@@ -3275,6 +3275,9 @@ void main() {
   testWidgets(
     'opens immersive now playing with desktop keyboard and returns exactly',
     (tester) async {
+      const captureTransition = bool.fromEnvironment(
+        'NOW_PLAYING_TRANSITION_VISUAL_REVIEW',
+      );
       tester.view.physicalSize = const Size(1100, 800);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -3348,7 +3351,27 @@ void main() {
       }
       expect(actionFocused, isTrue);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      final expandedPage = find.byKey(
+        const ValueKey('expanded-now-playing-page'),
+      );
+      final enteringTop = tester.getTopLeft(expandedPage).dy;
+      expect(enteringTop, greaterThan(0));
+      await tester.pump(const Duration(milliseconds: 180));
+      final enteringMidpoint = tester.getTopLeft(expandedPage).dy;
+      expect(enteringMidpoint, lessThan(enteringTop));
+      expect(enteringMidpoint, greaterThan(0));
+      if (captureTransition) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-now-playing-enter.png'),
+          ),
+        );
+      }
       await tester.pumpAndSettle();
+      expect(tester.getTopLeft(expandedPage).dy, 0);
 
       expect(
         find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
@@ -3386,7 +3409,20 @@ void main() {
       expect(tester.takeException(), isNull);
 
       await tester.tap(find.byKey(const ValueKey('expanded-now-playing-back')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(expandedPage, findsOneWidget);
+      expect(tester.getTopLeft(expandedPage).dy, greaterThan(0));
+      if (captureTransition) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-now-playing-exit.png'),
+          ),
+        );
+      }
       await tester.pumpAndSettle();
+      expect(expandedPage, findsNothing);
       expect(
         find.byKey(const ValueKey('track-search-content')),
         findsOneWidget,
