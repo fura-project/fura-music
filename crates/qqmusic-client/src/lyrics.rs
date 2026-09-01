@@ -321,15 +321,15 @@ where
         let envelope: LyricEnvelope =
             serde_json::from_slice(response.body()).map_err(|_| QqMusicLyricsError::InvalidJson)?;
         let data = extract_data(envelope)?;
+        let encrypted_original = data.lyric.ok_or(QqMusicLyricsError::MissingLyrics)?;
+        if encrypted_original.is_empty() {
+            return Err(QqMusicLyricsError::Unavailable);
+        }
         if data.crypt != Some(1) || data.qrc != Some(1) {
             return Err(invalid_document(
                 QqMusicLyricTrack::Original,
                 QqMusicLyricDocumentField::Representation,
             ));
-        }
-        let encrypted_original = data.lyric.ok_or(QqMusicLyricsError::MissingLyrics)?;
-        if encrypted_original.is_empty() {
-            return Err(QqMusicLyricsError::Unavailable);
         }
 
         let original_text = decrypt_track(&encrypted_original, QqMusicLyricTrack::Original)?;
@@ -905,6 +905,17 @@ mod tests {
         }));
         assert!(matches!(
             QqMusicClient::new(unavailable)
+                .lyrics(&credential(), "fixtureMID01", 0)
+                .await,
+            Err(QqMusicLyricsError::Unavailable)
+        ));
+
+        let unavailable_without_qrc = FixtureTransport::new(&json!({
+            "code": 0,
+            "req_0": {"code": 0, "data": {"crypt": 0, "qrc": 0, "lyric": ""}}
+        }));
+        assert!(matches!(
+            QqMusicClient::new(unavailable_without_qrc)
                 .lyrics(&credential(), "fixtureMID01", 0)
                 .await,
             Err(QqMusicLyricsError::Unavailable)

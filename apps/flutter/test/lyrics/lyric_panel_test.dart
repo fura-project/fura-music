@@ -86,6 +86,27 @@ void main() {
   });
 
   testWidgets(
+    'highlights the displayed lyric without inserting mismatched segment text',
+    (tester) async {
+      final controller = LyricController(
+        _ScriptedGateway([_ImmediateOperation(_mismatchedSegments())]),
+      );
+      await controller.load(_track);
+      controller.updatePositionMs(1250);
+
+      await _pumpPanel(tester, controller);
+      await tester.pumpAndSettle();
+
+      expect(find.text('displayed original'), findsOneWidget);
+      expect(find.text('完整翻译'), findsOneWidget);
+      expect(find.text('mismatched timed text'), findsNothing);
+      expect(find.byKey(const ValueKey('lyrics-line-0')), findsOneWidget);
+
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
     'follows active lines until manual scrolling and resets per track',
     (tester) async {
       tester.view.physicalSize = const Size(400, 560);
@@ -317,6 +338,24 @@ LyricLoadResult _longTranslation() => LyricLoadResult(
           '不会被固定行数或溢出策略截断的长翻译。',
       romanization: 'A complete romanization remains available as well.',
       segments: const [],
+    ),
+  ]),
+);
+
+LyricLoadResult _mismatchedSegments() => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    SynchronizedLyricLine(
+      text: 'displayed original',
+      startMs: 1000,
+      durationMs: 500,
+      translation: '完整翻译',
+      segments: const [
+        TimedLyricSegment(
+          text: 'mismatched timed text',
+          startMs: 1000,
+          durationMs: 500,
+        ),
+      ],
     ),
   ]),
 );

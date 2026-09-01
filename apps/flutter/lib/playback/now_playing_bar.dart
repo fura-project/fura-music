@@ -126,7 +126,11 @@ class NowPlayingBar extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final narrow = constraints.maxWidth < 520;
-                final desktop = constraints.maxWidth >= 900;
+                // Keep the accepted three-zone player through normal desktop
+                // window resizing. The previous 900 px inner breakpoint
+                // exposed the legacy inline layout while the application was
+                // still using its desktop Shell.
+                final desktop = constraints.maxWidth >= 640;
                 final content = Padding(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -232,7 +236,7 @@ class NowPlayingBar extends StatelessWidget {
                     ],
                   ),
                 );
-                return desktop ? SizedBox(height: 80, child: content) : content;
+                return desktop ? SizedBox(height: 96, child: content) : content;
               },
             ),
           ),
@@ -433,7 +437,7 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          flex: 4,
+          flex: 3,
           child: Row(
             key: const ValueKey('now-playing-track-zone'),
             children: [
@@ -458,23 +462,31 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
           ),
         ),
         Expanded(
-          flex: 4,
-          child: Column(
+          flex: 5,
+          child: Stack(
             key: const ValueKey('now-playing-transport-zone'),
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: _transportControls(
-                  controller,
-                  authenticationFailure,
-                  onSignInAgain,
-                  prominentPrimary: true,
-                  prominentPrimarySize: 48,
+              Center(
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: _transportControls(
+                    controller,
+                    authenticationFailure,
+                    onSignInAgain,
+                    prominentPrimary: true,
+                    prominentPrimarySize: 48,
+                  ),
                 ),
               ),
-              _PlaybackProgress(controller: playback, track: track),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: _PlaybackProgress(
+                  controller: playback,
+                  track: track,
+                  dense: true,
+                ),
+              ),
             ],
           ),
         ),
@@ -840,10 +852,15 @@ class _NowPlayingCatalogSelection extends StatelessWidget {
 }
 
 class _PlaybackProgress extends StatefulWidget {
-  const _PlaybackProgress({required this.controller, required this.track});
+  const _PlaybackProgress({
+    required this.controller,
+    required this.track,
+    this.dense = false,
+  });
 
   final TrackPlaybackController controller;
   final PlaylistTrackSummary track;
+  final bool dense;
 
   @override
   State<_PlaybackProgress> createState() => _PlaybackProgressState();
@@ -874,7 +891,7 @@ class _PlaybackProgressState extends State<_PlaybackProgress> {
       color: colors.onSurfaceVariant,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
-    return Row(
+    final progress = Row(
       children: [
         SizedBox(
           width: 42,
@@ -889,8 +906,12 @@ class _PlaybackProgressState extends State<_PlaybackProgress> {
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+              thumbShape: RoundSliderThumbShape(
+                enabledThumbRadius: widget.dense ? 5 : 6,
+              ),
+              overlayShape: RoundSliderOverlayShape(
+                overlayRadius: widget.dense ? 11 : 14,
+              ),
             ),
             child: Slider(
               key: const ValueKey('now-playing-progress'),
@@ -919,6 +940,7 @@ class _PlaybackProgressState extends State<_PlaybackProgress> {
         ),
       ],
     );
+    return widget.dense ? SizedBox(height: 24, child: progress) : progress;
   }
 
   void _commitSeek(double value) {

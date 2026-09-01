@@ -194,20 +194,19 @@ ActiveLyricSelection? selectActiveLyrics(
   int positionMs,
 ) {
   if (positionMs < 0) return null;
-  final lineIndex = _latestActiveIndex(
+  final lineIndex = _latestStartedIndex(
     lyrics.lines.length,
     (index) => lyrics.lines[index].startMs,
-    (index) => lyrics.lines[index].durationMs,
     positionMs,
   );
   if (lineIndex == null) return null;
 
   final segments = lyrics.lines[lineIndex].segments;
-  final segmentIndex = _latestActiveIndex(
+  final segmentIndex = _latestStartedIndex(
     segments.length,
     (index) => segments[index].startMs,
-    (index) => segments[index].durationMs,
     positionMs,
+    include: (index) => segments[index].durationMs > 0,
   );
   if (segmentIndex == null) {
     return ActiveLyricSelection(lineIndex: lineIndex);
@@ -216,24 +215,22 @@ ActiveLyricSelection? selectActiveLyrics(
   return ActiveLyricSelection(
     lineIndex: lineIndex,
     segmentIndex: segmentIndex,
-    segmentProgress: (positionMs - segment.startMs) / segment.durationMs,
+    segmentProgress: ((positionMs - segment.startMs) / segment.durationMs)
+        .clamp(0.0, 1.0),
   );
 }
 
-int? _latestActiveIndex(
+int? _latestStartedIndex(
   int length,
   int Function(int index) startAt,
-  int Function(int index) durationAt,
-  int positionMs,
-) {
+  int positionMs, {
+  bool Function(int index)? include,
+}) {
   int? selected;
   var selectedStart = -1;
   for (var index = 0; index < length; index += 1) {
     final start = startAt(index);
-    final duration = durationAt(index);
-    if (duration <= 0 || positionMs < start || positionMs >= start + duration) {
-      continue;
-    }
+    if (positionMs < start || include?.call(index) == false) continue;
     if (start > selectedStart || start == selectedStart) {
       selected = index;
       selectedStart = start;

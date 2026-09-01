@@ -24,6 +24,8 @@ import 'package:flutter/material.dart'
         ScrollableState,
         Semantics,
         SizedBox,
+        TabBar,
+        TabIndicatorAnimation,
         TextField,
         TextInputAction,
         Theme;
@@ -4883,6 +4885,18 @@ void main() {
             .dx,
         1,
       ),
+    );
+    final likedTabs = tester.widget<TabBar>(
+      find.byKey(const ValueKey('liked-songs-tabs')),
+    );
+    expect(likedTabs.indicatorAnimation, TabIndicatorAnimation.elastic);
+    expect(
+      likedTabs.controller!.animationDuration,
+      const Duration(milliseconds: 300),
+    );
+    expect(
+      find.byKey(const ValueKey('liked-collection-pages')),
+      findsOneWidget,
     );
     await tester.tap(find.byKey(const ValueKey('liked-tab-playlists')));
     await tester.pumpAndSettle();

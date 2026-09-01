@@ -269,7 +269,8 @@ void main() {
       secondSession.emitPosition(750);
       await _flush();
       expect(controller.lyrics?.activeSelection?.lineIndex, 0);
-      expect(controller.lyrics?.activeSelection?.segmentIndex, isNull);
+      expect(controller.lyrics?.activeSelection?.segmentIndex, 0);
+      expect(controller.lyrics?.activeSelection?.segmentProgress, 1);
 
       await controller.clear();
       expect(controller.lyrics?.stage, LyricStage.idle);

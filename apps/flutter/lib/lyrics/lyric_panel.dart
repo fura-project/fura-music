@@ -227,9 +227,8 @@ class _LyricContent extends StatefulWidget {
 
 class _LyricContentState extends State<_LyricContent> {
   final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _lineKeys = {};
   SynchronizedLyrics? _lastLyrics;
-  int? _lineKeyIndex;
-  GlobalKey? _activeLineKey;
   int? _lastActiveLineIndex;
   int _followAttempt = 0;
   bool _following = true;
@@ -241,8 +240,7 @@ class _LyricContentState extends State<_LyricContent> {
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
     if (!identical(lyrics, _lastLyrics)) {
       _lastLyrics = lyrics;
-      _lineKeyIndex = null;
-      _activeLineKey = null;
+      _lineKeys.clear();
       _lastActiveLineIndex = null;
       _followAttempt += 1;
       _following = true;
@@ -269,19 +267,20 @@ class _LyricContentState extends State<_LyricContent> {
             ),
             itemCount: lines.length,
             itemBuilder: (context, index) {
-              final line = _LyricLine(
-                key: ValueKey('lyrics-line-$index'),
-                line: lines[index],
-                lineIndex: index,
-                active: index == activeLineIndex,
-                immersive: widget.immersive,
-                positionMs: widget.controller.positionMs,
-                onSeek: widget.onSeek == null
-                    ? null
-                    : () => unawaited(widget.onSeek!(lines[index].startMs)),
+              return KeyedSubtree(
+                key: _lineKey(index),
+                child: _LyricLine(
+                  key: ValueKey('lyrics-line-$index'),
+                  line: lines[index],
+                  lineIndex: index,
+                  active: index == activeLineIndex,
+                  immersive: widget.immersive,
+                  positionMs: widget.controller.positionMs,
+                  onSeek: widget.onSeek == null
+                      ? null
+                      : () => unawaited(widget.onSeek!(lines[index].startMs)),
+                ),
               );
-              if (index != activeLineIndex) return line;
-              return KeyedSubtree(key: _lineKey(index), child: line);
             },
           ),
         ),
@@ -303,13 +302,10 @@ class _LyricContentState extends State<_LyricContent> {
     );
   }
 
-  GlobalKey _lineKey(int index) {
-    if (_lineKeyIndex != index) {
-      _lineKeyIndex = index;
-      _activeLineKey = GlobalKey(debugLabel: 'line-$index');
-    }
-    return _activeLineKey!;
-  }
+  GlobalKey _lineKey(int index) => _lineKeys.putIfAbsent(
+    index,
+    () => GlobalKey(debugLabel: 'lyrics-line-$index'),
+  );
 
   bool _onUserScroll(UserScrollNotification notification) {
     if (_following && notification.direction != ScrollDirection.idle) {
@@ -439,7 +435,7 @@ class _LyricLine extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (active && segmentsComposeLine)
+              if (segmentsComposeLine)
                 Wrap(
                   spacing: 0,
                   runSpacing: 4,
@@ -452,35 +448,13 @@ class _LyricLine extends StatelessWidget {
                       _TimedSegment(
                         key: ValueKey('lyrics-word-$lineIndex-$index'),
                         segment: line.segments[index],
-                        positionMs: positionMs,
+                        positionMs: active ? positionMs : -1,
                         style: textStyle,
                       ),
                   ],
                 )
               else
                 Text(line.text, style: textStyle),
-              if (active &&
-                  line.segments.isNotEmpty &&
-                  !segmentsComposeLine) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 0,
-                  runSpacing: 4,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < line.segments.length;
-                      index += 1
-                    )
-                      _TimedSegment(
-                        key: ValueKey('lyrics-word-$lineIndex-$index'),
-                        segment: line.segments[index],
-                        positionMs: positionMs,
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                  ],
-                ),
-              ],
               if (line.translation case final translation?) ...[
                 const SizedBox(height: 6),
                 Text(

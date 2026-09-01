@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -174,6 +175,67 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('does not paint track content with a stale palette', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1100, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _controller();
+    final palette = Completer<ColorScheme>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: MusicMaterialTheme.light(),
+        home: ExpandedNowPlayingPage(
+          controller: controller,
+          onBack: () {},
+          onSignInAgain: () {},
+          artworkImageProviderBuilder: (_) => _artwork(),
+          artworkColorSchemeLoader: ({
+            required provider,
+            required brightness,
+          }) => palette.future,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-palette-loading')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
+      findsNothing,
+    );
+
+    palette.complete(
+      ColorScheme.fromSeed(
+        seedColor: const Color(0xff4f5f92),
+        brightness: Brightness.light,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-palette-loading')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-palette-ready')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();

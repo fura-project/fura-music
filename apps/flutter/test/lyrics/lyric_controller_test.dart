@@ -24,12 +24,15 @@ void main() {
     expect(controller.activeSelection?.segmentProgress, 0.5);
     controller.updatePositionMs(1400);
     expect(controller.activeSelection?.lineIndex, 0);
-    expect(controller.activeSelection?.segmentIndex, isNull);
+    expect(controller.activeSelection?.segmentIndex, 0);
+    expect(controller.activeSelection?.segmentProgress, 1);
     controller.updatePositionMs(1800);
-    expect(controller.activeSelection, isNull);
+    expect(controller.activeSelection?.lineIndex, 0);
+    expect(controller.activeSelection?.segmentIndex, 0);
+    expect(controller.activeSelection?.segmentProgress, 1);
   });
 
-  test('selection is exact across gaps overlaps ties and end boundaries', () {
+  test('selection retains the latest started line through timing gaps', () {
     final lyrics = SynchronizedLyrics([
       SynchronizedLyricLine(
         text: 'first',
@@ -81,13 +84,13 @@ void main() {
     expect(selectActiveLyrics(lyrics, 140)?.segmentIndex, 1);
     expect(selectActiveLyrics(lyrics, 150)?.lineIndex, 2);
     expect(selectActiveLyrics(lyrics, 229)?.lineIndex, 2);
-    expect(selectActiveLyrics(lyrics, 230)?.lineIndex, 1);
-    expect(selectActiveLyrics(lyrics, 250), isNull);
+    expect(selectActiveLyrics(lyrics, 230)?.lineIndex, 2);
+    expect(selectActiveLyrics(lyrics, 250)?.lineIndex, 2);
     final overlappingSegment = selectActiveLyrics(lyrics, 330);
     expect(overlappingSegment?.lineIndex, 3);
     expect(overlappingSegment?.segmentIndex, 1);
     expect(overlappingSegment?.segmentProgress, 0.25);
-    expect(selectActiveLyrics(lyrics, 400), isNull);
+    expect(selectActiveLyrics(lyrics, 400)?.lineIndex, 4);
   });
 
   test('track replacement cancels and suppresses a late old result', () async {

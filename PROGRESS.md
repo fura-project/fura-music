@@ -1,16 +1,18 @@
 ---
 execution:
-  mode: AUTONOMOUS_DEVELOPMENT
+  mode: HUMAN_GATED_REGRESSION
   state: ACTIVE
   acceptance_milestone: M1
-  active_workstream: MEDIA_SOURCE_SEPARATION
+  active_workstream: HUMAN_REPORTED_UI_LYRICS_REGRESSION
   current_task: null
-  next_action: EXTERNAL_EVIDENCE
+  next_action: HUMAN_REVIEW
 ---
 
 # Current State
 
-- HD-016 Media Source Separation is implemented and machine-verified. Catalog/Account Provider capability ownership is distinct from the provider-neutral `MediaSourceResolver`/`MediaSourceCoordinator` path; production statically assembles only the QQ resolver, while a test-only synthetic resolver proves generic routing is not hardwired to `QQMusicProvider`. The public Bridge now uses provider-neutral media names, and the generic Dart gateway no longer owns QQ vault policy; QQ authentication owns explicit QQ-rejection cleanup. Execution mode remains `AUTONOMOUS_DEVELOPMENT`. This work did not add another service, cross-service matching, a plugin runtime, a marketplace, or a sidecar.
+- The maintainer explicitly switched execution to `HUMAN_GATED_REGRESSION` for five reproduced Liked-page, persistent-player, Expanded Now Playing, and synchronized-lyric presentation defects. Work is bounded to those regressions; the resulting visual candidate requires Human review and does not reopen unrelated Home, Shell, navigation, or Core architecture work.
+- The bounded candidate now uses one non-animated Liked-row hover owner that clears on scrolling, official secondary Material tabs with retained animated pages, one centered three-zone desktop player through normal resize, artwork-palette loading before Expanded Now Playing content, truthful `Unavailable` handling for empty instrumental lyrics, and stable in-place lyric/translation rows whose last started line/word remains selected until the next begins. Flutter format/analyze and all 420 tests pass; the Rust workspace's 304 offline tests, format, and strict Clippy pass. Canonical desktop/mobile renders remain Human-review evidence rather than visual acceptance. Exact QQ translation alignment beyond already mapped timestamps still requires sanitized live evidence and was not guessed.
+- HD-016 Media Source Separation is implemented and machine-verified. Catalog/Account Provider capability ownership is distinct from the provider-neutral `MediaSourceResolver`/`MediaSourceCoordinator` path; production statically assembles only the QQ resolver, while a test-only synthetic resolver proves generic routing is not hardwired to `QQMusicProvider`. The public Bridge uses provider-neutral media names, and the generic Dart gateway no longer owns QQ vault policy; QQ authentication owns explicit QQ-rejection cleanup. This work did not add another service, cross-service matching, a plugin runtime, a marketplace, or a sidecar.
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
 - M2 through M6 are checkpointed. HD-013 redirects the active M7 visual-review surface to a bounded Home data-slot correction; Liked Songs and Expanded Now Playing remain implemented and unaccepted.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
@@ -56,5 +58,5 @@ execution:
 - Linux local media, packaged Bridge, and development builds do not prove physical-device audio focus, hardware video decode, unavailable operating systems, or release readiness.
 - The locally rebuilt ARM64 Release APK proves the final package declares Internet access and contains the ARM64 Rust bridge library. It does not prove physical-device DNS/TLS reachability, current QQ compatibility, authenticated behavior, or that rerun 33395804013's successor will pass Linux/Windows.
 - Linux MPRIS unit and real session-bus integrations prove service registration, property signatures, progressing position calculation, Track-bound absolute/relative seek dispatch, and shuffle/repeat round trips through the existing handler. They do not prove a particular KDE/GNOME shell renders or invokes every supported control correctly. Android packaging still does not prove lock-screen/notification behavior, task-removal continuity, or headset controls; Apple/Windows runtime behavior remains unverified.
-- Home, Liked Songs, and Expanded Now Playing remain unaccepted. Home is the current visual-review candidate; canonical synthetic renders and targeted tests do not prove Human visual acceptance, authenticated personalization availability, or related-song quality across the catalog.
+- Home, Liked Songs, and Expanded Now Playing remain unaccepted. The current Human-review candidate is bounded to the reported Liked/player/Expanded Now Playing/lyric regressions; canonical synthetic renders and automated tests do not prove Human visual acceptance, authenticated personalization availability, or related-song quality across the catalog.
 - Historical research/checkpoint documents remain evidence snapshots. Current scheduling is governed by `AGENTS.md`, `ROADMAP.md`, and this file.

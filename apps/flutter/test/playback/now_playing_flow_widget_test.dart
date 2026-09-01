@@ -134,11 +134,22 @@ void main() {
       );
       expect(tester.takeException(), isNull);
 
+      final desktopBar = tester.getRect(
+        find.byKey(const ValueKey('now-playing-desktop-layout')),
+      );
+      final primaryAction = tester.getRect(
+        find.byKey(const ValueKey('now-playing-primary-action')),
+      );
+      expect(
+        (desktopBar.center.dy - primaryAction.center.dy).abs(),
+        lessThanOrEqualTo(8),
+      );
+
       tester.view.physicalSize = const Size(800, 700);
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('now-playing-desktop-layout')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
       expect(

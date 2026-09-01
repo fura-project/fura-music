@@ -52,6 +52,7 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
   String? _resolvedArtworkUri;
   Brightness? _resolvedBrightness;
   ColorScheme? _artworkColorScheme;
+  _ArtworkPaletteStage _paletteStage = _ArtworkPaletteStage.resolving;
   int _colorRequestGeneration = 0;
 
   @override
@@ -127,16 +128,27 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
             ),
             title: const Text('Now playing'),
           ),
-          body: _ExpandedNowPlayingBackdrop(
-            child: _ExpandedNowPlayingBody(
-              controller: widget.controller,
-              onBack: widget.onBack,
-              onSignInAgain: widget.onSignInAgain,
-              commentsGateway: widget.commentsGateway,
-              musicVideoGateway: widget.musicVideoGateway,
-              musicVideoEngine: widget.musicVideoEngine,
-              artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
-            ),
+          body: AnimatedSwitcher(
+            duration: MusicMotion.stateChange,
+            switchInCurve: Easing.emphasizedDecelerate,
+            switchOutCurve: Easing.emphasizedAccelerate,
+            child: _paletteStage == _ArtworkPaletteStage.resolving
+                ? const _ArtworkPaletteLoading(
+                    key: ValueKey('expanded-now-playing-palette-loading'),
+                  )
+                : _ExpandedNowPlayingBackdrop(
+                    key: const ValueKey('expanded-now-playing-palette-ready'),
+                    child: _ExpandedNowPlayingBody(
+                      controller: widget.controller,
+                      onBack: widget.onBack,
+                      onSignInAgain: widget.onSignInAgain,
+                      commentsGateway: widget.commentsGateway,
+                      musicVideoGateway: widget.musicVideoGateway,
+                      musicVideoEngine: widget.musicVideoEngine,
+                      artworkImageProviderBuilder:
+                          widget.artworkImageProviderBuilder,
+                    ),
+                  ),
           ),
           bottomNavigationBar: NowPlayingBar.expanded(
             controller: widget.controller,
@@ -161,6 +173,9 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
     _resolvedArtworkUri = artworkUri;
     _resolvedBrightness = brightness;
     _artworkColorScheme = null;
+    _paletteStage = artworkUri == null
+        ? _ArtworkPaletteStage.fallback
+        : _ArtworkPaletteStage.resolving;
     if (notify) setState(() {});
     if (artworkUri == null) return;
 
@@ -168,19 +183,43 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
     try {
       provider = widget.artworkImageProviderBuilder(artworkUri);
     } on Object {
+      _paletteStage = _ArtworkPaletteStage.fallback;
+      if (notify) setState(() {});
       return;
     }
     widget
         .artworkColorSchemeLoader(provider: provider, brightness: brightness)
         .then((scheme) {
           if (!mounted || generation != _colorRequestGeneration) return;
-          setState(() => _artworkColorScheme = scheme);
+          setState(() {
+            _artworkColorScheme = scheme;
+            _paletteStage = _ArtworkPaletteStage.resolved;
+          });
         })
         .onError((Object _, StackTrace _) {
           // A missing or undecodable cover keeps the normal app color scheme.
           // Do not surface the remote artwork URI through error diagnostics.
+          if (!mounted || generation != _colorRequestGeneration) return;
+          setState(() => _paletteStage = _ArtworkPaletteStage.fallback);
         });
   }
+}
+
+enum _ArtworkPaletteStage { resolving, resolved, fallback }
+
+class _ArtworkPaletteLoading extends StatelessWidget {
+  const _ArtworkPaletteLoading({super.key});
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: Theme.of(context).colorScheme.surface,
+    child: const Center(
+      child: SizedBox.square(
+        dimension: 28,
+        child: CircularProgressIndicator(strokeWidth: 3),
+      ),
+    ),
+  );
 }
 
 ImageProvider<Object> _networkArtworkProvider(String artworkUri) =>
@@ -196,7 +235,7 @@ Future<ColorScheme> _materialArtworkColorScheme({
 );
 
 class _ExpandedNowPlayingBackdrop extends StatelessWidget {
-  const _ExpandedNowPlayingBackdrop({required this.child});
+  const _ExpandedNowPlayingBackdrop({required this.child, super.key});
 
   final Widget child;
 
