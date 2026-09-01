@@ -6,6 +6,7 @@ import 'package:flutterustmusic/artist/artist_album_controller.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_controller.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
@@ -269,19 +270,9 @@ class _ArtistHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final portrait = DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Icon(
-        Icons.person_rounded,
-        size: desktop ? 68 : 48,
-        color: colors.onPrimaryContainer,
-      ),
+    final portrait = ArtistArtwork(
+      uri: artist.artworkUri,
+      iconSize: desktop ? 68 : 48,
     );
     return MusicCatalogHeader(
       artwork: portrait,

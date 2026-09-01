@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/favorite_artist_controller.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
@@ -282,7 +283,7 @@ class _ArtistGridItem extends StatelessWidget {
       onTap: onTap,
       child: Column(
         children: [
-          const Expanded(child: _ArtistArtwork()),
+          Expanded(child: ArtistArtwork(uri: artist.artworkUri)),
           const SizedBox(height: 12),
           Text(
             artist.name,
@@ -323,7 +324,10 @@ class _ArtistListItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           children: [
-            const SizedBox.square(dimension: 72, child: _ArtistArtwork()),
+            SizedBox.square(
+              dimension: 72,
+              child: ArtistArtwork(uri: artist.artworkUri),
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
@@ -340,32 +344,6 @@ class _ArtistListItem extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _ArtistArtwork extends StatelessWidget {
-  const _ArtistArtwork();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.person_rounded,
-          size: 44,
-          color: colors.onPrimaryContainer,
-        ),
-      ),
-    );
-  }
 }
 
 class _CollectionFooter extends StatelessWidget {

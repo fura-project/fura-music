@@ -58,15 +58,21 @@ class CatalogArtistSummary {
   final String providerId;
   final String opaqueId;
   final String name;
+  final String? artworkUri;
 
   const CatalogArtistSummary({
     required this.providerId,
     required this.opaqueId,
     required this.name,
+    this.artworkUri,
   });
 
   @override
-  int get hashCode => providerId.hashCode ^ opaqueId.hashCode ^ name.hashCode;
+  int get hashCode =>
+      providerId.hashCode ^
+      opaqueId.hashCode ^
+      name.hashCode ^
+      artworkUri.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -75,7 +81,8 @@ class CatalogArtistSummary {
           runtimeType == other.runtimeType &&
           providerId == other.providerId &&
           opaqueId == other.opaqueId &&
-          name == other.name;
+          name == other.name &&
+          artworkUri == other.artworkUri;
 }
 
 class QqMusicArtistAlbumPageLoad {

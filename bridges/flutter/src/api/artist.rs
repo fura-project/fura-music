@@ -13,6 +13,7 @@ pub struct CatalogArtistSummary {
     pub provider_id: String,
     pub opaque_id: String,
     pub name: String,
+    pub artwork_uri: Option<String>,
 }
 
 impl fmt::Debug for CatalogArtistSummary {
@@ -22,6 +23,7 @@ impl fmt::Debug for CatalogArtistSummary {
             .field("provider_id", &self.provider_id)
             .field("opaque_id", &"[REDACTED]")
             .field("name", &"[REDACTED]")
+            .field("has_artwork", &self.artwork_uri.is_some())
             .finish()
     }
 }
@@ -31,6 +33,7 @@ pub(super) fn bridge_artist_summary(artist: &music_domain::ArtistSummary) -> Cat
         provider_id: artist.id().provider().to_string(),
         opaque_id: artist.id().opaque().to_owned(),
         name: artist.name().to_owned(),
+        artwork_uri: artist.artwork_uri().map(str::to_owned),
     }
 }
 

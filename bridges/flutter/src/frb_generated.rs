@@ -8862,10 +8862,12 @@ impl SseDecode for crate::api::artist::CatalogArtistSummary {
         let mut var_providerId = <String>::sse_decode(deserializer);
         let mut var_opaqueId = <String>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_artworkUri = <Option<String>>::sse_decode(deserializer);
         return crate::api::artist::CatalogArtistSummary {
             provider_id: var_providerId,
             opaque_id: var_opaqueId,
             name: var_name,
+            artwork_uri: var_artworkUri,
         };
     }
 }
@@ -12944,6 +12946,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::artist::CatalogArtistSummary 
             self.provider_id.into_into_dart().into_dart(),
             self.opaque_id.into_into_dart().into_dart(),
             self.name.into_into_dart().into_dart(),
+            self.artwork_uri.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -16621,6 +16624,7 @@ impl SseEncode for crate::api::artist::CatalogArtistSummary {
         <String>::sse_encode(self.provider_id, serializer);
         <String>::sse_encode(self.opaque_id, serializer);
         <String>::sse_encode(self.name, serializer);
+        <Option<String>>::sse_encode(self.artwork_uri, serializer);
     }
 }
 

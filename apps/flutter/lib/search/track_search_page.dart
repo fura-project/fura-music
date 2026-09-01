@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -721,17 +722,15 @@ class _ArtistSearchResults extends StatelessWidget {
           }
           final artistIndex = index - 1;
           final artist = artists[artistIndex];
-          final colors = Theme.of(context).colorScheme;
           return ListTile(
             key: ValueKey('artist-search-result-$artistIndex'),
             minTileHeight: desktop ? 68 : 72,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
-            leading: CircleAvatar(
-              backgroundColor: colors.secondaryContainer,
-              foregroundColor: colors.onSecondaryContainer,
-              child: const Icon(Icons.person_rounded),
+            leading: SizedBox.square(
+              dimension: desktop ? 48 : 52,
+              child: ArtistArtwork(uri: artist.artworkUri, iconSize: 24),
             ),
             title: Text(
               artist.name,

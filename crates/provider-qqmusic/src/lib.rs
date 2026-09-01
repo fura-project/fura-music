@@ -2334,7 +2334,9 @@ fn map_artist_summary(artist: &qqmusic_client::QqMusicArtistSummary) -> Result<A
         .ok_or(())?;
     let id = ArtistId::new(qq_music_provider_id(), format!("artist:{numeric_id}:{mid}"))
         .map_err(|_| ())?;
-    ArtistSummary::new(id, artist.name()).map_err(|_| ())
+    ArtistSummary::new(id, artist.name())
+        .map(|summary| summary.with_artwork_uri(artist_artwork_uri(mid)))
+        .map_err(|_| ())
 }
 
 fn map_favorite_artist_summary(
@@ -2348,7 +2350,9 @@ fn map_favorite_artist_summary(
         .filter(|value| is_safe_track_mid(value))
         .ok_or(())?;
     let id = ArtistId::new(qq_music_provider_id(), format!("artist:-:{mid}")).map_err(|_| ())?;
-    ArtistSummary::new(id, artist.name()).map_err(|_| ())
+    ArtistSummary::new(id, artist.name())
+        .map(|summary| summary.with_artwork_uri(artist_artwork_uri(mid)))
+        .map_err(|_| ())
 }
 
 fn map_album_summary(album: &QqMusicAlbumSummary) -> Result<AlbumSummary, ()> {
@@ -2478,6 +2482,11 @@ fn album_artwork_uri(media_mid: &str) -> Option<String> {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
     safe.then(|| format!("https://y.gtimg.cn/music/photo_new/T002R300x300M000{media_mid}.jpg"))
+}
+
+fn artist_artwork_uri(media_mid: &str) -> Option<String> {
+    is_safe_track_mid(media_mid)
+        .then(|| format!("https://y.gtimg.cn/music/photo_new/T001R300x300M000{media_mid}.jpg"))
 }
 
 fn map_lyrics(
@@ -4405,6 +4414,10 @@ mod tests {
             "artist:42001:fixtureArtistMid"
         );
         assert_eq!(page.artists()[0].name(), "Synthetic Artist");
+        assert_eq!(
+            page.artists()[0].artwork_uri(),
+            Some("https://y.gtimg.cn/music/photo_new/T001R300x300M000fixtureArtistMid.jpg")
+        );
         assert!(!provider.has_authenticated_credential());
         let debug = format!("{page:?}");
         assert!(!debug.contains("Synthetic Artist"));
@@ -6164,10 +6177,16 @@ mod tests {
         assert_eq!(page.artists().len(), 1);
         assert_eq!(page.artists()[0].id().opaque(), "artist:-:fixtureArtistMid");
         assert_eq!(page.artists()[0].name(), "Synthetic favorite Artist");
+        assert_eq!(
+            page.artists()[0].artwork_uri(),
+            Some("https://y.gtimg.cn/music/photo_new/T001R300x300M000fixtureArtistMid.jpg")
+        );
         assert!(provider.has_authenticated_credential());
         let debug = format!("{page:?} {:?}", page.artists()[0]);
         assert!(!debug.contains("Synthetic favorite Artist"));
         assert!(!debug.contains("fixtureArtistMid"));
+        assert!(!debug.contains("y.gtimg.cn"));
+        assert!(super::artist_artwork_uri("unsafe/path").is_none());
 
         let rejected = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
             "code": 0,

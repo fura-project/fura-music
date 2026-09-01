@@ -15,6 +15,7 @@ void main() {
             providerId: 'qq-music',
             opaqueId: 'artist:61001:fixtureArtistMid',
             name: 'Synthetic Artist',
+            artworkUri: 'https://example.invalid/artist.jpg',
           ),
         ],
       ),
@@ -26,6 +27,10 @@ void main() {
     expect(result.hasMore, isTrue);
     expect(result.artists.single.providerId, 'qq-music');
     expect(result.artists.single.name, 'Synthetic Artist');
+    expect(
+      result.artists.single.artworkUri,
+      'https://example.invalid/artist.jpg',
+    );
   });
 
   test('maps every Bridge failure and rejects conflicting success data', () {

@@ -157,7 +157,8 @@ FavoriteArtistPageResult mapBridgeFavoriteArtistPage(
   for (final artist in result.artists) {
     if (artist.providerId.trim().isEmpty ||
         artist.opaqueId.trim().isEmpty ||
-        artist.name.trim().isEmpty) {
+        artist.name.trim().isEmpty ||
+        (artist.artworkUri?.trim().isEmpty ?? false)) {
       return const FavoriteArtistPageResult(
         failure: FavoriteArtistFailure.invalidResponse,
       );
@@ -167,6 +168,7 @@ FavoriteArtistPageResult mapBridgeFavoriteArtistPage(
         providerId: artist.providerId,
         opaqueId: artist.opaqueId,
         name: artist.name,
+        artworkUri: artist.artworkUri,
       ),
     );
   }

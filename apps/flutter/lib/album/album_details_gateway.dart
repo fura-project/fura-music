@@ -142,7 +142,8 @@ AlbumDetailsResult mapBridgeAlbumDetails(
     if (artist.providerId != expectedAlbum.providerId ||
         artist.providerId.trim().isEmpty ||
         artist.opaqueId.trim().isEmpty ||
-        artist.name.trim().isEmpty) {
+        artist.name.trim().isEmpty ||
+        (artist.artworkUri?.trim().isEmpty ?? false)) {
       return const AlbumDetailsResult(
         failure: AlbumDetailsFailure.invalidResponse,
       );
@@ -152,6 +153,7 @@ AlbumDetailsResult mapBridgeAlbumDetails(
         providerId: artist.providerId,
         opaqueId: artist.opaqueId,
         name: artist.name,
+        artworkUri: artist.artworkUri,
       ),
     );
   }

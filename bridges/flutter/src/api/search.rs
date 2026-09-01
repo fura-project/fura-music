@@ -705,7 +705,8 @@ mod tests {
             .expect("Artist ID"),
             "private-artist",
         )
-        .expect("Artist summary");
+        .expect("Artist summary")
+        .with_artwork_uri(Some("https://example.invalid/artist.jpg".into()));
         let mapped = map_load(Ok(TrackSearchPage::new(
             1,
             31,
@@ -791,7 +792,8 @@ mod tests {
             .expect("Artist ID"),
             "must-not-leak",
         )
-        .expect("Artist summary");
+        .expect("Artist summary")
+        .with_artwork_uri(Some("https://example.invalid/artist.jpg".into()));
         let mapped = map_artist_load(Ok(ArtistSearchPage::new(1, 8, true, vec![artist])));
 
         assert_eq!(mapped.page, 1);
@@ -800,9 +802,14 @@ mod tests {
         assert_eq!(mapped.artists.len(), 1);
         assert_eq!(mapped.artists[0].provider_id, "qq-music");
         assert_eq!(mapped.artists[0].name, "must-not-leak");
+        assert_eq!(
+            mapped.artists[0].artwork_uri.as_deref(),
+            Some("https://example.invalid/artist.jpg")
+        );
         let debug = format!("{mapped:?} {:?}", mapped.artists[0]);
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("42001"));
+        assert!(!debug.contains("example.invalid"));
     }
 
     #[test]

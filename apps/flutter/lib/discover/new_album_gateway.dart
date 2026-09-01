@@ -175,7 +175,8 @@ NewAlbumPageResult mapBridgeNewAlbumPage(
     for (final artist in release.artists) {
       if (artist.providerId.trim().isEmpty ||
           artist.opaqueId.trim().isEmpty ||
-          artist.name.trim().isEmpty) {
+          artist.name.trim().isEmpty ||
+          (artist.artworkUri?.trim().isEmpty ?? false)) {
         return NewAlbumPageResult(
           region: region,
           failure: NewAlbumFailure.invalidResponse,
@@ -186,6 +187,7 @@ NewAlbumPageResult mapBridgeNewAlbumPage(
           providerId: artist.providerId,
           opaqueId: artist.opaqueId,
           name: artist.name,
+          artworkUri: artist.artworkUri,
         ),
       );
     }

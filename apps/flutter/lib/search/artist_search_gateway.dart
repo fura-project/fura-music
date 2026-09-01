@@ -107,7 +107,8 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
   for (final artist in result.artists) {
     if (artist.providerId.trim().isEmpty ||
         artist.opaqueId.trim().isEmpty ||
-        artist.name.trim().isEmpty) {
+        artist.name.trim().isEmpty ||
+        (artist.artworkUri?.trim().isEmpty ?? false)) {
       return const ArtistSearchPageResult(
         failure: SearchFailure.invalidResponse,
       );
@@ -117,6 +118,7 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
         providerId: artist.providerId,
         opaqueId: artist.opaqueId,
         name: artist.name,
+        artworkUri: artist.artworkUri,
       ),
     );
   }

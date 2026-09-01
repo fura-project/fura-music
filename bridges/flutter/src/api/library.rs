@@ -432,7 +432,9 @@ pub(super) fn domain_track_summary(
 fn domain_artist_summary(artist: CatalogArtistSummary) -> Result<music_domain::ArtistSummary, ()> {
     let provider = music_domain::ProviderId::new(artist.provider_id).map_err(|_| ())?;
     let id = music_domain::ArtistId::new(provider, artist.opaque_id).map_err(|_| ())?;
-    music_domain::ArtistSummary::new(id, artist.name).map_err(|_| ())
+    music_domain::ArtistSummary::new(id, artist.name)
+        .map(|summary| summary.with_artwork_uri(artist.artwork_uri))
+        .map_err(|_| ())
 }
 
 fn domain_album_summary(album: CatalogAlbumSummary) -> Result<music_domain::AlbumSummary, ()> {
@@ -578,7 +580,8 @@ mod tests {
                     .expect("Artist ID"),
                     "private-artist",
                 )
-                .expect("Artist"),
+                .expect("Artist")
+                .with_artwork_uri(Some("https://example.invalid/artist.jpg".into())),
             ])
             .with_album_title(Some("private-album".into()))
             .with_album(Some(
@@ -606,6 +609,10 @@ mod tests {
         assert_eq!(mapped.tracks[0].artist_names, ["private-artist"]);
         assert_eq!(mapped.tracks[0].artists.len(), 1);
         assert_eq!(
+            mapped.tracks[0].artists[0].artwork_uri.as_deref(),
+            Some("https://example.invalid/artist.jpg")
+        );
+        assert_eq!(
             mapped.tracks[0].artists[0].opaque_id,
             "artist:42001:private-mid"
         );
@@ -619,6 +626,7 @@ mod tests {
         assert!(!debug.contains("private-artist"));
         assert!(!debug.contains("42001"));
         assert!(!debug.contains("private-mid"));
+        assert!(!debug.contains("example.invalid"));
     }
 
     #[test]

@@ -871,6 +871,7 @@ impl std::error::Error for InvalidArtistId {}
 pub struct ArtistSummary {
     id: ArtistId,
     name: String,
+    artwork_uri: Option<String>,
 }
 
 impl ArtistSummary {
@@ -882,7 +883,11 @@ impl ArtistSummary {
         if name.trim().is_empty() {
             return Err(InvalidArtistSummary);
         }
-        Ok(Self { id, name })
+        Ok(Self {
+            id,
+            name,
+            artwork_uri: None,
+        })
     }
 
     #[must_use]
@@ -894,6 +899,17 @@ impl ArtistSummary {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    #[must_use]
+    pub fn with_artwork_uri(mut self, artwork_uri: Option<String>) -> Self {
+        self.artwork_uri = nonblank(artwork_uri);
+        self
+    }
+
+    #[must_use]
+    pub fn artwork_uri(&self) -> Option<&str> {
+        self.artwork_uri.as_deref()
+    }
 }
 
 impl fmt::Debug for ArtistSummary {
@@ -902,6 +918,7 @@ impl fmt::Debug for ArtistSummary {
             .debug_struct("ArtistSummary")
             .field("id", &self.id)
             .field("name", &"[REDACTED]")
+            .field("has_artwork", &self.artwork_uri.is_some())
             .finish()
     }
 }
@@ -2734,6 +2751,28 @@ mod tests {
         assert!(
             AccountSummary::new(ProviderId::new("qq-music").expect("provider"), "   ").is_err()
         );
+    }
+
+    #[test]
+    fn artist_summary_keeps_optional_artwork_out_of_diagnostics() {
+        let id = ArtistId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "artist:42001:fixtureArtistMid",
+        )
+        .expect("Artist ID");
+        let summary = ArtistSummary::new(id, "Synthetic Artist")
+            .expect("Artist")
+            .with_artwork_uri(Some("https://example.invalid/artist.jpg".into()));
+
+        assert_eq!(summary.name(), "Synthetic Artist");
+        assert_eq!(
+            summary.artwork_uri(),
+            Some("https://example.invalid/artist.jpg")
+        );
+        let debug = format!("{summary:?}");
+        assert!(debug.contains("has_artwork: true"));
+        assert!(!debug.contains("Synthetic Artist"));
+        assert!(!debug.contains("artist.jpg"));
     }
 
     #[test]

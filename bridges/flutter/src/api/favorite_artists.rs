@@ -185,7 +185,9 @@ mod tests {
             "artist:-:fixtureArtistMid",
         )
         .expect("Artist ID");
-        let artist = ArtistSummary::new(id, "must-not-leak").expect("Artist");
+        let artist = ArtistSummary::new(id, "must-not-leak")
+            .expect("Artist")
+            .with_artwork_uri(Some("https://example.invalid/must-not-leak.jpg".into()));
 
         let mapped = map_load(Ok(FavoriteArtistsPage::new(20, 21, false, vec![artist])));
 
@@ -196,9 +198,14 @@ mod tests {
         assert_eq!(mapped.artists[0].provider_id, "qq-music");
         assert_eq!(mapped.artists[0].opaque_id, "artist:-:fixtureArtistMid");
         assert_eq!(mapped.artists[0].name, "must-not-leak");
+        assert_eq!(
+            mapped.artists[0].artwork_uri.as_deref(),
+            Some("https://example.invalid/must-not-leak.jpg")
+        );
         let debug = format!("{mapped:?} {:?}", mapped.artists[0]);
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("fixtureArtistMid"));
+        assert!(!debug.contains("example.invalid"));
     }
 
     #[test]

@@ -18,6 +18,7 @@ void main() {
             providerId: 'qq-music',
             opaqueId: 'artist:-:fixtureArtistMid',
             name: 'Synthetic Artist',
+            artworkUri: 'https://example.invalid/artist.jpg',
           ),
         ],
       ),
@@ -28,6 +29,10 @@ void main() {
     expect(result.total, 21);
     expect(result.hasMore, isFalse);
     expect(result.artists.single.name, 'Synthetic Artist');
+    expect(
+      result.artists.single.artworkUri,
+      'https://example.invalid/artist.jpg',
+    );
     expect(() => result.artists.clear(), throwsUnsupportedError);
   });
 
@@ -88,6 +93,23 @@ void main() {
       ),
     );
     expect(malformed.failure, FavoriteArtistFailure.invalidResponse);
+
+    final blankArtwork = mapBridgeFavoriteArtistPage(
+      const bridge.QqMusicFavoriteArtistPageLoad(
+        offset: 0,
+        total: 1,
+        hasMore: false,
+        artists: [
+          bridge_artist.CatalogArtistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'artist:-:fixtureArtistMid',
+            name: 'Synthetic Artist',
+            artworkUri: '   ',
+          ),
+        ],
+      ),
+    );
+    expect(blankArtwork.failure, FavoriteArtistFailure.invalidResponse);
 
     final contradictoryPagination = mapBridgeFavoriteArtistPage(
       const bridge.QqMusicFavoriteArtistPageLoad(

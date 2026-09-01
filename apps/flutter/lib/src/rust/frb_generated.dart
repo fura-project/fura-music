@@ -8793,12 +8793,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CatalogArtistSummary dco_decode_catalog_artist_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return CatalogArtistSummary(
       providerId: dco_decode_String(arr[0]),
       opaqueId: dco_decode_String(arr[1]),
       name: dco_decode_String(arr[2]),
+      artworkUri: dco_decode_opt_String(arr[3]),
     );
   }
 
@@ -12677,10 +12678,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_providerId = sse_decode_String(deserializer);
     var var_opaqueId = sse_decode_String(deserializer);
     var var_name = sse_decode_String(deserializer);
+    var var_artworkUri = sse_decode_opt_String(deserializer);
     return CatalogArtistSummary(
       providerId: var_providerId,
       opaqueId: var_opaqueId,
       name: var_name,
+      artworkUri: var_artworkUri,
     );
   }
 
@@ -17450,6 +17453,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.providerId, serializer);
     sse_encode_String(self.opaqueId, serializer);
     sse_encode_String(self.name, serializer);
+    sse_encode_opt_String(self.artworkUri, serializer);
   }
 
   @protected

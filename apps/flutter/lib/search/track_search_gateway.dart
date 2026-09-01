@@ -154,7 +154,8 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     for (final artist in item.artists) {
       if (artist.providerId.trim().isEmpty ||
           artist.opaqueId.trim().isEmpty ||
-          artist.name.trim().isEmpty) {
+          artist.name.trim().isEmpty ||
+          (artist.artworkUri?.trim().isEmpty ?? false)) {
         return const TrackSearchPageResult(
           failure: SearchFailure.invalidResponse,
         );
@@ -164,6 +165,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
           providerId: artist.providerId,
           opaqueId: artist.opaqueId,
           name: artist.name,
+          artworkUri: artist.artworkUri,
         ),
       );
     }
@@ -202,7 +204,8 @@ bool _sameArtists(List<ArtistSummary> first, List<ArtistSummary> second) {
   for (var index = 0; index < first.length; index++) {
     if (first[index].providerId != second[index].providerId ||
         first[index].opaqueId != second[index].opaqueId ||
-        first[index].name != second[index].name) {
+        first[index].name != second[index].name ||
+        first[index].artworkUri != second[index].artworkUri) {
       return false;
     }
   }

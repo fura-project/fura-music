@@ -456,7 +456,8 @@ mod tests {
             ArtistId::new(provider, "artist:42001:privateArtistMid").expect("Artist ID"),
             "must-not-leak-artist",
         )
-        .expect("Artist");
+        .expect("Artist")
+        .with_artwork_uri(Some("https://example.invalid/artist.jpg".into()));
         let mapped = map_details_load(Ok(AlbumDetails::new(album, vec![artist])
             .with_subtitle(Some("private-subtitle".into()))
             .with_release_date(Some("2026-08-26".into()))
@@ -466,6 +467,10 @@ mod tests {
         assert!(mapped.failure.is_none());
         let details = mapped.details.as_ref().expect("details");
         assert_eq!(details.artists.len(), 1);
+        assert_eq!(
+            details.artists[0].artwork_uri.as_deref(),
+            Some("https://example.invalid/artist.jpg")
+        );
         assert_eq!(details.subtitle.as_deref(), Some("private-subtitle"));
         assert_eq!(details.description.as_deref(), Some("private-description"));
         let debug = format!("{mapped:?} {details:?}");
@@ -476,6 +481,7 @@ mod tests {
             "2026-08-26",
             "43001",
             "42001",
+            "example.invalid",
         ] {
             assert!(!debug.contains(private));
         }

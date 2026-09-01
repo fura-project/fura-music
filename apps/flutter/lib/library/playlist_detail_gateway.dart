@@ -156,6 +156,7 @@ PlaylistTrackSummary? mapBridgeLibraryTrackSummary(
         providerId: artist.providerId,
         opaqueId: artist.opaqueId,
         name: artist.name,
+        artworkUri: artist.artworkUri,
       ),
     );
   }
@@ -211,7 +212,8 @@ bool _validBridgeArtist(
     _validProviderId(artist.providerId) &&
     artist.providerId == trackProviderId &&
     artist.opaqueId.trim().isNotEmpty &&
-    artist.name.trim().isNotEmpty;
+    artist.name.trim().isNotEmpty &&
+    !_blank(artist.artworkUri);
 
 bool _validProviderId(String value) =>
     value.isNotEmpty &&

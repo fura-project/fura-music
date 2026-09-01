@@ -41,6 +41,10 @@ void main() {
       result.snapshot?.tracks.first.artists.first.opaqueId,
       'artist:42001:private-mid',
     );
+    expect(
+      result.snapshot?.tracks.first.artists.first.artworkUri,
+      'https://images.example.test/artist.jpg',
+    );
     expect(result.snapshot?.currentIndex, 2);
     expect(result.toString(), isNot(contains('private-title')));
     expect(result.snapshot.toString(), isNot(contains('private-title')));
@@ -72,6 +76,7 @@ void main() {
           providerId: 'qq-music',
           opaqueId: 'artist:42001:fixtureArtistMid',
           name: 'Artist one',
+          artworkUri: 'https://images.example.test/artist-one.jpg',
         ),
       ],
       albumTitle: 'Album',
@@ -94,6 +99,10 @@ void main() {
     expect(forwarded.title, track.title);
     expect(forwarded.artistNames, track.artistNames);
     expect(forwarded.artists.single.opaqueId, track.artists.single.opaqueId);
+    expect(
+      forwarded.artists.single.artworkUri,
+      track.artists.single.artworkUri,
+    );
     expect(forwarded.subtitle, track.subtitle);
     expect(forwarded.albumTitle, track.albumTitle);
     expect(forwarded.album?.opaqueId, track.album?.opaqueId);
@@ -244,6 +253,7 @@ bridge_library.LibraryTrackSummary _bridgeTrack(String opaqueId) =>
           providerId: 'qq-music',
           opaqueId: 'artist:42001:private-mid',
           name: 'private-artist',
+          artworkUri: 'https://images.example.test/artist.jpg',
         ),
       ],
       albumTitle: 'private-album',

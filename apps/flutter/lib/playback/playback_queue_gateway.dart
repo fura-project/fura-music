@@ -256,6 +256,7 @@ bridge_library.LibraryTrackSummary _bridgeTrack(PlaylistTrackSummary track) =>
               providerId: artist.providerId,
               opaqueId: artist.opaqueId,
               name: artist.name,
+              artworkUri: artist.artworkUri,
             ),
           )
           .toList(growable: false),

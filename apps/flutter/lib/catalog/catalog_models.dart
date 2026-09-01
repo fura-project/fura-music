@@ -17,9 +17,11 @@ class ArtistSummary {
     required this.providerId,
     required this.opaqueId,
     required this.name,
+    this.artworkUri,
   });
 
   final String providerId;
   final String opaqueId;
   final String name;
+  final String? artworkUri;
 }

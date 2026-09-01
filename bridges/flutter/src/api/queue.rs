@@ -282,6 +282,10 @@ mod tests {
             "artist:42001:private-mid"
         );
         assert_eq!(
+            snapshot.tracks[0].artists[0].artwork_uri.as_deref(),
+            Some("https://images.example.test/artist.jpg")
+        );
+        assert_eq!(
             snapshot.tracks[0]
                 .album
                 .as_ref()
@@ -290,6 +294,7 @@ mod tests {
             "album:43001:private-mid"
         );
         assert!(!format!("{snapshot:?}").contains("private-title"));
+        assert!(!format!("{snapshot:?}").contains("images.example.test"));
         assert!(!format!("{queue:?}").contains("same"));
     }
 
@@ -354,6 +359,7 @@ mod tests {
                 provider_id: "local".into(),
                 opaque_id: "artist:foreign".into(),
                 name: "private-artist".into(),
+                artwork_uri: None,
             }],
             ..track("foreign-artist")
         };
@@ -442,6 +448,7 @@ mod tests {
                 provider_id: "qq-music".into(),
                 opaque_id: "artist:42001:private-mid".into(),
                 name: "private-artist".into(),
+                artwork_uri: Some("https://images.example.test/artist.jpg".into()),
             }],
             album_title: Some("private-album".into()),
             album: Some(CatalogAlbumSummary {
