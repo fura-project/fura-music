@@ -784,7 +784,7 @@ void main() {
     final first = find.byKey(const ValueKey('playlist-track-row-1'));
     final second = find.byKey(const ValueKey('playlist-track-row-2'));
 
-    for (var attempt = 0; attempt < 8; attempt += 1) {
+    for (var attempt = 0; attempt < 20; attempt += 1) {
       if (tester.widget<InkWell>(first).focusNode?.hasFocus ?? false) break;
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();

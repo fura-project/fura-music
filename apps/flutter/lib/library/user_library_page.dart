@@ -171,6 +171,215 @@ class _ExpandedNowPlayingRouteTransitionState
   );
 }
 
+class _RetainedPrimaryDestinationTransition extends StatefulWidget {
+  const _RetainedPrimaryDestinationTransition({
+    required this.index,
+    required this.children,
+  });
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<_RetainedPrimaryDestinationTransition> createState() =>
+      _RetainedPrimaryDestinationTransitionState();
+}
+
+class _RetainedPrimaryDestinationTransitionState
+    extends State<_RetainedPrimaryDestinationTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late int _currentIndex;
+  int? _previousIndex;
+  double _direction = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.index;
+    _controller = AnimationController(
+      vsync: this,
+      value: 1,
+      duration: const Duration(milliseconds: 300),
+    )..addStatusListener(_handleStatus);
+  }
+
+  @override
+  void didUpdateWidget(_RetainedPrimaryDestinationTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index == _currentIndex) return;
+    _previousIndex = _currentIndex;
+    _direction = widget.index > _currentIndex ? 1 : -1;
+    _currentIndex = widget.index;
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      _controller.value = 1;
+      _previousIndex = null;
+    } else {
+      unawaited(_controller.forward(from: 0));
+    }
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && _previousIndex != null) {
+      setState(() => _previousIndex = null);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeStatusListener(_handleStatus)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    key: const ValueKey('primary-destination-transition'),
+    animation: _controller,
+    builder: (context, _) {
+      final eased = Easing.emphasizedDecelerate.transform(_controller.value);
+      return Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.hardEdge,
+        children: [
+          for (var index = 0; index < widget.children.length; index++)
+            _destination(index, eased),
+        ],
+      );
+    },
+  );
+
+  Widget _destination(int index, double animationValue) {
+    final current = index == _currentIndex;
+    final previous = index == _previousIndex;
+    final active = current || previous;
+    final offset = current
+        ? Offset((1 - animationValue) * 18 * _direction, 0)
+        : Offset(-animationValue * 8 * _direction, 0);
+    final opacity = current ? 0.72 + animationValue * 0.28 : 1 - animationValue;
+    return Offstage(
+      offstage: !active,
+      child: TickerMode(
+        enabled: current,
+        child: ExcludeSemantics(
+          excluding: !current,
+          child: ExcludeFocus(
+            excluding: !current,
+            child: IgnorePointer(
+              ignoring: !current,
+              child: Transform.translate(
+                offset: offset,
+                child: Opacity(
+                  opacity: opacity.clamp(0, 1),
+                  child: widget.children[index],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShellPlaylistTransition extends StatefulWidget {
+  const _ShellPlaylistTransition({
+    required this.open,
+    required this.base,
+    required this.detail,
+  });
+
+  final bool open;
+  final Widget base;
+  final Widget detail;
+
+  @override
+  State<_ShellPlaylistTransition> createState() =>
+      _ShellPlaylistTransitionState();
+}
+
+class _ShellPlaylistTransitionState extends State<_ShellPlaylistTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late Widget _retainedDetail;
+
+  @override
+  void initState() {
+    super.initState();
+    _retainedDetail = widget.detail;
+    _controller = AnimationController(
+      vsync: this,
+      value: widget.open ? 1 : 0,
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 240),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_ShellPlaylistTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.open) _retainedDetail = widget.detail;
+    if (widget.open == oldWidget.open) return;
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      _controller.value = widget.open ? 1 : 0;
+    } else if (widget.open) {
+      unawaited(_controller.forward());
+    } else {
+      unawaited(_controller.reverse());
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    key: const ValueKey('shell-playlist-transition'),
+    animation: _controller,
+    builder: (context, _) {
+      final value = Easing.emphasizedDecelerate.transform(_controller.value);
+      final detailVisible = !_controller.isDismissed;
+      return Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Offstage(
+            offstage: _controller.isCompleted,
+            child: ExcludeSemantics(
+              excluding: widget.open,
+              child: ExcludeFocus(
+                excluding: widget.open,
+                child: IgnorePointer(ignoring: widget.open, child: widget.base),
+              ),
+            ),
+          ),
+          if (detailVisible)
+            ExcludeSemantics(
+              excluding: !widget.open,
+              child: ExcludeFocus(
+                excluding: !widget.open,
+                child: IgnorePointer(
+                  ignoring: !widget.open,
+                  child: Transform.translate(
+                    offset: Offset((1 - value) * 40, 0),
+                    child: Opacity(
+                      opacity: (0.7 + value * 0.3).clamp(0, 1),
+                      child: _retainedDetail,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late final UserLibraryController _controller;
   late final HomeController _homeController;
@@ -198,6 +407,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     debugLabel: 'authenticated back shortcut fallback',
   );
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
+  final GlobalKey<TrackSearchPageState> _trackSearchPageKey =
+      GlobalKey<TrackSearchPageState>(debugLabel: 'primary track search');
+  final TextEditingController _topSearchController = TextEditingController();
   final AuthenticatedNavigationState _navigation =
       AuthenticatedNavigationState();
   UserPlaylistSummary? _lastOpenedPlaylist;
@@ -330,6 +542,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _homeRecommendationReturnFocusNode.dispose();
     _librarySectionFocusScopeNode.dispose();
     _backShortcutFallbackFocusNode.dispose();
+    _topSearchController.dispose();
     super.dispose();
   }
 
@@ -348,9 +561,18 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     final nowPlayingRoutes = nowPlayingRouteIndex < 0
         ? const <AuthenticatedLocalRoute>[]
         : retainedRoutes.sublist(nowPlayingRouteIndex);
+    final firstCatalogRoute = catalogRoutes.isEmpty
+        ? null
+        : catalogRoutes.first;
+    final embeddedPlaylistRoute = firstCatalogRoute is PlaylistLocalRoute
+        ? firstCatalogRoute
+        : null;
+    final overlayCatalogRoutes = embeddedPlaylistRoute == null
+        ? catalogRoutes
+        : catalogRoutes.sublist(1);
     final catalogPages = <Widget>[
-      _primaryScaffold(),
-      ...catalogRoutes.map(_buildLocalRoute),
+      _primaryScaffold(embeddedPlaylistRoute: embeddedPlaylistRoute),
+      ...overlayCatalogRoutes.map(_buildLocalRoute),
     ];
     final catalogRoutePage = IndexedStack(
       index: catalogPages.length - 1,
@@ -419,16 +641,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   Widget _buildLocalRoute(AuthenticatedLocalRoute route) => switch (route) {
-    PlaylistLocalRoute() => PlaylistDetailPage(
-      key: ValueKey(_playlistRouteKey(route)),
-      playlist: route.playlist,
-      gateway: _library.playlistDetailGateway,
-      queuePlaybackController: _queuePlaybackController,
-      onBack: _returnFromTopRoute,
-      onOpenAlbum: _openTrackContextAlbum,
-      onOpenArtist: _openTrackContextArtist,
-      onSignInAgain: widget.onSignInAgain,
-    ),
+    PlaylistLocalRoute() => _buildPlaylistRoute(route),
     RankingLocalRoute() => RankingPage(
       key: ValueKey('ranking-detail-${route.ranking.opaqueId}'),
       ranking: route.ranking,
@@ -465,6 +678,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     ),
     ExpandedNowPlayingLocalRoute() => const SizedBox.shrink(),
   };
+
+  Widget _buildPlaylistRoute(
+    PlaylistLocalRoute route, {
+    bool embedded = false,
+  }) => PlaylistDetailPage(
+    key: ValueKey(_playlistRouteKey(route)),
+    playlist: route.playlist,
+    gateway: _library.playlistDetailGateway,
+    queuePlaybackController: _queuePlaybackController,
+    onBack: _returnFromTopRoute,
+    onOpenAlbum: _openTrackContextAlbum,
+    onOpenArtist: _openTrackContextArtist,
+    onSignInAgain: widget.onSignInAgain,
+    embedded: embedded,
+  );
 
   bool _isNowPlayingRoute(AuthenticatedLocalRoute route) => switch (route) {
     ArtistLocalRoute(origin: ArtistRouteOrigin.nowPlaying) => true,
@@ -645,10 +873,32 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool get _recommendationsOpen =>
       _primaryDestination == AuthenticatedPrimaryDestination.discover;
 
+  bool get _canDismissPlaylistIntoShell =>
+      _navigation.routes.length == 1 &&
+      _navigation.routes.single is PlaylistLocalRoute;
+
   void _selectPrimaryDestination(AuthenticatedPrimaryDestination destination) {
-    if (_navigation.hasLocalRoute || _primaryDestination == destination) return;
+    if (_navigation.hasLocalRoute && !_canDismissPlaylistIntoShell) return;
+    if (!_navigation.hasLocalRoute && _primaryDestination == destination) {
+      return;
+    }
     FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _navigation.selectPrimaryDestination(destination));
+    setState(() {
+      if (_canDismissPlaylistIntoShell) _navigation.popRoute();
+      if (_primaryDestination != destination) {
+        _navigation.selectPrimaryDestination(destination);
+      }
+    });
+  }
+
+  void _submitTopSearch(String query) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) return;
+    _selectPrimaryDestination(AuthenticatedPrimaryDestination.search);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_searchOpen) return;
+      _trackSearchPageKey.currentState?.submitTrackQuery(normalized);
+    });
   }
 
   LibrarySection get _librarySection => _navigation.librarySection;
@@ -667,9 +917,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openLikedSongs() {
-    if (_navigation.hasLocalRoute) return;
+    if (_navigation.hasLocalRoute && !_canDismissPlaylistIntoShell) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
+      if (_canDismissPlaylistIntoShell) _navigation.popRoute();
       _navigation.selectPrimaryDestination(
         AuthenticatedPrimaryDestination.library,
       );
@@ -678,9 +929,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openLibraryPlaylists() {
-    if (_navigation.hasLocalRoute) return;
+    if (_navigation.hasLocalRoute && !_canDismissPlaylistIntoShell) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
+      if (_canDismissPlaylistIntoShell) _navigation.popRoute();
       _navigation.selectPrimaryDestination(
         AuthenticatedPrimaryDestination.library,
       );
@@ -983,7 +1235,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     };
   }
 
-  Widget _primaryScaffold() => LayoutBuilder(
+  Widget _primaryScaffold({
+    PlaylistLocalRoute? embeddedPlaylistRoute,
+  }) => LayoutBuilder(
     builder: (context, constraints) {
       final destination = _primaryDestination;
       final wide = constraints.maxWidth >= 840;
@@ -992,7 +1246,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final likedSongsOpen =
           destination == AuthenticatedPrimaryDestination.library &&
           _librarySection == LibrarySection.likedSongs;
-      final primaryContent = IndexedStack(
+      final primaryContent = _RetainedPrimaryDestinationTransition(
         index: destination.index,
         children: [
           HomePage(
@@ -1043,7 +1297,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             AuthenticatedPrimaryDestination.search,
           ))
             TrackSearchPage(
-              key: const ValueKey('track-search-page'),
+              key: _trackSearchPageKey,
               gateway: _discovery.trackSearchGateway,
               artistGateway: _discovery.artistSearchGateway,
               albumGateway: _discovery.albumSearchGateway,
@@ -1087,8 +1341,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           showSearchShortcut:
               extendedSidebar &&
               destination != AuthenticatedPrimaryDestination.search,
-          onOpenSearch: () =>
-              _selectPrimaryDestination(AuthenticatedPrimaryDestination.search),
+          searchController: _topSearchController,
+          onSearchSubmitted: _submitTopSearch,
         ),
         titleSpacing: compactActions ? 8 : 16,
         actions: _primaryActions(compactActions: compactActions),
@@ -1137,11 +1391,26 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             Expanded(
               child: Scaffold(
                 appBar:
-                    compactActions &&
-                        destination == AuthenticatedPrimaryDestination.home
+                    (embeddedPlaylistRoute != null && !extendedSidebar) ||
+                        (compactActions &&
+                            destination == AuthenticatedPrimaryDestination.home)
                     ? null
                     : mainAppBar,
-                body: mainBody,
+                body: _ShellPlaylistTransition(
+                  open: embeddedPlaylistRoute != null,
+                  base: embeddedPlaylistRoute != null && !extendedSidebar
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: kToolbarHeight),
+                          child: mainBody,
+                        )
+                      : mainBody,
+                  detail: embeddedPlaylistRoute == null
+                      ? const SizedBox.shrink()
+                      : _buildPlaylistRoute(
+                          embeddedPlaylistRoute,
+                          embedded: true,
+                        ),
+                ),
                 bottomNavigationBar: wide
                     ? NowPlayingBar(
                         controller: _queuePlaybackController,
@@ -1752,14 +2021,16 @@ class _PrimaryShellTitle extends StatelessWidget {
     required this.compact,
     required this.showTitle,
     required this.showSearchShortcut,
-    required this.onOpenSearch,
+    required this.searchController,
+    required this.onSearchSubmitted,
   });
 
   final String title;
   final bool compact;
   final bool showTitle;
   final bool showSearchShortcut;
-  final VoidCallback onOpenSearch;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearchSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -1785,7 +2056,9 @@ class _PrimaryShellTitle extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 448),
               child: SearchBar(
                 key: const ValueKey('top-search-shortcut'),
-                onTap: onOpenSearch,
+                controller: searchController,
+                onSubmitted: onSearchSubmitted,
+                textInputAction: TextInputAction.search,
                 hintText: 'Search QQ Music',
                 leading: const Icon(Icons.search_rounded),
                 elevation: const WidgetStatePropertyAll(0),

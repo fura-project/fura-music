@@ -61,6 +61,7 @@ import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
+import 'package:flutterustmusic/search/track_search_page.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
@@ -1019,6 +1020,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('top search edits in place before opening Track results', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const resultTrack = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:top-search:fixture',
+      title: 'Top search result',
+      artistNames: ['Search artist'],
+    );
+    final search = _WidgetSearchGateway(
+      const TrackSearchPageResult(
+        page: 1,
+        total: 1,
+        items: [TrackSearchItem(track: resultTrack)],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        searchGateway: search,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final topSearch = find.byKey(const ValueKey('top-search-shortcut'));
+    expect(topSearch, findsOneWidget);
+    await tester.tap(topSearch);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    await tester.enterText(topSearch, 'direct song query');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(search.requests, [('direct song query', 1, 30)]);
+    expect(find.byKey(const ValueKey('track-search-content')), findsOneWidget);
+    expect(find.text('Top search result'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('primary-destination-transition')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+          .controller
+          ?.text,
+      'direct song query',
+    );
+  });
+
   testWidgets('canonical synthetic Home review fixture is complete', (
     tester,
   ) async {
@@ -1598,16 +1658,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Retained search result'), findsOneWidget);
       expect(search.requests, [('retained query', 1, 30)]);
-      final searchState = tester.state(
-        find.byKey(const ValueKey('track-search-page')),
-      );
+      final searchState = tester.state(find.byType(TrackSearchPage));
 
       await tester.tap(
         find.byKey(const ValueKey('primary-library-destination')),
       );
       await tester.pumpAndSettle();
-      final retainedSearchPage = find.byKey(
-        const ValueKey('track-search-page'),
+      final retainedSearchPage = find.byType(
+        TrackSearchPage,
         skipOffstage: false,
       );
       expect(retainedSearchPage, findsOneWidget);
@@ -4099,6 +4157,111 @@ void main() {
       isTrue,
     );
     semantics.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps the desktop shell while opening a playlist detail', (
+    tester,
+  ) async {
+    const captureReviewImages = bool.fromEnvironment('SHELL_NAV_VISUAL_REVIEW');
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const playlist = UserPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'favorite:shell-playlist',
+      title: 'Shell playlist',
+      trackCount: 1,
+    );
+    final detailGateway = _WidgetDetailGateway([
+      const PlaylistTrackPageResult(
+        total: 1,
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:shell-playlist:fixture',
+            title: 'Shell track',
+            artistNames: ['Shell artist'],
+            albumTitle: 'Shell album',
+            durationSeconds: 185,
+          ),
+        ],
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(playlists: [playlist]),
+        ]),
+        playlistDetailGateway: detailGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openLibrary(tester);
+    await tester.tap(find.text('Shell playlist').last);
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+      find.byKey(const ValueKey('shell-playlist-transition')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('embedded-playlist-detail')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('playlist-detail-table-header')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('playlist-track-row-1')), findsOneWidget);
+    expect(find.text('Shell track'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('authenticated-primary-shell')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-playlist-shell-desktop.png'),
+        ),
+      );
+    }
+
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('embedded-playlist-detail')),
+      findsOneWidget,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-playlist-shell-mobile.png'),
+        ),
+      );
+    }
+
+    await tester.tap(find.byKey(const ValueKey('primary-home-destination')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('embedded-playlist-detail')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+    expect(detailGateway.requests, hasLength(1));
     expect(tester.takeException(), isNull);
   });
 

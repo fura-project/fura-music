@@ -7,6 +7,7 @@ import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
+import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -914,40 +915,13 @@ class _LikedTrackTableHeader extends StatelessWidget {
   const _LikedTrackTableHeader();
 
   @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.4,
-    );
-    return Container(
-      key: const ValueKey('liked-songs-table-header'),
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          SizedBox(width: 40, child: Text('#', style: style)),
-          Expanded(flex: 3, child: Text('标题', style: style)),
-          const SizedBox(width: 16),
-          Expanded(flex: 2, child: Text('歌手', style: style)),
-          const SizedBox(width: 16),
-          Expanded(flex: 2, child: Text('专辑', style: style)),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 52,
-            child: Text('时长', textAlign: TextAlign.end, style: style),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const MusicTrackTableHeader(
+    key: ValueKey('liked-songs-table-header'),
+    titleLabel: '标题',
+    artistLabel: '歌手',
+    albumLabel: '专辑',
+    durationLabel: '时长',
+  );
 }
 
 class _LikedTrackRow extends StatefulWidget {
@@ -1063,142 +1037,33 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
   }
 
   Widget _desktopContent(BuildContext context, String artists, bool active) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        SizedBox(
-          width: 40,
-          child: Center(
-            child: widget.current
-                ? Icon(Icons.equalizer_rounded, size: 18, color: colors.primary)
-                : active
-                ? Icon(
-                    Icons.play_arrow_rounded,
-                    size: 19,
-                    color: colors.primary,
-                  )
-                : Text(
-                    '${widget.index}',
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: colors.onSurfaceVariant),
-                  ),
-          ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: 40,
-                child: _LikedTrackArtwork(uri: widget.track.artworkUri),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  widget.track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: widget.current ? colors.primary : colors.onSurface,
-                    fontWeight: widget.current
-                        ? FontWeight.w600
-                        : FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (active)
-                IconButton(
-                  tooltip: '添加到队列',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: widget.onAddToQueue,
-                  icon: const Icon(Icons.playlist_add_rounded, size: 19),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(flex: 2, child: _MetadataText(artists)),
-        const SizedBox(width: 16),
-        Expanded(flex: 2, child: _MetadataText(widget.track.albumTitle ?? '—')),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 52,
-          child: _MetadataText(
-            _duration(widget.track.durationSeconds),
-            alignment: TextAlign.end,
-          ),
-        ),
-      ],
+    return MusicTrackRowContent(
+      index: widget.index,
+      track: widget.track,
+      desktop: true,
+      current: widget.current,
+      active: active,
+      artistNames: artists,
+      onAddToQueue: widget.onAddToQueue,
+      onMore: () => _showKeyboardMenu(context),
+      addToQueueTooltip: '添加到队列',
+      moreTooltip: '更多操作',
     );
   }
 
-  Widget _compactContent(BuildContext context, String artists) => Row(
-    children: [
-      SizedBox(
-        width: 26,
-        child: widget.current
-            ? Icon(
-                Icons.equalizer_rounded,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              )
-            : Text(
-                '${widget.index}',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-      ),
-      const SizedBox(width: 8),
-      SizedBox.square(
-        dimension: 48,
-        child: _LikedTrackArtwork(uri: widget.track.artworkUri),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.track.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: widget.current
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              widget.track.albumTitle == null
-                  ? artists
-                  : '$artists · ${widget.track.albumTitle}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(width: 8),
-      Text(
-        _duration(widget.track.durationSeconds),
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-      ),
-      IconButton(
-        tooltip: '更多操作',
-        onPressed: () => unawaited(_showCompactMenu(context)),
-        icon: const Icon(Icons.more_horiz_rounded),
-      ),
-    ],
-  );
+  Widget _compactContent(BuildContext context, String artists) =>
+      MusicTrackRowContent(
+        index: widget.index,
+        track: widget.track,
+        desktop: false,
+        current: widget.current,
+        active: false,
+        artistNames: artists,
+        onAddToQueue: widget.onAddToQueue,
+        onMore: () => unawaited(_showCompactMenu(context)),
+        addToQueueTooltip: '添加到队列',
+        moreTooltip: '更多操作',
+      );
 
   void _showKeyboardMenu(BuildContext context) {
     if (!widget.desktop) {
@@ -1323,48 +1188,6 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
 }
 
 enum _LikedTrackAction { play, addToQueue, openAlbum, openArtist }
-
-class _MetadataText extends StatelessWidget {
-  const _MetadataText(this.value, {this.alignment});
-
-  final String value;
-  final TextAlign? alignment;
-
-  @override
-  Widget build(BuildContext context) => Text(
-    value,
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    textAlign: alignment,
-    style: Theme.of(context).textTheme.bodySmall
-        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-  );
-}
-
-class _LikedTrackArtwork extends StatelessWidget {
-  const _LikedTrackArtwork({this.uri});
-
-  final String? uri;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = ColoredBox(
-      color: colors.surfaceContainerHighest,
-      child: Icon(Icons.music_note_rounded, color: colors.onSurfaceVariant),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: uri == null
-          ? placeholder
-          : Image.network(
-              uri!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
-            ),
-    );
-  }
-}
 
 class _LikedTrackFooter extends StatelessWidget {
   const _LikedTrackFooter({
@@ -1512,13 +1335,6 @@ bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
     left != null &&
     left.providerId == right.providerId &&
     left.opaqueId == right.opaqueId;
-
-String _duration(int? seconds) {
-  if (seconds == null) return '—';
-  final minutes = seconds ~/ 60;
-  final remainder = seconds % 60;
-  return '$minutes:${remainder.toString().padLeft(2, '0')}';
-}
 
 (String, String) _failureCopy(UserLibraryFailure? failure) => switch (failure) {
   UserLibraryFailure.network => ('网络不可用', '请检查网络后重试。'),

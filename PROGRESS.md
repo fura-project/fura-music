@@ -3,13 +3,14 @@ execution:
   mode: HUMAN_GATED_REGRESSION
   state: ACTIVE
   acceptance_milestone: M1
-  active_workstream: SIGNED_OUT_HOME_PUBLIC_RECOMMENDATIONS
+  active_workstream: SHELL_NAVIGATION_PLAYLIST_SEARCH
   current_task: null
   next_action: HUMAN_REVIEW
 ---
 
 # Current State
 
+- The maintainer redirected the current Human-gated UI candidate to three bounded Shell interactions: retained primary destinations now use a Material-emphasized transition without rebuilding their local state; Playlist detail opens inside the adaptive authenticated Shell with Sidebar/rail, top region, persistent player, compact bottom navigation, and a shared dense Track-row visual grammar; and the desktop top Search field accepts text in place, then submits directly into the existing Track search surface. Canonical 1440×900 and 390×844 candidates render without overflow; Dart format/analyze and all 428 Flutter tests pass. The candidate remains pending maintainer visual/runtime review and does not self-accept the revised Shell behavior.
 - HD-017 redirects the current Human-gated UI candidate to signed-out Home. The page now loads the existing anonymous QQ public-playlist feed and public `Latest` new-song collection instead of rendering account-only Daily/Radar/personalized sign-in bars. The hero remains public; a second public Playlist and the new-song collection fill the compact top recommendations; lower shelves are labeled `Popular playlists` and `New songs`, and new-song rows use the existing guest playback Queue path. Authenticated Daily 30, Radar, personalized Playlists/Tracks, and current-Track related listening are unchanged. Synthetic 1440×960 and 390×844 candidates render without overflow; Dart format/analyze, all 426 Flutter tests, and the Linux Release build pass. Live catalog availability and visual acceptance remain maintainer evidence.
 - The maintainer explicitly switched execution to `HUMAN_GATED_REGRESSION` for five reproduced Liked-page, persistent-player, Expanded Now Playing, and synchronized-lyric presentation defects. Work is bounded to those regressions; the resulting visual candidate requires Human review and does not reopen unrelated Home, Shell, navigation, or Core architecture work.
 - The favorite-Artist placeholder report exposed a missing supported data path rather than an image-cache failure: QQ Artist summaries previously stopped at MID/name, while Domain, Bridge, and Dart had no optional portrait field. The bounded candidate now validates the QQ MID, derives the independently cross-checked HTTPS `T001` singer portrait, preserves it through provider-neutral typed models, and renders it in favorite-Artist, Artist Search, and Artist detail surfaces through one shared fallback-safe component. Offline mapping/UI checks and a bounded public JPEG range request pass; an authenticated favorite-Artist visual rerun remains the Human acceptance evidence.
@@ -33,6 +34,7 @@ execution:
 
 # Current Scheduling
 
+- The Shell navigation/Playlist/Search candidate is implemented and machine-verified. The next action is maintainer review of primary-page motion, Playlist detail placement at desktop and compact widths, and the direct Track-search submission behavior. No adjacent page or further aesthetic correction starts autonomously while this candidate is pending.
 - The signed-out Home public-recommendation candidate is implemented and machine-verified under HD-017. The next action is maintainer visual/runtime review of real anonymous public playlists and new songs; no adjacent page or further aesthetic correction starts autonomously while this candidate is pending.
 - Media Source Separation has completed its bounded safe implementation scope. Core routing, the QQ-owned resolver, provider-neutral Bridge, QQ-owned vault-cleanup edge, synthetic routing proof, pinned Bridge generation, full Rust gate, full Flutter tests, and Linux native Bridge integration pass. No additional production source or adjacent feature is authorized; scheduling returns to the still-pending Human/environment/external evidence below without changing execution mode.
 - The maintainer redirected the current bounded regression candidate to the Liked collection tabs. Songs retain the approved dense table/list presentation; real user playlists are split by typed owned/saved semantics; favorite Albums reuse the existing typed collection; and unsupported program/video account collections remain explicit rather than being fabricated from playlists or Track-associated MV.

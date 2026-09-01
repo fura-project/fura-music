@@ -48,12 +48,12 @@ class TrackSearchPage extends StatefulWidget {
   final bool embedded;
 
   @override
-  State<TrackSearchPage> createState() => _TrackSearchPageState();
+  State<TrackSearchPage> createState() => TrackSearchPageState();
 }
 
 enum _SearchType { tracks, artists, albums, playlists }
 
-class _TrackSearchPageState extends State<TrackSearchPage> {
+class TrackSearchPageState extends State<TrackSearchPage> {
   late final TrackSearchController _controller;
   late final ArtistSearchController _artistController;
   late final AlbumSearchController _albumController;
@@ -63,6 +63,19 @@ class _TrackSearchPageState extends State<TrackSearchPage> {
   final FocusNode _queryFocusNode = FocusNode(debugLabel: 'track search');
   final Set<_SearchType> _visitedTypes = {_SearchType.tracks};
   _SearchType _searchType = _SearchType.tracks;
+
+  void submitTrackQuery(String query) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) return;
+    if (_searchType != _SearchType.tracks) {
+      setState(() {
+        _searchType = _SearchType.tracks;
+        _visitedTypes.add(_SearchType.tracks);
+      });
+    }
+    _replaceQueryText(normalized);
+    unawaited(_controller.submit(normalized));
+  }
 
   @override
   void initState() {
