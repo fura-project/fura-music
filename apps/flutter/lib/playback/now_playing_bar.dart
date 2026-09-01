@@ -13,6 +13,9 @@ import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
+const _desktopNowPlayingHeight = 88.0;
+const _desktopNowPlayingVerticalInset = 8.0;
+
 /// Presentation-only callbacks for opening already-validated catalog context
 /// from repeated now-playing bars. The authenticated page owns the actual
 /// retained overlays and return semantics.
@@ -135,12 +138,12 @@ class NowPlayingBar extends StatelessWidget {
                   padding: EdgeInsets.fromLTRB(
                     16,
                     desktop
-                        ? 0
+                        ? _desktopNowPlayingVerticalInset
                         : narrow
                         ? 8
                         : 10,
                     12,
-                    desktop ? 0 : 4,
+                    desktop ? _desktopNowPlayingVerticalInset : 4,
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -236,7 +239,13 @@ class NowPlayingBar extends StatelessWidget {
                     ],
                   ),
                 );
-                return desktop ? SizedBox(height: 96, child: content) : content;
+                return desktop
+                    ? SizedBox(
+                        key: const ValueKey('now-playing-desktop-bar'),
+                        height: _desktopNowPlayingHeight,
+                        child: content,
+                      )
+                    : content;
               },
             ),
           ),
@@ -434,7 +443,7 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
     final playback = controller.playback;
     return SizedBox(
       key: const ValueKey('now-playing-desktop-layout'),
-      height: 96,
+      height: _desktopNowPlayingHeight - (2 * _desktopNowPlayingVerticalInset),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -465,29 +474,25 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
           ),
           Expanded(
             flex: 5,
-            child: Stack(
+            child: Column(
               key: const ValueKey('now-playing-transport-zone'),
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Center(
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: _transportControls(
-                      controller,
-                      authenticationFailure,
-                      onSignInAgain,
-                      prominentPrimary: true,
-                      prominentPrimarySize: 48,
-                    ),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: _transportControls(
+                    controller,
+                    authenticationFailure,
+                    onSignInAgain,
+                    prominentPrimary: true,
+                    prominentPrimarySize: 48,
                   ),
                 ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: _PlaybackProgress(
-                    controller: playback,
-                    track: track,
-                    dense: true,
-                  ),
+                _PlaybackProgress(
+                  controller: playback,
+                  track: track,
+                  dense: true,
                 ),
               ],
             ),
@@ -638,7 +643,7 @@ List<Widget> _transportControls(
       ? TextButton(
           key: const ValueKey('now-playing-sign-in-again'),
           onPressed: onSignInAgain,
-          child: const Text('Sign in again'),
+          child: const Text('Sign in'),
         )
       : prominentPrimary
       ? IconButton.filled(

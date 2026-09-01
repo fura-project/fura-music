@@ -135,6 +135,9 @@ void main() {
       expect(tester.takeException(), isNull);
 
       final desktopBar = tester.getRect(
+        find.byKey(const ValueKey('now-playing-desktop-bar')),
+      );
+      final desktopLayout = tester.getRect(
         find.byKey(const ValueKey('now-playing-desktop-layout')),
       );
       final primaryAction = tester.getRect(
@@ -143,13 +146,13 @@ void main() {
       final progressRow = tester.getRect(
         find.byKey(const ValueKey('now-playing-desktop-progress-row')),
       );
-      expect(desktopBar.height, 96);
-      expect(
-        (desktopBar.center.dy - primaryAction.center.dy).abs(),
-        lessThanOrEqualTo(1),
-      );
+      expect(desktopBar.height, 88);
+      expect(desktopLayout.height, 72);
+      expect(desktopLayout.top - desktopBar.top, closeTo(8, 1));
+      expect(desktopBar.bottom - desktopLayout.bottom, closeTo(8, 1));
+      expect(primaryAction.top - desktopLayout.top, closeTo(0, 1));
       expect(primaryAction.bottom, lessThanOrEqualTo(progressRow.top));
-      expect(progressRow.bottom, desktopBar.bottom);
+      expect(progressRow.bottom, desktopLayout.bottom);
       if (const bool.fromEnvironment('NOW_PLAYING_BAR_VISUAL_REVIEW')) {
         await expectLater(
           find.byType(MusicApp),
