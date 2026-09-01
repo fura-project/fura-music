@@ -22,7 +22,7 @@ use provider_api::{
     ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, CommentsError,
     DailyRecommendationError, DailyRecommendationProvider, FavoriteAlbumsProvider,
     FavoriteArtistsProvider, LibraryMutationError, LyricsError, LyricsProvider,
-    MediaResolutionError, MediaResolutionProvider, MusicProvider, MusicVideoError,
+    MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
     NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PersonalizedPlaylistsError,
     PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
     PhoneAuthenticationCodeState, PhoneAuthenticationProvider, PhoneAuthenticationSession,
@@ -87,6 +87,14 @@ pub struct QqMusicProvider<T> {
     active_phone_authentication: Arc<Mutex<Option<u32>>>,
 }
 
+/// QQ-owned immediate-playback source edge. It deliberately borrows the
+/// catalog/account provider so both responsibilities share one authenticated
+/// session without making the provider itself the generic playback router.
+#[derive(Clone, Copy)]
+pub struct QqMusicMediaSourceResolver<'a, T> {
+    provider: &'a QqMusicProvider<T>,
+}
+
 impl<T> QqMusicProvider<T> {
     #[must_use]
     pub fn new(client: QqMusicClient<T>) -> Self {
@@ -103,6 +111,11 @@ impl<T> QqMusicProvider<T> {
     #[must_use]
     pub fn client(&self) -> &QqMusicClient<T> {
         self.login.client()
+    }
+
+    #[must_use]
+    pub const fn media_source_resolver(&self) -> QqMusicMediaSourceResolver<'_, T> {
+        QqMusicMediaSourceResolver { provider: self }
     }
 
     #[must_use]
@@ -564,7 +577,6 @@ impl<T> MusicProvider for QqMusicProvider<T> {
                 ProviderCapability::Lyrics,
                 ProviderCapability::Comments,
                 ProviderCapability::MusicVideo,
-                ProviderCapability::MediaResolution,
             ],
         }
     }
@@ -1477,23 +1489,25 @@ where
     }
 }
 
-impl<T> MediaResolutionProvider for QqMusicProvider<T>
+impl<T> MediaSourceResolver for QqMusicMediaSourceResolver<'_, T>
 where
     T: HttpTransport + 'static,
 {
-    type Error = MediaResolutionError;
+    fn supports(&self, track_id: &TrackId) -> bool {
+        track_id.provider().as_str() == "qq-music"
+    }
 
     async fn resolve_media(
         &self,
         track_id: TrackId,
         preferred_quality: AudioQuality,
-    ) -> Result<ResolvedMediaSource, Self::Error> {
-        let candidate = self.media_credential()?;
+    ) -> Result<ResolvedMediaSource, MediaResolutionError> {
+        let candidate = self.provider.media_credential()?;
         let route = parse_media_track(&track_id)?;
 
-        let dispatch_response = self.client().cdn_dispatch().await;
+        let dispatch_response = self.provider.client().cdn_dispatch().await;
         if let Some(candidate) = candidate.as_ref() {
-            self.finish_media_await(
+            self.provider.finish_media_await(
                 candidate,
                 matches!(dispatch_response, Err(QqMusicMediaError::Rejected { .. })),
             )?;
@@ -1509,7 +1523,8 @@ where
         for (index, quality) in qualities.iter().copied().enumerate() {
             let source_response = match candidate.as_ref() {
                 Some(candidate) => {
-                    self.client()
+                    self.provider
+                        .client()
                         .mp3_source(
                             candidate,
                             route.song_mid,
@@ -1520,7 +1535,8 @@ where
                         .await
                 }
                 None => {
-                    self.client()
+                    self.provider
+                        .client()
                         .anonymous_standard_mp3_source(
                             route.song_mid,
                             route.file_media_mid,
@@ -1530,7 +1546,7 @@ where
                 }
             };
             if let Some(candidate) = candidate.as_ref() {
-                self.finish_media_await(
+                self.provider.finish_media_await(
                     candidate,
                     matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
                 )?;
@@ -3395,8 +3411,8 @@ mod tests {
         ArtistAlbumsProvider, ArtistSearchProvider, ArtistTracksProvider, CatalogError,
         CommentsError, DailyRecommendationError, DailyRecommendationProvider,
         FavoriteAlbumsProvider, FavoriteArtistsProvider, LibraryMutationError, LyricsError,
-        LyricsProvider, MediaResolutionError, MediaResolutionProvider, MusicProvider,
-        MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
+        LyricsProvider, MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
+        NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
         PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
         PersonalizedTracksProvider, PhoneAuthenticationCodeState, PhoneAuthenticationProvider,
         PhoneAuthenticationSession, PlaylistCreationProvider, PlaylistDeletionProvider,
@@ -4109,7 +4125,6 @@ mod tests {
                 ProviderCapability::Lyrics,
                 ProviderCapability::Comments,
                 ProviderCapability::MusicVideo,
-                ProviderCapability::MediaResolution,
             ]
         );
     }
@@ -6883,6 +6898,7 @@ mod tests {
         let track_id = qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1");
 
         let source = provider
+            .media_source_resolver()
             .resolve_media(track_id.clone(), AudioQuality::Standard)
             .await
             .expect("standard media");
@@ -6921,6 +6937,7 @@ mod tests {
         let track_id = qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1");
 
         let source = provider
+            .media_source_resolver()
             .resolve_media(track_id, AudioQuality::High)
             .await
             .expect("anonymous standard source");
@@ -6955,6 +6972,7 @@ mod tests {
 
         assert_eq!(
             provider
+                .media_source_resolver()
                 .resolve_media(
                     qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
                     AudioQuality::Standard,
@@ -6973,6 +6991,7 @@ mod tests {
         ])));
         set_authenticated(&high, "123456");
         let high_source = high
+            .media_source_resolver()
             .resolve_media(
                 qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
                 AudioQuality::High,
@@ -6988,6 +7007,7 @@ mod tests {
         ])));
         set_authenticated(&fallback, "123456");
         let fallback_source = fallback
+            .media_source_resolver()
             .resolve_media(
                 qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
                 AudioQuality::High,
@@ -7019,6 +7039,7 @@ mod tests {
         set_authenticated(&service_failure, "123456");
         assert_eq!(
             service_failure
+                .media_source_resolver()
                 .resolve_media(
                     qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
                     AudioQuality::High,
@@ -7050,6 +7071,7 @@ mod tests {
         for track_id in invalid {
             assert_eq!(
                 provider
+                    .media_source_resolver()
                     .resolve_media(track_id, AudioQuality::Standard)
                     .await,
                 Err(MediaResolutionError::InvalidResponse)
@@ -7073,6 +7095,7 @@ mod tests {
         set_authenticated(&unavailable, "123456");
         assert_eq!(
             unavailable
+                .media_source_resolver()
                 .resolve_media(
                     qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1",),
                     AudioQuality::Standard
@@ -7089,6 +7112,7 @@ mod tests {
         set_authenticated(&rejected, "123456");
         assert_eq!(
             rejected
+                .media_source_resolver()
                 .resolve_media(
                     qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1",),
                     AudioQuality::Standard
@@ -7105,6 +7129,7 @@ mod tests {
         set_authenticated(&upstream, "123456");
         assert_eq!(
             upstream
+                .media_source_resolver()
                 .resolve_media(
                     qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1",),
                     AudioQuality::Standard
@@ -7129,7 +7154,8 @@ mod tests {
             }));
             set_authenticated(&provider, "123456");
 
-            let request = provider.resolve_media(
+            let resolver = provider.media_source_resolver();
+            let request = resolver.resolve_media(
                 qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
                 AudioQuality::High,
             );

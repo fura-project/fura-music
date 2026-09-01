@@ -24,7 +24,6 @@ pub enum ProviderCapability {
     Lyrics,
     Comments,
     MusicVideo,
-    MediaResolution,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -952,27 +951,69 @@ impl fmt::Display for MediaResolutionError {
 
 impl std::error::Error for MediaResolutionError {}
 
-/// Provider-neutral immediate-playback resolution. The requested quality is a
-/// preference: a provider may return a lower actual quality only according to
-/// its documented fallback policy, and the returned source must report what it
-/// actually resolved.
-pub trait MediaResolutionProvider: MusicProvider + Sync {
-    type Error;
+/// One statically assembled source of provider-neutral immediate-playback
+/// media. Catalog and account providers do not own this contract: a resolver
+/// may share provider-specific client/authentication state internally, but it
+/// advertises support and resolves only already-known [`TrackId`] values.
+pub trait MediaSourceResolver: Sync {
+    fn supports(&self, track_id: &TrackId) -> bool;
 
     fn resolve_media(
         &self,
         track_id: TrackId,
         preferred_quality: AudioQuality,
-    ) -> impl Future<Output = Result<ResolvedMediaSource, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<ResolvedMediaSource, MediaResolutionError>> + Send;
+}
+
+/// Small in-process routing authority for immediate playback sources.
+///
+/// The current product deliberately assembles exactly one production resolver.
+/// This coordinator still owns the provider-identity support check so generic
+/// playback never reaches a catalog provider directly or asks a resolver to
+/// interpret another provider's opaque identity.
+pub struct MediaSourceCoordinator<R> {
+    resolver: R,
+}
+
+impl<R> MediaSourceCoordinator<R>
+where
+    R: MediaSourceResolver,
+{
+    #[must_use]
+    pub const fn new(resolver: R) -> Self {
+        Self { resolver }
+    }
+
+    /// # Errors
+    ///
+    /// Returns [`MediaResolutionError::Unavailable`] when the configured
+    /// resolver does not support the Track's provider identity, or forwards
+    /// the resolver's truthful typed failure.
+    pub async fn resolve_media(
+        &self,
+        track_id: TrackId,
+        preferred_quality: AudioQuality,
+    ) -> Result<ResolvedMediaSource, MediaResolutionError> {
+        if !self.resolver.supports(&track_id) {
+            return Err(MediaResolutionError::Unavailable);
+        }
+        self.resolver
+            .resolve_media(track_id, preferred_quality)
+            .await
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::future::{Future, ready};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::task::{Context, Poll, Waker};
+
     use super::{
-        MusicProvider, ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge,
-        QrImageFormat,
+        MediaResolutionError, MediaSourceCoordinator, MediaSourceResolver, MusicProvider,
+        ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrImageFormat,
     };
-    use music_domain::ProviderId;
+    use music_domain::{AudioFormat, AudioQuality, ProviderId, ResolvedMediaSource, TrackId};
 
     struct LibraryOnlyProvider;
 
@@ -1003,5 +1044,74 @@ mod tests {
         let debug = format!("{challenge:?}");
         assert!(debug.contains("24 bytes"));
         assert!(!debug.contains("sensitive"));
+    }
+
+    struct SyntheticMediaSourceResolver {
+        calls: AtomicUsize,
+    }
+
+    impl MediaSourceResolver for SyntheticMediaSourceResolver {
+        fn supports(&self, track_id: &TrackId) -> bool {
+            track_id.provider().as_str() == "synthetic"
+        }
+
+        fn resolve_media(
+            &self,
+            track_id: TrackId,
+            preferred_quality: AudioQuality,
+        ) -> impl Future<Output = Result<ResolvedMediaSource, MediaResolutionError>> + Send
+        {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            ready(
+                ResolvedMediaSource::new(
+                    track_id,
+                    "https://audio.example.test/synthetic.mp3",
+                    AudioFormat::Mp3,
+                    preferred_quality,
+                    60,
+                )
+                .map_err(|_| MediaResolutionError::InvalidResponse),
+            )
+        }
+    }
+
+    #[test]
+    fn media_source_coordinator_routes_through_a_non_qq_test_resolver() {
+        let coordinator = MediaSourceCoordinator::new(SyntheticMediaSourceResolver {
+            calls: AtomicUsize::new(0),
+        });
+        let synthetic_track = TrackId::new(
+            ProviderId::new("synthetic").expect("provider"),
+            "opaque-track",
+        )
+        .expect("track ID");
+
+        let resolved =
+            run_ready(coordinator.resolve_media(synthetic_track.clone(), AudioQuality::High))
+                .expect("synthetic source");
+
+        assert_eq!(resolved.track_id(), &synthetic_track);
+        assert_eq!(resolved.quality(), AudioQuality::High);
+        assert_eq!(coordinator.resolver.calls.load(Ordering::SeqCst), 1);
+
+        let unsupported = TrackId::new(
+            ProviderId::new("qq-music").expect("provider"),
+            "opaque-track",
+        )
+        .expect("track ID");
+        assert_eq!(
+            run_ready(coordinator.resolve_media(unsupported, AudioQuality::Standard)),
+            Err(MediaResolutionError::Unavailable)
+        );
+        assert_eq!(coordinator.resolver.calls.load(Ordering::SeqCst), 1);
+    }
+
+    fn run_ready<T>(future: impl Future<Output = T>) -> T {
+        let mut future = std::pin::pin!(future);
+        let mut context = Context::from_waker(Waker::noop());
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(value) => value,
+            Poll::Pending => panic!("synthetic resolver unexpectedly blocked"),
+        }
     }
 }

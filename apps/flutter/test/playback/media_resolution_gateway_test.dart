@@ -1,7 +1,4 @@
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart' as bridge;
 
@@ -10,11 +7,11 @@ void main() {
     const privateUri =
         'http://audio.example.test/source.mp3?vkey=must-not-leak';
     final result = mapBridgeMediaResolution(
-      const bridge.QqMusicMediaResolution(
-        source: bridge.QqMusicResolvedMediaSource(
+      const bridge.MediaResolution(
+        source: bridge.ResolvedMediaSource(
           uri: privateUri,
-          format: bridge.QqMusicMediaFormat.mp3,
-          quality: bridge.QqMusicMediaQuality.standard,
+          format: bridge.MediaFormat.mp3,
+          quality: bridge.MediaQuality.standard,
           validForSeconds: 7_200,
         ),
       ),
@@ -28,11 +25,11 @@ void main() {
     expect('$result ${result.source}', isNot(contains('must-not-leak')));
 
     final high = mapBridgeMediaResolution(
-      const bridge.QqMusicMediaResolution(
-        source: bridge.QqMusicResolvedMediaSource(
+      const bridge.MediaResolution(
+        source: bridge.ResolvedMediaSource(
           uri: 'https://audio.example.test/high.mp3',
-          format: bridge.QqMusicMediaFormat.mp3,
-          quality: bridge.QqMusicMediaQuality.high,
+          format: bridge.MediaFormat.mp3,
+          quality: bridge.MediaQuality.high,
           validForSeconds: 7_200,
         ),
       ),
@@ -42,25 +39,22 @@ void main() {
 
   test('maps every Bridge failure without collapsing availability', () {
     final expected = {
-      bridge.QqMusicMediaResolutionFailure.coreUnavailable:
+      bridge.MediaResolutionFailure.coreUnavailable:
           MediaResolutionFailure.coreUnavailable,
-      bridge.QqMusicMediaResolutionFailure.authenticationRequired:
+      bridge.MediaResolutionFailure.authenticationRequired:
           MediaResolutionFailure.authenticationRequired,
-      bridge.QqMusicMediaResolutionFailure.credentialRejected:
+      bridge.MediaResolutionFailure.credentialRejected:
           MediaResolutionFailure.credentialRejected,
-      bridge.QqMusicMediaResolutionFailure.unavailable:
+      bridge.MediaResolutionFailure.unavailable:
           MediaResolutionFailure.unavailable,
-      bridge.QqMusicMediaResolutionFailure.network:
-          MediaResolutionFailure.network,
-      bridge.QqMusicMediaResolutionFailure.serviceUnavailable:
+      bridge.MediaResolutionFailure.network: MediaResolutionFailure.network,
+      bridge.MediaResolutionFailure.serviceUnavailable:
           MediaResolutionFailure.serviceUnavailable,
-      bridge.QqMusicMediaResolutionFailure.invalidResponse:
+      bridge.MediaResolutionFailure.invalidResponse:
           MediaResolutionFailure.invalidResponse,
-      bridge.QqMusicMediaResolutionFailure.replaced:
-          MediaResolutionFailure.replaced,
-      bridge.QqMusicMediaResolutionFailure.cancelled:
-          MediaResolutionFailure.cancelled,
-      bridge.QqMusicMediaResolutionFailure.alreadyRunning:
+      bridge.MediaResolutionFailure.replaced: MediaResolutionFailure.replaced,
+      bridge.MediaResolutionFailure.cancelled: MediaResolutionFailure.cancelled,
+      bridge.MediaResolutionFailure.alreadyRunning:
           MediaResolutionFailure.alreadyRunning,
     };
 
@@ -70,31 +64,31 @@ void main() {
   });
 
   test('rejects missing conflicting or invalid success fields', () {
-    const validSource = bridge.QqMusicResolvedMediaSource(
+    const validSource = bridge.ResolvedMediaSource(
       uri: 'https://audio.example.test/source.mp3',
-      format: bridge.QqMusicMediaFormat.mp3,
-      quality: bridge.QqMusicMediaQuality.standard,
+      format: bridge.MediaFormat.mp3,
+      quality: bridge.MediaQuality.standard,
       validForSeconds: 1,
     );
     final invalid = [
-      const bridge.QqMusicMediaResolution(),
-      const bridge.QqMusicMediaResolution(
+      const bridge.MediaResolution(),
+      const bridge.MediaResolution(
         source: validSource,
-        failure: bridge.QqMusicMediaResolutionFailure.network,
+        failure: bridge.MediaResolutionFailure.network,
       ),
-      const bridge.QqMusicMediaResolution(
-        source: bridge.QqMusicResolvedMediaSource(
+      const bridge.MediaResolution(
+        source: bridge.ResolvedMediaSource(
           uri: 'file:///private/source.mp3',
-          format: bridge.QqMusicMediaFormat.mp3,
-          quality: bridge.QqMusicMediaQuality.standard,
+          format: bridge.MediaFormat.mp3,
+          quality: bridge.MediaQuality.standard,
           validForSeconds: 1,
         ),
       ),
-      const bridge.QqMusicMediaResolution(
-        source: bridge.QqMusicResolvedMediaSource(
+      const bridge.MediaResolution(
+        source: bridge.ResolvedMediaSource(
           uri: 'https://audio.example.test/source.mp3',
-          format: bridge.QqMusicMediaFormat.mp3,
-          quality: bridge.QqMusicMediaQuality.standard,
+          format: bridge.MediaFormat.mp3,
+          quality: bridge.MediaQuality.standard,
           validForSeconds: 0,
         ),
       ),
@@ -116,7 +110,6 @@ void main() {
       const MediaResolutionResult(failure: MediaResolutionFailure.cancelled),
     );
     final gateway = RustMediaResolutionGateway(
-      credentialVault: _FakeVault(),
       preferredQuality: PlaybackAudioQualityPreference.high,
       operationFactory: (provider, opaque, quality) {
         providerId = provider;
@@ -137,54 +130,22 @@ void main() {
     expect(operation.cancelCalls, 1);
   });
 
-  test('deletes the shared vault only after explicit rejection', () async {
-    final rejectedVault = _FakeVault();
-    final rejected = RustMediaResolutionGateway(
-      credentialVault: rejectedVault,
-      operationFactory: (_, _, _) => _ImmediateResolution(
-        const MediaResolutionResult(
-          failure: MediaResolutionFailure.credentialRejected,
+  test(
+    'generic gateway reports rejection without persistence policy',
+    () async {
+      final rejected = RustMediaResolutionGateway(
+        operationFactory: (_, _, _) => _ImmediateResolution(
+          const MediaResolutionResult(
+            failure: MediaResolutionFailure.credentialRejected,
+          ),
         ),
-      ),
-    );
-    final rejectedResult = await rejected
-        .beginResolution(providerId: 'qq-music', opaqueTrackId: 'opaque')
-        .run();
-    expect(rejectedResult.failure, MediaResolutionFailure.credentialRejected);
-    expect(rejectedVault.deleteCalls, 1);
-
-    final transientVault = _FakeVault();
-    final transient = RustMediaResolutionGateway(
-      credentialVault: transientVault,
-      operationFactory: (_, _, _) => _ImmediateResolution(
-        const MediaResolutionResult(failure: MediaResolutionFailure.network),
-      ),
-    );
-    await transient
-        .beginResolution(providerId: 'qq-music', opaqueTrackId: 'opaque')
-        .run();
-    expect(transientVault.deleteCalls, 0);
-
-    final failingVault = _FakeVault(
-      deleteError: StateError('synthetic vault failure'),
-    );
-    final cleanupFailure = RustMediaResolutionGateway(
-      credentialVault: failingVault,
-      operationFactory: (_, _, _) => _ImmediateResolution(
-        const MediaResolutionResult(
-          failure: MediaResolutionFailure.credentialRejected,
-        ),
-      ),
-    );
-    final cleanupResult = await cleanupFailure
-        .beginResolution(providerId: 'qq-music', opaqueTrackId: 'opaque')
-        .run();
-    expect(
-      cleanupResult.failure,
-      MediaResolutionFailure.credentialRejectedStorageCleanupFailed,
-    );
-    expect(failingVault.deleteCalls, 1);
-  });
+      );
+      final rejectedResult = await rejected
+          .beginResolution(providerId: 'qq-music', opaqueTrackId: 'opaque')
+          .run();
+      expect(rejectedResult.failure, MediaResolutionFailure.credentialRejected);
+    },
+  );
 }
 
 class _ImmediateResolution implements MediaResolutionOperation {
@@ -201,24 +162,4 @@ class _ImmediateResolution implements MediaResolutionOperation {
 
   @override
   Future<MediaResolutionResult> run() async => result;
-}
-
-class _FakeVault implements CredentialVault {
-  _FakeVault({this.deleteError});
-
-  final Object? deleteError;
-  int deleteCalls = 0;
-
-  @override
-  Future<void> delete() async {
-    deleteCalls += 1;
-    final deleteError = this.deleteError;
-    if (deleteError != null) throw deleteError;
-  }
-
-  @override
-  Future<Uint8List?> read() async => null;
-
-  @override
-  Future<void> write(Uint8List secretBytes) async {}
 }

@@ -61,8 +61,7 @@ mod tests {
                 "PlaylistMutation",
                 "Lyrics",
                 "Comments",
-                "MusicVideo",
-                "MediaResolution"
+                "MusicVideo"
             ]
         );
     }

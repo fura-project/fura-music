@@ -11,6 +11,7 @@ import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/authentication/qq_music_media_credential_cleanup.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -101,15 +102,18 @@ class MusicApp extends StatelessWidget {
       playlistDetailGateway ??= RustPlaylistDetailGateway(
         credentialVault: fallbackCredentialVault,
       );
-      mediaResolutionGateway ??= RustMediaResolutionGateway(
-        credentialVault: fallbackCredentialVault,
-        preferredQuality: switch (initialSettings.playbackQuality) {
-          AppPlaybackQualityPreference.standard =>
-            PlaybackAudioQualityPreference.standard,
-          AppPlaybackQualityPreference.high =>
-            PlaybackAudioQualityPreference.high,
-        },
-      );
+      mediaResolutionGateway ??=
+          QqMusicCredentialCleaningMediaResolutionGateway(
+            RustMediaResolutionGateway(
+              preferredQuality: switch (initialSettings.playbackQuality) {
+                AppPlaybackQualityPreference.standard =>
+                  PlaybackAudioQualityPreference.standard,
+                AppPlaybackQualityPreference.high =>
+                  PlaybackAudioQualityPreference.high,
+              },
+            ),
+            credentialVault: fallbackCredentialVault,
+          );
       lyricGateway ??= RustLyricGateway(
         credentialVault: fallbackCredentialVault,
       );

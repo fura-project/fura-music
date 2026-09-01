@@ -10,36 +10,36 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `await_resolution`, `failed_resolution`, `map_error`, `map_resolution`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
-QqMusicMediaResolutionHandle beginQqMusicMediaResolution({
+MediaResolutionHandle beginMediaResolution({
   required String providerId,
   required String opaqueTrackId,
-  required QqMusicMediaQualityPreference preferredQuality,
-}) => RustLib.instance.api.crateApiMediaBeginQqMusicMediaResolution(
+  required MediaQualityPreference preferredQuality,
+}) => RustLib.instance.api.crateApiMediaBeginMediaResolution(
   providerId: providerId,
   opaqueTrackId: opaqueTrackId,
   preferredQuality: preferredQuality,
 );
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>>
-abstract class QqMusicMediaResolutionHandle implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>>
+abstract class MediaResolutionHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicMediaResolution> run();
+  Future<MediaResolution> run();
 }
 
-enum QqMusicMediaFormat { mp3 }
+enum MediaFormat { mp3 }
 
-enum QqMusicMediaQuality { standard, high }
+enum MediaQuality { standard, high }
 
-enum QqMusicMediaQualityPreference { standard, high }
+enum MediaQualityPreference { standard, high }
 
-class QqMusicMediaResolution {
-  final QqMusicResolvedMediaSource? source;
-  final QqMusicMediaResolutionFailure? failure;
+class MediaResolution {
+  final ResolvedMediaSource? source;
+  final MediaResolutionFailure? failure;
 
-  const QqMusicMediaResolution({this.source, this.failure});
+  const MediaResolution({this.source, this.failure});
 
   @override
   int get hashCode => source.hashCode ^ failure.hashCode;
@@ -47,13 +47,13 @@ class QqMusicMediaResolution {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicMediaResolution &&
+      other is MediaResolution &&
           runtimeType == other.runtimeType &&
           source == other.source &&
           failure == other.failure;
 }
 
-enum QqMusicMediaResolutionFailure {
+enum MediaResolutionFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -68,13 +68,13 @@ enum QqMusicMediaResolutionFailure {
 
 /// Short-lived playback input. The URI can contain authorization material and
 /// is available to the playback edge, but never to Rust diagnostics.
-class QqMusicResolvedMediaSource {
+class ResolvedMediaSource {
   final String uri;
-  final QqMusicMediaFormat format;
-  final QqMusicMediaQuality quality;
+  final MediaFormat format;
+  final MediaQuality quality;
   final int validForSeconds;
 
-  const QqMusicResolvedMediaSource({
+  const ResolvedMediaSource({
     required this.uri,
     required this.format,
     required this.quality,
@@ -91,7 +91,7 @@ class QqMusicResolvedMediaSource {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicResolvedMediaSource &&
+      other is ResolvedMediaSource &&
           runtimeType == other.runtimeType &&
           uri == other.uri &&
           format == other.format &&

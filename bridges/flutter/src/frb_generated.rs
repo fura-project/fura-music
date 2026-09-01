@@ -60,7 +60,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1753236125;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1589721442;
 
 // Section: executor
 
@@ -68,6 +68,159 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__media__MediaResolutionHandle_cancel_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "MediaResolutionHandle_cancel",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>(crate::api::media::MediaResolutionHandle::cancel(
+                    &*api_that_guard,
+                ))?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__media__MediaResolutionHandle_is_active_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "MediaResolutionHandle_is_active",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>(crate::api::media::MediaResolutionHandle::is_active(
+                    &*api_that_guard,
+                ))?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__media__MediaResolutionHandle_run_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "MediaResolutionHandle_run",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = Ok::<_, ()>(
+                            crate::api::media::MediaResolutionHandle::run(&*api_that_guard).await,
+                        )?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__queue__PlaybackQueueHandle_advance_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -2566,166 +2719,6 @@ fn wire__crate__api__lyrics__QqMusicLyricLoadHandle_run_impl(
                         let api_that_guard = api_that_guard.unwrap();
                         let output_ok = Ok::<_, ()>(
                             crate::api::lyrics::QqMusicLyricLoadHandle::run(&*api_that_guard).await,
-                        )?;
-                        std::result::Result::Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__media__QqMusicMediaResolutionHandle_cancel_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "QqMusicMediaResolutionHandle_cancel",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_that = <RustOpaqueMoi<
-                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
-                    QqMusicMediaResolutionHandle,
-                >,
-            >>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let mut api_that_guard = None;
-                let decode_indices_ =
-                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
-                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                            &api_that, 0, false,
-                        ),
-                    ]);
-                for i in decode_indices_ {
-                    match i {
-                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
-                        _ => unreachable!(),
-                    }
-                }
-                let api_that_guard = api_that_guard.unwrap();
-                let output_ok = Ok::<_, ()>(
-                    crate::api::media::QqMusicMediaResolutionHandle::cancel(&*api_that_guard),
-                )?;
-                std::result::Result::Ok(output_ok)
-            })())
-        },
-    )
-}
-fn wire__crate__api__media__QqMusicMediaResolutionHandle_is_active_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "QqMusicMediaResolutionHandle_is_active",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_that = <RustOpaqueMoi<
-                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
-                    QqMusicMediaResolutionHandle,
-                >,
-            >>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let mut api_that_guard = None;
-                let decode_indices_ =
-                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
-                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                            &api_that, 0, false,
-                        ),
-                    ]);
-                for i in decode_indices_ {
-                    match i {
-                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
-                        _ => unreachable!(),
-                    }
-                }
-                let api_that_guard = api_that_guard.unwrap();
-                let output_ok = Ok::<_, ()>(
-                    crate::api::media::QqMusicMediaResolutionHandle::is_active(&*api_that_guard),
-                )?;
-                std::result::Result::Ok(output_ok)
-            })())
-        },
-    )
-}
-fn wire__crate__api__media__QqMusicMediaResolutionHandle_run_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "QqMusicMediaResolutionHandle_run",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_that = <RustOpaqueMoi<
-                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
-                    QqMusicMediaResolutionHandle,
-                >,
-            >>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, ()>(
-                    (move || async move {
-                        let mut api_that_guard = None;
-                        let decode_indices_ =
-                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
-                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                                    &api_that, 0, false,
-                                )],
-                            );
-                        for i in decode_indices_ {
-                            match i {
-                                0 => {
-                                    api_that_guard =
-                                        Some(api_that.lockable_decode_async_ref().await)
-                                }
-                                _ => unreachable!(),
-                            }
-                        }
-                        let api_that_guard = api_that_guard.unwrap();
-                        let output_ok = Ok::<_, ()>(
-                            crate::api::media::QqMusicMediaResolutionHandle::run(&*api_that_guard)
-                                .await,
                         )?;
                         std::result::Result::Ok(output_ok)
                     })()
@@ -6085,6 +6078,43 @@ fn wire__crate__api__music_video__TrackMusicVideoLoadHandle_run_impl(
         },
     )
 }
+fn wire__crate__api__media__begin_media_resolution_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "begin_media_resolution",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_provider_id = <String>::sse_decode(&mut deserializer);
+            let api_opaque_track_id = <String>::sse_decode(&mut deserializer);
+            let api_preferred_quality =
+                <crate::api::media::MediaQualityPreference>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(crate::api::media::begin_media_resolution(
+                    api_provider_id,
+                    api_opaque_track_id,
+                    api_preferred_quality,
+                ))?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6506,43 +6536,6 @@ fn wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(
                 let output_ok = Ok::<_, ()>(crate::api::lyrics::begin_qq_music_lyric_load(
                     api_provider_id,
                     api_opaque_track_id,
-                ))?;
-                std::result::Result::Ok(output_ok)
-            })())
-        },
-    )
-}
-fn wire__crate__api__media__begin_qq_music_media_resolution_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "begin_qq_music_media_resolution",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_provider_id = <String>::sse_decode(&mut deserializer);
-            let api_opaque_track_id = <String>::sse_decode(&mut deserializer);
-            let api_preferred_quality =
-                <crate::api::media::QqMusicMediaQualityPreference>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Ok::<_, ()>(crate::api::media::begin_qq_music_media_resolution(
-                    api_provider_id,
-                    api_opaque_track_id,
-                    api_preferred_quality,
                 ))?;
                 std::result::Result::Ok(output_ok)
             })())
@@ -7864,6 +7857,9 @@ fn wire__crate__api__authentication__verify_restored_qq_music_credential_impl(
 // Section: related_funcs
 
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PlaybackQueueHandle>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
@@ -7901,9 +7897,6 @@ flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicLyricLoadHandle>
-);
-flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
-    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicNewAlbumPageLoadHandle>
@@ -7972,6 +7965,16 @@ flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
 );
 
 // Section: dart2rust
+
+impl SseDecode for MediaResolutionHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>,
+        >>::sse_decode(deserializer);
+        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+    }
+}
 
 impl SseDecode for PlaybackQueueHandle {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8118,16 +8121,6 @@ impl SseDecode for QqMusicLyricLoadHandle {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <RustOpaqueMoi<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicLyricLoadHandle>,
-        >>::sse_decode(deserializer);
-        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
-    }
-}
-
-impl SseDecode for QqMusicMediaResolutionHandle {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <RustOpaqueMoi<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
         >>::sse_decode(deserializer);
         return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
     }
@@ -8364,6 +8357,18 @@ impl SseDecode for TrackMusicVideoLoadHandle {
 }
 
 impl SseDecode
+    for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <usize>::sse_decode(deserializer);
+        return decode_rust_opaque_moi(inner);
+    }
+}
+
+impl SseDecode
     for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PlaybackQueueHandle>>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8512,18 +8517,6 @@ impl SseDecode
 impl SseDecode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicLyricLoadHandle>,
-    >
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <usize>::sse_decode(deserializer);
-        return decode_rust_opaque_moi(inner);
-    }
-}
-
-impl SseDecode
-    for RustOpaqueMoi<
-        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
     >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9172,6 +9165,75 @@ impl SseDecode for Vec<crate::api::comments::TrackCommentSummary> {
     }
 }
 
+impl SseDecode for crate::api::media::MediaFormat {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::media::MediaFormat::Mp3,
+            _ => unreachable!("Invalid variant for MediaFormat: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::media::MediaQuality {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::media::MediaQuality::Standard,
+            1 => crate::api::media::MediaQuality::High,
+            _ => unreachable!("Invalid variant for MediaQuality: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::media::MediaQualityPreference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::media::MediaQualityPreference::Standard,
+            1 => crate::api::media::MediaQualityPreference::High,
+            _ => unreachable!("Invalid variant for MediaQualityPreference: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::media::MediaResolution {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_source =
+            <Option<crate::api::media::ResolvedMediaSource>>::sse_decode(deserializer);
+        let mut var_failure =
+            <Option<crate::api::media::MediaResolutionFailure>>::sse_decode(deserializer);
+        return crate::api::media::MediaResolution {
+            source: var_source,
+            failure: var_failure,
+        };
+    }
+}
+
+impl SseDecode for crate::api::media::MediaResolutionFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::media::MediaResolutionFailure::CoreUnavailable,
+            1 => crate::api::media::MediaResolutionFailure::AuthenticationRequired,
+            2 => crate::api::media::MediaResolutionFailure::CredentialRejected,
+            3 => crate::api::media::MediaResolutionFailure::Unavailable,
+            4 => crate::api::media::MediaResolutionFailure::Network,
+            5 => crate::api::media::MediaResolutionFailure::ServiceUnavailable,
+            6 => crate::api::media::MediaResolutionFailure::InvalidResponse,
+            7 => crate::api::media::MediaResolutionFailure::Replaced,
+            8 => crate::api::media::MediaResolutionFailure::Cancelled,
+            9 => crate::api::media::MediaResolutionFailure::AlreadyRunning,
+            _ => unreachable!("Invalid variant for MediaResolutionFailure: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9262,6 +9324,19 @@ impl SseDecode for Option<crate::api::library::LibraryPlaylistSummary> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::library::LibraryPlaylistSummary>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::media::MediaResolutionFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::media::MediaResolutionFailure>::sse_decode(
                 deserializer,
             ));
         } else {
@@ -9563,19 +9638,6 @@ impl SseDecode for Option<crate::api::lyrics::QqMusicLyricLoadFailure> {
     }
 }
 
-impl SseDecode for Option<crate::api::media::QqMusicMediaResolutionFailure> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(
-                <crate::api::media::QqMusicMediaResolutionFailure>::sse_decode(deserializer),
-            );
-        } else {
-            return None;
-        }
-    }
-}
-
 impl SseDecode for Option<crate::api::new_albums::QqMusicNewAlbumPageLoadFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9826,19 +9888,6 @@ impl SseDecode for Option<crate::api::recommendations::QqMusicRelatedTracksLoadF
     }
 }
 
-impl SseDecode for Option<crate::api::media::QqMusicResolvedMediaSource> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::media::QqMusicResolvedMediaSource>::sse_decode(
-                deserializer,
-            ));
-        } else {
-            return None;
-        }
-    }
-}
-
 impl SseDecode for Option<crate::api::lyrics::QqMusicSynchronizedLyrics> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9915,6 +9964,19 @@ impl SseDecode for Option<crate::api::library::QqMusicUserPlaylistLoadFailure> {
             return Some(
                 <crate::api::library::QqMusicUserPlaylistLoadFailure>::sse_decode(deserializer),
             );
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::media::ResolvedMediaSource> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::media::ResolvedMediaSource>::sse_decode(
+                deserializer,
+            ));
         } else {
             return None;
         }
@@ -10667,81 +10729,6 @@ impl SseDecode for crate::api::lyrics::QqMusicLyricLoadFailure {
     }
 }
 
-impl SseDecode for crate::api::media::QqMusicMediaFormat {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::media::QqMusicMediaFormat::Mp3,
-            _ => unreachable!("Invalid variant for QqMusicMediaFormat: {}", inner),
-        };
-    }
-}
-
-impl SseDecode for crate::api::media::QqMusicMediaQuality {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::media::QqMusicMediaQuality::Standard,
-            1 => crate::api::media::QqMusicMediaQuality::High,
-            _ => unreachable!("Invalid variant for QqMusicMediaQuality: {}", inner),
-        };
-    }
-}
-
-impl SseDecode for crate::api::media::QqMusicMediaQualityPreference {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::media::QqMusicMediaQualityPreference::Standard,
-            1 => crate::api::media::QqMusicMediaQualityPreference::High,
-            _ => unreachable!(
-                "Invalid variant for QqMusicMediaQualityPreference: {}",
-                inner
-            ),
-        };
-    }
-}
-
-impl SseDecode for crate::api::media::QqMusicMediaResolution {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_source =
-            <Option<crate::api::media::QqMusicResolvedMediaSource>>::sse_decode(deserializer);
-        let mut var_failure =
-            <Option<crate::api::media::QqMusicMediaResolutionFailure>>::sse_decode(deserializer);
-        return crate::api::media::QqMusicMediaResolution {
-            source: var_source,
-            failure: var_failure,
-        };
-    }
-}
-
-impl SseDecode for crate::api::media::QqMusicMediaResolutionFailure {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::media::QqMusicMediaResolutionFailure::CoreUnavailable,
-            1 => crate::api::media::QqMusicMediaResolutionFailure::AuthenticationRequired,
-            2 => crate::api::media::QqMusicMediaResolutionFailure::CredentialRejected,
-            3 => crate::api::media::QqMusicMediaResolutionFailure::Unavailable,
-            4 => crate::api::media::QqMusicMediaResolutionFailure::Network,
-            5 => crate::api::media::QqMusicMediaResolutionFailure::ServiceUnavailable,
-            6 => crate::api::media::QqMusicMediaResolutionFailure::InvalidResponse,
-            7 => crate::api::media::QqMusicMediaResolutionFailure::Replaced,
-            8 => crate::api::media::QqMusicMediaResolutionFailure::Cancelled,
-            9 => crate::api::media::QqMusicMediaResolutionFailure::AlreadyRunning,
-            _ => unreachable!(
-                "Invalid variant for QqMusicMediaResolutionFailure: {}",
-                inner
-            ),
-        };
-    }
-}
-
 impl SseDecode for crate::api::new_albums::QqMusicNewAlbumPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11438,22 +11425,6 @@ impl SseDecode for crate::api::recommendations::QqMusicRelatedTracksLoadFailure 
     }
 }
 
-impl SseDecode for crate::api::media::QqMusicResolvedMediaSource {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_uri = <String>::sse_decode(deserializer);
-        let mut var_format = <crate::api::media::QqMusicMediaFormat>::sse_decode(deserializer);
-        let mut var_quality = <crate::api::media::QqMusicMediaQuality>::sse_decode(deserializer);
-        let mut var_validForSeconds = <u32>::sse_decode(deserializer);
-        return crate::api::media::QqMusicResolvedMediaSource {
-            uri: var_uri,
-            format: var_format,
-            quality: var_quality,
-            valid_for_seconds: var_validForSeconds,
-        };
-    }
-}
-
 impl SseDecode for crate::api::lyrics::QqMusicSynchronizedLyricLine {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11683,6 +11654,22 @@ impl SseDecode for crate::api::library::QqMusicUserPlaylistLoadFailure {
     }
 }
 
+impl SseDecode for crate::api::media::ResolvedMediaSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_uri = <String>::sse_decode(deserializer);
+        let mut var_format = <crate::api::media::MediaFormat>::sse_decode(deserializer);
+        let mut var_quality = <crate::api::media::MediaQuality>::sse_decode(deserializer);
+        let mut var_validForSeconds = <u32>::sse_decode(deserializer);
+        return crate::api::media::ResolvedMediaSource {
+            uri: var_uri,
+            format: var_format,
+            quality: var_quality,
+            valid_for_seconds: var_validForSeconds,
+        };
+    }
+}
+
 impl SseDecode for crate::api::comments::TrackCommentSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11808,79 +11795,79 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        14 => wire__crate__api__authentication__QqMusicAccountSummaryLoadHandle_run_impl(
+        3 => wire__crate__api__media__MediaResolutionHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_run_impl(
+        17 => wire__crate__api__authentication__QqMusicAccountSummaryLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_run_impl(
+        20 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_run_impl(
+        23 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_run_impl(
+        26 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_run_impl(
+        29 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_run_impl(
+        32 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_run_impl(
+        35 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__recommendations__QqMusicDailyRecommendationLoadHandle_run_impl(
+        38 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_run_impl(
+        41 => wire__crate__api__recommendations__QqMusicDailyRecommendationLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_run_impl(
+        44 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_run_impl(
+        47 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__media__QqMusicMediaResolutionHandle_run_impl(
+        50 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
@@ -12049,43 +12036,43 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-                        1 => wire__crate__api__queue__PlaybackQueueHandle_advance_impl(ptr, rust_vec_len, data_len),
-2 => wire__crate__api__queue__PlaybackQueueHandle_clear_impl(ptr, rust_vec_len, data_len),
-3 => wire__crate__api__queue__PlaybackQueueHandle_complete_current_impl(ptr, rust_vec_len, data_len),
-4 => wire__crate__api__queue__PlaybackQueueHandle_push_impl(ptr, rust_vec_len, data_len),
-5 => wire__crate__api__queue__PlaybackQueueHandle_remove_impl(ptr, rust_vec_len, data_len),
-6 => wire__crate__api__queue__PlaybackQueueHandle_replace_impl(ptr, rust_vec_len, data_len),
-7 => wire__crate__api__queue__PlaybackQueueHandle_rewind_impl(ptr, rust_vec_len, data_len),
-8 => wire__crate__api__queue__PlaybackQueueHandle_select_impl(ptr, rust_vec_len, data_len),
-9 => wire__crate__api__queue__PlaybackQueueHandle_set_order_impl(ptr, rust_vec_len, data_len),
-10 => wire__crate__api__queue__PlaybackQueueHandle_set_repeat_mode_impl(ptr, rust_vec_len, data_len),
-11 => wire__crate__api__queue__PlaybackQueueHandle_snapshot_impl(ptr, rust_vec_len, data_len),
-12 => wire__crate__api__authentication__QqMusicAccountSummaryLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-13 => wire__crate__api__authentication__QqMusicAccountSummaryLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-15 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-16 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-18 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
-19 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
-21 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-22 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-24 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-25 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-27 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-28 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-30 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-31 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-33 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-34 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-36 => wire__crate__api__recommendations__QqMusicDailyRecommendationLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-37 => wire__crate__api__recommendations__QqMusicDailyRecommendationLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-39 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-40 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-42 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-43 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-45 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-46 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-48 => wire__crate__api__media__QqMusicMediaResolutionHandle_cancel_impl(ptr, rust_vec_len, data_len),
-49 => wire__crate__api__media__QqMusicMediaResolutionHandle_is_active_impl(ptr, rust_vec_len, data_len),
+                        1 => wire__crate__api__media__MediaResolutionHandle_cancel_impl(ptr, rust_vec_len, data_len),
+2 => wire__crate__api__media__MediaResolutionHandle_is_active_impl(ptr, rust_vec_len, data_len),
+4 => wire__crate__api__queue__PlaybackQueueHandle_advance_impl(ptr, rust_vec_len, data_len),
+5 => wire__crate__api__queue__PlaybackQueueHandle_clear_impl(ptr, rust_vec_len, data_len),
+6 => wire__crate__api__queue__PlaybackQueueHandle_complete_current_impl(ptr, rust_vec_len, data_len),
+7 => wire__crate__api__queue__PlaybackQueueHandle_push_impl(ptr, rust_vec_len, data_len),
+8 => wire__crate__api__queue__PlaybackQueueHandle_remove_impl(ptr, rust_vec_len, data_len),
+9 => wire__crate__api__queue__PlaybackQueueHandle_replace_impl(ptr, rust_vec_len, data_len),
+10 => wire__crate__api__queue__PlaybackQueueHandle_rewind_impl(ptr, rust_vec_len, data_len),
+11 => wire__crate__api__queue__PlaybackQueueHandle_select_impl(ptr, rust_vec_len, data_len),
+12 => wire__crate__api__queue__PlaybackQueueHandle_set_order_impl(ptr, rust_vec_len, data_len),
+13 => wire__crate__api__queue__PlaybackQueueHandle_set_repeat_mode_impl(ptr, rust_vec_len, data_len),
+14 => wire__crate__api__queue__PlaybackQueueHandle_snapshot_impl(ptr, rust_vec_len, data_len),
+15 => wire__crate__api__authentication__QqMusicAccountSummaryLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+16 => wire__crate__api__authentication__QqMusicAccountSummaryLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+18 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+19 => wire__crate__api__album__QqMusicAlbumDetailsLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+21 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
+22 => wire__crate__api__album_favorites__QqMusicAlbumFavoriteMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
+24 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+25 => wire__crate__api__search__QqMusicAlbumSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+27 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+28 => wire__crate__api__album__QqMusicAlbumTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+30 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+31 => wire__crate__api__artist__QqMusicArtistAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+33 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+34 => wire__crate__api__search__QqMusicArtistSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+36 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+37 => wire__crate__api__artist__QqMusicArtistTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+39 => wire__crate__api__recommendations__QqMusicDailyRecommendationLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+40 => wire__crate__api__recommendations__QqMusicDailyRecommendationLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+42 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+43 => wire__crate__api__favorite_albums__QqMusicFavoriteAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+45 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+46 => wire__crate__api__favorite_artists__QqMusicFavoriteArtistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+48 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+49 => wire__crate__api__lyrics__QqMusicLyricLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
 51 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
 52 => wire__crate__api__new_albums__QqMusicNewAlbumPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
 54 => wire__crate__api__new_songs__QqMusicNewSongsLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
@@ -12128,19 +12115,19 @@ fn pde_ffi_dispatcher_sync_impl(
 109 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
 111 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
 112 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-114 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
-115 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
-116 => wire__crate__api__album_favorites__begin_qq_music_album_favorite_mutation_impl(ptr, rust_vec_len, data_len),
-117 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
-118 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
-119 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
-120 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
-121 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
-122 => wire__crate__api__recommendations__begin_qq_music_daily_recommendation_load_impl(ptr, rust_vec_len, data_len),
-123 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
-124 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
-125 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
-126 => wire__crate__api__media__begin_qq_music_media_resolution_impl(ptr, rust_vec_len, data_len),
+114 => wire__crate__api__media__begin_media_resolution_impl(ptr, rust_vec_len, data_len),
+115 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
+116 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
+117 => wire__crate__api__album_favorites__begin_qq_music_album_favorite_mutation_impl(ptr, rust_vec_len, data_len),
+118 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
+119 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
+120 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
+121 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
+122 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
+123 => wire__crate__api__recommendations__begin_qq_music_daily_recommendation_load_impl(ptr, rust_vec_len, data_len),
+124 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
+125 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
+126 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
 127 => wire__crate__api__new_albums__begin_qq_music_new_album_page_load_impl(ptr, rust_vec_len, data_len),
 128 => wire__crate__api__new_songs__begin_qq_music_new_songs_load_impl(ptr, rust_vec_len, data_len),
 129 => wire__crate__api__recommendations__begin_qq_music_personalized_playlists_load_impl(ptr, rust_vec_len, data_len),
@@ -12179,6 +12166,26 @@ fn pde_ffi_dispatcher_sync_impl(
 }
 
 // Section: rust2dart
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<MediaResolutionHandle> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
+            .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<MediaResolutionHandle>
+{
+}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<MediaResolutionHandle>>
+    for MediaResolutionHandle
+{
+    fn into_into_dart(self) -> FrbWrapper<MediaResolutionHandle> {
+        self.into()
+    }
+}
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<PlaybackQueueHandle> {
@@ -12434,26 +12441,6 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<QqMusicLyricLoadHandle>>
     for QqMusicLyricLoadHandle
 {
     fn into_into_dart(self) -> FrbWrapper<QqMusicLyricLoadHandle> {
-        self.into()
-    }
-}
-
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for FrbWrapper<QqMusicMediaResolutionHandle> {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
-            .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for FrbWrapper<QqMusicMediaResolutionHandle>
-{
-}
-
-impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<QqMusicMediaResolutionHandle>>
-    for QqMusicMediaResolutionHandle
-{
-    fn into_into_dart(self) -> FrbWrapper<QqMusicMediaResolutionHandle> {
         self.into()
     }
 }
@@ -13114,6 +13101,118 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::library::LibraryTrackSummary>
     for crate::api::library::LibraryTrackSummary
 {
     fn into_into_dart(self) -> crate::api::library::LibraryTrackSummary {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::media::MediaFormat {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Mp3 => 0.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::media::MediaFormat
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::media::MediaFormat>
+    for crate::api::media::MediaFormat
+{
+    fn into_into_dart(self) -> crate::api::media::MediaFormat {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::media::MediaQuality {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Standard => 0.into_dart(),
+            Self::High => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::media::MediaQuality
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::media::MediaQuality>
+    for crate::api::media::MediaQuality
+{
+    fn into_into_dart(self) -> crate::api::media::MediaQuality {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::media::MediaQualityPreference {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Standard => 0.into_dart(),
+            Self::High => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::media::MediaQualityPreference
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::media::MediaQualityPreference>
+    for crate::api::media::MediaQualityPreference
+{
+    fn into_into_dart(self) -> crate::api::media::MediaQualityPreference {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::media::MediaResolution {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.source.into_into_dart().into_dart(),
+            self.failure.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::media::MediaResolution
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::media::MediaResolution>
+    for crate::api::media::MediaResolution
+{
+    fn into_into_dart(self) -> crate::api::media::MediaResolution {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::media::MediaResolutionFailure {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::CoreUnavailable => 0.into_dart(),
+            Self::AuthenticationRequired => 1.into_dart(),
+            Self::CredentialRejected => 2.into_dart(),
+            Self::Unavailable => 3.into_dart(),
+            Self::Network => 4.into_dart(),
+            Self::ServiceUnavailable => 5.into_dart(),
+            Self::InvalidResponse => 6.into_dart(),
+            Self::Replaced => 7.into_dart(),
+            Self::Cancelled => 8.into_dart(),
+            Self::AlreadyRunning => 9.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::media::MediaResolutionFailure
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::media::MediaResolutionFailure>
+    for crate::api::media::MediaResolutionFailure
+{
+    fn into_into_dart(self) -> crate::api::media::MediaResolutionFailure {
         self
     }
 }
@@ -14086,118 +14185,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::lyrics::QqMusicLyricLoadFailu
     for crate::api::lyrics::QqMusicLyricLoadFailure
 {
     fn into_into_dart(self) -> crate::api::lyrics::QqMusicLyricLoadFailure {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicMediaFormat {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::Mp3 => 0.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::media::QqMusicMediaFormat
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicMediaFormat>
-    for crate::api::media::QqMusicMediaFormat
-{
-    fn into_into_dart(self) -> crate::api::media::QqMusicMediaFormat {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicMediaQuality {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::Standard => 0.into_dart(),
-            Self::High => 1.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::media::QqMusicMediaQuality
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicMediaQuality>
-    for crate::api::media::QqMusicMediaQuality
-{
-    fn into_into_dart(self) -> crate::api::media::QqMusicMediaQuality {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicMediaQualityPreference {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::Standard => 0.into_dart(),
-            Self::High => 1.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::media::QqMusicMediaQualityPreference
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicMediaQualityPreference>
-    for crate::api::media::QqMusicMediaQualityPreference
-{
-    fn into_into_dart(self) -> crate::api::media::QqMusicMediaQualityPreference {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicMediaResolution {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.source.into_into_dart().into_dart(),
-            self.failure.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::media::QqMusicMediaResolution
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicMediaResolution>
-    for crate::api::media::QqMusicMediaResolution
-{
-    fn into_into_dart(self) -> crate::api::media::QqMusicMediaResolution {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicMediaResolutionFailure {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::CoreUnavailable => 0.into_dart(),
-            Self::AuthenticationRequired => 1.into_dart(),
-            Self::CredentialRejected => 2.into_dart(),
-            Self::Unavailable => 3.into_dart(),
-            Self::Network => 4.into_dart(),
-            Self::ServiceUnavailable => 5.into_dart(),
-            Self::InvalidResponse => 6.into_dart(),
-            Self::Replaced => 7.into_dart(),
-            Self::Cancelled => 8.into_dart(),
-            Self::AlreadyRunning => 9.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::media::QqMusicMediaResolutionFailure
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicMediaResolutionFailure>
-    for crate::api::media::QqMusicMediaResolutionFailure
-{
-    fn into_into_dart(self) -> crate::api::media::QqMusicMediaResolutionFailure {
         self
     }
 }
@@ -15211,29 +15198,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::recommendations::QqMusicRelat
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::media::QqMusicResolvedMediaSource {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.uri.into_into_dart().into_dart(),
-            self.format.into_into_dart().into_dart(),
-            self.quality.into_into_dart().into_dart(),
-            self.valid_for_seconds.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::media::QqMusicResolvedMediaSource
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::media::QqMusicResolvedMediaSource>
-    for crate::api::media::QqMusicResolvedMediaSource
-{
-    fn into_into_dart(self) -> crate::api::media::QqMusicResolvedMediaSource {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::lyrics::QqMusicSynchronizedLyricLine {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -15539,6 +15503,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::library::QqMusicUserPlaylistL
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::media::ResolvedMediaSource {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.uri.into_into_dart().into_dart(),
+            self.format.into_into_dart().into_dart(),
+            self.quality.into_into_dart().into_dart(),
+            self.valid_for_seconds.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::media::ResolvedMediaSource
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::media::ResolvedMediaSource>
+    for crate::api::media::ResolvedMediaSource
+{
+    fn into_into_dart(self) -> crate::api::media::ResolvedMediaSource {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::comments::TrackCommentSummary {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -15658,6 +15645,18 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::music_video::TrackMusicVideoS
 {
     fn into_into_dart(self) -> crate::api::music_video::TrackMusicVideoSummary {
         self
+    }
+}
+
+impl SseEncode for MediaResolutionHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>,
+        >>::sse_encode(
+            flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
+            serializer,
+        );
     }
 }
 
@@ -15825,18 +15824,6 @@ impl SseEncode for QqMusicLyricLoadHandle {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <RustOpaqueMoi<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicLyricLoadHandle>,
-        >>::sse_encode(
-            flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
-            serializer,
-        );
-    }
-}
-
-impl SseEncode for QqMusicMediaResolutionHandle {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <RustOpaqueMoi<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
         >>::sse_encode(
             flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
             serializer,
@@ -16117,6 +16104,19 @@ impl SseEncode for TrackMusicVideoLoadHandle {
 }
 
 impl SseEncode
+    for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        let (ptr, size) = self.sse_encode_raw();
+        <usize>::sse_encode(ptr, serializer);
+        <i32>::sse_encode(size, serializer);
+    }
+}
+
+impl SseEncode
     for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PlaybackQueueHandle>>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -16277,19 +16277,6 @@ impl SseEncode
 impl SseEncode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicLyricLoadHandle>,
-    >
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        let (ptr, size) = self.sse_encode_raw();
-        <usize>::sse_encode(ptr, serializer);
-        <i32>::sse_encode(size, serializer);
-    }
-}
-
-impl SseEncode
-    for RustOpaqueMoi<
-        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
     >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -16852,6 +16839,85 @@ impl SseEncode for Vec<crate::api::comments::TrackCommentSummary> {
     }
 }
 
+impl SseEncode for crate::api::media::MediaFormat {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::media::MediaFormat::Mp3 => 0,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::media::MediaQuality {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::media::MediaQuality::Standard => 0,
+                crate::api::media::MediaQuality::High => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::media::MediaQualityPreference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::media::MediaQualityPreference::Standard => 0,
+                crate::api::media::MediaQualityPreference::High => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::media::MediaResolution {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<crate::api::media::ResolvedMediaSource>>::sse_encode(self.source, serializer);
+        <Option<crate::api::media::MediaResolutionFailure>>::sse_encode(self.failure, serializer);
+    }
+}
+
+impl SseEncode for crate::api::media::MediaResolutionFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::media::MediaResolutionFailure::CoreUnavailable => 0,
+                crate::api::media::MediaResolutionFailure::AuthenticationRequired => 1,
+                crate::api::media::MediaResolutionFailure::CredentialRejected => 2,
+                crate::api::media::MediaResolutionFailure::Unavailable => 3,
+                crate::api::media::MediaResolutionFailure::Network => 4,
+                crate::api::media::MediaResolutionFailure::ServiceUnavailable => 5,
+                crate::api::media::MediaResolutionFailure::InvalidResponse => 6,
+                crate::api::media::MediaResolutionFailure::Replaced => 7,
+                crate::api::media::MediaResolutionFailure::Cancelled => 8,
+                crate::api::media::MediaResolutionFailure::AlreadyRunning => 9,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -16928,6 +16994,16 @@ impl SseEncode for Option<crate::api::library::LibraryPlaylistSummary> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::library::LibraryPlaylistSummary>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::media::MediaResolutionFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::media::MediaResolutionFailure>::sse_encode(value, serializer);
         }
     }
 }
@@ -17162,16 +17238,6 @@ impl SseEncode for Option<crate::api::lyrics::QqMusicLyricLoadFailure> {
     }
 }
 
-impl SseEncode for Option<crate::api::media::QqMusicMediaResolutionFailure> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::media::QqMusicMediaResolutionFailure>::sse_encode(value, serializer);
-        }
-    }
-}
-
 impl SseEncode for Option<crate::api::new_albums::QqMusicNewAlbumPageLoadFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -17372,16 +17438,6 @@ impl SseEncode for Option<crate::api::recommendations::QqMusicRelatedTracksLoadF
     }
 }
 
-impl SseEncode for Option<crate::api::media::QqMusicResolvedMediaSource> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::media::QqMusicResolvedMediaSource>::sse_encode(value, serializer);
-        }
-    }
-}
-
 impl SseEncode for Option<crate::api::lyrics::QqMusicSynchronizedLyrics> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -17442,6 +17498,16 @@ impl SseEncode for Option<crate::api::library::QqMusicUserPlaylistLoadFailure> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::library::QqMusicUserPlaylistLoadFailure>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::media::ResolvedMediaSource> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::media::ResolvedMediaSource>::sse_encode(value, serializer);
         }
     }
 }
@@ -18091,91 +18157,6 @@ impl SseEncode for crate::api::lyrics::QqMusicLyricLoadFailure {
     }
 }
 
-impl SseEncode for crate::api::media::QqMusicMediaFormat {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::api::media::QqMusicMediaFormat::Mp3 => 0,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
-    }
-}
-
-impl SseEncode for crate::api::media::QqMusicMediaQuality {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::api::media::QqMusicMediaQuality::Standard => 0,
-                crate::api::media::QqMusicMediaQuality::High => 1,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
-    }
-}
-
-impl SseEncode for crate::api::media::QqMusicMediaQualityPreference {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::api::media::QqMusicMediaQualityPreference::Standard => 0,
-                crate::api::media::QqMusicMediaQualityPreference::High => 1,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
-    }
-}
-
-impl SseEncode for crate::api::media::QqMusicMediaResolution {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Option<crate::api::media::QqMusicResolvedMediaSource>>::sse_encode(
-            self.source,
-            serializer,
-        );
-        <Option<crate::api::media::QqMusicMediaResolutionFailure>>::sse_encode(
-            self.failure,
-            serializer,
-        );
-    }
-}
-
-impl SseEncode for crate::api::media::QqMusicMediaResolutionFailure {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::api::media::QqMusicMediaResolutionFailure::CoreUnavailable => 0,
-                crate::api::media::QqMusicMediaResolutionFailure::AuthenticationRequired => 1,
-                crate::api::media::QqMusicMediaResolutionFailure::CredentialRejected => 2,
-                crate::api::media::QqMusicMediaResolutionFailure::Unavailable => 3,
-                crate::api::media::QqMusicMediaResolutionFailure::Network => 4,
-                crate::api::media::QqMusicMediaResolutionFailure::ServiceUnavailable => 5,
-                crate::api::media::QqMusicMediaResolutionFailure::InvalidResponse => 6,
-                crate::api::media::QqMusicMediaResolutionFailure::Replaced => 7,
-                crate::api::media::QqMusicMediaResolutionFailure::Cancelled => 8,
-                crate::api::media::QqMusicMediaResolutionFailure::AlreadyRunning => 9,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
-    }
-}
-
 impl SseEncode for crate::api::new_albums::QqMusicNewAlbumPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -18794,16 +18775,6 @@ crate::api::recommendations::QqMusicRelatedTracksLoadFailure::AlreadyRunning => 
     }
 }
 
-impl SseEncode for crate::api::media::QqMusicResolvedMediaSource {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.uri, serializer);
-        <crate::api::media::QqMusicMediaFormat>::sse_encode(self.format, serializer);
-        <crate::api::media::QqMusicMediaQuality>::sse_encode(self.quality, serializer);
-        <u32>::sse_encode(self.valid_for_seconds, serializer);
-    }
-}
-
 impl SseEncode for crate::api::lyrics::QqMusicSynchronizedLyricLine {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -18994,6 +18965,16 @@ impl SseEncode for crate::api::library::QqMusicUserPlaylistLoadFailure {
     }
 }
 
+impl SseEncode for crate::api::media::ResolvedMediaSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.uri, serializer);
+        <crate::api::media::MediaFormat>::sse_encode(self.format, serializer);
+        <crate::api::media::MediaQuality>::sse_encode(self.quality, serializer);
+        <u32>::sse_encode(self.valid_for_seconds, serializer);
+    }
+}
+
 impl SseEncode for crate::api::comments::TrackCommentSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -19140,6 +19121,20 @@ mod io {
     // Section: boilerplate
 
     flutter_rust_bridge::frb_generated_boilerplate_io!();
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>>::increment_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>>::decrement_strong_count(ptr as _);
+    }
 
     #[unsafe(no_mangle)]
     pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
@@ -19405,24 +19400,6 @@ mod io {
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicLyricLoadHandle>>::decrement_strong_count(ptr as _);
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
-        >::increment_strong_count(ptr as _);
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
-        >::decrement_strong_count(ptr as _);
     }
 
     #[unsafe(no_mangle)]
@@ -19881,6 +19858,20 @@ mod web {
     flutter_rust_bridge::frb_generated_boilerplate_web!();
 
     #[wasm_bindgen]
+    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>>::increment_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<MediaResolutionHandle>>::decrement_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
     pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
         ptr: *const std::ffi::c_void,
     ) {
@@ -20144,24 +20135,6 @@ mod web {
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicLyricLoadHandle>>::decrement_strong_count(ptr as _);
-    }
-
-    #[wasm_bindgen]
-    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
-        >::increment_strong_count(ptr as _);
-    }
-
-    #[wasm_bindgen]
-    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicMediaResolutionHandle(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicMediaResolutionHandle>,
-        >::decrement_strong_count(ptr as _);
     }
 
     #[wasm_bindgen]

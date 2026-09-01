@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/authentication/qq_music_media_credential_cleanup.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -29,14 +30,18 @@ Future<void> main() async {
     credentialVault: credentialVault,
   );
   final settingsLoad = await AppSettingsStore().load();
-  final mediaResolutionGateway = RustMediaResolutionGateway(
-    credentialVault: credentialVault,
-    preferredQuality: switch (settingsLoad.settings.playbackQuality) {
-      AppPlaybackQualityPreference.standard =>
-        PlaybackAudioQualityPreference.standard,
-      AppPlaybackQualityPreference.high => PlaybackAudioQualityPreference.high,
-    },
-  );
+  final mediaResolutionGateway =
+      QqMusicCredentialCleaningMediaResolutionGateway(
+        RustMediaResolutionGateway(
+          preferredQuality: switch (settingsLoad.settings.playbackQuality) {
+            AppPlaybackQualityPreference.standard =>
+              PlaybackAudioQualityPreference.standard,
+            AppPlaybackQualityPreference.high =>
+              PlaybackAudioQualityPreference.high,
+          },
+        ),
+        credentialVault: credentialVault,
+      );
   final lyricGateway = RustLyricGateway(credentialVault: credentialVault);
   final credentialRestore = await authenticationGateway.restoreCredential();
   final systemPlaybackBinding = await initializeSystemPlaybackBinding();

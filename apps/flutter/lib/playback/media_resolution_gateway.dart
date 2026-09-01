@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart' as bridge;
 
 enum PlaybackAudioFormat { mp3 }
@@ -72,15 +71,10 @@ typedef MediaResolutionOperationFactory = MediaResolutionOperation Function(
 
 class RustMediaResolutionGateway implements MediaResolutionGateway {
   RustMediaResolutionGateway({
-    CredentialVault? credentialVault,
     MediaResolutionOperationFactory? operationFactory,
     this.preferredQuality = PlaybackAudioQualityPreference.standard,
-  }) : _operationFactory = operationFactory ?? _beginRustResolution,
-       _credentialVault = SerializedCredentialVault(
-         credentialVault ?? PlatformCredentialVault(),
-       );
+  }) : _operationFactory = operationFactory ?? _beginRustResolution;
 
-  final CredentialVault _credentialVault;
   final MediaResolutionOperationFactory _operationFactory;
   final PlaybackAudioQualityPreference preferredQuality;
 
@@ -88,10 +82,7 @@ class RustMediaResolutionGateway implements MediaResolutionGateway {
   MediaResolutionOperation beginResolution({
     required String providerId,
     required String opaqueTrackId,
-  }) => _VaultCleaningMediaResolutionOperation(
-    _operationFactory(providerId, opaqueTrackId, preferredQuality),
-    _credentialVault,
-  );
+  }) => _operationFactory(providerId, opaqueTrackId, preferredQuality);
 }
 
 MediaResolutionOperation _beginRustResolution(
@@ -99,14 +90,13 @@ MediaResolutionOperation _beginRustResolution(
   String opaqueTrackId,
   PlaybackAudioQualityPreference preferredQuality,
 ) => _RustMediaResolutionOperation(
-  bridge.beginQqMusicMediaResolution(
+  bridge.beginMediaResolution(
     providerId: providerId,
     opaqueTrackId: opaqueTrackId,
     preferredQuality: switch (preferredQuality) {
       PlaybackAudioQualityPreference.standard =>
-        bridge.QqMusicMediaQualityPreference.standard,
-      PlaybackAudioQualityPreference.high =>
-        bridge.QqMusicMediaQualityPreference.high,
+        bridge.MediaQualityPreference.standard,
+      PlaybackAudioQualityPreference.high => bridge.MediaQualityPreference.high,
     },
   ),
 );
@@ -114,7 +104,7 @@ MediaResolutionOperation _beginRustResolution(
 class _RustMediaResolutionOperation implements MediaResolutionOperation {
   const _RustMediaResolutionOperation(this._handle);
 
-  final bridge.QqMusicMediaResolutionHandle _handle;
+  final bridge.MediaResolutionHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -131,37 +121,8 @@ class _RustMediaResolutionOperation implements MediaResolutionOperation {
   }
 }
 
-class _VaultCleaningMediaResolutionOperation
-    implements MediaResolutionOperation {
-  const _VaultCleaningMediaResolutionOperation(this._inner, this._vault);
-
-  final MediaResolutionOperation _inner;
-  final CredentialVault _vault;
-
-  @override
-  bool cancel() => _inner.cancel();
-
-  @override
-  Future<MediaResolutionResult> run() async {
-    final result = await _inner.run();
-    if (result.failure != MediaResolutionFailure.credentialRejected) {
-      return result;
-    }
-    try {
-      await _vault.delete();
-      return result;
-    } on Object {
-      return const MediaResolutionResult(
-        failure: MediaResolutionFailure.credentialRejectedStorageCleanupFailed,
-      );
-    }
-  }
-}
-
 @visibleForTesting
-MediaResolutionResult mapBridgeMediaResolution(
-  bridge.QqMusicMediaResolution result,
-) {
+MediaResolutionResult mapBridgeMediaResolution(bridge.MediaResolution result) {
   final bridgeSource = result.source;
   final bridgeFailure = result.failure;
   if (bridgeFailure != null) {
@@ -188,11 +149,11 @@ MediaResolutionResult mapBridgeMediaResolution(
     source: ResolvedPlaybackSource(
       uri: uri,
       format: switch (bridgeSource.format) {
-        bridge.QqMusicMediaFormat.mp3 => PlaybackAudioFormat.mp3,
+        bridge.MediaFormat.mp3 => PlaybackAudioFormat.mp3,
       },
       quality: switch (bridgeSource.quality) {
-        bridge.QqMusicMediaQuality.standard => PlaybackAudioQuality.standard,
-        bridge.QqMusicMediaQuality.high => PlaybackAudioQuality.high,
+        bridge.MediaQuality.standard => PlaybackAudioQuality.standard,
+        bridge.MediaQuality.high => PlaybackAudioQuality.high,
       },
       validForSeconds: bridgeSource.validForSeconds,
     ),
@@ -201,26 +162,23 @@ MediaResolutionResult mapBridgeMediaResolution(
 
 @visibleForTesting
 MediaResolutionFailure mapBridgeMediaResolutionFailure(
-  bridge.QqMusicMediaResolutionFailure failure,
+  bridge.MediaResolutionFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicMediaResolutionFailure.coreUnavailable =>
+  bridge.MediaResolutionFailure.coreUnavailable =>
     MediaResolutionFailure.coreUnavailable,
-  bridge.QqMusicMediaResolutionFailure.authenticationRequired =>
+  bridge.MediaResolutionFailure.authenticationRequired =>
     MediaResolutionFailure.authenticationRequired,
-  bridge.QqMusicMediaResolutionFailure.credentialRejected =>
+  bridge.MediaResolutionFailure.credentialRejected =>
     MediaResolutionFailure.credentialRejected,
-  bridge.QqMusicMediaResolutionFailure.unavailable =>
+  bridge.MediaResolutionFailure.unavailable =>
     MediaResolutionFailure.unavailable,
-  bridge.QqMusicMediaResolutionFailure.network =>
-    MediaResolutionFailure.network,
-  bridge.QqMusicMediaResolutionFailure.serviceUnavailable =>
+  bridge.MediaResolutionFailure.network => MediaResolutionFailure.network,
+  bridge.MediaResolutionFailure.serviceUnavailable =>
     MediaResolutionFailure.serviceUnavailable,
-  bridge.QqMusicMediaResolutionFailure.invalidResponse =>
+  bridge.MediaResolutionFailure.invalidResponse =>
     MediaResolutionFailure.invalidResponse,
-  bridge.QqMusicMediaResolutionFailure.replaced =>
-    MediaResolutionFailure.replaced,
-  bridge.QqMusicMediaResolutionFailure.cancelled =>
-    MediaResolutionFailure.cancelled,
-  bridge.QqMusicMediaResolutionFailure.alreadyRunning =>
+  bridge.MediaResolutionFailure.replaced => MediaResolutionFailure.replaced,
+  bridge.MediaResolutionFailure.cancelled => MediaResolutionFailure.cancelled,
+  bridge.MediaResolutionFailure.alreadyRunning =>
     MediaResolutionFailure.alreadyRunning,
 };

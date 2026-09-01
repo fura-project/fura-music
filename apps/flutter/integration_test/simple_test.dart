@@ -42,7 +42,6 @@ void main() {
       'Lyrics',
       'Comments',
       'MusicVideo',
-      'MediaResolution',
     ]);
     final restore = restoreQqMusicCredentialFromSecureStorage();
     expect(restore.state, QqMusicCredentialRestoreState.signedOut);
@@ -273,18 +272,22 @@ void main() {
       cancelledRankingTrackLoad.failure,
       QqMusicRankingLoadFailure.cancelled,
     );
-    final unusedMediaResolution = beginQqMusicMediaResolution(
+    final unusedMediaResolution = beginMediaResolution(
       providerId: 'qq-music',
       opaqueTrackId: 'track:41001:0:1:fixtureTrackMid1',
-      preferredQuality: QqMusicMediaQualityPreference.high,
+      preferredQuality: MediaQualityPreference.high,
     );
     expect(unusedMediaResolution.isActive, isTrue);
     expect(unusedMediaResolution.cancel(), isTrue);
     final cancelledMediaResolution = await unusedMediaResolution.run();
-    expect(
-      cancelledMediaResolution.failure,
-      QqMusicMediaResolutionFailure.cancelled,
+    expect(cancelledMediaResolution.failure, MediaResolutionFailure.cancelled);
+    final unsupportedMediaResolution = beginMediaResolution(
+      providerId: 'synthetic-unsupported',
+      opaqueTrackId: 'opaque-track',
+      preferredQuality: MediaQualityPreference.standard,
     );
+    final unsupportedMediaResult = await unsupportedMediaResolution.run();
+    expect(unsupportedMediaResult.failure, MediaResolutionFailure.unavailable);
     final unusedTrackLike = beginQqMusicTrackLikeMutation(
       providerId: 'qq-music',
       opaqueTrackId: 'track:41001:0:fixtureTrackMid:fixtureFileMid',
