@@ -140,10 +140,24 @@ void main() {
       final primaryAction = tester.getRect(
         find.byKey(const ValueKey('now-playing-primary-action')),
       );
+      final progressRow = tester.getRect(
+        find.byKey(const ValueKey('now-playing-desktop-progress-row')),
+      );
+      expect(desktopBar.height, 96);
       expect(
         (desktopBar.center.dy - primaryAction.center.dy).abs(),
-        lessThanOrEqualTo(8),
+        lessThanOrEqualTo(1),
       );
+      expect(primaryAction.bottom, lessThanOrEqualTo(progressRow.top));
+      expect(progressRow.bottom, desktopBar.bottom);
+      if (const bool.fromEnvironment('NOW_PLAYING_BAR_VISUAL_REVIEW')) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-now-playing-bar-desktop.png'),
+          ),
+        );
+      }
 
       tester.view.physicalSize = const Size(800, 700);
       await tester.pumpAndSettle();

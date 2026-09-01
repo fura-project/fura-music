@@ -432,81 +432,84 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playback = controller.playback;
-    return Row(
+    return SizedBox(
       key: const ValueKey('now-playing-desktop-layout'),
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          flex: 3,
-          child: Row(
-            key: const ValueKey('now-playing-track-zone'),
-            children: [
-              _NowPlayingArtwork(
-                track: track,
-                stage: playback.stage,
-                dimension: 56,
-                onOpenCatalog: onOpenCatalog,
-                catalogLabel: catalogLabel,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _TrackInfo(
+      height: 96,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Row(
+              key: const ValueKey('now-playing-track-zone'),
+              children: [
+                _NowPlayingArtwork(
                   track: track,
-                  status: _statusCopy(controller),
-                  error: error,
-                  onOpenExpanded: onOpenExpanded,
+                  stage: playback.stage,
+                  dimension: 56,
+                  onOpenCatalog: onOpenCatalog,
+                  catalogLabel: catalogLabel,
                 ),
-              ),
-              const SizedBox(width: 16),
-            ],
-          ),
-        ),
-        Expanded(
-          flex: 5,
-          child: Stack(
-            key: const ValueKey('now-playing-transport-zone'),
-            children: [
-              Center(
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: _transportControls(
-                    controller,
-                    authenticationFailure,
-                    onSignInAgain,
-                    prominentPrimary: true,
-                    prominentPrimarySize: 48,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _TrackInfo(
+                    track: track,
+                    status: _statusCopy(controller),
+                    error: error,
+                    onOpenExpanded: onOpenExpanded,
                   ),
                 ),
-              ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: _PlaybackProgress(
-                  controller: playback,
-                  track: track,
-                  dense: true,
-                ),
-              ),
-            ],
+                const SizedBox(width: 16),
+              ],
+            ),
           ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Row(
-            key: const ValueKey('now-playing-utility-zone'),
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (controller.lyrics != null)
-                _LyricsButton(
-                  controller: controller,
-                  onSignInAgain: onSignInAgain,
+          Expanded(
+            flex: 5,
+            child: Stack(
+              key: const ValueKey('now-playing-transport-zone'),
+              children: [
+                Center(
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: _transportControls(
+                      controller,
+                      authenticationFailure,
+                      onSignInAgain,
+                      prominentPrimary: true,
+                      prominentPrimarySize: 48,
+                    ),
+                  ),
                 ),
-              _VolumeButton(controller: controller),
-              _QueueButton(controller: controller),
-            ],
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _PlaybackProgress(
+                    controller: playback,
+                    track: track,
+                    dense: true,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          Expanded(
+            flex: 3,
+            child: Row(
+              key: const ValueKey('now-playing-utility-zone'),
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (controller.lyrics != null)
+                  _LyricsButton(
+                    controller: controller,
+                    onSignInAgain: onSignInAgain,
+                  ),
+                _VolumeButton(controller: controller),
+                _QueueButton(controller: controller),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -940,7 +943,13 @@ class _PlaybackProgressState extends State<_PlaybackProgress> {
         ),
       ],
     );
-    return widget.dense ? SizedBox(height: 24, child: progress) : progress;
+    return widget.dense
+        ? SizedBox(
+            key: const ValueKey('now-playing-desktop-progress-row'),
+            height: 24,
+            child: progress,
+          )
+        : progress;
   }
 
   void _commitSeek(double value) {
