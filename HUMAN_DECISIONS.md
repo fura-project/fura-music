@@ -161,4 +161,12 @@
 
 **Consequences:** A future real Media Source Resolver requires separate Human product authority. This decision does not authorize a broad aggregator, another production music service, cross-service Track matching, universal Track identity, dynamic plugins, a marketplace, runtime source discovery/install/update, a sidecar, or authorization/DRM bypass. Queue, playback-engine, and system-playback ownership remain unchanged.
 
+## HD-017 — Signed-out Home uses truthful public recommendations
+
+**Status:** Accepted on 2026-09-01
+
+**Decision:** When no QQ account is active, Home replaces unavailable account-only Daily 30, Radar, personalized Playlist, and personalized Track presentation with existing anonymous QQ Music public recommendations and public new songs. These surfaces use public labels such as `Popular playlist`, `Popular playlists`, and `New songs`; they must not imply personalization. The authenticated Home composition and capability mapping remain unchanged.
+
+**Consequences:** This supersedes HD-011 only for signed-out Home presentation. It authorizes no new QQ endpoint, fake Daily/Radar content, listening-history inference, additional Provider, Shell/navigation redesign, or generic feed framework. Public recommendation and new-song failures remain truthful and retryable, and guest playback keeps the existing availability and authorization rules.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

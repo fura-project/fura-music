@@ -40,7 +40,18 @@ class NewSongController extends ChangeNotifier {
   Future<void> _load(NewSongCategory expectedCategory) async {
     final generation = ++_generation;
     _operation?.cancel();
-    final operation = _gateway.beginLoad(category: expectedCategory);
+    late final NewSongLoadOperation operation;
+    try {
+      operation = _gateway.beginLoad(category: expectedCategory);
+    } on Object {
+      if (!_isCurrent(generation, expectedCategory)) return;
+      _operation = null;
+      _tracks = const [];
+      _failure = NewSongFailure.coreUnavailable;
+      _stage = NewSongStage.error;
+      _notify();
+      return;
+    }
     _operation = operation;
     _tracks = const [];
     _failure = null;

@@ -49,9 +49,9 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Goal:** integrate the existing product one page at a time against Human-approved Stitch/Figma sources so it reads as a mature QQ Music-familiar Material 3 client, using only truthful capabilities and no copied branding, proprietary assets, fake personalization, or new framework.
 
-**Current sequence:** HD-013 redirects the active visual-review candidate back to Home for one bounded recommendation-compatibility and data-slot correction. Expanded Now Playing and Liked Songs remain implemented and unaccepted. After canonical wide and compact Home renders, work stops for maintainer visual review; another page does not start autonomously.
+**Current sequence:** HD-017 makes the signed-out Home public-recommendation composition the active visual-review candidate. Expanded Now Playing and Liked Songs remain implemented and unaccepted. After canonical wide and compact Home renders, work stops for maintainer visual review; another page does not start autonomously.
 
-**Current scope:** Preserve the approved Home composition and Shell while removing Popular Programs, retaining exact public/Daily/personalized/Radar slots, exposing personalized-playlist failure classification without account content, and backing `More from your listening` with a distinct current-Track related read. No generic recommendation may substitute for another slot. After targeted Core/Flutter checks plus canonical desktop and mobile renders, implementation stops for Human visual review.
+**Current scope:** Preserve the approved Home composition and Shell while signed-out account-only slots use the already supported anonymous public-playlist and new-song capabilities with explicit public labels. Authenticated Daily, personalized Playlist/Track, and Radar slots remain exact and unchanged; generic content may not masquerade as them. After targeted Flutter checks plus canonical desktop and mobile renders, implementation stops for Human visual review.
 
 **Boundaries:** approved frames are visual sources of truth, while implementation must preserve retained state, accessibility, truthful Provider semantics, and the existing Flutter/Rust/music ownership. M7 is product integration, not a design-framework, navigation-framework, or architecture-rewrite project.
 

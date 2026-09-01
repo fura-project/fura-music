@@ -138,13 +138,39 @@ void main() {
             playlists: [
               RecommendedPlaylistSummary(
                 providerId: 'qq-music',
-                opaqueId: 'catalog:signed-out-home',
-                title: 'Signed-out public recommendation',
+                opaqueId: 'catalog:signed-out-hero',
+                title: 'Public listening pick',
                 trackCount: 24,
+              ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:signed-out-popular',
+                title: 'Million-play favorites',
+                trackCount: 80,
+              ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:signed-out-shelf',
+                title: 'Open-air playlist',
+                trackCount: 36,
               ),
             ],
           ),
         ),
+        newSongGateway: _WidgetNewSongGateway({
+          NewSongCategory.latest: const NewSongResult(
+            category: NewSongCategory.latest,
+            tracks: [
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:guest:new-song',
+                title: 'Fresh release',
+                artistNames: ['Public artist'],
+                durationSeconds: 192,
+              ),
+            ],
+          ),
+        }),
       ),
     );
     await tester.pumpAndSettle();
@@ -152,11 +178,19 @@ void main() {
     expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
     expect(find.text('Not signed in'), findsOneWidget);
-    expect(find.text('Signed-out public recommendation'), findsOneWidget);
-    expect(find.byKey(const ValueKey('home-daily-sign-in')), findsOneWidget);
+    expect(find.text('Public listening pick'), findsOneWidget);
+    expect(find.text('Million-play favorites'), findsOneWidget);
+    expect(find.text('Fresh release'), findsWidgets);
+    expect(find.text('Popular playlists'), findsOneWidget);
+    expect(find.text('New songs'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('home-guest-playlists-shelf')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('home-daily-sign-in')), findsNothing);
     expect(
       find.byKey(const ValueKey('home-personalized-tracks-sign-in')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Scan with WeChat'), findsNothing);
 
@@ -175,6 +209,139 @@ void main() {
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
     expect(session.cancelCalls, 1);
   });
+
+  testWidgets(
+    'signed-out Home renders public playlists and playable new songs',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'SIGNED_OUT_HOME_VISUAL_REVIEW',
+      );
+      final publicPlaylists = List.generate(
+        8,
+        (index) => RecommendedPlaylistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'catalog:guest:${index + 1}',
+          title: [
+            'Weekend listening',
+            'Million-play favorites',
+            'Fresh pop discoveries',
+            'Late-night city songs',
+            'Acoustic mornings',
+            'Electronic focus',
+            'Mandopop essentials',
+            'Road-trip favorites',
+          ][index],
+          trackCount: 24 + index * 7,
+        ),
+      );
+      final newSongs = List.generate(
+        6,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'track:guest:${index + 1}',
+          title: [
+            'First Light',
+            'City Summer',
+            'Soft Horizon',
+            'Parallel Roads',
+            'After the Rain',
+            'Moving North',
+          ][index],
+          artistNames: [
+            [
+              'Open Coast',
+              'River North',
+              'Quiet Signals',
+              'Aster Field',
+              'Blue Lantern',
+              'Night Avenue',
+            ][index],
+          ],
+          durationSeconds: 176 + index * 9,
+        ),
+      );
+
+      Future<_WidgetPlaybackQueueGateway> pumpFixture(Size size) async {
+        final queue = _WidgetPlaybackQueueGateway();
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpWidget(
+          MusicApp(
+            bootstrap: _bootstrap,
+            authenticationGateway: _WidgetGateway(_WaitingSession()),
+            recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+              RecommendedPlaylistPageResult(playlists: publicPlaylists),
+            ),
+            newSongGateway: _WidgetNewSongGateway({
+              NewSongCategory.latest: NewSongResult(
+                category: NewSongCategory.latest,
+                tracks: newSongs,
+              ),
+            }),
+            playbackQueueGateway: queue,
+            mediaResolutionGateway: const _UnavailableMediaGateway(),
+            lyricGateway: const _WidgetLyricGateway(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Popular playlist'), findsOneWidget);
+        expect(find.text('Million-play favorites'), findsOneWidget);
+        expect(find.text('Popular playlists'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('home-guest-playlists-shelf')),
+          findsOneWidget,
+        );
+        expect(find.text('New songs'), findsWidgets);
+        expect(
+          find.byKey(const ValueKey('home-guest-new-songs')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('home-daily-sign-in')), findsNothing);
+        expect(find.text('Daily recommendation'), findsNothing);
+        expect(find.text('Radar'), findsNothing);
+        expect(find.text('Your playlist treasures'), findsNothing);
+        expect(find.text('Songs picked for you'), findsNothing);
+        expect(
+          find.byKey(const ValueKey('home-personalized-tracks-sign-in')),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+        return queue;
+      }
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final desktopQueue = await pumpFixture(const Size(1440, 960));
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-home-guest-desktop.png'),
+          ),
+        );
+      }
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-guest-new-song-1')),
+      );
+      await tester.tap(find.byKey(const ValueKey('home-guest-new-song-1')));
+      await tester.pump();
+      expect(desktopQueue.replacements.single.$1, newSongs);
+      expect(desktopQueue.replacements.single.$2, 0);
+
+      await pumpFixture(const Size(390, 844));
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-home-guest-mobile.png'),
+          ),
+        );
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('uses a scrollable single-column layout on a narrow screen', (
     tester,

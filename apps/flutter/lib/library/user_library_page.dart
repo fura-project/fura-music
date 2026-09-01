@@ -11,6 +11,7 @@ import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
+import 'package:flutterustmusic/discover/new_song_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
@@ -176,6 +177,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final QueuePlaybackController _queuePlaybackController;
   late final ArtworkColorSchemeCache _expandedNowPlayingPalette;
   late final RecommendedPlaylistController _recommendedPlaylistController;
+  late final NewSongController _guestNewSongController;
   late final RadarController _homeRadarController;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
@@ -221,6 +223,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _recommendedPlaylistController = RecommendedPlaylistController(
       _discovery.recommendedPlaylistGateway,
     );
+    _guestNewSongController = NewSongController(_discovery.newSongGateway);
     _homeRadarController = RadarController(_discovery.radarGateway);
     _queuePlaybackController = QueuePlaybackController(
       _playback.playbackQueueGateway,
@@ -237,6 +240,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _homeController.addListener(_onHomeChanged);
     _homeRadarController.addListener(_onHomeChanged);
     unawaited(_recommendedPlaylistController.load());
+    if (!widget.authenticated) {
+      unawaited(_guestNewSongController.load());
+    }
     if (widget.authenticated) {
       unawaited(_controller.load());
       unawaited(_homeController.load());
@@ -312,6 +318,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _homeController.removeListener(_onHomeChanged);
     _homeController.dispose();
     _recommendedPlaylistController.dispose();
+    _guestNewSongController.dispose();
     _homeRadarController.removeListener(_onHomeChanged);
     _homeRadarController.dispose();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
@@ -992,10 +999,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             key: const ValueKey('home-page'),
             homeController: _homeController,
             recommendationController: _recommendedPlaylistController,
+            guestNewSongController: _guestNewSongController,
             radarController: _homeRadarController,
             queuePlaybackController: _queuePlaybackController,
             authenticated: widget.authenticated,
-            onRequestSignIn: widget.onRequestSignIn,
             onOpenDiscover: () => _selectPrimaryDestination(
               AuthenticatedPrimaryDestination.discover,
             ),

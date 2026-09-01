@@ -6,6 +6,17 @@ import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 void main() {
+  test('maps a synchronous gateway failure without escaping load', () async {
+    final controller = NewSongController(const _ThrowingGateway());
+
+    await controller.load();
+
+    expect(controller.stage, NewSongStage.error);
+    expect(controller.failure, NewSongFailure.coreUnavailable);
+    expect(controller.tracks, isEmpty);
+    controller.dispose();
+  });
+
   const first = PlaylistTrackSummary(
     providerId: 'qq-music',
     opaqueId: 'track:41001:0:firstMid:-',
@@ -94,6 +105,14 @@ void main() {
     );
     await load;
   });
+}
+
+class _ThrowingGateway implements NewSongGateway {
+  const _ThrowingGateway();
+
+  @override
+  NewSongLoadOperation beginLoad({required NewSongCategory category}) =>
+      throw StateError('core unavailable');
 }
 
 class _ScriptedGateway implements NewSongGateway {
