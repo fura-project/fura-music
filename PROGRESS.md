@@ -4,13 +4,13 @@ execution:
   state: ACTIVE
   acceptance_milestone: M1
   active_workstream: MEDIA_SOURCE_SEPARATION
-  current_task: SEPARATE_MEDIA_SOURCE_ROUTING
-  next_action: IMPLEMENT
+  current_task: null
+  next_action: EXTERNAL_EVIDENCE
 ---
 
 # Current State
 
-- HD-016 authorizes a bounded Media Source Separation workstream and explicitly switches execution mode to `AUTONOMOUS_DEVELOPMENT`. Catalog/Account Provider ownership and immediate-playback source resolution will become distinct typed Rust responsibilities while QQ Music remains the only bundled production catalog and media source. This work does not authorize another service, cross-service matching, a plugin runtime, a marketplace, or a sidecar.
+- HD-016 Media Source Separation is implemented and machine-verified. Catalog/Account Provider capability ownership is distinct from the provider-neutral `MediaSourceResolver`/`MediaSourceCoordinator` path; production statically assembles only the QQ resolver, while a test-only synthetic resolver proves generic routing is not hardwired to `QQMusicProvider`. The public Bridge now uses provider-neutral media names, and the generic Dart gateway no longer owns QQ vault policy; QQ authentication owns explicit QQ-rejection cleanup. Execution mode remains `AUTONOMOUS_DEVELOPMENT`. This work did not add another service, cross-service matching, a plugin runtime, a marketplace, or a sidecar.
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
 - M2 through M6 are checkpointed. HD-013 redirects the active M7 visual-review surface to a bounded Home data-slot correction; Liked Songs and Expanded Now Playing remain implemented and unaccepted.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
@@ -29,10 +29,10 @@ execution:
 
 # Current Scheduling
 
-- Media Source Separation is the only active autonomous objective. Complete the provider-neutral Core routing, QQ-owned resolver, Bridge naming, credential-cleanup ownership correction, synthetic-resolver proof, generation, and relevant Core/Flutter gates before returning to external evidence. Do not use this authorization for another Provider, endpoint, UI task, framework, or adjacent refactor.
+- Media Source Separation has completed its bounded safe implementation scope. Core routing, the QQ-owned resolver, provider-neutral Bridge, QQ-owned vault-cleanup edge, synthetic routing proof, pinned Bridge generation, full Rust gate, full Flutter tests, and Linux native Bridge integration pass. No additional production source or adjacent feature is authorized; scheduling returns to the still-pending Human/environment/external evidence below without changing execution mode.
 - The maintainer redirected the current bounded regression candidate to the Liked collection tabs. Songs retain the approved dense table/list presentation; real user playlists are split by typed owned/saved semantics; favorite Albums reuse the existing typed collection; and unsupported program/video account collections remain explicit rather than being fabricated from playlists or Track-associated MV.
 - Home still needs a maintainer authenticated rerun for Daily/personalized recommendation availability and the corrected personalized/related recommendation presentation. Liked Songs and Expanded Now Playing remain implemented and unaccepted.
-- The current candidate intentionally omits unsupported download and batch-edit controls. Program and video tabs expose the requested information architecture, but real collection content remains capability-blocked in the current Human-gated regression mode; synthetic review content does not enter production and no account data was accessed.
+- The current candidate intentionally omits unsupported download and batch-edit controls. Program and video tabs expose the requested information architecture, but real collection content remains capability-blocked; synthetic review content does not enter production and no account data was accessed.
 - No other page may begin before maintainer visual acceptance or another explicit Human redirect. Automated checks and the bounded Material 3 review cannot supply that acceptance.
 - Do not automate stored-account access, real-account mutation acceptance, or secret-bearing screenshots/fixtures.
 - QQ Web QR approval/credential restore and phone-code delivery/authorization remain maintainer-operated compatibility observations; the agent may not scan, authorize, or submit a real phone number autonomously. Phone authorization is a reverse-engineered private-client protocol, not an official public API, and remains visibly experimental until live compatibility is established.

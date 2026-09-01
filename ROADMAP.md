@@ -69,13 +69,17 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Current evidence:** the shared adapter and all five platform registrations are implemented. Unit regressions prove command/state delegation and terminal clearing; the current Linux session initializes MPRIS and produces a Release build; Android x64 Debug packages. HD-015 authorizes a manual, development-only CI workflow for the remaining native build hosts; its committed workflow must still run successfully before it becomes platform build evidence. Android device behavior and Apple/Windows runtimes remain human/environment gated.
 
-## Active Core Workstream — Media Source Separation
+## Completed Core Workstream — Media Source Separation
 
 **Goal:** make Catalog/Account Provider ownership distinct from immediate-playback Media Source Resolution while preserving QQ Music as the only bundled first-class catalog and production source.
 
 **Bounded exit criteria:** generic playback enters a small typed Rust media-source coordinator; the QQ resolver alone interprets QQ Track identity and preserves current guest/authenticated quality behavior; the Flutter/Rust media Bridge is provider-neutral and cancellable; generic Flutter resolution no longer owns QQ vault cleanup; a test-only synthetic resolver proves routing is not hardwired to `QQMusicProvider`; Core and affected Flutter gates pass.
 
 **Boundaries:** no additional production source, cross-service matching, universal identity, dynamic plugin/runtime discovery, marketplace, sidecar, source selector, Queue/player/system-media redesign, speculative format/quality, stored-account automation, or access-control bypass. Existing manual and target-specific evidence remains pending.
+
+**Outcome:** generic playback now enters one typed `MediaSourceCoordinator` and routes QQ Tracks to a distinct QQ-owned resolver; `QQMusicProvider` remains the first-class Catalog/Account owner but is no longer the generic playback-routing authority. The public Bridge and generic Dart gateway are provider-neutral, QQ authentication owns QQ-vault rejection cleanup, and a test-only non-QQ resolver plus an unsupported-provider native integration prove the separation without adding a second production source.
+
+**Completed:** 2026-09-01. Full Rust tests/fmt/strict Clippy, pinned Bridge generation and orphan audit, Dart format/analyze, Flutter tests, and Linux native Bridge integration are the machine evidence. Live authenticated QQ playback and target-specific runtime checks remain independent maintainer/environment evidence.
 
 ## Completed Checkpoint — First-Release Core Capability Completion
 
