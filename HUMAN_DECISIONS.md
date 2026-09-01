@@ -153,4 +153,12 @@
 
 **Consequences:** This supersedes HD-001 only for the narrow, short-lived maintainer testing channel above. It does not decide final product identity, application identifiers, signing custody, notarization, physical iOS provisioning, public release distribution, or the native-video notice work in TD-006. A successful job proves only the named build/test boundary; runtime acceptance remains independent on each target.
 
+## HD-016 — Media Source Separation
+
+**Status:** Accepted on 2026-09-01
+
+**Decision:** Separate immediate-playback Media Source Resolution from Catalog/Account Provider ownership. QQ Music remains the default bundled first-class Catalog/Account Provider and also supplies the only bundled production Media Source Resolver. Flutter consumes one typed provider-neutral playback-resolution Bridge, while Rust Core owns source routing and QQ-owned code retains QQ identity, authorization, protocol, and fallback behavior. The maintainer explicitly switches execution mode to `AUTONOMOUS_DEVELOPMENT` for this bounded objective.
+
+**Consequences:** A future real Media Source Resolver requires separate Human product authority. This decision does not authorize a broad aggregator, another production music service, cross-service Track matching, universal Track identity, dynamic plugins, a marketplace, runtime source discovery/install/update, a sidecar, or authorization/DRM bypass. Queue, playback-engine, and system-playback ownership remain unchanged.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

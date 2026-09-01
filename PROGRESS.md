@@ -1,15 +1,16 @@
 ---
 execution:
-  mode: HUMAN_GATED_REGRESSION
+  mode: AUTONOMOUS_DEVELOPMENT
   state: ACTIVE
   acceptance_milestone: M1
-  active_workstream: SYSTEM_PLAYBACK_PLATFORM_ADAPTATION
-  current_task: LINUX_UBUNTU_24_PACKAGE_REGRESSION
-  next_action: PUSH_RERUN_AND_ANDROID_RUNTIME_RETEST
+  active_workstream: MEDIA_SOURCE_SEPARATION
+  current_task: SEPARATE_MEDIA_SOURCE_ROUTING
+  next_action: IMPLEMENT
 ---
 
 # Current State
 
+- HD-016 authorizes a bounded Media Source Separation workstream and explicitly switches execution mode to `AUTONOMOUS_DEVELOPMENT`. Catalog/Account Provider ownership and immediate-playback source resolution will become distinct typed Rust responsibilities while QQ Music remains the only bundled production catalog and media source. This work does not authorize another service, cross-service matching, a plugin runtime, a marketplace, or a sidecar.
 - The first-release Core-capability workstream checkpointed on 2026-08-28. Its audit has no required executable `MISSING` item; every remaining gap is exactly evidence-, environment-, or human-decision-blocked. See `docs/development/first-release-core-capability-checkpoint.md`.
 - M2 through M6 are checkpointed. HD-013 redirects the active M7 visual-review surface to a bounded Home data-slot correction; Liked Songs and Expanded Now Playing remain implemented and unaccepted.
 - M1 still lacks the maintainer-operated real QQ playback → Queue → synchronized/word-timed lyric observation. The checkpoint does not close or bypass it.
@@ -28,7 +29,7 @@ execution:
 
 # Current Scheduling
 
-- There is no remaining safe agent-only Core capability task supported by the audit. Do not invent another endpoint, Provider, framework, or refactor to keep producing commits.
+- Media Source Separation is the only active autonomous objective. Complete the provider-neutral Core routing, QQ-owned resolver, Bridge naming, credential-cleanup ownership correction, synthetic-resolver proof, generation, and relevant Core/Flutter gates before returning to external evidence. Do not use this authorization for another Provider, endpoint, UI task, framework, or adjacent refactor.
 - The maintainer redirected the current bounded regression candidate to the Liked collection tabs. Songs retain the approved dense table/list presentation; real user playlists are split by typed owned/saved semantics; favorite Albums reuse the existing typed collection; and unsupported program/video account collections remain explicit rather than being fabricated from playlists or Track-associated MV.
 - Home still needs a maintainer authenticated rerun for Daily/personalized recommendation availability and the corrected personalized/related recommendation presentation. Liked Songs and Expanded Now Playing remain implemented and unaccepted.
 - The current candidate intentionally omits unsupported download and batch-edit controls. Program and video tabs expose the requested information architecture, but real collection content remains capability-blocked in the current Human-gated regression mode; synthetic review content does not enter production and no account data was accessed.
