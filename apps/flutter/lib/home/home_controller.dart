@@ -35,6 +35,7 @@ class HomeController extends ChangeNotifier {
   RecommendedPlaylistSummary? _dailyPlaylist;
   List<RecommendedPlaylistSummary> _personalizedPlaylists = const [];
   List<PlaylistTrackSummary> _personalizedTracks = const [];
+  PlaylistTrackSummary? _preferredRelatedSeed;
   PlaylistTrackSummary? _relatedSeed;
   List<PlaylistTrackSummary> _relatedTracks = const [];
   AccountSummaryFailure? _accountFailure;
@@ -100,6 +101,12 @@ class HomeController extends ChangeNotifier {
   }
 
   void updateRelatedSeed(PlaylistTrackSummary? seed) {
+    _preferredRelatedSeed = seed;
+    _reconcileRelatedSeed();
+  }
+
+  void _reconcileRelatedSeed() {
+    final seed = _preferredRelatedSeed ?? _personalizedTracks.firstOrNull;
     final previous = _relatedSeed;
     if (previous?.providerId == seed?.providerId &&
         previous?.opaqueId == seed?.opaqueId) {
@@ -223,6 +230,7 @@ class HomeController extends ChangeNotifier {
       _personalizedTracks = const [];
       _personalizedTracksFailure = PersonalizedTracksFailure.coreUnavailable;
       _personalizedTracksStage = HomeResourceStage.error;
+      _reconcileRelatedSeed();
       _notify();
       return;
     }
@@ -243,6 +251,7 @@ class HomeController extends ChangeNotifier {
         : result.tracks.isEmpty
         ? HomeResourceStage.empty
         : HomeResourceStage.content;
+    _reconcileRelatedSeed();
     _notify();
   }
 

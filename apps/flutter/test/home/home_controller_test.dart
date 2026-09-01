@@ -205,6 +205,67 @@ void main() {
     expect(controller.relatedTracksStage, HomeResourceStage.empty);
     expect(controller.relatedTracks, isEmpty);
   });
+
+  test(
+    'uses the first personalized song until a queue seed is available',
+    () async {
+      const personalizedSeed = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:11:0:personalized-mid:-',
+        title: 'Personalized seed',
+        artistNames: ['Artist'],
+      );
+      const queueSeed = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:12:0:queue-mid:-',
+        title: 'Queue seed',
+        artistNames: ['Artist'],
+      );
+      final related = _RelatedGateway(
+        const RelatedTracksResult(
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'track:22:0:related-mid:-',
+              title: 'Related',
+              artistNames: ['Artist'],
+            ),
+          ],
+        ),
+      );
+      final controller = HomeController(
+        _AccountGateway(const AccountSummaryLoadResult()),
+        _DailyGateway(const DailyRecommendationResult()),
+        _PlaylistsGateway(const PersonalizedPlaylistsResult()),
+        _TracksGateway(
+          const PersonalizedTracksResult(tracks: [personalizedSeed]),
+        ),
+        related,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.load();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(related.seeds, [same(personalizedSeed)]);
+      expect(controller.relatedSeed, same(personalizedSeed));
+      expect(controller.relatedTracksStage, HomeResourceStage.content);
+
+      controller.updateRelatedSeed(queueSeed);
+      await Future<void>.delayed(Duration.zero);
+      expect(related.seeds, [same(personalizedSeed), same(queueSeed)]);
+      expect(controller.relatedSeed, same(queueSeed));
+
+      controller.updateRelatedSeed(null);
+      await Future<void>.delayed(Duration.zero);
+      expect(related.seeds, [
+        same(personalizedSeed),
+        same(queueSeed),
+        same(personalizedSeed),
+      ]);
+      expect(controller.relatedSeed, same(personalizedSeed));
+    },
+  );
 }
 
 class _AccountGateway implements AccountSummaryGateway {

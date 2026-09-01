@@ -19,8 +19,11 @@ abstract final class _HomeGeometry {
   static const double itemGap = 16;
   static const double wideHeroHeight = 280;
   static const double compactHeroHeight = 256;
-  static const double compactShelfWidth = 144;
-  static const double trackRowHeight = 56;
+  static const double compactShelfWidth = 136;
+  static const double wideShelfMinWidth = 136;
+  static const double wideShelfMaxWidth = 164;
+  static const double trackRowHeight = 60;
+  static const double trackArtworkSize = 44;
   static const BorderRadius heroRadius = BorderRadius.all(Radius.circular(12));
   static const BorderRadius artworkRadius = BorderRadius.all(
     Radius.circular(8),
@@ -1616,8 +1619,9 @@ class _RelatedTrackSection extends StatelessWidget {
       HomeResourceStage.empty when seed == null => const _HomeInlineState(
         key: ValueKey('home-related-tracks-no-seed'),
         icon: Icons.music_note_outlined,
-        title: 'Play a song to find related music',
-        detail: 'This section uses the current queue song as its seed.',
+        title: 'No recommendation seed yet',
+        detail:
+            'Personalized songs or your current queue song will appear here.',
         compactFootprint: true,
       ),
       HomeResourceStage.empty => _HomeInlineState(
@@ -1649,7 +1653,7 @@ class _RelatedTrackSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Based on “${seed?.title ?? 'your current song'}”',
+            'Inspired by “${seed?.title ?? 'your current song'}”',
             key: const ValueKey('home-related-tracks-seed'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1761,7 +1765,7 @@ class _HomeTrackTile extends StatelessWidget {
               child: Row(
                 children: [
                   SizedBox.square(
-                    dimension: 40,
+                    dimension: _HomeGeometry.trackArtworkSize,
                     child: _HomeArtwork(
                       uri: track.artworkUri,
                       placeholderIcon: playing
@@ -1986,29 +1990,36 @@ class _PlaylistShelf<T> extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cardWidth =
-            (constraints.maxWidth - _HomeGeometry.itemGap * 5) / 6;
-        return GridView.builder(
+        final availableColumns =
+            ((constraints.maxWidth + _HomeGeometry.itemGap) /
+                    (_HomeGeometry.wideShelfMinWidth + _HomeGeometry.itemGap))
+                .floor()
+                .clamp(1, 6);
+        final fittedWidth =
+            (constraints.maxWidth -
+                _HomeGeometry.itemGap * (availableColumns - 1)) /
+            availableColumns;
+        final cardWidth = fittedWidth > _HomeGeometry.wideShelfMaxWidth
+            ? _HomeGeometry.wideShelfMaxWidth
+            : fittedWidth;
+        return Wrap(
           key: layoutKey,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: items.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 6,
-            crossAxisSpacing: _HomeGeometry.itemGap,
-            mainAxisSpacing: _HomeGeometry.itemGap,
-            mainAxisExtent: cardWidth + 44,
-          ),
-          itemBuilder: (context, index) => _PlaylistArtworkCard<T>(
-            item: items[index],
-            itemKey: itemKey(index),
-            title: title,
-            artworkUri: artworkUri,
-            semanticLabel: semanticLabel,
-            placeholderIcon: placeholderIcon,
-            onSelected: onSelected,
-            focusNode: focusNode(items[index]),
-          ),
+          spacing: _HomeGeometry.itemGap,
+          runSpacing: _HomeGeometry.itemGap,
+          children: [
+            for (var index = 0; index < items.length; index++)
+              _PlaylistArtworkCard<T>(
+                width: cardWidth,
+                item: items[index],
+                itemKey: itemKey(index),
+                title: title,
+                artworkUri: artworkUri,
+                semanticLabel: semanticLabel,
+                placeholderIcon: placeholderIcon,
+                onSelected: onSelected,
+                focusNode: focusNode(items[index]),
+              ),
+          ],
         );
       },
     );

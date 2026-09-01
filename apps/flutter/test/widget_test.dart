@@ -1024,7 +1024,7 @@ void main() {
         findsNothing,
       );
       expect(find.byKey(const ValueKey('home-related-tracks')), findsOneWidget);
-      expect(find.text('Based on “Silver Lines”'), findsOneWidget);
+      expect(find.text('Inspired by “Silver Lines”'), findsOneWidget);
       expect(find.byKey(const ValueKey('home-open-library')), findsOneWidget);
       expect(find.text('MADE FOR YOU'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -1033,6 +1033,16 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await pumpFixture(const Size(1440, 960));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('home-library-playlist-0'))),
+      const Size.square(164),
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('home-personalized-track-1')))
+          .height,
+      60,
+    );
     expect(
       find.byKey(const ValueKey('now-playing-desktop-layout')),
       findsOneWidget,
@@ -1067,6 +1077,10 @@ void main() {
     }
 
     await pumpFixture(const Size(390, 844));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('home-library-playlist-0'))),
+      const Size.square(136),
+    );
     expect(
       find.byKey(const ValueKey('now-playing-compact-layout')),
       findsOneWidget,
@@ -1399,7 +1413,7 @@ void main() {
       );
       expect(queue.replacements.single.$1, [homeTrack]);
       expect(relatedSeeds.single.opaqueId, homeTrack.opaqueId);
-      expect(find.text('Based on “Compact Home song”'), findsOneWidget);
+      expect(find.text('Inspired by “Compact Home song”'), findsOneWidget);
       expect(find.text('Related Home song'), findsOneWidget);
 
       final homeSearch = find.byKey(const ValueKey('open-track-search'));
