@@ -32,11 +32,11 @@ abstract final class _HomeGeometry {
   );
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({
     required this.homeController,
     required this.recommendationController,
-    required this.guestNewSongController,
+    required this.newSongController,
     required this.radarController,
     required this.queuePlaybackController,
     required this.authenticated,
@@ -46,12 +46,13 @@ class HomePage extends StatelessWidget {
     required this.onOpenRecommendation,
     this.lastOpenedRecommendation,
     this.recommendationReturnFocusNode,
+    this.spotlightRotationInterval = const Duration(seconds: 12),
     super.key,
   });
 
   final HomeController homeController;
   final RecommendedPlaylistController recommendationController;
-  final NewSongController guestNewSongController;
+  final NewSongController newSongController;
   final RadarController radarController;
   final QueuePlaybackController queuePlaybackController;
   final bool authenticated;
@@ -61,62 +62,220 @@ class HomePage extends StatelessWidget {
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
+  final Duration spotlightRotationInterval;
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  Timer? _spotlightTimer;
+  DateTime? _spotlightDay;
+  String? _spotlightIdentity;
+  bool _spotlightAutoPlaying = true;
+  bool _animationsDisabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startSpotlightTimer();
+  }
+
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.spotlightRotationInterval !=
+        widget.spotlightRotationInterval) {
+      _spotlightTimer?.cancel();
+      _startSpotlightTimer();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+    if (_animationsDisabled == animationsDisabled) return;
+    _animationsDisabled = animationsDisabled;
+    _spotlightTimer?.cancel();
+    _spotlightTimer = null;
+    _startSpotlightTimer();
+  }
+
+  @override
+  void dispose() {
+    _spotlightTimer?.cancel();
+    super.dispose();
+  }
+
+  RecommendedPlaylistSummary? _resolveSpotlight() {
+    final playlists = widget.recommendationController.playlists;
+    if (widget.recommendationController.stage !=
+            RecommendedPlaylistStage.content ||
+        playlists.isEmpty) {
+      _spotlightIdentity = null;
+      return null;
+    }
+    final now = DateTime.now();
+    final day = DateTime(now.year, now.month, now.day);
+    final selectedIndex = playlists.indexWhere(
+      (playlist) => _recommendationIdentity(playlist) == _spotlightIdentity,
+    );
+    if (_spotlightDay != day || selectedIndex < 0) {
+      final selected = selectHomeSpotlightForDay(playlists, day);
+      _spotlightDay = day;
+      _spotlightIdentity = selected == null
+          ? null
+          : _recommendationIdentity(selected);
+      return selected;
+    }
+    return playlists[selectedIndex];
+  }
+
+  void _startSpotlightTimer() {
+    if (!_spotlightAutoPlaying ||
+        _animationsDisabled ||
+        widget.spotlightRotationInterval <= Duration.zero) {
+      return;
+    }
+    _spotlightTimer = Timer.periodic(
+      widget.spotlightRotationInterval,
+      (_) => _moveSpotlight(1),
+    );
+  }
+
+  void _moveSpotlight(int offset, {bool restartTimer = false}) {
+    if (!mounted) return;
+    final playlists = widget.recommendationController.playlists;
+    if (widget.recommendationController.stage !=
+            RecommendedPlaylistStage.content ||
+        playlists.length < 2) {
+      return;
+    }
+    final current = _resolveSpotlight();
+    final currentIndex = current == null ? 0 : playlists.indexOf(current);
+    final nextIndex = (currentIndex + offset) % playlists.length;
+    setState(() {
+      _spotlightIdentity = _recommendationIdentity(playlists[nextIndex]);
+    });
+    if (restartTimer) {
+      _spotlightTimer?.cancel();
+      _spotlightTimer = null;
+      _startSpotlightTimer();
+    }
+  }
+
+  void _toggleSpotlightAutoPlay() {
+    setState(() {
+      _spotlightAutoPlaying = !_spotlightAutoPlaying;
+    });
+    _spotlightTimer?.cancel();
+    _spotlightTimer = null;
+    _startSpotlightTimer();
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge([
-      homeController,
-      recommendationController,
-      guestNewSongController,
-      radarController,
-      queuePlaybackController,
+      widget.homeController,
+      widget.recommendationController,
+      widget.newSongController,
+      widget.radarController,
+      widget.queuePlaybackController,
     ]),
-    builder: (context, _) => SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < _HomeGeometry.compactBreakpoint) {
-            return _HomeCompactLayout(
-              homeController: homeController,
-              recommendationController: recommendationController,
-              guestNewSongController: guestNewSongController,
-              radarController: radarController,
-              queuePlaybackController: queuePlaybackController,
-              authenticated: authenticated,
-              onOpenDiscover: onOpenDiscover,
-              onOpenLibrary: onOpenLibrary,
-              onAccountAction: onAccountAction,
-              onOpenRecommendation: onOpenRecommendation,
-              lastOpenedRecommendation: lastOpenedRecommendation,
-              recommendationReturnFocusNode: recommendationReturnFocusNode,
+    builder: (context, _) {
+      final spotlightPlaylist = _resolveSpotlight();
+      return SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < _HomeGeometry.compactBreakpoint) {
+              return _HomeCompactLayout(
+                homeController: widget.homeController,
+                recommendationController: widget.recommendationController,
+                newSongController: widget.newSongController,
+                radarController: widget.radarController,
+                queuePlaybackController: widget.queuePlaybackController,
+                authenticated: widget.authenticated,
+                spotlightPlaylist: spotlightPlaylist,
+                onPreviousSpotlight: () =>
+                    _moveSpotlight(-1, restartTimer: true),
+                onNextSpotlight: () => _moveSpotlight(1, restartTimer: true),
+                spotlightAutoPlaying:
+                    _spotlightAutoPlaying && !_animationsDisabled,
+                spotlightAutoPlayAvailable: !_animationsDisabled,
+                onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
+                onOpenDiscover: widget.onOpenDiscover,
+                onOpenLibrary: widget.onOpenLibrary,
+                onAccountAction: widget.onAccountAction,
+                onOpenRecommendation: widget.onOpenRecommendation,
+                lastOpenedRecommendation: widget.lastOpenedRecommendation,
+                recommendationReturnFocusNode:
+                    widget.recommendationReturnFocusNode,
+              );
+            }
+            return _HomeWideLayout(
+              homeController: widget.homeController,
+              recommendationController: widget.recommendationController,
+              newSongController: widget.newSongController,
+              radarController: widget.radarController,
+              queuePlaybackController: widget.queuePlaybackController,
+              authenticated: widget.authenticated,
+              spotlightPlaylist: spotlightPlaylist,
+              onPreviousSpotlight: () => _moveSpotlight(-1, restartTimer: true),
+              onNextSpotlight: () => _moveSpotlight(1, restartTimer: true),
+              spotlightAutoPlaying:
+                  _spotlightAutoPlaying && !_animationsDisabled,
+              spotlightAutoPlayAvailable: !_animationsDisabled,
+              onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
+              onOpenDiscover: widget.onOpenDiscover,
+              onOpenLibrary: widget.onOpenLibrary,
+              onOpenRecommendation: widget.onOpenRecommendation,
+              lastOpenedRecommendation: widget.lastOpenedRecommendation,
+              recommendationReturnFocusNode:
+                  widget.recommendationReturnFocusNode,
             );
-          }
-          return _HomeWideLayout(
-            homeController: homeController,
-            recommendationController: recommendationController,
-            guestNewSongController: guestNewSongController,
-            radarController: radarController,
-            queuePlaybackController: queuePlaybackController,
-            authenticated: authenticated,
-            onOpenDiscover: onOpenDiscover,
-            onOpenLibrary: onOpenLibrary,
-            onOpenRecommendation: onOpenRecommendation,
-            lastOpenedRecommendation: lastOpenedRecommendation,
-            recommendationReturnFocusNode: recommendationReturnFocusNode,
-          );
-        },
-      ),
-    ),
+          },
+        ),
+      );
+    },
   );
 }
+
+@visibleForTesting
+RecommendedPlaylistSummary? selectHomeSpotlightForDay(
+  List<RecommendedPlaylistSummary> playlists,
+  DateTime day,
+) {
+  if (playlists.isEmpty) return null;
+  final ordered = [...playlists]
+    ..sort(
+      (left, right) =>
+          _recommendationIdentity(left)
+              .compareTo(_recommendationIdentity(right)),
+    );
+  final normalizedDay = DateTime.utc(day.year, day.month, day.day);
+  final dayNumber =
+      normalizedDay.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+  return ordered[dayNumber % ordered.length];
+}
+
+String _recommendationIdentity(RecommendedPlaylistSummary playlist) =>
+    '${playlist.providerId}\u0000${playlist.opaqueId}';
 
 class _HomeWideLayout extends StatelessWidget {
   const _HomeWideLayout({
     required this.homeController,
     required this.recommendationController,
-    required this.guestNewSongController,
+    required this.newSongController,
     required this.radarController,
     required this.queuePlaybackController,
     required this.authenticated,
+    required this.spotlightPlaylist,
+    required this.onPreviousSpotlight,
+    required this.onNextSpotlight,
+    required this.spotlightAutoPlaying,
+    required this.spotlightAutoPlayAvailable,
+    required this.onToggleSpotlightAutoPlay,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
     required this.onOpenRecommendation,
@@ -126,10 +285,16 @@ class _HomeWideLayout extends StatelessWidget {
 
   final HomeController homeController;
   final RecommendedPlaylistController recommendationController;
-  final NewSongController guestNewSongController;
+  final NewSongController newSongController;
   final RadarController radarController;
   final QueuePlaybackController queuePlaybackController;
   final bool authenticated;
+  final RecommendedPlaylistSummary? spotlightPlaylist;
+  final VoidCallback onPreviousSpotlight;
+  final VoidCallback onNextSpotlight;
+  final bool spotlightAutoPlaying;
+  final bool spotlightAutoPlayAvailable;
+  final VoidCallback onToggleSpotlightAutoPlay;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
@@ -152,10 +317,16 @@ class _HomeWideLayout extends StatelessWidget {
         _DailyRecommendationSection(
           homeController: homeController,
           controller: recommendationController,
-          guestNewSongController: guestNewSongController,
+          newSongController: newSongController,
           radarController: radarController,
           queueController: queuePlaybackController,
           authenticated: authenticated,
+          spotlightPlaylist: spotlightPlaylist,
+          onPreviousSpotlight: onPreviousSpotlight,
+          onNextSpotlight: onNextSpotlight,
+          spotlightAutoPlaying: spotlightAutoPlaying,
+          spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
+          onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
           compact: false,
           onSelected: onOpenRecommendation,
           lastOpened: lastOpenedRecommendation,
@@ -183,6 +354,7 @@ class _HomeWideLayout extends StatelessWidget {
         else
           _GuestPlaylistSection(
             controller: recommendationController,
+            spotlightPlaylist: spotlightPlaylist,
             compact: false,
             onSelected: onOpenRecommendation,
             lastOpened: lastOpenedRecommendation,
@@ -201,12 +373,25 @@ class _HomeWideLayout extends StatelessWidget {
             compact: false,
           )
         else
-          _GuestNewSongSection(
-            controller: guestNewSongController,
+          _NewSongSection(
+            controller: newSongController,
             queueController: queuePlaybackController,
             compact: false,
+            authenticated: false,
           ),
         if (authenticated) ...[
+          const SizedBox(height: _HomeGeometry.sectionGap),
+          const _HomeSectionHeader(
+            titleKey: ValueKey('home-new-songs-heading'),
+            title: 'Fresh releases',
+          ),
+          const SizedBox(height: _HomeGeometry.itemGap),
+          _NewSongSection(
+            controller: newSongController,
+            queueController: queuePlaybackController,
+            compact: false,
+            authenticated: true,
+          ),
           const SizedBox(height: _HomeGeometry.sectionGap),
           _HomeSectionHeader(
             titleKey: const ValueKey('home-recommended-playlists-heading'),
@@ -218,7 +403,7 @@ class _HomeWideLayout extends StatelessWidget {
           const SizedBox(height: _HomeGeometry.itemGap),
           _MoreRecommendationsSection(
             controller: recommendationController,
-            skippedItems: 1,
+            spotlightPlaylist: spotlightPlaylist,
             compact: false,
             onSelected: onOpenRecommendation,
             lastOpened: lastOpenedRecommendation,
@@ -245,10 +430,16 @@ class _HomeCompactLayout extends StatelessWidget {
   const _HomeCompactLayout({
     required this.homeController,
     required this.recommendationController,
-    required this.guestNewSongController,
+    required this.newSongController,
     required this.radarController,
     required this.queuePlaybackController,
     required this.authenticated,
+    required this.spotlightPlaylist,
+    required this.onPreviousSpotlight,
+    required this.onNextSpotlight,
+    required this.spotlightAutoPlaying,
+    required this.spotlightAutoPlayAvailable,
+    required this.onToggleSpotlightAutoPlay,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
     required this.onAccountAction,
@@ -259,10 +450,16 @@ class _HomeCompactLayout extends StatelessWidget {
 
   final HomeController homeController;
   final RecommendedPlaylistController recommendationController;
-  final NewSongController guestNewSongController;
+  final NewSongController newSongController;
   final RadarController radarController;
   final QueuePlaybackController queuePlaybackController;
   final bool authenticated;
+  final RecommendedPlaylistSummary? spotlightPlaylist;
+  final VoidCallback onPreviousSpotlight;
+  final VoidCallback onNextSpotlight;
+  final bool spotlightAutoPlaying;
+  final bool spotlightAutoPlayAvailable;
+  final VoidCallback onToggleSpotlightAutoPlay;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
   final VoidCallback onAccountAction;
@@ -295,10 +492,16 @@ class _HomeCompactLayout extends StatelessWidget {
               _DailyRecommendationSection(
                 homeController: homeController,
                 controller: recommendationController,
-                guestNewSongController: guestNewSongController,
+                newSongController: newSongController,
                 radarController: radarController,
                 queueController: queuePlaybackController,
                 authenticated: authenticated,
+                spotlightPlaylist: spotlightPlaylist,
+                onPreviousSpotlight: onPreviousSpotlight,
+                onNextSpotlight: onNextSpotlight,
+                spotlightAutoPlaying: spotlightAutoPlaying,
+                spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
+                onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
                 compact: true,
                 onSelected: onOpenRecommendation,
                 lastOpened: lastOpenedRecommendation,
@@ -332,6 +535,7 @@ class _HomeCompactLayout extends StatelessWidget {
               else
                 _GuestPlaylistSection(
                   controller: recommendationController,
+                  spotlightPlaylist: spotlightPlaylist,
                   compact: true,
                   onSelected: onOpenRecommendation,
                   lastOpened: lastOpenedRecommendation,
@@ -351,12 +555,26 @@ class _HomeCompactLayout extends StatelessWidget {
                   compact: true,
                 )
               else
-                _GuestNewSongSection(
-                  controller: guestNewSongController,
+                _NewSongSection(
+                  controller: newSongController,
                   queueController: queuePlaybackController,
                   compact: true,
+                  authenticated: false,
                 ),
               if (authenticated) ...[
+                const SizedBox(height: _HomeGeometry.sectionGap),
+                const _HomeSectionHeader(
+                  titleKey: ValueKey('home-new-songs-heading'),
+                  title: 'Fresh releases',
+                  compact: true,
+                ),
+                const SizedBox(height: _HomeGeometry.itemGap),
+                _NewSongSection(
+                  controller: newSongController,
+                  queueController: queuePlaybackController,
+                  compact: true,
+                  authenticated: true,
+                ),
                 const SizedBox(height: _HomeGeometry.sectionGap),
                 _HomeSectionHeader(
                   titleKey: const ValueKey(
@@ -371,7 +589,7 @@ class _HomeCompactLayout extends StatelessWidget {
                 const SizedBox(height: _HomeGeometry.itemGap),
                 _MoreRecommendationsSection(
                   controller: recommendationController,
-                  skippedItems: 1,
+                  spotlightPlaylist: spotlightPlaylist,
                   compact: true,
                   onSelected: onOpenRecommendation,
                   lastOpened: lastOpenedRecommendation,
@@ -586,10 +804,16 @@ class _DailyRecommendationSection extends StatelessWidget {
   const _DailyRecommendationSection({
     required this.homeController,
     required this.controller,
-    required this.guestNewSongController,
+    required this.newSongController,
     required this.radarController,
     required this.queueController,
     required this.authenticated,
+    required this.spotlightPlaylist,
+    required this.onPreviousSpotlight,
+    required this.onNextSpotlight,
+    required this.spotlightAutoPlaying,
+    required this.spotlightAutoPlayAvailable,
+    required this.onToggleSpotlightAutoPlay,
     required this.compact,
     required this.onSelected,
     required this.lastOpened,
@@ -598,10 +822,16 @@ class _DailyRecommendationSection extends StatelessWidget {
 
   final HomeController homeController;
   final RecommendedPlaylistController controller;
-  final NewSongController guestNewSongController;
+  final NewSongController newSongController;
   final RadarController radarController;
   final QueuePlaybackController queueController;
   final bool authenticated;
+  final RecommendedPlaylistSummary? spotlightPlaylist;
+  final VoidCallback onPreviousSpotlight;
+  final VoidCallback onNextSpotlight;
+  final bool spotlightAutoPlaying;
+  final bool spotlightAutoPlayAvailable;
+  final VoidCallback onToggleSpotlightAutoPlay;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
@@ -610,21 +840,25 @@ class _DailyRecommendationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final daily = homeController.dailyPlaylist;
-    final featured =
-        controller.stage == RecommendedPlaylistStage.content &&
-            controller.playlists.isNotEmpty
-        ? controller.playlists.first
-        : null;
+    final publicPlaylists = controller.stage == RecommendedPlaylistStage.content
+        ? controller.playlists
+        : const <RecommendedPlaylistSummary>[];
+    final supportingPlaylist = publicPlaylists
+        .where(
+          (playlist) =>
+              _recommendationIdentity(playlist) !=
+              (spotlightPlaylist == null
+                  ? null
+                  : _recommendationIdentity(spotlightPlaylist!)),
+        )
+        .firstOrNull;
     return _DailyRecommendationContent(
       key: const ValueKey('home-recommendations-section'),
-      featuredPlaylist: featured,
-      guestPopularPlaylist:
-          controller.stage == RecommendedPlaylistStage.content &&
-              controller.playlists.length > 1
-          ? controller.playlists[1]
-          : null,
+      featuredPlaylist: spotlightPlaylist,
+      guestPopularPlaylist: supportingPlaylist,
+      publicPlaylistCount: publicPlaylists.length,
       publicStage: controller.stage,
-      guestNewSongController: guestNewSongController,
+      newSongController: newSongController,
       dailyPlaylist: daily,
       dailyStage: homeController.dailyStage,
       radarController: radarController,
@@ -634,6 +868,11 @@ class _DailyRecommendationSection extends StatelessWidget {
       onSelected: onSelected,
       onRetryPublic: controller.retry,
       onRetryDaily: homeController.retryDaily,
+      onPreviousSpotlight: onPreviousSpotlight,
+      onNextSpotlight: onNextSpotlight,
+      spotlightAutoPlaying: spotlightAutoPlaying,
+      spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
+      onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
       lastOpened: lastOpened,
       returnFocusNode: returnFocusNode,
     );
@@ -644,8 +883,9 @@ class _DailyRecommendationContent extends StatelessWidget {
   const _DailyRecommendationContent({
     required this.featuredPlaylist,
     required this.guestPopularPlaylist,
+    required this.publicPlaylistCount,
     required this.publicStage,
-    required this.guestNewSongController,
+    required this.newSongController,
     required this.dailyPlaylist,
     required this.dailyStage,
     required this.radarController,
@@ -655,6 +895,11 @@ class _DailyRecommendationContent extends StatelessWidget {
     required this.onSelected,
     required this.onRetryPublic,
     required this.onRetryDaily,
+    required this.onPreviousSpotlight,
+    required this.onNextSpotlight,
+    required this.spotlightAutoPlaying,
+    required this.spotlightAutoPlayAvailable,
+    required this.onToggleSpotlightAutoPlay,
     required this.lastOpened,
     required this.returnFocusNode,
     super.key,
@@ -662,8 +907,9 @@ class _DailyRecommendationContent extends StatelessWidget {
 
   final RecommendedPlaylistSummary? featuredPlaylist;
   final RecommendedPlaylistSummary? guestPopularPlaylist;
+  final int publicPlaylistCount;
   final RecommendedPlaylistStage publicStage;
-  final NewSongController guestNewSongController;
+  final NewSongController newSongController;
   final RecommendedPlaylistSummary? dailyPlaylist;
   final HomeResourceStage dailyStage;
   final RadarController radarController;
@@ -673,6 +919,11 @@ class _DailyRecommendationContent extends StatelessWidget {
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final VoidCallback onRetryPublic;
   final VoidCallback onRetryDaily;
+  final VoidCallback onPreviousSpotlight;
+  final VoidCallback onNextSpotlight;
+  final bool spotlightAutoPlaying;
+  final bool spotlightAutoPlayAvailable;
+  final VoidCallback onToggleSpotlightAutoPlay;
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
 
@@ -680,16 +931,40 @@ class _DailyRecommendationContent extends StatelessWidget {
       lastOpened?.providerId == playlist.providerId &&
       lastOpened?.opaqueId == playlist.opaqueId;
 
-  Widget _featuredSlot() {
+  Widget _featuredSlot(BuildContext context) {
     final playlist = featuredPlaylist;
     if (playlist != null) {
-      return _FeaturedRecommendationCard(
-        playlist: playlist,
-        eyebrow: "TODAY'S PICK",
-        height: compact ? _HomeGeometry.compactHeroHeight : null,
-        itemKey: const ValueKey('home-recommendation-0'),
-        onSelected: onSelected,
-        focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+      return AnimatedSwitcher(
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 360),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.035, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        ),
+        child: _FeaturedRecommendationCard(
+          key: ValueKey(_recommendationIdentity(playlist)),
+          playlist: playlist,
+          eyebrow: 'DAILY SPOTLIGHT',
+          height: compact ? _HomeGeometry.compactHeroHeight : null,
+          itemKey: const ValueKey('home-recommendation-0'),
+          onSelected: onSelected,
+          focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+          showCarouselControls: publicPlaylistCount > 1,
+          onPrevious: onPreviousSpotlight,
+          onNext: onNextSpotlight,
+          autoPlaying: spotlightAutoPlaying,
+          autoPlayAvailable: spotlightAutoPlayAvailable,
+          onToggleAutoPlay: onToggleSpotlightAutoPlay,
+        ),
       );
     }
     return _RecommendationSlotState(
@@ -772,9 +1047,9 @@ class _DailyRecommendationContent extends StatelessWidget {
 
   Widget _radarSlot() {
     if (!authenticated) {
-      if (guestNewSongController.stage == NewSongStage.content &&
-          guestNewSongController.tracks.isNotEmpty) {
-        final tracks = guestNewSongController.tracks;
+      if (newSongController.stage == NewSongStage.content &&
+          newSongController.tracks.isNotEmpty) {
+        final tracks = newSongController.tracks;
         return _TrackRecommendationCard(
           track: tracks.first,
           label: 'New songs',
@@ -787,11 +1062,9 @@ class _DailyRecommendationContent extends StatelessWidget {
       return _RecommendationSlotState(
         key: const ValueKey('home-guest-new-song-state'),
         title: 'New songs',
-        detail: _newSongStateDetail(guestNewSongController.stage),
-        loading: guestNewSongController.stage == NewSongStage.loading,
-        onRetry: guestNewSongController.canRetry
-            ? guestNewSongController.retry
-            : null,
+        detail: _newSongStateDetail(newSongController.stage),
+        loading: newSongController.stage == NewSongStage.loading,
+        onRetry: newSongController.canRetry ? newSongController.retry : null,
         compact: compact,
       );
     }
@@ -823,7 +1096,7 @@ class _DailyRecommendationContent extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _featuredSlot(),
+          _featuredSlot(context),
           const SizedBox(height: _HomeGeometry.itemGap),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -842,7 +1115,7 @@ class _DailyRecommendationContent extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(flex: 2, child: _featuredSlot()),
+          Expanded(flex: 2, child: _featuredSlot(context)),
           const SizedBox(width: _HomeGeometry.itemGap),
           Expanded(
             child: Column(
@@ -1016,7 +1289,14 @@ class _FeaturedRecommendationCard extends StatelessWidget {
     required this.itemKey,
     required this.onSelected,
     required this.focusNode,
+    required this.showCarouselControls,
+    required this.onPrevious,
+    required this.onNext,
+    required this.autoPlaying,
+    required this.autoPlayAvailable,
+    required this.onToggleAutoPlay,
     this.height,
+    super.key,
   });
 
   final RecommendedPlaylistSummary playlist;
@@ -1024,6 +1304,12 @@ class _FeaturedRecommendationCard extends StatelessWidget {
   final Key itemKey;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final FocusNode? focusNode;
+  final bool showCarouselControls;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final bool autoPlaying;
+  final bool autoPlayAvailable;
+  final VoidCallback onToggleAutoPlay;
   final double? height;
 
   @override
@@ -1127,6 +1413,48 @@ class _FeaturedRecommendationCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (showCarouselControls)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Material(
+                    color: colors.scrim.withValues(alpha: 0.56),
+                    borderRadius: BorderRadius.circular(24),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          key: const ValueKey('home-spotlight-previous'),
+                          tooltip: 'Previous spotlight',
+                          onPressed: onPrevious,
+                          color: Colors.white,
+                          icon: const Icon(Icons.chevron_left_rounded),
+                        ),
+                        if (autoPlayAvailable)
+                          IconButton(
+                            key: const ValueKey('home-spotlight-auto-play'),
+                            tooltip: autoPlaying
+                                ? 'Pause spotlight rotation'
+                                : 'Resume spotlight rotation',
+                            onPressed: onToggleAutoPlay,
+                            color: Colors.white,
+                            icon: Icon(
+                              autoPlaying
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded,
+                            ),
+                          ),
+                        IconButton(
+                          key: const ValueKey('home-spotlight-next'),
+                          tooltip: 'Next spotlight',
+                          onPressed: onNext,
+                          color: Colors.white,
+                          icon: const Icon(Icons.chevron_right_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1441,6 +1769,7 @@ class _RecommendationSlotState extends StatelessWidget {
 class _GuestPlaylistSection extends StatelessWidget {
   const _GuestPlaylistSection({
     required this.controller,
+    required this.spotlightPlaylist,
     required this.compact,
     required this.onSelected,
     required this.lastOpened,
@@ -1448,6 +1777,7 @@ class _GuestPlaylistSection extends StatelessWidget {
   });
 
   final RecommendedPlaylistController controller;
+  final RecommendedPlaylistSummary? spotlightPlaylist;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
@@ -1485,7 +1815,15 @@ class _GuestPlaylistSection extends StatelessWidget {
   }
 
   Widget _guestPlaylistContent() {
-    final items = controller.playlists.skip(2).take(6).toList(growable: false);
+    final spotlightIdentity = spotlightPlaylist == null
+        ? null
+        : _recommendationIdentity(spotlightPlaylist!);
+    final publicItems = controller.playlists
+        .where(
+          (playlist) => _recommendationIdentity(playlist) != spotlightIdentity,
+        )
+        .toList(growable: false);
+    final items = publicItems.skip(1).take(6).toList(growable: false);
     if (items.isEmpty) {
       return const _HomeInlineState(
         key: ValueKey('home-guest-playlists-empty'),
@@ -1514,16 +1852,18 @@ class _GuestPlaylistSection extends StatelessWidget {
   }
 }
 
-class _GuestNewSongSection extends StatelessWidget {
-  const _GuestNewSongSection({
+class _NewSongSection extends StatelessWidget {
+  const _NewSongSection({
     required this.controller,
     required this.queueController,
     required this.compact,
+    required this.authenticated,
   });
 
   final NewSongController controller;
   final QueuePlaybackController queueController;
   final bool compact;
+  final bool authenticated;
 
   @override
   Widget build(BuildContext context) {
@@ -1532,14 +1872,18 @@ class _GuestNewSongSection extends StatelessWidget {
         compact: compact,
         semanticLabel: 'Loading public new songs',
       ),
-      NewSongStage.empty => const _HomeInlineState(
-        key: ValueKey('home-guest-new-songs-empty'),
+      NewSongStage.empty => _HomeInlineState(
+        key: ValueKey(
+          authenticated ? 'home-new-songs-empty' : 'home-guest-new-songs-empty',
+        ),
         icon: Icons.new_releases_outlined,
         title: 'No new songs right now',
         detail: 'QQ Music did not return a public new-song collection.',
       ),
       NewSongStage.error => _HomeInlineState(
-        key: const ValueKey('home-guest-new-songs-error'),
+        key: ValueKey(
+          authenticated ? 'home-new-songs-error' : 'home-guest-new-songs-error',
+        ),
         icon: Icons.cloud_off_outlined,
         title: 'Couldn’t load new songs',
         detail: _newSongFailureDetail(controller.failure),
@@ -1555,8 +1899,10 @@ class _GuestNewSongSection extends StatelessWidget {
         tracks: controller.tracks.take(6).toList(growable: false),
         queueController: queueController,
         compact: compact,
-        sectionKey: const ValueKey('home-guest-new-songs'),
-        itemKeyPrefix: 'home-guest-new-song',
+        sectionKey: ValueKey(
+          authenticated ? 'home-new-songs' : 'home-guest-new-songs',
+        ),
+        itemKeyPrefix: authenticated ? 'home-new-song' : 'home-guest-new-song',
       ),
     };
   }
@@ -2038,7 +2384,7 @@ class _HomeTrackLoading extends StatelessWidget {
 class _MoreRecommendationsSection extends StatelessWidget {
   const _MoreRecommendationsSection({
     required this.controller,
-    required this.skippedItems,
+    required this.spotlightPlaylist,
     required this.compact,
     required this.onSelected,
     required this.lastOpened,
@@ -2046,7 +2392,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
   });
 
   final RecommendedPlaylistController controller;
-  final int skippedItems;
+  final RecommendedPlaylistSummary? spotlightPlaylist;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
@@ -2062,8 +2408,13 @@ class _MoreRecommendationsSection extends StatelessWidget {
         detail: 'The primary recommendation state is shown above.',
       );
     }
+    final spotlightIdentity = spotlightPlaylist == null
+        ? null
+        : _recommendationIdentity(spotlightPlaylist!);
     final items = controller.playlists
-        .skip(skippedItems)
+        .where(
+          (playlist) => _recommendationIdentity(playlist) != spotlightIdentity,
+        )
         .take(6)
         .toList(growable: false);
     if (items.isEmpty) {
@@ -2082,8 +2433,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
       title: (playlist) => playlist.title,
       artworkUri: (playlist) => playlist.artworkUri,
       semanticLabel: _recommendationSemanticLabel,
-      itemKey: (index) =>
-          ValueKey('home-recommendation-${index + skippedItems + 1}'),
+      itemKey: (index) => ValueKey('home-recommendation-${index + 1}'),
       onSelected: onSelected,
       focusNode: (playlist) =>
           lastOpened?.providerId == playlist.providerId &&

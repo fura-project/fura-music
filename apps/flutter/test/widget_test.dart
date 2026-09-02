@@ -47,6 +47,7 @@ import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/home_page.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
@@ -1152,6 +1153,32 @@ void main() {
         durationSeconds: 176 + index * 11,
       ),
     );
+    final newSongs = List.generate(
+      6,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:${61000 + index}:0:syntheticNewMid:-',
+        title: const [
+          'First Daylight',
+          'New Constellation',
+          'Bright City',
+          'Open Water',
+          'Summer Signal',
+          'September Air',
+        ][index],
+        artistNames: [
+          const [
+            'Clear Harbor',
+            'Nova Lane',
+            'City Glass',
+            'Blue Current',
+            'Sunroom',
+            'North Wind',
+          ][index],
+        ],
+        durationSeconds: 171 + index * 12,
+      ),
+    );
 
     MusicApp fixture() {
       final queue = _WidgetPlaybackQueueGateway()
@@ -1201,6 +1228,12 @@ void main() {
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
           RecommendedPlaylistPageResult(playlists: publicPlaylists),
         ),
+        newSongGateway: _WidgetNewSongGateway({
+          NewSongCategory.latest: NewSongResult(
+            category: NewSongCategory.latest,
+            tracks: newSongs,
+          ),
+        }),
         playbackQueueGateway: queue,
         mediaResolutionGateway: const _UnavailableMediaGateway(),
         lyricGateway: const _WidgetLyricGateway(),
@@ -1229,6 +1262,9 @@ void main() {
         find.byKey(const ValueKey('home-public-playlists-shelf')),
         findsOneWidget,
       );
+      expect(find.text('Fresh releases'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-new-songs')), findsOneWidget);
+      expect(find.text('First Daylight'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('home-hot-programs-unavailable')),
         findsNothing,
@@ -1237,12 +1273,66 @@ void main() {
       expect(find.text('Inspired by “Silver Lines”'), findsOneWidget);
       expect(find.byKey(const ValueKey('home-open-library')), findsOneWidget);
       expect(find.text('MADE FOR YOU'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-spotlight-previous')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('home-spotlight-next')), findsOneWidget);
+      if (!tester.platformDispatcher.accessibilityFeatures.disableAnimations) {
+        expect(
+          find.byKey(const ValueKey('home-spotlight-auto-play')),
+          findsOneWidget,
+        );
+      }
       expect(tester.takeException(), isNull);
     }
 
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await pumpFixture(const Size(1440, 960));
+    final initialSpotlight = selectHomeSpotlightForDay(
+      publicPlaylists,
+      DateTime.now(),
+    )!;
+    final initialSpotlightIndex = publicPlaylists.indexOf(initialSpotlight);
+    final nextSpotlight =
+        publicPlaylists[(initialSpotlightIndex + 1) % publicPlaylists.length];
+    final hero = find.byKey(const ValueKey('home-recommendation-0'));
+    expect(
+      tester
+          .getRect(hero)
+          .overlaps(tester.getRect(find.text(initialSpotlight.title))),
+      isTrue,
+    );
+    await tester.tap(find.byKey(const ValueKey('home-spotlight-next')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getRect(hero)
+          .overlaps(tester.getRect(find.text(nextSpotlight.title))),
+      isTrue,
+    );
+    await tester.tap(find.byKey(const ValueKey('home-spotlight-previous')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-spotlight-auto-play')));
+    await tester.pump(const Duration(seconds: 13));
+    expect(
+      tester
+          .getRect(hero)
+          .overlaps(tester.getRect(find.text(initialSpotlight.title))),
+      isTrue,
+    );
+    await tester.tap(find.byKey(const ValueKey('home-spotlight-auto-play')));
+    await tester.pump(const Duration(seconds: 12));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getRect(hero)
+          .overlaps(tester.getRect(find.text(nextSpotlight.title))),
+      isTrue,
+    );
+    await tester.tap(find.byKey(const ValueKey('home-spotlight-previous')));
+    await tester.pumpAndSettle();
     expect(
       tester.getSize(find.byKey(const ValueKey('home-library-playlist-0'))),
       const Size.square(164),
@@ -1333,6 +1423,15 @@ void main() {
         ),
       );
     }
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        FakeAccessibilityFeatures.allOn;
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await pumpFixture(const Size(1440, 960));
+    expect(
+      find.byKey(const ValueKey('home-spotlight-auto-play')),
+      findsNothing,
+    );
   });
 
   testWidgets('routes fresh QR authentication through Home to Library', (
@@ -2735,7 +2834,7 @@ void main() {
   );
 
   testWidgets(
-    'loads typed new songs lazily and uses the existing queue on narrow screens',
+    'loads Home and Discover new songs independently on narrow screens',
     (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1;
@@ -2784,10 +2883,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(newSongs.requests, [NewSongCategory.latest]);
 
       await tester.tap(find.byKey(const ValueKey('open-recommendations')));
       await tester.pumpAndSettle();
-      expect(newSongs.requests, isEmpty);
+      expect(newSongs.requests, [NewSongCategory.latest]);
 
       await _selectAdaptiveSection(
         tester,
@@ -2797,7 +2897,10 @@ void main() {
       expect(find.byKey(const ValueKey('new-songs-content')), findsOneWidget);
       expect(find.text('Latest Track'), findsOneWidget);
       expect(find.text('Latest Artist · Latest Album · 3:21'), findsOneWidget);
-      expect(newSongs.requests, [NewSongCategory.latest]);
+      expect(newSongs.requests, [
+        NewSongCategory.latest,
+        NewSongCategory.latest,
+      ]);
 
       await tester.tap(find.byKey(const ValueKey('new-song-queue-0')));
       await tester.pump();
@@ -2816,6 +2919,7 @@ void main() {
       expect(find.text('Japan Track'), findsOneWidget);
       expect(newSongs.requests, [
         NewSongCategory.latest,
+        NewSongCategory.latest,
         NewSongCategory.japan,
       ]);
 
@@ -2831,6 +2935,7 @@ void main() {
       );
       expect(find.text('Japan Track'), findsOneWidget);
       expect(newSongs.requests, [
+        NewSongCategory.latest,
         NewSongCategory.latest,
         NewSongCategory.japan,
       ]);
