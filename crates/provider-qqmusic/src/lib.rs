@@ -1282,24 +1282,38 @@ where
         offset: u32,
         size: u32,
     ) -> Result<PlaylistTracksPage, Self::Error> {
-        let candidate = self.authenticated_credential()?;
         let route = parse_playlist_route(&playlist_id)?;
         let response = match route {
-            QqMusicPlaylistRoute::Ordinary { playlist_id } => {
+            QqMusicPlaylistRoute::Public { playlist_id } => {
                 self.client()
-                    .playlist_tracks_page(&candidate, playlist_id, offset, size)
+                    .public_playlist_tracks_page(playlist_id, offset, size)
                     .await
+            }
+            QqMusicPlaylistRoute::Account { playlist_id } => {
+                let candidate = self.authenticated_credential()?;
+                let response = self
+                    .client()
+                    .playlist_tracks_page(&candidate, playlist_id, offset, size)
+                    .await;
+                self.finish_library_await(
+                    &candidate,
+                    matches!(response, Err(QqMusicPlaylistDetailError::Rejected { .. })),
+                )?;
+                response
             }
             QqMusicPlaylistRoute::LikedSongs => {
-                self.client()
+                let candidate = self.authenticated_credential()?;
+                let response = self
+                    .client()
                     .liked_songs_page(&candidate, offset, size)
-                    .await
+                    .await;
+                self.finish_library_await(
+                    &candidate,
+                    matches!(response, Err(QqMusicPlaylistDetailError::Rejected { .. })),
+                )?;
+                response
             }
         };
-        self.finish_library_await(
-            &candidate,
-            matches!(response, Err(QqMusicPlaylistDetailError::Rejected { .. })),
-        )?;
         let page = response.as_ref().map_err(map_playlist_detail_error)?;
         if page.has_more() && page.tracks().is_empty() {
             return Err(UserLibraryError::InvalidResponse);
@@ -1957,7 +1971,8 @@ fn map_playlist_search_summary(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum QqMusicPlaylistRoute {
-    Ordinary { playlist_id: u64 },
+    Public { playlist_id: u64 },
+    Account { playlist_id: u64 },
     LikedSongs,
 }
 
@@ -2050,16 +2065,16 @@ fn parse_playlist_route(
     let mut parts = playlist_id.opaque().split(':');
     match (parts.next(), parts.next(), parts.next(), parts.next()) {
         (Some("catalog"), Some(raw_id), None, None) => parse_nonzero_u64(raw_id)
-            .map(|playlist_id| QqMusicPlaylistRoute::Ordinary { playlist_id }),
+            .map(|playlist_id| QqMusicPlaylistRoute::Public { playlist_id }),
         (Some("favorite"), Some(raw_id), None, None) => parse_nonzero_u64(raw_id)
-            .map(|playlist_id| QqMusicPlaylistRoute::Ordinary { playlist_id }),
+            .map(|playlist_id| QqMusicPlaylistRoute::Account { playlist_id }),
         (Some("owned"), Some(raw_id), Some(raw_directory_id), None) => {
             let playlist_id = parse_nonzero_u64(raw_id)?;
             let directory_id = parse_nonzero_u64(raw_directory_id)?;
             if directory_id == 201 {
                 Ok(QqMusicPlaylistRoute::LikedSongs)
             } else {
-                Ok(QqMusicPlaylistRoute::Ordinary { playlist_id })
+                Ok(QqMusicPlaylistRoute::Account { playlist_id })
             }
         }
         _ => Err(UserLibraryError::InvalidResponse),
@@ -2507,9 +2522,9 @@ fn map_favorite_artists_error<E>(error: &QqMusicFavoriteArtistsError<E>) -> User
 fn map_playlist_detail_error<E>(error: &QqMusicPlaylistDetailError<E>) -> UserLibraryError {
     match error {
         QqMusicPlaylistDetailError::Transport(_) => UserLibraryError::Network,
-        QqMusicPlaylistDetailError::HttpStatus(_) | QqMusicPlaylistDetailError::Upstream { .. } => {
-            UserLibraryError::ServiceUnavailable
-        }
+        QqMusicPlaylistDetailError::HttpStatus(_)
+        | QqMusicPlaylistDetailError::RateLimited { .. }
+        | QqMusicPlaylistDetailError::Upstream { .. } => UserLibraryError::ServiceUnavailable,
         QqMusicPlaylistDetailError::Rejected { .. } => UserLibraryError::CredentialRejected,
         QqMusicPlaylistDetailError::InvalidPlaylistId
         | QqMusicPlaylistDetailError::MissingEncryptedUin
@@ -6143,6 +6158,43 @@ mod tests {
         assert_eq!(params[2]["dirid"], 201);
         assert_eq!(params[2]["enc_host_uin"], "encrypted-123456");
         assert_eq!(params[3]["disstid"], 81001);
+        assert!(
+            requests[3]
+                .headers()
+                .iter()
+                .all(|(name, _)| name != "Cookie")
+        );
+        let public_body: Value = serde_json::from_slice(
+            requests[3]
+                .body_bytes()
+                .expect("public playlist-detail request body"),
+        )
+        .expect("request JSON");
+        assert!(public_body["comm"].get("authst").is_none());
+    }
+
+    #[tokio::test]
+    async fn loads_public_catalog_playlist_without_account_state() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
+            playlist_detail_page_json(&playlist_track_fixture(), 1, false),
+        ])));
+
+        let page = provider
+            .playlist_tracks_page(qq_playlist_id("catalog:81001"), 0, 100)
+            .await
+            .expect("anonymous public playlist detail");
+
+        assert_eq!(page.total(), 1);
+        assert_eq!(page.tracks().len(), 1);
+        assert!(!provider.has_authenticated_credential());
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 1);
+        assert!(
+            requests[0]
+                .headers()
+                .iter()
+                .all(|(name, _)| name != "Cookie")
+        );
     }
 
     #[tokio::test]
@@ -6216,6 +6268,21 @@ mod tests {
             Err(UserLibraryError::ServiceUnavailable)
         );
         assert!(upstream.has_authenticated_credential());
+
+        let public =
+            QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([json!({
+                "code": 0,
+                "music.srfDissInfo.DissInfo": {"code": 1000, "data": {"code": 0}}
+            })])));
+        set_authenticated(&public, "123456");
+        assert_eq!(
+            public
+                .playlist_tracks_page(qq_playlist_id("catalog:8001"), 0, 100)
+                .await,
+            Err(UserLibraryError::ServiceUnavailable)
+        );
+        assert!(public.has_authenticated_credential());
+        assert_eq!(public.client().transport().requests().len(), 1);
     }
 
     #[tokio::test]

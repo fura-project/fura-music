@@ -4,6 +4,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::credential::is_credential_rejection_code;
+use crate::protocol_strategy::is_musicu_rate_limited_code;
 use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
@@ -37,6 +38,9 @@ pub enum QqMusicPlaylistDetailError<E> {
     MissingResult,
     MissingResultCode,
     Rejected {
+        code: i64,
+    },
+    RateLimited {
         code: i64,
     },
     Upstream {
@@ -78,6 +82,10 @@ impl<E> fmt::Debug for QqMusicPlaylistDetailError<E> {
             Self::MissingResultCode => formatter.write_str("MissingResultCode"),
             Self::Rejected { code } => formatter
                 .debug_struct("Rejected")
+                .field("code", code)
+                .finish(),
+            Self::RateLimited { code } => formatter
+                .debug_struct("RateLimited")
                 .field("code", code)
                 .finish(),
             Self::Upstream {
@@ -140,6 +148,12 @@ impl<E> fmt::Display for QqMusicPlaylistDetailError<E> {
                 write!(
                     formatter,
                     "QQ Music rejected the credential with code {code}"
+                )
+            }
+            Self::RateLimited { code } => {
+                write!(
+                    formatter,
+                    "QQ Music rate limited the request with code {code}"
                 )
             }
             Self::Upstream {
@@ -442,7 +456,37 @@ where
             return Err(QqMusicPlaylistDetailError::InvalidPlaylistId);
         }
         self.playlist_tracks_page_for_route(
-            credential,
+            Some(credential),
+            PlaylistRoute::Ordinary { playlist_id },
+            offset,
+            size,
+        )
+        .await
+    }
+
+    /// Returns one bounded anonymous page from a public QQ Music playlist.
+    ///
+    /// This uses the same evidenced `CgiGetDiss` contract as authenticated
+    /// playlist detail, but deliberately omits account fields and Cookie.
+    /// Account-owned and liked-song directories must use their authenticated
+    /// entry points instead.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a zero playlist identity and page sizes outside `1..=100`
+    /// before transport. Anonymous upstream failures remain service outcomes
+    /// rather than being guessed into credential rejection.
+    pub async fn public_playlist_tracks_page(
+        &self,
+        playlist_id: u64,
+        offset: u32,
+        size: u32,
+    ) -> Result<QqMusicPlaylistTracksPage, QqMusicPlaylistDetailError<T::Error>> {
+        if playlist_id == 0 {
+            return Err(QqMusicPlaylistDetailError::InvalidPlaylistId);
+        }
+        self.playlist_tracks_page_for_route(
+            None,
             PlaylistRoute::Ordinary { playlist_id },
             offset,
             size,
@@ -469,7 +513,7 @@ where
             .filter(|value| !value.trim().is_empty())
             .ok_or(QqMusicPlaylistDetailError::MissingEncryptedUin)?;
         self.playlist_tracks_page_for_route(
-            credential,
+            Some(credential),
             PlaylistRoute::LikedSongs { encrypted_uin },
             offset,
             size,
@@ -479,7 +523,7 @@ where
 
     async fn playlist_tracks_page_for_route(
         &self,
-        credential: &Credential,
+        credential: Option<&Credential>,
         route: PlaylistRoute<'_>,
         offset: u32,
         size: u32,
@@ -489,18 +533,20 @@ where
         }
         let body = serde_json::to_vec(&PlaylistDetailRequest::new(credential, route, offset, size))
             .map_err(|_| QqMusicPlaylistDetailError::Serialize)?;
+        let request = HttpRequest::post(MUSICU_URL)
+            .header("Content-Type", "application/json")
+            .header("Origin", "https://y.qq.com")
+            .header("Referer", "https://y.qq.com/")
+            .body(body)
+            .response_body_limit(MAX_PLAYLIST_DETAIL_RESPONSE_BYTES)
+            .timeout(PLAYLIST_DETAIL_TIMEOUT);
+        let request = match credential {
+            Some(credential) => request.header("Cookie", credential.musicu_cookie_header()),
+            None => request,
+        };
         let response = self
             .transport()
-            .execute(
-                HttpRequest::post(MUSICU_URL)
-                    .header("Content-Type", "application/json")
-                    .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
-                    .header("Cookie", credential.musicu_cookie_header())
-                    .body(body)
-                    .response_body_limit(MAX_PLAYLIST_DETAIL_RESPONSE_BYTES)
-                    .timeout(PLAYLIST_DETAIL_TIMEOUT),
-            )
+            .execute(request)
             .await
             .map_err(QqMusicPlaylistDetailError::Transport)?;
         if !(200..300).contains(&response.status()) {
@@ -509,7 +555,7 @@ where
 
         let envelope: PlaylistDetailResponse = serde_json::from_slice(response.body())
             .map_err(|_| QqMusicPlaylistDetailError::InvalidJson)?;
-        map_response(envelope, offset)
+        map_response(envelope, offset, credential.is_some())
     }
 }
 
@@ -527,7 +573,12 @@ struct PlaylistDetailRequest<'a> {
 }
 
 impl<'a> PlaylistDetailRequest<'a> {
-    fn new(credential: &'a Credential, route: PlaylistRoute<'a>, offset: u32, size: u32) -> Self {
+    fn new(
+        credential: Option<&'a Credential>,
+        route: PlaylistRoute<'a>,
+        offset: u32,
+        size: u32,
+    ) -> Self {
         let param = match route {
             PlaylistRoute::Ordinary { playlist_id } => PlaylistDetailParam {
                 playlist_id,
@@ -561,11 +612,11 @@ impl<'a> PlaylistDetailRequest<'a> {
                 format: "json",
                 input_charset: "utf-8",
                 output_charset: "utf-8",
-                user_id: credential.music_id(),
-                account_id: credential.music_id(),
-                auth_key: credential.music_key(),
-                login_type: credential.login_type().value(),
-                login_uin: credential.music_id(),
+                user_id: credential.map(Credential::music_id),
+                account_id: credential.map(Credential::music_id),
+                auth_key: credential.map(Credential::music_key),
+                login_type: credential.map(|credential| credential.login_type().value()),
+                login_uin: credential.map(Credential::music_id),
             },
             request: PlaylistDetailRpc {
                 module: "music.srfDissInfo.DissInfo",
@@ -591,15 +642,20 @@ struct PlaylistDetailComm<'a> {
     #[serde(rename = "outCharset")]
     output_charset: &'static str,
     #[serde(rename = "uid")]
-    user_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_id: Option<&'a str>,
     #[serde(rename = "qq")]
-    account_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_id: Option<&'a str>,
     #[serde(rename = "authst")]
-    auth_key: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auth_key: Option<&'a str>,
     #[serde(rename = "tmeLoginType")]
-    login_type: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    login_type: Option<u32>,
     #[serde(rename = "loginUin")]
-    login_uin: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    login_uin: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -710,6 +766,7 @@ struct RawAlbum {
 fn map_response<E>(
     envelope: PlaylistDetailResponse,
     offset: u32,
+    credential_aware: bool,
 ) -> Result<QqMusicPlaylistTracksPage, QqMusicPlaylistDetailError<E>> {
     let global_code = envelope
         .code
@@ -720,10 +777,18 @@ fn map_response<E>(
         .as_ref()
         .and_then(|result| result.data.as_ref())
         .and_then(|data| data.code);
-    if let Some(code) = [Some(global_code), result_code, data_code]
+    let codes = [Some(global_code), result_code, data_code];
+    if let Some(code) = codes
         .into_iter()
         .flatten()
-        .find(|code| is_credential_rejection_code(*code))
+        .find(|code| is_musicu_rate_limited_code(*code))
+    {
+        return Err(QqMusicPlaylistDetailError::RateLimited { code });
+    }
+    if let Some(code) = codes
+        .into_iter()
+        .flatten()
+        .find(|code| credential_aware && is_credential_rejection_code(*code))
     {
         return Err(QqMusicPlaylistDetailError::Rejected { code });
     }
@@ -1032,6 +1097,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn serializes_public_playlist_without_account_context() {
+        let client = QqMusicClient::new(FakeTransport::new([page_fixture()]));
+
+        let page = client
+            .public_playlist_tracks_page(7001, 0, 1)
+            .await
+            .expect("public fixture playlist page");
+        assert_eq!(page.tracks().len(), 1);
+
+        let request = &client.transport().requests()[0];
+        assert!(request.headers().iter().all(|(name, _)| name != "Cookie"));
+        let body: Value =
+            serde_json::from_slice(request.body_bytes().expect("playlist-detail request body"))
+                .expect("request JSON");
+        let comm = body["comm"].as_object().expect("comm object");
+        for account_field in ["uid", "qq", "authst", "tmeLoginType", "loginUin"] {
+            assert!(!comm.contains_key(account_field));
+        }
+        assert_eq!(body["music.srfDissInfo.DissInfo"]["param"]["disstid"], 7001);
+    }
+
+    #[tokio::test]
     async fn serializes_liked_songs_as_the_evidenced_directory_route() {
         let mut fixture = page_fixture();
         fixture["music.srfDissInfo.DissInfo"]["data"]
@@ -1109,6 +1196,34 @@ mod tests {
                 data_code: Some(0),
             })
         ));
+    }
+
+    #[tokio::test]
+    async fn anonymous_codes_are_not_guessed_as_credential_rejection_and_rate_limit_stops() {
+        let client = QqMusicClient::new(FakeTransport::new([
+            json!({
+                "code": 0,
+                "music.srfDissInfo.DissInfo": {"code": 1000, "data": {"code": 0}}
+            }),
+            json!({
+                "code": 2001,
+                "music.srfDissInfo.DissInfo": {"code": 0, "data": {"code": 0}}
+            }),
+        ]));
+
+        assert!(matches!(
+            client.public_playlist_tracks_page(1, 0, 100).await,
+            Err(QqMusicPlaylistDetailError::Upstream {
+                global_code: 0,
+                result_code: Some(1000),
+                data_code: Some(0),
+            })
+        ));
+        assert!(matches!(
+            client.public_playlist_tracks_page(1, 0, 100).await,
+            Err(QqMusicPlaylistDetailError::RateLimited { code: 2001 })
+        ));
+        assert_eq!(client.transport().requests().len(), 2);
     }
 
     #[tokio::test]

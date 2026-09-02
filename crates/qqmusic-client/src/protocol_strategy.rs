@@ -106,7 +106,9 @@ pub(crate) fn classify_musicu_codes(
     global_code: i64,
     result_code: Option<i64>,
 ) -> Result<(), QqProtocolOutcome> {
-    let outcome = if global_code == 2001 || matches!(result_code, Some(2001)) {
+    let outcome = if is_musicu_rate_limited_code(global_code)
+        || result_code.is_some_and(is_musicu_rate_limited_code)
+    {
         QqProtocolOutcome::RateLimited
     } else if global_code == 0 && !matches!(result_code, Some(code) if code != 0) {
         QqProtocolOutcome::Success
@@ -120,6 +122,10 @@ pub(crate) fn classify_musicu_codes(
             unreachable!("musicu status codes do not permit retry or fallback")
         }
     }
+}
+
+pub(crate) const fn is_musicu_rate_limited_code(code: i64) -> bool {
+    code == 2001
 }
 
 #[cfg(test)]
