@@ -8,7 +8,7 @@
     <application
         android:allowBackup="false"
         android:label="fura music"
-        android:name="${applicationName}"
+        android:name=".FuraApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

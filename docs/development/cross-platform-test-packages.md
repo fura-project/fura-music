@@ -19,8 +19,20 @@ There is no Web artifact because the product's Rust core, secure-storage, native
 
 ## What CI proves
 
-Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The Android job additionally verifies that the ARM64 Release APK declares Internet access and contains the expected ARM64 Rust bridge library. Linux additionally verifies its libmpv build dependency, runs the isolated system-media initialization integration under a temporary D-Bus/X11 session, and rejects a bundle whose executable has an unresolved shared-library dependency on that build host.
+Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The Android job additionally verifies that the ARM64 Release APK declares Internet access, contains the expected ARM64 Rust bridge library, packages the Android rustls certificate-verifier class, and exports the process-startup JNI initializer. Linux additionally verifies its libmpv build dependency, runs the isolated system-media initialization integration under a temporary D-Bus/X11 session, and rejects a bundle whose executable has an unresolved shared-library dependency on that build host.
 
 A green workflow does not prove real-account QQ Music behavior, physical Android or Apple behavior, Windows SMTC usability, Linux desktop-shell integration, codecs on another machine, signing, notarization, store acceptance, or release readiness. Those observations remain per-target maintainer tests.
 
 Each artifact includes `FLUTTER_VERSION.txt`, `RUST_VERSION.txt`, and this boundary note so the toolchain and claim do not become detached from the binary.
+
+## Android anonymous HTTPS runtime check
+
+After installing a newly built APK on an Android target, the bounded public QQ Music HTTPS regression can be run explicitly with:
+
+```bash
+flutter test integration_test/android_anonymous_https_test.dart \
+  -d <android-device-id> \
+  --dart-define=QQMUSIC_LIVE_TESTS=true
+```
+
+This check performs one anonymous, size-one public Track search. It does not read stored credentials, mutate an account, or print/persist returned Track content. APK inspection proves only that the required verifier components are packaged and wired; successful execution on an Android target is still required to prove platform TLS and current QQ reachability.

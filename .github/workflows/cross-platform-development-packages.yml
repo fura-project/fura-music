@@ -111,8 +111,24 @@ jobs:
           test -n "$aapt"
           "$aapt" dump permissions "$apk" | tee build/android-arm64-permissions.txt
           grep -q "android.permission.INTERNET" build/android-arm64-permissions.txt
+          "$aapt" dump xmltree "$apk" AndroidManifest.xml \
+            > build/android-arm64-manifest.txt
+          grep -q 'dev.axiaobo.flutterustmusic.FuraApplication' \
+            build/android-arm64-manifest.txt
           unzip -l "$apk" | tee build/android-arm64-contents.txt
           grep -q "lib/arm64-v8a/librust_lib_flutterustmusic.so" build/android-arm64-contents.txt
+          : > build/android-arm64-dex-strings.txt
+          for dex in $(zipinfo -1 "$apk" 'classes*.dex'); do
+            unzip -p "$apk" "$dex" | strings >> build/android-arm64-dex-strings.txt
+          done
+          grep -q 'org/rustls/platformverifier/CertificateVerifier' \
+            build/android-arm64-dex-strings.txt
+          unzip -p "$apk" lib/arm64-v8a/librust_lib_flutterustmusic.so \
+            > build/librust_lib_flutterustmusic-arm64.so
+          readelf -Ws build/librust_lib_flutterustmusic-arm64.so \
+            > build/librust_lib_flutterustmusic-arm64-symbols.txt
+          grep -q 'Java_dev_axiaobo_flutterustmusic_FuraApplication_initializeRustlsPlatformVerifier' \
+            build/librust_lib_flutterustmusic-arm64-symbols.txt
 
       - name: Collect ARM64 APK
         working-directory: apps/flutter

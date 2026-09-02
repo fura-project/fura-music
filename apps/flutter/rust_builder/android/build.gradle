@@ -1,7 +1,23 @@
 // The Android Gradle Plugin builds the native code with the Android NDK.
+import groovy.json.JsonSlurper
 
 group 'com.flutter_rust_bridge.rust_lib_flutterustmusic'
 version '1.0'
+
+def bridgeManifest = new File(project.projectDir, '../../../../bridges/flutter/Cargo.toml')
+def rustlsAndroidMetadata = new JsonSlurper().parseText(providers.exec {
+    workingDir project.projectDir
+    commandLine 'cargo', 'metadata', '--format-version', '1', '--filter-platform',
+            'aarch64-linux-android', '--manifest-path', bridgeManifest.absolutePath
+}.standardOutput.asText.get())
+def rustlsAndroidPackage = rustlsAndroidMetadata.packages.find {
+    it.name == 'rustls-platform-verifier-android'
+}
+if (rustlsAndroidPackage == null) {
+    throw new GradleException('Cargo metadata did not contain rustls-platform-verifier-android')
+}
+def rustlsAndroidManifest = file(rustlsAndroidPackage.manifest_path)
+def rustlsAndroidMavenRepository = new File(rustlsAndroidManifest.parentFile, 'maven')
 
 buildscript {
     repositories {
@@ -19,6 +35,10 @@ rootProject.allprojects {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url rustlsAndroidMavenRepository
+            metadataSources.artifact()
+        }
     }
 }
 
@@ -46,7 +66,12 @@ android {
 
     defaultConfig {
         minSdkVersion 19
+        consumerProguardFiles 'consumer-rules.pro'
     }
+}
+
+dependencies {
+    implementation "rustls:rustls-platform-verifier:${rustlsAndroidPackage.version}"
 }
 
 def rustupExecutable = System.getenv('PATH')

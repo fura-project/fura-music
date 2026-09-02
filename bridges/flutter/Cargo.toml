@@ -16,6 +16,10 @@ provider-qqmusic = { path = "../../crates/provider-qqmusic" }
 qqmusic-client = { path = "../../crates/qqmusic-client" }
 tokio = { version = "1.53.1", features = ["sync"] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22.4"
+rustls-platform-verifier = "0.7.0"
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 unsafe_code = "allow"
