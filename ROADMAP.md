@@ -81,6 +81,16 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Completed:** 2026-09-01. Full Rust tests/fmt/strict Clippy, pinned Bridge generation and orphan audit, Dart format/analyze, Flutter tests, and Linux native Bridge integration are the machine evidence. Live authenticated QQ playback and target-specific runtime checks remain independent maintainer/environment evidence.
 
+## Active Core Workstream — QQ Capability Evidence and Auth-Aware Protocol Strategy
+
+**Goal:** keep each public QQ capability facade stable while making its private protocol choice deterministic, auth-aware, evidence-driven, and able to distinguish protocol compatibility, authentication, content availability, and session-level risk outcomes.
+
+**Bounded exit criteria:** the current capability/protocol inventory is recorded with separate anonymous/authenticated evidence; a small private Client policy can express return, bounded retry, evidence-safe fallback, and mandatory stop; at least one observed risk outcome is typed and regression-tested without changing provider-neutral semantics; alternative paths remain evidence-only unless their exact request, bounded output and failure behavior are independently supported; relevant Rust gates pass.
+
+**Boundaries:** one `QQMusicProvider`, one QQ credential owner, existing Media Source separation, unchanged provider-api/Bridge/Flutter contracts, and no automatic endpoint racing or learning. No new Provider, service aggregation, dynamic strategy registry/plugin runtime, sidecar, risk-control evasion, access-control bypass, stored-account automation, UI work, or production fallback based only on static source similarity is authorized.
+
+**Current evidence:** the production inventory and evidence-only candidates are in [the QQ capability protocol matrix](docs/research/qqmusic-capability-protocol-matrix.md). Authenticated endpoint promotion and account/device/region-dependent comparisons remain Human evidence rather than autonomous live probes.
+
 ## Completed Checkpoint — First-Release Core Capability Completion
 
 **Goal:** freeze page-level visual redesign and complete the smallest truthful Account, Home-data, Library, Playback/media, Catalog, Settings, Platform, and Track-related capability foundation needed by the already authorized QQ Music-first first release.

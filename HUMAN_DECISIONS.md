@@ -47,6 +47,14 @@
 
 **Consequences:** Historical phone-login research may remain as clearly dated evidence, but it is not a current capability or pending compatibility claim. A maintainer-operated confirmed QR approval is still required for live QQ credential-exchange and restore evidence, and no QR credential or account material may be retained in fixtures or diagnostics.
 
+## HD-020 — Capability-local, auth-aware QQ protocol strategy
+
+**Status:** Accepted on 2026-09-03
+
+**Decision:** Fura may maintain deterministic, evidence-driven protocol strategies inside `QQMusicClient` per capability, authentication state, and necessary content context. Anonymous and authenticated behavior are separate evidence surfaces. `QQMusicProvider` remains the only QQ Catalog/Account Provider, uses one credential/session owner, and keeps QQ protocol choices private from provider-api, Bridge, Flutter, Queue, playback, and the separately owned Media Source routing boundary. The maintainer explicitly switched execution to `AUTONOMOUS_DEVELOPMENT` for this bounded Core objective.
+
+**Consequences:** Alternative QQ implementations may be researched and reimplemented as typed Rust request/decoder variants, but static similarity alone does not authorize a production fallback or a new Primary. This decision does not authorize another Provider, multi-service aggregation, dynamic plugins, a sidecar, runtime endpoint racing/learning, risk-control evasion, high-frequency account probes, or VIP/copyright/region bypass. A rate limit, security verification, credential/account/device restriction, or access-control result stops the capability rather than rotating client profiles.
+
 ## HD-002 — Default Material baseline before theme personas
 
 **Status:** Accepted on 2026-08-27
