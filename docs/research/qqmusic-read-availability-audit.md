@@ -16,6 +16,7 @@ media URI, vkey, or response body was printed, retained, or committed.
 | Lyrics/QRC | Empty original lyric or a successful response without QRC is `Unavailable`; translation and romanization may independently be absent. | Explicit anonymous rejection is `AuthenticationRequired`; authenticated rejection remains `CredentialRejected`. Other nonzero upstream codes are service failures. | Missing required original field, invalid ciphertext/XML/timing, or mismatched identity remains `InvalidResponse`. | Anonymous no-Cookie request, decrypt, and QRC parse passed. The Provider no longer blocks signed-out lyrics before this request. |
 | Comments | A valid page/list may be empty; blank deleted rows are tolerated only in the already evidenced newest-list shape. | HTTP/nonzero service failures remain retryable service outcomes. | Invalid pagination or malformed nonblank rows remain invalid responses. | One anonymous public page mapped successfully. The live redaction assertion was corrected so short returned values cannot create substring false positives. |
 | Track-associated MV | A Track with no associated VID is successful `None`. | An associated MV without an accepted HTTPS MP4 source is `SourceUnavailable`; service codes remain service failures. | Track/VID mismatch or malformed metadata remains invalid. | One anonymous public Track-associated MV and HTTPS source mapped successfully. |
+| Public Playlist Detail | A valid terminal page may be empty. | Code `2001` is rate limiting and STOP; other unknown nonzero codes remain service failures rather than being guessed into authentication. | Missing identity, page fields, required Track context, or an empty continuing page remains invalid. | The production `catalog:*` route and a two-request ignored live gate pass anonymously without Cookie/account fields; account-owned/favorite/liked contexts remain authenticated. |
 | Playlist/ranking artwork | Artwork is optional display metadata; blank, invalid, or unsafe cleartext artwork becomes absent without invalidating the catalog item. | None is inferred from artwork alone. | Required playlist identity/title failures still invalidate the row. | Shared normalization preserves HTTPS, upgrades only the independently observed `http://qpic.y.qq.com` host, and drops other cleartext/invalid values. |
 | Guest media source | Individual Tracks may truthfully be unavailable to an anonymous request. | Rejection/unavailable is not relabeled as VIP, region, or copyright restriction without evidence. | Mismatched source identity, absolute provider path, or malformed response remains invalid. | A bounded current new-song sample produced at least one anonymous playable source. Search is no longer a prerequisite of this gate because its independent rate limit caused false failures. |
 | Related Tracks | A successful empty set is legitimate. | Signed-request service/rejection failures remain distinct. | Duplicate or malformed Track rows remain invalid. | The bounded anonymous public-seed live gate returned a nonempty compatible set. |
@@ -38,6 +39,10 @@ media URI, vkey, or response body was printed, retained, or committed.
 4. Live comment diagnostics assert fixed redaction markers rather than checking
    whether arbitrary returned user strings happen to occur inside a debug
    representation.
+5. Public `catalog:*` Playlist Detail now uses the independently evidenced
+   anonymous `CgiGetDiss` context. Account-owned, favorite, and liked-song
+   identity remains authenticated; an anonymous failure never clears the
+   current account credential.
 
 ## External cross-check
 

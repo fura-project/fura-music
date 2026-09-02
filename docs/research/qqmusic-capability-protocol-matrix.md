@@ -2,7 +2,7 @@
 
 **Snapshot:** 2026-09-03
 
-**Baseline before this pass:** local `41d5268`
+**Baseline before this pass:** local `29d3a17`
 
 **Scope:** direct QQ Music protocol evidence used by Fura's single `QQMusicProvider`
 
@@ -41,7 +41,8 @@ was tested.
 | Artist Search | musicu Desktop Search, type 1 | same module/method | named module key; Desktop params | Fixture pass | Not needed | None | 1-based page, max 30; numeric ID, MID, name | Same Search code policy; empty page is valid only with valid metadata | Fura source/fixture; 2026-09-03 | `PRIMARY` |
 | Album Search | musicu Desktop Search, type 2 | same module/method | named module key; Desktop params | Fixture pass | Not needed | None | 1-based page, max 30; numeric ID, MID, title | Same Search code policy; optional display fields cannot invalidate identity | Fura source/fixture; 2026-09-03 | `PRIMARY` |
 | Playlist Search | musicu Desktop Search, type 3 | same module/method | named module key; Desktop params | Fixture pass | Not needed | None | 1-based page, max 30; playlist ID/title/count; short continuing page is allowed | Same Search code policy; invalid numeric identity is shape failure | Fura source/fixture; 2026-09-03 | `PRIMARY` |
-| Playlist Detail, ordinary | musicu DissInfo | `music.srfDissInfo.DissInfo/CgiGetDiss` | mobile QQ profile `ct=11`, `cv/v=13020508`, `tmeAppID=qqmusic`; named result | `UNKNOWN`; current facade requires account state | Fixture pass; user library/detail has prior Human observation | Current QQ credential and Cookie | offset plus bounded `song_begin/song_num`, max 100; exact total/continuation and minimum playable Track context | Explicit credential rejection is distinct; nonzero service codes STOP; malformed/empty-continuing pages are invalid | Fura source/fixture/Human; independent current source corroboration; 2026-09-03 | `PRIMARY` |
+| Playlist Detail, public catalog | musicu DissInfo | `music.srfDissInfo.DissInfo/CgiGetDiss` | mobile QQ profile `ct=11`, `cv/v=13020508`, `tmeAppID=qqmusic`; named result without account fields | Fixture plus two-request ignored live gate pass | Not needed; public catalog remains anonymous even while signed in | None | offset plus bounded `song_begin/song_num`, max 100; exact total/continuation and minimum playable Track context | `2001` is `RateLimited` and STOP; anonymous credential-like codes remain unknown service outcomes rather than signing out; malformed/empty-continuing pages are invalid | Fura source/fixture/live; independent current source corroboration; 2026-09-03 | `PRIMARY` |
+| Playlist Detail, account-owned/favorite | same musicu DissInfo strategy | same module/method with ordinary `disstid` context | same profile with current account fields and Cookie | Not applicable to account-scoped identity | Fixture pass; user library/detail has prior Human observation | Current QQ credential and Cookie | Same bounded page contract | Explicit credential rejection is distinct and clears only the matching current credential; nonzero service codes STOP | Fura source/fixture/Human; 2026-09-03 | `PRIMARY` |
 | Playlist Detail, liked songs | DissInfo directory context | same module/method with `dirid=201` and encrypted UIN | same authenticated mobile envelope | Not applicable | Fixture pass; user library/detail has prior Human observation | Credential, Cookie and encrypted UIN | Same bounded page contract | Same as ordinary detail; content context selects this route, not fallback | Fura source/fixture/Human; 2026-09-03 | `PRIMARY` |
 | Artist Tracks, numeric identity | musicu SongListInter | `music.musichallSong.SongListInter/GetSingerSongList` | `wk_v17`, `ct=20`, `cv=1770`; `singerid/begin/num` | Fixture pass | Not needed | None | offset, max 100; exact requested MID, total and continuation | Selected when Fura's QQ-owned opaque identity contains numeric ID; malformed identity/response does not switch routes | Fura source/fixture; 2026-09-03 | `PRIMARY` |
 | Artist Tracks, MID-only identity | musicu song-list server | `musichall.song_list_server/GetSingerSongList` | same public profile; `singerMid/begin/number` | Fixture pass | Not needed | None | Same bounded output and shared decoder | Content-context route for MID-only favorite Artists; not a retry fallback for the numeric route | Fura source/fixture; independent source corroboration; 2026-09-03 | `PRIMARY` |
@@ -77,7 +78,7 @@ compatibility with its typed decoder.
 
 | Capability | Candidate strategy | Protocol family / host | Profile and envelope difference | Anonymous status | Authenticated status | Pagination/output gap | Evidence | Production status and reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Search, per result type | `DoSearchForQQMusicMobile` | musicu SearchCgiService | Mobile method/profile/response decoder differs from Fura Desktop | Static external evidence only | `UNKNOWN` | Fura decoder contract not characterized | L-1124 pinned source and another independent source; 2026-09-03 | `EVIDENCE_ONLY`; no failure case currently justifies a second production route |
+| Search, per result type | `DoSearchForQQMusicMobile` | musicu `music.search.SearchCgiService/DoSearchForQQMusicMobile` | Android profile; `searchid/query/search_type/num_per_page/page_num` plus selectors; response/page decoder differs from Fura Desktop | Static external evidence only | `UNKNOWN` | Per-type field completeness and Fura page contract are not characterized | L-1124 pinned source; 2026-09-03 | `EVIDENCE_ONLY`; current code `2001` is a risk STOP, not permission to rotate profiles, so no autonomous live A/B was run |
 | Search, per result type | `DoSearchForQQMusicLite` | musicu SearchCgiService | Lite profile and envelope | Static external documentation only | `UNKNOWN` | Decoder/pagination equivalence unknown | simple-music pinned documentation; 2026-09-03 | `EVIDENCE_ONLY` |
 | Search, per result type | `SearchAdaptor/do_search_v2` | musicu adaptor family | Different module, params and response family | Static external documentation only | `UNKNOWN` | Output completeness and page semantics unknown | external source survey; 2026-09-03 | `EVIDENCE_ONLY` |
 | Search | legacy `client_search_cp` family | legacy CGI | legacy query/envelope | Historical only; a recent implementation report describes `new_json=1` breakage | `UNKNOWN` | Modern Track context and pagination not characterized | independent issue/source history; 2026-09-03 | `EVIDENCE_ONLY`; not a safe compatibility fallback |
@@ -85,9 +86,23 @@ compatibility with its typed decoder.
 | Playlist Detail | `fcg_ucc_getcdinfo_byids_cp.fcg` | legacy qzone CGI | legacy full-list response | Historical static evidence | `UNKNOWN` | Bounded page contract and large-playlist behavior unproven | simple-music documentation/history; 2026-09-03 | `EVIDENCE_ONLY`; must not silently perform unbounded loads |
 | Favorite Albums | `music.musicasset.AlbumFavRead/CgiGetAlbumFavInfo` | musicu asset read | named musicu response rather than legacy profile asset | `UNKNOWN` | Static external evidence; earlier Fura compatibility was incomplete | Field completeness/continuation compatibility unresolved | L-1124 pinned source plus Fura historical decision; 2026-09-03 | `EVIDENCE_ONLY`; current legacy route remains evidence-driven Primary |
 | Lyrics | legacy lyric CGI | legacy CGI | plain/base64 or legacy lyric response | Historical/static external evidence | `UNKNOWN` | QRC word timing, translation alignment and bounds not equivalent | simple-music documentation; 2026-09-03 | `EVIDENCE_ONLY`; cannot replace the current richer contract |
-| Media VKey | `vkey.GetVkeyServer/CgiGetVkey` | musicu legacy VKey | different module/method and response shape | Static external evidence | Static external evidence | Exact item identity, TTL and authorization outcomes not characterized | simple-music documentation; 2026-09-03 | `EVIDENCE_ONLY`; live/Human evidence would be required before production |
+| Media VKey | `vkey.GetVkeyServer/CgiGetVkey` | musicu legacy VKey | `ct=24` anonymous / `ct=19` authenticated source evidence; explicit filename, song MID/type, UIN and login flag; different response shape | Static external evidence | Static external evidence | Exact item identity, TTL, unavailable/risk codes, and authenticated authorization outcomes are not characterized | yakult and simple-music pinned source/documentation; 2026-09-03 | `EVIDENCE_ONLY`; current `UrlGetVkey` has no demonstrated compatibility gap, and extra source probing would not justify a production fallback |
 | Media VKey | EVkey / lossless-format requests | musicu media authorization | additional formats/qualities | `UNKNOWN` | Static ecosystem evidence only | Fura intentionally supports only MP3 Standard/High | source survey; 2026-09-03 | `REJECTED` for current scope; no speculative codec or entitlement expansion |
 | Account Summary | legacy profile CGI | legacy profile | incomplete-data fallback candidate only | Authentication required | Static/historical evidence only | Current public nickname/avatar completeness and rejection semantics unproven | source survey; 2026-09-03 | `EVIDENCE_ONLY`; no demonstrated incomplete-data failure warrants fallback |
+
+## P0 optimization outcome — 2026-09-03
+
+| Capability | Decision | Safe live evidence in this pass | Reason |
+| --- | --- | --- | --- |
+| Track/Artist/Album/Playlist Search | Retain Desktop Search as `PRIMARY`; Mobile, Lite, Adaptor and legacy candidates remain `EVIDENCE_ONLY` | None | The current Primary already produced code `2001`. That is a session-risk STOP, so this pass did not issue another Search request or rotate profile. Static candidate shapes do not prove Fura's per-type completeness or failure semantics. |
+| Playlist Detail | Promote the existing `CgiGetDiss` strategy to `PRIMARY` for anonymous public-catalog context; retain the same strategy with authenticated context for account-owned/favorite/liked identities | The two-request public recommendation → one-row detail gate passed | Current and independent source agree on the bounded request/decoder; deterministic tests prove no Cookie/account fields, pagination, identity mapping, and that anonymous failures cannot clear credentials. `aiDissInfo` and qzone remain evidence-only. |
+| Media VKey / CDN | Retain `UrlGetVkey` and `GetCdnDispatch` as separate current `PRIMARY` responsibilities; `CgiGetVkey` remains `EVIDENCE_ONLY` | No new live request | The current guest Primary already has a passing ignored live gate and no demonstrated compatibility gap. The candidate still lacks complete identity, TTL, unavailable/risk, and authenticated authorization semantics; probing it would not justify production routing. |
+
+The only autonomous live probe actually run for this pass was public Playlist
+Detail. It was anonymous, serial, read-only, default-ignored, and capped at two
+requests. Search was deliberately not retried after the existing rate-limit
+evidence. The current Media Primary was not re-probed, and no candidate VKey
+endpoint was called. No risk STOP occurred in the Playlist Detail window.
 
 ## Auth-aware deterministic policy
 
@@ -96,9 +111,9 @@ send credentials everywhere” switch.
 
 | Policy | Current examples | Deterministic behavior |
 | --- | --- | --- |
-| Anonymous-only by typed request signature | Search, public catalog, rankings, comments, public recommendations | Never fabricate or attach a credential. A valid empty response stays empty rather than becoming `AuthenticationRequired`. |
+| Anonymous-only by typed request signature | Search, public catalog including public Playlist Detail, rankings, comments, public recommendations | Never fabricate or attach a credential. A valid empty response stays empty rather than becoming `AuthenticationRequired`. |
 | Authenticated-preferred | Lyrics; media selection above the Client chooses authenticated High when a current credential exists and anonymous Standard otherwise | Use the sole current credential when supplied; otherwise use the separately evidenced anonymous request. Anonymous unavailability does not invalidate a credential. |
-| Authenticated-required by typed request signature | Daily/Radar/personalized content, account/library reads and playlist detail | Provider rejects signed-out access before the request. The strategy never creates, refreshes or replaces credentials. |
+| Authenticated-required by typed request signature | Daily/Radar/personalized content, account/library reads, account-owned/favorite Playlist Detail and liked songs | Provider rejects signed-out access before the request. The strategy never creates, refreshes or replaces credentials. |
 
 The private `qqmusic-client` policy vocabulary can represent these selections,
 but existing single-path capabilities retain their stronger Rust signatures.
@@ -121,6 +136,13 @@ Search code `2001` is the first production-integrated classification: all four
 Search result types now return a typed rate-limit error which maps through the
 unchanged Provider contract as `ServiceUnavailable`. It never becomes an empty
 page or a fallback attempt.
+
+Public Playlist Detail now applies the same risk classification before any
+credential interpretation. `catalog:*` identity deterministically selects the
+anonymous request; account-owned, favorite, and liked-song identities select
+their authenticated context. This is content/auth-context routing on one
+`CgiGetDiss` strategy, not a protocol fallback, and therefore cannot issue a
+second endpoint request after a STOP result.
 
 No shared request-budget/cooldown object was added. There is currently no
 production capability that switches protocol after a request, so such state
@@ -150,12 +172,12 @@ session-scoped risk state instead of constructing a budget per endpoint.
 - Repository-specific observed outcome rules remain in
   [QQ Music read availability audit](qqmusic-read-availability-audit.md).
 
-Changing a `PRIMARY`, adding a production `FALLBACK`, or interpreting a new
-restriction code requires a sanitized fixture, a bounded independently
-repeatable integration result, or Human-operated evidence when account,
-membership, region or device context is essential. Required Human evidence
-currently includes authenticated recommendation availability/quality, a clean
-process credential restore after the confirmed QR login, authenticated
-playback/Queue/synchronized and word-timed lyrics, and any A/B comparison that
-would promote an evidence-only endpoint. No stored credential may be automated
-to obtain it.
+HD-021 permits autonomous promotion only when exact static evidence,
+deterministic fixtures, bounded output/error semantics, and any relevant safe
+anonymous live observation agree. Account-, membership-, region-, or
+device-dependent promotion still requires Human-operated evidence. Required
+Human evidence currently includes authenticated recommendation
+availability/quality, a clean-process credential restore after the confirmed
+QR login, authenticated playback/Queue/synchronized and word-timed lyrics, and
+any authenticated A/B comparison. No stored credential may be automated to
+obtain it.

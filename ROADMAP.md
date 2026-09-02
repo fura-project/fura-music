@@ -89,7 +89,7 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 **Boundaries:** one `QQMusicProvider`, one QQ credential owner, existing Media Source separation, unchanged provider-api/Bridge/Flutter contracts, and no automatic endpoint racing or learning. No new Provider, service aggregation, dynamic strategy registry/plugin runtime, sidecar, risk-control evasion, access-control bypass, stored-account automation, UI work, or production fallback based only on static source similarity is authorized.
 
-**Current evidence:** the production inventory and evidence-only candidates are in [the QQ capability protocol matrix](docs/research/qqmusic-capability-protocol-matrix.md). Authenticated endpoint promotion and account/device/region-dependent comparisons remain Human evidence rather than autonomous live probes.
+**Current evidence:** the production inventory and evidence-only candidates are in [the QQ capability protocol matrix](docs/research/qqmusic-capability-protocol-matrix.md). HD-021 permits evidence-complete anonymous, read-only candidates to be promoted autonomously; public Playlist Detail now uses the verified anonymous context. Search alternatives remain evidence-only after the current Primary produced rate-limit code `2001`, and VKey alternatives have no demonstrated compatibility gap. Authenticated endpoint promotion and account/device/region-dependent comparisons remain Human evidence rather than autonomous live probes.
 
 ## Completed Checkpoint — First-Release Core Capability Completion
 

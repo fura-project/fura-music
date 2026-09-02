@@ -55,6 +55,14 @@
 
 **Consequences:** Alternative QQ implementations may be researched and reimplemented as typed Rust request/decoder variants, but static similarity alone does not authorize a production fallback or a new Primary. This decision does not authorize another Provider, multi-service aggregation, dynamic plugins, a sidecar, runtime endpoint racing/learning, risk-control evasion, high-frequency account probes, or VIP/copyright/region bypass. A rate limit, security verification, credential/account/device restriction, or access-control result stops the capability rather than rotating client profiles.
 
+## HD-021 — Safe autonomous promotion of anonymous QQ protocol strategies
+
+**Status:** Accepted on 2026-09-03
+
+**Decision:** Within HD-020, the agent may autonomously promote a capability-local QQ protocol candidate to deterministic production `PRIMARY` or compatibility-only `FALLBACK` when its exact request and decoder, bounded Domain completeness, identity and pagination semantics, safe failure classification, independent source evidence, deterministic fixtures, and—when relevant—an anonymous, read-only, serial, hard-budget live observation all agree. Authenticated, membership-, region-, device-, or account-dependent promotion remains Human evidence.
+
+**Consequences:** This does not authorize stored-account automation, authenticated autonomous probes, profile rotation after risk control, endpoint racing or online learning, VIP/copyright/region bypass, another Provider, multi-service aggregation, a dynamic plugin/runtime, or a sidecar. `RateLimited`, security verification, credential/account/device restriction, access denial, and unknown upstream outcomes remain STOP results and may not trigger another protocol request.
+
 ## HD-002 — Default Material baseline before theme personas
 
 **Status:** Accepted on 2026-08-27

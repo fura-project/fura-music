@@ -1,8 +1,8 @@
 # QQ Music playlist-detail evidence
 
-- **Status:** Implemented protocol foundation for M1 playlist detail
-- **Last checked:** 2026-08-26
-- **Scope:** Ordinary playlist pages and the authenticated account's built-in liked-songs directory.
+- **Status:** Production route with separate public-anonymous and account-authenticated contexts
+- **Last checked:** 2026-09-03
+- **Scope:** Public catalog, account-owned/favorite, and built-in liked-songs playlist pages.
 
 This note records protocol behavior and boundaries, not reusable third-party source code. No account credential or user-derived response was used.
 
@@ -13,6 +13,7 @@ This note records protocol behavior and boundaries, not reusable third-party sou
 3. [yakult-green-tea/qq-music-api at `2c27d6b`](https://github.com/yakult-green-tea/qq-music-api/tree/2c27d6b90dd56bcf0796883e27216f69189d8f68), especially the authenticated liked-songs service and its request-shape tests.
 4. [feeluown-qqmusic at `241a967`](https://github.com/feeluown/feeluown-qqmusic/tree/241a9678bcd26e88d19e08e5da8048018f06e330), especially its sanitized `get_diss_info` fixture and playlist-to-track mapping. Its current ordinary playlist call uses a legacy endpoint, so it corroborates response fields rather than this request envelope.
 5. A no-account probe against a public playlist on 2026-08-26. It returned zero global, named-result, and data codes, one requested row, `total_song_num`, numeric `hasmore`, and the documented song/artist/album fields. A 100-row request returned about 128 KiB. The public playlist ID and all content values are deliberately absent from project fixtures and diagnostics.
+6. The default-ignored production-path gate on 2026-09-03 made exactly two serial anonymous reads: three public recommendation summaries followed by one requested playlist row. The request and decoder passed without Cookie or account fields. It retained no playlist identity, title, Track content, response body, or account material.
 
 ## Shared endpoint and response
 
@@ -35,7 +36,7 @@ The minimum raw track boundary preserves:
 
 These are QQ-specific protocol summaries. `QQMusicProvider` maps them into provider-neutral track summaries and keeps QQ song ID, song MID, primary type, and optional file-media MID behind a provider-owned opaque identity for media and lyrics. The response's separate `songtype` field is deliberately not retained after a controlled probe disproved its use as the vkey song-type parameter. Album artwork uses the independently documented `photo_new/T002R300x300M000{mid}.jpg` form only when the MID is a safe URL component. File-quality, payment, action-bit, tracing, MV, and other raw response structures remain excluded.
 
-## Ordinary playlist route
+## Public and account-scoped ordinary routes
 
 Independent current musicu implementations agree on:
 
@@ -50,7 +51,13 @@ orderlist: true
 onlysonglist: false
 ```
 
-The application supplies its authenticated musicu comm and cookie because user-library playlists can have account-specific visibility, even though the controlled public probe worked without credentials.
+Provider-owned `catalog:<id>` identity selects the anonymous route and sends no
+Cookie or account fields, even when a user is signed in. `favorite:<id>` and
+non-liked `owned:<id>:<dirId>` identities retain the authenticated envelope and
+single credential owner because they are account-scoped. Anonymous
+credential-like codes are not guessed into `CredentialRejected`; observed
+musicu code `2001` is a rate-limit STOP in either context. Both routes keep the
+same bounded page and decoder contract.
 
 ## Built-in liked-songs route
 
@@ -71,6 +78,6 @@ The project omits `onlysonglist` on this route, matching the cross-validated req
 
 ## Evidence still required
 
-1. A sanitized authenticated ordinary-playlist response or controlled account integration.
+1. A sanitized account-scoped ordinary-playlist response or controlled account integration beyond the existing broad user-library observation.
 2. A sanitized authenticated liked-songs response or controlled account integration.
 3. Evidence for unavailable or region-filtered song entries before deciding their long-term Domain and playback representation.
