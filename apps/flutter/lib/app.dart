@@ -37,10 +37,11 @@ import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
-class MusicApp extends StatelessWidget {
+class MusicApp extends StatefulWidget {
   factory MusicApp({
     required BootstrapStatus bootstrap,
     QqMusicAuthenticationGateway? authenticationGateway,
@@ -74,10 +75,13 @@ class MusicApp extends StatelessWidget {
     SystemPlaybackBinding systemPlaybackBinding =
         const NoopSystemPlaybackBinding(),
     AppSettings initialSettings = AppSettings.defaults,
+    AppSettingsStore? settingsStore,
+    ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
     Key? key,
   }) {
+    RustMediaResolutionGateway? defaultMediaResolutionGateway;
     if (authenticationGateway == null ||
         libraryGateway == null ||
         playlistDetailGateway == null ||
@@ -102,18 +106,16 @@ class MusicApp extends StatelessWidget {
       playlistDetailGateway ??= RustPlaylistDetailGateway(
         credentialVault: fallbackCredentialVault,
       );
-      mediaResolutionGateway ??=
-          QqMusicCredentialCleaningMediaResolutionGateway(
-            RustMediaResolutionGateway(
-              preferredQuality: switch (initialSettings.playbackQuality) {
-                AppPlaybackQualityPreference.standard =>
-                  PlaybackAudioQualityPreference.standard,
-                AppPlaybackQualityPreference.high =>
-                  PlaybackAudioQualityPreference.high,
-              },
-            ),
-            credentialVault: fallbackCredentialVault,
-          );
+      if (mediaResolutionGateway == null) {
+        defaultMediaResolutionGateway = RustMediaResolutionGateway(
+          preferredQuality: _playbackQuality(initialSettings.playbackQuality),
+        );
+        mediaResolutionGateway =
+            QqMusicCredentialCleaningMediaResolutionGateway(
+              defaultMediaResolutionGateway,
+              credentialVault: fallbackCredentialVault,
+            );
+      }
       lyricGateway ??= RustLyricGateway(
         credentialVault: fallbackCredentialVault,
       );
@@ -190,6 +192,13 @@ class MusicApp extends StatelessWidget {
         systemPlaybackBinding: systemPlaybackBinding,
       ),
       initialSettings: initialSettings,
+      settingsStore: settingsStore,
+      onPlaybackQualityChanged:
+          onPlaybackQualityChanged ??
+          (defaultMediaResolutionGateway == null
+              ? null
+              : (preference) => defaultMediaResolutionGateway!
+                    .updatePreferredQuality(_playbackQuality(preference))),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
@@ -203,6 +212,8 @@ class MusicApp extends StatelessWidget {
     required this.discoveryDependencies,
     required this.playbackDependencies,
     required this.initialSettings,
+    required this.settingsStore,
+    required this.onPlaybackQualityChanged,
     required this.initialCredentialRestore,
     super.key,
   });
@@ -214,28 +225,74 @@ class MusicApp extends StatelessWidget {
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
   final AppSettings initialSettings;
+  final AppSettingsStore? settingsStore;
+  final ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Flutterust Music',
-      theme: MusicMaterialTheme.light(),
-      darkTheme: MusicMaterialTheme.dark(),
-      themeMode: initialSettings.theme.materialThemeMode,
-      home: LoginPage(
-        bootstrap: bootstrap,
-        authenticationGateway: authenticationGateway,
-        homeDependencies: homeDependencies,
-        libraryDependencies: libraryDependencies,
-        discoveryDependencies: discoveryDependencies,
-        playbackDependencies: playbackDependencies,
-        initialCredentialRestore: initialCredentialRestore,
-      ),
-    );
-  }
+  State<MusicApp> createState() => _MusicAppState();
 }
+
+class _MusicAppState extends State<MusicApp> {
+  late AppSettings _settings;
+  AppSettingsStore? _settingsStore;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = widget.initialSettings;
+    _settingsStore = widget.settingsStore;
+  }
+
+  Future<AppSettingsWriteResult> _updateSettings(AppSettings settings) async {
+    if (settings == _settings) return AppSettingsWriteResult.saved;
+    final previous = _settings;
+    setState(() => _settings = settings);
+    widget.onPlaybackQualityChanged?.call(settings.playbackQuality);
+    var result = AppSettingsWriteResult.storageUnavailable;
+    try {
+      final store = _settingsStore ??= AppSettingsStore();
+      result = await store.save(settings);
+    } on Object {
+      result = AppSettingsWriteResult.storageUnavailable;
+    }
+    if (result == AppSettingsWriteResult.storageUnavailable &&
+        mounted &&
+        _settings == settings) {
+      setState(() => _settings = previous);
+      widget.onPlaybackQualityChanged?.call(previous.playbackQuality);
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    title: 'fura music',
+    theme: MusicMaterialTheme.light(),
+    darkTheme: MusicMaterialTheme.dark(),
+    themeMode: _settings.theme.materialThemeMode,
+    home: LoginPage(
+      bootstrap: widget.bootstrap,
+      authenticationGateway: widget.authenticationGateway,
+      homeDependencies: widget.homeDependencies,
+      libraryDependencies: widget.libraryDependencies,
+      discoveryDependencies: widget.discoveryDependencies,
+      playbackDependencies: widget.playbackDependencies,
+      settings: _settings,
+      onSettingsChanged: _updateSettings,
+      initialCredentialRestore: widget.initialCredentialRestore,
+    ),
+  );
+}
+
+PlaybackAudioQualityPreference _playbackQuality(
+  AppPlaybackQualityPreference preference,
+) => switch (preference) {
+  AppPlaybackQualityPreference.standard =>
+    PlaybackAudioQualityPreference.standard,
+  AppPlaybackQualityPreference.high => PlaybackAudioQualityPreference.high,
+};
 
 class LoginPage extends StatefulWidget {
   const LoginPage({
@@ -245,6 +302,8 @@ class LoginPage extends StatefulWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.settings,
+    required this.onSettingsChanged,
     required this.initialCredentialRestore,
     super.key,
   });
@@ -255,6 +314,9 @@ class LoginPage extends StatefulWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final AppSettings settings;
+  final Future<AppSettingsWriteResult> Function(AppSettings settings)
+  onSettingsChanged;
   final CredentialRestoreResult initialCredentialRestore;
 
   @override
@@ -345,6 +407,8 @@ class _LoginPageState extends State<LoginPage> {
           libraryDependencies: widget.libraryDependencies,
           discoveryDependencies: widget.discoveryDependencies,
           playbackDependencies: widget.playbackDependencies,
+          settings: widget.settings,
+          onSettingsChanged: widget.onSettingsChanged,
           authenticated: authenticated,
           onRequestSignIn: _requestSignIn,
           onSignInAgain: _requestSignInAgain,

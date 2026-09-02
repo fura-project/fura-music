@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' show PointerDeviceKind, SemanticsAction, Size, Tristate;
+import 'dart:ui' show Clip, PointerDeviceKind, SemanticsAction, Size, Tristate;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/gestures.dart' show kSecondaryButton;
@@ -16,6 +16,7 @@ import 'package:flutter/material.dart'
         InkWell,
         ListView,
         ListTile,
+        Material,
         NavigationBar,
         NavigationRail,
         OutlinedButton,
@@ -63,6 +64,7 @@ import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 Future<void> _selectAdaptiveSection(
@@ -178,7 +180,8 @@ void main() {
 
     expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
-    expect(find.text('Not signed in'), findsOneWidget);
+    expect(find.text('fura music'), findsOneWidget);
+    expect(find.text('Sign in to QQ Music'), findsOneWidget);
     expect(find.text('Public listening pick'), findsOneWidget);
     expect(find.text('Million-play favorites'), findsOneWidget);
     expect(find.text('Fresh release'), findsWidgets);
@@ -4209,7 +4212,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(
-      find.byKey(const ValueKey('shell-playlist-transition')),
+      find.byKey(const ValueKey('shell-detail-transition')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsOneWidget);
@@ -5470,6 +5473,118 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+    'keeps the complete playlist sidebar clipped with pinned settings',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'SIDEBAR_SETTINGS_VISUAL_REVIEW',
+      );
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final playlists = List.generate(
+        14,
+        (index) => UserPlaylistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'sidebar:$index',
+          title: 'Personal playlist ${index + 1}',
+          trackCount: index + 1,
+        ),
+      );
+      final settingsStorage = _WidgetSettingsDocumentStorage();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([
+            UserLibraryResult(playlists: playlists),
+          ]),
+          accountSummaryGateway: const _WidgetAccountSummaryGateway(
+            AccountSummaryLoadResult(
+              summary: AuthenticatedAccountSummary(
+                displayName: 'Fura listener',
+              ),
+            ),
+          ),
+          settingsStore: AppSettingsStore(storage: settingsStorage),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('fura music'), findsOneWidget);
+      expect(find.text('Fura listener'), findsOneWidget);
+      expect(find.byKey(const ValueKey('sidebar-account')), findsOneWidget);
+      final clipMaterial = tester.widget<Material>(
+        find.byKey(const ValueKey('sidebar-scroll-clip')),
+      );
+      expect(clipMaterial.clipBehavior, Clip.hardEdge);
+      expect(find.byKey(const ValueKey('open-settings')), findsOneWidget);
+
+      final sidebarScroll = find.descendant(
+        of: find.byKey(const ValueKey('sidebar-scroll-clip')),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
+        find.text('Personal playlist 14'),
+        320,
+        scrollable: sidebarScroll,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Personal playlist 14'), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-settings')), findsOneWidget);
+      expect(
+        tester.getBottomLeft(find.byKey(const ValueKey('open-settings'))).dy,
+        lessThanOrEqualTo(900),
+      );
+
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-music-sidebar-desktop.png')),
+        );
+      }
+
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('embedded-settings-page')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-theme-selector')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Dark'));
+      await tester.pumpAndSettle();
+      expect(settingsStorage.document, contains('"theme":"dark"'));
+      expect(
+        Theme.of(tester.element(find.byKey(const ValueKey('settings-content'))))
+            .brightness,
+        Brightness.dark,
+      );
+
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('embedded-settings-page')),
+        findsOneWidget,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-music-settings-compact.png')),
+        );
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('returns rejected library credentials to sign-in', (
     tester,
   ) async {
@@ -5504,6 +5619,19 @@ const _bootstrap = BootstrapStatus(
     implementedCapabilities: ['Authentication'],
   ),
 );
+
+class _WidgetSettingsDocumentStorage implements AppSettingsDocumentStorage {
+  String? document;
+
+  @override
+  Future<void> delete() async => document = null;
+
+  @override
+  Future<String?> read() async => document;
+
+  @override
+  Future<void> write(String document) async => this.document = document;
+}
 
 class _WidgetGateway
     implements

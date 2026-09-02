@@ -70,6 +70,10 @@ class ExpandedNowPlayingLocalRoute extends AuthenticatedLocalRoute {
   const ExpandedNowPlayingLocalRoute();
 }
 
+class SettingsLocalRoute extends AuthenticatedLocalRoute {
+  const SettingsLocalRoute();
+}
+
 enum AuthenticatedBackTarget { none, localRoute, libraryPlaylists, home }
 
 class AuthenticatedBackResult {

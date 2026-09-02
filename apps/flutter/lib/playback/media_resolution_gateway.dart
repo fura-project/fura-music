@@ -76,7 +76,11 @@ class RustMediaResolutionGateway implements MediaResolutionGateway {
   }) : _operationFactory = operationFactory ?? _beginRustResolution;
 
   final MediaResolutionOperationFactory _operationFactory;
-  final PlaybackAudioQualityPreference preferredQuality;
+  PlaybackAudioQualityPreference preferredQuality;
+
+  void updatePreferredQuality(PlaybackAudioQualityPreference preference) {
+    preferredQuality = preference;
+  }
 
   @override
   MediaResolutionOperation beginResolution({

@@ -130,6 +130,29 @@ void main() {
     expect(operation.cancelCalls, 1);
   });
 
+  test('uses an updated quality preference for the next resolution', () {
+    final qualities = <PlaybackAudioQualityPreference>[];
+    final gateway = RustMediaResolutionGateway(
+      operationFactory: (_, _, quality) {
+        qualities.add(quality);
+        return _ImmediateResolution(
+          const MediaResolutionResult(
+            failure: MediaResolutionFailure.unavailable,
+          ),
+        );
+      },
+    );
+
+    gateway.beginResolution(providerId: 'qq-music', opaqueTrackId: 'first');
+    gateway.updatePreferredQuality(PlaybackAudioQualityPreference.high);
+    gateway.beginResolution(providerId: 'qq-music', opaqueTrackId: 'second');
+
+    expect(qualities, [
+      PlaybackAudioQualityPreference.standard,
+      PlaybackAudioQualityPreference.high,
+    ]);
+  });
+
   test(
     'generic gateway reports rejection without persistence policy',
     () async {

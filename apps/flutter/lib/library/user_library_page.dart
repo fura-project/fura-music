@@ -38,6 +38,9 @@ import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/settings/app_settings_store.dart';
+import 'package:flutterustmusic/settings/settings_page.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 bool _radarRequiresSignIn(RadarFailure? failure) =>
@@ -51,6 +54,8 @@ class UserLibraryPage extends StatefulWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.settings,
+    required this.onSettingsChanged,
     required this.authenticated,
     required this.onRequestSignIn,
     required this.onSignInAgain,
@@ -62,6 +67,9 @@ class UserLibraryPage extends StatefulWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final AppSettings settings;
+  final Future<AppSettingsWriteResult> Function(AppSettings settings)
+  onSettingsChanged;
   final bool authenticated;
   final VoidCallback onRequestSignIn;
   final VoidCallback onSignInAgain;
@@ -283,8 +291,8 @@ class _RetainedPrimaryDestinationTransitionState
   }
 }
 
-class _ShellPlaylistTransition extends StatefulWidget {
-  const _ShellPlaylistTransition({
+class _ShellDetailTransition extends StatefulWidget {
+  const _ShellDetailTransition({
     required this.open,
     required this.base,
     required this.detail,
@@ -295,11 +303,10 @@ class _ShellPlaylistTransition extends StatefulWidget {
   final Widget detail;
 
   @override
-  State<_ShellPlaylistTransition> createState() =>
-      _ShellPlaylistTransitionState();
+  State<_ShellDetailTransition> createState() => _ShellDetailTransitionState();
 }
 
-class _ShellPlaylistTransitionState extends State<_ShellPlaylistTransition>
+class _ShellDetailTransitionState extends State<_ShellDetailTransition>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late Widget _retainedDetail;
@@ -317,7 +324,7 @@ class _ShellPlaylistTransitionState extends State<_ShellPlaylistTransition>
   }
 
   @override
-  void didUpdateWidget(_ShellPlaylistTransition oldWidget) {
+  void didUpdateWidget(_ShellDetailTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.open) _retainedDetail = widget.detail;
     if (widget.open == oldWidget.open) return;
@@ -338,7 +345,7 @@ class _ShellPlaylistTransitionState extends State<_ShellPlaylistTransition>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    key: const ValueKey('shell-playlist-transition'),
+    key: const ValueKey('shell-detail-transition'),
     animation: _controller,
     builder: (context, _) {
       final value = Easing.emphasizedDecelerate.transform(_controller.value);
@@ -399,6 +406,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   );
   final FocusNode _homeRecommendationReturnFocusNode = FocusNode(
     debugLabel: 'last Home recommendation',
+  );
+  final FocusNode _settingsReturnFocusNode = FocusNode(
+    debugLabel: 'settings entry',
   );
   final FocusScopeNode _librarySectionFocusScopeNode = FocusScopeNode(
     debugLabel: 'library section selector',
@@ -540,6 +550,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _searchReturnFocusNode.dispose();
     _recommendationsReturnFocusNode.dispose();
     _homeRecommendationReturnFocusNode.dispose();
+    _settingsReturnFocusNode.dispose();
     _librarySectionFocusScopeNode.dispose();
     _backShortcutFallbackFocusNode.dispose();
     _topSearchController.dispose();
@@ -564,14 +575,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     final firstCatalogRoute = catalogRoutes.isEmpty
         ? null
         : catalogRoutes.first;
-    final embeddedPlaylistRoute = firstCatalogRoute is PlaylistLocalRoute
+    final embeddedShellRoute =
+        firstCatalogRoute is PlaylistLocalRoute ||
+            firstCatalogRoute is SettingsLocalRoute
         ? firstCatalogRoute
         : null;
-    final overlayCatalogRoutes = embeddedPlaylistRoute == null
+    final overlayCatalogRoutes = embeddedShellRoute == null
         ? catalogRoutes
         : catalogRoutes.sublist(1);
     final catalogPages = <Widget>[
-      _primaryScaffold(embeddedPlaylistRoute: embeddedPlaylistRoute),
+      _primaryScaffold(embeddedShellRoute: embeddedShellRoute),
       ...overlayCatalogRoutes.map(_buildLocalRoute),
     ];
     final catalogRoutePage = IndexedStack(
@@ -677,7 +690,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       onSignInAgain: widget.onSignInAgain,
     ),
     ExpandedNowPlayingLocalRoute() => const SizedBox.shrink(),
+    SettingsLocalRoute() => _buildSettingsRoute(),
   };
+
+  Widget _buildSettingsRoute({bool embedded = false}) => SettingsPage(
+    key: const ValueKey('settings-page'),
+    settings: widget.settings,
+    onSettingsChanged: widget.onSettingsChanged,
+    onBack: _returnFromTopRoute,
+    embedded: embedded,
+  );
 
   Widget _buildPlaylistRoute(
     PlaylistLocalRoute route, {
@@ -811,6 +833,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             _playlistReturnFocusNode,
           PlaylistLocalRoute(origin: PlaylistRouteOrigin.homeRecommendation) =>
             _homeRecommendationReturnFocusNode,
+          SettingsLocalRoute() => _settingsReturnFocusNode,
           _ => null,
         };
         if (focusNode != null) _restoreFocusNode(focusNode);
@@ -873,18 +896,19 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool get _recommendationsOpen =>
       _primaryDestination == AuthenticatedPrimaryDestination.discover;
 
-  bool get _canDismissPlaylistIntoShell =>
+  bool get _canDismissShellDetail =>
       _navigation.routes.length == 1 &&
-      _navigation.routes.single is PlaylistLocalRoute;
+      (_navigation.routes.single is PlaylistLocalRoute ||
+          _navigation.routes.single is SettingsLocalRoute);
 
   void _selectPrimaryDestination(AuthenticatedPrimaryDestination destination) {
-    if (_navigation.hasLocalRoute && !_canDismissPlaylistIntoShell) return;
+    if (_navigation.hasLocalRoute && !_canDismissShellDetail) return;
     if (!_navigation.hasLocalRoute && _primaryDestination == destination) {
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      if (_canDismissPlaylistIntoShell) _navigation.popRoute();
+      if (_canDismissShellDetail) _navigation.popRoute();
       if (_primaryDestination != destination) {
         _navigation.selectPrimaryDestination(destination);
       }
@@ -917,10 +941,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openLikedSongs() {
-    if (_navigation.hasLocalRoute && !_canDismissPlaylistIntoShell) return;
+    if (_navigation.hasLocalRoute && !_canDismissShellDetail) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      if (_canDismissPlaylistIntoShell) _navigation.popRoute();
+      if (_canDismissShellDetail) _navigation.popRoute();
       _navigation.selectPrimaryDestination(
         AuthenticatedPrimaryDestination.library,
       );
@@ -929,14 +953,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _openLibraryPlaylists() {
-    if (_navigation.hasLocalRoute && !_canDismissPlaylistIntoShell) return;
+    if (_navigation.hasLocalRoute && !_canDismissShellDetail) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      if (_canDismissPlaylistIntoShell) _navigation.popRoute();
+      if (_canDismissShellDetail) _navigation.popRoute();
       _navigation.selectPrimaryDestination(
         AuthenticatedPrimaryDestination.library,
       );
       _navigation.selectLibrarySection(LibrarySection.playlists);
+    });
+  }
+
+  void _openSettings() {
+    if (_navigation.topRoute is SettingsLocalRoute) return;
+    if (_navigation.hasLocalRoute && !_canDismissShellDetail) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      if (_canDismissShellDetail) _navigation.popRoute();
+      _navigation.push(const SettingsLocalRoute());
     });
   }
 
@@ -1236,7 +1270,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   Widget _primaryScaffold({
-    PlaylistLocalRoute? embeddedPlaylistRoute,
+    AuthenticatedLocalRoute? embeddedShellRoute,
   }) => LayoutBuilder(
     builder: (context, constraints) {
       final destination = _primaryDestination;
@@ -1246,6 +1280,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final likedSongsOpen =
           destination == AuthenticatedPrimaryDestination.library &&
           _librarySection == LibrarySection.likedSongs;
+      final settingsOpen = embeddedShellRoute is SettingsLocalRoute;
       final primaryContent = _RetainedPrimaryDestinationTransition(
         index: destination.index,
         children: [
@@ -1345,7 +1380,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           onSearchSubmitted: _submitTopSearch,
         ),
         titleSpacing: compactActions ? 8 : 16,
-        actions: _primaryActions(compactActions: compactActions),
+        actions: _primaryActions(
+          compactActions: compactActions,
+          showSettings: !extendedSidebar,
+          settingsSelected: settingsOpen,
+        ),
       );
       return Scaffold(
         key: const ValueKey('authenticated-primary-shell'),
@@ -1362,10 +1401,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   authenticated: widget.authenticated,
                   recommendationsFocusNode: _recommendationsReturnFocusNode,
                   searchFocusNode: _searchReturnFocusNode,
+                  settingsSelected: settingsOpen,
+                  settingsFocusNode: _settingsReturnFocusNode,
                   onRequestSignIn: widget.onRequestSignIn,
                   onDestinationSelected: _selectPrimaryDestination,
                   onOpenLikedSongs: _openLikedSongs,
                   onOpenLibrary: _openLibraryPlaylists,
+                  onOpenSettings: _openSettings,
                   onOpenPlaylist: (playlist) {
                     _selectPrimaryDestination(
                       AuthenticatedPrimaryDestination.library,
@@ -1391,25 +1433,27 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             Expanded(
               child: Scaffold(
                 appBar:
-                    (embeddedPlaylistRoute != null && !extendedSidebar) ||
+                    (embeddedShellRoute != null && !extendedSidebar) ||
                         (compactActions &&
                             destination == AuthenticatedPrimaryDestination.home)
                     ? null
                     : mainAppBar,
-                body: _ShellPlaylistTransition(
-                  open: embeddedPlaylistRoute != null,
-                  base: embeddedPlaylistRoute != null && !extendedSidebar
+                body: _ShellDetailTransition(
+                  open: embeddedShellRoute != null,
+                  base: embeddedShellRoute != null && !extendedSidebar
                       ? Padding(
                           padding: const EdgeInsets.only(top: kToolbarHeight),
                           child: mainBody,
                         )
                       : mainBody,
-                  detail: embeddedPlaylistRoute == null
-                      ? const SizedBox.shrink()
-                      : _buildPlaylistRoute(
-                          embeddedPlaylistRoute,
-                          embedded: true,
-                        ),
+                  detail: switch (embeddedShellRoute) {
+                    PlaylistLocalRoute() => _buildPlaylistRoute(
+                      embeddedShellRoute,
+                      embedded: true,
+                    ),
+                    SettingsLocalRoute() => _buildSettingsRoute(embedded: true),
+                    _ => const SizedBox.shrink(),
+                  },
                 ),
                 bottomNavigationBar: wide
                     ? NowPlayingBar(
@@ -1551,7 +1595,20 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     child: Icon(icon),
   );
 
-  List<Widget> _primaryActions({required bool compactActions}) => [
+  List<Widget> _primaryActions({
+    required bool compactActions,
+    required bool showSettings,
+    required bool settingsSelected,
+  }) => [
+    if (showSettings)
+      IconButton(
+        key: const ValueKey('open-settings'),
+        tooltip: 'Settings',
+        isSelected: settingsSelected,
+        onPressed: _openSettings,
+        icon: const Icon(Icons.settings_outlined),
+        selectedIcon: const Icon(Icons.settings_rounded),
+      ),
     IconButton(
       key: ValueKey(widget.authenticated ? 'sign-out' : 'sign-in'),
       tooltip: widget.authenticated ? 'Sign out' : 'Sign in to QQ Music',
@@ -1690,10 +1747,13 @@ class _DesktopMusicSidebar extends StatelessWidget {
     required this.authenticated,
     required this.recommendationsFocusNode,
     required this.searchFocusNode,
+    required this.settingsSelected,
+    required this.settingsFocusNode,
     required this.onRequestSignIn,
     required this.onDestinationSelected,
     required this.onOpenLikedSongs,
     required this.onOpenLibrary,
+    required this.onOpenSettings,
     required this.onOpenPlaylist,
   });
 
@@ -1704,10 +1764,13 @@ class _DesktopMusicSidebar extends StatelessWidget {
   final bool authenticated;
   final FocusNode recommendationsFocusNode;
   final FocusNode searchFocusNode;
+  final bool settingsSelected;
+  final FocusNode settingsFocusNode;
   final VoidCallback onRequestSignIn;
   final ValueChanged<AuthenticatedPrimaryDestination> onDestinationSelected;
   final VoidCallback onOpenLikedSongs;
   final VoidCallback onOpenLibrary;
+  final VoidCallback onOpenSettings;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
 
   @override
@@ -1719,108 +1782,128 @@ class _DesktopMusicSidebar extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            const _MusicSidebarBrand(expanded: true),
             AnimatedBuilder(
               animation: homeController,
-              builder: (context, _) => _SidebarAccount(
+              builder: (context, _) => _SidebarIdentity(
                 authenticated: authenticated,
                 displayName: homeController.account?.displayName,
                 avatarUri: homeController.account?.avatarUri,
                 onRequestSignIn: onRequestSignIn,
               ),
             ),
-            const Divider(height: MusicSpacing.section),
+            const Divider(height: 1),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                children: [
-                  const _SidebarSectionLabel('ONLINE MUSIC'),
-                  _SidebarDestinationTile(
-                    key: const ValueKey('primary-home-destination'),
-                    selected:
-                        destination == AuthenticatedPrimaryDestination.home,
-                    icon: Icons.home_outlined,
-                    selectedIcon: Icons.home_rounded,
-                    label: 'Home',
-                    onTap: () => onDestinationSelected(
-                      AuthenticatedPrimaryDestination.home,
-                    ),
-                  ),
-                  _SidebarDestinationTile(
-                    key: const ValueKey('open-recommendations'),
-                    selected:
-                        destination == AuthenticatedPrimaryDestination.discover,
-                    icon: Icons.explore_outlined,
-                    selectedIcon: Icons.explore_rounded,
-                    label: 'Discover',
-                    focusNode: recommendationsFocusNode,
-                    onTap: () => onDestinationSelected(
-                      AuthenticatedPrimaryDestination.discover,
-                    ),
-                  ),
-                  _SidebarDestinationTile(
-                    key: const ValueKey('open-track-search'),
-                    selected:
-                        destination == AuthenticatedPrimaryDestination.search,
-                    icon: Icons.search_rounded,
-                    selectedIcon: Icons.search_rounded,
-                    label: 'Search',
-                    focusNode: searchFocusNode,
-                    onTap: () => onDestinationSelected(
-                      AuthenticatedPrimaryDestination.search,
-                    ),
-                  ),
-                  const SizedBox(height: MusicSpacing.contentGap),
-                  const _SidebarSectionLabel('MY MUSIC'),
-                  _SidebarDestinationTile(
-                    key: const ValueKey('open-liked-songs'),
-                    selected:
-                        destination ==
-                            AuthenticatedPrimaryDestination.library &&
-                        librarySection == LibrarySection.likedSongs,
-                    icon: Icons.favorite_border_rounded,
-                    selectedIcon: Icons.favorite_rounded,
-                    label: '喜欢',
-                    onTap: onOpenLikedSongs,
-                  ),
-                  _SidebarDestinationTile(
-                    key: const ValueKey('primary-library-destination'),
-                    selected:
-                        destination ==
-                            AuthenticatedPrimaryDestination.library &&
-                        librarySection != LibrarySection.likedSongs,
-                    icon: Icons.library_music_outlined,
-                    selectedIcon: Icons.library_music_rounded,
-                    label: 'Library',
-                    onTap: onOpenLibrary,
-                  ),
-                  if (libraryController.stage == UserLibraryStage.content &&
-                      libraryController.playlists.isNotEmpty) ...[
-                    const SizedBox(height: MusicSpacing.contentGap),
-                    const _SidebarSectionLabel('YOUR PLAYLISTS'),
-                    for (final playlist
-                        in libraryController.playlists
-                            .where((playlist) => !playlist.isLikedSongs)
-                            .take(7))
-                      ListTile(
-                        dense: true,
-                        minTileHeight: 44,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                        ),
-                        leading: SizedBox.square(
-                          dimension: 32,
-                          child: _PlaylistArtwork(playlist: playlist),
-                        ),
-                        title: Text(
-                          playlist.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () => onOpenPlaylist(playlist),
+              child: Material(
+                key: const ValueKey('sidebar-scroll-clip'),
+                type: MaterialType.transparency,
+                clipBehavior: Clip.hardEdge,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                  children: [
+                    const _SidebarSectionLabel('ONLINE MUSIC'),
+                    _SidebarDestinationTile(
+                      key: const ValueKey('primary-home-destination'),
+                      selected:
+                          destination == AuthenticatedPrimaryDestination.home,
+                      icon: Icons.home_outlined,
+                      selectedIcon: Icons.home_rounded,
+                      label: 'Home',
+                      onTap: () => onDestinationSelected(
+                        AuthenticatedPrimaryDestination.home,
                       ),
+                    ),
+                    _SidebarDestinationTile(
+                      key: const ValueKey('open-recommendations'),
+                      selected:
+                          destination ==
+                          AuthenticatedPrimaryDestination.discover,
+                      icon: Icons.explore_outlined,
+                      selectedIcon: Icons.explore_rounded,
+                      label: 'Discover',
+                      focusNode: recommendationsFocusNode,
+                      onTap: () => onDestinationSelected(
+                        AuthenticatedPrimaryDestination.discover,
+                      ),
+                    ),
+                    _SidebarDestinationTile(
+                      key: const ValueKey('open-track-search'),
+                      selected:
+                          destination == AuthenticatedPrimaryDestination.search,
+                      icon: Icons.search_rounded,
+                      selectedIcon: Icons.search_rounded,
+                      label: 'Search',
+                      focusNode: searchFocusNode,
+                      onTap: () => onDestinationSelected(
+                        AuthenticatedPrimaryDestination.search,
+                      ),
+                    ),
+                    const SizedBox(height: MusicSpacing.contentGap),
+                    const _SidebarSectionLabel('MY MUSIC'),
+                    _SidebarDestinationTile(
+                      key: const ValueKey('open-liked-songs'),
+                      selected:
+                          destination ==
+                              AuthenticatedPrimaryDestination.library &&
+                          librarySection == LibrarySection.likedSongs,
+                      icon: Icons.favorite_border_rounded,
+                      selectedIcon: Icons.favorite_rounded,
+                      label: '喜欢',
+                      onTap: onOpenLikedSongs,
+                    ),
+                    _SidebarDestinationTile(
+                      key: const ValueKey('primary-library-destination'),
+                      selected:
+                          destination ==
+                              AuthenticatedPrimaryDestination.library &&
+                          librarySection != LibrarySection.likedSongs,
+                      icon: Icons.library_music_outlined,
+                      selectedIcon: Icons.library_music_rounded,
+                      label: 'Library',
+                      onTap: onOpenLibrary,
+                    ),
+                    if (libraryController.stage == UserLibraryStage.content &&
+                        libraryController.playlists.isNotEmpty) ...[
+                      const SizedBox(height: MusicSpacing.contentGap),
+                      const _SidebarSectionLabel('YOUR PLAYLISTS'),
+                      for (final playlist in libraryController.playlists.where(
+                        (playlist) => !playlist.isLikedSongs,
+                      ))
+                        ListTile(
+                          dense: true,
+                          minTileHeight: 44,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                          ),
+                          leading: SizedBox.square(
+                            dimension: 32,
+                            child: _PlaylistArtwork(playlist: playlist),
+                          ),
+                          title: Tooltip(
+                            message: playlist.title,
+                            child: Text(
+                              playlist.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          onTap: () => onOpenPlaylist(playlist),
+                        ),
+                    ],
                   ],
-                ],
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: _SidebarDestinationTile(
+                key: const ValueKey('open-settings'),
+                selected: settingsSelected,
+                icon: Icons.settings_outlined,
+                selectedIcon: Icons.settings_rounded,
+                label: 'Settings',
+                focusNode: settingsFocusNode,
+                onTap: onOpenSettings,
               ),
             ),
           ],
@@ -1830,8 +1913,8 @@ class _DesktopMusicSidebar extends StatelessWidget {
   );
 }
 
-class _SidebarAccount extends StatelessWidget {
-  const _SidebarAccount({
+class _SidebarIdentity extends StatelessWidget {
+  const _SidebarIdentity({
     required this.authenticated,
     required this.displayName,
     required this.avatarUri,
@@ -1846,29 +1929,30 @@ class _SidebarAccount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final fallback = ColoredBox(
-      color: colors.primaryContainer,
-      child: Icon(Icons.person_rounded, color: colors.onPrimaryContainer),
+    final brandFallback = ColoredBox(
+      key: const ValueKey('music-sidebar-brand'),
+      color: colors.primary,
+      child: Icon(Icons.graphic_eq_rounded, color: colors.onPrimary),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       child: InkWell(
         key: const ValueKey('sidebar-account'),
         onTap: authenticated ? null : onRequestSignIn,
         borderRadius: MusicRadii.control,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
               SizedBox.square(
-                dimension: 40,
+                dimension: 44,
                 child: ClipOval(
-                  child: avatarUri == null
-                      ? fallback
+                  child: !authenticated || avatarUri == null
+                      ? brandFallback
                       : Image.network(
                           avatarUri!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => fallback,
+                          errorBuilder: (_, _, _) => brandFallback,
                         ),
                 ),
               ),
@@ -1878,19 +1962,17 @@ class _SidebarAccount extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      authenticated
-                          ? displayName ?? 'QQ Music listener'
-                          : 'Not signed in',
+                      'fura music',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     Text(
                       authenticated
-                          ? displayName == null
-                                ? 'Loading account…'
-                                : 'QQ Music'
+                          ? displayName ?? 'Loading QQ Music account…'
                           : 'Sign in to QQ Music',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: colors.onSurfaceVariant),
                     ),
@@ -1994,7 +2076,7 @@ class _MusicSidebarBrand extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Music',
+                          'fura music',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         Text(
@@ -2009,7 +2091,7 @@ class _MusicSidebarBrand extends StatelessWidget {
                   ),
                 ],
               )
-            : Tooltip(message: 'QQ Music client', child: mark),
+            : Tooltip(message: 'fura music', child: mark),
       ),
     );
   }

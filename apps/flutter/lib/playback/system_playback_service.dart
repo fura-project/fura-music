@@ -64,7 +64,7 @@ Future<SystemPlaybackBinding> initializeSystemPlaybackBinding() async {
       builder: () => handler,
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'dev.axiaobo.flutterustmusic.playback',
-        androidNotificationChannelName: 'Music playback',
+        androidNotificationChannelName: 'fura music playback',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,
       ),

@@ -3,13 +3,14 @@ execution:
   mode: HUMAN_GATED_REGRESSION
   state: ACTIVE
   acceptance_milestone: M1
-  active_workstream: SHELL_NAVIGATION_PLAYLIST_SEARCH
+  active_workstream: FURA_MUSIC_SIDEBAR_SETTINGS
   current_task: null
   next_action: HUMAN_REVIEW
 ---
 
 # Current State
 
+- HD-018 formally names the product `fura music`; user-visible Flutter and platform display metadata now use that name while repository/package/binary, application-ID, Settings-key, and signing identifiers remain compatibility-preserving and HD-001 keeps those release choices pending. The wide desktop Sidebar now merges brand/account into one compact identity row, renders every personal Playlist in an independently clipped scroll viewport, keeps Settings pinned below that viewport, and routes into the existing typed theme/quality preferences without changing playback ownership. The clipping regression has a focused structural test, a 14-Playlist fixture proves the former seven-item truncation is gone, and canonical 1440×900 plus 390×844 renders show the candidate without overflow. Dart format/analyze, all 430 Flutter tests, and the Linux Release build pass; the Sidebar/Settings candidate remains pending Human visual review.
 - The maintainer redirected the current Human-gated UI candidate to three bounded Shell interactions: retained primary destinations now use a Material-emphasized transition without rebuilding their local state; Playlist detail opens inside the adaptive authenticated Shell with Sidebar/rail, top region, persistent player, compact bottom navigation, and a shared dense Track-row visual grammar; and the desktop top Search field accepts text in place, then submits directly into the existing Track search surface. Canonical 1440×900 and 390×844 candidates render without overflow; Dart format/analyze and all 428 Flutter tests pass. The candidate remains pending maintainer visual/runtime review and does not self-accept the revised Shell behavior.
 - HD-017 redirects the current Human-gated UI candidate to signed-out Home. The page now loads the existing anonymous QQ public-playlist feed and public `Latest` new-song collection instead of rendering account-only Daily/Radar/personalized sign-in bars. The hero remains public; a second public Playlist and the new-song collection fill the compact top recommendations; lower shelves are labeled `Popular playlists` and `New songs`, and new-song rows use the existing guest playback Queue path. Authenticated Daily 30, Radar, personalized Playlists/Tracks, and current-Track related listening are unchanged. Synthetic 1440×960 and 390×844 candidates render without overflow; Dart format/analyze, all 426 Flutter tests, and the Linux Release build pass. Live catalog availability and visual acceptance remain maintainer evidence.
 - The maintainer explicitly switched execution to `HUMAN_GATED_REGRESSION` for five reproduced Liked-page, persistent-player, Expanded Now Playing, and synchronized-lyric presentation defects. Work is bounded to those regressions; the resulting visual candidate requires Human review and does not reopen unrelated Home, Shell, navigation, or Core architecture work.
@@ -55,7 +56,7 @@ execution:
 
 # Pending Human Decisions
 
-- **HD-001:** final product/display name, platform identifiers, signing custody, and distribution ownership.
+- **HD-001:** platform application identifiers, signing custody, and distribution ownership.
 
 # Important Evidence Limits
 

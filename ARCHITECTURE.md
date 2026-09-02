@@ -222,7 +222,7 @@ The playback protocol foundation in `QQMusicClient` uses one bounded unauthentic
 
 `QqMusicMediaSourceResolver` alone parses `track:<id>:<primary-type>:<song-mid>:<file-media-mid-or->`. It runs dispatch before vkey through the shared QQ client; when authenticated it rechecks the exact credential after both awaits and signs out only on explicit credential rejection for that candidate. The signed-out path never installs, fabricates, or clears a credential. It maps no QQ filename, vkey, CDN list, or raw result code into Domain.
 
-The Bridge exposes this operation through one provider-neutral, single-use `MediaResolutionHandle`. Its input carries provider identity, opaque Track identity, and a typed Standard/High preference; it enters `MediaSourceCoordinator`, which routes the supported QQ identity to the statically assembled QQ resolver. Its success output contains only URI, format, actual quality, and validity, while its failure output is coarse and typed. The handle owns exact cancel/run/isActive lifecycle, drops the losing resolver/network future, and redacts both opaque identity and source URI from Rust diagnostics. The generated Dart DTO deliberately has no generated string representation. Dart's version-2 local settings document persists only system/light/dark and Standard/High, migrates version 1 to Standard, and injects the loaded quality into this gateway at startup; no Settings page or second playback owner is introduced.
+The Bridge exposes this operation through one provider-neutral, single-use `MediaResolutionHandle`. Its input carries provider identity, opaque Track identity, and a typed Standard/High preference; it enters `MediaSourceCoordinator`, which routes the supported QQ identity to the statically assembled QQ resolver. Its success output contains only URI, format, actual quality, and validity, while its failure output is coarse and typed. The handle owns exact cancel/run/isActive lifecycle, drops the losing resolver/network future, and redacts both opaque identity and source URI from Rust diagnostics. The generated Dart DTO deliberately has no generated string representation. Dart's version-2 local settings document persists only system/light/dark and Standard/High, migrates version 1 to Standard, and initializes the gateway before application construction. The bounded Flutter Settings page may update the preference used by the next resolution; it does not create a second playback owner or change an active source.
 
 The first remote library-write foundation provides provider-neutral desired liked-Track and owned-playlist Track membership. `QQMusicClient` maps present/absent to the cross-validated `PlaylistDetailWrite` `AddSonglist`/`DelSonglist` requests. Built-in liked songs use directory `201`; an arbitrary target must be the exact `owned:<playlist-id>:<directory-id>` identity previously produced by `QQMusicProvider`, while public catalog, externally favorited, foreign, and malformed targets fail before transport. Only the validated numeric Track ID and primary type are parsed inside the Provider. Success requires zero global, named-request, and mutation result codes. `PlaylistMutation` is advertised only after concrete operations exist; network, malformed-response, cancellation, and account-replacement outcomes remain explicitly unconfirmed because cancelling a local wait cannot recall a remote write. Single-use Bridges and Dart gateways preserve that distinction and clear the platform vault only for explicit credential rejection. No UI, playlist-container mutation, or automatic real-account test exists yet.
 
@@ -251,13 +251,15 @@ The adaptive now-playing surface consumes the queue controller and exposes bound
 Credential semantics and serialization remain in Rust. `flutter_secure_storage` is a platform integration edge only; it stores one opaque versioned document and cannot declare a user authenticated. Android backup is disabled, Apple synchronization is disabled, and corrupt or unavailable storage must remain distinguishable from an upstream credential rejection. Linux passed a disposable runtime write/read/delete integration on 2026-08-25 and Android 16 x64 passed the same bounded test on 2026-08-26; other target runtimes remain tracked by TD-004.
 
 Noncritical presentation preferences remain at the Flutter edge. `AppSettings`
-currently contains only the existing system/light/dark theme choice, while
-`AppSettingsStore` owns one versioned JSON document over the official async
+contains the system/light/dark theme choice and Standard/High media-resolution
+preference, while `AppSettingsStore` owns one versioned JSON document over the official async
 `shared_preferences` adapter. Missing, malformed, future-version, or unavailable
 storage falls back to a typed default without rewriting the original document;
 save and reset affect only the project-owned key. Startup reads that document
 before constructing `MusicApp` and maps the typed choice to the existing
-Material themes. This store is not secure storage, contains no account data, and
+Material themes. A bounded Settings route in the authenticated Shell edits only
+those two existing typed values; theme changes rebuild presentation immediately,
+while quality changes apply to the next media resolution. This store is not secure storage, contains no account data, and
 does not authorize speculative playback or lyric preferences. A disposable
 random-key Linux integration proves native read/write/delete and cleanup.
 

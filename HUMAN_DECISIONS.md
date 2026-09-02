@@ -2,16 +2,18 @@
 
 ## HD-001 — Release identity and signing custody
 
-**Status:** Pending
+**Status:** Partially accepted on 2026-09-02
 
 **Context:** M1 packaging has produced development Android and Linux artifacts, so TD-002's packaging trigger is satisfied. Android release builds still use development signing and the platform shells still use generated identity. HD-015 permits only short-lived, manually requested GitHub Actions test artifacts; no production artifact or release channel has been authorized.
 
-**Decision needed:** The human maintainer defines the final product/display name, per-platform application identifiers, and the secret-safe ownership and custody workflow for release signing keys before external distribution.
+**Accepted decision:** The final product/display name is `fura music` (HD-018). This name may be applied to user-visible application chrome and platform display metadata without changing internal package or binary identifiers.
+
+**Decision still needed:** The human maintainer defines per-platform application identifiers and the secret-safe ownership and custody workflow for release signing keys before external distribution.
 
 **Options:**
 
-1. Keep the current working product name and define final platform identifiers plus signing custody.
-2. Choose a different final product name and corresponding platform identifiers plus signing custody before release setup.
+1. Keep the existing development application identifiers and define signing custody.
+2. Choose final production application identifiers and define signing custody before release setup.
 
 **Blocked work:**
 
@@ -28,6 +30,14 @@
 - Evidence-backed QQ Music Provider/Core work within the Roadmap.
 
 **Current agent action:** Continue any independently evidenced Roadmap work when available and keep generated or development-signed artifacts development-only.
+
+## HD-018 — fura music product display name
+
+**Status:** Accepted on 2026-09-02
+
+**Decision:** The product is formally named `fura music`. User-visible application titles, brand copy, and platform display-name metadata use this name. The existing repository, Dart package, Rust crate, executable/build-target, application-ID, Settings storage-key, and signing identifiers remain unchanged unless separately authorized.
+
+**Consequences:** Product-facing UI and documentation may adopt `fura music` immediately. This decision partially resolves HD-001's name question but does not authorize application-ID migration, signing-key custody, production release, or compatibility-breaking storage/package renames.
 
 ## HD-002 — Default Material baseline before theme personas
 

@@ -11,7 +11,7 @@ QQ Music users should have an open, modern, cross-platform client whose core mus
 
 ## Product positioning
 
-`flutterustmusic` is a QQ Music-first client, not a multi-service aggregation dashboard. QQ Music is the first-class provider. Other providers may later supply local media or narrowly scoped fallback capabilities when a real product need exists.
+`fura music` is a QQ Music-first client, not a multi-service aggregation dashboard. QQ Music is the first-class provider. Other providers may later supply local media or narrowly scoped fallback capabilities when a real product need exists. The repository and internal package names may remain `flutterustmusic`; they are implementation identifiers rather than the product display name.
 
 ## Core experience
 

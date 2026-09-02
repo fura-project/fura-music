@@ -24,7 +24,7 @@ void main() {
         'Identity',
         signature: DBusSignature('s'),
       )).asString(),
-      'Music playback',
+      'fura music playback',
     );
     expect(
       (await remote.getProperty(

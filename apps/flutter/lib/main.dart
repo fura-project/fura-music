@@ -29,17 +29,18 @@ Future<void> main() async {
   final playlistDetailGateway = RustPlaylistDetailGateway(
     credentialVault: credentialVault,
   );
-  final settingsLoad = await AppSettingsStore().load();
+  final settingsStore = AppSettingsStore();
+  final settingsLoad = await settingsStore.load();
+  final rustMediaResolutionGateway = RustMediaResolutionGateway(
+    preferredQuality: switch (settingsLoad.settings.playbackQuality) {
+      AppPlaybackQualityPreference.standard =>
+        PlaybackAudioQualityPreference.standard,
+      AppPlaybackQualityPreference.high => PlaybackAudioQualityPreference.high,
+    },
+  );
   final mediaResolutionGateway =
       QqMusicCredentialCleaningMediaResolutionGateway(
-        RustMediaResolutionGateway(
-          preferredQuality: switch (settingsLoad.settings.playbackQuality) {
-            AppPlaybackQualityPreference.standard =>
-              PlaybackAudioQualityPreference.standard,
-            AppPlaybackQualityPreference.high =>
-              PlaybackAudioQualityPreference.high,
-          },
-        ),
+        rustMediaResolutionGateway,
         credentialVault: credentialVault,
       );
   final lyricGateway = RustLyricGateway(credentialVault: credentialVault);
@@ -56,6 +57,15 @@ Future<void> main() async {
       lyricGateway: lyricGateway,
       systemPlaybackBinding: systemPlaybackBinding,
       initialSettings: settingsLoad.settings,
+      settingsStore: settingsStore,
+      onPlaybackQualityChanged: (preference) {
+        rustMediaResolutionGateway.updatePreferredQuality(switch (preference) {
+          AppPlaybackQualityPreference.standard =>
+            PlaybackAudioQualityPreference.standard,
+          AppPlaybackQualityPreference.high =>
+            PlaybackAudioQualityPreference.high,
+        });
+      },
       initialCredentialRestore: credentialRestore,
     ),
   );
