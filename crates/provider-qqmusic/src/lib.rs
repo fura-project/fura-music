@@ -25,7 +25,6 @@ use provider_api::{
     MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
     NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PersonalizedPlaylistsError,
     PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
-    PhoneAuthenticationCodeState, PhoneAuthenticationProvider, PhoneAuthenticationSession,
     PlaylistCreationProvider, PlaylistDeletionProvider, PlaylistDetailsProvider,
     PlaylistSearchProvider, PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
     QrAuthenticationChallenge, QrAuthenticationChannel, QrAuthenticationProgress,
@@ -37,8 +36,7 @@ use provider_api::{
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
-    HttpTransport, PhoneAuthCodeResult, PhoneAuthorizationSession, PhoneLoginError,
-    QqMusicAlbumDetailsError, QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState,
+    HttpTransport, QqMusicAlbumDetailsError, QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState,
     QqMusicAlbumSearchError, QqMusicAlbumSummary, QqMusicAlbumTracksError,
     QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
     QqMusicAudioQuality, QqMusicClient, QqMusicCreatePlaylistError, QqMusicDailyRecommendation,
@@ -83,8 +81,6 @@ pub struct QqMusicProvider<T> {
     credential: Arc<Mutex<QqMusicCredentialState>>,
     next_restore_verification: AtomicU32,
     active_restore_verification: Mutex<Option<u32>>,
-    next_phone_authentication: AtomicU32,
-    active_phone_authentication: Arc<Mutex<Option<u32>>>,
 }
 
 /// QQ-owned immediate-playback source edge. It deliberately borrows the
@@ -103,8 +99,6 @@ impl<T> QqMusicProvider<T> {
             credential: Arc::new(Mutex::new(QqMusicCredentialState::SignedOut)),
             next_restore_verification: AtomicU32::new(1),
             active_restore_verification: Mutex::new(None),
-            next_phone_authentication: AtomicU32::new(1),
-            active_phone_authentication: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -432,11 +426,7 @@ impl<T> QqMusicProvider<T> {
     /// handle after QR creation completes.
     #[must_use]
     pub fn cancel_active_authentication(&self) -> bool {
-        let qr_cancelled = self.login.cancel_active();
-        let phone_cancelled = phone_authentication_guard(&self.active_phone_authentication)
-            .take()
-            .is_some();
-        qr_cancelled || phone_cancelled
+        self.login.cancel_active()
     }
 
     /// Cancels local authentication work and removes every retained QQ Music
@@ -444,7 +434,6 @@ impl<T> QqMusicProvider<T> {
     /// responsibility of the application edge.
     pub fn sign_out(&self) {
         self.login.cancel_active();
-        *phone_authentication_guard(&self.active_phone_authentication) = None;
         let mut credential = credential_guard(&self.credential);
         let mut verification = restore_verification_guard(&self.active_restore_verification);
         *credential = QqMusicCredentialState::SignedOut;
@@ -1687,7 +1676,6 @@ where
             }
         }
         *restore_verification_guard(&self.active_restore_verification) = None;
-        *phone_authentication_guard(&self.active_phone_authentication) = None;
         let session = self
             .login
             .begin_channel(match channel {
@@ -1711,129 +1699,6 @@ where
 
     fn sign_out(&self) {
         QqMusicProvider::sign_out(self);
-    }
-}
-
-impl<T> PhoneAuthenticationProvider for QqMusicProvider<T>
-where
-    T: HttpTransport + 'static,
-{
-    type Error = AuthenticationError;
-    type Session = QqMusicPhoneAuthenticationSession<T>;
-
-    fn begin_phone_authentication(
-        &self,
-        country_code: String,
-        phone_number: String,
-    ) -> Result<Self::Session, Self::Error> {
-        let session = PhoneAuthorizationSession::new(&country_code, &phone_number)
-            .map_err(|_| AuthenticationError::InvalidResponse)?;
-        self.login.cancel_active();
-        *restore_verification_guard(&self.active_restore_verification) = None;
-        {
-            let mut credential = credential_guard(&self.credential);
-            if matches!(
-                *credential,
-                QqMusicCredentialState::PendingVerification(_)
-                    | QqMusicCredentialState::LocallyExpired(_)
-            ) {
-                *credential = QqMusicCredentialState::SignedOut;
-            }
-        }
-        let attempt_id = self
-            .next_phone_authentication
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
-                Some(if current == u32::MAX { 1 } else { current + 1 })
-            })
-            .unwrap_or_else(std::convert::identity);
-        *phone_authentication_guard(&self.active_phone_authentication) = Some(attempt_id);
-        Ok(QqMusicPhoneAuthenticationSession {
-            client: self.login.client_handle(),
-            session,
-            attempt_id,
-            active: Arc::clone(&self.active_phone_authentication),
-            credential: Arc::clone(&self.credential),
-        })
-    }
-}
-
-pub struct QqMusicPhoneAuthenticationSession<T> {
-    client: Arc<QqMusicClient<T>>,
-    session: PhoneAuthorizationSession,
-    attempt_id: u32,
-    active: Arc<Mutex<Option<u32>>>,
-    credential: Arc<Mutex<QqMusicCredentialState>>,
-}
-
-impl<T> std::fmt::Debug for QqMusicPhoneAuthenticationSession<T> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("QqMusicPhoneAuthenticationSession")
-            .field("active", &self.is_current())
-            .finish_non_exhaustive()
-    }
-}
-
-impl<T> QqMusicPhoneAuthenticationSession<T> {
-    fn is_current(&self) -> bool {
-        *phone_authentication_guard(&self.active) == Some(self.attempt_id)
-    }
-
-    fn clear_if_current(&self) -> bool {
-        let mut active = phone_authentication_guard(&self.active);
-        if *active != Some(self.attempt_id) {
-            return false;
-        }
-        *active = None;
-        true
-    }
-}
-
-impl<T> PhoneAuthenticationSession for QqMusicPhoneAuthenticationSession<T>
-where
-    T: HttpTransport + 'static,
-{
-    type Error = AuthenticationError;
-
-    fn is_active(&self) -> bool {
-        self.is_current()
-    }
-
-    fn cancel(&self) -> bool {
-        self.clear_if_current()
-    }
-
-    async fn send_code(&self) -> Result<PhoneAuthenticationCodeState, Self::Error> {
-        if !self.is_current() {
-            return Err(AuthenticationError::Replaced);
-        }
-        let result = self.client.send_phone_auth_code(&self.session).await;
-        if !self.is_current() {
-            return Err(AuthenticationError::Replaced);
-        }
-        match result.map_err(|error| map_phone_login_error(&error))? {
-            PhoneAuthCodeResult::Sent => Ok(PhoneAuthenticationCodeState::Sent),
-            PhoneAuthCodeResult::CaptchaRequired { security_url } => {
-                Ok(PhoneAuthenticationCodeState::CaptchaRequired { security_url })
-            }
-            PhoneAuthCodeResult::RateLimited => Ok(PhoneAuthenticationCodeState::RateLimited),
-        }
-    }
-
-    async fn authorize(&self, verification_code: String) -> Result<(), Self::Error> {
-        if !self.is_current() {
-            return Err(AuthenticationError::Replaced);
-        }
-        let credential = self
-            .client
-            .authorize_phone(&self.session, &verification_code)
-            .await
-            .map_err(|error| map_phone_login_error(&error))?;
-        if !self.clear_if_current() {
-            return Err(AuthenticationError::Replaced);
-        }
-        *credential_guard(&self.credential) = QqMusicCredentialState::Authenticated(credential);
-        Ok(())
     }
 }
 
@@ -1951,14 +1816,6 @@ fn credential_guard(
 }
 
 fn restore_verification_guard(
-    attempt: &Mutex<Option<u32>>,
-) -> std::sync::MutexGuard<'_, Option<u32>> {
-    attempt
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-fn phone_authentication_guard(
     attempt: &Mutex<Option<u32>>,
 ) -> std::sync::MutexGuard<'_, Option<u32>> {
     attempt
@@ -3316,22 +3173,6 @@ fn map_qq_qr_error<E>(error: &QqQrError<E>) -> AuthenticationError {
     }
 }
 
-fn map_phone_login_error<E>(error: &PhoneLoginError<E>) -> AuthenticationError {
-    match error {
-        PhoneLoginError::Transport(_) => AuthenticationError::Network,
-        PhoneLoginError::HttpStatus(_) => AuthenticationError::ServiceUnavailable,
-        PhoneLoginError::Upstream(_)
-        | PhoneLoginError::Credential(qqmusic_client::LoginCredentialError::Upstream { .. }) => {
-            AuthenticationError::Rejected
-        }
-        PhoneLoginError::Invalid(_)
-        | PhoneLoginError::Serialize
-        | PhoneLoginError::InvalidJson
-        | PhoneLoginError::MissingResult
-        | PhoneLoginError::Credential(_) => AuthenticationError::InvalidResponse,
-    }
-}
-
 fn map_qr_error<E>(error: &WechatQrError<E>) -> AuthenticationError {
     match error {
         WechatQrError::Transport(_) => AuthenticationError::Network,
@@ -3423,8 +3264,7 @@ mod tests {
         LyricsProvider, MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
         NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
         PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
-        PersonalizedTracksProvider, PhoneAuthenticationCodeState, PhoneAuthenticationProvider,
-        PhoneAuthenticationSession, PlaylistCreationProvider, PlaylistDeletionProvider,
+        PersonalizedTracksProvider, PlaylistCreationProvider, PlaylistDeletionProvider,
         PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
         ProviderCapability, QrAuthenticationChannel, QrAuthenticationProgress,
         QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
@@ -3449,46 +3289,8 @@ mod tests {
 
     struct SuccessfulAuthenticationTransport;
 
-    struct PhoneAuthenticationTransport {
-        responses: Mutex<VecDeque<HttpResponse>>,
-    }
-
     struct VerificationTransport {
         response: HttpResponse,
-    }
-
-    impl PhoneAuthenticationTransport {
-        fn successful() -> Self {
-            Self {
-                responses: Mutex::new(
-                    [
-                        json!({
-                            "code": 0,
-                            "req_0": {"code": 0, "data": {}}
-                        }),
-                        json!({
-                            "code": 0,
-                            "req_0": {
-                                "code": 0,
-                                "data": {
-                                    "str_musicid": "123456",
-                                    "musickey": "private-phone-key",
-                                    "loginType": 2
-                                }
-                            }
-                        }),
-                    ]
-                    .into_iter()
-                    .map(|value| {
-                        HttpResponse::new(
-                            200,
-                            serde_json::to_vec(&value).expect("phone fixture JSON"),
-                        )
-                    })
-                    .collect(),
-                ),
-            }
-        }
     }
 
     struct OwnedPlaylistsTransport {
@@ -4099,19 +3901,6 @@ mod tests {
                 }"#
                 .to_vec(),
             ))
-        }
-    }
-
-    impl HttpTransport for PhoneAuthenticationTransport {
-        type Error = Infallible;
-
-        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
-            Ok(self
-                .responses
-                .lock()
-                .expect("phone response lock")
-                .pop_front()
-                .expect("phone fixture response"))
         }
     }
 
@@ -7681,39 +7470,5 @@ mod tests {
         let decoded = Credential::decode_from_secure_storage(&encoded)
             .expect("provider emits a valid credential document");
         assert_eq!(decoded.music_id(), "123456");
-    }
-
-    #[tokio::test]
-    async fn provider_maps_phone_flow_and_retains_credential_inside_the_provider() {
-        let provider = QqMusicProvider::new(QqMusicClient::new(
-            PhoneAuthenticationTransport::successful(),
-        ));
-        let session = provider
-            .begin_phone_authentication("86".into(), "13000000000".into())
-            .expect("provider phone session");
-
-        assert!(session.is_active());
-        assert_eq!(
-            session.send_code().await.expect("phone-code mapping"),
-            PhoneAuthenticationCodeState::Sent
-        );
-        assert!(!provider.has_authenticated_credential());
-
-        session
-            .authorize("123456".into())
-            .await
-            .expect("phone authorization mapping");
-
-        assert!(!session.is_active());
-        assert!(provider.has_authenticated_credential());
-        assert!(!format!("{session:?}").contains("13000000000"));
-        let encoded = provider
-            .encode_authenticated_credential()
-            .expect("encode credential")
-            .expect("authenticated credential");
-        let decoded = Credential::decode_from_secure_storage(&encoded)
-            .expect("provider emits a valid credential document");
-        assert_eq!(decoded.music_id(), "123456");
-        assert_eq!(decoded.login_type(), LoginType::QQ);
     }
 }

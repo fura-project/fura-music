@@ -13,11 +13,6 @@ enum LoginStage {
   storedCredentialExpired,
   restoreError,
   starting,
-  sendingPhoneCode,
-  phoneCodeSent,
-  phoneCaptchaRequired,
-  phoneRateLimited,
-  authorizingPhone,
   waitingForScan,
   scannedAwaitingConfirmation,
   reconnecting,
@@ -61,13 +56,10 @@ class LoginController extends ChangeNotifier {
   LoginStage _stage = LoginStage.idle;
   LoginSession? _session;
   LoginStartOperation? _startOperation;
-  PhoneLoginStartOperation? _phoneStartOperation;
-  PhoneLoginSession? _phoneSession;
   CredentialVerificationOperation? _verificationOperation;
   Uint8List? _qrImageBytes;
   LoginFailure? _failure;
   LoginQrChannel _qrChannel = LoginQrChannel.qq;
-  String? _phoneSecurityUrl;
   CredentialSaveState _credentialSaveState = CredentialSaveState.none;
   CredentialRestoreResult _credentialRestoreResult;
   CredentialVerificationResult? _credentialVerificationResult;
@@ -79,7 +71,6 @@ class LoginController extends ChangeNotifier {
   Uint8List? get qrImageBytes => _qrImageBytes;
   LoginFailure? get failure => _failure;
   LoginQrChannel get qrChannel => _qrChannel;
-  String? get phoneSecurityUrl => _phoneSecurityUrl;
   CredentialSaveState get credentialSaveState => _credentialSaveState;
   CredentialRestoreResult get credentialRestoreResult =>
       _credentialRestoreResult;
@@ -87,11 +78,7 @@ class LoginController extends ChangeNotifier {
       _credentialVerificationResult;
 
   bool get canCancel =>
-      _stage == LoginStage.starting ||
-      _stage == LoginStage.sendingPhoneCode ||
-      _stage == LoginStage.authorizingPhone ||
-      (_session?.isActive ?? false) ||
-      (_phoneSession?.isActive ?? false);
+      _stage == LoginStage.starting || (_session?.isActive ?? false);
 
   bool get canRetry =>
       _stage == LoginStage.error && (_session?.isActive ?? false);
@@ -124,12 +111,8 @@ class LoginController extends ChangeNotifier {
     _verificationOperation = null;
     _startOperation?.cancel();
     _startOperation = null;
-    _phoneStartOperation?.cancel();
-    _phoneStartOperation = null;
     _session?.cancel();
     _session = null;
-    _phoneSession?.cancel();
-    _phoneSession = null;
     final completer = Completer<CredentialSignOutResult>();
     final operation = completer.future;
     _signOutOperation = operation;
@@ -229,15 +212,10 @@ class LoginController extends ChangeNotifier {
     _verificationOperation = null;
     _startOperation?.cancel();
     _startOperation = null;
-    _phoneStartOperation?.cancel();
-    _phoneStartOperation = null;
     _session?.cancel();
     _session = null;
-    _phoneSession?.cancel();
-    _phoneSession = null;
     _qrImageBytes = null;
     _failure = null;
-    _phoneSecurityUrl = null;
     _qrChannel = channel;
     _credentialSaveState = CredentialSaveState.none;
     _credentialRestoreResult = CredentialRestoreResult.signedOut;
@@ -276,96 +254,6 @@ class LoginController extends ChangeNotifier {
     unawaited(_poll(generation));
   }
 
-  Future<void> sendPhoneCode({
-    required String countryCode,
-    required String phoneNumber,
-  }) async {
-    final multiMethodGateway =
-        _gateway is MultiMethodQqMusicAuthenticationGateway
-        ? _gateway as MultiMethodQqMusicAuthenticationGateway
-        : null;
-    if (multiMethodGateway == null) {
-      _failure = LoginFailure.coreUnavailable;
-      _stage = LoginStage.error;
-      _notify();
-      return;
-    }
-    final generation = ++_generation;
-    _verificationOperation?.cancel();
-    _verificationOperation = null;
-    _startOperation?.cancel();
-    _startOperation = null;
-    _phoneStartOperation?.cancel();
-    _phoneStartOperation = null;
-    _session?.cancel();
-    _session = null;
-    _phoneSession?.cancel();
-    _phoneSession = null;
-    _qrImageBytes = null;
-    _failure = null;
-    _phoneSecurityUrl = null;
-    _credentialSaveState = CredentialSaveState.none;
-    _stage = LoginStage.sendingPhoneCode;
-    _notify();
-
-    final operation = multiMethodGateway.beginPhoneStart(
-      countryCode: countryCode,
-      phoneNumber: phoneNumber,
-    );
-    _phoneStartOperation = operation;
-    final result = await operation.run();
-    if (identical(_phoneStartOperation, operation)) {
-      _phoneStartOperation = null;
-    }
-    if (!_isCurrent(generation)) {
-      result.session?.cancel();
-      return;
-    }
-    _phoneSecurityUrl = result.securityUrl;
-    switch (result.state) {
-      case PhoneCodeState.sent:
-        if (result.session == null) {
-          _failure = LoginFailure.invalidResponse;
-          _stage = LoginStage.error;
-        } else {
-          _phoneSession = result.session;
-          _stage = LoginStage.phoneCodeSent;
-        }
-      case PhoneCodeState.captchaRequired:
-        _stage = LoginStage.phoneCaptchaRequired;
-      case PhoneCodeState.rateLimited:
-        _stage = LoginStage.phoneRateLimited;
-      case null:
-        _failure = result.failure ?? LoginFailure.invalidResponse;
-        _stage = LoginStage.error;
-    }
-    _notify();
-  }
-
-  Future<void> authorizePhone(String verificationCode) async {
-    final session = _phoneSession;
-    if (session == null || !session.isActive) {
-      _failure = LoginFailure.sessionFinished;
-      _stage = LoginStage.error;
-      _notify();
-      return;
-    }
-    final generation = _generation;
-    _failure = null;
-    _stage = LoginStage.authorizingPhone;
-    _notify();
-    final failure = await session.authorize(verificationCode);
-    if (!_isCurrent(generation)) return;
-    if (failure != null) {
-      _failure = failure;
-      _stage = LoginStage.error;
-      _notify();
-      return;
-    }
-    _phoneSession = null;
-    await _finishAuthentication(generation);
-  }
-
   void retry() {
     if (!canRetry) return;
     _failure = null;
@@ -380,15 +268,10 @@ class LoginController extends ChangeNotifier {
     _verificationOperation = null;
     _startOperation?.cancel();
     _startOperation = null;
-    _phoneStartOperation?.cancel();
-    _phoneStartOperation = null;
     _session?.cancel();
     _session = null;
-    _phoneSession?.cancel();
-    _phoneSession = null;
     _qrImageBytes = null;
     _failure = null;
-    _phoneSecurityUrl = null;
     _credentialSaveState = CredentialSaveState.none;
     _credentialRestoreResult = CredentialRestoreResult.signedOut;
     _credentialVerificationResult = null;
@@ -501,12 +384,8 @@ class LoginController extends ChangeNotifier {
     _verificationOperation = null;
     _startOperation?.cancel();
     _startOperation = null;
-    _phoneStartOperation?.cancel();
-    _phoneStartOperation = null;
     _session?.cancel();
     _session = null;
-    _phoneSession?.cancel();
-    _phoneSession = null;
     super.dispose();
   }
 }

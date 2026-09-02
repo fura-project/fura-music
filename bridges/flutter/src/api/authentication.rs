@@ -4,21 +4,18 @@ use std::sync::{LazyLock, Mutex as StdMutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use provider_api::{
-    AccountSummaryError, AccountSummaryProvider, AuthenticationError, PhoneAuthenticationCodeState,
-    PhoneAuthenticationProvider, PhoneAuthenticationSession, QrAuthenticationChannel,
+    AccountSummaryError, AccountSummaryProvider, AuthenticationError, QrAuthenticationChannel,
     QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
 };
 use provider_qqmusic::{
-    QqMusicCredentialRestoreState as ProviderCredentialRestoreState,
-    QqMusicPhoneAuthenticationSession, QqMusicProvider, QqMusicQrAuthenticationCancellation,
-    QqMusicQrAuthenticationSession,
+    QqMusicCredentialRestoreState as ProviderCredentialRestoreState, QqMusicProvider,
+    QqMusicQrAuthenticationCancellation, QqMusicQrAuthenticationSession,
 };
 use qqmusic_client::{CredentialPersistenceError, QqMusicClient, ReqwestTransport};
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
-type NativePhoneSession = QqMusicPhoneAuthenticationSession<ReqwestTransport>;
 
 static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|| {
     ReqwestTransport::new()
@@ -93,38 +90,6 @@ pub enum QqMusicQrLoginFailure {
 pub struct QqMusicQrLoginStart {
     pub session: Option<QqMusicQrLoginSessionHandle>,
     pub challenge: Option<QqMusicQrChallenge>,
-    pub failure: Option<QqMusicQrLoginFailure>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum QqMusicPhoneCodeState {
-    Sent,
-    CaptchaRequired,
-    RateLimited,
-}
-
-pub struct QqMusicPhoneLoginStart {
-    pub session: Option<QqMusicPhoneLoginSessionHandle>,
-    pub state: Option<QqMusicPhoneCodeState>,
-    pub security_url: Option<String>,
-    pub failure: Option<QqMusicQrLoginFailure>,
-}
-
-impl fmt::Debug for QqMusicPhoneLoginStart {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("QqMusicPhoneLoginStart")
-            .field("has_session", &self.session.is_some())
-            .field("state", &self.state)
-            .field("has_security_url", &self.security_url.is_some())
-            .field("failure", &self.failure)
-            .finish()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct QqMusicPhoneLoginResult {
-    pub authenticated: bool,
     pub failure: Option<QqMusicQrLoginFailure>,
 }
 
@@ -291,45 +256,6 @@ impl QqMusicQrLoginSessionHandle {
     }
 }
 
-#[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicPhoneLoginSessionHandle {
-    session: NativePhoneSession,
-    running: AtomicBool,
-}
-
-impl QqMusicPhoneLoginSessionHandle {
-    pub async fn authorize(&self, verification_code: String) -> QqMusicPhoneLoginResult {
-        if self.running.swap(true, Ordering::SeqCst) {
-            return QqMusicPhoneLoginResult {
-                authenticated: false,
-                failure: Some(QqMusicQrLoginFailure::AdvanceAlreadyInProgress),
-            };
-        }
-        let result = self.session.authorize(verification_code).await;
-        self.running.store(false, Ordering::SeqCst);
-        match result {
-            Ok(()) => QqMusicPhoneLoginResult {
-                authenticated: true,
-                failure: None,
-            },
-            Err(error) => QqMusicPhoneLoginResult {
-                authenticated: false,
-                failure: Some(map_error(error)),
-            },
-        }
-    }
-
-    #[flutter_rust_bridge::frb(sync)]
-    pub fn cancel(&self) -> bool {
-        self.session.cancel()
-    }
-
-    #[flutter_rust_bridge::frb(sync, getter)]
-    pub fn is_active(&self) -> bool {
-        self.session.is_active()
-    }
-}
-
 #[flutter_rust_bridge::frb(sync)]
 pub fn reserve_qq_music_wechat_qr_login_start() -> u32 {
     NEXT_START_ATTEMPT
@@ -403,63 +329,6 @@ pub fn cancel_qq_music_wechat_qr_login_start(attempt_id: u32) -> bool {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn cancel_qq_music_qr_login_start(attempt_id: u32) -> bool {
-    cancel_qq_music_wechat_qr_login_start(attempt_id)
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn reserve_qq_music_phone_login_start() -> u32 {
-    reserve_qq_music_wechat_qr_login_start()
-}
-
-pub async fn start_qq_music_phone_login(
-    attempt_id: u32,
-    country_code: String,
-    phone_number: String,
-) -> QqMusicPhoneLoginStart {
-    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
-        return failed_phone_start(QqMusicQrLoginFailure::CoreUnavailable);
-    };
-    *start_attempt_guard() = Some(attempt_id);
-    let session = match provider.begin_phone_authentication(country_code, phone_number) {
-        Ok(session) => session,
-        Err(error) => {
-            clear_start_attempt(attempt_id);
-            return failed_phone_start(map_error(error));
-        }
-    };
-    let state = match session.send_code().await {
-        Ok(state) => state,
-        Err(error) => {
-            clear_start_attempt(attempt_id);
-            session.cancel();
-            return failed_phone_start(map_error(error));
-        }
-    };
-    clear_start_attempt(attempt_id);
-    let (state, security_url) = match state {
-        PhoneAuthenticationCodeState::Sent => (QqMusicPhoneCodeState::Sent, None),
-        PhoneAuthenticationCodeState::CaptchaRequired { security_url } => {
-            (QqMusicPhoneCodeState::CaptchaRequired, security_url)
-        }
-        PhoneAuthenticationCodeState::RateLimited => (QqMusicPhoneCodeState::RateLimited, None),
-    };
-    let keep_session = matches!(state, QqMusicPhoneCodeState::Sent);
-    if !keep_session {
-        session.cancel();
-    }
-    QqMusicPhoneLoginStart {
-        session: keep_session.then_some(QqMusicPhoneLoginSessionHandle {
-            session,
-            running: AtomicBool::new(false),
-        }),
-        state: Some(state),
-        security_url,
-        failure: None,
-    }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn cancel_qq_music_phone_login_start(attempt_id: u32) -> bool {
     cancel_qq_music_wechat_qr_login_start(attempt_id)
 }
 
@@ -675,15 +544,6 @@ fn failed_start(failure: QqMusicQrLoginFailure) -> QqMusicQrLoginStart {
     QqMusicQrLoginStart {
         session: None,
         challenge: None,
-        failure: Some(failure),
-    }
-}
-
-fn failed_phone_start(failure: QqMusicQrLoginFailure) -> QqMusicPhoneLoginStart {
-    QqMusicPhoneLoginStart {
-        session: None,
-        state: None,
-        security_url: None,
         failure: Some(failure),
     }
 }

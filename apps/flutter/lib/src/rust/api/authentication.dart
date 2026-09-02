@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_account_summary`, `failed_phone_start`, `failed_restore`, `failed_start`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `native_qq_music_provider`, `start_attempt_guard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_account_summary`, `failed_restore`, `failed_start`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `native_qq_music_provider`, `start_attempt_guard`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveQqMusicWechatQrLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
@@ -37,24 +37,6 @@ bool cancelQqMusicWechatQrLoginStart({required int attemptId}) =>
 
 bool cancelQqMusicQrLoginStart({required int attemptId}) => RustLib.instance.api
     .crateApiAuthenticationCancelQqMusicQrLoginStart(attemptId: attemptId);
-
-int reserveQqMusicPhoneLoginStart() =>
-    RustLib.instance.api.crateApiAuthenticationReserveQqMusicPhoneLoginStart();
-
-Future<QqMusicPhoneLoginStart> startQqMusicPhoneLogin({
-  required int attemptId,
-  required String countryCode,
-  required String phoneNumber,
-}) => RustLib.instance.api.crateApiAuthenticationStartQqMusicPhoneLogin(
-  attemptId: attemptId,
-  countryCode: countryCode,
-  phoneNumber: phoneNumber,
-);
-
-bool cancelQqMusicPhoneLoginStart({required int attemptId}) => RustLib
-    .instance
-    .api
-    .crateApiAuthenticationCancelQqMusicPhoneLoginStart(attemptId: attemptId);
 
 bool qqMusicHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiAuthenticationQqMusicHasAuthenticatedCredential();
@@ -109,15 +91,6 @@ abstract class QqMusicAccountSummaryLoadHandle implements RustOpaqueInterface {
   bool get isActive;
 
   Future<QqMusicAccountSummaryLoad> run();
-}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPhoneLoginSessionHandle>>
-abstract class QqMusicPhoneLoginSessionHandle implements RustOpaqueInterface {
-  Future<QqMusicPhoneLoginResult> authorize({required String verificationCode});
-
-  bool cancel();
-
-  bool get isActive;
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicQrLoginSessionHandle>>
@@ -259,57 +232,6 @@ enum QqMusicCredentialVerificationFailure {
 }
 
 enum QqMusicCredentialVerificationState { authenticated, rejected }
-
-enum QqMusicPhoneCodeState { sent, captchaRequired, rateLimited }
-
-class QqMusicPhoneLoginResult {
-  final bool authenticated;
-  final QqMusicQrLoginFailure? failure;
-
-  const QqMusicPhoneLoginResult({required this.authenticated, this.failure});
-
-  @override
-  int get hashCode => authenticated.hashCode ^ failure.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is QqMusicPhoneLoginResult &&
-          runtimeType == other.runtimeType &&
-          authenticated == other.authenticated &&
-          failure == other.failure;
-}
-
-class QqMusicPhoneLoginStart {
-  final QqMusicPhoneLoginSessionHandle? session;
-  final QqMusicPhoneCodeState? state;
-  final String? securityUrl;
-  final QqMusicQrLoginFailure? failure;
-
-  const QqMusicPhoneLoginStart({
-    this.session,
-    this.state,
-    this.securityUrl,
-    this.failure,
-  });
-
-  @override
-  int get hashCode =>
-      session.hashCode ^
-      state.hashCode ^
-      securityUrl.hashCode ^
-      failure.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is QqMusicPhoneLoginStart &&
-          runtimeType == other.runtimeType &&
-          session == other.session &&
-          state == other.state &&
-          securityUrl == other.securityUrl &&
-          failure == other.failure;
-}
 
 class QqMusicQrChallenge {
   final QqMusicQrImageFormat imageFormat;

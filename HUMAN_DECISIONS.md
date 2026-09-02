@@ -39,6 +39,14 @@
 
 **Consequences:** Product-facing UI and documentation may adopt `fura music` immediately. This decision partially resolves HD-001's name question but does not authorize application-ID migration, signing-key custody, production release, or compatibility-breaking storage/package renames.
 
+## HD-019 — QR-only direct account authorization
+
+**Status:** Accepted on 2026-09-02
+
+**Decision:** Direct account authorization in the first-release client uses QQ Web QR and WeChat Web QR. Remove the unverified phone/SMS one-time-code path from production Core, Bridge, Flutter presentation, and acceptance scheduling; the client continues not to collect account passwords.
+
+**Consequences:** Historical phone-login research may remain as clearly dated evidence, but it is not a current capability or pending compatibility claim. A maintainer-operated confirmed QR approval is still required for live QQ credential-exchange and restore evidence, and no QR credential or account material may be retained in fixtures or diagnostics.
+
 ## HD-002 — Default Material baseline before theme personas
 
 **Status:** Accepted on 2026-08-27

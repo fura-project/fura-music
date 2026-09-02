@@ -26,7 +26,6 @@ mod new_albums;
 mod new_songs;
 mod owned_playlists;
 mod personalized_tracks;
-mod phone_login;
 mod playlist_containers;
 mod playlist_detail;
 mod playlist_search;
@@ -100,9 +99,6 @@ pub use owned_playlists::{
 pub use personalized_tracks::{
     PersonalizedTrackField, QqMusicPersonalizedTracks, QqMusicPersonalizedTracksError,
     QqMusicRelatedTracks, QqMusicRelatedTracksError,
-};
-pub use phone_login::{
-    InvalidPhoneAuthorization, PhoneAuthCodeResult, PhoneAuthorizationSession, PhoneLoginError,
 };
 pub use playlist_containers::{
     QqMusicCreatePlaylistError, QqMusicCreatedPlaylist, QqMusicDeletePlaylistError,

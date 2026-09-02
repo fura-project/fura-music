@@ -378,24 +378,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('offers QQ QR, WeChat QR, and phone-code authorization', (
-    tester,
-  ) async {
+  testWidgets('offers only QQ and WeChat QR authorization', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final phoneSession = _WidgetPhoneSession();
     await tester.pumpWidget(
       MusicApp(
         bootstrap: _bootstrap,
-        authenticationGateway: _WidgetGateway(
-          _WaitingSession(),
-          phoneStart: PhoneLoginStart(
-            session: phoneSession,
-            state: PhoneCodeState.sent,
-          ),
-        ),
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
       ),
     );
@@ -404,25 +395,12 @@ void main() {
 
     expect(find.text('Scan with QQ'), findsOneWidget);
     expect(find.text('Scan with WeChat'), findsOneWidget);
-    await tester.tap(find.text('Use phone and SMS code (experimental)'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('phone-number-field')),
-      '13000000000',
-    );
-    await tester.tap(find.byKey(const ValueKey('send-phone-code-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('Enter the SMS code'), findsOneWidget);
-
-    await tester.enterText(
+    expect(find.textContaining('SMS'), findsNothing);
+    expect(find.byKey(const ValueKey('phone-number-field')), findsNothing);
+    expect(
       find.byKey(const ValueKey('phone-verification-code-field')),
-      '123456',
+      findsNothing,
     );
-    await tester.tap(find.byKey(const ValueKey('authorize-phone-button')));
-    await tester.pumpAndSettle();
-    expect(phoneSession.codes, ['123456']);
-    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
-    expect(find.byKey(const ValueKey('user-library-page')), findsOneWidget);
   });
 
   testWidgets('signed-out Library keeps the shell and opens sign-in in place', (
@@ -5644,9 +5622,6 @@ class _WidgetGateway
     List<FutureOr<CredentialSignOutResult>> signOutResults = const [
       CredentialSignOutResult.signedOut,
     ],
-    this.phoneStart = const PhoneLoginStart(
-      failure: LoginFailure.coreUnavailable,
-    ),
   }) : _verificationOperation =
            verificationOperation ??
            const _ImmediateWidgetVerification(
@@ -5657,7 +5632,6 @@ class _WidgetGateway
   final _WaitingSession session;
   bool authenticated;
   final CredentialVerificationOperation _verificationOperation;
-  final PhoneLoginStart phoneStart;
   final List<FutureOr<CredentialSignOutResult>> _signOutResults;
   int signOutCalls = 0;
 
@@ -5684,12 +5658,6 @@ class _WidgetGateway
   LoginStartOperation beginQrStart(LoginQrChannel channel) => beginStart();
 
   @override
-  PhoneLoginStartOperation beginPhoneStart({
-    required String countryCode,
-    required String phoneNumber,
-  }) => _WidgetPhoneStartOperation(phoneStart);
-
-  @override
   CredentialVerificationOperation beginCredentialVerification() =>
       _verificationOperation;
 
@@ -5708,40 +5676,6 @@ class _WidgetGateway
       authenticated = false;
     }
     return result;
-  }
-}
-
-class _WidgetPhoneStartOperation implements PhoneLoginStartOperation {
-  const _WidgetPhoneStartOperation(this.result);
-
-  final PhoneLoginStart result;
-
-  @override
-  bool cancel() => true;
-
-  @override
-  Future<PhoneLoginStart> run() async => result;
-}
-
-class _WidgetPhoneSession implements PhoneLoginSession {
-  bool active = true;
-  final List<String> codes = [];
-
-  @override
-  bool get isActive => active;
-
-  @override
-  Future<LoginFailure?> authorize(String verificationCode) async {
-    codes.add(verificationCode);
-    active = false;
-    return null;
-  }
-
-  @override
-  bool cancel() {
-    final wasActive = active;
-    active = false;
-    return wasActive;
   }
 }
 

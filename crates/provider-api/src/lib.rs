@@ -629,46 +629,6 @@ pub trait QrAuthenticationProvider: MusicProvider + Sync {
     fn sign_out(&self);
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PhoneAuthenticationCodeState {
-    Sent,
-    CaptchaRequired { security_url: Option<String> },
-    RateLimited,
-}
-
-pub trait PhoneAuthenticationSession: Send {
-    type Error;
-
-    fn is_active(&self) -> bool;
-    fn cancel(&self) -> bool;
-    fn send_code(
-        &self,
-    ) -> impl Future<Output = Result<PhoneAuthenticationCodeState, Self::Error>> + Send;
-    fn authorize(
-        &self,
-        verification_code: String,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
-}
-
-/// Provider-neutral phone-number plus one-time-code authentication.
-/// Password collection is deliberately outside this capability.
-pub trait PhoneAuthenticationProvider: MusicProvider + Sync {
-    type Error;
-    type Session: PhoneAuthenticationSession<Error = Self::Error>;
-
-    /// Creates an isolated phone authorization session without sending a code.
-    ///
-    /// # Errors
-    ///
-    /// Returns a provider-defined validation or lifecycle error when the
-    /// process-local session cannot be created safely.
-    fn begin_phone_authentication(
-        &self,
-        country_code: String,
-        phone_number: String,
-    ) -> Result<Self::Session, Self::Error>;
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AccountSummaryError {
     AuthenticationRequired,

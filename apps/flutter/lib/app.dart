@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
@@ -496,46 +495,10 @@ class _AuthenticationDialogState extends State<_AuthenticationDialog> {
   );
 }
 
-class _AuthenticationPanel extends StatefulWidget {
+class _AuthenticationPanel extends StatelessWidget {
   const _AuthenticationPanel({required this.controller});
 
   final LoginController controller;
-
-  @override
-  State<_AuthenticationPanel> createState() => _AuthenticationPanelState();
-}
-
-class _AuthenticationPanelState extends State<_AuthenticationPanel> {
-  final TextEditingController _countryCodeController = TextEditingController(
-    text: '86',
-  );
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _verificationCodeController =
-      TextEditingController();
-  bool _showPhoneForm = false;
-
-  @override
-  void dispose() {
-    _countryCodeController.dispose();
-    _phoneController.dispose();
-    _verificationCodeController.dispose();
-    super.dispose();
-  }
-
-  void _showPhone() => setState(() => _showPhoneForm = true);
-
-  void _hidePhone() => setState(() => _showPhoneForm = false);
-
-  void _sendPhoneCode() {
-    widget.controller.sendPhoneCode(
-      countryCode: _countryCodeController.text,
-      phoneNumber: _phoneController.text,
-    );
-  }
-
-  void _authorizePhone() {
-    widget.controller.authorizePhone(_verificationCodeController.text);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -550,22 +513,14 @@ class _AuthenticationPanelState extends State<_AuthenticationPanel> {
       child: Padding(
         padding: const EdgeInsets.all(MusicSpacing.panel),
         child: AnimatedBuilder(
-          animation: widget.controller,
+          animation: controller,
           builder: (context, _) => AnimatedSwitcher(
             duration: MusicMotion.stateChange,
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             child: _AuthenticationContent(
-              key: ValueKey((widget.controller.stage, _showPhoneForm)),
-              controller: widget.controller,
-              showPhoneForm: _showPhoneForm,
-              countryCodeController: _countryCodeController,
-              phoneController: _phoneController,
-              verificationCodeController: _verificationCodeController,
-              onShowPhone: _showPhone,
-              onHidePhone: _hidePhone,
-              onSendPhoneCode: _sendPhoneCode,
-              onAuthorizePhone: _authorizePhone,
+              key: ValueKey(controller.stage),
+              controller: controller,
             ),
           ),
         ),
@@ -575,34 +530,15 @@ class _AuthenticationPanelState extends State<_AuthenticationPanel> {
 }
 
 class _AuthenticationContent extends StatelessWidget {
-  const _AuthenticationContent({
-    required this.controller,
-    required this.showPhoneForm,
-    required this.countryCodeController,
-    required this.phoneController,
-    required this.verificationCodeController,
-    required this.onShowPhone,
-    required this.onHidePhone,
-    required this.onSendPhoneCode,
-    required this.onAuthorizePhone,
-    super.key,
-  });
+  const _AuthenticationContent({required this.controller, super.key});
 
   final LoginController controller;
-  final bool showPhoneForm;
-  final TextEditingController countryCodeController;
-  final TextEditingController phoneController;
-  final TextEditingController verificationCodeController;
-  final VoidCallback onShowPhone;
-  final VoidCallback onHidePhone;
-  final VoidCallback onSendPhoneCode;
-  final VoidCallback onAuthorizePhone;
 
   @override
   Widget build(BuildContext context) {
     final stage = controller.stage;
     if (stage == LoginStage.idle) {
-      return showPhoneForm ? _phoneEntry(context) : _idle(context);
+      return _idle(context);
     }
     if (stage == LoginStage.verificationRequired ||
         stage == LoginStage.verifyingStoredCredential) {
@@ -616,13 +552,6 @@ class _AuthenticationContent extends StatelessWidget {
       return _restoreTerminal(context);
     }
     if (stage == LoginStage.starting) return _starting(context);
-    if (stage == LoginStage.sendingPhoneCode ||
-        stage == LoginStage.phoneCodeSent ||
-        stage == LoginStage.phoneCaptchaRequired ||
-        stage == LoginStage.phoneRateLimited ||
-        stage == LoginStage.authorizingPhone) {
-      return _phoneAuthorization(context);
-    }
     if (stage == LoginStage.authenticated) return _authenticated(context);
     if (stage == LoginStage.waitingForScan ||
         stage == LoginStage.scannedAwaitingConfirmation ||
@@ -645,7 +574,7 @@ class _AuthenticationContent extends StatelessWidget {
       ),
       const SizedBox(height: 12),
       Text(
-        'Authorize with QQ or WeChat QR. An experimental one-time SMS option is also available; passwords are never collected.',
+        'Authorize with QQ or WeChat QR. Passwords are never collected.',
         style: _supportingStyle(context),
       ),
       const SizedBox(height: 28),
@@ -662,190 +591,8 @@ class _AuthenticationContent extends StatelessWidget {
         icon: const Icon(Icons.qr_code_scanner_rounded),
         label: const Text('Scan with WeChat'),
       ),
-      TextButton.icon(
-        key: const ValueKey('show-phone-login-button'),
-        onPressed: onShowPhone,
-        icon: const Icon(Icons.sms_outlined),
-        label: const Text('Use phone and SMS code (experimental)'),
-      ),
     ],
   );
-
-  Widget _phoneEntry(BuildContext context) => AutofillGroup(
-    child: Column(
-      key: const ValueKey('phone-login-entry'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const _PanelIcon(icon: Icons.sms_outlined),
-        const SizedBox(height: 20),
-        Text(
-          'Sign in with a one-time code',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'This experimental option uses QQ Music\'s private client protocol and has not yet passed a real-account login check. This app never asks for or stores your QQ password.',
-          style: _supportingStyle(context),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 92,
-              child: TextField(
-                key: const ValueKey('phone-country-code-field'),
-                controller: countryCodeController,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'Country',
-                  prefixText: '+',
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                key: const ValueKey('phone-number-field'),
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                autofillHints: const [AutofillHints.telephoneNumber],
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(labelText: 'Phone number'),
-                onSubmitted: (_) => onSendPhoneCode(),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          key: const ValueKey('send-phone-code-button'),
-          onPressed: onSendPhoneCode,
-          icon: const Icon(Icons.send_rounded),
-          label: const Text('Send code'),
-        ),
-        TextButton(onPressed: onHidePhone, child: const Text('Other methods')),
-      ],
-    ),
-  );
-
-  Widget _phoneAuthorization(BuildContext context) {
-    final stage = controller.stage;
-    if (stage == LoginStage.sendingPhoneCode ||
-        stage == LoginStage.authorizingPhone) {
-      return Column(
-        key: const ValueKey('phone-login-progress'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox.square(
-            dimension: 42,
-            child: CircularProgressIndicator(strokeWidth: 3),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            stage == LoginStage.sendingPhoneCode
-                ? 'Requesting your code…'
-                : 'Authorizing with QQ Music…',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: controller.cancel,
-            child: const Text('Cancel'),
-          ),
-        ],
-      );
-    }
-    if (stage == LoginStage.phoneCaptchaRequired ||
-        stage == LoginStage.phoneRateLimited) {
-      final captcha = stage == LoginStage.phoneCaptchaRequired;
-      final url = controller.phoneSecurityUrl;
-      return Column(
-        key: const ValueKey('phone-login-blocked'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PanelIcon(
-            icon: captcha
-                ? Icons.verified_user_outlined
-                : Icons.hourglass_top_rounded,
-          ),
-          const SizedBox(height: 20),
-          _announcedAuthenticationMessage(
-            context,
-            captcha ? 'Verification required' : 'Too many requests',
-            captcha
-                ? 'QQ Music requires a security check before another SMS can be sent.'
-                : 'QQ Music has temporarily limited SMS requests. Try again later.',
-          ),
-          if (captcha && url != null) ...[
-            const SizedBox(height: 12),
-            SelectableText(
-              url,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          const SizedBox(height: 20),
-          TextButton(
-            onPressed: () {
-              controller.cancel();
-              onHidePhone();
-            },
-            child: const Text('Choose another method'),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      key: const ValueKey('phone-code-entry'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const _PanelIcon(icon: Icons.mark_email_read_outlined),
-        const SizedBox(height: 20),
-        Text(
-          'Enter the SMS code',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Use the six-digit code sent by QQ Music.',
-          style: _supportingStyle(context),
-        ),
-        const SizedBox(height: 20),
-        TextField(
-          key: const ValueKey('phone-verification-code-field'),
-          controller: verificationCodeController,
-          keyboardType: TextInputType.number,
-          autofillHints: const [AutofillHints.oneTimeCode],
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(6),
-          ],
-          decoration: const InputDecoration(labelText: 'Verification code'),
-          onSubmitted: (_) => onAuthorizePhone(),
-        ),
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          key: const ValueKey('authorize-phone-button'),
-          onPressed: onAuthorizePhone,
-          icon: const Icon(Icons.login_rounded),
-          label: const Text('Authorize'),
-        ),
-        TextButton(
-          onPressed: () {
-            controller.cancel();
-            onHidePhone();
-          },
-          child: const Text('Choose another method'),
-        ),
-      ],
-    );
-  }
 
   Widget _starting(BuildContext context) => Column(
     key: const ValueKey('login-starting'),

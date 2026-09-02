@@ -2,7 +2,9 @@
 
 - **Status:** Active research for M1 authentication
 - **Last checked:** 2026-08-31
-- **Scope:** Credential lifecycle, restore semantics, bounded signed-in account identity, QQ/WeChat QR authorization, and phone plus one-time-code authorization.
+- **Scope:** Credential lifecycle, restore semantics, bounded signed-in account identity, and QQ/WeChat QR authorization.
+
+> **Current product status (2026-09-02):** The phone/one-time-code investigation below is retained only as historical protocol research. The production Client, Provider, Bridge, Dart controller, and UI no longer expose that unverified path; QQ and WeChat QR are the supported authorization choices.
 
 This note records behavioral evidence, not source code. Reference implementations have different licenses, so implementation in this repository must be independent.
 
@@ -12,6 +14,7 @@ This note records behavioral evidence, not source code. Reference implementation
 2. [yakult-green-tea/qq-music-api at `2c27d6b`](https://github.com/yakult-green-tea/qq-music-api/tree/2c27d6b90dd56bcf0796883e27216f69189d8f68) (2026-08-25, MIT), especially `src/services/auth/qrLogin.ts` and its QR/session tests. Its repository records a real QQ Music App QR acceptance run on 2026-08-04.
 3. [feeluown/feeluown-qqmusic at `241a967`](https://github.com/feeluown/feeluown-qqmusic/tree/241a9678bcd26e88d19e08e5da8048018f06e330) (2026-03-26; no license file found in the inspected checkout), especially `fuo_qqmusic/login.py`, `provider.py`, and `provider_ui.py`. It is supporting evidence for cookie restore behavior, not a source to copy.
 4. [ylw1997/qqmusic-api at `5f87b07`](https://github.com/ylw1997/qqmusic-api/tree/5f87b07b85923f8862d7b57f9d558ce0314ba1a7) (2026-04-27), especially its executable `wx_login_qr` flow and QR documentation. This independently matches the L-1124 WeChat bootstrap parameters.
+5. [Suxiaoqinx/QQMusicapi at `b6d748b`](https://github.com/Suxiaoqinx/QQMusicapi/tree/b6d748bb63fc65b6a98a383d8974fe3f3fd75d5b) (rechecked 2026-09-02), especially `src/modules/login.js`, as an independent QQ Connect request-shape cross-check.
 
 No real account, cookie, or authorization code was used. Live QR response bytes were processed transiently by the opt-in test but were not printed or persisted.
 
@@ -94,12 +97,17 @@ not interchangeable variants of a generic hash. An initial implementation
 using the wrong seed/operator produced a repeatable HTTP 403 on polling; a
 known-answer regression now locks both values.
 
-After a confirmed QR, the bounded flow follows `check_sig` without automatic
-redirects, carries only response cookies into QQ Connect authorization, and
-exchanges the returned code through `QQConnectLogin.LoginServer.QQLogin` with
-QQ login type `2`. Authorization cookies, redirect codes, account identity,
-and credentials stay inside redacted Rust session types and never cross the
-typed Bridge.
+After a confirmed QR, both current L-1124 and Suxiaoqinx flows call `check_sig`
+without carrying the transient `qrsig` cookie, then carry only response cookies
+into QQ Connect authorization. Suxiaoqinx also supplies the QQ QR-page Referer
+on the authorization POST. A maintainer report in which the approving device
+succeeded while the client failed exposed that this repository did the opposite
+at both boundaries. The corrected request regression now rejects a Cookie on
+`check_sig`, requires that Referer on authorization, and retains the existing
+no-redirect behavior. The returned code is exchanged through
+`QQConnectLogin.LoginServer.QQLogin` with QQ login type `2`. Authorization
+cookies, redirect codes, account identity, and credentials stay inside redacted
+Rust session types and never cross the typed Bridge.
 
 On 2026-08-31 the ignored, environment-gated `live_qq_qr` test fetched a new
 QQ Web QR and received the unconfirmed waiting state from one poll. It did not
@@ -108,7 +116,7 @@ the image or session values. This proves current anonymous bootstrap and poll
 compatibility only; the confirmed redirect and credential exchange remain
 offline fixture-verified and require maintainer-operated acceptance.
 
-### Phone plus one-time-code authorization
+### Historical: phone plus one-time-code authorization
 
 This is not a documented Tencent public login API. The only current direct
 implementation found for this exact phone flow is the independently inspected
@@ -120,18 +128,17 @@ one-time code for authorization. The current source also distinguishes
 CAPTCHA code `20276` and frequency-limit code `100001` from successful code
 delivery.
 
-The project models this as one process-local, cancellable session with a
-random per-session device identity. Phone number and SMS code never implement
-`Debug`, cross the Bridge after authorization, or enter persistence. Flutter
-collects country code, phone number, and the six-digit one-time code; it never
-asks for a QQ password. CAPTCHA and rate limiting remain explicit UI states
-instead of being guessed as success or generic network failure.
+Before HD-019, the project modeled this as one process-local, cancellable
+session with a random per-session device identity. Phone number and SMS code
+did not implement `Debug`, cross the Bridge after authorization, or enter
+persistence. That production path and its Flutter inputs were removed on
+2026-09-02 rather than being presented as a supported account method.
 
-Request shape, error mapping, replacement/cancellation, credential
-installation, secure-vault persistence, and the adaptive sign-in dialog are
-offline tested. No SMS was sent and no phone/account was accessed in this
-checkout. The product therefore labels this method experimental: live delivery,
-successful phone authorization, and release compatibility are not yet claimed.
+The former request shape, error mapping, replacement/cancellation, credential
+installation, secure-vault persistence, and adaptive-dialog tests were offline
+only. No SMS was sent and no phone/account was accessed in this checkout. Those
+tests and production implementation were removed with HD-019; this historical
+description is not a current capability or future authorization.
 
 ### First network slice: WeChat QR bootstrap
 
@@ -205,5 +212,4 @@ The Provider layer now maps raw protocol image/state/error types into provider-n
 Before claiming M1 authentication acceptance:
 
 1. Perform a maintainer-operated QQ Web QR approval and confirm that credential exchange and restore succeed without retaining secret-bearing evidence.
-2. Perform a maintainer-operated phone-code attempt if that channel is to be claimed for the first release; offline request fixtures do not prove SMS delivery or current account acceptance.
-3. Run the existing disposable secure-vault pattern on each distribution target; Linux passed on 2026-08-25, but plugin linkage alone does not prove the remaining platform implementations.
+2. Run the existing disposable secure-vault pattern on each distribution target; Linux passed on 2026-08-25, but plugin linkage alone does not prove the remaining platform implementations.

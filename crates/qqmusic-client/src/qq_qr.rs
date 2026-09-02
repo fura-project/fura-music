@@ -70,7 +70,6 @@ impl fmt::Debug for QqQrSession {
 pub struct QqQrAuthorization {
     uin: String,
     sigx: String,
-    qrsig: String,
 }
 
 impl fmt::Debug for QqQrAuthorization {
@@ -277,11 +276,7 @@ where
                 let url = Url::parse(redirect).map_err(|_| QqQrError::MissingAuthorization)?;
                 let uin = query_value(&url, "uin").ok_or(QqQrError::MissingAuthorization)?;
                 let sigx = query_value(&url, "ptsigx").ok_or(QqQrError::MissingAuthorization)?;
-                session.authorization = Some(QqQrAuthorization {
-                    uin,
-                    sigx,
-                    qrsig: session.qrsig.clone(),
-                });
+                session.authorization = Some(QqQrAuthorization { uin, sigx });
                 Ok(QqQrPollResult::Authorized)
             }
             status => Err(QqQrError::UnrecognizedPollStatus(status)),
@@ -322,7 +317,6 @@ where
                     .query("pt_3rd_aid", QQ_CONNECT_APP_ID)
                     .header("Referer", QR_REFERER)
                     .header("User-Agent", WEB_USER_AGENT)
-                    .header("Cookie", format!("qrsig={}", authorization.qrsig))
                     .follow_redirects(false)
                     .response_body_limit(MAX_TEXT_BYTES)
                     .timeout(REQUEST_TIMEOUT),
@@ -346,6 +340,7 @@ where
             .execute(
                 HttpRequest::post(AUTHORIZE_URL)
                     .header("Content-Type", "application/x-www-form-urlencoded")
+                    .header("Referer", QR_REFERER)
                     .header("User-Agent", WEB_USER_AGENT)
                     .header("Cookie", cookie_header)
                     .body(body.into_bytes())
@@ -718,6 +713,22 @@ mod tests {
         let requests = client.transport().requests();
         assert!(!requests[2].redirects_are_followed());
         assert!(!requests[3].redirects_are_followed());
+        assert!(
+            requests[2]
+                .headers()
+                .iter()
+                .all(|(name, _)| !name.eq_ignore_ascii_case("cookie"))
+        );
+        assert!(requests[3].headers().iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("referer") && value == "https://xui.ptlogin2.qq.com/"
+        }));
+        let authorize_cookie = requests[3]
+            .headers()
+            .iter()
+            .find_map(|(name, value)| name.eq_ignore_ascii_case("cookie").then_some(value))
+            .expect("authorization response cookies");
+        assert!(authorize_cookie.contains("p_skey="));
+        assert!(!authorize_cookie.contains("qrsig="));
         let form = std::str::from_utf8(requests[3].body_bytes().expect("authorize form"))
             .expect("UTF-8 form");
         assert!(form.contains("g_tk="));

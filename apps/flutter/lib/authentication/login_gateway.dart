@@ -114,37 +114,6 @@ abstract interface class QqMusicAuthenticationGateway {
 
 abstract interface class MultiMethodQqMusicAuthenticationGateway {
   LoginStartOperation beginQrStart(LoginQrChannel channel);
-  PhoneLoginStartOperation beginPhoneStart({
-    required String countryCode,
-    required String phoneNumber,
-  });
-}
-
-enum PhoneCodeState { sent, captchaRequired, rateLimited }
-
-class PhoneLoginStart {
-  const PhoneLoginStart({
-    this.session,
-    this.state,
-    this.securityUrl,
-    this.failure,
-  });
-
-  final PhoneLoginSession? session;
-  final PhoneCodeState? state;
-  final String? securityUrl;
-  final LoginFailure? failure;
-}
-
-abstract interface class PhoneLoginSession {
-  Future<LoginFailure?> authorize(String verificationCode);
-  bool cancel();
-  bool get isActive;
-}
-
-abstract interface class PhoneLoginStartOperation {
-  Future<PhoneLoginStart> run();
-  bool cancel();
 }
 
 abstract interface class LoginStartOperation {
@@ -190,16 +159,6 @@ class RustQqMusicAuthenticationGateway
   @override
   LoginStartOperation beginQrStart(LoginQrChannel channel) =>
       _RustLoginStartOperation(bridge.reserveQqMusicQrLoginStart(), channel);
-
-  @override
-  PhoneLoginStartOperation beginPhoneStart({
-    required String countryCode,
-    required String phoneNumber,
-  }) => _RustPhoneLoginStartOperation(
-    bridge.reserveQqMusicPhoneLoginStart(),
-    countryCode,
-    phoneNumber,
-  );
 
   @override
   CredentialVerificationOperation beginCredentialVerification() =>
@@ -427,65 +386,6 @@ class _RustLoginStartOperation implements LoginStartOperation {
         imageBytes: challenge.imageBytes,
       ),
     );
-  }
-}
-
-class _RustPhoneLoginStartOperation implements PhoneLoginStartOperation {
-  const _RustPhoneLoginStartOperation(
-    this._attemptId,
-    this._countryCode,
-    this._phoneNumber,
-  );
-
-  final int _attemptId;
-  final String _countryCode;
-  final String _phoneNumber;
-
-  @override
-  bool cancel() => bridge.cancelQqMusicPhoneLoginStart(attemptId: _attemptId);
-
-  @override
-  Future<PhoneLoginStart> run() async {
-    final outcome = await bridge.startQqMusicPhoneLogin(
-      attemptId: _attemptId,
-      countryCode: _countryCode,
-      phoneNumber: _phoneNumber,
-    );
-    return PhoneLoginStart(
-      session: outcome.session == null
-          ? null
-          : _RustPhoneLoginSession(outcome.session!),
-      state: switch (outcome.state) {
-        bridge.QqMusicPhoneCodeState.sent => PhoneCodeState.sent,
-        bridge.QqMusicPhoneCodeState.captchaRequired =>
-          PhoneCodeState.captchaRequired,
-        bridge.QqMusicPhoneCodeState.rateLimited => PhoneCodeState.rateLimited,
-        null => null,
-      },
-      securityUrl: outcome.securityUrl,
-      failure: outcome.failure == null ? null : _mapFailure(outcome.failure!),
-    );
-  }
-}
-
-class _RustPhoneLoginSession implements PhoneLoginSession {
-  const _RustPhoneLoginSession(this._inner);
-
-  final bridge.QqMusicPhoneLoginSessionHandle _inner;
-
-  @override
-  bool cancel() => _inner.cancel();
-
-  @override
-  bool get isActive => _inner.isActive;
-
-  @override
-  Future<LoginFailure?> authorize(String verificationCode) async {
-    final result = await _inner.authorize(verificationCode: verificationCode);
-    if (result.authenticated) return null;
-    return result.failure == null
-        ? LoginFailure.invalidResponse
-        : _mapFailure(result.failure!);
   }
 }
 

@@ -115,10 +115,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       wire._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPersonalizedTracksLoadHandlePtr;
 
   CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_QqMusicPhoneLoginSessionHandlePtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandlePtr;
-
-  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicPlaylistCreationHandlePtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandlePtr;
 
@@ -287,12 +283,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPersonalizedTracksLoadHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPersonalizedTracksLoadHandle(
-    dynamic raw,
-  );
-
-  @protected
-  QqMusicPhoneLoginSessionHandle
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
     dynamic raw,
   );
 
@@ -501,12 +491,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  QqMusicPhoneLoginSessionHandle
-  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    dynamic raw,
-  );
-
-  @protected
   QqMusicPlaylistCreationHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
     dynamic raw,
@@ -711,12 +695,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  QqMusicPhoneLoginSessionHandle
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    dynamic raw,
-  );
-
-  @protected
   QqMusicPlaylistCreationHandle
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
     dynamic raw,
@@ -820,12 +798,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BootstrapStatus dco_decode_bootstrap_status(dynamic raw);
-
-  @protected
-  QqMusicPhoneLoginSessionHandle
-  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    dynamic raw,
-  );
 
   @protected
   QqMusicQrLoginSessionHandle
@@ -971,11 +943,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPersonalizedTracksLoadFailure
   dco_decode_box_autoadd_qq_music_personalized_tracks_load_failure(dynamic raw);
-
-  @protected
-  QqMusicPhoneCodeState dco_decode_box_autoadd_qq_music_phone_code_state(
-    dynamic raw,
-  );
 
   @protected
   QqMusicPlaylistCreationFailure
@@ -1176,12 +1143,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
-  QqMusicPhoneLoginSessionHandle?
-  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    dynamic raw,
-  );
-
-  @protected
   QqMusicQrLoginSessionHandle?
   dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     dynamic raw,
@@ -1342,11 +1303,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPersonalizedTracksLoadFailure?
   dco_decode_opt_box_autoadd_qq_music_personalized_tracks_load_failure(
-    dynamic raw,
-  );
-
-  @protected
-  QqMusicPhoneCodeState? dco_decode_opt_box_autoadd_qq_music_phone_code_state(
     dynamic raw,
   );
 
@@ -1666,15 +1622,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_qq_music_personalized_tracks_load_failure(dynamic raw);
 
   @protected
-  QqMusicPhoneCodeState dco_decode_qq_music_phone_code_state(dynamic raw);
-
-  @protected
-  QqMusicPhoneLoginResult dco_decode_qq_music_phone_login_result(dynamic raw);
-
-  @protected
-  QqMusicPhoneLoginStart dco_decode_qq_music_phone_login_start(dynamic raw);
-
-  @protected
   QqMusicPlaylistCreationFailure dco_decode_qq_music_playlist_creation_failure(
     dynamic raw,
   );
@@ -1978,12 +1925,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  QqMusicPhoneLoginSessionHandle
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   QqMusicPlaylistCreationHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
     SseDeserializer deserializer,
@@ -2184,12 +2125,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPersonalizedTracksLoadHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPersonalizedTracksLoadHandle(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  QqMusicPhoneLoginSessionHandle
-  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
     SseDeserializer deserializer,
   );
 
@@ -2398,12 +2333,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  QqMusicPhoneLoginSessionHandle
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   QqMusicPlaylistCreationHandle
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
     SseDeserializer deserializer,
@@ -2507,12 +2436,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BootstrapStatus sse_decode_bootstrap_status(SseDeserializer deserializer);
-
-  @protected
-  QqMusicPhoneLoginSessionHandle
-  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    SseDeserializer deserializer,
-  );
 
   @protected
   QqMusicQrLoginSessionHandle
@@ -2698,11 +2621,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPersonalizedTracksLoadFailure
   sse_decode_box_autoadd_qq_music_personalized_tracks_load_failure(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  QqMusicPhoneCodeState sse_decode_box_autoadd_qq_music_phone_code_state(
     SseDeserializer deserializer,
   );
 
@@ -2967,12 +2885,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
-  QqMusicPhoneLoginSessionHandle?
-  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   QqMusicQrLoginSessionHandle?
   sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     SseDeserializer deserializer,
@@ -3153,11 +3065,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicPersonalizedTracksLoadFailure?
   sse_decode_opt_box_autoadd_qq_music_personalized_tracks_load_failure(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  QqMusicPhoneCodeState? sse_decode_opt_box_autoadd_qq_music_phone_code_state(
     SseDeserializer deserializer,
   );
 
@@ -3549,21 +3456,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  QqMusicPhoneCodeState sse_decode_qq_music_phone_code_state(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  QqMusicPhoneLoginResult sse_decode_qq_music_phone_login_result(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  QqMusicPhoneLoginStart sse_decode_qq_music_phone_login_start(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   QqMusicPlaylistCreationFailure sse_decode_qq_music_playlist_creation_failure(
     SseDeserializer deserializer,
   );
@@ -3940,13 +3832,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    QqMusicPhoneLoginSessionHandle self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
     QqMusicPlaylistCreationHandle self,
     SseSerializer serializer,
@@ -4180,13 +4065,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPersonalizedTracksLoadHandle(
     QqMusicPersonalizedTracksLoadHandle self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    QqMusicPhoneLoginSessionHandle self,
     SseSerializer serializer,
   );
 
@@ -4430,13 +4308,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    QqMusicPhoneLoginSessionHandle self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPlaylistCreationHandle(
     QqMusicPlaylistCreationHandle self,
     SseSerializer serializer,
@@ -4556,13 +4427,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_bootstrap_status(
     BootstrapStatus self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    QqMusicPhoneLoginSessionHandle self,
     SseSerializer serializer,
   );
 
@@ -4762,12 +4626,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_qq_music_personalized_tracks_load_failure(
     QqMusicPersonalizedTracksLoadFailure self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_box_autoadd_qq_music_phone_code_state(
-    QqMusicPhoneCodeState self,
     SseSerializer serializer,
   );
 
@@ -5067,13 +4925,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    QqMusicPhoneLoginSessionHandle? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     QqMusicQrLoginSessionHandle? self,
     SseSerializer serializer,
@@ -5262,12 +5113,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_qq_music_personalized_tracks_load_failure(
     QqMusicPersonalizedTracksLoadFailure? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_qq_music_phone_code_state(
-    QqMusicPhoneCodeState? self,
     SseSerializer serializer,
   );
 
@@ -5707,24 +5552,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_personalized_tracks_load_failure(
     QqMusicPersonalizedTracksLoadFailure self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_qq_music_phone_code_state(
-    QqMusicPhoneCodeState self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_qq_music_phone_login_result(
-    QqMusicPhoneLoginResult self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_qq_music_phone_login_start(
-    QqMusicPhoneLoginStart self,
     SseSerializer serializer,
   );
 
@@ -6641,40 +6468,6 @@ class RustLibWire implements BaseWire {
       );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPersonalizedTracksLoadHandle =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPersonalizedTracksLoadHandlePtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandlePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandlePtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandlePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandle =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicPhoneLoginSessionHandlePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void

@@ -51,8 +51,6 @@ void main() {
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
     final unusedQrStart = reserveQqMusicQrLoginStart();
     expect(cancelQqMusicQrLoginStart(attemptId: unusedQrStart), isFalse);
-    final unusedPhoneStart = reserveQqMusicPhoneLoginStart();
-    expect(cancelQqMusicPhoneLoginStart(attemptId: unusedPhoneStart), isFalse);
     final unusedLibraryLoad = beginQqMusicUserPlaylistLoad();
     expect(unusedLibraryLoad.isActive, isTrue);
     expect(unusedLibraryLoad.cancel(), isTrue);
