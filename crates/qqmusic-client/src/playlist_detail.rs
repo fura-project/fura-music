@@ -1119,6 +1119,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn accepts_valid_empty_public_playlist_page() {
+        let client = QqMusicClient::new(FakeTransport::new([json!({
+            "code": 0,
+            "music.srfDissInfo.DissInfo": {
+                "code": 0,
+                "data": {
+                    "code": 0,
+                    "songlist": [],
+                    "total_song_num": 0,
+                    "hasmore": 0
+                }
+            }
+        })]));
+
+        let page = client
+            .public_playlist_tracks_page(7001, 0, 100)
+            .await
+            .expect("valid empty public playlist page");
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.total(), 0);
+        assert!(!page.has_more());
+        assert!(page.tracks().is_empty());
+        assert_eq!(client.transport().requests().len(), 1);
+    }
+
+    #[tokio::test]
     async fn serializes_liked_songs_as_the_evidenced_directory_route() {
         let mut fixture = page_fixture();
         fixture["music.srfDissInfo.DissInfo"]["data"]
