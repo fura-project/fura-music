@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::protocol_strategy::{QqProtocolOutcome, classify_musicu_codes};
 use crate::{
     HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicArtistSummary, QqMusicClient,
     QqMusicTrackSummary,
@@ -41,6 +42,10 @@ pub enum QqMusicSearchError<E> {
     MissingResult,
     MissingResultCode,
     Upstream {
+        global_code: i64,
+        result_code: Option<i64>,
+    },
+    RateLimited {
         global_code: i64,
         result_code: Option<i64>,
     },
@@ -88,6 +93,14 @@ impl<E> fmt::Debug for QqMusicSearchError<E> {
                 result_code,
             } => formatter
                 .debug_struct("Upstream")
+                .field("global_code", global_code)
+                .field("result_code", result_code)
+                .finish(),
+            Self::RateLimited {
+                global_code,
+                result_code,
+            } => formatter
+                .debug_struct("RateLimited")
                 .field("global_code", global_code)
                 .field("result_code", result_code)
                 .finish(),
@@ -141,6 +154,13 @@ impl<E> fmt::Display for QqMusicSearchError<E> {
             } => write!(
                 formatter,
                 "search request failed with global code {global_code} and result code {result_code:?}"
+            ),
+            Self::RateLimited {
+                global_code,
+                result_code,
+            } => write!(
+                formatter,
+                "search request was rate limited with global code {global_code} and result code {result_code:?}"
             ),
             Self::MissingData => formatter.write_str("search data is missing"),
             Self::MissingBody => formatter.write_str("search body is missing"),
@@ -412,11 +432,20 @@ fn map_response<E>(
 ) -> Result<QqMusicTrackSearchPage, QqMusicSearchError<E>> {
     let global_code = envelope.code.ok_or(QqMusicSearchError::MissingGlobalCode)?;
     let result_code = envelope.search.as_ref().and_then(|result| result.code);
-    if global_code != 0 || result_code.is_some_and(|code| code != 0) {
-        return Err(QqMusicSearchError::Upstream {
-            global_code,
-            result_code,
-        });
+    match classify_musicu_codes(global_code, result_code) {
+        Ok(()) => {}
+        Err(QqProtocolOutcome::RateLimited) => {
+            return Err(QqMusicSearchError::RateLimited {
+                global_code,
+                result_code,
+            });
+        }
+        Err(_) => {
+            return Err(QqMusicSearchError::Upstream {
+                global_code,
+                result_code,
+            });
+        }
     }
     let result = envelope.search.ok_or(QqMusicSearchError::MissingResult)?;
     result.code.ok_or(QqMusicSearchError::MissingResultCode)?;
@@ -615,6 +644,23 @@ mod tests {
         assert!(!debug.contains("synthetic query"));
         assert!(!debug.contains("Synthetic track"));
         assert!(!debug.contains("fixtureTrackMid1"));
+    }
+
+    #[tokio::test]
+    async fn classifies_rate_limit_without_fabricating_an_empty_page() {
+        let client = QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "search": {"code": 2001}
+        })));
+
+        assert!(matches!(
+            client.search_tracks("query", 1, 5).await,
+            Err(QqMusicSearchError::RateLimited {
+                global_code: 0,
+                result_code: Some(2001)
+            })
+        ));
+        assert_eq!(client.transport().requests().len(), 1);
     }
 
     #[tokio::test]

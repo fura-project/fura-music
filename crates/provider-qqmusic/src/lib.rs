@@ -2644,9 +2644,9 @@ fn map_album_favorite_error<E>(error: &QqMusicAlbumFavoriteError<E>) -> LibraryM
 fn map_search_error<E>(error: &QqMusicSearchError<E>) -> SearchError {
     match error {
         QqMusicSearchError::Transport(_) => SearchError::Network,
-        QqMusicSearchError::HttpStatus(_) | QqMusicSearchError::Upstream { .. } => {
-            SearchError::ServiceUnavailable
-        }
+        QqMusicSearchError::HttpStatus(_)
+        | QqMusicSearchError::RateLimited { .. }
+        | QqMusicSearchError::Upstream { .. } => SearchError::ServiceUnavailable,
         QqMusicSearchError::InvalidQuery
         | QqMusicSearchError::InvalidPage { .. }
         | QqMusicSearchError::InvalidPageSize { .. }
@@ -2672,9 +2672,9 @@ fn map_search_error<E>(error: &QqMusicSearchError<E>) -> SearchError {
 fn map_artist_search_error<E>(error: &QqMusicArtistSearchError<E>) -> SearchError {
     match error {
         QqMusicArtistSearchError::Transport(_) => SearchError::Network,
-        QqMusicArtistSearchError::HttpStatus(_) | QqMusicArtistSearchError::Upstream { .. } => {
-            SearchError::ServiceUnavailable
-        }
+        QqMusicArtistSearchError::HttpStatus(_)
+        | QqMusicArtistSearchError::RateLimited { .. }
+        | QqMusicArtistSearchError::Upstream { .. } => SearchError::ServiceUnavailable,
         QqMusicArtistSearchError::InvalidQuery
         | QqMusicArtistSearchError::InvalidPage { .. }
         | QqMusicArtistSearchError::InvalidPageSize { .. }
@@ -2700,9 +2700,9 @@ fn map_artist_search_error<E>(error: &QqMusicArtistSearchError<E>) -> SearchErro
 fn map_album_search_error<E>(error: &QqMusicAlbumSearchError<E>) -> SearchError {
     match error {
         QqMusicAlbumSearchError::Transport(_) => SearchError::Network,
-        QqMusicAlbumSearchError::HttpStatus(_) | QqMusicAlbumSearchError::Upstream { .. } => {
-            SearchError::ServiceUnavailable
-        }
+        QqMusicAlbumSearchError::HttpStatus(_)
+        | QqMusicAlbumSearchError::RateLimited { .. }
+        | QqMusicAlbumSearchError::Upstream { .. } => SearchError::ServiceUnavailable,
         QqMusicAlbumSearchError::InvalidQuery
         | QqMusicAlbumSearchError::InvalidPage { .. }
         | QqMusicAlbumSearchError::InvalidPageSize { .. }
@@ -2728,9 +2728,9 @@ fn map_album_search_error<E>(error: &QqMusicAlbumSearchError<E>) -> SearchError 
 fn map_playlist_search_error<E>(error: &QqMusicPlaylistSearchError<E>) -> SearchError {
     match error {
         QqMusicPlaylistSearchError::Transport(_) => SearchError::Network,
-        QqMusicPlaylistSearchError::HttpStatus(_) | QqMusicPlaylistSearchError::Upstream { .. } => {
-            SearchError::ServiceUnavailable
-        }
+        QqMusicPlaylistSearchError::HttpStatus(_)
+        | QqMusicPlaylistSearchError::RateLimited { .. }
+        | QqMusicPlaylistSearchError::Upstream { .. } => SearchError::ServiceUnavailable,
         QqMusicPlaylistSearchError::InvalidQuery
         | QqMusicPlaylistSearchError::InvalidPage { .. }
         | QqMusicPlaylistSearchError::InvalidPageSize { .. }
@@ -4307,6 +4307,13 @@ mod tests {
             SearchError::ServiceUnavailable
         );
         assert_eq!(
+            super::map_search_error(&QqMusicSearchError::<Infallible>::RateLimited {
+                global_code: 0,
+                result_code: Some(2001),
+            }),
+            SearchError::ServiceUnavailable
+        );
+        assert_eq!(
             super::map_search_error(&QqMusicSearchError::<Infallible>::InvalidPagination),
             SearchError::InvalidResponse
         );
@@ -4314,6 +4321,13 @@ mod tests {
             super::map_artist_search_error(&QqMusicArtistSearchError::<Infallible>::HttpStatus(
                 503
             )),
+            SearchError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_artist_search_error(&QqMusicArtistSearchError::<Infallible>::RateLimited {
+                global_code: 0,
+                result_code: Some(2001),
+            }),
             SearchError::ServiceUnavailable
         );
         assert_eq!(
@@ -4327,6 +4341,13 @@ mod tests {
             SearchError::ServiceUnavailable
         );
         assert_eq!(
+            super::map_album_search_error(&QqMusicAlbumSearchError::<Infallible>::RateLimited {
+                global_code: 0,
+                result_code: Some(2001),
+            }),
+            SearchError::ServiceUnavailable
+        );
+        assert_eq!(
             super::map_album_search_error(
                 &QqMusicAlbumSearchError::<Infallible>::InvalidPagination
             ),
@@ -4335,6 +4356,15 @@ mod tests {
         assert_eq!(
             super::map_playlist_search_error(
                 &QqMusicPlaylistSearchError::<Infallible>::HttpStatus(503)
+            ),
+            SearchError::ServiceUnavailable
+        );
+        assert_eq!(
+            super::map_playlist_search_error(
+                &QqMusicPlaylistSearchError::<Infallible>::RateLimited {
+                    global_code: 0,
+                    result_code: Some(2001),
+                }
             ),
             SearchError::ServiceUnavailable
         );

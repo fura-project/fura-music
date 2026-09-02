@@ -33,6 +33,7 @@ mod personalized_tracks;
 mod playlist_containers;
 mod playlist_detail;
 mod playlist_search;
+mod protocol_strategy;
 mod qq_qr;
 mod qrc_cipher;
 mod radar_recommendations;
