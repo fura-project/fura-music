@@ -323,12 +323,17 @@ where
             )
             .await
             .map_err(QqQrError::Transport)?;
+        qq_qr_debug_http_status("check_sig", check.status());
         ensure_redirect_or_success("check signature", check.status())?;
         let cookies = response_cookies(&check);
         let p_skey = cookies
             .iter()
-            .find_map(|(name, value)| (name == "p_skey").then_some(value.as_str()))
-            .ok_or(QqQrError::MissingPSkey)?;
+            .find_map(|(name, value)| (name == "p_skey").then_some(value.as_str()));
+        qq_qr_debug(format_args!(
+            "phase=check_sig p_skey_present={}",
+            p_skey.is_some()
+        ));
+        let p_skey = p_skey.ok_or(QqQrError::MissingPSkey)?;
         let cookie_header = cookies
             .iter()
             .map(|(name, value)| format!("{name}={value}"))
@@ -350,13 +355,23 @@ where
             )
             .await
             .map_err(QqQrError::Transport)?;
+        qq_qr_debug(format_args!(
+            "phase=authorize http_status={} location_present={}",
+            authorize.status(),
+            authorize.header_values("location").next().is_some()
+        ));
         ensure_redirect_or_success("authorization", authorize.status())?;
         let location = authorize
             .header_values("location")
             .next()
             .ok_or(QqQrError::MissingRedirect)?;
         let location = Url::parse(location).map_err(|_| QqQrError::MissingRedirect)?;
-        let code = query_value(&location, "code").ok_or(QqQrError::MissingAuthorizationCode)?;
+        let code = query_value(&location, "code");
+        qq_qr_debug(format_args!(
+            "phase=authorize authorization_code_present={}",
+            code.is_some()
+        ));
+        let code = code.ok_or(QqQrError::MissingAuthorizationCode)?;
 
         let payload =
             serde_json::to_vec(&QqLoginRequest::new(&code)).map_err(|_| QqQrError::Serialize)?;
@@ -374,14 +389,43 @@ where
             )
             .await
             .map_err(QqQrError::Transport)?;
-        ensure_success("credential exchange", login.status())?;
-        decode_login_credential(
-            login.body(),
-            "QQConnectLogin.LoginServer.QQLogin",
-            LoginType::QQ,
-        )
-        .map_err(QqQrError::Credential)
+        decode_qq_login_response(&login)
     }
+}
+
+fn decode_qq_login_response<E>(login: &HttpResponse) -> Result<Credential, QqQrError<E>> {
+    qq_qr_debug(format_args!(
+        "phase=credential_exchange http_status={}",
+        login.status()
+    ));
+    ensure_success("credential exchange", login.status())?;
+    let credential = decode_login_credential(
+        login.body(),
+        "QQConnectLogin.LoginServer.QQLogin",
+        LoginType::QQ,
+    );
+    match credential {
+        Ok(credential) => {
+            qq_qr_debug(format_args!("phase=credential_exchange outcome=success"));
+            Ok(credential)
+        }
+        Err(error) => {
+            qq_qr_debug(format_args!(
+                "phase=credential_exchange outcome=decode_error detail={error:?}"
+            ));
+            Err(QqQrError::Credential(error))
+        }
+    }
+}
+
+fn qq_qr_debug(message: fmt::Arguments<'_>) {
+    if std::env::var_os("FURA_QQ_QR_DEBUG").is_some() {
+        eprintln!("[fura][qq-qr] {message}");
+    }
+}
+
+fn qq_qr_debug_http_status(phase: &str, status: u16) {
+    qq_qr_debug(format_args!("phase={phase} http_status={status}"));
 }
 
 impl QrImage {
@@ -668,8 +712,14 @@ mod tests {
 
     #[tokio::test]
     async fn exchanges_confirmed_qq_authorization_through_redirect_chain() {
+        // Real musicu envelopes also carry scalar transport metadata. The login
+        // decoder must select the named result instead of flattening every
+        // unrelated top-level value into the login response model.
         let credential = serde_json::json!({
             "code": 0,
+            "ts": 1_777_777_777,
+            "start_ts": 1_777_777_776,
+            "traceid": "synthetic-trace",
             "QQConnectLogin.LoginServer.QQLogin": {
                 "code": 0,
                 "data": {

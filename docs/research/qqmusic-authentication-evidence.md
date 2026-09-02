@@ -113,8 +113,22 @@ On 2026-08-31 the ignored, environment-gated `live_qq_qr` test fetched a new
 QQ Web QR and received the unconfirmed waiting state from one poll. It did not
 display or scan the QR, approve authorization, access an account, or retain
 the image or session values. This proves current anonymous bootstrap and poll
-compatibility only; the confirmed redirect and credential exchange remain
-offline fixture-verified and require maintainer-operated acceptance.
+compatibility only.
+
+On 2026-09-02 a maintainer-operated, secret-safe interactive run completed the
+confirmed path. Opt-in diagnostics retained only phase status, value-presence
+booleans, JSON value kinds, and redacted error categories. They showed a
+successful `check_sig` redirect with `p_skey`, a successful authorization
+redirect with a code, and an HTTP-successful, syntactically valid musicu login
+envelope with the expected named login result. The client still returned
+`InvalidJson` because its deserializer flattened every non-`code` top-level
+value into `LoginResponse`; real musicu transport metadata such as `ts`,
+`start_ts`, and `traceid` are scalars and therefore made that flatten operation
+fail before the named result could be read. The decoder now selects only the
+global code and exact named login result. A synthetic regression includes
+unrelated scalar metadata, and the maintainer confirmed that QR approval then
+signed the client in. No QR session value, cookie, authorization code, account
+identity, credential, response body, or account content was printed or saved.
 
 ### Historical: phone plus one-time-code authorization
 
@@ -211,5 +225,5 @@ The Provider layer now maps raw protocol image/state/error types into provider-n
 
 Before claiming M1 authentication acceptance:
 
-1. Perform a maintainer-operated QQ Web QR approval and confirm that credential exchange and restore succeed without retaining secret-bearing evidence.
+1. Confirm a clean-process restore after the successful maintainer-operated QQ Web QR credential exchange without retaining secret-bearing evidence.
 2. Run the existing disposable secure-vault pattern on each distribution target; Linux passed on 2026-08-25, but plugin linkage alone does not prove the remaining platform implementations.

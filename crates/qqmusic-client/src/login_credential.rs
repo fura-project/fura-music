@@ -54,13 +54,6 @@ impl std::error::Error for LoginCredentialError {
 }
 
 #[derive(Deserialize)]
-struct LoginEnvelope {
-    code: Option<i64>,
-    #[serde(flatten)]
-    calls: std::collections::HashMap<String, LoginResponse>,
-}
-
-#[derive(Deserialize)]
 struct LoginResponse {
     code: Option<i64>,
     data: Option<RawCredential>,
@@ -118,15 +111,19 @@ pub(crate) fn decode_login_credential(
     result_key: &str,
     login_type: LoginType,
 ) -> Result<Credential, LoginCredentialError> {
-    let mut envelope: LoginEnvelope =
+    let envelope: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|_| LoginCredentialError::InvalidJson)?;
     let global_code = envelope
-        .code
+        .get("code")
+        .and_then(serde_json::Value::as_i64)
         .ok_or(LoginCredentialError::MissingGlobalCode)?;
-    let login = envelope
-        .calls
-        .remove(result_key)
-        .ok_or(LoginCredentialError::MissingLoginResult)?;
+    let login: LoginResponse = serde_json::from_value(
+        envelope
+            .get(result_key)
+            .cloned()
+            .ok_or(LoginCredentialError::MissingLoginResult)?,
+    )
+    .map_err(|_| LoginCredentialError::InvalidJson)?;
     if global_code != 0 || login.code != Some(0) {
         return Err(LoginCredentialError::Upstream {
             global_code,
