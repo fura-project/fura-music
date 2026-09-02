@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicArtistSummary, QqMusicClient,
-    QqMusicTrackSummary,
+    QqMusicTrackSummary, normalized_https_image_uri,
 };
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
@@ -700,7 +700,8 @@ fn map_ranking_summary(raw: RawRankingSummary) -> Result<QqMusicRankingSummary, 
         top_id,
         title,
         period: nonblank(raw.period),
-        artwork_uri: nonblank(raw.front_pic_url).or_else(|| nonblank(raw.head_pic_url)),
+        artwork_uri: normalized_https_image_uri(raw.front_pic_url)
+            .or_else(|| normalized_https_image_uri(raw.head_pic_url)),
         total: raw.total,
     })
 }

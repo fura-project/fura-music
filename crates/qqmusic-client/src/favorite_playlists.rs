@@ -4,7 +4,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::credential::is_credential_rejection_code;
-use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
+use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_FAVORITE_PLAYLISTS_RESPONSE_BYTES: usize = 1024 * 1024;
@@ -494,7 +494,7 @@ fn map_response<E>(
         playlists.push(QqMusicFavoritePlaylist {
             playlist_id,
             name,
-            cover_url: raw.cover_url.filter(|value| !value.trim().is_empty()),
+            cover_url: normalized_https_image_uri(raw.cover_url),
             track_count: raw.track_count,
         });
     }

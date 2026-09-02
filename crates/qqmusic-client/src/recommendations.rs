@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{HttpRequest, HttpTransport, QqMusicClient};
+use crate::{HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
@@ -372,7 +372,7 @@ impl RawRecommendedCover {
         [self.medium, self.big, self.default, self.small]
             .into_iter()
             .flatten()
-            .find(|value| !value.trim().is_empty())
+            .find_map(|value| normalized_https_image_uri(Some(value)))
     }
 }
 

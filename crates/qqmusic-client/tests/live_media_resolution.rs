@@ -1,11 +1,14 @@
-use qqmusic_client::{QqMusicAudioQuality, QqMusicClient, QqMusicMediaError, ReqwestTransport};
+use qqmusic_client::{
+    QqMusicAudioQuality, QqMusicClient, QqMusicMediaError, QqMusicNewSongCategory, ReqwestTransport,
+};
 
-/// Opt-in compatibility probe using only a bounded public Search page and an
-/// anonymous `uin=0` media context. It retains no Track content, source URL,
-/// vkey, or response body.
+/// Opt-in compatibility probe using only a bounded public new-song collection
+/// and an anonymous `uin=0` media context. It retains no Track content, source
+/// URL, vkey, or response body. Search is intentionally not a prerequisite:
+/// QQ may independently rate-limit Search with result code 2001.
 #[tokio::test]
 #[ignore = "live QQ Music service; run explicitly with QQMUSIC_LIVE_TESTS=1"]
-async fn resolves_one_public_search_result_without_account() {
+async fn resolves_one_public_catalog_track_without_account() {
     if std::env::var("QQMUSIC_LIVE_TESTS").as_deref() != Ok("1") {
         eprintln!("skipped: set QQMUSIC_LIVE_TESTS=1 for the live request");
         return;
@@ -19,12 +22,12 @@ async fn resolves_one_public_search_result_without_account() {
     assert!(dispatch.base_count() > 0);
     assert!(dispatch.expiration_seconds() > 0);
 
-    let page = client
-        .search_tracks("Coldplay", 1, 10)
+    let collection = client
+        .new_songs(QqMusicNewSongCategory::Latest)
         .await
-        .expect("bounded public Search remains compatible");
+        .expect("bounded public new-song collection remains compatible");
     let mut found_source = false;
-    for track in page.tracks() {
+    for track in collection.tracks().iter().take(10) {
         match client
             .anonymous_standard_mp3_source(track.song_mid(), track.file_media_mid(), &dispatch)
             .await
@@ -41,6 +44,6 @@ async fn resolves_one_public_search_result_without_account() {
     }
     assert!(
         found_source,
-        "bounded public Search page returned no anonymously playable Track"
+        "bounded public catalog sample returned no anonymously playable Track"
     );
 }

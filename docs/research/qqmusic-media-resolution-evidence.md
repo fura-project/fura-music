@@ -1,7 +1,7 @@
 # QQ Music media-resolution evidence
 
 - **Status:** Anonymous standard plus authenticated standard/high MP3 selection implemented; authenticated playback retest pending
-- **Last checked:** 2026-08-31
+- **Last checked:** 2026-09-01
 - **Scope:** Anonymous standard MP3, authenticated standard/high MP3, actual-quality reporting, and one bounded fallback policy.
 
 This note records independently implemented protocol behavior and two bounded no-account probes. It does not copy reusable third-party code. No account credential, user library, media URL, vkey, or response content was retained.
@@ -107,6 +107,15 @@ query result content, Track identity, source URL, vkey, or response body. This
 proves that current guest playback is possible for some public catalog results,
 not that every search result is anonymously playable or that authentication
 would make every unavailable Track playable.
+
+On 2026-09-01 repeated bounded Search requests began returning result code
+`2001` after earlier successes. Two current independent clients classify that
+code as rate limiting. Because Search availability is not part of media-source
+resolution, the gate now draws at most ten candidates from the existing public
+new-song collection instead. The updated gate passed and found an anonymously
+playable source without retaining Track or source data. This prevents an
+independent Search rate limit from creating a false media-resolution failure;
+it does not weaken either capability's failure semantics.
 
 The first authorized Linux product smoke restored the user's real account and loaded playlist/detail data, but every attempted ordinary or VIP track mapped to unavailable before reaching the audio engine. The anonymous batch probe above reproduced the exact all-`101404` behavior from the forwarded `songtype: 13`, establishing a protocol-mapping root cause without inspecting the user's credential, identifiers, source URLs, or response bodies. The correction has offline regressions and a passing anonymous live client probe; a fresh authorized product retest is still required before claiming playback success.
 

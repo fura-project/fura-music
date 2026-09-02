@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{HttpRequest, HttpTransport, QqMusicClient};
+use crate::{HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const PLAYLIST_SEARCH_KEY: &str = "music.search.SearchCgiService";
@@ -477,7 +477,7 @@ fn map_playlist<E>(
     Ok(QqMusicPlaylistSearchSummary {
         playlist_id,
         title,
-        artwork_uri: nonblank(raw.imgurl),
+        artwork_uri: normalized_https_image_uri(raw.imgurl),
         track_count,
     })
 }

@@ -1,7 +1,7 @@
 # QQ Music lyric and QRC evidence
 
-- **Status:** Evidence, Domain/Provider contract, and protocol client implemented; Provider mapping pending
-- **Last checked:** 2026-08-26
+- **Status:** Anonymous/authenticated Client and Provider mapping implemented; live anonymous QRC path passed
+- **Last checked:** 2026-09-01
 - **Scope:** One QQ Music track's synchronized original lyrics, optional translation/romanization, and basic word-level timing for M1.
 
 This note records independently implemented behavior plus one bounded anonymous response-shape probe. It does not retain or reproduce lyric text, encrypted lyric bodies, account data, or reusable third-party source code.
@@ -116,7 +116,7 @@ On 2026-08-26 an anonymous request for the public song MID already used by the r
 
 The probe printed only codes, field names, types, lengths, flags, and nonempty booleans. It did not print or retain the encrypted body or decoded lyrics. This proves the anonymous request and response shape on that date. It does not prove authenticated behavior, lyric availability across the catalog, translation/romanization coverage, decryption correctness in this project, or exact timing behavior for a real track.
 
-After implementation, the opt-in Rust `live_lyrics` test ran the same public MID through the actual bounded client request, QQ-compatible decryptor, XML reader, and QRC parser. It confirmed a nonempty original line set with at least one timed segment without printing or retaining ciphertext or lyric text. This proves the implemented anonymous request/decode/parse path on 2026-08-26; it still does not prove authenticated-only outcomes or auxiliary-track coverage.
+After implementation, the opt-in Rust `live_lyrics` test ran the same public MID through the actual bounded client request, QQ-compatible decryptor, XML reader, and QRC parser. It confirmed a nonempty original line set with at least one timed segment without printing or retaining ciphertext or lyric text. On 2026-09-01 the gate passed again with no Cookie and only zero/empty anonymous account fields; the Provider now uses this path while signed out instead of rejecting before transport. This proves the implemented anonymous request/decode/parse path for that public sample; it still does not prove authenticated-only outcomes or auxiliary-track coverage.
 
 ## Selected first implementation slice
 

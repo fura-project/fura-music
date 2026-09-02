@@ -291,7 +291,7 @@ where
     /// document failures without retaining lyric content in diagnostics.
     pub async fn lyrics(
         &self,
-        credential: &Credential,
+        credential: Option<&Credential>,
         song_mid: &str,
         song_type: u32,
     ) -> Result<QqMusicLyrics, QqMusicLyricsError<T::Error>> {
@@ -300,18 +300,19 @@ where
         }
         let body = serde_json::to_vec(&LyricRequest::new(credential, song_mid, song_type))
             .map_err(|_| QqMusicLyricsError::Serialize)?;
+        let mut request = HttpRequest::post(MUSICU_URL)
+            .header("Content-Type", "application/json")
+            .header("Origin", "https://y.qq.com")
+            .header("Referer", "https://y.qq.com/")
+            .body(body)
+            .response_body_limit(MAX_LYRIC_RESPONSE_BYTES)
+            .timeout(LYRIC_REQUEST_TIMEOUT);
+        if let Some(credential) = credential {
+            request = request.header("Cookie", credential.musicu_cookie_header());
+        }
         let response = self
             .transport()
-            .execute(
-                HttpRequest::post(MUSICU_URL)
-                    .header("Content-Type", "application/json")
-                    .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
-                    .header("Cookie", credential.musicu_cookie_header())
-                    .body(body)
-                    .response_body_limit(MAX_LYRIC_RESPONSE_BYTES)
-                    .timeout(LYRIC_REQUEST_TIMEOUT),
-            )
+            .execute(request)
             .await
             .map_err(QqMusicLyricsError::Transport)?;
         if !(200..300).contains(&response.status()) {
@@ -636,7 +637,7 @@ struct LyricRequest<'a> {
 }
 
 impl<'a> LyricRequest<'a> {
-    fn new(credential: &'a Credential, song_mid: &'a str, song_type: u32) -> Self {
+    fn new(credential: Option<&'a Credential>, song_mid: &'a str, song_type: u32) -> Self {
         Self {
             comm: LyricComm::new(credential),
             request: LyricRpc {
@@ -715,7 +716,14 @@ struct LyricComm<'a> {
 }
 
 impl<'a> LyricComm<'a> {
-    fn new(credential: &'a Credential) -> Self {
+    fn new(credential: Option<&'a Credential>) -> Self {
+        let (user_id, auth_key, login_type) = credential.map_or(("0", "", 0), |credential| {
+            (
+                credential.music_id(),
+                credential.music_key(),
+                credential.login_type().value(),
+            )
+        });
         Self {
             cv: 13_020_508,
             version: 13_020_508,
@@ -724,11 +732,11 @@ impl<'a> LyricComm<'a> {
             format: "json",
             input_charset: "utf-8",
             output_charset: "utf-8",
-            user_id: credential.music_id(),
-            account_id: credential.music_id(),
-            auth_key: credential.music_key(),
-            login_type: credential.login_type().value(),
-            login_uin: credential.music_id(),
+            user_id,
+            account_id: user_id,
+            auth_key,
+            login_type,
+            login_uin: user_id,
         }
     }
 }
@@ -838,7 +846,7 @@ mod tests {
         let transport = FixtureTransport::new(&success_response());
         let client = QqMusicClient::new(transport.clone());
         let lyrics = client
-            .lyrics(&credential(), "fixtureMID01", 0)
+            .lyrics(Some(&credential()), "fixtureMID01", 0)
             .await
             .expect("lyrics");
 
@@ -869,6 +877,32 @@ mod tests {
         }
         assert!(format!("{lyrics:?}").contains("original_line_count: 2"));
         assert!(!format!("{lyrics:?}").contains("Synthetic"));
+    }
+
+    #[tokio::test]
+    async fn anonymous_lyrics_send_no_cookie_or_fabricated_account_material() {
+        let transport = FixtureTransport::new(&success_response());
+        QqMusicClient::new(transport.clone())
+            .lyrics(None, "fixtureMID01", 0)
+            .await
+            .expect("anonymous lyrics");
+
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        assert!(
+            requests[0]
+                .headers()
+                .iter()
+                .all(|(name, _)| name != "Cookie")
+        );
+        let body: Value =
+            serde_json::from_slice(requests[0].body_bytes().expect("lyric request body"))
+                .expect("request JSON");
+        assert_eq!(body["comm"]["uid"], "0");
+        assert_eq!(body["comm"]["qq"], "0");
+        assert_eq!(body["comm"]["loginUin"], "0");
+        assert_eq!(body["comm"]["authst"], "");
+        assert_eq!(body["comm"]["tmeLoginType"], 0);
     }
 
     #[test]
@@ -905,7 +939,7 @@ mod tests {
         }));
         assert!(matches!(
             QqMusicClient::new(unavailable)
-                .lyrics(&credential(), "fixtureMID01", 0)
+                .lyrics(Some(&credential()), "fixtureMID01", 0)
                 .await,
             Err(QqMusicLyricsError::Unavailable)
         ));
@@ -916,7 +950,7 @@ mod tests {
         }));
         assert!(matches!(
             QqMusicClient::new(unavailable_without_qrc)
-                .lyrics(&credential(), "fixtureMID01", 0)
+                .lyrics(Some(&credential()), "fixtureMID01", 0)
                 .await,
             Err(QqMusicLyricsError::Unavailable)
         ));
@@ -927,7 +961,7 @@ mod tests {
         }));
         assert!(matches!(
             QqMusicClient::new(rejected)
-                .lyrics(&credential(), "fixtureMID01", 0)
+                .lyrics(Some(&credential()), "fixtureMID01", 0)
                 .await,
             Err(QqMusicLyricsError::Rejected { code: 104_401 })
         ));
@@ -941,7 +975,7 @@ mod tests {
         }));
         assert!(matches!(
             QqMusicClient::new(invalid)
-                .lyrics(&credential(), "fixtureMID01", 0)
+                .lyrics(Some(&credential()), "fixtureMID01", 0)
                 .await,
             Err(QqMusicLyricsError::InvalidDocument {
                 track: QqMusicLyricTrack::Original,
@@ -954,7 +988,7 @@ mod tests {
     async fn rejects_invalid_identity_before_transport_and_redacts_errors() {
         let transport = FixtureTransport::new(&success_response());
         let result = QqMusicClient::new(transport.clone())
-            .lyrics(&credential(), "bad mid", 0)
+            .lyrics(Some(&credential()), "bad mid", 0)
             .await;
         assert!(matches!(result, Err(QqMusicLyricsError::InvalidSongMid)));
         assert!(transport.requests().is_empty());

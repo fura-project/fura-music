@@ -213,20 +213,27 @@ impl<T> QqMusicProvider<T> {
         Ok(())
     }
 
-    fn authenticated_lyrics_credential(&self) -> Result<Credential, LyricsError> {
+    fn lyrics_credential(&self) -> Option<Credential> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential) => Some(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
-            | QqMusicCredentialState::LocallyExpired(_) => Err(LyricsError::AuthenticationRequired),
+            | QqMusicCredentialState::LocallyExpired(_) => None,
         }
     }
 
     fn finish_lyrics_await(
         &self,
-        candidate: &Credential,
+        candidate: Option<&Credential>,
         rejected: bool,
     ) -> Result<(), LyricsError> {
+        let Some(candidate) = candidate else {
+            return if rejected {
+                Err(LyricsError::AuthenticationRequired)
+            } else {
+                Ok(())
+            };
+        };
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
@@ -1573,14 +1580,14 @@ where
     type Error = LyricsError;
 
     async fn lyrics(&self, track_id: TrackId) -> Result<SynchronizedLyrics, Self::Error> {
-        let candidate = self.authenticated_lyrics_credential()?;
+        let candidate = self.lyrics_credential();
         let route = parse_lyrics_track(&track_id)?;
         let response = self
             .client()
-            .lyrics(&candidate, route.song_mid, route.song_type)
+            .lyrics(candidate.as_ref(), route.song_mid, route.song_type)
             .await;
         self.finish_lyrics_await(
-            &candidate,
+            candidate.as_ref(),
             matches!(response, Err(QqMusicLyricsError::Rejected { .. })),
         )?;
         response
@@ -7036,17 +7043,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn lyrics_require_authentication_and_reject_malformed_identity_before_transport() {
+    async fn signed_out_lyrics_use_anonymous_request_and_reject_malformed_identity() {
         let provider = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(
             &lyrics_success_json(),
         )));
-        assert_eq!(
-            provider
-                .lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"))
-                .await,
-            Err(LyricsError::AuthenticationRequired)
+        let lyrics = provider
+            .lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"))
+            .await
+            .expect("anonymous lyrics");
+        assert_eq!(lyrics.lines().len(), 2);
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 1);
+        assert!(
+            requests[0]
+                .headers()
+                .iter()
+                .all(|(name, _)| name != "Cookie")
         );
-        set_authenticated(&provider, "123456");
         let foreign = TrackId::new(
             ProviderId::new("local").expect("provider"),
             "track:41001:0:fixtureMID01:fixtureFileMID01",
@@ -7067,11 +7080,24 @@ mod tests {
                 Err(LyricsError::InvalidResponse)
             );
         }
-        assert!(provider.client().transport().requests().is_empty());
+        assert_eq!(provider.client().transport().requests().len(), 1);
     }
 
     #[tokio::test]
     async fn lyric_failure_clears_only_explicit_rejection() {
+        let anonymous_rejected =
+            QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(&json!({
+                "code": 0,
+                "req_0": {"code": 1000}
+            }))));
+        assert_eq!(
+            anonymous_rejected
+                .lyrics(qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01"))
+                .await,
+            Err(LyricsError::AuthenticationRequired)
+        );
+        assert!(!anonymous_rejected.has_authenticated_credential());
+
         let unavailable = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(&json!({
             "code": 0,
             "req_0": {"code": 0, "data": {"crypt": 1, "qrc": 1, "lyric": ""}}

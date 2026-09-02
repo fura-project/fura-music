@@ -4,6 +4,10 @@
 //! evidence. The client owns native HTTPS transport without exposing it to
 //! providers or Flutter.
 
+use reqwest::Url;
+
+const MAX_IMAGE_URI_BYTES: usize = 4 * 1024;
+
 mod album;
 mod album_details;
 mod album_favorites;
@@ -163,14 +167,63 @@ impl<T> QqMusicClient<T> {
     }
 }
 
+/// Keeps optional display artwork from turning an otherwise valid catalog row
+/// into a protocol failure. QQ still returns cleartext `qpic.y.qq.com` artwork
+/// on some feeds even though the same resource is served over HTTPS.
+fn normalized_https_image_uri(value: Option<String>) -> Option<String> {
+    let value = value?.trim().to_owned();
+    if value.is_empty() || value.len() > MAX_IMAGE_URI_BYTES {
+        return None;
+    }
+    let mut url = Url::parse(&value).ok()?;
+    url.host()?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return None;
+    }
+    match url.scheme() {
+        "https" => Some(value),
+        "http" if url.host_str() == Some("qpic.y.qq.com") => {
+            url.set_scheme("https").ok()?;
+            Some(url.into())
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::QqMusicClient;
+    use super::{QqMusicClient, normalized_https_image_uri};
 
     #[test]
     fn client_owns_but_does_not_hide_transport_lifecycle() {
         let client = QqMusicClient::new("offline-transport");
         assert_eq!(client.transport(), &"offline-transport");
         assert_eq!(client.into_transport(), "offline-transport");
+    }
+
+    #[test]
+    fn optional_artwork_is_https_or_absent() {
+        assert_eq!(
+            normalized_https_image_uri(Some(
+                " http://qpic.y.qq.com/music_cover/fixture/300?n=1 ".into()
+            )),
+            Some("https://qpic.y.qq.com/music_cover/fixture/300?n=1".into())
+        );
+        assert_eq!(
+            normalized_https_image_uri(Some("https://example.invalid/cover.jpg".into())),
+            Some("https://example.invalid/cover.jpg".into())
+        );
+        assert_eq!(
+            normalized_https_image_uri(Some("http://example.invalid/cover.jpg".into())),
+            None
+        );
+        assert_eq!(
+            normalized_https_image_uri(Some(
+                "https://user:secret@example.invalid/cover.jpg".into()
+            )),
+            None
+        );
+        assert_eq!(normalized_https_image_uri(Some("   ".into())), None);
+        assert_eq!(normalized_https_image_uri(None), None);
     }
 }

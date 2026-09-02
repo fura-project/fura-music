@@ -29,8 +29,8 @@ async fn maps_one_anonymous_read_only_comment_page() {
     assert!(!page_debug.contains(&PUBLIC_SONG_ID.to_string()));
     for comment in page.hot_comments().iter().chain(page.latest_comments()) {
         let comment_debug = format!("{comment:?}");
-        assert!(!comment_debug.contains(comment.comment_id()));
-        assert!(!comment_debug.contains(comment.author_display_name()));
-        assert!(!comment_debug.contains(comment.content()));
+        assert!(comment_debug.contains("comment_id: \"[REDACTED]\""));
+        assert!(comment_debug.contains("author_display_name: \"[REDACTED]\""));
+        assert!(comment_debug.contains("content: \"[REDACTED]\""));
     }
 }

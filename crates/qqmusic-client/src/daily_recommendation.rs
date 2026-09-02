@@ -2,11 +2,10 @@ use std::collections::HashSet;
 use std::fmt;
 use std::time::Duration;
 
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 use crate::credential::is_credential_rejection_code;
-use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
+use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
@@ -741,16 +740,7 @@ fn map_daily_playlist<E>(
             field: DailyRecommendationField::Title,
         },
     )?;
-    let artwork_uri = match card.cover.as_deref() {
-        None => None,
-        Some(value) if value.trim().is_empty() => None,
-        Some(value) if value.len() <= MAX_TEXT_BYTES && https_uri(value) => Some(value.to_owned()),
-        Some(_) => {
-            return Err(QqMusicDailyRecommendationError::InvalidDailyPlaylist {
-                field: DailyRecommendationField::ArtworkUri,
-            });
-        }
-    };
+    let artwork_uri = normalized_https_image_uri(card.cover.clone());
     Ok(QqMusicDailyRecommendation {
         playlist_id,
         title,
@@ -774,7 +764,7 @@ fn map_personalized_playlist<E>(
             field: PersonalizedPlaylistField::Title,
         },
     )?;
-    let artwork_uri = personalized_artwork_uri(card.cover.as_deref());
+    let artwork_uri = normalized_https_image_uri(card.cover.clone());
     Ok(QqMusicPersonalizedPlaylist {
         playlist_id,
         title,
@@ -787,27 +777,6 @@ fn bounded_nonblank(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty() && value.len() <= MAX_TEXT_BYTES)
         .map(str::to_owned)
-}
-
-fn https_uri(value: &str) -> bool {
-    Url::parse(value).is_ok_and(|url| url.scheme() == "https" && url.host().is_some())
-}
-
-fn personalized_artwork_uri(value: Option<&str>) -> Option<String> {
-    let value = value?.trim();
-    if value.is_empty() || value.len() > MAX_TEXT_BYTES {
-        return None;
-    }
-    let mut url = Url::parse(value).ok()?;
-    url.host()?;
-    match url.scheme() {
-        "https" => Some(value.to_owned()),
-        "http" if url.host_str() == Some("qpic.y.qq.com") => {
-            url.set_scheme("https").ok()?;
-            Some(url.into())
-        }
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -921,6 +890,29 @@ mod tests {
         .await
         .expect("valid feed without Daily 30");
         assert!(absent.is_none());
+
+        let mut cleartext_qq_artwork = daily_card("9002", "Daily QQ artwork");
+        cleartext_qq_artwork["cover"] = json!("http://qpic.y.qq.com/music_cover/fixture/300?n=1");
+        let normalized =
+            QqMusicClient::new(DailyTransport::new(&feed_json(&[cleartext_qq_artwork])))
+                .daily_recommendation(&credential())
+                .await
+                .expect("daily response")
+                .expect("daily playlist");
+        assert_eq!(
+            normalized.artwork_uri(),
+            Some("https://qpic.y.qq.com/music_cover/fixture/300?n=1")
+        );
+
+        let mut unusable_artwork = daily_card("9002", "Daily unusable artwork");
+        unusable_artwork["cover"] = json!("http://example.invalid/daily.jpg");
+        let without_artwork =
+            QqMusicClient::new(DailyTransport::new(&feed_json(&[unusable_artwork])))
+                .daily_recommendation(&credential())
+                .await
+                .expect("optional artwork does not invalidate Daily")
+                .expect("daily playlist");
+        assert_eq!(without_artwork.artwork_uri(), None);
 
         let duplicate = QqMusicClient::new(DailyTransport::new(&feed_json(&[
             daily_card("9002", "First private title"),
