@@ -169,26 +169,39 @@ impl<T> QqMusicClient<T> {
 }
 
 /// Keeps optional display artwork from turning an otherwise valid catalog row
-/// into a protocol failure. QQ still returns cleartext `qpic.y.qq.com` artwork
-/// on some feeds even though the same resource is served over HTTPS.
+/// into a protocol failure. QQ still returns cleartext or protocol-relative
+/// artwork on its evidenced image hosts even though the same resources are
+/// served over HTTPS.
 fn normalized_https_image_uri(value: Option<String>) -> Option<String> {
     let value = value?.trim().to_owned();
     if value.is_empty() || value.len() > MAX_IMAGE_URI_BYTES {
         return None;
     }
-    let mut url = Url::parse(&value).ok()?;
+    let protocol_relative = value.starts_with("//");
+    let normalized = if protocol_relative {
+        format!("https:{value}")
+    } else {
+        value
+    };
+    let mut url = Url::parse(&normalized).ok()?;
     url.host()?;
     if !url.username().is_empty() || url.password().is_some() {
         return None;
     }
     match url.scheme() {
-        "https" => Some(value),
-        "http" if url.host_str() == Some("qpic.y.qq.com") => {
+        "https" if !protocol_relative || url.host_str().is_some_and(is_evidenced_qq_image_host) => {
+            Some(normalized)
+        }
+        "http" if url.host_str().is_some_and(is_evidenced_qq_image_host) => {
             url.set_scheme("https").ok()?;
             Some(url.into())
         }
         _ => None,
     }
+}
+
+fn is_evidenced_qq_image_host(host: &str) -> bool {
+    matches!(host, "qpic.y.qq.com" | "p.qpic.cn" | "y.gtimg.cn")
 }
 
 #[cfg(test)]
@@ -211,11 +224,29 @@ mod tests {
             Some("https://qpic.y.qq.com/music_cover/fixture/300?n=1".into())
         );
         assert_eq!(
+            normalized_https_image_uri(Some("http://p.qpic.cn/music_cover/fixture/300?n=1".into())),
+            Some("https://p.qpic.cn/music_cover/fixture/300?n=1".into())
+        );
+        assert_eq!(
+            normalized_https_image_uri(Some("//y.gtimg.cn/music/photo_new/fixture.jpg?n=1".into())),
+            Some("https://y.gtimg.cn/music/photo_new/fixture.jpg?n=1".into())
+        );
+        assert_eq!(
             normalized_https_image_uri(Some("https://example.invalid/cover.jpg".into())),
             Some("https://example.invalid/cover.jpg".into())
         );
         assert_eq!(
             normalized_https_image_uri(Some("http://example.invalid/cover.jpg".into())),
+            None
+        );
+        assert_eq!(
+            normalized_https_image_uri(Some(
+                "http://p.qpic.cn.example.invalid/music_cover/fixture/300".into()
+            )),
+            None
+        );
+        assert_eq!(
+            normalized_https_image_uri(Some("//example.invalid/cover.jpg".into())),
             None
         );
         assert_eq!(

@@ -475,7 +475,7 @@ mod tests {
                             "tid": 7001,
                             "dirId": 201,
                             "dirName": "Fixture liked songs",
-                            "picUrl": "https://example.invalid/liked.jpg",
+                            "picUrl": "http://p.qpic.cn/music_cover/fixture/300?n=1",
                             "songNum": 42
                         },
                         {
@@ -500,7 +500,7 @@ mod tests {
         assert_eq!(result.playlists()[0].name(), "Fixture liked songs");
         assert_eq!(
             result.playlists()[0].cover_url(),
-            Some("https://example.invalid/liked.jpg")
+            Some("https://p.qpic.cn/music_cover/fixture/300?n=1")
         );
         assert_eq!(result.playlists()[0].track_count(), Some(42));
         assert_eq!(result.playlists()[1].cover_url(), None);
