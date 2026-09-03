@@ -35,6 +35,7 @@ mod playlist_detail;
 mod playlist_search;
 mod protocol_strategy;
 mod qq_qr;
+mod qq_quick_login;
 mod qrc_cipher;
 mod radar_recommendations;
 mod rankings;
@@ -117,6 +118,9 @@ pub use playlist_search::{
     QqMusicPlaylistSearchSummary,
 };
 pub use qq_qr::{QqQrAuthorization, QqQrError, QqQrPollResult, QqQrSession};
+pub use qq_quick_login::{
+    QqDesktopQuickLoginAccount, QqDesktopQuickLoginError, QqDesktopQuickLoginSession,
+};
 pub use radar_recommendations::{QqMusicRadarError, QqMusicRadarTrackPage, RadarTrackField};
 pub use rankings::{
     QqMusicRankingGroup, QqMusicRankingSummary, QqMusicRankingTrackPage, QqMusicRankingsError,

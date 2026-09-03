@@ -130,6 +130,18 @@ unrelated scalar metadata, and the maintainer confirmed that QR approval then
 signed the client in. No QR session value, cookie, authorization code, account
 identity, credential, response body, or account content was printed or saved.
 
+### Desktop QQ local quick authorization
+
+On 2026-09-03 the maintainer clarified that desktop QQ authorization means the QQ Connect quick-login experience shown by QQ Music: a running desktop QQ exposes signed-in accounts, the user clicks an avatar, and QQ supplies a one-time ticket. It does not mean launching the QR payload in a browser.
+
+The current QQ `xlogin` page reported build `202609011612` and loaded `https://qq-web.cdn-go.cn/monorepo/c1db8078/ptlogin/js/c_login_2.js`. Static inspection found that HTTPS quick login probes odd loopback ports `4301`, `4303`, `4305`, `4307`, and `4309`; calls `pt_get_uins` with `pt_local_tk`, QQ login app `716027609`, DAID `383`, QQ Music Connect app `100497308`, and `login_jump`; then calls `pt_get_st` for the explicitly selected account. It hashes the returned `clientkey` for `https://ssl.ptlogin2.qq.com/jump`, after which the existing QQ Connect authorization and QQ Music credential exchange apply. The same script fetches account images through `ssl.ptlogin2.qq.com/getface`.
+
+The inspected Linux environment had the current QQ client listening on `127.0.0.1:4301`. A connection-only TLS check found a publicly trusted Tencent certificate with `localhost.ptlogin2.qq.com` in its SAN. The implementation did not call `pt_get_uins`, inspect the user's account list, request `pt_get_st`, or authorize an account. Those remain maintainer-operated evidence.
+
+The production candidate pins the local hostname to `127.0.0.1`, bounds all loopback responses and timeouts, accepts at most ten structurally valid accounts, and retains the raw QQ identifier plus local token/ticket only inside an opaque Rust session. Flutter receives a nickname, masked account hint, and attempt-local selection index. A first attempt also performed the script's `getface` lookup serially before returning any account; the maintainer's five-second failure report exposed that as an incorrect interaction gate. The corrected candidate returns choices immediately after the local probe and uses a generic account icon. Real avatar loading is deferred until it can be lazy/non-blocking without exposing raw QQ identity. Complete request/exchange behavior is fixture-tested; a disabled-by-default discovery-only live test reads no ticket and prints no identity.
+
+HD-022 records the separate mobile boundary. Installed-client QQ/WeChat authorization is still requested, but a generic URL dispatch is not accepted as implementation. Native SDK work needs the registered Fura package/signing identities and evidence that its authorization can become a QQ Music session without embedding or impersonating QQ Music's application identity.
+
 ### Historical: phone plus one-time-code authorization
 
 This is not a documented Tencent public login API. The only current direct

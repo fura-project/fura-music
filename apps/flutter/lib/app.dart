@@ -71,6 +71,7 @@ class MusicApp extends StatefulWidget {
     FavoriteArtistGateway? favoriteArtistGateway,
     TrackCommentGateway? trackCommentGateway,
     ForegroundAudioEngine? audioEngine,
+    bool desktopQuickLoginEnabled = false,
     SystemPlaybackBinding systemPlaybackBinding =
         const NoopSystemPlaybackBinding(),
     AppSettings initialSettings = AppSettings.defaults,
@@ -190,6 +191,7 @@ class MusicApp extends StatefulWidget {
         audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
         systemPlaybackBinding: systemPlaybackBinding,
       ),
+      desktopQuickLoginEnabled: desktopQuickLoginEnabled,
       initialSettings: initialSettings,
       settingsStore: settingsStore,
       onPlaybackQualityChanged:
@@ -210,6 +212,7 @@ class MusicApp extends StatefulWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.desktopQuickLoginEnabled,
     required this.initialSettings,
     required this.settingsStore,
     required this.onPlaybackQualityChanged,
@@ -223,6 +226,7 @@ class MusicApp extends StatefulWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final bool desktopQuickLoginEnabled;
   final AppSettings initialSettings;
   final AppSettingsStore? settingsStore;
   final ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged;
@@ -278,6 +282,7 @@ class _MusicAppState extends State<MusicApp> {
       libraryDependencies: widget.libraryDependencies,
       discoveryDependencies: widget.discoveryDependencies,
       playbackDependencies: widget.playbackDependencies,
+      desktopQuickLoginEnabled: widget.desktopQuickLoginEnabled,
       settings: _settings,
       onSettingsChanged: _updateSettings,
       initialCredentialRestore: widget.initialCredentialRestore,
@@ -301,6 +306,7 @@ class LoginPage extends StatefulWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.desktopQuickLoginEnabled,
     required this.settings,
     required this.onSettingsChanged,
     required this.initialCredentialRestore,
@@ -313,6 +319,7 @@ class LoginPage extends StatefulWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final bool desktopQuickLoginEnabled;
   final AppSettings settings;
   final Future<AppSettingsWriteResult> Function(AppSettings settings)
   onSettingsChanged;
@@ -332,6 +339,7 @@ class _LoginPageState extends State<LoginPage> {
     super.initState();
     _controller = LoginController(
       widget.authenticationGateway,
+      desktopQuickLoginEnabled: widget.desktopQuickLoginEnabled,
       initialCredentialRestore: widget.initialCredentialRestore,
     );
     _previousStage = _controller.stage;
@@ -471,7 +479,10 @@ class _AuthenticationDialogState extends State<_AuthenticationDialog> {
       key: const ValueKey('authentication-dialog'),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440, maxHeight: 720),
+        constraints: BoxConstraints(
+          maxWidth: widget.controller.supportsDesktopQuickLogin ? 560 : 440,
+          maxHeight: 720,
+        ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           child: Column(
@@ -580,7 +591,9 @@ class _AuthenticationContent extends StatelessWidget {
       const SizedBox(height: 28),
       FilledButton.icon(
         key: const ValueKey('start-qq-login-button'),
-        onPressed: () => controller.startQr(LoginQrChannel.qq),
+        onPressed: controller.supportsDesktopQuickLogin
+            ? controller.startDesktopQqAuthorization
+            : () => controller.startQr(LoginQrChannel.qq),
         icon: const Icon(Icons.qr_code_2_rounded),
         label: const Text('Scan with QQ'),
       ),
@@ -774,6 +787,34 @@ class _AuthenticationContent extends StatelessWidget {
       key: const ValueKey('login-active'),
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (controller.supportsDesktopQuickLogin) ...[
+          SegmentedButton<LoginQrChannel>(
+            key: const ValueKey('desktop-login-channel-selector'),
+            segments: const [
+              ButtonSegment(
+                value: LoginQrChannel.qq,
+                icon: Icon(Icons.person_rounded),
+                label: Text('QQ login'),
+              ),
+              ButtonSegment(
+                value: LoginQrChannel.wechat,
+                icon: Icon(Icons.qr_code_scanner_rounded),
+                label: Text('WeChat login'),
+              ),
+            ],
+            selected: {controller.qrChannel},
+            onSelectionChanged: (selection) {
+              if (selection.isNotEmpty) {
+                unawaited(
+                  selection.first == LoginQrChannel.qq
+                      ? controller.startDesktopQqAuthorization()
+                      : controller.startQr(selection.first),
+                );
+              }
+            },
+          ),
+          const SizedBox(height: 24),
+        ],
         if (image != null)
           Semantics(
             label: controller.qrChannel == LoginQrChannel.qq
@@ -801,6 +842,11 @@ class _AuthenticationContent extends StatelessWidget {
               ),
             ),
           ),
+        if (controller.supportsDesktopQuickLogin &&
+            controller.qrChannel == LoginQrChannel.qq) ...[
+          const SizedBox(height: 20),
+          _DesktopQuickLoginChoices(controller: controller),
+        ],
         const SizedBox(height: 24),
         _announcedAuthenticationMessage(
           context,
@@ -981,6 +1027,185 @@ class _AuthenticationContent extends StatelessWidget {
     };
   }
 }
+
+class _DesktopQuickLoginChoices extends StatelessWidget {
+  const _DesktopQuickLoginChoices({required this.controller});
+
+  final LoginController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final stage = controller.desktopQuickStage;
+    if (stage == DesktopQuickLoginStage.loading) {
+      return const Row(
+        key: ValueKey('desktop-quick-login-loading'),
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 12),
+          Flexible(child: Text('Checking desktop QQ…')),
+        ],
+      );
+    }
+
+    final accounts = controller.desktopQuickAccounts;
+    if (stage == DesktopQuickLoginStage.noAccounts ||
+        (stage == DesktopQuickLoginStage.error && accounts.isEmpty)) {
+      return _DesktopQuickLoginUnavailable(
+        failure: controller.desktopQuickFailure,
+        onRetry: controller.loadDesktopQuickAccounts,
+      );
+    }
+    if (accounts.isEmpty) return const SizedBox.shrink();
+
+    final authorizing = stage == DesktopQuickLoginStage.authorizing;
+    return Column(
+      key: const ValueKey('desktop-quick-login-accounts'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Quick login', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Select an account already signed in to desktop QQ.',
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final account in accounts)
+                SizedBox(
+                  width: 128,
+                  child: OutlinedButton(
+                    key: ValueKey(
+                      'desktop-quick-account-${account.selectionId}',
+                    ),
+                    onPressed:
+                        !authorizing &&
+                            controller.canAuthorizeDesktopQuickAccount
+                        ? () => controller.authorizeDesktopQuickAccount(
+                            account.selectionId,
+                          )
+                        : null,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircleAvatar(
+                          radius: 22,
+                          child:
+                              authorizing &&
+                                  controller.desktopQuickSelectionId ==
+                                      account.selectionId
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.person_rounded),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          account.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                        Text(
+                          account.accountHint,
+                          maxLines: 1,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (stage == DesktopQuickLoginStage.error) ...[
+          const SizedBox(height: 10),
+          Text(
+            _desktopQuickFailureCopy(controller.desktopQuickFailure),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DesktopQuickLoginUnavailable extends StatelessWidget {
+  const _DesktopQuickLoginUnavailable({
+    required this.failure,
+    required this.onRetry,
+  });
+
+  final DesktopQuickLoginFailure? failure;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    key: const ValueKey('desktop-quick-login-unavailable'),
+    children: [
+      Icon(
+        Icons.desktop_windows_outlined,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          failure == DesktopQuickLoginFailure.clientUnavailable
+              ? 'Open and sign in to desktop QQ to use quick login.'
+              : failure == null
+              ? 'No signed-in desktop QQ account was found.'
+              : _desktopQuickFailureCopy(failure),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+      TextButton(onPressed: onRetry, child: const Text('Retry')),
+    ],
+  );
+}
+
+String _desktopQuickFailureCopy(DesktopQuickLoginFailure? failure) =>
+    switch (failure) {
+      DesktopQuickLoginFailure.clientUnavailable =>
+        'Desktop QQ is not available. Open QQ and try again.',
+      DesktopQuickLoginFailure.network =>
+        'Desktop QQ authorization could not reach QQ Music.',
+      DesktopQuickLoginFailure.serviceUnavailable =>
+        'QQ authorization is temporarily unavailable.',
+      DesktopQuickLoginFailure.rejected =>
+        'Desktop QQ did not approve this authorization.',
+      DesktopQuickLoginFailure.invalidSelection ||
+      DesktopQuickLoginFailure.invalidResponse =>
+        'Desktop QQ returned a response this build could not verify.',
+      DesktopQuickLoginFailure.cancelled ||
+      DesktopQuickLoginFailure.replaced ||
+      DesktopQuickLoginFailure.sessionFinished =>
+        'This quick-login attempt is no longer active. Retry discovery.',
+      DesktopQuickLoginFailure.alreadyRunning =>
+        'Desktop QQ authorization is already in progress.',
+      DesktopQuickLoginFailure.coreUnavailable =>
+        'The music core could not start desktop QQ authorization.',
+      null => 'Desktop QQ quick login is unavailable.',
+    };
 
 class _PanelIcon extends StatelessWidget {
   const _PanelIcon({required this.icon});

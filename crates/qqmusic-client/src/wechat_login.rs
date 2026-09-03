@@ -252,6 +252,11 @@ impl<T> WechatQrLoginCoordinator<T> {
     }
 
     #[must_use]
+    pub fn client_handle(&self) -> Arc<QqMusicClient<T>> {
+        Arc::clone(&self.client)
+    }
+
+    #[must_use]
     pub fn has_active_session(&self) -> bool {
         matches!(*self.state.borrow(), AttemptState::Active(_))
     }

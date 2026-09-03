@@ -31,6 +31,20 @@ enum LoginFailure {
   advanceAlreadyInProgress,
 }
 
+enum DesktopQuickLoginFailure {
+  coreUnavailable,
+  clientUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  invalidSelection,
+  rejected,
+  cancelled,
+  replaced,
+  sessionFinished,
+  alreadyRunning,
+}
+
 enum CredentialPersistenceResult {
   stored,
   noAuthenticatedCredential,
@@ -103,6 +117,53 @@ class LoginStart {
   final LoginFailure? failure;
 }
 
+class DesktopQuickLoginAccount {
+  const DesktopQuickLoginAccount({
+    required this.selectionId,
+    required this.displayName,
+    required this.accountHint,
+  });
+
+  final int selectionId;
+  final String displayName;
+  final String accountHint;
+}
+
+class DesktopQuickLoginUpdate {
+  const DesktopQuickLoginUpdate({
+    required this.authenticated,
+    this.failure,
+    required this.sessionActive,
+  });
+
+  final bool authenticated;
+  final DesktopQuickLoginFailure? failure;
+  final bool sessionActive;
+}
+
+abstract interface class DesktopQuickLoginSession {
+  Future<DesktopQuickLoginUpdate> authorize(int selectionId);
+  bool cancel();
+  bool get isActive;
+}
+
+class DesktopQuickLoginStart {
+  const DesktopQuickLoginStart({
+    this.session,
+    this.accounts = const [],
+    this.failure,
+  });
+
+  final DesktopQuickLoginSession? session;
+  final List<DesktopQuickLoginAccount> accounts;
+  final DesktopQuickLoginFailure? failure;
+}
+
+abstract interface class DesktopQuickLoginStartOperation {
+  Future<DesktopQuickLoginStart> run();
+  bool cancel();
+}
+
 abstract interface class QqMusicAuthenticationGateway {
   LoginStartOperation beginStart();
   bool get hasAuthenticatedCredential;
@@ -114,6 +175,10 @@ abstract interface class QqMusicAuthenticationGateway {
 
 abstract interface class MultiMethodQqMusicAuthenticationGateway {
   LoginStartOperation beginQrStart(LoginQrChannel channel);
+}
+
+abstract interface class DesktopQuickQqMusicAuthenticationGateway {
+  DesktopQuickLoginStartOperation beginDesktopQuickLoginStart();
 }
 
 abstract interface class LoginStartOperation {
@@ -129,7 +194,8 @@ abstract interface class CredentialVerificationOperation {
 class RustQqMusicAuthenticationGateway
     implements
         QqMusicAuthenticationGateway,
-        MultiMethodQqMusicAuthenticationGateway {
+        MultiMethodQqMusicAuthenticationGateway,
+        DesktopQuickQqMusicAuthenticationGateway {
   RustQqMusicAuthenticationGateway({
     CredentialVault? credentialVault,
     CredentialRestoreImporter? credentialImporter,
@@ -159,6 +225,12 @@ class RustQqMusicAuthenticationGateway
   @override
   LoginStartOperation beginQrStart(LoginQrChannel channel) =>
       _RustLoginStartOperation(bridge.reserveQqMusicQrLoginStart(), channel);
+
+  @override
+  DesktopQuickLoginStartOperation beginDesktopQuickLoginStart() =>
+      _RustDesktopQuickLoginStartOperation(
+        bridge.reserveQqMusicDesktopQuickLoginStart(),
+      );
 
   @override
   CredentialVerificationOperation beginCredentialVerification() =>
@@ -345,6 +417,106 @@ CredentialRestoreResult _restoreQqMusicCredentialInRust(
     null => CredentialRestoreResult.coreUnavailable,
   };
 }
+
+class _RustDesktopQuickLoginStartOperation
+    implements DesktopQuickLoginStartOperation {
+  const _RustDesktopQuickLoginStartOperation(this._attemptId);
+
+  final int _attemptId;
+
+  @override
+  bool cancel() =>
+      bridge.cancelQqMusicDesktopQuickLoginStart(attemptId: _attemptId);
+
+  @override
+  Future<DesktopQuickLoginStart> run() async {
+    try {
+      final outcome = await bridge.startQqMusicDesktopQuickLogin(
+        attemptId: _attemptId,
+      );
+      final failure = outcome.failure;
+      final session = outcome.session;
+      return DesktopQuickLoginStart(
+        session: session == null
+            ? null
+            : _RustDesktopQuickLoginSession(session),
+        accounts: outcome.accounts
+            .map(
+              (account) => DesktopQuickLoginAccount(
+                selectionId: account.selectionId,
+                displayName: account.displayName,
+                accountHint: account.accountHint,
+              ),
+            )
+            .toList(growable: false),
+        failure: failure == null ? null : _mapDesktopQuickFailure(failure),
+      );
+    } on Object {
+      return const DesktopQuickLoginStart(
+        failure: DesktopQuickLoginFailure.coreUnavailable,
+      );
+    }
+  }
+}
+
+class _RustDesktopQuickLoginSession implements DesktopQuickLoginSession {
+  const _RustDesktopQuickLoginSession(this._inner);
+
+  final bridge.QqMusicDesktopQuickLoginSessionHandle _inner;
+
+  @override
+  bool cancel() => _inner.cancel();
+
+  @override
+  bool get isActive => _inner.isActive;
+
+  @override
+  Future<DesktopQuickLoginUpdate> authorize(int selectionId) async {
+    try {
+      final update = await _inner.authorize(selectionId: selectionId);
+      return DesktopQuickLoginUpdate(
+        authenticated: update.authenticated,
+        failure: update.failure == null
+            ? null
+            : _mapDesktopQuickFailure(update.failure!),
+        sessionActive: update.sessionActive,
+      );
+    } on Object {
+      return DesktopQuickLoginUpdate(
+        authenticated: false,
+        failure: DesktopQuickLoginFailure.coreUnavailable,
+        sessionActive: _inner.isActive,
+      );
+    }
+  }
+}
+
+DesktopQuickLoginFailure _mapDesktopQuickFailure(
+  bridge.QqMusicDesktopQuickLoginFailure failure,
+) => switch (failure) {
+  bridge.QqMusicDesktopQuickLoginFailure.coreUnavailable =>
+    DesktopQuickLoginFailure.coreUnavailable,
+  bridge.QqMusicDesktopQuickLoginFailure.clientUnavailable =>
+    DesktopQuickLoginFailure.clientUnavailable,
+  bridge.QqMusicDesktopQuickLoginFailure.network =>
+    DesktopQuickLoginFailure.network,
+  bridge.QqMusicDesktopQuickLoginFailure.serviceUnavailable =>
+    DesktopQuickLoginFailure.serviceUnavailable,
+  bridge.QqMusicDesktopQuickLoginFailure.invalidResponse =>
+    DesktopQuickLoginFailure.invalidResponse,
+  bridge.QqMusicDesktopQuickLoginFailure.invalidSelection =>
+    DesktopQuickLoginFailure.invalidSelection,
+  bridge.QqMusicDesktopQuickLoginFailure.rejected =>
+    DesktopQuickLoginFailure.rejected,
+  bridge.QqMusicDesktopQuickLoginFailure.cancelled =>
+    DesktopQuickLoginFailure.cancelled,
+  bridge.QqMusicDesktopQuickLoginFailure.replaced =>
+    DesktopQuickLoginFailure.replaced,
+  bridge.QqMusicDesktopQuickLoginFailure.sessionFinished =>
+    DesktopQuickLoginFailure.sessionFinished,
+  bridge.QqMusicDesktopQuickLoginFailure.alreadyRunning =>
+    DesktopQuickLoginFailure.alreadyRunning,
+};
 
 class _RustLoginStartOperation implements LoginStartOperation {
   const _RustLoginStartOperation(this._attemptId, this._channel);

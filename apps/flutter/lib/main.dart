@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
@@ -51,6 +52,10 @@ Future<void> main() async {
     MusicApp(
       bootstrap: bootstrapStatus(),
       authenticationGateway: authenticationGateway,
+      desktopQuickLoginEnabled:
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS,
       libraryGateway: libraryGateway,
       playlistDetailGateway: playlistDetailGateway,
       mediaResolutionGateway: mediaResolutionGateway,

@@ -4,18 +4,22 @@ use std::sync::{LazyLock, Mutex as StdMutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use provider_api::{
-    AccountSummaryError, AccountSummaryProvider, AuthenticationError, QrAuthenticationChannel,
-    QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+    AccountSummaryError, AccountSummaryProvider, AuthenticationError,
+    DesktopQuickAuthenticationError, DesktopQuickAuthenticationProvider,
+    DesktopQuickAuthenticationSession, QrAuthenticationChannel, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
 };
 use provider_qqmusic::{
-    QqMusicCredentialRestoreState as ProviderCredentialRestoreState, QqMusicProvider,
-    QqMusicQrAuthenticationCancellation, QqMusicQrAuthenticationSession,
+    QqMusicCredentialRestoreState as ProviderCredentialRestoreState,
+    QqMusicDesktopQuickAuthenticationSession, QqMusicProvider, QqMusicQrAuthenticationCancellation,
+    QqMusicQrAuthenticationSession,
 };
 use qqmusic_client::{CredentialPersistenceError, QqMusicClient, ReqwestTransport};
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
+type NativeDesktopQuickSession = QqMusicDesktopQuickAuthenticationSession<ReqwestTransport>;
 
 static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|| {
     ReqwestTransport::new()
@@ -25,6 +29,7 @@ static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|
 });
 static NEXT_START_ATTEMPT: AtomicU32 = AtomicU32::new(1);
 static ACTIVE_START_ATTEMPT: StdMutex<Option<u32>> = StdMutex::new(None);
+static ACTIVE_DESKTOP_QUICK_START_ATTEMPT: StdMutex<Option<u32>> = StdMutex::new(None);
 
 pub(crate) fn native_qq_music_provider() -> Result<&'static NativeProvider, ()> {
     QQ_MUSIC_PROVIDER.as_ref().map_err(|_| ())
@@ -91,6 +96,63 @@ pub struct QqMusicQrLoginStart {
     pub session: Option<QqMusicQrLoginSessionHandle>,
     pub challenge: Option<QqMusicQrChallenge>,
     pub failure: Option<QqMusicQrLoginFailure>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicDesktopQuickLoginAccount {
+    pub selection_id: u32,
+    pub display_name: String,
+    pub account_hint: String,
+}
+
+impl fmt::Debug for QqMusicDesktopQuickLoginAccount {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicDesktopQuickLoginAccount")
+            .field("selection_id", &self.selection_id)
+            .field("display_name", &"[REDACTED]")
+            .field("account_hint", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicDesktopQuickLoginFailure {
+    CoreUnavailable,
+    ClientUnavailable,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    InvalidSelection,
+    Rejected,
+    Cancelled,
+    Replaced,
+    SessionFinished,
+    AlreadyRunning,
+}
+
+pub struct QqMusicDesktopQuickLoginStart {
+    pub session: Option<QqMusicDesktopQuickLoginSessionHandle>,
+    pub accounts: Vec<QqMusicDesktopQuickLoginAccount>,
+    pub failure: Option<QqMusicDesktopQuickLoginFailure>,
+}
+
+impl fmt::Debug for QqMusicDesktopQuickLoginStart {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicDesktopQuickLoginStart")
+            .field("has_session", &self.session.is_some())
+            .field("account_count", &self.accounts.len())
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct QqMusicDesktopQuickLoginUpdate {
+    pub authenticated: bool,
+    pub failure: Option<QqMusicDesktopQuickLoginFailure>,
+    pub session_active: bool,
 }
 
 impl fmt::Debug for QqMusicQrLoginStart {
@@ -254,6 +316,158 @@ impl QqMusicQrLoginSessionHandle {
     pub fn is_active(&self) -> bool {
         self.cancellation.is_active()
     }
+}
+
+/// Rust-owned desktop QQ quick-login attempt. Flutter receives only an opaque
+/// selection index plus redacted presentation labels; local QQ identifiers and
+/// one-time tickets remain inside Rust.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicDesktopQuickLoginSessionHandle {
+    session: AsyncMutex<Option<NativeDesktopQuickSession>>,
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl QqMusicDesktopQuickLoginSessionHandle {
+    pub async fn authorize(&self, selection_id: u32) -> QqMusicDesktopQuickLoginUpdate {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_desktop_quick_update(
+                QqMusicDesktopQuickLoginFailure::SessionFinished,
+                false,
+            );
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_desktop_quick_update(
+                QqMusicDesktopQuickLoginFailure::AlreadyRunning,
+                true,
+            );
+        }
+        let outcome = {
+            let mut session = self.session.lock().await;
+            let Some(session) = session.as_mut() else {
+                self.running.store(false, Ordering::SeqCst);
+                self.active.store(false, Ordering::SeqCst);
+                return failed_desktop_quick_update(
+                    QqMusicDesktopQuickLoginFailure::SessionFinished,
+                    false,
+                );
+            };
+            tokio::select! {
+                () = self.cancelled.notified() => {
+                    Err(DesktopQuickAuthenticationError::Cancelled)
+                }
+                result = session.authorize(selection_id) => result,
+            }
+        };
+        self.running.store(false, Ordering::SeqCst);
+        match outcome {
+            Ok(()) => {
+                self.active.store(false, Ordering::SeqCst);
+                *self.session.lock().await = None;
+                QqMusicDesktopQuickLoginUpdate {
+                    authenticated: true,
+                    failure: None,
+                    session_active: false,
+                }
+            }
+            Err(error) => {
+                let failure = map_desktop_quick_failure(error);
+                let retryable = matches!(
+                    failure,
+                    QqMusicDesktopQuickLoginFailure::Network
+                        | QqMusicDesktopQuickLoginFailure::ServiceUnavailable
+                        | QqMusicDesktopQuickLoginFailure::InvalidSelection
+                ) && self.active.load(Ordering::SeqCst);
+                if !retryable {
+                    self.active.store(false, Ordering::SeqCst);
+                    *self.session.lock().await = None;
+                }
+                failed_desktop_quick_update(failure, retryable)
+            }
+        }
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn reserve_qq_music_desktop_quick_login_start() -> u32 {
+    let attempt_id = NEXT_START_ATTEMPT
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            Some(if current == u32::MAX { 1 } else { current + 1 })
+        })
+        .expect("start-attempt update closure always returns Some");
+    *desktop_quick_start_attempt_guard() = Some(attempt_id);
+    attempt_id
+}
+
+pub async fn start_qq_music_desktop_quick_login(attempt_id: u32) -> QqMusicDesktopQuickLoginStart {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_desktop_quick_start(QqMusicDesktopQuickLoginFailure::CoreUnavailable);
+    };
+    if *desktop_quick_start_attempt_guard() != Some(attempt_id) {
+        return failed_desktop_quick_start(QqMusicDesktopQuickLoginFailure::Replaced);
+    }
+    let session = match provider.begin_desktop_quick_authentication().await {
+        Ok(session) => session,
+        Err(error) => {
+            clear_desktop_quick_start_attempt(attempt_id);
+            return failed_desktop_quick_start(map_desktop_quick_failure(error));
+        }
+    };
+    if *desktop_quick_start_attempt_guard() != Some(attempt_id) {
+        return failed_desktop_quick_start(QqMusicDesktopQuickLoginFailure::Replaced);
+    }
+    clear_desktop_quick_start_attempt(attempt_id);
+    let accounts = session
+        .accounts()
+        .into_iter()
+        .map(|account| QqMusicDesktopQuickLoginAccount {
+            selection_id: account.selection_id(),
+            display_name: account.display_name().to_owned(),
+            account_hint: account.account_hint().to_owned(),
+        })
+        .collect::<Vec<_>>();
+    if accounts.is_empty() {
+        return QqMusicDesktopQuickLoginStart {
+            session: None,
+            accounts,
+            failure: None,
+        };
+    }
+    QqMusicDesktopQuickLoginStart {
+        session: Some(QqMusicDesktopQuickLoginSessionHandle {
+            session: AsyncMutex::new(Some(session)),
+            active: AtomicBool::new(true),
+            running: AtomicBool::new(false),
+            cancelled: Notify::new(),
+        }),
+        accounts,
+        failure: None,
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_qq_music_desktop_quick_login_start(attempt_id: u32) -> bool {
+    let mut active = desktop_quick_start_attempt_guard();
+    if *active != Some(attempt_id) {
+        return false;
+    }
+    *active = None;
+    true
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -426,6 +640,7 @@ pub fn sign_out_qq_music() -> bool {
         return false;
     };
     *start_attempt_guard() = None;
+    *desktop_quick_start_attempt_guard() = None;
     QrAuthenticationProvider::sign_out(provider);
     true
 }
@@ -548,6 +763,27 @@ fn failed_start(failure: QqMusicQrLoginFailure) -> QqMusicQrLoginStart {
     }
 }
 
+fn failed_desktop_quick_start(
+    failure: QqMusicDesktopQuickLoginFailure,
+) -> QqMusicDesktopQuickLoginStart {
+    QqMusicDesktopQuickLoginStart {
+        session: None,
+        accounts: Vec::new(),
+        failure: Some(failure),
+    }
+}
+
+const fn failed_desktop_quick_update(
+    failure: QqMusicDesktopQuickLoginFailure,
+    session_active: bool,
+) -> QqMusicDesktopQuickLoginUpdate {
+    QqMusicDesktopQuickLoginUpdate {
+        authenticated: false,
+        failure: Some(failure),
+        session_active,
+    }
+}
+
 fn start_attempt_guard() -> std::sync::MutexGuard<'static, Option<u32>> {
     ACTIVE_START_ATTEMPT
         .lock()
@@ -556,6 +792,19 @@ fn start_attempt_guard() -> std::sync::MutexGuard<'static, Option<u32>> {
 
 fn clear_start_attempt(attempt_id: u32) {
     let mut active = start_attempt_guard();
+    if *active == Some(attempt_id) {
+        *active = None;
+    }
+}
+
+fn desktop_quick_start_attempt_guard() -> std::sync::MutexGuard<'static, Option<u32>> {
+    ACTIVE_DESKTOP_QUICK_START_ATTEMPT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn clear_desktop_quick_start_attempt(attempt_id: u32) {
+    let mut active = desktop_quick_start_attempt_guard();
     if *active == Some(attempt_id) {
         *active = None;
     }
@@ -587,6 +836,35 @@ const fn map_error(error: AuthenticationError) -> QqMusicQrLoginFailure {
         AuthenticationError::TimedOut => QqMusicQrLoginFailure::TimedOut,
         AuthenticationError::TooManyNetworkFailures => {
             QqMusicQrLoginFailure::TooManyNetworkFailures
+        }
+    }
+}
+
+const fn map_desktop_quick_failure(
+    error: DesktopQuickAuthenticationError,
+) -> QqMusicDesktopQuickLoginFailure {
+    match error {
+        DesktopQuickAuthenticationError::ClientUnavailable => {
+            QqMusicDesktopQuickLoginFailure::ClientUnavailable
+        }
+        DesktopQuickAuthenticationError::Network => QqMusicDesktopQuickLoginFailure::Network,
+        DesktopQuickAuthenticationError::ServiceUnavailable => {
+            QqMusicDesktopQuickLoginFailure::ServiceUnavailable
+        }
+        DesktopQuickAuthenticationError::InvalidResponse => {
+            QqMusicDesktopQuickLoginFailure::InvalidResponse
+        }
+        DesktopQuickAuthenticationError::InvalidSelection => {
+            QqMusicDesktopQuickLoginFailure::InvalidSelection
+        }
+        DesktopQuickAuthenticationError::Rejected => QqMusicDesktopQuickLoginFailure::Rejected,
+        DesktopQuickAuthenticationError::Cancelled => QqMusicDesktopQuickLoginFailure::Cancelled,
+        DesktopQuickAuthenticationError::Replaced => QqMusicDesktopQuickLoginFailure::Replaced,
+        DesktopQuickAuthenticationError::SessionFinished => {
+            QqMusicDesktopQuickLoginFailure::SessionFinished
+        }
+        DesktopQuickAuthenticationError::AlreadyRunning => {
+            QqMusicDesktopQuickLoginFailure::AlreadyRunning
         }
     }
 }
@@ -665,13 +943,14 @@ const fn map_verification_failure(
 mod tests {
     use super::{
         QqMusicAccountSummary, QqMusicAccountSummaryFailure, QqMusicCredentialExport,
-        QqMusicCredentialRestoreFailure, QqMusicCredentialVerificationFailure, QqMusicQrChallenge,
+        QqMusicCredentialRestoreFailure, QqMusicCredentialVerificationFailure,
+        QqMusicDesktopQuickLoginAccount, QqMusicDesktopQuickLoginFailure, QqMusicQrChallenge,
         QqMusicQrImageFormat, QqMusicQrLoginFailure, begin_qq_music_account_summary_load,
-        clear_start_attempt, failed_start, map_account_summary_failure, map_error,
-        map_persistence_error, map_verification_failure, reserve_qq_music_wechat_qr_login_start,
-        start_attempt_guard,
+        clear_start_attempt, failed_start, map_account_summary_failure, map_desktop_quick_failure,
+        map_error, map_persistence_error, map_verification_failure,
+        reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
     };
-    use provider_api::{AccountSummaryError, AuthenticationError};
+    use provider_api::{AccountSummaryError, AuthenticationError, DesktopQuickAuthenticationError};
     use qqmusic_client::{CredentialPersistenceError, InvalidCredential};
 
     #[test]
@@ -703,6 +982,28 @@ mod tests {
         let debug = format!("{challenge:?}");
         assert!(debug.contains("16 bytes"));
         assert!(!debug.contains("private"));
+    }
+
+    #[test]
+    fn desktop_quick_account_and_failure_mapping_are_redacted_and_typed() {
+        let account = QqMusicDesktopQuickLoginAccount {
+            selection_id: 1,
+            display_name: "Private nickname".to_owned(),
+            account_hint: "21••••90".to_owned(),
+        };
+
+        let debug = format!("{account:?}");
+        assert!(debug.contains("selection_id: 1"));
+        assert!(!debug.contains("Private nickname"));
+        assert!(!debug.contains("21"));
+        assert_eq!(
+            map_desktop_quick_failure(DesktopQuickAuthenticationError::ClientUnavailable),
+            QqMusicDesktopQuickLoginFailure::ClientUnavailable,
+        );
+        assert_eq!(
+            map_desktop_quick_failure(DesktopQuickAuthenticationError::AlreadyRunning),
+            QqMusicDesktopQuickLoginFailure::AlreadyRunning,
+        );
     }
 
     #[test]

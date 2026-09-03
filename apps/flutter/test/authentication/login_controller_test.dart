@@ -19,6 +19,95 @@ void main() {
     controller.dispose();
   });
 
+  test('discovers masked desktop QQ accounts only when enabled', () async {
+    final quickSession = _FakeDesktopQuickLoginSession();
+    final gateway = _FakeGateway.immediate(
+      _successfulStart(_FakeLoginSession()),
+      desktopQuickStart: DesktopQuickLoginStart(
+        session: quickSession,
+        accounts: const [
+          DesktopQuickLoginAccount(
+            selectionId: 0,
+            displayName: 'Synthetic listener',
+            accountHint: '21••••90',
+          ),
+        ],
+      ),
+    );
+    final controller = LoginController(gateway, desktopQuickLoginEnabled: true);
+
+    await controller.loadDesktopQuickAccounts();
+
+    expect(controller.desktopQuickStage, DesktopQuickLoginStage.ready);
+    expect(controller.desktopQuickAccounts.single.accountHint, '21••••90');
+    expect(controller.canAuthorizeDesktopQuickAccount, isTrue);
+    controller.dispose();
+    expect(quickSession.cancelCalls, 1);
+  });
+
+  test(
+    'desktop QQ quick authorization persists the installed credential',
+    () async {
+      final quickSession = _FakeDesktopQuickLoginSession(
+        updates: const [
+          DesktopQuickLoginUpdate(authenticated: true, sessionActive: false),
+        ],
+      );
+      final gateway = _FakeGateway.immediate(
+        _successfulStart(_FakeLoginSession()),
+        desktopQuickStart: DesktopQuickLoginStart(
+          session: quickSession,
+          accounts: const [
+            DesktopQuickLoginAccount(
+              selectionId: 3,
+              displayName: 'Synthetic listener',
+              accountHint: '21••••90',
+            ),
+          ],
+        ),
+      );
+      final controller = LoginController(
+        gateway,
+        desktopQuickLoginEnabled: true,
+      );
+      await controller.loadDesktopQuickAccounts();
+
+      await controller.authorizeDesktopQuickAccount(3);
+
+      expect(quickSession.selections, [3]);
+      expect(controller.stage, LoginStage.authenticated);
+      expect(controller.credentialSaveState, CredentialSaveState.saved);
+      expect(gateway.persistCalls, 1);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'desktop QQ discovery keeps unavailable client separate from QR login',
+    () async {
+      final gateway = _FakeGateway.immediate(
+        _successfulStart(_FakeLoginSession()),
+        desktopQuickStart: const DesktopQuickLoginStart(
+          failure: DesktopQuickLoginFailure.clientUnavailable,
+        ),
+      );
+      final controller = LoginController(
+        gateway,
+        desktopQuickLoginEnabled: true,
+      );
+
+      await controller.loadDesktopQuickAccounts();
+
+      expect(controller.desktopQuickStage, DesktopQuickLoginStage.error);
+      expect(
+        controller.desktopQuickFailure,
+        DesktopQuickLoginFailure.clientUnavailable,
+      );
+      expect(controller.stage, LoginStage.idle);
+      controller.dispose();
+    },
+  );
+
   test('maps waiting, scanned, and authenticated updates in order', () async {
     final session = _FakeLoginSession();
     final gateway = _FakeGateway.immediate(_successfulStart(session));
@@ -433,11 +522,15 @@ LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
 class _FakeGateway
     implements
         QqMusicAuthenticationGateway,
-        MultiMethodQqMusicAuthenticationGateway {
+        MultiMethodQqMusicAuthenticationGateway,
+        DesktopQuickQqMusicAuthenticationGateway {
   _FakeGateway.immediate(
     LoginStart result, {
     this.persistenceResult = CredentialPersistenceResult.stored,
     this.authenticated = false,
+    this.desktopQuickStart = const DesktopQuickLoginStart(
+      failure: DesktopQuickLoginFailure.clientUnavailable,
+    ),
     List<FutureOr<CredentialSignOutResult>> signOutResults = const [
       CredentialSignOutResult.signedOut,
     ],
@@ -448,6 +541,9 @@ class _FakeGateway
   _FakeGateway.pending()
     : persistenceResult = CredentialPersistenceResult.stored,
       authenticated = false,
+      desktopQuickStart = const DesktopQuickLoginStart(
+        failure: DesktopQuickLoginFailure.clientUnavailable,
+      ),
       _immediateResult = null,
       _pendingStarts = <Completer<LoginStart>>[],
       _signOutResults = [CredentialSignOutResult.signedOut];
@@ -456,6 +552,7 @@ class _FakeGateway
   final List<Completer<LoginStart>>? _pendingStarts;
   final CredentialPersistenceResult persistenceResult;
   bool authenticated;
+  final DesktopQuickLoginStart desktopQuickStart;
   final List<FutureOr<CredentialSignOutResult>> _signOutResults;
   final List<_FakeStartOperation> operations = <_FakeStartOperation>[];
   final List<Completer<CredentialVerificationResult>> _pendingVerifications =
@@ -465,6 +562,10 @@ class _FakeGateway
   final List<LoginQrChannel> qrChannels = <LoginQrChannel>[];
   int persistCalls = 0;
   int signOutCalls = 0;
+
+  @override
+  DesktopQuickLoginStartOperation beginDesktopQuickLoginStart() =>
+      _FakeDesktopQuickLoginStartOperation(desktopQuickStart);
 
   @override
   bool get hasAuthenticatedCredential => authenticated;
@@ -527,6 +628,60 @@ class _FakeGateway
   void completeVerification(int index, CredentialVerificationResult result) {
     _pendingVerifications[index].complete(result);
   }
+}
+
+class _FakeDesktopQuickLoginStartOperation
+    implements DesktopQuickLoginStartOperation {
+  _FakeDesktopQuickLoginStartOperation(this.result);
+
+  final DesktopQuickLoginStart result;
+  bool active = true;
+
+  @override
+  bool cancel() {
+    final wasActive = active;
+    active = false;
+    return wasActive;
+  }
+
+  @override
+  Future<DesktopQuickLoginStart> run() async => result;
+}
+
+class _FakeDesktopQuickLoginSession implements DesktopQuickLoginSession {
+  _FakeDesktopQuickLoginSession({
+    List<DesktopQuickLoginUpdate> updates = const [],
+  }) : _updates = List.of(updates);
+
+  final List<DesktopQuickLoginUpdate> _updates;
+  final List<int> selections = [];
+  int cancelCalls = 0;
+  bool active = true;
+
+  @override
+  Future<DesktopQuickLoginUpdate> authorize(int selectionId) async {
+    selections.add(selectionId);
+    final update = _updates.isEmpty
+        ? const DesktopQuickLoginUpdate(
+            authenticated: false,
+            failure: DesktopQuickLoginFailure.invalidResponse,
+            sessionActive: false,
+          )
+        : _updates.removeAt(0);
+    active = update.sessionActive;
+    return update;
+  }
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    final wasActive = active;
+    active = false;
+    return wasActive;
+  }
+
+  @override
+  bool get isActive => active;
 }
 
 class _FakeStartOperation implements LoginStartOperation {

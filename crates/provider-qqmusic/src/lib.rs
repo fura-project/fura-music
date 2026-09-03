@@ -1,7 +1,7 @@
 //! QQ Music provider mapping layer.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use music_domain::{
@@ -20,13 +20,15 @@ use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
     AlbumFavoriteMutationProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
     ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, CommentsError,
-    DailyRecommendationError, DailyRecommendationProvider, FavoriteAlbumsProvider,
-    FavoriteArtistsProvider, LibraryMutationError, LyricsError, LyricsProvider,
-    MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
-    NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PersonalizedPlaylistsError,
-    PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
-    PlaylistCreationProvider, PlaylistDeletionProvider, PlaylistDetailsProvider,
-    PlaylistSearchProvider, PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
+    DailyRecommendationError, DailyRecommendationProvider, DesktopQuickAuthenticationAccount,
+    DesktopQuickAuthenticationError, DesktopQuickAuthenticationProvider,
+    DesktopQuickAuthenticationSession, FavoriteAlbumsProvider, FavoriteArtistsProvider,
+    LibraryMutationError, LyricsError, LyricsProvider, MediaResolutionError, MediaSourceResolver,
+    MusicProvider, MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider,
+    OwnedPlaylistsProvider, PersonalizedPlaylistsError, PersonalizedPlaylistsProvider,
+    PersonalizedTracksError, PersonalizedTracksProvider, PlaylistCreationProvider,
+    PlaylistDeletionProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
+    PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
     QrAuthenticationChallenge, QrAuthenticationChannel, QrAuthenticationProgress,
     QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
     RadarRecommendationsProvider, RankingsProvider, RecommendationError,
@@ -36,24 +38,24 @@ use provider_api::{
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
-    HttpTransport, QqMusicAlbumDetailsError, QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState,
-    QqMusicAlbumSearchError, QqMusicAlbumSummary, QqMusicAlbumTracksError,
-    QqMusicArtistAlbumsError, QqMusicArtistSearchError, QqMusicArtistTracksError,
-    QqMusicAudioQuality, QqMusicClient, QqMusicCreatePlaylistError, QqMusicDailyRecommendation,
-    QqMusicDailyRecommendationError, QqMusicDeletePlaylistError, QqMusicFavoriteAlbumsError,
-    QqMusicFavoriteArtistsError, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
-    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMusicVideoQuality,
-    QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory, QqMusicNewSongsError,
-    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPersonalizedPlaylist,
-    QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError, QqMusicPlaylistDetailError,
-    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError,
-    QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
-    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError,
-    QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
-    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError,
-    QrImageMediaType, QrLoginChannel, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
-    WechatQrLoginSession,
+    HttpTransport, QqDesktopQuickLoginError, QqDesktopQuickLoginSession, QqMusicAlbumDetailsError,
+    QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState, QqMusicAlbumSearchError,
+    QqMusicAlbumSummary, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
+    QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicAudioQuality, QqMusicClient,
+    QqMusicCreatePlaylistError, QqMusicDailyRecommendation, QqMusicDailyRecommendationError,
+    QqMusicDeletePlaylistError, QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError,
+    QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
+    QqMusicMediaError, QqMusicMusicVideoQuality, QqMusicNewAlbumArea, QqMusicNewAlbumsError,
+    QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
+    QqMusicPersonalizedPlaylist, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
+    QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
+    QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
+    QqMusicRankingsError, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
+    QqMusicRelatedTracksError, QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError,
+    QqMusicTrackLikeState, QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError,
+    QqMusicTrackSummary, QqQrError, QrImageMediaType, QrLoginChannel,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -79,6 +81,7 @@ enum QqMusicCredentialState {
 pub struct QqMusicProvider<T> {
     login: WechatQrLoginCoordinator<T>,
     credential: Arc<Mutex<QqMusicCredentialState>>,
+    active_desktop_quick_login: Arc<Mutex<Option<Arc<AtomicBool>>>>,
     next_restore_verification: AtomicU32,
     active_restore_verification: Mutex<Option<u32>>,
 }
@@ -97,6 +100,7 @@ impl<T> QqMusicProvider<T> {
         Self {
             login: WechatQrLoginCoordinator::new(client),
             credential: Arc::new(Mutex::new(QqMusicCredentialState::SignedOut)),
+            active_desktop_quick_login: Arc::new(Mutex::new(None)),
             next_restore_verification: AtomicU32::new(1),
             active_restore_verification: Mutex::new(None),
         }
@@ -441,6 +445,14 @@ impl<T> QqMusicProvider<T> {
     /// responsibility of the application edge.
     pub fn sign_out(&self) {
         self.login.cancel_active();
+        if let Some(active) = self
+            .active_desktop_quick_login
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            active.store(false, Ordering::SeqCst);
+        }
         let mut credential = credential_guard(&self.credential);
         let mut verification = restore_verification_guard(&self.active_restore_verification);
         *credential = QqMusicCredentialState::SignedOut;
@@ -1720,6 +1732,109 @@ where
 
     fn sign_out(&self) {
         QqMusicProvider::sign_out(self);
+    }
+}
+
+pub struct QqMusicDesktopQuickAuthenticationSession<T> {
+    client: Arc<QqMusicClient<T>>,
+    session: QqDesktopQuickLoginSession,
+    credential: Arc<Mutex<QqMusicCredentialState>>,
+    active: Arc<AtomicBool>,
+}
+
+impl<T> std::fmt::Debug for QqMusicDesktopQuickAuthenticationSession<T> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("QqMusicDesktopQuickAuthenticationSession")
+            .field("session", &self.session)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T> DesktopQuickAuthenticationSession for QqMusicDesktopQuickAuthenticationSession<T>
+where
+    T: HttpTransport + 'static,
+{
+    fn accounts(&self) -> Vec<DesktopQuickAuthenticationAccount> {
+        self.session
+            .accounts()
+            .into_iter()
+            .map(|account| {
+                DesktopQuickAuthenticationAccount::new(
+                    account.selection_id(),
+                    account.display_name().to_owned(),
+                    account.account_hint().to_owned(),
+                )
+            })
+            .collect()
+    }
+
+    async fn authorize(
+        &mut self,
+        selection_id: u32,
+    ) -> Result<(), DesktopQuickAuthenticationError> {
+        if !self.active.load(Ordering::SeqCst) {
+            return Err(DesktopQuickAuthenticationError::Replaced);
+        }
+        let credential = self
+            .client
+            .authorize_desktop_qq_account(&self.session, selection_id)
+            .await
+            .map_err(map_desktop_quick_login_error)?;
+        if !self.active.swap(false, Ordering::SeqCst) {
+            return Err(DesktopQuickAuthenticationError::Replaced);
+        }
+        *credential_guard(&self.credential) = QqMusicCredentialState::Authenticated(credential);
+        Ok(())
+    }
+}
+
+impl<T> Drop for QqMusicDesktopQuickAuthenticationSession<T> {
+    fn drop(&mut self) {
+        self.active.store(false, Ordering::SeqCst);
+    }
+}
+
+impl<T> DesktopQuickAuthenticationProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Session = QqMusicDesktopQuickAuthenticationSession<T>;
+
+    async fn begin_desktop_quick_authentication(
+        &self,
+    ) -> Result<Self::Session, DesktopQuickAuthenticationError> {
+        {
+            let mut credential = credential_guard(&self.credential);
+            if matches!(
+                *credential,
+                QqMusicCredentialState::PendingVerification(_)
+                    | QqMusicCredentialState::LocallyExpired(_)
+            ) {
+                *credential = QqMusicCredentialState::SignedOut;
+            }
+        }
+        *restore_verification_guard(&self.active_restore_verification) = None;
+        let session = self
+            .client()
+            .discover_desktop_qq_accounts()
+            .await
+            .map_err(map_desktop_quick_login_error)?;
+        let active = Arc::new(AtomicBool::new(true));
+        if let Some(previous) = self
+            .active_desktop_quick_login
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .replace(Arc::clone(&active))
+        {
+            previous.store(false, Ordering::SeqCst);
+        }
+        Ok(QqMusicDesktopQuickAuthenticationSession {
+            client: self.login.client_handle(),
+            session,
+            credential: Arc::clone(&self.credential),
+            active,
+        })
     }
 }
 
@@ -3167,6 +3282,38 @@ fn map_login_error<E>(error: WechatQrLoginError<E>) -> AuthenticationError {
         WechatQrLoginError::SessionTimedOut => AuthenticationError::TimedOut,
         WechatQrLoginError::TransportFailureLimitReached { .. } => {
             AuthenticationError::TooManyNetworkFailures
+        }
+    }
+}
+
+fn map_desktop_quick_login_error<E>(
+    error: QqDesktopQuickLoginError<E>,
+) -> DesktopQuickAuthenticationError {
+    match error {
+        QqDesktopQuickLoginError::ClientUnavailable => {
+            DesktopQuickAuthenticationError::ClientUnavailable
+        }
+        QqDesktopQuickLoginError::Transport(_) => DesktopQuickAuthenticationError::Network,
+        QqDesktopQuickLoginError::HttpStatus { .. } => {
+            DesktopQuickAuthenticationError::ServiceUnavailable
+        }
+        QqDesktopQuickLoginError::InvalidSelection => {
+            DesktopQuickAuthenticationError::InvalidSelection
+        }
+        QqDesktopQuickLoginError::Rejected => DesktopQuickAuthenticationError::Rejected,
+        QqDesktopQuickLoginError::QqConnect(error) => match map_qq_qr_error(&error) {
+            AuthenticationError::Network => DesktopQuickAuthenticationError::Network,
+            AuthenticationError::ServiceUnavailable => {
+                DesktopQuickAuthenticationError::ServiceUnavailable
+            }
+            AuthenticationError::Rejected => DesktopQuickAuthenticationError::Rejected,
+            _ => DesktopQuickAuthenticationError::InvalidResponse,
+        },
+        QqDesktopQuickLoginError::InvalidResponse
+        | QqDesktopQuickLoginError::MissingClientKey
+        | QqDesktopQuickLoginError::RandomnessUnavailable
+        | QqDesktopQuickLoginError::ClockBeforeUnixEpoch => {
+            DesktopQuickAuthenticationError::InvalidResponse
         }
     }
 }

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::future::Future;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 const DEFAULT_RESPONSE_BODY_LIMIT: usize = 4 * 1024 * 1024;
@@ -310,10 +311,18 @@ impl ReqwestTransport {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .user_agent(concat!("flutterustmusic/", env!("CARGO_PKG_VERSION")))
+            .resolve(
+                "localhost.ptlogin2.qq.com",
+                SocketAddr::from(([127, 0, 0, 1], 0)),
+            )
             .build()?;
         let no_redirect_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .user_agent(concat!("flutterustmusic/", env!("CARGO_PKG_VERSION")))
+            .resolve(
+                "localhost.ptlogin2.qq.com",
+                SocketAddr::from(([127, 0, 0, 1], 0)),
+            )
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
         Ok(Self {

@@ -16,13 +16,13 @@ const POLL_URL: &str = "https://ssl.ptlogin2.qq.com/ptqrlogin";
 const CHECK_SIG_URL: &str = "https://ssl.ptlogin2.graph.qq.com/check_sig";
 const AUTHORIZE_URL: &str = "https://graph.qq.com/oauth2.0/authorize";
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
-const LOGIN_JUMP_URL: &str = "https://graph.qq.com/oauth2.0/login_jump";
-const QR_REFERER: &str = "https://xui.ptlogin2.qq.com/";
-const WEB_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
+pub(crate) const LOGIN_JUMP_URL: &str = "https://graph.qq.com/oauth2.0/login_jump";
+pub(crate) const QR_REFERER: &str = "https://xui.ptlogin2.qq.com/";
+pub(crate) const WEB_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
                               (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const QQ_CONNECT_APP_ID: &str = "100497308";
-const QR_APP_ID: &str = "716027609";
-const DAID: &str = "383";
+pub(crate) const QQ_CONNECT_APP_ID: &str = "100497308";
+pub(crate) const QR_APP_ID: &str = "716027609";
+pub(crate) const DAID: &str = "383";
 const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_TEXT_BYTES: usize = 128 * 1024;
 const MAX_LOGIN_BYTES: usize = 512 * 1024;
@@ -326,6 +326,13 @@ where
         qq_qr_debug_http_status("check_sig", check.status());
         ensure_redirect_or_success("check signature", check.status())?;
         let cookies = response_cookies(&check);
+        self.exchange_qq_connect_cookies(&cookies).await
+    }
+
+    pub(crate) async fn exchange_qq_connect_cookies(
+        &self,
+        cookies: &[(String, String)],
+    ) -> Result<Credential, QqQrError<T::Error>> {
         let p_skey = cookies
             .iter()
             .find_map(|(name, value)| (name == "p_skey").then_some(value.as_str()));
@@ -543,13 +550,13 @@ fn unix_millis<E>() -> Result<u128, QqQrError<E>> {
         .map_err(|_| QqQrError::ClockBeforeUnixEpoch)
 }
 
-fn hash33(value: &str, initial: u32) -> u32 {
+pub(crate) fn hash33(value: &str, initial: u32) -> u32 {
     value.bytes().fold(initial, |hash, byte| {
         (hash << 5).wrapping_add(hash).wrapping_add(u32::from(byte))
     }) & 0x7fff_ffff
 }
 
-fn parse_callback_args(body: &str) -> Option<Vec<String>> {
+pub(crate) fn parse_callback_args(body: &str) -> Option<Vec<String>> {
     let start = body.find("ptuiCB(")? + "ptuiCB(".len();
     let end = body[start..].find(')')? + start;
     let mut values = Vec::new();
@@ -571,7 +578,7 @@ fn parse_callback_args(body: &str) -> Option<Vec<String>> {
     (!values.is_empty()).then_some(values)
 }
 
-fn response_cookies(response: &HttpResponse) -> Vec<(String, String)> {
+pub(crate) fn response_cookies(response: &HttpResponse) -> Vec<(String, String)> {
     response
         .header_values("set-cookie")
         .filter_map(|header| {
@@ -585,7 +592,7 @@ fn response_cookies(response: &HttpResponse) -> Vec<(String, String)> {
         .collect()
 }
 
-fn cookie_value(header: &str, expected_name: &str) -> Option<String> {
+pub(crate) fn cookie_value(header: &str, expected_name: &str) -> Option<String> {
     let pair = header.split(';').next()?;
     let (name, value) = pair.split_once('=')?;
     (name.trim() == expected_name).then(|| value.trim().to_owned())
@@ -599,7 +606,7 @@ fn validate_cookie_value<E>(value: &str) -> Result<(), QqQrError<E>> {
     }
 }
 
-fn is_valid_cookie_value(value: &str) -> bool {
+pub(crate) fn is_valid_cookie_value(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 4096
         && !value.bytes().any(|byte| byte <= 0x20 || byte == b';')

@@ -404,6 +404,72 @@ void main() {
     );
   });
 
+  testWidgets('offers desktop QQ account quick authorization beside QR login', (
+    tester,
+  ) async {
+    const captureReviewImage = bool.fromEnvironment(
+      'DESKTOP_QUICK_LOGIN_VISUAL_REVIEW',
+    );
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final quickSession = _WidgetDesktopQuickLoginSession();
+    final authenticationGateway = _WidgetGateway(
+      _WaitingSession(),
+      desktopQuickStart: DesktopQuickLoginStart(
+        session: quickSession,
+        accounts: const [
+          DesktopQuickLoginAccount(
+            selectionId: 0,
+            displayName: 'Synthetic QQ account',
+            accountHint: '21••••90',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: authenticationGateway,
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        desktopQuickLoginEnabled: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openSignInDialog(tester);
+
+    expect(find.text('Scan with QQ'), findsOneWidget);
+    expect(find.text('Scan with WeChat'), findsOneWidget);
+    expect(find.text('Quick login'), findsNothing);
+    expect(authenticationGateway.desktopQuickStartCalls, 0);
+
+    await tester.tap(find.text('Scan with QQ'));
+    await tester.pumpAndSettle();
+    expect(authenticationGateway.desktopQuickStartCalls, 1);
+
+    expect(find.text('Quick login'), findsOneWidget);
+    expect(find.text('Synthetic QQ account'), findsOneWidget);
+    expect(find.text('21••••90'), findsOneWidget);
+    expect(find.text('Scan with QQ'), findsOneWidget);
+    expect(find.text('QQ login'), findsOneWidget);
+    expect(find.text('WeChat login'), findsOneWidget);
+    if (captureReviewImage) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(Uri.file('/tmp/fura-desktop-qq-quick-login.png')),
+      );
+    }
+
+    await tester.tap(find.byKey(const ValueKey('desktop-quick-account-0')));
+    await tester.pumpAndSettle();
+
+    expect(quickSession.selections, [0]);
+    expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+    expect(find.byKey(const ValueKey('user-library-page')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('signed-out Library keeps the shell and opens sign-in in place', (
     tester,
   ) async {
@@ -5719,10 +5785,14 @@ class _WidgetSettingsDocumentStorage implements AppSettingsDocumentStorage {
 class _WidgetGateway
     implements
         QqMusicAuthenticationGateway,
-        MultiMethodQqMusicAuthenticationGateway {
+        MultiMethodQqMusicAuthenticationGateway,
+        DesktopQuickQqMusicAuthenticationGateway {
   _WidgetGateway(
     this.session, {
     this.authenticated = false,
+    this.desktopQuickStart = const DesktopQuickLoginStart(
+      failure: DesktopQuickLoginFailure.clientUnavailable,
+    ),
     CredentialVerificationOperation? verificationOperation,
     List<FutureOr<CredentialSignOutResult>> signOutResults = const [
       CredentialSignOutResult.signedOut,
@@ -5736,9 +5806,17 @@ class _WidgetGateway
 
   final _WaitingSession session;
   bool authenticated;
+  final DesktopQuickLoginStart desktopQuickStart;
   final CredentialVerificationOperation _verificationOperation;
   final List<FutureOr<CredentialSignOutResult>> _signOutResults;
   int signOutCalls = 0;
+  int desktopQuickStartCalls = 0;
+
+  @override
+  DesktopQuickLoginStartOperation beginDesktopQuickLoginStart() {
+    desktopQuickStartCalls += 1;
+    return _WidgetDesktopQuickLoginStartOperation(desktopQuickStart);
+  }
 
   @override
   bool get hasAuthenticatedCredential => authenticated;
@@ -5782,6 +5860,49 @@ class _WidgetGateway
     }
     return result;
   }
+}
+
+class _WidgetDesktopQuickLoginStartOperation
+    implements DesktopQuickLoginStartOperation {
+  _WidgetDesktopQuickLoginStartOperation(this.result);
+
+  final DesktopQuickLoginStart result;
+  bool active = true;
+
+  @override
+  bool cancel() {
+    final wasActive = active;
+    active = false;
+    return wasActive;
+  }
+
+  @override
+  Future<DesktopQuickLoginStart> run() async => result;
+}
+
+class _WidgetDesktopQuickLoginSession implements DesktopQuickLoginSession {
+  final List<int> selections = [];
+  bool active = true;
+
+  @override
+  Future<DesktopQuickLoginUpdate> authorize(int selectionId) async {
+    selections.add(selectionId);
+    active = false;
+    return const DesktopQuickLoginUpdate(
+      authenticated: true,
+      sessionActive: false,
+    );
+  }
+
+  @override
+  bool cancel() {
+    final wasActive = active;
+    active = false;
+    return wasActive;
+  }
+
+  @override
+  bool get isActive => active;
 }
 
 class _WidgetLibraryGateway implements UserLibraryGateway {

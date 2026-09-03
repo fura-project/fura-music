@@ -47,6 +47,18 @@
 
 **Consequences:** Historical phone-login research may remain as clearly dated evidence, but it is not a current capability or pending compatibility claim. A maintainer-operated confirmed QR approval is still required for live QQ credential-exchange and restore evidence, and no QR credential or account material may be retained in fixtures or diagnostics.
 
+## HD-022 — Platform-native QQ and WeChat authorization targets
+
+**Status:** Partially accepted on 2026-09-03
+
+**Context:** The maintainer clarified that “desktop QQ authorization” means the QQ Connect quick-login surface used by QQ Music: a running desktop QQ exposes already signed-in account choices, the user selects an avatar, and desktop QQ supplies a one-time authorization ticket. It does not mean opening the QR payload in a generic browser. The requested mobile target likewise means authorization through installed QQ and WeChat clients, not merely dispatching an HTTPS URL.
+
+**Accepted decision:** Desktop Fura may present the QQ Web QR beside account choices discovered from the official desktop QQ loopback quick-login service and authorize only after an explicit account selection. Local QQ identifiers and one-time tickets remain Rust-owned and redacted; presentation receives a nickname, masked account hint, and attempt-local selection index. The initial QQ/WeChat choice remains visible before any local discovery or QR request. QQ and WeChat QR remain fallback methods and Fura never collects an account password. Avatar loading may be added only without delaying account selection or exposing the raw QQ identifier outside Core.
+
+**Requested but externally blocked:** Android/iOS should eventually offer installed-client QQ and WeChat authorization. Production integration requires an authorized application identity, matching Android package/signature, matching iOS Bundle ID/Universal Link, required privacy disclosures, and a credential exchange that Tencent permits for QQ Music access. Fura must not embed QQ Music's native application secrets or impersonate its registered package/signature. A Fura-owned social-login token must not be assumed interchangeable with a QQ Music session.
+
+**Consequences:** HD-019 remains authoritative for the currently shipped mobile paths and password prohibition, but is superseded for desktop QQ local quick authorization. The bounded desktop candidate may be machine-tested with synthetic account data; account discovery and complete authorization remain maintainer-operated evidence. Mobile native SDK code does not start until the required identity and QQ Music exchange boundary are available.
+
 ## HD-020 — Capability-local, auth-aware QQ protocol strategy
 
 **Status:** Accepted on 2026-09-03

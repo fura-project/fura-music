@@ -629,6 +629,105 @@ pub trait QrAuthenticationProvider: MusicProvider + Sync {
     fn sign_out(&self);
 }
 
+/// Provider-neutral presentation of one account exposed by a trusted desktop
+/// client's local quick-login service. `selection_id` is attempt-local and
+/// opaque; no provider account identifier crosses this contract.
+#[derive(Clone, Eq, PartialEq)]
+pub struct DesktopQuickAuthenticationAccount {
+    selection_id: u32,
+    display_name: String,
+    account_hint: String,
+}
+
+impl DesktopQuickAuthenticationAccount {
+    #[must_use]
+    pub const fn new(selection_id: u32, display_name: String, account_hint: String) -> Self {
+        Self {
+            selection_id,
+            display_name,
+            account_hint,
+        }
+    }
+
+    #[must_use]
+    pub const fn selection_id(&self) -> u32 {
+        self.selection_id
+    }
+
+    #[must_use]
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    #[must_use]
+    pub fn account_hint(&self) -> &str {
+        &self.account_hint
+    }
+}
+
+impl fmt::Debug for DesktopQuickAuthenticationAccount {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DesktopQuickAuthenticationAccount")
+            .field("selection_id", &self.selection_id)
+            .field("display_name", &"[REDACTED]")
+            .field("account_hint", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DesktopQuickAuthenticationError {
+    ClientUnavailable,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    InvalidSelection,
+    Rejected,
+    Cancelled,
+    Replaced,
+    SessionFinished,
+    AlreadyRunning,
+}
+
+impl fmt::Display for DesktopQuickAuthenticationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::ClientUnavailable => "desktop authorization client is unavailable",
+            Self::Network => "desktop authorization network request failed",
+            Self::ServiceUnavailable => "desktop authorization service is unavailable",
+            Self::InvalidResponse => "desktop authorization returned an invalid response",
+            Self::InvalidSelection => "desktop authorization account choice is invalid",
+            Self::Rejected => "desktop authorization was rejected",
+            Self::Cancelled => "desktop authorization was cancelled",
+            Self::Replaced => "desktop authorization was replaced",
+            Self::SessionFinished => "desktop authorization session has finished",
+            Self::AlreadyRunning => "desktop authorization is already running",
+        })
+    }
+}
+
+impl std::error::Error for DesktopQuickAuthenticationError {}
+
+pub trait DesktopQuickAuthenticationSession: Send {
+    fn accounts(&self) -> Vec<DesktopQuickAuthenticationAccount>;
+
+    fn authorize(
+        &mut self,
+        selection_id: u32,
+    ) -> impl Future<Output = Result<(), DesktopQuickAuthenticationError>> + Send;
+}
+
+/// Optional desktop-client quick authorization implemented only by eligible
+/// providers. Discovery remains an explicit user-visible login action.
+pub trait DesktopQuickAuthenticationProvider: MusicProvider + Sync {
+    type Session: DesktopQuickAuthenticationSession;
+
+    fn begin_desktop_quick_authentication(
+        &self,
+    ) -> impl Future<Output = Result<Self::Session, DesktopQuickAuthenticationError>> + Send;
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AccountSummaryError {
     AuthenticationRequired,
@@ -970,8 +1069,9 @@ mod tests {
     use std::task::{Context, Poll, Waker};
 
     use super::{
-        MediaResolutionError, MediaSourceCoordinator, MediaSourceResolver, MusicProvider,
-        ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrImageFormat,
+        DesktopQuickAuthenticationAccount, MediaResolutionError, MediaSourceCoordinator,
+        MediaSourceResolver, MusicProvider, ProviderCapability, ProviderDescriptor,
+        QrAuthenticationChallenge, QrImageFormat,
     };
     use music_domain::{AudioFormat, AudioQuality, ProviderId, ResolvedMediaSource, TrackId};
 
@@ -1004,6 +1104,20 @@ mod tests {
         let debug = format!("{challenge:?}");
         assert!(debug.contains("24 bytes"));
         assert!(!debug.contains("sensitive"));
+    }
+
+    #[test]
+    fn desktop_quick_account_debug_output_redacts_local_identity() {
+        let account = DesktopQuickAuthenticationAccount::new(
+            2,
+            "Private nickname".to_owned(),
+            "21••••90".to_owned(),
+        );
+
+        let debug = format!("{account:?}");
+        assert!(debug.contains("selection_id: 2"));
+        assert!(!debug.contains("Private nickname"));
+        assert!(!debug.contains("21"));
     }
 
     struct SyntheticMediaSourceResolver {

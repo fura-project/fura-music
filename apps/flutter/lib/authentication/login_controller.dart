@@ -25,10 +25,21 @@ enum LoginStage {
 
 enum CredentialSaveState { none, saving, saved, failed }
 
+enum DesktopQuickLoginStage {
+  disabled,
+  idle,
+  loading,
+  ready,
+  noAccounts,
+  authorizing,
+  error,
+}
+
 class LoginController extends ChangeNotifier {
   LoginController(
     this._gateway, {
     this._networkRetryDelay = const Duration(seconds: 1),
+    this.desktopQuickLoginEnabled = false,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
   }) : _credentialRestoreResult = initialCredentialRestore {
@@ -51,12 +62,15 @@ class LoginController extends ChangeNotifier {
 
   final QqMusicAuthenticationGateway _gateway;
   final Duration _networkRetryDelay;
+  final bool desktopQuickLoginEnabled;
   final Set<int> _pollingGenerations = <int>{};
 
   LoginStage _stage = LoginStage.idle;
   LoginSession? _session;
   LoginStartOperation? _startOperation;
   CredentialVerificationOperation? _verificationOperation;
+  DesktopQuickLoginStartOperation? _desktopQuickStartOperation;
+  DesktopQuickLoginSession? _desktopQuickSession;
   Uint8List? _qrImageBytes;
   LoginFailure? _failure;
   LoginQrChannel _qrChannel = LoginQrChannel.qq;
@@ -64,7 +78,12 @@ class LoginController extends ChangeNotifier {
   CredentialRestoreResult _credentialRestoreResult;
   CredentialVerificationResult? _credentialVerificationResult;
   Future<CredentialSignOutResult>? _signOutOperation;
+  List<DesktopQuickLoginAccount> _desktopQuickAccounts = const [];
+  DesktopQuickLoginFailure? _desktopQuickFailure;
+  DesktopQuickLoginStage _desktopQuickStage = DesktopQuickLoginStage.idle;
+  int? _desktopQuickSelectionId;
   int _generation = 0;
+  int _desktopQuickGeneration = 0;
   bool _disposed = false;
 
   LoginStage get stage => _stage;
@@ -76,7 +95,19 @@ class LoginController extends ChangeNotifier {
       _credentialRestoreResult;
   CredentialVerificationResult? get credentialVerificationResult =>
       _credentialVerificationResult;
+  List<DesktopQuickLoginAccount> get desktopQuickAccounts =>
+      _desktopQuickAccounts;
+  DesktopQuickLoginFailure? get desktopQuickFailure => _desktopQuickFailure;
+  DesktopQuickLoginStage get desktopQuickStage => supportsDesktopQuickLogin
+      ? _desktopQuickStage
+      : DesktopQuickLoginStage.disabled;
+  int? get desktopQuickSelectionId => _desktopQuickSelectionId;
+  bool get canAuthorizeDesktopQuickAccount =>
+      _desktopQuickSession?.isActive ?? false;
 
+  bool get supportsDesktopQuickLogin =>
+      desktopQuickLoginEnabled &&
+      _gateway is DesktopQuickQqMusicAuthenticationGateway;
   bool get canCancel =>
       _stage == LoginStage.starting || (_session?.isActive ?? false);
 
@@ -109,6 +140,7 @@ class LoginController extends ChangeNotifier {
     final generation = ++_generation;
     _verificationOperation?.cancel();
     _verificationOperation = null;
+    _clearDesktopQuickLogin();
     _startOperation?.cancel();
     _startOperation = null;
     _session?.cancel();
@@ -204,7 +236,109 @@ class LoginController extends ChangeNotifier {
     unawaited(verifyRestoredCredential());
   }
 
-  Future<void> start() => startQr(LoginQrChannel.wechat);
+  Future<void> loadDesktopQuickAccounts() async {
+    if (!supportsDesktopQuickLogin ||
+        _desktopQuickStage == DesktopQuickLoginStage.loading ||
+        _desktopQuickStage == DesktopQuickLoginStage.authorizing) {
+      return;
+    }
+    final generation = ++_desktopQuickGeneration;
+    _desktopQuickStartOperation?.cancel();
+    _desktopQuickSession?.cancel();
+    _desktopQuickSession = null;
+    _desktopQuickAccounts = const [];
+    _desktopQuickFailure = null;
+    _desktopQuickSelectionId = null;
+    _desktopQuickStage = DesktopQuickLoginStage.loading;
+    _notify();
+
+    final operation = (_gateway as DesktopQuickQqMusicAuthenticationGateway)
+        .beginDesktopQuickLoginStart();
+    _desktopQuickStartOperation = operation;
+    final result = await operation.run();
+    if (identical(_desktopQuickStartOperation, operation)) {
+      _desktopQuickStartOperation = null;
+    }
+    if (!_isCurrentDesktopQuick(generation)) {
+      result.session?.cancel();
+      return;
+    }
+
+    final failure = result.failure;
+    final session = result.session;
+    if (failure != null) {
+      session?.cancel();
+      _desktopQuickFailure = failure;
+      _desktopQuickStage = DesktopQuickLoginStage.error;
+    } else if (session == null || result.accounts.isEmpty) {
+      session?.cancel();
+      _desktopQuickStage = DesktopQuickLoginStage.noAccounts;
+    } else {
+      _desktopQuickSession = session;
+      _desktopQuickAccounts = List.unmodifiable(result.accounts);
+      _desktopQuickStage = DesktopQuickLoginStage.ready;
+    }
+    _notify();
+  }
+
+  Future<void> authorizeDesktopQuickAccount(int selectionId) async {
+    final session = _desktopQuickSession;
+    if (!supportsDesktopQuickLogin ||
+        session == null ||
+        !session.isActive ||
+        _desktopQuickStage == DesktopQuickLoginStage.authorizing ||
+        !_desktopQuickAccounts.any(
+          (account) => account.selectionId == selectionId,
+        )) {
+      return;
+    }
+    final generation = ++_desktopQuickGeneration;
+    _desktopQuickSelectionId = selectionId;
+    _desktopQuickFailure = null;
+    _desktopQuickStage = DesktopQuickLoginStage.authorizing;
+    _notify();
+
+    final update = await session.authorize(selectionId);
+    if (!_isCurrentDesktopQuick(generation)) return;
+    if (update.authenticated) {
+      final authenticationGeneration = ++_generation;
+      _verificationOperation?.cancel();
+      _verificationOperation = null;
+      _startOperation?.cancel();
+      _startOperation = null;
+      _session?.cancel();
+      _session = null;
+      _qrImageBytes = null;
+      _desktopQuickSession = null;
+      _desktopQuickAccounts = const [];
+      _desktopQuickFailure = null;
+      _desktopQuickSelectionId = null;
+      _desktopQuickStage = DesktopQuickLoginStage.idle;
+      await _finishAuthentication(authenticationGeneration);
+      return;
+    }
+
+    _desktopQuickFailure =
+        update.failure ?? DesktopQuickLoginFailure.invalidResponse;
+    if (!update.sessionActive) {
+      _desktopQuickSession = null;
+    }
+    _desktopQuickStage = DesktopQuickLoginStage.error;
+    _notify();
+  }
+
+  Future<void> start() => supportsDesktopQuickLogin
+      ? startDesktopQqAuthorization()
+      : startQr(LoginQrChannel.wechat);
+
+  Future<void> startDesktopQqAuthorization() async {
+    if (!supportsDesktopQuickLogin) {
+      await startQr(LoginQrChannel.qq);
+      return;
+    }
+    unawaited(loadDesktopQuickAccounts());
+    await startQr(LoginQrChannel.qq);
+  }
 
   Future<void> startQr(LoginQrChannel channel) async {
     final generation = ++_generation;
@@ -270,6 +404,7 @@ class LoginController extends ChangeNotifier {
     _startOperation = null;
     _session?.cancel();
     _session = null;
+    _clearDesktopQuickLogin();
     _qrImageBytes = null;
     _failure = null;
     _credentialSaveState = CredentialSaveState.none;
@@ -334,6 +469,7 @@ class LoginController extends ChangeNotifier {
       case LoginProgress.authenticated:
         _session = null;
         _qrImageBytes = null;
+        _clearDesktopQuickLogin();
         await _finishAuthentication(generation);
         return true;
       case LoginProgress.expired:
@@ -372,6 +508,21 @@ class LoginController extends ChangeNotifier {
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
+  bool _isCurrentDesktopQuick(int generation) =>
+      !_disposed && generation == _desktopQuickGeneration;
+
+  void _clearDesktopQuickLogin() {
+    ++_desktopQuickGeneration;
+    _desktopQuickStartOperation?.cancel();
+    _desktopQuickStartOperation = null;
+    _desktopQuickSession?.cancel();
+    _desktopQuickSession = null;
+    _desktopQuickAccounts = const [];
+    _desktopQuickFailure = null;
+    _desktopQuickSelectionId = null;
+    _desktopQuickStage = DesktopQuickLoginStage.idle;
+  }
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -382,6 +533,7 @@ class LoginController extends ChangeNotifier {
     ++_generation;
     _verificationOperation?.cancel();
     _verificationOperation = null;
+    _clearDesktopQuickLogin();
     _startOperation?.cancel();
     _startOperation = null;
     _session?.cancel();

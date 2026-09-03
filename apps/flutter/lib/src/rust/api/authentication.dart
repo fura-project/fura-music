@@ -7,8 +7,24 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_start_attempt`, `failed_account_summary`, `failed_restore`, `failed_start`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `native_qq_music_provider`, `start_attempt_guard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_desktop_quick_start_attempt`, `clear_start_attempt`, `desktop_quick_start_attempt_guard`, `failed_account_summary`, `failed_desktop_quick_start`, `failed_desktop_quick_update`, `failed_restore`, `failed_start`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_desktop_quick_failure`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `native_qq_music_provider`, `start_attempt_guard`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+
+int reserveQqMusicDesktopQuickLoginStart() => RustLib.instance.api
+    .crateApiAuthenticationReserveQqMusicDesktopQuickLoginStart();
+
+Future<QqMusicDesktopQuickLoginStart> startQqMusicDesktopQuickLogin({
+  required int attemptId,
+}) => RustLib.instance.api.crateApiAuthenticationStartQqMusicDesktopQuickLogin(
+  attemptId: attemptId,
+);
+
+bool cancelQqMusicDesktopQuickLoginStart({required int attemptId}) => RustLib
+    .instance
+    .api
+    .crateApiAuthenticationCancelQqMusicDesktopQuickLoginStart(
+      attemptId: attemptId,
+    );
 
 int reserveQqMusicWechatQrLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicWechatQrLoginStart();
@@ -91,6 +107,16 @@ abstract class QqMusicAccountSummaryLoadHandle implements RustOpaqueInterface {
   bool get isActive;
 
   Future<QqMusicAccountSummaryLoad> run();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicDesktopQuickLoginSessionHandle>>
+abstract class QqMusicDesktopQuickLoginSessionHandle
+    implements RustOpaqueInterface {
+  Future<QqMusicDesktopQuickLoginUpdate> authorize({required int selectionId});
+
+  bool cancel();
+
+  bool get isActive;
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicQrLoginSessionHandle>>
@@ -232,6 +258,94 @@ enum QqMusicCredentialVerificationFailure {
 }
 
 enum QqMusicCredentialVerificationState { authenticated, rejected }
+
+class QqMusicDesktopQuickLoginAccount {
+  final int selectionId;
+  final String displayName;
+  final String accountHint;
+
+  const QqMusicDesktopQuickLoginAccount({
+    required this.selectionId,
+    required this.displayName,
+    required this.accountHint,
+  });
+
+  @override
+  int get hashCode =>
+      selectionId.hashCode ^ displayName.hashCode ^ accountHint.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicDesktopQuickLoginAccount &&
+          runtimeType == other.runtimeType &&
+          selectionId == other.selectionId &&
+          displayName == other.displayName &&
+          accountHint == other.accountHint;
+}
+
+enum QqMusicDesktopQuickLoginFailure {
+  coreUnavailable,
+  clientUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  invalidSelection,
+  rejected,
+  cancelled,
+  replaced,
+  sessionFinished,
+  alreadyRunning,
+}
+
+class QqMusicDesktopQuickLoginStart {
+  final QqMusicDesktopQuickLoginSessionHandle? session;
+  final List<QqMusicDesktopQuickLoginAccount> accounts;
+  final QqMusicDesktopQuickLoginFailure? failure;
+
+  const QqMusicDesktopQuickLoginStart({
+    this.session,
+    required this.accounts,
+    this.failure,
+  });
+
+  @override
+  int get hashCode => session.hashCode ^ accounts.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicDesktopQuickLoginStart &&
+          runtimeType == other.runtimeType &&
+          session == other.session &&
+          accounts == other.accounts &&
+          failure == other.failure;
+}
+
+class QqMusicDesktopQuickLoginUpdate {
+  final bool authenticated;
+  final QqMusicDesktopQuickLoginFailure? failure;
+  final bool sessionActive;
+
+  const QqMusicDesktopQuickLoginUpdate({
+    required this.authenticated,
+    this.failure,
+    required this.sessionActive,
+  });
+
+  @override
+  int get hashCode =>
+      authenticated.hashCode ^ failure.hashCode ^ sessionActive.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicDesktopQuickLoginUpdate &&
+          runtimeType == other.runtimeType &&
+          authenticated == other.authenticated &&
+          failure == other.failure &&
+          sessionActive == other.sessionActive;
+}
 
 class QqMusicQrChallenge {
   final QqMusicQrImageFormat imageFormat;

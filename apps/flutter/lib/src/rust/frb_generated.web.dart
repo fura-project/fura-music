@@ -89,6 +89,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle;
 
   CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_QqMusicDesktopQuickLoginSessionHandlePtr =>
+      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle;
+
+  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_QqMusicFavoriteAlbumPageLoadHandlePtr => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle;
 
@@ -243,6 +247,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicDailyRecommendationLoadHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
     dynamic raw,
   );
 
@@ -451,6 +461,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     dynamic raw,
@@ -655,6 +671,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadHandle
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     dynamic raw,
@@ -802,6 +824,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BootstrapStatus dco_decode_bootstrap_status(dynamic raw);
 
   @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicQrLoginSessionHandle
   dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     dynamic raw,
@@ -912,6 +940,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_qq_music_daily_recommendation_load_failure(
     dynamic raw,
   );
+
+  @protected
+  QqMusicDesktopQuickLoginFailure
+  dco_decode_box_autoadd_qq_music_desktop_quick_login_failure(dynamic raw);
 
   @protected
   QqMusicFavoriteAlbumPageLoadFailure
@@ -1110,6 +1142,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<QqMusicDesktopQuickLoginAccount>
+  dco_decode_list_qq_music_desktop_quick_login_account(dynamic raw);
+
+  @protected
   List<QqMusicSynchronizedLyricLine>
   dco_decode_list_qq_music_synchronized_lyric_line(dynamic raw);
 
@@ -1143,6 +1179,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  QqMusicDesktopQuickLoginSessionHandle?
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    dynamic raw,
+  );
 
   @protected
   QqMusicQrLoginSessionHandle?
@@ -1271,6 +1313,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_box_autoadd_qq_music_daily_recommendation_load_failure(
     dynamic raw,
   );
+
+  @protected
+  QqMusicDesktopQuickLoginFailure?
+  dco_decode_opt_box_autoadd_qq_music_desktop_quick_login_failure(dynamic raw);
 
   @protected
   QqMusicFavoriteAlbumPageLoadFailure?
@@ -1560,6 +1606,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicDailyRecommendationLoadFailure
   dco_decode_qq_music_daily_recommendation_load_failure(dynamic raw);
+
+  @protected
+  QqMusicDesktopQuickLoginAccount
+  dco_decode_qq_music_desktop_quick_login_account(dynamic raw);
+
+  @protected
+  QqMusicDesktopQuickLoginFailure
+  dco_decode_qq_music_desktop_quick_login_failure(dynamic raw);
+
+  @protected
+  QqMusicDesktopQuickLoginStart dco_decode_qq_music_desktop_quick_login_start(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicDesktopQuickLoginUpdate dco_decode_qq_music_desktop_quick_login_update(
+    dynamic raw,
+  );
 
   @protected
   QqMusicFavoriteAlbumPageLoad dco_decode_qq_music_favorite_album_page_load(
@@ -1885,6 +1949,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     SseDeserializer deserializer,
@@ -2085,6 +2155,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicDailyRecommendationLoadHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
     SseDeserializer deserializer,
   );
 
@@ -2293,6 +2369,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicFavoriteAlbumPageLoadHandle
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     SseDeserializer deserializer,
@@ -2440,6 +2522,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BootstrapStatus sse_decode_bootstrap_status(SseDeserializer deserializer);
 
   @protected
+  QqMusicDesktopQuickLoginSessionHandle
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicQrLoginSessionHandle
   sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     SseDeserializer deserializer,
@@ -2582,6 +2670,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicDailyRecommendationLoadFailure
   sse_decode_box_autoadd_qq_music_daily_recommendation_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDesktopQuickLoginFailure
+  sse_decode_box_autoadd_qq_music_desktop_quick_login_failure(
     SseDeserializer deserializer,
   );
 
@@ -2844,6 +2938,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<QqMusicDesktopQuickLoginAccount>
+  sse_decode_list_qq_music_desktop_quick_login_account(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<QqMusicSynchronizedLyricLine>
   sse_decode_list_qq_music_synchronized_lyric_line(
     SseDeserializer deserializer,
@@ -2885,6 +2985,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  QqMusicDesktopQuickLoginSessionHandle?
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   QqMusicQrLoginSessionHandle?
@@ -3025,6 +3131,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicDailyRecommendationLoadFailure?
   sse_decode_opt_box_autoadd_qq_music_daily_recommendation_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDesktopQuickLoginFailure?
+  sse_decode_opt_box_autoadd_qq_music_desktop_quick_login_failure(
     SseDeserializer deserializer,
   );
 
@@ -3374,6 +3486,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicDailyRecommendationLoadFailure
   sse_decode_qq_music_daily_recommendation_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDesktopQuickLoginAccount
+  sse_decode_qq_music_desktop_quick_login_account(SseDeserializer deserializer);
+
+  @protected
+  QqMusicDesktopQuickLoginFailure
+  sse_decode_qq_music_desktop_quick_login_failure(SseDeserializer deserializer);
+
+  @protected
+  QqMusicDesktopQuickLoginStart sse_decode_qq_music_desktop_quick_login_start(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicDesktopQuickLoginUpdate sse_decode_qq_music_desktop_quick_login_update(
     SseDeserializer deserializer,
   );
 
@@ -3785,6 +3915,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    QqMusicDesktopQuickLoginSessionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     QqMusicFavoriteAlbumPageLoadHandle self,
     SseSerializer serializer,
@@ -4018,6 +4155,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
     QqMusicDailyRecommendationLoadHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    QqMusicDesktopQuickLoginSessionHandle self,
     SseSerializer serializer,
   );
 
@@ -4261,6 +4405,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    QqMusicDesktopQuickLoginSessionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     QqMusicFavoriteAlbumPageLoadHandle self,
     SseSerializer serializer,
@@ -4434,6 +4585,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    QqMusicDesktopQuickLoginSessionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicQrLoginSessionHandle(
     QqMusicQrLoginSessionHandle self,
     SseSerializer serializer,
@@ -4586,6 +4744,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_qq_music_daily_recommendation_load_failure(
     QqMusicDailyRecommendationLoadFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_desktop_quick_login_failure(
+    QqMusicDesktopQuickLoginFailure self,
     SseSerializer serializer,
   );
 
@@ -4875,6 +5039,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_qq_music_desktop_quick_login_account(
+    List<QqMusicDesktopQuickLoginAccount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_qq_music_synchronized_lyric_line(
     List<QqMusicSynchronizedLyricLine> self,
     SseSerializer serializer,
@@ -4924,6 +5094,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    QqMusicDesktopQuickLoginSessionHandle? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
@@ -5073,6 +5250,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_qq_music_daily_recommendation_load_failure(
     QqMusicDailyRecommendationLoadFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_desktop_quick_login_failure(
+    QqMusicDesktopQuickLoginFailure? self,
     SseSerializer serializer,
   );
 
@@ -5458,6 +5641,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_daily_recommendation_load_failure(
     QqMusicDailyRecommendationLoadFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_desktop_quick_login_account(
+    QqMusicDesktopQuickLoginAccount self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_desktop_quick_login_failure(
+    QqMusicDesktopQuickLoginFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_desktop_quick_login_start(
+    QqMusicDesktopQuickLoginStart self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_desktop_quick_login_update(
+    QqMusicDesktopQuickLoginUpdate self,
     SseSerializer serializer,
   );
 
@@ -6028,6 +6235,22 @@ class RustLibWire implements BaseWire {
       );
 
   void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+        ptr,
+      );
+
+  void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicFavoriteAlbumPageLoadHandle(
     int ptr,
   ) => wasmModule
@@ -6509,6 +6732,16 @@ extension type RustLibWasmModule._(JSObject _) implements JSObject {
 
   external void
   rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDailyRecommendationLoadHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicDesktopQuickLoginSessionHandle(
     int ptr,
   );
 
