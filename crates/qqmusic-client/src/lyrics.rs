@@ -93,6 +93,60 @@ impl<E> fmt::Debug for QqMusicLyricsError<E> {
     }
 }
 
+impl<E> QqMusicLyricsError<E> {
+    // Returns a stable, content-free failure stage for opt-in diagnostics.
+    #[must_use]
+    pub(crate) const fn diagnostic_code(&self) -> &'static str {
+        match self {
+            Self::InvalidSongMid => "identity.invalid_song_mid",
+            Self::Transport(_) => "transport.failed",
+            Self::Serialize => "request.serialize",
+            Self::HttpStatus(_) => "response.http_status",
+            Self::InvalidJson => "response.invalid_json",
+            Self::MissingGlobalCode => "response.missing_global_code",
+            Self::MissingResult => "response.missing_result",
+            Self::MissingResultCode => "response.missing_result_code",
+            Self::Rejected { .. } => "response.credential_rejected",
+            Self::Upstream { .. } => "response.upstream_failure",
+            Self::MissingData => "response.missing_data",
+            Self::MissingLyrics => "response.missing_original",
+            Self::Unavailable => "content.unavailable",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Original,
+                field: QqMusicLyricDocumentField::Representation,
+            } => "original.invalid_representation",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Original,
+                field: QqMusicLyricDocumentField::Ciphertext,
+            } => "original.invalid_ciphertext",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Original,
+                field: QqMusicLyricDocumentField::Xml,
+            } => "original.invalid_xml",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Original,
+                field: QqMusicLyricDocumentField::LyricContent,
+            } => "original.invalid_content",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Original,
+                field: QqMusicLyricDocumentField::Timing,
+            } => "original.invalid_timing",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Original,
+                field: QqMusicLyricDocumentField::SafetyLimit,
+            } => "original.safety_limit",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Translation,
+                ..
+            } => "translation.invalid",
+            Self::InvalidDocument {
+                track: QqMusicLyricTrack::Romanization,
+                ..
+            } => "romanization.invalid",
+        }
+    }
+}
+
 impl<E> fmt::Display for QqMusicLyricsError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -283,7 +337,7 @@ impl<T> QqMusicClient<T>
 where
     T: HttpTransport,
 {
-    /// Loads and parses the current cloud-QRC lyric representation.
+    /// Loads and parses the current encrypted cloud lyric representation.
     ///
     /// # Errors
     ///
@@ -295,58 +349,72 @@ where
         song_mid: &str,
         song_type: u32,
     ) -> Result<QqMusicLyrics, QqMusicLyricsError<T::Error>> {
-        if !is_safe_song_mid(song_mid) {
-            return Err(QqMusicLyricsError::InvalidSongMid);
-        }
-        let body = serde_json::to_vec(&LyricRequest::new(credential, song_mid, song_type))
-            .map_err(|_| QqMusicLyricsError::Serialize)?;
-        let mut request = HttpRequest::post(MUSICU_URL)
-            .header("Content-Type", "application/json")
-            .header("Origin", "https://y.qq.com")
-            .header("Referer", "https://y.qq.com/")
-            .body(body)
-            .response_body_limit(MAX_LYRIC_RESPONSE_BYTES)
-            .timeout(LYRIC_REQUEST_TIMEOUT);
-        if let Some(credential) = credential {
-            request = request.header("Cookie", credential.musicu_cookie_header());
-        }
-        let response = self
-            .transport()
-            .execute(request)
-            .await
-            .map_err(QqMusicLyricsError::Transport)?;
-        if !(200..300).contains(&response.status()) {
-            return Err(QqMusicLyricsError::HttpStatus(response.status()));
-        }
+        let result: Result<QqMusicLyrics, QqMusicLyricsError<T::Error>> = async {
+            if !is_safe_song_mid(song_mid) {
+                return Err(QqMusicLyricsError::InvalidSongMid);
+            }
+            let body = serde_json::to_vec(&LyricRequest::new(credential, song_mid, song_type))
+                .map_err(|_| QqMusicLyricsError::Serialize)?;
+            let mut request = HttpRequest::post(MUSICU_URL)
+                .header("Content-Type", "application/json")
+                .header("Origin", "https://y.qq.com")
+                .header("Referer", "https://y.qq.com/")
+                .body(body)
+                .response_body_limit(MAX_LYRIC_RESPONSE_BYTES)
+                .timeout(LYRIC_REQUEST_TIMEOUT);
+            if let Some(credential) = credential {
+                request = request.header("Cookie", credential.musicu_cookie_header());
+            }
+            let response = self
+                .transport()
+                .execute(request)
+                .await
+                .map_err(QqMusicLyricsError::Transport)?;
+            if !(200..300).contains(&response.status()) {
+                return Err(QqMusicLyricsError::HttpStatus(response.status()));
+            }
 
-        let envelope: LyricEnvelope =
-            serde_json::from_slice(response.body()).map_err(|_| QqMusicLyricsError::InvalidJson)?;
-        let data = extract_data(envelope)?;
-        let encrypted_original = data.lyric.ok_or(QqMusicLyricsError::MissingLyrics)?;
-        if encrypted_original.is_empty() {
-            return Err(QqMusicLyricsError::Unavailable);
-        }
-        if data.crypt != Some(1) || data.qrc != Some(1) {
-            return Err(invalid_document(
-                QqMusicLyricTrack::Original,
-                QqMusicLyricDocumentField::Representation,
-            ));
-        }
+            let envelope: LyricEnvelope = serde_json::from_slice(response.body())
+                .map_err(|_| QqMusicLyricsError::InvalidJson)?;
+            let data = extract_data(envelope)?;
+            let encrypted_original = data.lyric.ok_or(QqMusicLyricsError::MissingLyrics)?;
+            if encrypted_original.is_empty() {
+                return Err(QqMusicLyricsError::Unavailable);
+            }
+            if data.crypt != Some(1) {
+                return Err(invalid_document(
+                    QqMusicLyricTrack::Original,
+                    QqMusicLyricDocumentField::Representation,
+                ));
+            }
 
-        let original_text = decrypt_track(&encrypted_original, QqMusicLyricTrack::Original)?;
-        let original = parse_qrc_xml(&original_text)
+            let original_text = decrypt_track(&encrypted_original, QqMusicLyricTrack::Original)?;
+            let original = match data.qrc {
+                Some(1) => parse_qrc_xml(&original_text),
+                Some(0) => parse_original_lrc(&original_text),
+                _ => {
+                    return Err(invalid_document(
+                        QqMusicLyricTrack::Original,
+                        QqMusicLyricDocumentField::Representation,
+                    ));
+                }
+            }
             .map_err(|field| invalid_document(QqMusicLyricTrack::Original, field))?;
-        if original.is_empty() {
-            return Err(QqMusicLyricsError::Unavailable);
-        }
-        let translation = parse_optional_auxiliary(data.trans, QqMusicLyricTrack::Translation)?;
-        let romanization = parse_optional_auxiliary(data.roma, QqMusicLyricTrack::Romanization)?;
+            if original.is_empty() {
+                return Err(QqMusicLyricsError::Unavailable);
+            }
+            let translation = parse_optional_auxiliary(data.trans, QqMusicLyricTrack::Translation);
+            let romanization = parse_optional_auxiliary(data.roma, QqMusicLyricTrack::Romanization);
 
-        Ok(QqMusicLyrics {
-            original,
-            translation,
-            romanization,
-        })
+            Ok(QqMusicLyrics {
+                original,
+                translation,
+                romanization,
+            })
+        }
+        .await;
+        lyric_debug_result(&result);
+        result
     }
 }
 
@@ -383,15 +451,88 @@ fn decrypt_track<E>(
         .map_err(|_| invalid_document(track, QqMusicLyricDocumentField::Ciphertext))
 }
 
-fn parse_optional_auxiliary<E>(
+fn parse_optional_auxiliary(
     ciphertext: Option<String>,
     track: QqMusicLyricTrack,
-) -> Result<Vec<QqMusicAuxiliaryLyricLine>, QqMusicLyricsError<E>> {
+) -> Vec<QqMusicAuxiliaryLyricLine> {
     let Some(ciphertext) = ciphertext.filter(|value| !value.is_empty()) else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
-    let plaintext = decrypt_track(&ciphertext, track)?;
-    parse_lrc(&plaintext).map_err(|field| invalid_document(track, field))
+    let parsed = decrypt_cloud_qrc(&ciphertext)
+        .map_err(|_| QqMusicLyricDocumentField::Ciphertext)
+        .and_then(|plaintext| parse_auxiliary_document(&plaintext));
+    match parsed {
+        Ok(lines) if !lines.is_empty() => lines,
+        Ok(_) => {
+            lyric_debug_optional(track, QqMusicLyricDocumentField::LyricContent);
+            Vec::new()
+        }
+        Err(field) => {
+            lyric_debug_optional(track, field);
+            Vec::new()
+        }
+    }
+}
+
+fn parse_original_lrc(
+    document: &str,
+) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDocumentField> {
+    parse_lrc(document).map(|lines| {
+        lines
+            .into_iter()
+            .map(|line| QqMusicTimedLyricLine {
+                text: line.text,
+                start_ms: line.start_ms,
+                duration_ms: 0,
+                segments: Vec::new(),
+            })
+            .collect()
+    })
+}
+
+fn parse_auxiliary_document(
+    document: &str,
+) -> Result<Vec<QqMusicAuxiliaryLyricLine>, QqMusicLyricDocumentField> {
+    let lrc = parse_lrc(document)?;
+    if !lrc.is_empty() {
+        return Ok(lrc);
+    }
+    let qrc = if document.trim_start().starts_with('<') {
+        parse_qrc_xml(document)?
+    } else {
+        parse_qrc_content(document)?
+    };
+    Ok(qrc
+        .into_iter()
+        .map(|line| QqMusicAuxiliaryLyricLine {
+            text: line.text,
+            start_ms: line.start_ms,
+        })
+        .collect())
+}
+
+fn lyric_debug_result<E>(result: &Result<QqMusicLyrics, QqMusicLyricsError<E>>) {
+    if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_none() {
+        return;
+    }
+    match result {
+        Ok(lyrics) => eprintln!(
+            "[fura][qq-lyrics] outcome=success original_lines={} translation_lines={} romanization_lines={}",
+            lyrics.original.len(),
+            lyrics.translation.len(),
+            lyrics.romanization.len(),
+        ),
+        Err(error) => eprintln!(
+            "[fura][qq-lyrics] outcome=failure stage={}",
+            error.diagnostic_code(),
+        ),
+    }
+}
+
+fn lyric_debug_optional(track: QqMusicLyricTrack, field: QqMusicLyricDocumentField) {
+    if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_some() {
+        eprintln!("[fura][qq-lyrics] outcome=partial optional_track={track:?} field={field:?}");
+    }
 }
 
 fn invalid_document<E>(
@@ -771,7 +912,8 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        QqMusicLyricDocumentField, QqMusicLyricTrack, QqMusicLyricsError, parse_lrc, parse_qrc_xml,
+        QqMusicLyricDocumentField, QqMusicLyricTrack, QqMusicLyricsError, parse_auxiliary_document,
+        parse_lrc, parse_qrc_xml,
     };
     use crate::{Credential, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient};
 
@@ -905,6 +1047,47 @@ mod tests {
         assert_eq!(body["comm"]["tmeLoginType"], 0);
     }
 
+    #[tokio::test]
+    async fn accepts_encrypted_line_timed_original_without_inventing_word_timing() {
+        let transport = FixtureTransport::new(&json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {
+                    "crypt": 1,
+                    "qrc": 0,
+                    "lyric": TRANSLATION,
+                    "trans": "",
+                    "roma": ""
+                }
+            }
+        }));
+        let lyrics = QqMusicClient::new(transport)
+            .lyrics(None, "fixtureMID01", 0)
+            .await
+            .expect("line-timed lyrics");
+
+        assert_eq!(lyrics.original().len(), 2);
+        assert_eq!(lyrics.original()[0].text(), "Translated fixture");
+        assert_eq!(lyrics.original()[0].start_ms(), 1_000);
+        assert_eq!(lyrics.original()[0].duration_ms(), 0);
+        assert!(lyrics.original()[0].segments().is_empty());
+    }
+
+    #[tokio::test]
+    async fn malformed_optional_track_does_not_discard_valid_original() {
+        let mut response = success_response();
+        response["req_0"]["data"]["trans"] = json!("0000000000000000");
+        let lyrics = QqMusicClient::new(FixtureTransport::new(&response))
+            .lyrics(None, "fixtureMID01", 0)
+            .await
+            .expect("valid original survives malformed optional track");
+
+        assert_eq!(lyrics.original().len(), 2);
+        assert!(lyrics.translation().is_empty());
+        assert_eq!(lyrics.romanization().len(), 1);
+    }
+
     #[test]
     fn qrc_parser_decodes_xml_entities_and_preserves_source_timing() {
         let xml = r#"<QrcInfos><LyricInfo><Lyric_1 LyricType="1" LyricContent="[0,10]A&amp;B(0,10)&#10;[20,0](19,2)"/></LyricInfo></QrcInfos>"#;
@@ -929,6 +1112,16 @@ mod tests {
         );
         assert_eq!(lines[0].text(), "Auxiliary");
         assert_eq!(lines[2].text(), "");
+    }
+
+    #[test]
+    fn auxiliary_parser_accepts_qrc_documents_as_line_timed_text() {
+        let xml = r#"<QrcInfos><LyricInfo><Lyric_1 LyricType="1" LyricContent="[1000,800]Optional(1000,800)"/></LyricInfo></QrcInfos>"#;
+        let lines = parse_auxiliary_document(xml).expect("auxiliary QRC");
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].text(), "Optional");
+        assert_eq!(lines[0].start_ms(), 1_000);
     }
 
     #[tokio::test]
@@ -997,6 +1190,7 @@ mod tests {
             track: QqMusicLyricTrack::Translation,
             field: QqMusicLyricDocumentField::Timing,
         };
+        assert_eq!(error.diagnostic_code(), "translation.invalid");
         assert!(!format!("{error:?}").contains("fixture"));
     }
 }

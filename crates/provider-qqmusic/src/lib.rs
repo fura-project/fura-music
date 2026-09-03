@@ -5669,6 +5669,22 @@ mod tests {
         })
     }
 
+    fn line_timed_lyrics_success_json() -> Value {
+        json!({
+            "code": 0,
+            "req_0": {
+                "code": 0,
+                "data": {
+                    "crypt": 1,
+                    "qrc": 0,
+                    "lyric": SYNTHETIC_TRANSLATION_LYRIC,
+                    "trans": "",
+                    "roma": ""
+                }
+            }
+        })
+    }
+
     #[tokio::test]
     async fn maps_owned_playlists_to_provider_independent_summaries() {
         let provider = QqMusicProvider::new(QqMusicClient::new(OwnedPlaylistsTransport::new(0)));
@@ -7121,6 +7137,27 @@ mod tests {
                 .expect("lyric request JSON");
         assert_eq!(body["req_0"]["param"]["songMid"], "fixtureMID01");
         assert_eq!(body["req_0"]["param"]["type"], 7);
+    }
+
+    #[tokio::test]
+    async fn maps_line_timed_qq_lyrics_without_fabricating_word_segments() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(LyricsTransport::new(
+            &line_timed_lyrics_success_json(),
+        )));
+        let track_id = qq_track_id("track:41001:0:fixtureMID01:fixtureFileMID01");
+
+        let lyrics = provider
+            .lyrics(track_id.clone())
+            .await
+            .expect("line-timed synchronized lyrics");
+
+        assert_eq!(lyrics.track_id(), &track_id);
+        assert_eq!(lyrics.lines().len(), 2);
+        assert_eq!(lyrics.lines()[0].text(), "Translated fixture");
+        assert_eq!(lyrics.lines()[0].start_ms(), 1_000);
+        assert_eq!(lyrics.lines()[0].duration_ms(), 0);
+        assert!(lyrics.lines()[0].segments().is_empty());
+        assert!(!lyrics.has_word_timing());
     }
 
     #[test]
