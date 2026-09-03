@@ -561,17 +561,68 @@ fn parse_qrc_xml(xml: &str) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDo
     }
 }
 
+fn decode_qrc_xml_entities(value: &str) -> String {
+    let mut decoded = String::with_capacity(value.len());
+    let mut cursor = 0_usize;
+    while let Some(relative_start) = value[cursor..].find('&') {
+        let start = cursor + relative_start;
+        decoded.push_str(&value[cursor..start]);
+        let entity = value[start + 1..]
+            .find(';')
+            .filter(|length| *length <= 16)
+            .and_then(|length| {
+                let body = &value[start + 1..start + 1 + length];
+                decode_qrc_xml_entity(body).map(|character| (length, character))
+            });
+        if let Some((length, character)) = entity {
+            decoded.push(character);
+            cursor = start + length + 2;
+        } else {
+            decoded.push('&');
+            cursor = start + 1;
+        }
+    }
+    decoded.push_str(&value[cursor..]);
+    decoded
+}
+
+fn decode_qrc_xml_entity(value: &str) -> Option<char> {
+    match value {
+        "amp" => Some('&'),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        value if value.starts_with("#x") => {
+            char::from_u32(u32::from_str_radix(&value[2..], 16).ok()?)
+        }
+        value if value.starts_with('#') => char::from_u32(value[1..].parse().ok()?),
+        _ => None,
+    }
+}
+
 fn lyric_content(element: &BytesStart<'_>) -> Result<Option<String>, QqMusicLyricDocumentField> {
     let mut lyric_type = None;
     let mut content = None;
     for attribute in element.attributes().with_checks(true) {
         let attribute = attribute.map_err(|_| QqMusicLyricDocumentField::Xml)?;
-        let value = attribute
-            .normalized_value(XmlVersion::Implicit1_0)
-            .map_err(|_| QqMusicLyricDocumentField::Xml)?;
         match attribute.key.as_ref() {
-            "LyricType" => lyric_type = Some(value.into_owned()),
-            "LyricContent" => content = Some(value.into_owned()),
+            "LyricType" => {
+                lyric_type = Some(
+                    attribute
+                        .normalized_value(XmlVersion::Implicit1_0)
+                        .map_err(|_| QqMusicLyricDocumentField::Xml)?
+                        .into_owned(),
+                );
+            }
+            // QQ's XML-shaped QRC can leave reserved characters such as the
+            // ampersand in `Up&Up` unescaped inside this one content field.
+            // Preserve XML structure parsing, but decode only known entities
+            // here and keep literal/unknown ampersands as lyric text.
+            "LyricContent" => {
+                let value = attribute.value.as_ref();
+                content = Some(decode_qrc_xml_entities(value));
+            }
             _ => {}
         }
     }
@@ -1098,6 +1149,27 @@ mod tests {
         assert_eq!(lines[0].segments()[0].text(), "A&B");
         assert_eq!(lines[1].text(), "");
         assert_eq!(lines[1].segments()[0].start_ms(), 19);
+    }
+
+    #[test]
+    fn qrc_parser_accepts_unescaped_ampersand_in_qq_pseudo_xml_metadata() {
+        let xml = r#"<QrcInfos><LyricInfo><Lyric_1 LyricType="1" LyricContent="[ti:Up&Up]&#10;[1000,500]Up(1000,200)&(1200,100)Up(1300,200)"/></LyricInfo></QrcInfos>"#;
+        let lines = parse_qrc_xml(xml).expect("QQ pseudo XML");
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].text(), "Up&Up");
+        assert_eq!(lines[0].start_ms(), 1_000);
+        assert_eq!(lines[0].segments().len(), 3);
+        assert_eq!(lines[0].segments()[1].text(), "&");
+    }
+
+    #[test]
+    fn qrc_parser_keeps_unknown_entities_as_lyric_text() {
+        let xml = r#"<QrcInfos><LyricInfo><Lyric_1 LyricType="1" LyricContent="[1000,500]A&unknown;B(1000,500)"/></LyricInfo></QrcInfos>"#;
+        let lines = parse_qrc_xml(xml).expect("unknown lyric entity");
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].text(), "A&unknown;B");
     }
 
     #[test]
