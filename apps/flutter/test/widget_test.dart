@@ -14,15 +14,17 @@ import 'package:flutter/material.dart'
         FocusManager,
         GridView,
         InkWell,
-        ListView,
         ListTile,
         Material,
         NavigationBar,
+        NavigationDestination,
         NavigationRail,
+        NavigationRailLabelType,
         OutlinedButton,
         PageStorageKey,
         Scrollable,
         ScrollableState,
+        SearchBar,
         Semantics,
         SizedBox,
         TabBar,
@@ -84,8 +86,18 @@ Future<void> _selectAdaptiveSection(
 }
 
 Future<void> _openLibrary(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('primary-library-destination')));
+  final sidebarLiked = find.byKey(const ValueKey('open-liked-songs'));
+  await tester.tap(
+    sidebarLiked.evaluate().isNotEmpty
+        ? sidebarLiked
+        : find.byKey(const ValueKey('primary-library-destination')),
+  );
   await tester.pumpAndSettle();
+}
+
+Future<void> _openPlaylists(WidgetTester tester) async {
+  await _openLibrary(tester);
+  await _selectLibrarySection(tester, 'playlists');
 }
 
 Future<void> _openSignInDialog(WidgetTester tester) async {
@@ -100,6 +112,25 @@ Future<void> _openSignInDialog(WidgetTester tester) async {
 }
 
 Future<void> _selectLibrarySection(WidgetTester tester, String section) async {
+  final likedTab = find.byKey(
+    ValueKey(switch (section) {
+      'liked-songs' => 'liked-tab-songs',
+      'playlists' => 'liked-tab-playlists',
+      'albums' => 'liked-tab-albums',
+      _ => 'liked-tab-unavailable',
+    }),
+  );
+  if (likedTab.evaluate().isNotEmpty) {
+    await tester.tap(likedTab);
+    if (section == 'albums') {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+    } else {
+      await tester.pumpAndSettle();
+    }
+    return;
+  }
   final control = find.byKey(const ValueKey('library-section-selector'));
   final itemFinder = find.byKey(ValueKey('library-section-$section'));
   if (tester.widget(control) is OutlinedButton) {
@@ -470,7 +501,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('signed-out Library keeps the shell and opens sign-in in place', (
+  testWidgets('signed-out Liked keeps the shell and opens sign-in in place', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -504,7 +535,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('applies the dark Material foundation to auth and Library', (
+  testWidgets('applies the dark Material foundation to auth and Liked', (
     tester,
   ) async {
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
@@ -555,10 +586,10 @@ void main() {
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
     await _openLibrary(tester);
 
-    expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('Synthetic favorites'), findsWidgets);
+    expect(find.text('暂时无法找到喜欢歌单'), findsOneWidget);
+    expect(find.text('Library'), findsNothing);
     expect(
-      Theme.of(tester.element(find.text('Your music'))).brightness,
+      Theme.of(tester.element(find.text('暂时无法找到喜欢歌单'))).brightness,
       Brightness.dark,
     );
     expect(tester.takeException(), isNull);
@@ -724,7 +755,7 @@ void main() {
     expect(find.text('This code expired'), findsNothing);
   });
 
-  testWidgets('routes an authenticated account through Home into playlists', (
+  testWidgets('routes an authenticated account through Home into Liked', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
@@ -748,6 +779,8 @@ void main() {
                 opaqueId: 'owned:7001:201',
                 title: 'Synthetic favorites',
                 trackCount: 42,
+                isLikedSongs: true,
+                ownership: UserPlaylistOwnership.owned,
               ),
               UserPlaylistSummary(
                 providerId: 'qq-music',
@@ -830,6 +863,9 @@ void main() {
             ],
           ),
         ),
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(total: 42),
+        ]),
       ),
     );
     await tester.pumpAndSettle();
@@ -911,48 +947,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-open-library')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('Your playlists'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('user-playlist-table-header')),
-      findsOneWidget,
-    );
-    expect(find.text('Playlist'), findsOneWidget);
-    expect(find.text('Tracks'), findsOneWidget);
-    final playlistsHeader = find.byKey(
-      const ValueKey('library-playlists-header'),
-    );
-    expect(playlistsHeader, findsOneWidget);
-    expect(
-      find.descendant(
-        of: playlistsHeader,
-        matching: find.byTooltip('Refresh playlists'),
-      ),
-      findsOneWidget,
-    );
-    final libraryContent = find.byKey(const ValueKey('user-library-content'));
-    final favoriteTitle = find.descendant(
-      of: libraryContent,
-      matching: find.text('Synthetic favorites'),
-    );
-    expect(favoriteTitle, findsOneWidget);
-    expect(
-      find.descendant(
-        of: libraryContent,
-        matching: find.text('Synthetic saved mix'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: libraryContent, matching: find.text('42 tracks')),
-      findsOneWidget,
-    );
-    final playlistSemantics = tester.getSemantics(favoriteTitle);
-    expect(playlistSemantics.label, 'Synthetic favorites, 42 tracks');
-    expect(
-      playlistSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
-      isTrue,
-    );
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-tabs')), findsOneWidget);
+    expect(find.text('Library'), findsNothing);
     semantics.dispose();
     expect(find.text('You’re signed in'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -1036,9 +1034,16 @@ void main() {
     final dailyStateRect = tester.getRect(
       find.byKey(const ValueKey('home-daily-recommendation-state')),
     );
+    final firstPublicTitleRect = tester.getRect(find.text('Public hero pick'));
+    final secondPublicTitleRect = tester.getRect(
+      find.text('Public secondary pick'),
+    );
     expect(
-      heroRect.overlaps(tester.getRect(find.text('Public hero pick'))),
-      isTrue,
+      [
+        firstPublicTitleRect,
+        secondPublicTitleRect,
+      ].where(heroRect.overlaps).length,
+      1,
     );
     expect(
       radarRect.overlaps(tester.getRect(find.text('Real Radar slot'))),
@@ -1500,7 +1505,7 @@ void main() {
     );
   });
 
-  testWidgets('routes fresh QR authentication through Home to Library', (
+  testWidgets('routes fresh QR authentication through Home to Liked', (
     tester,
   ) async {
     final session = _WaitingSession();
@@ -1524,10 +1529,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
-    expect(find.text('Open library'), findsOneWidget);
+    expect(find.text('Liked'), findsOneWidget);
     await _openLibrary(tester);
-    expect(find.text('Your music'), findsOneWidget);
-    expect(find.text('No playlists yet'), findsOneWidget);
+    expect(find.text('暂时无法找到喜欢歌单'), findsOneWidget);
+    expect(find.text('Library'), findsNothing);
   });
 
   testWidgets('opens real Home content and restores its exact entry', (
@@ -1751,6 +1756,15 @@ void main() {
         tester.widget<NavigationBar>(find.byType(NavigationBar)).destinations,
         hasLength(4),
       );
+      expect(
+        (tester
+                    .widget<NavigationBar>(find.byType(NavigationBar))
+                    .destinations
+                    .last
+                as NavigationDestination)
+            .label,
+        '喜欢',
+      );
       expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('home-recommendations-section')),
@@ -1760,7 +1774,7 @@ void main() {
       expect(find.text('Compact Home playlist'), findsOneWidget);
       expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
       expect(find.byType(AppBar), findsNothing);
-      expect(tester.getSize(find.byType(NavigationBar)).height, 64);
+      expect(tester.getSize(find.byType(NavigationBar)).height, 72);
       expect(
         tester
             .getRect(find.byKey(const ValueKey('home-recommendation-0')))
@@ -1784,7 +1798,7 @@ void main() {
         tester
             .getSize(find.byKey(const ValueKey('now-playing-compact-layout')))
             .height,
-        64,
+        68,
       );
       expect(queue.replacements.single.$1, [homeTrack]);
       expect(relatedSeeds.single.opaqueId, homeTrack.opaqueId);
@@ -1804,6 +1818,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Retained search result'), findsOneWidget);
       expect(search.requests, [('retained query', 1, 30)]);
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('now-playing-compact-layout')))
+            .height,
+        68,
+      );
+      expect(tester.getSize(find.byType(NavigationBar)).height, 72);
       final searchState = tester.state(find.byType(TrackSearchPage));
 
       await tester.tap(
@@ -1832,6 +1853,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Retained discovery result'), findsOneWidget);
       expect(recommendations.requests, [(0, 20)]);
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('now-playing-compact-layout')))
+            .height,
+        68,
+      );
 
       tester.view.physicalSize = const Size(1100, 760);
       await tester.pumpAndSettle();
@@ -2348,7 +2375,7 @@ void main() {
   );
 
   testWidgets(
-    'saved collections share labeled compact loading and empty states',
+    'favorite Albums keep labeled compact loading and empty states in Liked',
     (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1;
@@ -2403,20 +2430,12 @@ void main() {
       expect(find.byType(MusicContentStatePanel), findsOneWidget);
       expect(find.text('No favorite albums yet'), findsOneWidget);
 
-      await _selectLibrarySection(tester, 'artists');
-
-      expect(
-        find.byKey(const ValueKey('favorite-artists-empty')),
-        findsOneWidget,
-      );
-      expect(find.byType(MusicContentStatePanel), findsOneWidget);
-      expect(find.text('No favorite artists yet'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'saved collection failures keep one live region and exact recovery',
+    'favorite Album failures keep one live region and exact recovery',
     (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1;
@@ -2471,30 +2490,7 @@ void main() {
       );
       expect(albums.requests, [(0, 20), (0, 20)]);
 
-      await _selectLibrarySection(tester, 'artists');
-
-      final artistError = find.byKey(
-        const ValueKey('favorite-artists-credential-rejected'),
-      );
-      expect(artistError, findsOneWidget);
-      expect(find.byType(MusicContentStatePanel), findsOneWidget);
-      expect(
-        find.descendant(
-          of: artistError,
-          matching: find.byWidgetPredicate(
-            (widget) =>
-                widget is Semantics && widget.properties.liveRegion == true,
-          ),
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('Try again'), findsNothing);
-      expect(find.text('Sign in again'), findsOneWidget);
       expect(tester.takeException(), isNull);
-
-      await tester.tap(find.text('Sign in again'));
-      await tester.pumpAndSettle();
-      expect(find.text('Scan with WeChat'), findsOneWidget);
     },
   );
 
@@ -2542,20 +2538,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await _openLibrary(tester);
-      final sectionSelector = find.byKey(
-        const ValueKey('library-section-selector'),
-      );
       expect(favorites.requests, isEmpty);
-      expect(find.text('Your music'), findsOneWidget);
-      expect(sectionSelector, findsOneWidget);
-      expect(find.text('Library: Playlists'), findsOneWidget);
-      expect(
-        tester
-            .getSemantics(sectionSelector)
-            .getSemanticsData()
-            .hasAction(SemanticsAction.tap),
-        isTrue,
-      );
+      expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('liked-songs-tabs')), findsOneWidget);
+      expect(find.text('Library'), findsNothing);
       expect(tester.takeException(), isNull);
       await _selectLibrarySection(tester, 'albums');
       expect(tester.takeException(), isNull);
@@ -2563,19 +2549,11 @@ void main() {
         find.byKey(const ValueKey('favorite-albums-content')),
         findsOneWidget,
       );
-      final albumsHeader = find.byKey(const ValueKey('library-albums-header'));
-      expect(albumsHeader, findsOneWidget);
+      expect(find.byKey(const ValueKey('liked-albums-search')), findsOneWidget);
       expect(find.text('Saved Album'), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
       expect(find.byType(GridView), findsNothing);
       expect(find.byType(NavigationBar), findsOneWidget);
-      expect(
-        find.descendant(
-          of: albumsHeader,
-          matching: find.byKey(const ValueKey('favorite-albums-refresh')),
-        ),
-        findsOneWidget,
-      );
 
       await tester.tap(find.byKey(const ValueKey('primary-home-destination')));
       await tester.pumpAndSettle();
@@ -2623,182 +2601,55 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(await tester.binding.handlePopRoute(), isTrue);
       await tester.pumpAndSettle();
-      expect(find.text('No playlists yet'), findsOneWidget);
-      expect(find.text('Your music'), findsOneWidget);
-      expect(find.text('Library: Playlists'), findsOneWidget);
-      final focusedContext = FocusManager.instance.primaryFocus?.context;
-      expect(focusedContext, isNotNull);
-      expect(
-        find
-            .ancestor(
-              of: find.byElementPredicate(
-                (element) => identical(element, focusedContext),
-              ),
-              matching: find.byKey(const ValueKey('library-section-selector')),
-            )
-            .evaluate(),
-        isNotEmpty,
-      );
+      expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets(
-    'retains favorite Artists across compact and desktop Library sections',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 800);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      const artist = ArtistSummary(
-        providerId: 'qq-music',
-        opaqueId: 'artist:-:fixtureFavoriteArtistMid',
-        name: 'Saved Artist',
-      );
-      const album = AlbumSummary(
-        providerId: 'qq-music',
-        opaqueId: 'album:43001:fixtureArtistAlbumMid',
-        title: 'Saved Artist Album',
-      );
-      const track = PlaylistTrackSummary(
-        providerId: 'qq-music',
-        opaqueId: 'track:41001:0:fixtureArtistTrackMid:-',
-        title: 'Saved Artist Track',
-        artistNames: ['Saved Artist'],
-      );
-      final favorites = _WidgetFavoriteArtistGateway(
-        const FavoriteArtistPageResult(total: 1, artists: [artist]),
-      );
-      final artistTracks = _WidgetArtistGateway(
-        const ArtistTrackPageResult(total: 1, tracks: [track]),
-      );
-      final artistAlbums = _WidgetArtistAlbumGateway(
-        const ArtistAlbumPageResult(total: 1, albums: [album]),
-      );
-      final albumTracks = _WidgetAlbumGateway(
-        const AlbumTrackPageResult(total: 1, tracks: [track]),
-      );
-      await tester.pumpWidget(
-        MusicApp(
-          bootstrap: _bootstrap,
-          authenticationGateway: _WidgetGateway(
-            _WaitingSession(),
-            authenticated: true,
+  testWidgets('Liked does not expose the removed favorite-Artist root', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final favorites = _WidgetFavoriteArtistGateway(
+      const FavoriteArtistPageResult(
+        total: 1,
+        artists: [
+          ArtistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'artist:-:fixtureFavoriteArtistMid',
+            name: 'Saved Artist',
           ),
-          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
-          favoriteArtistGateway: favorites,
-          artistTrackGateway: artistTracks,
-          artistAlbumGateway: artistAlbums,
-          albumTrackGateway: albumTracks,
-          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
-          playbackQueueGateway: _WidgetPlaybackQueueGateway(),
-          lyricGateway: const _WidgetLyricGateway(),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
         ),
-      );
-      await tester.pumpAndSettle();
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        favoriteArtistGateway: favorites,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openLibrary(tester);
 
-      await _openLibrary(tester);
-      expect(favorites.requests, isEmpty);
-      expect(find.text('Your music'), findsOneWidget);
-      final sectionSelector = find.byKey(
-        const ValueKey('library-section-selector'),
-      );
-      expect(sectionSelector, findsOneWidget);
-      expect(find.text('Library: Playlists'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      expect(
-        tester
-            .getSemantics(sectionSelector)
-            .getSemanticsData()
-            .hasAction(SemanticsAction.tap),
-        isTrue,
-      );
-      await _selectLibrarySection(tester, 'artists');
-      expect(
-        find.byKey(const ValueKey('favorite-artists-content')),
-        findsOneWidget,
-      );
-      final artistsHeader = find.byKey(
-        const ValueKey('library-artists-header'),
-      );
-      expect(artistsHeader, findsOneWidget);
-      expect(
-        find.descendant(
-          of: artistsHeader,
-          matching: find.byKey(const ValueKey('favorite-artists-refresh')),
-        ),
-        findsOneWidget,
-      );
-      expect(find.byType(GridView), findsNothing);
-      expect(favorites.requests, [(0, 20)]);
-
-      final artistAction = find.byKey(const ValueKey('favorite-artist-0'));
-      final artistSemantics = find.ancestor(
-        of: artistAction,
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is Semantics &&
-              widget.properties.label == 'Saved Artist, Artist',
-        ),
-      );
-      expect(
-        tester.widget<Semantics>(artistSemantics).properties.onTap,
-        isNotNull,
-      );
-      await tester.tap(artistAction);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
-      expect(artistTracks.requests, [(artist, 0, 30)]);
-
-      await tester.tap(find.byTooltip('Back to favorite artists'));
-      await tester.pumpAndSettle();
-      expect(find.text('Saved Artist'), findsOneWidget);
-      expect(favorites.requests, [(0, 20)]);
-
-      await _selectLibrarySection(tester, 'playlists');
-      expect(find.text('No playlists yet'), findsOneWidget);
-      await _selectLibrarySection(tester, 'artists');
-      expect(find.text('Saved Artist'), findsOneWidget);
-      expect(favorites.requests, [(0, 20)]);
-
-      tester.view.physicalSize = const Size(1000, 700);
-      await tester.pumpAndSettle();
-      expect(find.byType(GridView), findsOneWidget);
-      expect(tester.widget<InkWell>(artistAction).onTap, isNotNull);
-      await tester.tap(artistAction);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
-      expect(artistTracks.requests, [(artist, 0, 30), (artist, 0, 30)]);
-
-      await tester.tap(find.text('Albums'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('artist-albums-content')),
-        findsOneWidget,
-      );
-      expect(artistAlbums.requests, [(artist, 0, 30)]);
-      await tester.tap(find.byKey(const ValueKey('artist-album-0')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
-      expect(albumTracks.requests.single.$1, album);
-
-      expect(await tester.binding.handlePopRoute(), isTrue);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('artist-albums-content')),
-        findsOneWidget,
-      );
-      await tester.tap(find.byTooltip('Back to favorite artists'));
-      await tester.pumpAndSettle();
-      await _selectLibrarySection(tester, 'playlists');
-      expect(find.text('No playlists yet'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('library-section-artists')),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
+    expect(find.text('Library'), findsNothing);
+    expect(find.byKey(const ValueKey('library-section-artists')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('favorite-artists-content')),
+      findsNothing,
+    );
+    expect(favorites.requests, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'loads new albums lazily and preserves them through Album playback return',
@@ -3244,15 +3095,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(queue.replacements.single.$1, [track]);
 
-      await tester.tap(
+      expect(
         find.byKey(const ValueKey('now-playing-catalog-action')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('expanded-now-playing-open-catalog')),
       );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('now-playing-catalog-selection')),
         findsOneWidget,
       );
-      expect(find.text('Current Album'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('now-playing-catalog-selection')),
+          matching: find.text('Current Album'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('First credit'), findsWidgets);
       expect(find.text('Second credit'), findsWidgets);
 
@@ -3354,7 +3217,11 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
       await tester.pumpAndSettle();
 
-      final action = find.byKey(const ValueKey('now-playing-catalog-action'));
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pumpAndSettle();
+      final action = find.byKey(
+        const ValueKey('expanded-now-playing-open-catalog'),
+      );
       final semantics = tester.getSemantics(action);
       expect(
         semantics.getSemanticsData().hasAction(SemanticsAction.tap),
@@ -3470,8 +3337,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('track-search-result-0')));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pumpAndSettle();
       await tester.tap(
-        find.byKey(const ValueKey('now-playing-catalog-action')),
+        find.byKey(const ValueKey('expanded-now-playing-open-catalog')),
       );
       await tester.pumpAndSettle();
       expect(
@@ -3485,15 +3354,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('track-search-content')),
+        find.byKey(const ValueKey('expanded-now-playing-page')),
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('album-content')), findsNothing);
       expect(find.byKey(const ValueKey('artist-content')), findsNothing);
       expect(find.text('Replacement Track'), findsWidgets);
       expect(
-        find.byKey(const ValueKey('now-playing-catalog-action')),
+        find.byKey(const ValueKey('expanded-now-playing-open-catalog')),
         findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('expanded-now-playing-back')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('track-search-content')),
+        findsOneWidget,
       );
       expect(search.requests, [('stale context query', 1, 30)]);
       expect(queue.replacements, hasLength(1));
@@ -4296,14 +4171,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openLibrary(tester);
+    await _openPlaylists(tester);
     expect(find.text('Narrow playlist'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('user-playlist-table-header')),
       findsNothing,
     );
     final playlistSemantics = tester.getSemantics(find.text('Narrow playlist'));
-    expect(playlistSemantics.label, 'Narrow playlist');
+    expect(playlistSemantics.label, 'Narrow playlist, 歌单');
     expect(
       playlistSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
       isTrue,
@@ -4356,7 +4231,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _openLibrary(tester);
     await tester.tap(find.text('Shell playlist').last);
     await tester.pump(const Duration(milliseconds: 120));
 
@@ -4537,7 +4411,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _openLibrary(tester);
+    await _openPlaylists(tester);
     await tester.tap(find.text('Open me').last);
     await tester.pumpAndSettle();
 
@@ -4648,7 +4522,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Back to playlists'));
     await tester.pumpAndSettle();
-    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
   });
 
   testWidgets('system and desktop back return to the existing library', (
@@ -4692,7 +4566,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _openLibrary(tester);
+    await _openPlaylists(tester);
     await tester.tap(find.text('System back playlist').last);
     await tester.pumpAndSettle();
     expect(find.text('System back track'), findsOneWidget);
@@ -4701,7 +4575,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(handled, isTrue);
-    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
     expect(find.text('System back playlist'), findsOneWidget);
     expect(libraryGateway._next, 1);
     expect(find.text('System back track'), findsNothing);
@@ -4718,7 +4592,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
     await tester.pumpAndSettle();
-    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
     expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -4729,7 +4603,7 @@ void main() {
       platform: 'windows',
     );
     await tester.pumpAndSettle();
-    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
     expect(libraryGateway._next, 1);
     expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
   });
@@ -4767,22 +4641,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openLibrary(tester);
+    await _openPlaylists(tester);
     final list = find.byKey(
-      const PageStorageKey<String>('user-playlist-list-desktop'),
+      const PageStorageKey<String>('liked-playlists-grid'),
     );
     final scrollable = find.descendant(
       of: list,
       matching: find.byType(Scrollable),
     );
-    await tester.scrollUntilVisible(
-      find.text('Playlist 24'),
-      500,
-      scrollable: scrollable,
+    final desktopScrollState = tester.state<ScrollableState>(scrollable);
+    desktopScrollState.position.jumpTo(
+      desktopScrollState.position.maxScrollExtent,
     );
     await tester.pumpAndSettle();
     final before = tester.state<ScrollableState>(scrollable).position.pixels;
-    await tester.tap(find.text('Playlist 24'));
+    await tester.tap(find.text('Playlist 29'));
     await tester.pumpAndSettle();
     expect(find.text('This playlist is empty'), findsOneWidget);
 
@@ -4792,7 +4665,7 @@ void main() {
     final after = tester.state<ScrollableState>(scrollable).position.pixels;
     expect(after, moreOrLessEquals(before, epsilon: 1));
     final playlistAction = find.ancestor(
-      of: find.text('Playlist 24'),
+      of: find.text('Playlist 29'),
       matching: find.byType(InkWell),
     );
     expect(tester.widget<InkWell>(playlistAction).focusNode?.hasFocus, isTrue);
@@ -4831,20 +4704,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openLibrary(tester);
-    final list = find.byType(ListView);
+    await _openPlaylists(tester);
+    final list = find.byKey(
+      const PageStorageKey<String>('liked-playlists-grid'),
+    );
     final scrollable = find.descendant(
       of: list,
       matching: find.byType(Scrollable),
     );
-    await tester.scrollUntilVisible(
-      find.text('Narrow playlist 24'),
-      400,
-      scrollable: scrollable,
+    final mobileScrollState = tester.state<ScrollableState>(scrollable);
+    mobileScrollState.position.jumpTo(
+      mobileScrollState.position.maxScrollExtent,
     );
     await tester.pumpAndSettle();
     final before = tester.state<ScrollableState>(scrollable).position.pixels;
-    await tester.tap(find.text('Narrow playlist 24'));
+    await tester.tap(find.text('Narrow playlist 29'));
     await tester.pumpAndSettle();
     expect(find.text('This playlist is empty'), findsOneWidget);
 
@@ -4853,7 +4727,7 @@ void main() {
 
     final after = tester.state<ScrollableState>(scrollable).position.pixels;
     expect(after, moreOrLessEquals(before, epsilon: 1));
-    expect(find.text('Narrow playlist 24'), findsOneWidget);
+    expect(find.text('Narrow playlist 29'), findsOneWidget);
   });
 
   testWidgets('failed detail refresh keeps tracks visible and retries', (
@@ -4912,7 +4786,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _openLibrary(tester);
+    await _openPlaylists(tester);
     await tester.tap(find.text('Refresh me').last);
     await tester.pumpAndSettle();
 
@@ -5016,7 +4890,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _openLibrary(tester);
+    await _openPlaylists(tester);
     await tester.tap(find.text('Transient detail').last);
     await tester.pumpAndSettle();
 
@@ -5039,69 +4913,47 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('failed refresh keeps the complete library visible and retries', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'Liked fallback keeps playlists when its built-in list is absent',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      MusicApp(
-        bootstrap: _bootstrap,
-        authenticationGateway: _WidgetGateway(
-          _WaitingSession(),
-          authenticated: true,
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([
+            const UserLibraryResult(
+              playlists: [
+                UserPlaylistSummary(
+                  providerId: 'qq-music',
+                  opaqueId: 'favorite:current',
+                  title: 'Current library',
+                ),
+              ],
+            ),
+          ]),
         ),
-        libraryGateway: _WidgetLibraryGateway([
-          const UserLibraryResult(
-            playlists: [
-              UserPlaylistSummary(
-                providerId: 'qq-music',
-                opaqueId: 'favorite:current',
-                title: 'Current library',
-              ),
-            ],
-          ),
-          const UserLibraryResult(failure: UserLibraryFailure.network),
-          const UserLibraryResult(
-            playlists: [
-              UserPlaylistSummary(
-                providerId: 'qq-music',
-                opaqueId: 'favorite:fresh',
-                title: 'Fresh library',
-              ),
-            ],
-          ),
-        ]),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await _openLibrary(tester);
-    await tester.tap(find.byTooltip('Refresh playlists'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Current library'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('user-library-refresh-failure')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('previous results'), findsOneWidget);
-    expect(find.text('Couldn’t reach QQ Music'), findsNothing);
-    expect(tester.takeException(), isNull);
-
-    await tester.tap(find.byKey(const ValueKey('library-refresh-retry')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Fresh library'), findsOneWidget);
-    expect(find.text('Current library'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('user-library-refresh-failure')),
-      findsNothing,
-    );
-  });
+      await _openLibrary(tester);
+      expect(
+        find.byKey(const ValueKey('liked-songs-unavailable')),
+        findsOneWidget,
+      );
+      await _selectLibrarySection(tester, 'playlists');
+      expect(find.text('Current library'), findsOneWidget);
+      expect(find.text('Library'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('sign out requires confirmation and keeps the signed-out shell', (
     tester,
@@ -5372,7 +5224,6 @@ void main() {
         await tester.pumpAndSettle();
       } else {
         await _openLibrary(tester);
-        await _selectLibrarySection(tester, 'liked-songs');
       }
       expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
       expect(find.byKey(const ValueKey('liked-songs-title')), findsOneWidget);
@@ -5387,6 +5238,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await pumpLikedSongs(const Size(1440, 960));
+    expect(find.text('Library'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('primary-library-destination')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('liked-songs-table-header')),
       findsOneWidget,
@@ -5416,6 +5272,57 @@ void main() {
       find.byKey(const ValueKey('liked-collection-pages')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('liked-songs-expanded-header')),
+      findsOneWidget,
+    );
+    final desktopShellTop = tester.getTopLeft(find.byType(AppBar)).dy;
+    tester.view.physicalSize = const Size(1440, 720);
+    await tester.pumpAndSettle();
+    final desktopLikedList = find.byKey(
+      const PageStorageKey<String>('liked-songs-track-list'),
+    );
+    await tester.drag(desktopLikedList, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('liked-songs-collapsed-header')),
+      findsOneWidget,
+    );
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
+    expect(find.byKey(const ValueKey('sign-out')), findsOneWidget);
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(desktopShellTop, 1),
+    );
+    expect(
+      (tester.getCenter(find.byKey(const ValueKey('liked-songs-title'))).dy -
+              tester
+                  .getCenter(find.byKey(const ValueKey('liked-songs-search')))
+                  .dy)
+          .abs(),
+      lessThan(8),
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-desktop-collapsed.png'),
+        ),
+      );
+    }
+    await tester.drag(desktopLikedList, const Offset(0, 400));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('liked-songs-expanded-header')),
+      findsOneWidget,
+    );
+    tester.view.physicalSize = const Size(1440, 960);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('liked-tab-playlists')));
     await tester.pumpAndSettle();
     expect(
@@ -5584,6 +5491,53 @@ void main() {
       find.byKey(const ValueKey('now-playing-compact-layout')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('liked-songs-expanded-header')),
+      findsOneWidget,
+    );
+    final mobileShellTop = tester.getTopLeft(find.byType(AppBar)).dy;
+    final mobileLikedList = find.byKey(
+      const PageStorageKey<String>('liked-songs-track-list'),
+    );
+    await tester.drag(mobileLikedList, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('liked-songs-collapsed-header')),
+      findsOneWidget,
+    );
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byKey(const ValueKey('open-settings')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sign-out')), findsOneWidget);
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(mobileShellTop, 1),
+    );
+    expect(
+      (tester.getCenter(find.byKey(const ValueKey('liked-songs-title'))).dy -
+              tester
+                  .getCenter(find.byKey(const ValueKey('liked-songs-search')))
+                  .dy)
+          .abs(),
+      lessThan(8),
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-liked-mobile-collapsed.png'),
+        ),
+      );
+    }
+    await tester.drag(mobileLikedList, const Offset(0, 400));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('liked-songs-expanded-header')),
+      findsOneWidget,
+    );
     if (captureReviewImages) {
       await expectLater(
         find.byType(MusicApp),
@@ -5619,6 +5573,24 @@ void main() {
     await tester.tap(find.text('添加到队列'));
     await tester.pumpAndSettle();
     expect(reviewQueue.pushed, hasLength(1));
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        FakeAccessibilityFeatures.allOn;
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await pumpLikedSongs(const Size(390, 844));
+    await tester.drag(
+      find.byKey(const PageStorageKey<String>('liked-songs-track-list')),
+      const Offset(0, -180),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('liked-songs-collapsed-header')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('liked-songs-expanded-header')),
+      findsNothing,
+    );
     semantics.dispose();
   });
 
@@ -5733,6 +5705,536 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'settings shell replaces navigation and top actions with symmetric motion',
+    (tester) async {
+      const captureReviewImage = bool.fromEnvironment(
+        'SETTINGS_SHELL_VISUAL_REVIEW',
+      );
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          accountSummaryGateway: const _WidgetAccountSummaryGateway(
+            AccountSummaryLoadResult(
+              summary: AuthenticatedAccountSummary(
+                displayName: 'Fura listener',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('desktop-music-sidebar')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('sidebar-account')), findsOneWidget);
+      expect(find.byKey(const ValueKey('sign-out')), findsOneWidget);
+      expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('music-navigation-transition-page')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-navigation-transition-page')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('music-shell-top-bar')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('settings-shell-top-bar')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('sign-out')), findsOneWidget);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('desktop-settings-sidebar')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('sidebar-account')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('settings-sidebar-back')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-nav-appearance')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-nav-playback')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('sign-out')), findsNothing);
+      expect(find.byKey(const ValueKey('sign-in')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('settings-shell-actions')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
+      final settingsSearch = find.byKey(const ValueKey('settings-search'));
+      expect(settingsSearch, findsOneWidget);
+      expect(
+        tester.widget<SearchBar>(settingsSearch).hintText,
+        'Search settings',
+      );
+      expect(find.byKey(const ValueKey('settings-toolbar')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('settings-theme-selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-quality-selector')),
+        findsNothing,
+      );
+      if (captureReviewImage) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-settings-shell-desktop.png')),
+        );
+      }
+
+      await tester.tap(find.byKey(const ValueKey('settings-nav-playback')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-theme-selector')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-quality-selector')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(settingsSearch, 'dark');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-search-summary')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-theme-selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-quality-selector')),
+        findsNothing,
+      );
+
+      await tester.enterText(settingsSearch, 'not-a-setting');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-search-empty')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-theme-selector')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-quality-selector')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('music-navigation-transition-page')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-navigation-transition-page')),
+        findsOneWidget,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('desktop-music-sidebar')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('desktop-settings-sidebar')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('sidebar-account')), findsOneWidget);
+      expect(find.byKey(const ValueKey('sign-out')), findsOneWidget);
+      expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-search')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'mobile settings navigate from categories into searchable detail pages',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'MOBILE_SETTINGS_VISUAL_REVIEW',
+      );
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final settingsStorage = _WidgetSettingsDocumentStorage();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(_WaitingSession()),
+          settingsStore: AppSettingsStore(storage: settingsStorage),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('settings-compact-menu')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-detail')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-appearance')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-playback')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-search')),
+        findsOneWidget,
+      );
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byKey(const ValueKey('sign-in')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('settings-theme-selector')),
+        findsNothing,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-settings-mobile-menu.png')),
+        );
+      }
+
+      await tester.tap(
+        find.byKey(const ValueKey('settings-compact-appearance')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('settings-compact-menu')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-detail')),
+        findsOneWidget,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-compact-menu')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('settings-theme-selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-title-appearance')),
+        findsOneWidget,
+      );
+      expect(find.byType(NavigationBar), findsNothing);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-settings-mobile-appearance.png'),
+          ),
+        );
+      }
+
+      await tester.tap(find.text('Dark'));
+      await tester.pumpAndSettle();
+      expect(settingsStorage.document, contains('"theme":"dark"'));
+      await tester.tap(find.byKey(const ValueKey('settings-back')));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('settings-compact-menu')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-detail')),
+        findsOneWidget,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Dark theme'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('settings-compact-playback')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-quality-selector')),
+        findsOneWidget,
+      );
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-compact-menu')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-quality-selector')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('settings-compact-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'quality');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-compact-search-result-playback')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-search-result-appearance')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('settings-compact-search-result-playback')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-quality-selector')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('settings-back')));
+      await tester.pumpAndSettle();
+
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('recommended-playlists-page')),
+        findsOneWidget,
+      );
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('mobile settings hierarchy honors reduced motion', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        FakeAccessibilityFeatures.allOn;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('settings-compact-appearance')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('settings-compact-menu')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('settings-compact-detail')),
+      findsOneWidget,
+    );
+    tester.view.physicalSize = const Size(360, 800);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('settings-back')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('settings-compact-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-compact-detail')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('signed-out settings shell hides every login affordance', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('sign-in')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sidebar-account')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('desktop-settings-sidebar')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('sidebar-account')), findsNothing);
+    expect(find.byKey(const ValueKey('sign-in')), findsNothing);
+    expect(find.byKey(const ValueKey('sign-out')), findsNothing);
+    expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings reuses the navigation rail at medium desktop widths', (
+    tester,
+  ) async {
+    const captureMediumRail = bool.fromEnvironment('MEDIUM_RAIL_VISUAL_REVIEW');
+    tester.view.physicalSize = const Size(960, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('music-navigation-rail')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('settings-navigation-rail')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('sign-in')), findsOneWidget);
+    final mediumSettings = find.byKey(const ValueKey('open-settings'));
+    expect(mediumSettings, findsOneWidget);
+    final settingsEntryRail = tester.widget<NavigationRail>(
+      find.byKey(const ValueKey('settings-entry-navigation-rail')),
+    );
+    expect(settingsEntryRail.labelType, NavigationRailLabelType.all);
+    expect(settingsEntryRail.selectedIndex, isNull);
+    expect(find.text('Settings'), findsOneWidget);
+    expect(tester.getCenter(mediumSettings).dy, greaterThan(720));
+    if (captureMediumRail) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/fura-medium-rail-settings-bottom.png'),
+        ),
+      );
+    }
+
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('music-navigation-transition-page')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('settings-navigation-transition-page')),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('music-navigation-rail')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('settings-navigation-rail')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('settings-rail-back')), findsOneWidget);
+    expect(find.text('Appearance'), findsWidgets);
+    expect(find.byKey(const ValueKey('settings-nav-playback')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-toolbar')), findsNothing);
+    expect(find.byKey(const ValueKey('sign-in')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('settings-nav-playback')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('settings-quality-selector')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('settings-rail-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('music-navigation-rail')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('settings-navigation-rail')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('sign-in')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings shell honors reduced motion in both directions', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        FakeAccessibilityFeatures.allOn;
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('desktop-settings-sidebar')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('settings-shell-top-bar')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('music-shell-top-bar')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('desktop-settings-sidebar')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-shell-top-bar')), findsNothing);
+    expect(find.byKey(const ValueKey('music-shell-top-bar')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('returns rejected library credentials to sign-in', (
     tester,

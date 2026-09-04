@@ -74,7 +74,7 @@ class SettingsLocalRoute extends AuthenticatedLocalRoute {
   const SettingsLocalRoute();
 }
 
-enum AuthenticatedBackTarget { none, localRoute, libraryPlaylists, home }
+enum AuthenticatedBackTarget { none, localRoute, likedRoot, home }
 
 class AuthenticatedBackResult {
   const AuthenticatedBackResult._(this.target, [this.route]);
@@ -84,8 +84,8 @@ class AuthenticatedBackResult {
   const AuthenticatedBackResult.localRoute(AuthenticatedLocalRoute route)
     : this._(AuthenticatedBackTarget.localRoute, route);
 
-  const AuthenticatedBackResult.libraryPlaylists()
-    : this._(AuthenticatedBackTarget.libraryPlaylists);
+  const AuthenticatedBackResult.likedRoot()
+    : this._(AuthenticatedBackTarget.likedRoot);
 
   const AuthenticatedBackResult.home() : this._(AuthenticatedBackTarget.home);
 
@@ -103,13 +103,13 @@ class AuthenticatedBackResult {
 class AuthenticatedNavigationState {
   AuthenticatedPrimaryDestination _primaryDestination =
       AuthenticatedPrimaryDestination.home;
-  LibrarySection _librarySection = LibrarySection.playlists;
+  LibrarySection _librarySection = LibrarySection.likedSongs;
   final Set<AuthenticatedPrimaryDestination> _visitedDestinations = {
     AuthenticatedPrimaryDestination.home,
     AuthenticatedPrimaryDestination.library,
   };
   final Set<LibrarySection> _visitedLibrarySections = {
-    LibrarySection.playlists,
+    LibrarySection.likedSongs,
   };
   final List<AuthenticatedLocalRoute> _routes = [];
 
@@ -121,7 +121,7 @@ class AuthenticatedNavigationState {
   bool get hasLocalRoute => _routes.isNotEmpty;
   bool get hasLibrarySubsection =>
       _primaryDestination == AuthenticatedPrimaryDestination.library &&
-      _librarySection != LibrarySection.playlists;
+      _librarySection != LibrarySection.likedSongs;
   bool get canGoBack =>
       hasLocalRoute ||
       hasLibrarySubsection ||
@@ -162,8 +162,8 @@ class AuthenticatedNavigationState {
     final route = popRoute();
     if (route != null) return AuthenticatedBackResult.localRoute(route);
     if (hasLibrarySubsection) {
-      _librarySection = LibrarySection.playlists;
-      return const AuthenticatedBackResult.libraryPlaylists();
+      _librarySection = LibrarySection.likedSongs;
+      return const AuthenticatedBackResult.likedRoot();
     }
     if (_primaryDestination != AuthenticatedPrimaryDestination.home) {
       _primaryDestination = AuthenticatedPrimaryDestination.home;

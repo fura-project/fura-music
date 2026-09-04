@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
@@ -22,20 +23,30 @@ class LikedSongsPage extends StatefulWidget {
     required this.queuePlaybackController,
     required this.onOpenPlaylist,
     required this.onSignInAgain,
+    this.lastOpenedPlaylist,
+    this.playlistReturnFocusNode,
     this.onOpenAlbum,
+    this.onOpenFavoriteAlbum,
     this.onOpenArtist,
+    this.onHeaderCollapsedChanged,
+    this.collapsedHeaderActions,
     super.key,
   });
 
-  final UserPlaylistSummary playlist;
+  final UserPlaylistSummary? playlist;
   final List<UserPlaylistSummary> playlists;
   final PlaylistDetailGateway gateway;
   final FavoriteAlbumGateway favoriteAlbumGateway;
   final QueuePlaybackController queuePlaybackController;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final VoidCallback onSignInAgain;
+  final UserPlaylistSummary? lastOpenedPlaylist;
+  final FocusNode? playlistReturnFocusNode;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<AlbumSummary>? onOpenFavoriteAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final ValueChanged<bool>? onHeaderCollapsedChanged;
+  final Widget? collapsedHeaderActions;
 
   @override
   State<LikedSongsPage> createState() => _LikedSongsPageState();
@@ -43,13 +54,15 @@ class LikedSongsPage extends StatefulWidget {
 
 class _LikedSongsPageState extends State<LikedSongsPage>
     with SingleTickerProviderStateMixin {
-  late final PlaylistDetailController _controller;
+  PlaylistDetailController? _controller;
   late final Listenable _pageListenable;
   late final TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   _LikedCollectionSection _section = _LikedCollectionSection.songs;
   bool _albumsVisited = false;
+  bool _headerCollapsed = false;
+  bool _userReturningToHeader = false;
 
   @override
   void initState() {
@@ -58,13 +71,17 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       length: _LikedCollectionSection.values.length,
       vsync: this,
     )..addListener(_handleTabChanged);
-    _controller = PlaylistDetailController(widget.playlist, widget.gateway);
+    final playlist = widget.playlist;
+    _controller = playlist == null
+        ? null
+        : PlaylistDetailController(playlist, widget.gateway);
     _pageListenable = Listenable.merge([
-      _controller,
+      ?_controller,
       widget.queuePlaybackController,
     ]);
     _searchController.addListener(_updateQuery);
-    unawaited(_controller.load());
+    final controller = _controller;
+    if (controller != null) unawaited(controller.load());
   }
 
   @override
@@ -75,7 +92,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     _searchController
       ..removeListener(_updateQuery)
       ..dispose();
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -86,8 +103,9 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   }
 
   List<PlaylistTrackSummary> get _visibleTracks {
-    if (_query.isEmpty) return _controller.tracks;
-    return _controller.tracks
+    final tracks = _controller?.tracks ?? const <PlaylistTrackSummary>[];
+    if (_query.isEmpty) return tracks;
+    return tracks
         .where((track) {
           final searchable = [
             track.title,
@@ -118,6 +136,35 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       _section = section;
       if (section == _LikedCollectionSection.albums) _albumsVisited = true;
     });
+    _setHeaderCollapsed(false);
+  }
+
+  bool _handleCollectionScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    if (notification is UserScrollNotification) {
+      if (notification.direction == ScrollDirection.forward) {
+        _userReturningToHeader = true;
+      } else if (notification.direction == ScrollDirection.reverse) {
+        _userReturningToHeader = false;
+      }
+    }
+    final returnedToHeader =
+        _headerCollapsed &&
+        _userReturningToHeader &&
+        notification.metrics.pixels <= 4;
+    if (returnedToHeader) _userReturningToHeader = false;
+    final collapse = _headerCollapsed
+        ? !returnedToHeader
+        : notification.metrics.pixels > 56;
+    _setHeaderCollapsed(collapse);
+    return false;
+  }
+
+  void _setHeaderCollapsed(bool collapsed) {
+    if (collapsed == _headerCollapsed) return;
+    if (!collapsed) _userReturningToHeader = false;
+    setState(() => _headerCollapsed = collapsed);
+    widget.onHeaderCollapsedChanged?.call(collapsed);
   }
 
   void _selectSection(_LikedCollectionSection section) {
@@ -138,90 +185,103 @@ class _LikedSongsPageState extends State<LikedSongsPage>
         builder: (context, constraints) {
           final desktop = constraints.maxWidth >= 820;
           final tracks = _visibleTracks;
+          final controller = _controller;
           return Column(
             key: const ValueKey('liked-songs-page'),
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _LikedSongsHeader(
-                total: switch (_controller.stage) {
-                  PlaylistDetailStage.content ||
-                  PlaylistDetailStage.empty => _controller.total,
-                  _ => widget.playlist.trackCount,
-                },
+                total: controller == null
+                    ? null
+                    : switch (controller.stage) {
+                        PlaylistDetailStage.content ||
+                        PlaylistDetailStage.empty => controller.total,
+                        _ => widget.playlist?.trackCount,
+                      },
                 desktop: desktop,
                 canPlay: tracks.isNotEmpty,
-                isRefreshing: _controller.isRefreshing,
+                isRefreshing: controller?.isRefreshing ?? false,
                 searchController: _searchController,
                 onPlayAll: tracks.isEmpty ? null : () => _playAll(tracks),
-                onRefresh: _controller.isLoading ? null : _controller.refresh,
+                onRefresh: controller == null || controller.isLoading
+                    ? null
+                    : controller.refresh,
                 selectedSection: _section,
                 tabController: _tabController,
+                collapsed: _headerCollapsed,
+                collapsedActions: widget.collapsedHeaderActions,
                 playlistCount: widget.playlists
                     .where((playlist) => !playlist.isLikedSongs)
                     .length,
               ),
               if (_section == _LikedCollectionSection.songs &&
-                  _controller.isRefreshing)
+                  (controller?.isRefreshing ?? false))
                 const LinearProgressIndicator(
                   key: ValueKey('liked-songs-refresh-progress'),
                 ),
               if (_section == _LikedCollectionSection.songs &&
-                  _controller.refreshFailure != null)
+                  controller?.refreshFailure != null)
                 LibraryRefreshFailureBanner(
                   key: const ValueKey('liked-songs-refresh-failure'),
-                  message: _refreshFailureCopy(_controller.refreshFailure!),
-                  canRetry: _controller.canRetryRefresh,
-                  onRetry: _controller.retryRefresh,
-                  onDismiss: _controller.dismissRefreshFailure,
+                  message: _refreshFailureCopy(controller!.refreshFailure!),
+                  canRetry: controller.canRetryRefresh,
+                  onRetry: controller.retryRefresh,
+                  onDismiss: controller.dismissRefreshFailure,
                 ),
               Expanded(
-                child: TabBarView(
-                  key: const ValueKey('liked-collection-pages'),
-                  controller: _tabController,
-                  children: [
-                    _RetainedLikedSection(child: _body(desktop, tracks)),
-                    _RetainedLikedSection(
-                      child: _LikedPlaylistsCollection(
-                        playlists: _visiblePlaylists,
-                        searching: _query.isNotEmpty,
-                        onOpenPlaylist: widget.onOpenPlaylist,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _handleCollectionScroll,
+                  child: TabBarView(
+                    key: const ValueKey('liked-collection-pages'),
+                    controller: _tabController,
+                    children: [
+                      _RetainedLikedSection(child: _body(desktop, tracks)),
+                      _RetainedLikedSection(
+                        child: _LikedPlaylistsCollection(
+                          playlists: _visiblePlaylists,
+                          searching: _query.isNotEmpty,
+                          onOpenPlaylist: widget.onOpenPlaylist,
+                          lastOpenedPlaylist: widget.lastOpenedPlaylist,
+                          returnFocusNode: widget.playlistReturnFocusNode,
+                        ),
                       ),
-                    ),
-                    _RetainedLikedSection(
-                      child: _albumsVisited
-                          ? FavoriteAlbumsPage(
-                              key: const ValueKey('liked-favorite-albums'),
-                              gateway: widget.favoriteAlbumGateway,
-                              queuePlaybackController:
-                                  widget.queuePlaybackController,
-                              onBack: () =>
-                                  _selectSection(_LikedCollectionSection.songs),
-                              onOpenAlbum: (album) =>
-                                  widget.onOpenAlbum?.call(album),
-                              onSignInAgain: widget.onSignInAgain,
-                              embedded: true,
-                              showHeader: false,
-                              filterQuery: _query,
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                    const _RetainedLikedSection(
-                      child: _UnavailableLikedCollection(
-                        key: ValueKey('liked-programs-unavailable'),
-                        icon: Icons.podcasts_rounded,
-                        title: '有声节目收藏尚未接入',
-                        detail: '当前 Core 没有经过验证的 QQ Music 有声节目收藏读取能力。',
+                      _RetainedLikedSection(
+                        child: _albumsVisited
+                            ? FavoriteAlbumsPage(
+                                key: const ValueKey('liked-favorite-albums'),
+                                gateway: widget.favoriteAlbumGateway,
+                                queuePlaybackController:
+                                    widget.queuePlaybackController,
+                                onBack: () => _selectSection(
+                                  _LikedCollectionSection.songs,
+                                ),
+                                onOpenAlbum: (album) =>
+                                    widget.onOpenFavoriteAlbum?.call(album),
+                                onSignInAgain: widget.onSignInAgain,
+                                embedded: true,
+                                showHeader: false,
+                                filterQuery: _query,
+                              )
+                            : const SizedBox.shrink(),
                       ),
-                    ),
-                    const _RetainedLikedSection(
-                      child: _UnavailableLikedCollection(
-                        key: ValueKey('liked-videos-unavailable'),
-                        icon: Icons.video_library_outlined,
-                        title: '视频收藏尚未接入',
-                        detail: '歌曲关联 MV 不等同于账号的视频收藏，不会在这里混用。',
+                      const _RetainedLikedSection(
+                        child: _UnavailableLikedCollection(
+                          key: ValueKey('liked-programs-unavailable'),
+                          icon: Icons.podcasts_rounded,
+                          title: '有声节目收藏尚未接入',
+                          detail: '当前 Core 没有经过验证的 QQ Music 有声节目收藏读取能力。',
+                        ),
                       ),
-                    ),
-                  ],
+                      const _RetainedLikedSection(
+                        child: _UnavailableLikedCollection(
+                          key: ValueKey('liked-videos-unavailable'),
+                          icon: Icons.video_library_outlined,
+                          title: '视频收藏尚未接入',
+                          detail: '歌曲关联 MV 不等同于账号的视频收藏，不会在这里混用。',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -231,61 +291,71 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     ),
   );
 
-  Widget _body(bool desktop, List<PlaylistTrackSummary> tracks) =>
-      switch (_controller.stage) {
-        PlaylistDetailStage.loading => const _LikedSongsMessage(
-          key: ValueKey('liked-songs-loading'),
-          loading: true,
-          icon: Icons.favorite_rounded,
-          title: '正在加载喜欢的歌曲…',
-          detail: '正在从 QQ Music 读取收藏。',
+  Widget _body(bool desktop, List<PlaylistTrackSummary> tracks) {
+    final controller = _controller;
+    if (controller == null) {
+      return const _LikedSongsMessage(
+        key: ValueKey('liked-songs-unavailable'),
+        icon: Icons.favorite_border_rounded,
+        title: '暂时无法找到喜欢歌单',
+        detail: 'QQ Music 未返回内建喜欢歌单；其他收藏仍可从上方标签进入。',
+      );
+    }
+    return switch (controller.stage) {
+      PlaylistDetailStage.loading => const _LikedSongsMessage(
+        key: ValueKey('liked-songs-loading'),
+        loading: true,
+        icon: Icons.favorite_rounded,
+        title: '正在加载喜欢的歌曲…',
+        detail: '正在从 QQ Music 读取收藏。',
+      ),
+      PlaylistDetailStage.content when tracks.isEmpty => _LikedSongsMessage(
+        key: const ValueKey('liked-songs-search-empty'),
+        icon: Icons.search_off_rounded,
+        title: '未找到匹配的歌曲',
+        detail: '请尝试其他关键词，搜索范围为已加载的喜欢歌曲。',
+      ),
+      PlaylistDetailStage.content => _LikedTrackCollection(
+        tracks: tracks,
+        loadedCount: controller.tracks.length,
+        total: controller.total,
+        hasMore: controller.hasMore,
+        isLoadingMore: controller.isLoadingMore,
+        appendFailure: controller.appendFailure,
+        desktop: desktop,
+        current: widget.queuePlaybackController.current,
+        onLoadMore: controller.loadMore,
+        onRetryMore: controller.retryMore,
+        onTrackSelected: (index) => unawaited(
+          widget.queuePlaybackController.replaceAndPlay(tracks, index),
         ),
-        PlaylistDetailStage.content when tracks.isEmpty => _LikedSongsMessage(
-          key: const ValueKey('liked-songs-search-empty'),
-          icon: Icons.search_off_rounded,
-          title: '未找到匹配的歌曲',
-          detail: '请尝试其他关键词，搜索范围为已加载的喜欢歌曲。',
-        ),
-        PlaylistDetailStage.content => _LikedTrackCollection(
-          tracks: tracks,
-          loadedCount: _controller.tracks.length,
-          total: _controller.total,
-          hasMore: _controller.hasMore,
-          isLoadingMore: _controller.isLoadingMore,
-          appendFailure: _controller.appendFailure,
-          desktop: desktop,
-          current: widget.queuePlaybackController.current,
-          onLoadMore: _controller.loadMore,
-          onRetryMore: _controller.retryMore,
-          onTrackSelected: (index) => unawaited(
-            widget.queuePlaybackController.replaceAndPlay(tracks, index),
-          ),
-          onTrackQueued: _addToQueue,
-          onOpenAlbum: widget.onOpenAlbum,
-          onOpenArtist: widget.onOpenArtist,
-        ),
-        PlaylistDetailStage.empty => const _LikedSongsMessage(
-          key: ValueKey('liked-songs-empty'),
-          icon: Icons.favorite_border_rounded,
-          title: '还没有喜欢的歌曲',
-          detail: '在 QQ Music 中喜欢的歌曲会显示在这里。',
-        ),
-        PlaylistDetailStage.error => _LikedSongsFailure(
-          failure: _controller.failure,
-          canRetry: _controller.canRetry,
-          showSignInAgain: false,
-          onRetry: _controller.retry,
-          onSignInAgain: widget.onSignInAgain,
-        ),
-        PlaylistDetailStage.authenticationRequired ||
-        PlaylistDetailStage.credentialRejected => _LikedSongsFailure(
-          failure: _controller.failure,
-          canRetry: false,
-          showSignInAgain: true,
-          onRetry: _controller.retry,
-          onSignInAgain: widget.onSignInAgain,
-        ),
-      };
+        onTrackQueued: _addToQueue,
+        onOpenAlbum: widget.onOpenAlbum,
+        onOpenArtist: widget.onOpenArtist,
+      ),
+      PlaylistDetailStage.empty => const _LikedSongsMessage(
+        key: ValueKey('liked-songs-empty'),
+        icon: Icons.favorite_border_rounded,
+        title: '还没有喜欢的歌曲',
+        detail: '在 QQ Music 中喜欢的歌曲会显示在这里。',
+      ),
+      PlaylistDetailStage.error => _LikedSongsFailure(
+        failure: controller.failure,
+        canRetry: controller.canRetry,
+        showSignInAgain: false,
+        onRetry: controller.retry,
+        onSignInAgain: widget.onSignInAgain,
+      ),
+      PlaylistDetailStage.authenticationRequired ||
+      PlaylistDetailStage.credentialRejected => _LikedSongsFailure(
+        failure: controller.failure,
+        canRetry: false,
+        showSignInAgain: true,
+        onRetry: controller.retry,
+        onSignInAgain: widget.onSignInAgain,
+      ),
+    };
+  }
 
   void _playAll(List<PlaylistTrackSummary> tracks) {
     if (tracks.isEmpty) return;
@@ -315,6 +385,8 @@ class _LikedSongsHeader extends StatelessWidget {
     required this.onRefresh,
     required this.selectedSection,
     required this.tabController,
+    required this.collapsed,
+    required this.collapsedActions,
     required this.playlistCount,
   });
 
@@ -327,74 +399,176 @@ class _LikedSongsHeader extends StatelessWidget {
   final VoidCallback? onRefresh;
   final _LikedCollectionSection selectedSection;
   final TabController tabController;
+  final bool collapsed;
+  final Widget? collapsedActions;
   final int playlistCount;
 
   @override
   Widget build(BuildContext context) {
     final horizontal = desktop ? MusicSpacing.page : MusicSpacing.pageCompact;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '喜欢',
-            key: const ValueKey('liked-songs-title'),
-            style: Theme.of(context).textTheme.headlineLarge
-                ?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.4),
-          ),
-          const SizedBox(height: 18),
-          _LikedCategoryTabs(
-            total: total,
-            playlistCount: playlistCount,
-            controller: tabController,
-          ),
-          const SizedBox(height: 18),
-          if (desktop)
-            Row(
-              children: [
-                if (selectedSection == _LikedCollectionSection.songs) ...[
-                  _PlayAllButton(onPressed: onPlayAll),
-                  const SizedBox(width: 10),
-                  _RefreshButton(
-                    refreshing: isRefreshing,
-                    onPressed: onRefresh,
-                  ),
-                ],
-                const Spacer(),
-                SizedBox(
-                  width: 220,
-                  child: _LikedCollectionSearch(
-                    controller: searchController,
-                    section: selectedSection,
-                  ),
-                ),
-              ],
-            )
-          else ...[
-            if (selectedSection == _LikedCollectionSection.songs) ...[
-              Row(
-                children: [
-                  Expanded(child: _PlayAllButton(onPressed: onPlayAll)),
-                  const SizedBox(width: 10),
-                  _RefreshButton(
-                    refreshing: isRefreshing,
-                    onPressed: onRefresh,
-                    compact: true,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
-            _LikedCollectionSearch(
-              controller: searchController,
-              section: selectedSection,
-            ),
-          ],
-        ],
+    return AnimatedSwitcher(
+      key: const ValueKey('liked-songs-header-transition'),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : MusicMotion.stateChange,
+      switchInCurve: Easing.emphasizedDecelerate,
+      switchOutCurve: Easing.emphasizedAccelerate,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SizeTransition(
+          sizeFactor: animation,
+          alignment: Alignment.topCenter,
+          child: child,
+        ),
+      ),
+      child: Padding(
+        key: ValueKey(
+          collapsed
+              ? 'liked-songs-collapsed-header'
+              : 'liked-songs-expanded-header',
+        ),
+        padding: EdgeInsets.fromLTRB(
+          collapsed ? 12 : horizontal,
+          collapsed && desktop
+              ? 4
+              : collapsed
+              ? 6
+              : 16,
+          collapsed ? 12 : horizontal,
+          collapsed && desktop
+              ? 4
+              : collapsed
+              ? 6
+              : 14,
+        ),
+        child: collapsed ? _collapsedHeader(context) : _expandedHeader(context),
       ),
     );
   }
+
+  Widget _expandedHeader(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _title(context, compact: false),
+      const SizedBox(height: 18),
+      _tabs(),
+      const SizedBox(height: 18),
+      if (desktop)
+        Row(
+          children: [
+            if (selectedSection == _LikedCollectionSection.songs) ...[
+              _PlayAllButton(onPressed: onPlayAll),
+              const SizedBox(width: 10),
+              _RefreshButton(refreshing: isRefreshing, onPressed: onRefresh),
+            ],
+            const Spacer(),
+            SizedBox(width: 220, child: _search()),
+          ],
+        )
+      else ...[
+        if (selectedSection == _LikedCollectionSection.songs) ...[
+          Row(
+            children: [
+              Expanded(child: _PlayAllButton(onPressed: onPlayAll)),
+              const SizedBox(width: 10),
+              _RefreshButton(
+                refreshing: isRefreshing,
+                onPressed: onRefresh,
+                compact: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        _search(),
+      ],
+    ],
+  );
+
+  Widget _collapsedHeader(BuildContext context) {
+    if (desktop) {
+      return SizedBox(
+        height: 48,
+        child: Row(
+          key: const ValueKey('liked-songs-collapsed-row'),
+          children: [
+            _title(context, compact: true),
+            const SizedBox(width: 12),
+            Expanded(child: _tabs()),
+            if (selectedSection == _LikedCollectionSection.songs) ...[
+              const SizedBox(width: 8),
+              _PlayAllButton(onPressed: onPlayAll, compact: true),
+              _RefreshButton(
+                refreshing: isRefreshing,
+                onPressed: onRefresh,
+                compact: true,
+              ),
+            ],
+            const SizedBox(width: 12),
+            SizedBox(width: 220, child: _search()),
+            if (collapsedActions case final actions?) ...[
+              const SizedBox(width: 4),
+              actions,
+            ],
+          ],
+        ),
+      );
+    }
+    return Column(
+      key: const ValueKey('liked-songs-collapsed-column'),
+      children: [
+        Row(
+          children: [
+            _title(context, compact: true),
+            const SizedBox(width: 12),
+            Expanded(child: _search()),
+            if (collapsedActions case final actions?) ...[
+              const SizedBox(width: 4),
+              actions,
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              Expanded(child: _tabs()),
+              if (selectedSection == _LikedCollectionSection.songs) ...[
+                _PlayAllButton(onPressed: onPlayAll, compact: true),
+                _RefreshButton(
+                  refreshing: isRefreshing,
+                  onPressed: onRefresh,
+                  compact: true,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _title(BuildContext context, {required bool compact}) => Text(
+    '喜欢',
+    key: const ValueKey('liked-songs-title'),
+    style: compact
+        ? Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w700)
+        : Theme.of(context).textTheme.headlineLarge
+              ?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.4),
+  );
+
+  Widget _tabs() => _LikedCategoryTabs(
+    total: total,
+    playlistCount: playlistCount,
+    controller: tabController,
+  );
+
+  Widget _search() => _LikedCollectionSearch(
+    controller: searchController,
+    section: selectedSection,
+  );
 }
 
 class _LikedCategoryTabs extends StatelessWidget {
@@ -454,11 +628,15 @@ class _LikedPlaylistsCollection extends StatelessWidget {
     required this.playlists,
     required this.searching,
     required this.onOpenPlaylist,
+    required this.lastOpenedPlaylist,
+    required this.returnFocusNode,
   });
 
   final List<UserPlaylistSummary> playlists;
   final bool searching;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
+  final UserPlaylistSummary? lastOpenedPlaylist;
+  final FocusNode? returnFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -555,6 +733,12 @@ class _LikedPlaylistsCollection extends StatelessWidget {
             (context, index) => _LikedPlaylistCard(
               playlist: playlists[index],
               onTap: () => onOpenPlaylist(playlists[index]),
+              focusNode:
+                  lastOpenedPlaylist?.providerId ==
+                          playlists[index].providerId &&
+                      lastOpenedPlaylist?.opaqueId == playlists[index].opaqueId
+                  ? returnFocusNode
+                  : null,
             ),
             childCount: playlists.length,
           ),
@@ -565,10 +749,15 @@ class _LikedPlaylistsCollection extends StatelessWidget {
 }
 
 class _LikedPlaylistCard extends StatelessWidget {
-  const _LikedPlaylistCard({required this.playlist, required this.onTap});
+  const _LikedPlaylistCard({
+    required this.playlist,
+    required this.onTap,
+    required this.focusNode,
+  });
 
   final UserPlaylistSummary playlist;
   final VoidCallback onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -588,6 +777,7 @@ class _LikedPlaylistCard extends StatelessWidget {
       onTap: onTap,
       child: InkWell(
         key: ValueKey('liked-playlist-${playlist.opaqueId}'),
+        focusNode: focusNode,
         onTap: onTap,
         borderRadius: MusicRadii.artwork,
         child: Column(
@@ -701,17 +891,25 @@ class _RetainedLikedSectionState extends State<_RetainedLikedSection>
 }
 
 class _PlayAllButton extends StatelessWidget {
-  const _PlayAllButton({required this.onPressed});
+  const _PlayAllButton({required this.onPressed, this.compact = false});
 
   final VoidCallback? onPressed;
+  final bool compact;
 
   @override
-  Widget build(BuildContext context) => FilledButton.icon(
-    key: const ValueKey('liked-songs-play-all'),
-    onPressed: onPressed,
-    icon: const Icon(Icons.play_arrow_rounded),
-    label: const Text('播放全部'),
-  );
+  Widget build(BuildContext context) => compact
+      ? IconButton.filled(
+          key: const ValueKey('liked-songs-play-all'),
+          tooltip: '播放全部',
+          onPressed: onPressed,
+          icon: const Icon(Icons.play_arrow_rounded),
+        )
+      : FilledButton.icon(
+          key: const ValueKey('liked-songs-play-all'),
+          onPressed: onPressed,
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text('播放全部'),
+        );
 }
 
 class _RefreshButton extends StatelessWidget {

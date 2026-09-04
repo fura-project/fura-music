@@ -15,10 +15,11 @@ import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 const _desktopNowPlayingHeight = 88.0;
 const _desktopNowPlayingVerticalInset = 8.0;
+const _mobileNowPlayingHeight = 68.0;
 
 /// Presentation-only callbacks for opening already-validated catalog context
-/// from repeated now-playing bars. The authenticated page owns the actual
-/// retained overlays and return semantics.
+/// from the retained now-playing experience. The authenticated page owns the
+/// actual retained overlays and return semantics.
 class NowPlayingCatalogNavigation extends InheritedWidget {
   const NowPlayingCatalogNavigation({
     required this.onOpenAlbum,
@@ -44,290 +45,118 @@ class NowPlayingBar extends StatelessWidget {
     required this.controller,
     required this.onSignInAgain,
     super.key,
-  }) : _expanded = false,
-       _compact = false;
-
-  const NowPlayingBar.compact({
-    required this.controller,
-    required this.onSignInAgain,
-    super.key,
-  }) : _expanded = false,
-       _compact = true;
+  }) : _expanded = false;
 
   const NowPlayingBar.expanded({
     required this.controller,
     required this.onSignInAgain,
     super.key,
-  }) : _expanded = true,
-       _compact = false;
+  }) : _expanded = true;
 
   final QueuePlaybackController controller;
   final VoidCallback onSignInAgain;
   final bool _expanded;
-  final bool _compact;
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final track = controller.current;
-        if (track == null) return const SizedBox.shrink();
-        final playback = controller.playback;
-        final authenticationFailure = playback.requiresAuthentication;
-        if (_expanded) {
-          return _ExpandedPlaybackControls(
-            controller: controller,
-            track: track,
-            authenticationFailure: authenticationFailure,
-            onSignInAgain: onSignInAgain,
-          );
-        }
-        final catalogNavigation = NowPlayingCatalogNavigation.maybeOf(context);
-        final expandedNavigation = ExpandedNowPlayingNavigation.maybeOf(
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) {
+      final track = controller.current;
+      if (track == null) {
+        return _presenceTransition(
           context,
+          const SizedBox.shrink(key: ValueKey('now-playing-empty')),
         );
-        final catalogActions = catalogNavigation == null
-            ? const <_NowPlayingCatalogAction>[]
-            : _catalogActions(track);
-        final catalogLabel = catalogActions.isEmpty
-            ? null
-            : _catalogActionLabel(track, catalogActions);
-        final openCatalog = catalogActions.isEmpty
-            ? null
-            : () => _openCatalog(
-                context,
-                catalogNavigation!,
-                track,
-                controller.currentIndex,
-                catalogActions,
-              );
-
-        final error =
-            controller.failure != null ||
-            playback.stage == TrackPlaybackStage.resolutionError ||
-            playback.stage == TrackPlaybackStage.engineError;
-
-        if (_compact) {
-          return _CompactNowPlayingBar(
-            controller: controller,
-            track: track,
-            authenticationFailure: authenticationFailure,
-            error: error,
-            onSignInAgain: onSignInAgain,
-            onOpenCatalog: openCatalog,
-            catalogLabel: catalogLabel,
-            onOpenExpanded: expandedNavigation?.onOpen,
-          );
-        }
-
-        return SafeArea(
+      }
+      final playback = controller.playback;
+      final authenticationFailure = playback.requiresAuthentication;
+      final error =
+          controller.failure != null ||
+          playback.stage == TrackPlaybackStage.resolutionError ||
+          playback.stage == TrackPlaybackStage.engineError;
+      final expandedNavigation = ExpandedNowPlayingNavigation.maybeOf(context);
+      final Widget bar;
+      if (_expanded) {
+        bar = _ExpandedPlaybackControls(
+          controller: controller,
+          track: track,
+          authenticationFailure: authenticationFailure,
+          onSignInAgain: onSignInAgain,
+        );
+      } else if (MediaQuery.sizeOf(context).width < 640) {
+        bar = _CompactNowPlayingBar(
+          controller: controller,
+          track: track,
+          authenticationFailure: authenticationFailure,
+          error: error,
+          onSignInAgain: onSignInAgain,
+          onOpenExpanded: expandedNavigation?.onOpen,
+        );
+      } else {
+        bar = SafeArea(
           top: false,
           child: Material(
             color: Theme.of(context).colorScheme.surfaceContainer,
             elevation: 3,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final narrow = constraints.maxWidth < 520;
-                // Keep the accepted three-zone player through normal desktop
-                // window resizing. The previous 900 px inner breakpoint
-                // exposed the legacy inline layout while the application was
-                // still using its desktop Shell.
-                final desktop = constraints.maxWidth >= 640;
-                final content = Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    desktop
-                        ? _desktopNowPlayingVerticalInset
-                        : narrow
-                        ? 8
-                        : 10,
-                    12,
-                    desktop ? _desktopNowPlayingVerticalInset : 4,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (narrow)
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                _NowPlayingArtwork(
-                                  track: track,
-                                  stage: playback.stage,
-                                  dimension: 48,
-                                  onOpenCatalog: openCatalog,
-                                  catalogLabel: catalogLabel,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _TrackInfo(
-                                    track: track,
-                                    status: _statusCopy(controller),
-                                    error: error,
-                                    onOpenExpanded: expandedNavigation?.onOpen,
-                                  ),
-                                ),
-                                if (controller.lyrics != null)
-                                  _LyricsButton(
-                                    controller: controller,
-                                    onSignInAgain: onSignInAgain,
-                                  ),
-                                _VolumeButton(controller: controller),
-                                _QueueButton(controller: controller),
-                              ],
-                            ),
-                            Wrap(
-                              alignment: WrapAlignment.end,
-                              children: _transportControls(
-                                controller,
-                                authenticationFailure,
-                                onSignInAgain,
-                              ),
-                            ),
-                          ],
-                        )
-                      else if (desktop)
-                        _DesktopNowPlayingLayout(
-                          controller: controller,
-                          track: track,
-                          authenticationFailure: authenticationFailure,
-                          error: error,
-                          onSignInAgain: onSignInAgain,
-                          onOpenCatalog: openCatalog,
-                          catalogLabel: catalogLabel,
-                          onOpenExpanded: expandedNavigation?.onOpen,
-                        )
-                      else
-                        Row(
-                          children: [
-                            _NowPlayingArtwork(
-                              track: track,
-                              stage: playback.stage,
-                              dimension: 52,
-                              onOpenCatalog: openCatalog,
-                              catalogLabel: catalogLabel,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _TrackInfo(
-                                track: track,
-                                status: _statusCopy(controller),
-                                error: error,
-                                onOpenExpanded: expandedNavigation?.onOpen,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            ..._transportControls(
-                              controller,
-                              authenticationFailure,
-                              onSignInAgain,
-                            ),
-                            if (controller.lyrics != null)
-                              _LyricsButton(
-                                controller: controller,
-                                onSignInAgain: onSignInAgain,
-                              ),
-                            _VolumeButton(controller: controller),
-                            _QueueButton(controller: controller),
-                          ],
-                        ),
-                      if (!desktop)
-                        _PlaybackProgress(controller: playback, track: track),
-                    ],
-                  ),
-                );
-                return desktop
-                    ? SizedBox(
-                        key: const ValueKey('now-playing-desktop-bar'),
-                        height: _desktopNowPlayingHeight,
-                        child: content,
-                      )
-                    : content;
-              },
+            child: SizedBox(
+              key: const ValueKey('now-playing-desktop-bar'),
+              height: _desktopNowPlayingHeight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  _desktopNowPlayingVerticalInset,
+                  12,
+                  _desktopNowPlayingVerticalInset,
+                ),
+                child: _DesktopNowPlayingLayout(
+                  controller: controller,
+                  track: track,
+                  authenticationFailure: authenticationFailure,
+                  error: error,
+                  onSignInAgain: onSignInAgain,
+                  onOpenExpanded: expandedNavigation?.onOpen,
+                ),
+              ),
             ),
           ),
         );
-      },
-    );
-  }
-
-  Future<void> _openCatalog(
-    BuildContext context,
-    NowPlayingCatalogNavigation navigation,
-    PlaylistTrackSummary expectedTrack,
-    int? expectedIndex,
-    List<_NowPlayingCatalogAction> actions,
-  ) async {
-    if (!_isCurrentTrack(expectedTrack, expectedIndex)) return;
-    if (actions.length == 1) {
-      final action = actions.single;
-      if (_currentTrackHasAction(action)) {
-        _dispatchCatalogAction(navigation, action);
       }
-      return;
-    }
-    final compact = MediaQuery.sizeOf(context).width < 600;
-    final selected = compact
-        ? await showModalBottomSheet<_NowPlayingCatalogAction>(
-            context: context,
-            showDragHandle: true,
-            builder: (context) => PlaybackShortcuts(
-              controller: controller,
-              child: _NowPlayingCatalogSelection(
-                actions: actions,
-                compact: true,
-              ),
-            ),
-          )
-        : await showDialog<_NowPlayingCatalogAction>(
-            context: context,
-            builder: (context) => PlaybackShortcuts(
-              controller: controller,
-              child: AlertDialog(
-                title: const Text('Browse current Track'),
-                content: _NowPlayingCatalogSelection(
-                  actions: actions,
-                  compact: false,
+      return _presenceTransition(
+        context,
+        KeyedSubtree(key: const ValueKey('now-playing-present'), child: bar),
+      );
+    },
+  );
+
+  Widget _presenceTransition(BuildContext context, Widget child) =>
+      AnimatedSwitcher(
+        key: const ValueKey('now-playing-presence-transition'),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 320),
+        switchInCurve: Easing.emphasizedDecelerate,
+        switchOutCurve: Easing.emphasizedAccelerate,
+        transitionBuilder: (child, animation) {
+          if (child.key != const ValueKey('now-playing-present')) return child;
+          return ClipRect(
+            child: SizeTransition(
+              sizeFactor: animation,
+              alignment: Alignment.bottomCenter,
+              child: FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.22),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                ],
               ),
             ),
           );
-    if (!context.mounted ||
-        selected == null ||
-        !_isCurrentTrack(expectedTrack, expectedIndex) ||
-        !_currentTrackHasAction(selected)) {
-      return;
-    }
-    _dispatchCatalogAction(navigation, selected);
-  }
-
-  bool _isCurrentTrack(PlaylistTrackSummary expectedTrack, int? expectedIndex) {
-    final current = controller.current;
-    return controller.currentIndex == expectedIndex &&
-        current?.providerId == expectedTrack.providerId &&
-        current?.opaqueId == expectedTrack.opaqueId;
-  }
-
-  bool _currentTrackHasAction(_NowPlayingCatalogAction expectedAction) {
-    final current = controller.current;
-    if (current == null) return false;
-    return _catalogActions(current).any(
-      (action) =>
-          action.album?.providerId == expectedAction.album?.providerId &&
-          action.album?.opaqueId == expectedAction.album?.opaqueId &&
-          action.artist?.providerId == expectedAction.artist?.providerId &&
-          action.artist?.opaqueId == expectedAction.artist?.opaqueId,
-    );
-  }
+        },
+        child: child,
+      );
 }
 
 class _CompactNowPlayingBar extends StatelessWidget {
@@ -337,8 +166,6 @@ class _CompactNowPlayingBar extends StatelessWidget {
     required this.authenticationFailure,
     required this.error,
     required this.onSignInAgain,
-    required this.onOpenCatalog,
-    required this.catalogLabel,
     required this.onOpenExpanded,
   });
 
@@ -347,70 +174,87 @@ class _CompactNowPlayingBar extends StatelessWidget {
   final bool authenticationFailure;
   final bool error;
   final VoidCallback onSignInAgain;
-  final VoidCallback? onOpenCatalog;
-  final String? catalogLabel;
   final VoidCallback? onOpenExpanded;
 
   @override
   Widget build(BuildContext context) {
     final playback = controller.playback;
+    final colors = Theme.of(context).colorScheme;
+    final row = SizedBox(
+      height: _mobileNowPlayingHeight,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          children: [
+            _NowPlayingArtwork(
+              track: track,
+              stage: playback.stage,
+              dimension: 48,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _TrackInfo(
+                track: track,
+                status: _statusCopy(controller),
+                error: error,
+              ),
+            ),
+            if (authenticationFailure)
+              TextButton(
+                key: const ValueKey('now-playing-sign-in-again'),
+                onPressed: onSignInAgain,
+                child: const Text('Sign in'),
+              )
+            else
+              IconButton.filled(
+                key: const ValueKey('now-playing-primary-action'),
+                tooltip: _primaryTooltip(playback.stage),
+                onPressed: playback.canActivate
+                    ? () => unawaited(playback.activate())
+                    : null,
+                constraints: const BoxConstraints.tightFor(
+                  width: 42,
+                  height: 42,
+                ),
+                icon: Icon(_primaryIcon(playback.stage)),
+              ),
+            _QueueButton(controller: controller),
+          ],
+        ),
+      ),
+    );
+    final onOpenExpanded = this.onOpenExpanded;
     return SafeArea(
       top: false,
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Material(
           key: const ValueKey('now-playing-compact-layout'),
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          elevation: 3,
-          shape: const StadiumBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            height: 64,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  _NowPlayingArtwork(
-                    track: track,
-                    stage: playback.stage,
-                    dimension: 48,
-                    onOpenCatalog: onOpenCatalog,
-                    catalogLabel: catalogLabel,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _TrackInfo(
-                      track: track,
-                      status: _statusCopy(controller),
-                      error: error,
-                      onOpenExpanded: onOpenExpanded,
-                    ),
-                  ),
-                  if (authenticationFailure)
-                    TextButton(
-                      key: const ValueKey('now-playing-sign-in-again'),
-                      onPressed: onSignInAgain,
-                      child: const Text('Sign in'),
-                    )
-                  else
-                    IconButton.filled(
-                      key: const ValueKey('now-playing-primary-action'),
-                      tooltip: _primaryTooltip(playback.stage),
-                      onPressed: playback.canActivate
-                          ? () => unawaited(playback.activate())
-                          : null,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 40,
-                        height: 40,
-                      ),
-                      icon: Icon(_primaryIcon(playback.stage)),
-                    ),
-                  _QueueButton(controller: controller),
-                ],
-              ),
-            ),
+          color: colors.surfaceContainerHigh,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
           ),
+          clipBehavior: Clip.antiAlias,
+          child: onOpenExpanded == null
+              ? row
+              : Tooltip(
+                  message: 'Open now playing',
+                  child: Semantics(
+                    key: const ValueKey('now-playing-open-expanded'),
+                    button: true,
+                    container: true,
+                    explicitChildNodes: true,
+                    label: 'Open now playing for ${track.title}',
+                    onTap: onOpenExpanded,
+                    child: InkWell(
+                      onTap: onOpenExpanded,
+                      excludeFromSemantics: true,
+                      child: row,
+                    ),
+                  ),
+                ),
         ),
       ),
     );
@@ -424,8 +268,6 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
     required this.authenticationFailure,
     required this.error,
     required this.onSignInAgain,
-    required this.onOpenCatalog,
-    required this.catalogLabel,
     required this.onOpenExpanded,
   });
 
@@ -434,44 +276,53 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
   final bool authenticationFailure;
   final bool error;
   final VoidCallback onSignInAgain;
-  final VoidCallback? onOpenCatalog;
-  final String? catalogLabel;
   final VoidCallback? onOpenExpanded;
 
   @override
   Widget build(BuildContext context) {
     final playback = controller.playback;
+    final trackIdentity = Row(
+      key: const ValueKey('now-playing-track-zone'),
+      children: [
+        _NowPlayingArtwork(track: track, stage: playback.stage, dimension: 56),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _TrackInfo(
+            track: track,
+            status: _statusCopy(controller),
+            error: error,
+          ),
+        ),
+        const SizedBox(width: 16),
+      ],
+    );
+    final onOpenExpanded = this.onOpenExpanded;
+    final interactiveTrackIdentity = onOpenExpanded == null
+        ? trackIdentity
+        : Tooltip(
+            message: 'Open now playing',
+            child: Semantics(
+              key: const ValueKey('now-playing-open-expanded'),
+              button: true,
+              container: true,
+              explicitChildNodes: true,
+              label: 'Open now playing for ${track.title}',
+              onTap: onOpenExpanded,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: onOpenExpanded,
+                excludeFromSemantics: true,
+                child: trackIdentity,
+              ),
+            ),
+          );
     return SizedBox(
       key: const ValueKey('now-playing-desktop-layout'),
       height: _desktopNowPlayingHeight - (2 * _desktopNowPlayingVerticalInset),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            flex: 3,
-            child: Row(
-              key: const ValueKey('now-playing-track-zone'),
-              children: [
-                _NowPlayingArtwork(
-                  track: track,
-                  stage: playback.stage,
-                  dimension: 56,
-                  onOpenCatalog: onOpenCatalog,
-                  catalogLabel: catalogLabel,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _TrackInfo(
-                    track: track,
-                    status: _statusCopy(controller),
-                    error: error,
-                    onOpenExpanded: onOpenExpanded,
-                  ),
-                ),
-                const SizedBox(width: 16),
-              ],
-            ),
-          ),
+          Expanded(flex: 3, child: interactiveTrackIdentity),
           Expanded(
             flex: 5,
             child: Column(
@@ -760,6 +611,99 @@ class _RepeatButton extends StatelessWidget {
   }
 }
 
+String? nowPlayingCatalogContextLabel(
+  BuildContext context,
+  PlaylistTrackSummary track,
+) {
+  if (NowPlayingCatalogNavigation.maybeOf(context) == null) return null;
+  final actions = _catalogActions(track);
+  return actions.isEmpty ? null : _catalogActionLabel(track, actions);
+}
+
+Future<void> openNowPlayingCatalogContext({
+  required BuildContext context,
+  required QueuePlaybackController controller,
+  required PlaylistTrackSummary expectedTrack,
+  required int? expectedIndex,
+}) async {
+  final navigation = NowPlayingCatalogNavigation.maybeOf(context);
+  if (navigation == null ||
+      !_isCurrentTrack(controller, expectedTrack, expectedIndex)) {
+    return;
+  }
+  final actions = _catalogActions(expectedTrack);
+  if (actions.isEmpty) return;
+  if (actions.length == 1) {
+    final action = actions.single;
+    if (_currentTrackHasAction(controller, action)) {
+      _dispatchCatalogAction(navigation, action);
+    }
+    return;
+  }
+  final compact = MediaQuery.sizeOf(context).width < 600;
+  final selected = compact
+      ? await showModalBottomSheet<_NowPlayingCatalogAction>(
+          context: context,
+          showDragHandle: true,
+          builder: (context) => PlaybackShortcuts(
+            controller: controller,
+            child: _NowPlayingCatalogSelection(actions: actions, compact: true),
+          ),
+        )
+      : await showDialog<_NowPlayingCatalogAction>(
+          context: context,
+          builder: (context) => PlaybackShortcuts(
+            controller: controller,
+            child: AlertDialog(
+              title: const Text('Browse current Track'),
+              content: _NowPlayingCatalogSelection(
+                actions: actions,
+                compact: false,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+  if (!context.mounted ||
+      selected == null ||
+      !_isCurrentTrack(controller, expectedTrack, expectedIndex) ||
+      !_currentTrackHasAction(controller, selected)) {
+    return;
+  }
+  _dispatchCatalogAction(navigation, selected);
+}
+
+bool _isCurrentTrack(
+  QueuePlaybackController controller,
+  PlaylistTrackSummary expectedTrack,
+  int? expectedIndex,
+) {
+  final current = controller.current;
+  return controller.currentIndex == expectedIndex &&
+      current?.providerId == expectedTrack.providerId &&
+      current?.opaqueId == expectedTrack.opaqueId;
+}
+
+bool _currentTrackHasAction(
+  QueuePlaybackController controller,
+  _NowPlayingCatalogAction expectedAction,
+) {
+  final current = controller.current;
+  if (current == null) return false;
+  return _catalogActions(current).any(
+    (action) =>
+        action.album?.providerId == expectedAction.album?.providerId &&
+        action.album?.opaqueId == expectedAction.album?.opaqueId &&
+        action.artist?.providerId == expectedAction.artist?.providerId &&
+        action.artist?.opaqueId == expectedAction.artist?.opaqueId,
+  );
+}
+
 void _dispatchCatalogAction(
   NowPlayingCatalogNavigation navigation,
   _NowPlayingCatalogAction action,
@@ -980,13 +924,11 @@ class _TrackInfo extends StatelessWidget {
     required this.track,
     required this.status,
     required this.error,
-    this.onOpenExpanded,
   });
 
   final PlaylistTrackSummary track;
   final String status;
   final bool error;
-  final VoidCallback? onOpenExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -994,16 +936,12 @@ class _TrackInfo extends StatelessWidget {
     final artist = track.artistNames.isEmpty
         ? 'Unknown artist'
         : track.artistNames.join(' · ');
-    final onOpenExpanded = this.onOpenExpanded;
-    final information = Column(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (onOpenExpanded == null)
-          _trackTitle(theme)
-        else
-          ExcludeSemantics(child: _trackTitle(theme)),
+        _trackTitle(theme),
         const SizedBox(height: 2),
         Semantics(
           container: true,
@@ -1023,32 +961,6 @@ class _TrackInfo extends StatelessWidget {
           ),
         ),
       ],
-    );
-    if (onOpenExpanded == null) return information;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 48),
-      child: Stack(
-        fit: StackFit.passthrough,
-        children: [
-          information,
-          Positioned.fill(
-            child: Tooltip(
-              message: 'Open now playing',
-              child: Semantics(
-                button: true,
-                label: 'Open now playing for ${track.title}',
-                onTap: onOpenExpanded,
-                excludeSemantics: true,
-                child: InkWell(
-                  key: const ValueKey('now-playing-open-expanded'),
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: onOpenExpanded,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1229,15 +1141,11 @@ class _NowPlayingArtwork extends StatelessWidget {
     required this.track,
     required this.stage,
     required this.dimension,
-    required this.onOpenCatalog,
-    required this.catalogLabel,
   });
 
   final PlaylistTrackSummary track;
   final TrackPlaybackStage stage;
   final double dimension;
-  final VoidCallback? onOpenCatalog;
-  final String? catalogLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1294,29 +1202,11 @@ class _NowPlayingArtwork extends StatelessWidget {
         ),
       ),
     );
-    final onOpenCatalog = this.onOpenCatalog;
-    if (onOpenCatalog == null) {
-      return Semantics(
-        container: true,
-        image: true,
-        label: 'Artwork for ${track.title}',
-        child: artwork,
-      );
-    }
-    return Tooltip(
-      message: catalogLabel!,
-      child: Semantics(
-        button: true,
-        label: catalogLabel,
-        excludeSemantics: true,
-        onTap: onOpenCatalog,
-        child: InkWell(
-          key: const ValueKey('now-playing-catalog-action'),
-          borderRadius: BorderRadius.circular(12),
-          onTap: onOpenCatalog,
-          child: artwork,
-        ),
-      ),
+    return Semantics(
+      container: true,
+      image: true,
+      label: 'Artwork for ${track.title}',
+      child: artwork,
     );
   }
 }

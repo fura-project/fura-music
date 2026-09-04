@@ -339,7 +339,7 @@ class _HomeWideLayout extends StatelessWidget {
               ? 'Your playlist treasures'
               : 'Popular playlists',
           actionKey: const ValueKey('home-open-library'),
-          actionLabel: authenticated ? 'Open library' : 'Browse all',
+          actionLabel: authenticated ? 'Liked' : 'Browse all',
           onAction: authenticated ? onOpenLibrary : onOpenDiscover,
         ),
         const SizedBox(height: _HomeGeometry.itemGap),
@@ -519,7 +519,7 @@ class _HomeCompactLayout extends StatelessWidget {
                     ? 'Your playlist treasures'
                     : 'Popular playlists',
                 actionKey: const ValueKey('home-open-library'),
-                actionLabel: authenticated ? 'Library' : 'Browse all',
+                actionLabel: authenticated ? 'Liked' : 'Browse all',
                 onAction: authenticated ? onOpenLibrary : onOpenDiscover,
                 compact: true,
               ),
@@ -2009,8 +2009,8 @@ class _CompactHomeActions extends StatelessWidget {
       ),
       _CompactHomeAction(
         key: const ValueKey('home-compact-open-library'),
-        icon: Icons.library_music_outlined,
-        label: 'Library',
+        icon: Icons.favorite_border_rounded,
+        label: 'Liked',
         onPressed: onOpenLibrary,
       ),
     ],

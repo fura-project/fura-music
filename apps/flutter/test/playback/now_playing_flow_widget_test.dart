@@ -28,12 +28,23 @@ void main() {
     final audio = _FakeAudioEngine([_FakeAudioSession()]);
     final queue = _WidgetQueueGateway();
     await _openDetail(tester, media: media, audio: audio, queue: queue);
+    final presence = find.byKey(
+      const ValueKey('now-playing-presence-transition'),
+    );
+    expect(presence, findsOneWidget);
+    expect(tester.getSize(presence).height, 0);
     expect(
       find.byKey(const ValueKey('now-playing-open-expanded')),
       findsNothing,
     );
 
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('now-playing-present')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 120));
+    final enteringHeight = tester.getSize(presence).height;
+    expect(enteringHeight, greaterThan(0));
+    expect(enteringHeight, lessThan(88));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
@@ -42,7 +53,30 @@ void main() {
       find.byKey(const ValueKey('now-playing-artwork-placeholder')),
       findsOneWidget,
     );
-    expect(find.bySemanticsLabel('Artwork for First track'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('now-playing-artwork-action')),
+      findsNothing,
+    );
+    final trackIdentityAction = find.byKey(
+      const ValueKey('now-playing-open-expanded'),
+    );
+    final trackIdentityRect = tester.getRect(trackIdentityAction);
+    expect(
+      trackIdentityRect.contains(
+        tester.getCenter(find.byKey(const ValueKey('now-playing-artwork'))),
+      ),
+      isTrue,
+    );
+    expect(
+      trackIdentityRect.contains(
+        tester.getCenter(find.byKey(const ValueKey('now-playing-title'))),
+      ),
+      isTrue,
+    );
+    expect(
+      tester.getSemantics(trackIdentityAction).label,
+      'Open now playing for First track',
+    );
     expect(
       find.byKey(const ValueKey('now-playing-catalog-action')),
       findsNothing,
@@ -68,6 +102,40 @@ void main() {
     await tester.tap(find.byTooltip('Stop'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Stopped'), findsOneWidget);
+  });
+
+  testWidgets('first mobile playback bar honors reduced motion', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        FakeAccessibilityFeatures.allOn;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('reduced-motion')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+    );
+    final presence = find.byKey(
+      const ValueKey('now-playing-presence-transition'),
+    );
+    expect(tester.getSize(presence).height, 0);
+
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pump();
+
+    expect(tester.getSize(presence).height, 80);
+    expect(
+      find.byKey(const ValueKey('now-playing-compact-layout')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -178,8 +246,11 @@ void main() {
   );
 
   testWidgets(
-    'desktop artwork catalog chooser lays out with Semantics enabled',
+    'desktop identity area opens lyrics before the Artist catalog chooser',
     (tester) async {
+      const captureCatalogEntry = bool.fromEnvironment(
+        'NOW_PLAYING_CATALOG_VISUAL_REVIEW',
+      );
       final semantics = tester.ensureSemantics();
       tester.view.physicalSize = const Size(1440, 960);
       tester.view.devicePixelRatio = 1;
@@ -209,8 +280,26 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
       await tester.pumpAndSettle();
 
-      await tester.tap(
+      expect(
         find.byKey(const ValueKey('now-playing-catalog-action')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('now-playing-artwork')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-page')),
+        findsOneWidget,
+      );
+      if (captureCatalogEntry) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-expanded-now-playing-catalog-link.png'),
+          ),
+        );
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('expanded-now-playing-open-catalog')),
       );
       await tester.pumpAndSettle();
 
@@ -250,7 +339,6 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
-
     var status = tester.getSemantics(
       find.byKey(const ValueKey('now-playing-status')),
     );
@@ -512,7 +600,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Back to playlists'));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
     expect(find.textContaining('Finding a playable source'), findsOneWidget);
 
     firstResult.complete(_success('first'));
@@ -643,7 +731,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Back to playlists'));
     await tester.pumpAndSettle();
-    expect(find.text('Your playlists'), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
     await tester.pumpAndSettle();
@@ -845,7 +933,7 @@ void main() {
     expect(find.textContaining('Paused'), findsOneWidget);
   });
 
-  testWidgets('narrow lyric and volume sheets retain playback shortcuts', (
+  testWidgets('narrow expanded lyrics and volume retain playback shortcuts', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -863,21 +951,22 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.tap(find.byKey(const ValueKey('now-playing-artwork')));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-page')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Pause'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Paused'), findsOneWidget);
+    expect(find.byTooltip('Resume'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Close lyrics'));
-    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Volume'));
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
     await tester.pumpAndSettle();
-    expect(find.textContaining('Playing'), findsOneWidget);
+    expect(find.byTooltip('Pause'), findsOneWidget);
   });
 
   testWidgets('desktop context actions preserve positional queue intent', (
@@ -1353,7 +1442,7 @@ void main() {
     expect(find.byKey(const ValueKey('now-playing-title')), findsOneWidget);
   });
 
-  testWidgets('opens synchronized lyrics as a narrow bottom sheet', (
+  testWidgets('opens synchronized lyrics from the narrow playback surface', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
@@ -1374,10 +1463,14 @@ void main() {
     session.emitPosition(1250);
     await tester.pump();
 
-    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-page')),
+      findsOneWidget,
+    );
+    expect(find.byType(BottomSheet), findsNothing);
     expect(find.byType(Dialog), findsNothing);
     expect(find.text('Narrow synchronized line'), findsOneWidget);
     expect(find.text('First track'), findsWidgets);
@@ -1393,7 +1486,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(session.seekPositions, [1000]);
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.mediaStop);
+    await tester.tap(find.byTooltip('Stop'));
     await tester.pumpAndSettle();
     expect(
       tester
@@ -1472,25 +1565,67 @@ void main() {
       audio: _FakeAudioEngine([_FakeAudioSession()]),
     );
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pump();
+    final presence = find.byKey(
+      const ValueKey('now-playing-presence-transition'),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(tester.getSize(presence).height, greaterThan(0));
+    expect(tester.getSize(presence).height, lessThan(80));
     await tester.pumpAndSettle();
 
+    expect(
+      tester.getSize(find.byKey(const ValueKey('now-playing-compact-layout'))),
+      const Size(366, 68),
+    );
+    final compactSurface = tester.widget<Material>(
+      find.byKey(const ValueKey('now-playing-compact-layout')),
+    );
+    expect(compactSurface.elevation, 0);
+    final compactShape = compactSurface.shape! as RoundedRectangleBorder;
+    expect(compactShape.side, BorderSide.none);
+    expect(compactShape.borderRadius, BorderRadius.circular(28));
+    final primaryAction = find.byKey(
+      const ValueKey('now-playing-primary-action'),
+    );
+    final primaryColor = Theme.of(tester.element(primaryAction))
+        .colorScheme
+        .primary;
+    expect(
+      tester
+          .widgetList<Material>(
+            find.descendant(of: primaryAction, matching: find.byType(Material)),
+          )
+          .any((material) => material.color == primaryColor),
+      isTrue,
+    );
     expect(find.byTooltip('Pause'), findsOneWidget);
-    expect(find.byTooltip('Stop'), findsOneWidget);
-    expect(find.byTooltip('Volume'), findsOneWidget);
+    expect(find.byTooltip('Stop'), findsNothing);
+    expect(find.byTooltip('Volume'), findsNothing);
     expect(find.byTooltip('Show queue'), findsOneWidget);
-    await tester.tap(find.byTooltip('Volume'));
+    await tester.tap(find.byKey(const ValueKey('now-playing-primary-action')));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsOneWidget);
-    expect(find.byType(Dialog), findsNothing);
-    expect(find.byKey(const ValueKey('volume-slider')), findsOneWidget);
-    await tester.tapAt(const Offset(8, 8));
-    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-page')),
+      findsNothing,
+    );
+    expect(find.byTooltip('Resume'), findsOneWidget);
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
     expect(find.text('Queue'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-page')),
+      findsNothing,
+    );
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
     await tester.pumpAndSettle();
-    expect(find.textContaining('Paused'), findsOneWidget);
+    expect(find.textContaining('Playing'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close queue'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Stop'), findsOneWidget);
+    expect(find.byTooltip('Volume'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1515,6 +1650,14 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
 
+    expect(find.byTooltip('Shuffle off. Turn on shuffle'), findsNothing);
+    expect(find.byTooltip('Repeat off. Set repeat all'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-controls')),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Shuffle off. Turn on shuffle'), findsOneWidget);
     expect(find.byTooltip('Repeat off. Set repeat all'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('now-playing-shuffle')));
@@ -1536,12 +1679,6 @@ void main() {
     expect(media.requests, [('qq-music', 'first')]);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('expanded-now-playing-compact-controls')),
-      findsOneWidget,
-    );
     expect(find.byKey(const ValueKey('now-playing-shuffle')), findsOneWidget);
     expect(find.byKey(const ValueKey('now-playing-repeat')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -1681,8 +1818,14 @@ Future<void> _openDetail(
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('primary-library-destination')));
-  await tester.pumpAndSettle();
+  final sidebarPlaylist = find.text('Fixture playlist');
+  if (find.byKey(const ValueKey('open-liked-songs')).evaluate().isEmpty) {
+    await tester.tap(find.byKey(const ValueKey('primary-library-destination')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('liked-tab-playlists')));
+    await tester.pumpAndSettle();
+  }
+  await tester.ensureVisible(sidebarPlaylist.last);
   await tester.tap(find.text('Fixture playlist').last);
   await tester.pumpAndSettle();
 }

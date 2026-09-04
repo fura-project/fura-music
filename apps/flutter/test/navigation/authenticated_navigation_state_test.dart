@@ -7,13 +7,13 @@ void main() {
     final navigation = AuthenticatedNavigationState();
 
     expect(navigation.primaryDestination, AuthenticatedPrimaryDestination.home);
-    expect(navigation.librarySection, LibrarySection.playlists);
+    expect(navigation.librarySection, LibrarySection.likedSongs);
     expect(navigation.routes, isEmpty);
     expect(navigation.canGoBack, isFalse);
     expect(navigation.goBack().target, AuthenticatedBackTarget.none);
   });
 
-  test('records retained destination and Library-section visits', () {
+  test('records retained destination and collection-section visits', () {
     final navigation = AuthenticatedNavigationState();
 
     expect(
@@ -36,11 +36,8 @@ void main() {
     expect(navigation.selectLibrarySection(LibrarySection.albums), isTrue);
     expect(navigation.visitedLibrarySection(LibrarySection.albums), isTrue);
 
-    expect(
-      navigation.goBack().target,
-      AuthenticatedBackTarget.libraryPlaylists,
-    );
-    expect(navigation.librarySection, LibrarySection.playlists);
+    expect(navigation.goBack().target, AuthenticatedBackTarget.likedRoot);
+    expect(navigation.librarySection, LibrarySection.likedSongs);
     expect(navigation.goBack().target, AuthenticatedBackTarget.home);
   });
 

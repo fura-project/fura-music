@@ -368,6 +368,17 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
     if (track == null) {
       return _ExpandedNowPlayingEmpty(onBack: widget.onBack);
     }
+    final catalogLabel = nowPlayingCatalogContextLabel(context, track);
+    final onOpenCatalog = catalogLabel == null
+        ? null
+        : () => unawaited(
+            openNowPlayingCatalogContext(
+              context: context,
+              controller: widget.controller,
+              expectedTrack: track,
+              expectedIndex: _currentIndex,
+            ),
+          );
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
@@ -387,6 +398,8 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
                         track: track,
                         artworkImageProviderBuilder:
                             widget.artworkImageProviderBuilder,
+                        catalogLabel: catalogLabel,
+                        onOpenCatalog: onOpenCatalog,
                         onOpenComments: () => _openComments(context, track),
                         onOpenMusicVideo: () => _openMusicVideo(context, track),
                       ),
@@ -416,6 +429,8 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
                 track: track,
                 compact: true,
                 artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
+                catalogLabel: catalogLabel,
+                onOpenCatalog: onOpenCatalog,
                 onOpenComments: () => _openComments(context, track),
                 onOpenMusicVideo: () => _openMusicVideo(context, track),
               ),
@@ -514,6 +529,8 @@ class _ExpandedTrackHero extends StatelessWidget {
   const _ExpandedTrackHero({
     required this.track,
     required this.artworkImageProviderBuilder,
+    required this.catalogLabel,
+    required this.onOpenCatalog,
     required this.onOpenComments,
     required this.onOpenMusicVideo,
     this.compact = false,
@@ -521,6 +538,8 @@ class _ExpandedTrackHero extends StatelessWidget {
 
   final PlaylistTrackSummary track;
   final ArtworkImageProviderBuilder artworkImageProviderBuilder;
+  final String? catalogLabel;
+  final VoidCallback? onOpenCatalog;
   final VoidCallback onOpenComments;
   final VoidCallback onOpenMusicVideo;
   final bool compact;
@@ -564,15 +583,7 @@ class _ExpandedTrackHero extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        artists,
-                        key: const ValueKey('expanded-now-playing-artists'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
+                      _artistLink(context, artists, compact: true),
                       if (track.albumTitle case final albumTitle?)
                         Text(
                           albumTitle,
@@ -638,16 +649,7 @@ class _ExpandedTrackHero extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  artists,
-                  key: const ValueKey('expanded-now-playing-artists'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
+                _artistLink(context, artists, compact: false),
                 if (track.albumTitle case final albumTitle?)
                   Text(
                     albumTitle,
@@ -684,6 +686,52 @@ class _ExpandedTrackHero extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _artistLink(
+    BuildContext context,
+    String artists, {
+    required bool compact,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final style = (compact
+        ? Theme.of(context).textTheme.bodyMedium
+        : Theme.of(context).textTheme.bodyLarge);
+    final activateCatalog = onOpenCatalog;
+    final label = Text(
+      artists,
+      key: const ValueKey('expanded-now-playing-artists'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: compact ? TextAlign.start : TextAlign.center,
+      style: style?.copyWith(
+        color: activateCatalog == null
+            ? colors.onSurfaceVariant
+            : colors.primary,
+      ),
+    );
+    if (activateCatalog == null) return label;
+    return Tooltip(
+      message: catalogLabel!,
+      child: TextButton(
+        key: const ValueKey('expanded-now-playing-open-catalog'),
+        onPressed: activateCatalog,
+        style: TextButton.styleFrom(
+          alignment: compact ? Alignment.centerLeft : Alignment.center,
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 36),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(child: label),
+            const SizedBox(width: 2),
+            const Icon(Icons.chevron_right_rounded, size: 18),
+          ],
+        ),
+      ),
     );
   }
 }
