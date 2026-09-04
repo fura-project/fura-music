@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
@@ -16,9 +17,9 @@ import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
-import 'package:flutterustmusic/navigation/music_section_selector.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class RecommendedPlaylistsPage extends StatefulWidget {
   const RecommendedPlaylistsPage({
@@ -36,6 +37,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
     this.controller,
     this.onOpenTrackAlbum,
     this.onOpenTrackArtist,
+    this.onHeaderCollapsedChanged,
     this.embedded = false,
     super.key,
   });
@@ -54,6 +56,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
   final RecommendedPlaylistController? controller;
   final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
   final ValueChanged<ArtistSummary>? onOpenTrackArtist;
+  final ValueChanged<bool>? onHeaderCollapsedChanged;
   final bool embedded;
 
   @override
@@ -61,14 +64,18 @@ class RecommendedPlaylistsPage extends StatefulWidget {
       _RecommendedPlaylistsPageState();
 }
 
-class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
+class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
+    with SingleTickerProviderStateMixin {
   late final RecommendedPlaylistController _controller;
   late final NewAlbumController _newAlbumController;
   late final NewSongController _newSongController;
   late final RankingGroupController _rankingController;
   late final RadarController _radarController;
+  late final TabController _tabController;
   late final bool _ownsPlaylistController;
   _DiscoverType _type = _DiscoverType.playlists;
+  bool _headerCollapsed = false;
+  bool _userReturningToHeader = false;
   bool _rankingsVisited = false;
   bool _radarVisited = false;
   bool _newAlbumsVisited = false;
@@ -84,6 +91,10 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
     _newSongController = NewSongController(widget.newSongGateway);
     _rankingController = RankingGroupController(widget.rankingGateway);
     _radarController = RadarController(widget.radarGateway);
+    _tabController = TabController(
+      length: _DiscoverType.values.length,
+      vsync: this,
+    );
     if (_ownsPlaylistController) unawaited(_controller.load());
   }
 
@@ -94,6 +105,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
     _newSongController.dispose();
     _rankingController.dispose();
     _radarController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -107,69 +119,44 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
           _newSongController,
           _rankingController,
           _radarController,
+          widget.queuePlaybackController,
         ]),
         builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) => Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: MusicSectionSelector<_DiscoverType>(
-                    controlKey: const ValueKey('discover-type-selector'),
-                    label: 'Discover section',
-                    destinations: const [
-                      MusicSectionDestination(
-                        value: _DiscoverType.playlists,
-                        icon: Icons.queue_music_rounded,
-                        label: 'Playlists',
-                        itemKey: ValueKey('discover-type-playlists'),
-                      ),
-                      MusicSectionDestination(
-                        value: _DiscoverType.rankings,
-                        icon: Icons.leaderboard_rounded,
-                        label: 'Rankings',
-                        itemKey: ValueKey('discover-type-rankings'),
-                      ),
-                      MusicSectionDestination(
-                        value: _DiscoverType.radar,
-                        icon: Icons.radar_rounded,
-                        label: 'Radar',
-                        itemKey: ValueKey('discover-type-radar'),
-                      ),
-                      MusicSectionDestination(
-                        value: _DiscoverType.newAlbums,
-                        icon: Icons.album_rounded,
-                        label: 'New albums',
-                        itemKey: ValueKey('discover-type-new-albums'),
-                      ),
-                      MusicSectionDestination(
-                        value: _DiscoverType.newSongs,
-                        icon: Icons.new_releases_rounded,
-                        label: 'New songs',
-                        itemKey: ValueKey('discover-type-new-songs'),
-                      ),
-                    ],
-                    selected: _type,
-                    compact: constraints.maxWidth < 680,
+          builder: (context, constraints) {
+            final desktop = constraints.maxWidth >= 820;
+            final compactPlayerVisible =
+                constraints.maxWidth < 640 &&
+                widget.queuePlaybackController.current != null;
+            final bottomPadding = compactPlayerVisible ? 104.0 : 24.0;
+            return Column(
+              key: const ValueKey('discover-page-scroll'),
+              children: [
+                _DiscoverHeader(
+                  desktop: desktop,
+                  collapsed: _headerCollapsed,
+                  tabs: _DiscoverTabs(
+                    controller: _tabController,
                     onSelected: _selectType,
                   ),
                 ),
-              ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: switch (_type) {
-                    _DiscoverType.playlists => _playlistBody(),
-                    _DiscoverType.rankings => _rankingBody(),
-                    _DiscoverType.radar => _radarBody(),
-                    _DiscoverType.newAlbums => _newAlbumBody(),
-                    _DiscoverType.newSongs => _newSongBody(),
-                  },
+                Expanded(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleCollectionScroll,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: switch (_type) {
+                        _DiscoverType.playlists => _playlistBody(bottomPadding),
+                        _DiscoverType.rankings => _rankingBody(bottomPadding),
+                        _DiscoverType.radar => _radarBody(bottomPadding),
+                        _DiscoverType.newAlbums => _newAlbumBody(bottomPadding),
+                        _DiscoverType.newSongs => _newSongBody(bottomPadding),
+                      },
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -192,7 +179,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
     );
   }
 
-  Widget _playlistBody() => switch (_controller.stage) {
+  Widget _playlistBody(double bottomPadding) => switch (_controller.stage) {
     RecommendedPlaylistStage.loading => const MusicLoadingPanel(
       key: ValueKey('recommendations-loading'),
       label: 'Loading Recommended Playlists',
@@ -225,41 +212,44 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
       onSelected: widget.onOpenPlaylist,
+      bottomPadding: bottomPadding,
     ),
   };
 
-  Widget _rankingBody() => switch (_rankingController.stage) {
-    RankingGroupStage.loading => const MusicLoadingPanel(
-      key: ValueKey('rankings-loading'),
-      label: 'Loading QQ Music Rankings',
-    ),
-    RankingGroupStage.empty => const MusicContentStatePanel(
-      key: ValueKey('rankings-empty'),
-      icon: Icons.leaderboard_outlined,
-      title: 'No rankings right now',
-      detail: 'QQ Music returned no current ranking groups.',
-    ),
-    RankingGroupStage.error => MusicContentStatePanel(
-      key: const ValueKey('rankings-error'),
-      icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load rankings',
-      detail: rankingFailureCopy(_rankingController.failure),
-      liveRegion: true,
-      action: _rankingController.canRetry
-          ? FilledButton.tonal(
-              onPressed: _rankingController.retry,
-              child: const Text('Try again'),
-            )
-          : null,
-    ),
-    RankingGroupStage.content => _RankingCollection(
-      key: const ValueKey('rankings-content'),
-      groups: _rankingController.groups,
-      onSelected: widget.onOpenRanking,
-    ),
-  };
+  Widget _rankingBody(double bottomPadding) =>
+      switch (_rankingController.stage) {
+        RankingGroupStage.loading => const MusicLoadingPanel(
+          key: ValueKey('rankings-loading'),
+          label: 'Loading QQ Music Rankings',
+        ),
+        RankingGroupStage.empty => const MusicContentStatePanel(
+          key: ValueKey('rankings-empty'),
+          icon: Icons.leaderboard_outlined,
+          title: 'No rankings right now',
+          detail: 'QQ Music returned no current ranking groups.',
+        ),
+        RankingGroupStage.error => MusicContentStatePanel(
+          key: const ValueKey('rankings-error'),
+          icon: Icons.cloud_off_rounded,
+          title: 'Couldn’t load rankings',
+          detail: rankingFailureCopy(_rankingController.failure),
+          liveRegion: true,
+          action: _rankingController.canRetry
+              ? FilledButton.tonal(
+                  onPressed: _rankingController.retry,
+                  child: const Text('Try again'),
+                )
+              : null,
+        ),
+        RankingGroupStage.content => _RankingCollection(
+          key: const ValueKey('rankings-content'),
+          groups: _rankingController.groups,
+          onSelected: widget.onOpenRanking,
+          bottomPadding: bottomPadding,
+        ),
+      };
 
-  Widget _radarBody() => switch (_radarController.stage) {
+  Widget _radarBody(double bottomPadding) => switch (_radarController.stage) {
     RadarStage.loading => const MusicLoadingPanel(
       key: ValueKey('radar-loading'),
       label: 'Loading QQ Music Radar',
@@ -293,102 +283,107 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       onQueue: _queueRadar,
       onOpenAlbum: widget.onOpenTrackAlbum,
       onOpenArtist: widget.onOpenTrackArtist,
+      bottomPadding: bottomPadding,
     ),
   };
 
-  Widget _newAlbumBody() => switch (_newAlbumController.stage) {
-    NewAlbumStage.loading => _NewAlbumShell(
-      key: const ValueKey('new-albums-loading'),
-      region: _newAlbumController.region,
-      onRegionSelected: _newAlbumController.selectRegion,
-      child: const MusicLoadingPanel(label: 'Loading New Albums'),
-    ),
-    NewAlbumStage.empty => _NewAlbumShell(
-      key: const ValueKey('new-albums-empty'),
-      region: _newAlbumController.region,
-      onRegionSelected: _newAlbumController.selectRegion,
-      child: const MusicContentStatePanel(
-        icon: Icons.album_outlined,
-        title: 'No new albums right now',
-        detail: 'QQ Music returned an empty page for this region.',
-      ),
-    ),
-    NewAlbumStage.error => _NewAlbumShell(
-      key: const ValueKey('new-albums-error'),
-      region: _newAlbumController.region,
-      onRegionSelected: _newAlbumController.selectRegion,
-      child: MusicContentStatePanel(
-        icon: Icons.cloud_off_rounded,
-        title: 'Couldn’t load new albums',
-        detail: newAlbumFailureCopy(_newAlbumController.failure),
-        liveRegion: true,
-        action: _newAlbumController.canRetry
-            ? FilledButton.tonal(
-                onPressed: _newAlbumController.retry,
-                child: const Text('Try again'),
-              )
-            : null,
-      ),
-    ),
-    NewAlbumStage.content => _NewAlbumCollection(
-      key: const ValueKey('new-albums-content'),
-      region: _newAlbumController.region,
-      releases: _newAlbumController.releases,
-      hasMore: _newAlbumController.hasMore,
-      isLoadingMore: _newAlbumController.isLoadingMore,
-      appendFailure: _newAlbumController.appendFailure,
-      onRegionSelected: _newAlbumController.selectRegion,
-      onLoadMore: _newAlbumController.loadMore,
-      onRetryMore: _newAlbumController.retryMore,
-      onSelected: (release) => widget.onOpenAlbum(release.album),
-    ),
-  };
+  Widget _newAlbumBody(double bottomPadding) =>
+      switch (_newAlbumController.stage) {
+        NewAlbumStage.loading => _NewAlbumShell(
+          key: const ValueKey('new-albums-loading'),
+          region: _newAlbumController.region,
+          onRegionSelected: _newAlbumController.selectRegion,
+          child: const MusicLoadingPanel(label: 'Loading New Albums'),
+        ),
+        NewAlbumStage.empty => _NewAlbumShell(
+          key: const ValueKey('new-albums-empty'),
+          region: _newAlbumController.region,
+          onRegionSelected: _newAlbumController.selectRegion,
+          child: const MusicContentStatePanel(
+            icon: Icons.album_outlined,
+            title: 'No new albums right now',
+            detail: 'QQ Music returned an empty page for this region.',
+          ),
+        ),
+        NewAlbumStage.error => _NewAlbumShell(
+          key: const ValueKey('new-albums-error'),
+          region: _newAlbumController.region,
+          onRegionSelected: _newAlbumController.selectRegion,
+          child: MusicContentStatePanel(
+            icon: Icons.cloud_off_rounded,
+            title: 'Couldn’t load new albums',
+            detail: newAlbumFailureCopy(_newAlbumController.failure),
+            liveRegion: true,
+            action: _newAlbumController.canRetry
+                ? FilledButton.tonal(
+                    onPressed: _newAlbumController.retry,
+                    child: const Text('Try again'),
+                  )
+                : null,
+          ),
+        ),
+        NewAlbumStage.content => _NewAlbumCollection(
+          key: const ValueKey('new-albums-content'),
+          region: _newAlbumController.region,
+          releases: _newAlbumController.releases,
+          hasMore: _newAlbumController.hasMore,
+          isLoadingMore: _newAlbumController.isLoadingMore,
+          appendFailure: _newAlbumController.appendFailure,
+          onRegionSelected: _newAlbumController.selectRegion,
+          onLoadMore: _newAlbumController.loadMore,
+          onRetryMore: _newAlbumController.retryMore,
+          onSelected: (release) => widget.onOpenAlbum(release.album),
+          bottomPadding: bottomPadding,
+        ),
+      };
 
-  Widget _newSongBody() => switch (_newSongController.stage) {
-    NewSongStage.loading => _NewSongShell(
-      key: const ValueKey('new-songs-loading'),
-      category: _newSongController.category,
-      onCategorySelected: _newSongController.selectCategory,
-      child: const MusicLoadingPanel(label: 'Loading New Songs'),
-    ),
-    NewSongStage.empty => _NewSongShell(
-      key: const ValueKey('new-songs-empty'),
-      category: _newSongController.category,
-      onCategorySelected: _newSongController.selectCategory,
-      child: const MusicContentStatePanel(
-        icon: Icons.music_off_rounded,
-        title: 'No new songs right now',
-        detail: 'QQ Music returned no Tracks for this category.',
-      ),
-    ),
-    NewSongStage.error => _NewSongShell(
-      key: const ValueKey('new-songs-error'),
-      category: _newSongController.category,
-      onCategorySelected: _newSongController.selectCategory,
-      child: MusicContentStatePanel(
-        icon: Icons.cloud_off_rounded,
-        title: 'Couldn’t load new songs',
-        detail: newSongFailureCopy(_newSongController.failure),
-        liveRegion: true,
-        action: _newSongController.canRetry
-            ? FilledButton.tonal(
-                onPressed: _newSongController.retry,
-                child: const Text('Try again'),
-              )
-            : null,
-      ),
-    ),
-    NewSongStage.content => _NewSongCollection(
-      key: const ValueKey('new-songs-content'),
-      category: _newSongController.category,
-      tracks: _newSongController.tracks,
-      onCategorySelected: _newSongController.selectCategory,
-      onPlay: _playNewSong,
-      onQueue: _queueNewSong,
-      onOpenAlbum: widget.onOpenTrackAlbum,
-      onOpenArtist: widget.onOpenTrackArtist,
-    ),
-  };
+  Widget _newSongBody(double bottomPadding) =>
+      switch (_newSongController.stage) {
+        NewSongStage.loading => _NewSongShell(
+          key: const ValueKey('new-songs-loading'),
+          category: _newSongController.category,
+          onCategorySelected: _newSongController.selectCategory,
+          child: const MusicLoadingPanel(label: 'Loading New Songs'),
+        ),
+        NewSongStage.empty => _NewSongShell(
+          key: const ValueKey('new-songs-empty'),
+          category: _newSongController.category,
+          onCategorySelected: _newSongController.selectCategory,
+          child: const MusicContentStatePanel(
+            icon: Icons.music_off_rounded,
+            title: 'No new songs right now',
+            detail: 'QQ Music returned no Tracks for this category.',
+          ),
+        ),
+        NewSongStage.error => _NewSongShell(
+          key: const ValueKey('new-songs-error'),
+          category: _newSongController.category,
+          onCategorySelected: _newSongController.selectCategory,
+          child: MusicContentStatePanel(
+            icon: Icons.cloud_off_rounded,
+            title: 'Couldn’t load new songs',
+            detail: newSongFailureCopy(_newSongController.failure),
+            liveRegion: true,
+            action: _newSongController.canRetry
+                ? FilledButton.tonal(
+                    onPressed: _newSongController.retry,
+                    child: const Text('Try again'),
+                  )
+                : null,
+          ),
+        ),
+        NewSongStage.content => _NewSongCollection(
+          key: const ValueKey('new-songs-content'),
+          category: _newSongController.category,
+          tracks: _newSongController.tracks,
+          onCategorySelected: _newSongController.selectCategory,
+          onPlay: _playNewSong,
+          onQueue: _queueNewSong,
+          onOpenAlbum: widget.onOpenTrackAlbum,
+          onOpenArtist: widget.onOpenTrackArtist,
+          bottomPadding: bottomPadding,
+        ),
+      };
 
   Widget? _radarFailureAction(RadarFailure? failure) {
     if (_radarRequiresSignIn(failure)) {
@@ -455,7 +450,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
 
   void _selectType(_DiscoverType type) {
     if (_type == type) return;
+    if (_tabController.index != type.index) {
+      _tabController.animateTo(type.index);
+    }
     setState(() => _type = type);
+    _setHeaderCollapsed(false);
     if (type == _DiscoverType.rankings && !_rankingsVisited) {
       _rankingsVisited = true;
       unawaited(_rankingController.load());
@@ -473,9 +472,158 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage> {
       unawaited(_newSongController.load());
     }
   }
+
+  bool _handleCollectionScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    if (notification is UserScrollNotification) {
+      if (notification.direction == ScrollDirection.forward) {
+        _userReturningToHeader = true;
+      } else if (notification.direction == ScrollDirection.reverse) {
+        _userReturningToHeader = false;
+      }
+    }
+    final returnedToHeader =
+        _headerCollapsed &&
+        _userReturningToHeader &&
+        notification.metrics.pixels <= 4;
+    if (returnedToHeader) _userReturningToHeader = false;
+    final collapse = _headerCollapsed
+        ? !returnedToHeader
+        : notification.metrics.pixels > 48;
+    _setHeaderCollapsed(collapse);
+    return false;
+  }
+
+  void _setHeaderCollapsed(bool collapsed) {
+    if (collapsed == _headerCollapsed) return;
+    if (!collapsed) _userReturningToHeader = false;
+    setState(() => _headerCollapsed = collapsed);
+    widget.onHeaderCollapsedChanged?.call(collapsed);
+  }
 }
 
 enum _DiscoverType { playlists, rankings, radar, newAlbums, newSongs }
+
+class _DiscoverHeader extends StatelessWidget {
+  const _DiscoverHeader({
+    required this.desktop,
+    required this.collapsed,
+    required this.tabs,
+  });
+
+  final bool desktop;
+  final bool collapsed;
+  final Widget tabs;
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = desktop
+        ? MusicSpacing.pageWide
+        : MusicSpacing.pageCompact;
+    return AnimatedSwitcher(
+      key: const ValueKey('discover-header-transition'),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : MusicMotion.stateChange,
+      switchInCurve: Easing.emphasizedDecelerate,
+      switchOutCurve: Easing.emphasizedAccelerate,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SizeTransition(
+          sizeFactor: animation,
+          alignment: Alignment.topCenter,
+          child: child,
+        ),
+      ),
+      child: Material(
+        key: ValueKey(
+          collapsed ? 'discover-collapsed-header' : 'discover-expanded-header',
+        ),
+        color: Theme.of(context).colorScheme.surface,
+        elevation: collapsed ? 1 : 0,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            collapsed ? 2 : 16,
+            0,
+            collapsed ? 2 : 6,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!collapsed) ...[
+                Padding(
+                  padding: EdgeInsets.only(right: horizontal),
+                  child: Text(
+                    'Discover',
+                    key: const ValueKey('discover-heading'),
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: EdgeInsets.only(right: horizontal),
+                  child: Text(
+                    'Playlists, charts, Radar, and new releases from QQ Music',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+              tabs,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DiscoverTabs extends StatelessWidget {
+  const _DiscoverTabs({required this.controller, required this.onSelected});
+
+  final TabController controller;
+  final ValueChanged<_DiscoverType> onSelected;
+
+  @override
+  Widget build(BuildContext context) => TabBar.secondary(
+    key: const ValueKey('discover-type-selector'),
+    controller: controller,
+    isScrollable: true,
+    tabAlignment: TabAlignment.start,
+    dividerColor: Colors.transparent,
+    indicatorAnimation: TabIndicatorAnimation.elastic,
+    indicatorSize: TabBarIndicatorSize.label,
+    indicatorWeight: 3,
+    labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+    onTap: (index) => onSelected(_DiscoverType.values[index]),
+    tabs: [
+      for (final type in _DiscoverType.values)
+        Tab(
+          key: ValueKey(switch (type) {
+            _DiscoverType.playlists => 'discover-type-playlists',
+            _DiscoverType.rankings => 'discover-type-rankings',
+            _DiscoverType.radar => 'discover-type-radar',
+            _DiscoverType.newAlbums => 'discover-type-new-albums',
+            _DiscoverType.newSongs => 'discover-type-new-songs',
+          }),
+          height: 48,
+          text: switch (type) {
+            _DiscoverType.playlists => 'Playlists',
+            _DiscoverType.rankings => 'Rankings',
+            _DiscoverType.radar => 'Radar',
+            _DiscoverType.newAlbums => 'New albums',
+            _DiscoverType.newSongs => 'New songs',
+          },
+        ),
+    ],
+  );
+}
 
 class _NewSongShell extends StatelessWidget {
   const _NewSongShell({
@@ -510,6 +658,7 @@ class _NewSongCollection extends StatelessWidget {
     required this.onQueue,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.bottomPadding,
     super.key,
   });
 
@@ -520,6 +669,7 @@ class _NewSongCollection extends StatelessWidget {
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -528,34 +678,6 @@ class _NewSongCollection extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              desktop ? 48 : 20,
-              desktop ? 24 : 16,
-              desktop ? 48 : 20,
-              8,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'New songs',
-                  style:
-                      (desktop
-                              ? Theme.of(context).textTheme.headlineMedium
-                              : Theme.of(context).textTheme.headlineSmall)
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${newSongCategoryLabel(category)} releases from QQ Music',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
           _NewSongCategoryPicker(
             category: category,
             onSelected: onCategorySelected,
@@ -570,7 +692,7 @@ class _NewSongCollection extends StatelessWidget {
                     desktop ? 40 : 12,
                     8,
                     desktop ? 40 : 12,
-                    28,
+                    bottomPadding,
                   ),
                   itemCount: tracks.length,
                   itemBuilder: (context, index) {
@@ -661,6 +783,7 @@ class _NewAlbumCollection extends StatelessWidget {
     required this.onLoadMore,
     required this.onRetryMore,
     required this.onSelected,
+    required this.bottomPadding,
     super.key,
   });
 
@@ -673,6 +796,7 @@ class _NewAlbumCollection extends StatelessWidget {
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final ValueChanged<NewAlbumRelease> onSelected;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -688,34 +812,6 @@ class _NewAlbumCollection extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              desktop ? 48 : 20,
-              desktop ? 24 : 16,
-              desktop ? 48 : 20,
-              8,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'New albums',
-                  style:
-                      (desktop
-                              ? Theme.of(context).textTheme.headlineMedium
-                              : Theme.of(context).textTheme.headlineSmall)
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Fresh ${newAlbumRegionLabel(region)} releases from QQ Music',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
           _NewAlbumRegionPicker(region: region, onSelected: onRegionSelected),
           Expanded(
             child: desktop
@@ -723,7 +819,7 @@ class _NewAlbumCollection extends StatelessWidget {
                     key: PageStorageKey<String>(
                       'new-album-grid-${region.name}',
                     ),
-                    padding: const EdgeInsets.fromLTRB(48, 8, 48, 24),
+                    padding: EdgeInsets.fromLTRB(48, 8, 48, bottomPadding),
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 220,
@@ -744,7 +840,7 @@ class _NewAlbumCollection extends StatelessWidget {
                     key: PageStorageKey<String>(
                       'new-album-list-${region.name}',
                     ),
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
                     itemCount: releases.length + 1,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) => index == releases.length
@@ -959,11 +1055,13 @@ class _RankingCollection extends StatelessWidget {
   const _RankingCollection({
     required this.groups,
     required this.onSelected,
+    required this.bottomPadding,
     super.key,
   });
 
   final List<RankingGroup> groups;
   final ValueChanged<RankingSummary> onSelected;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -973,27 +1071,11 @@ class _RankingCollection extends StatelessWidget {
         key: const PageStorageKey<String>('ranking-groups'),
         padding: EdgeInsets.fromLTRB(
           desktop ? 48 : 16,
-          desktop ? 24 : 16,
+          16,
           desktop ? 48 : 16,
-          28,
+          bottomPadding,
         ),
         children: [
-          Text(
-            'QQ Music rankings',
-            style:
-                (desktop
-                        ? Theme.of(context).textTheme.headlineMedium
-                        : Theme.of(context).textTheme.headlineSmall)
-                    ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Current charts from QQ Music',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          SizedBox(height: desktop ? 28 : 20),
           for (final group in groups) ...[
             Semantics(
               header: true,
@@ -1093,6 +1175,7 @@ class _RadarCollection extends StatelessWidget {
     required this.onQueue,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.bottomPadding,
     super.key,
   });
 
@@ -1109,6 +1192,7 @@ class _RadarCollection extends StatelessWidget {
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -1121,38 +1205,13 @@ class _RadarCollection extends StatelessWidget {
             key: const PageStorageKey<String>('radar-tracks'),
             padding: EdgeInsets.fromLTRB(
               desktop ? 40 : 12,
-              desktop ? 24 : 16,
+              8,
               desktop ? 40 : 12,
-              24,
+              bottomPadding,
             ),
-            itemCount: tracks.length + 2,
+            itemCount: tracks.length + 1,
             itemBuilder: (context, index) {
-              if (index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'QQ Music Radar',
-                        style:
-                            (desktop
-                                    ? Theme.of(context).textTheme.headlineMedium
-                                    : Theme.of(context).textTheme.headlineSmall)
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Track recommendations for your signed-in session',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              if (index == tracks.length + 1) {
+              if (index == tracks.length) {
                 return _RadarFooter(
                   hasMore: hasMore,
                   isLoadingMore: isLoadingMore,
@@ -1164,7 +1223,7 @@ class _RadarCollection extends StatelessWidget {
                   onSignInAgain: onSignInAgain,
                 );
               }
-              final trackIndex = index - 1;
+              final trackIndex = index;
               final track = tracks[trackIndex];
               return MusicTrackTile(
                 itemKey: ValueKey('radar-track-$trackIndex'),
@@ -1266,6 +1325,7 @@ class _RecommendationCollection extends StatelessWidget {
     required this.onLoadMore,
     required this.onRetryMore,
     required this.onSelected,
+    required this.bottomPadding,
     super.key,
   });
 
@@ -1276,42 +1336,12 @@ class _RecommendationCollection extends StatelessWidget {
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final desktop = constraints.maxWidth >= 760;
-      final header = Padding(
-        padding: EdgeInsets.fromLTRB(
-          desktop ? 48 : 20,
-          desktop ? 24 : 16,
-          desktop ? 48 : 20,
-          desktop ? 24 : 16,
-        ),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Recommended playlists',
-                style:
-                    (desktop
-                            ? Theme.of(context).textTheme.headlineMedium
-                            : Theme.of(context).textTheme.headlineSmall)
-                        ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Public picks from QQ Music',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
       final footer = _RecommendationFooter(
         hasMore: hasMore,
         isLoadingMore: isLoadingMore,
@@ -1319,47 +1349,39 @@ class _RecommendationCollection extends StatelessWidget {
         onLoadMore: onLoadMore,
         onRetryMore: onRetryMore,
       );
-      return Column(
-        children: [
-          header,
-          Expanded(
-            child: desktop
-                ? GridView.builder(
-                    key: const PageStorageKey<String>(
-                      'recommended-playlist-grid',
+      final horizontal = desktop
+          ? MusicSpacing.pageWide
+          : MusicSpacing.pageCompact;
+      return CustomScrollView(
+        key: const PageStorageKey<String>('recommended-playlist-grid'),
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
+            sliver: SliverGrid.builder(
+              gridDelegate: desktop
+                  ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 210,
+                      mainAxisExtent: 272,
+                      crossAxisSpacing: 20,
+                      mainAxisSpacing: 24,
+                    )
+                  : const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisExtent: 236,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 16,
                     ),
-                    padding: const EdgeInsets.fromLTRB(48, 0, 48, 24),
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 220,
-                          mainAxisExtent: 270,
-                          crossAxisSpacing: 24,
-                          mainAxisSpacing: 28,
-                        ),
-                    itemCount: playlists.length + 1,
-                    itemBuilder: (context, index) => index == playlists.length
-                        ? footer
-                        : _RecommendationGridItem(
-                            key: ValueKey('recommendations-item-$index'),
-                            playlist: playlists[index],
-                            onTap: () => onSelected(playlists[index]),
-                          ),
-                  )
-                : ListView.separated(
-                    key: const PageStorageKey<String>(
-                      'recommended-playlist-list',
-                    ),
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: playlists.length + 1,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) => index == playlists.length
-                        ? footer
-                        : _RecommendationListItem(
-                            key: ValueKey('recommendations-item-$index'),
-                            playlist: playlists[index],
-                            onTap: () => onSelected(playlists[index]),
-                          ),
-                  ),
+              itemCount: playlists.length,
+              itemBuilder: (context, index) => _RecommendationGridItem(
+                key: ValueKey('recommendations-item-$index'),
+                playlist: playlists[index],
+                onTap: () => onSelected(playlists[index]),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: EdgeInsets.only(bottom: bottomPadding),
+            sliver: SliverToBoxAdapter(child: footer),
           ),
         ],
       );
@@ -1378,70 +1400,52 @@ class _RecommendationGridItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: _semanticLabel(playlist),
-    excludeSemantics: true,
-    onTap: onTap,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
+  Widget build(BuildContext context) => Card(
+    margin: EdgeInsets.zero,
+    elevation: 0,
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    shape: const RoundedRectangleBorder(borderRadius: MusicRadii.content),
+    clipBehavior: Clip.antiAlias,
+    child: Semantics(
+      button: true,
+      label: _semanticLabel(playlist),
+      excludeSemantics: true,
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _RecommendationArtwork(uri: playlist.artworkUri)),
-          const SizedBox(height: 12),
-          Text(
-            playlist.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
-          ),
-          if (playlist.trackCount case final count?) ...[
-            const SizedBox(height: 4),
-            Text(
-              '$count tracks',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SizedBox.expand(
+                  child: _RecommendationArtwork(uri: playlist.artworkUri),
+                ),
               ),
-            ),
-          ],
-        ],
+              const SizedBox(height: 10),
+              Text(
+                playlist.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700, height: 1.25),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                playlist.trackCount != null
+                    ? '${playlist.trackCount} tracks'
+                    : 'QQ Music playlist',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-    ),
-  );
-}
-
-class _RecommendationListItem extends StatelessWidget {
-  const _RecommendationListItem({
-    required this.playlist,
-    required this.onTap,
-    super.key,
-  });
-
-  final RecommendedPlaylistSummary playlist;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: _semanticLabel(playlist),
-    excludeSemantics: true,
-    onTap: onTap,
-    child: ListTile(
-      minTileHeight: 80,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      leading: SizedBox.square(
-        dimension: 60,
-        child: _RecommendationArtwork(uri: playlist.artworkUri),
-      ),
-      title: Text(playlist.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: playlist.trackCount != null
-          ? Text('${playlist.trackCount} tracks')
-          : const Text('QQ Music playlist'),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: onTap,
     ),
   );
 }
@@ -1463,7 +1467,7 @@ class _RecommendationArtwork extends StatelessWidget {
       child: Icon(Icons.queue_music_rounded, color: colors.onPrimaryContainer),
     );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: uri == null
           ? placeholder
           : Image.network(

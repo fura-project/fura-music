@@ -22,6 +22,7 @@ import 'package:flutter/material.dart'
         NavigationRailLabelType,
         OutlinedButton,
         PageStorageKey,
+        Scaffold,
         Scrollable,
         ScrollableState,
         SearchBar,
@@ -2139,10 +2140,25 @@ void main() {
       expect(find.text('Synthetic discovery'), findsOneWidget);
       expect(recommendations.requests, [(0, 20)]);
       expect(find.byType(GridView), findsNothing);
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('recommendations-item-0')))
+            .height,
+        236,
+      );
 
       tester.view.physicalSize = const Size(1000, 700);
       await tester.pumpAndSettle();
-      expect(find.byType(GridView), findsOneWidget);
+      expect(
+        find.byKey(const PageStorageKey<String>('recommended-playlist-grid')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('recommendations-item-0')))
+            .height,
+        272,
+      );
       expect(find.text('Synthetic discovery'), findsOneWidget);
       expect(recommendations.requests, [(0, 20)]);
 
@@ -2173,6 +2189,162 @@ void main() {
       expect(handled, isTrue);
       expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
       expect(tester.widget<Focus>(discoverEntry).focusNode?.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'canonical Discover header, grid, and player overlay are coherent',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'DISCOVER_VISUAL_REVIEW',
+      );
+      final playlists = List.generate(
+        10,
+        (index) => RecommendedPlaylistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'discover-review-$index',
+          title: const [
+            'Quiet hours for focused listening',
+            'Fresh voices across the city',
+            'Late-night electronic discoveries',
+            'Warm acoustic weekend',
+            'Piano rooms and soft rain',
+            'Songs for the long way home',
+            'Indie colors after sunset',
+            'Bright pop for a new morning',
+            'Unhurried jazz selections',
+            'A small universe of sound',
+          ][index],
+          trackCount: 24 + index * 9,
+        ),
+      );
+      const currentTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:discover-review',
+        title: 'After the rain',
+        artistNames: ['Harbor Lights'],
+        albumTitle: 'City reflections',
+        durationSeconds: 218,
+      );
+
+      MusicApp fixture() {
+        final queue = _WidgetPlaybackQueueGateway()
+          ..replace(tracks: const [currentTrack], currentIndex: 0);
+        return MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+            RecommendedPlaylistPageResult(playlists: playlists),
+          ),
+          playbackQueueGateway: queue,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+          initialSettings: const AppSettings(theme: AppThemePreference.light),
+        );
+      }
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(fixture());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('discover-expanded-header')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('discover-heading')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('discover-type-selector')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('recommendations-item-0'))),
+        const Size(169, 236),
+      );
+      expect(
+        find.byKey(const ValueKey('compact-player-overlay-shell')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Scaffold>(
+              find.byKey(const ValueKey('authenticated-content-shell')),
+            )
+            .bottomNavigationBar,
+        isA<NavigationBar>(),
+      );
+      final discoverGrid = find.byKey(
+        const PageStorageKey<String>('recommended-playlist-grid'),
+      );
+      final compactPlayer = find.byKey(
+        const ValueKey('now-playing-compact-layout'),
+      );
+      expect(
+        tester.getBottomLeft(discoverGrid).dy,
+        greaterThan(tester.getTopLeft(compactPlayer).dy),
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-discover-mobile-canonical.png'),
+          ),
+        );
+      }
+
+      await tester.drag(discoverGrid, const Offset(0, -220));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('discover-collapsed-header')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('discover-heading')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('music-shell-top-bar')),
+          matching: find.text('Discover'),
+        ),
+        findsOneWidget,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-discover-mobile-collapsed.png'),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(1200, 800);
+      await tester.pumpWidget(fixture());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('recommendations-item-0')))
+            .height,
+        272,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-discover-desktop-canonical.png'),
+          ),
+        );
+      }
       expect(tester.takeException(), isNull);
     },
   );

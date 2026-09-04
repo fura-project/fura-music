@@ -547,6 +547,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool _compactSettingsSectionOpen = false;
   String _settingsSearchQuery = '';
   bool _likedHeaderCollapsed = false;
+  bool _discoverHeaderCollapsed = false;
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
 
@@ -1433,6 +1434,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     setState(() => _likedHeaderCollapsed = collapsed);
   }
 
+  void _updateDiscoverHeaderCollapsed(bool collapsed) {
+    if (!mounted || collapsed == _discoverHeaderCollapsed) return;
+    setState(() => _discoverHeaderCollapsed = collapsed);
+  }
+
   Widget _primaryScaffold({
     AuthenticatedLocalRoute? embeddedShellRoute,
   }) => LayoutBuilder(
@@ -1447,6 +1453,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final settingsOpen = embeddedShellRoute is SettingsLocalRoute;
       final likedHeaderOwnsTopBar =
           likedSongsOpen && embeddedShellRoute == null && _likedHeaderCollapsed;
+      final discoverRootOpen =
+          destination == AuthenticatedPrimaryDestination.discover &&
+          embeddedShellRoute == null;
       final primaryContent = _RetainedPrimaryDestinationTransition(
         index: destination.index,
         children: [
@@ -1488,6 +1497,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               onOpenTrackAlbum: _openTrackContextAlbum,
               onOpenTrackArtist: _openTrackContextArtist,
               onSignInAgain: widget.onSignInAgain,
+              onHeaderCollapsedChanged: _updateDiscoverHeaderCollapsed,
               embedded: true,
             )
           else
@@ -1575,10 +1585,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                     AuthenticatedPrimaryDestination.library => '喜欢',
                   },
                   compact: compactActions,
-                  showTitle:
-                      !likedSongsOpen &&
-                      (destination != AuthenticatedPrimaryDestination.home ||
-                          !extendedSidebar),
+                  showTitle: discoverRootOpen
+                      ? _discoverHeaderCollapsed
+                      : !likedSongsOpen &&
+                            (destination !=
+                                    AuthenticatedPrimaryDestination.home ||
+                                !extendedSidebar),
                   showSearchShortcut:
                       extendedSidebar &&
                       destination != AuthenticatedPrimaryDestination.search,
@@ -1732,6 +1744,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             if (!wide) const SizedBox.shrink(),
             Expanded(
               child: Scaffold(
+                key: const ValueKey('authenticated-content-shell'),
                 appBar:
                     detailUsesOwnToolbar ||
                         likedHeaderOwnsTopBar ||
@@ -1739,32 +1752,50 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                             destination == AuthenticatedPrimaryDestination.home)
                     ? null
                     : mainAppBar,
-                body: _ShellDetailTransition(
-                  open: embeddedShellRoute != null,
-                  base: Padding(
-                    padding: EdgeInsets.only(
-                      top: detailUsesOwnToolbar ? kToolbarHeight : 0,
-                    ),
-                    child: mainBody,
+                body: _CompactPlayerOverlay(
+                  enabled: constraints.maxWidth < 640,
+                  applyBottomSafeArea: settingsOpen,
+                  player: NowPlayingBar(
+                    controller: _queuePlaybackController,
+                    onSignInAgain: widget.onSignInAgain,
                   ),
-                  detail: switch (embeddedShellRoute) {
-                    PlaylistLocalRoute() => _buildPlaylistRoute(
-                      embeddedShellRoute,
-                      embedded: true,
+                  child: _ShellDetailTransition(
+                    open: embeddedShellRoute != null,
+                    base: Padding(
+                      padding: EdgeInsets.only(
+                        top: detailUsesOwnToolbar ? kToolbarHeight : 0,
+                      ),
+                      child: mainBody,
                     ),
-                    SettingsLocalRoute() => _buildSettingsRoute(
-                      embedded: true,
-                      showToolbar: !wide,
-                      compactHierarchy: !wide,
-                    ),
-                    _ => const SizedBox.shrink(),
-                  },
+                    detail: switch (embeddedShellRoute) {
+                      PlaylistLocalRoute() => _buildPlaylistRoute(
+                        embeddedShellRoute,
+                        embedded: true,
+                      ),
+                      SettingsLocalRoute() => _buildSettingsRoute(
+                        embedded: true,
+                        showToolbar: !wide,
+                        compactHierarchy: !wide,
+                      ),
+                      _ => const SizedBox.shrink(),
+                    },
+                  ),
                 ),
                 bottomNavigationBar: wide
                     ? NowPlayingBar(
                         controller: _queuePlaybackController,
                         onSignInAgain: widget.onSignInAgain,
                       )
+                    : constraints.maxWidth < 640
+                    ? settingsOpen
+                          ? null
+                          : NavigationBar(
+                              height: 72,
+                              selectedIndex: destination.index,
+                              onDestinationSelected:
+                                  _selectPrimaryDestinationByIndex,
+                              destinations: _navigationBarDestinations(),
+                            )
                     : Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -2554,6 +2585,36 @@ class _PrimaryShellTitle extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _CompactPlayerOverlay extends StatelessWidget {
+  const _CompactPlayerOverlay({
+    required this.enabled,
+    required this.applyBottomSafeArea,
+    required this.player,
+    required this.child,
+  });
+
+  final bool enabled;
+  final bool applyBottomSafeArea;
+  final Widget player;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final overlayPlayer = applyBottomSafeArea
+        ? SafeArea(top: false, child: player)
+        : player;
+    return Stack(
+      key: const ValueKey('compact-player-overlay-shell'),
+      fit: StackFit.expand,
+      children: [
+        child,
+        if (enabled)
+          Align(alignment: Alignment.bottomCenter, child: overlayPlayer),
       ],
     );
   }
