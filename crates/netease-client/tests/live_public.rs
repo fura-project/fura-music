@@ -64,27 +64,6 @@ impl Transport for ShapeTransport {
     }
 }
 #[tokio::test]
-#[ignore = "explicit anonymous read-only compatibility observation; one HTTP request"]
-async fn anonymous_track_search() {
-    assert_eq!(
-        std::env::var("FURA_NETEASE_PUBLIC_PROBE").as_deref(),
-        Ok("1")
-    );
-    let client = NeteaseClient::new(ShapeTransport(HttpsTransport::new().unwrap()));
-    match client.search_tracks("Mozart", 0, 3).await {
-        Ok(page) => {
-            assert!(!page.items.is_empty());
-            println!(
-                "NETEASE search: public rows={}, continuation={}",
-                page.items.len(),
-                page.more
-            );
-        }
-        Err(error) => panic!("NETEASE search STOP: {error}"),
-    }
-}
-
-#[tokio::test]
 #[ignore = "explicit anonymous serial catalog observation; hard maximum 16 HTTPS requests"]
 async fn anonymous_catalog_slice() {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -103,7 +82,7 @@ async fn anonymous_catalog_slice() {
             if response.status == 429 {
                 self.stop.store(true, Ordering::SeqCst);
             }
-            // Known risk outcomes stop this entire observation, not just one capability.
+            // Conservatively stop the whole window on every non-success envelope.
             if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&response.body)
                 && v.get("code").and_then(serde_json::Value::as_i64) != Some(200)
             {
@@ -112,16 +91,13 @@ async fn anonymous_catalog_slice() {
             Ok(response)
         }
     }
-    fn report<T>(name: &str, r: Result<T, Error>) -> Option<T> {
-        match r {
+    fn report<T>(name: &str, result: Result<T, Error>) -> T {
+        match result {
             Ok(value) => {
                 println!("{name}: PASS");
-                Some(value)
+                value
             }
-            Err(e) => {
-                println!("{name}: STOP {e}");
-                None
-            }
+            Err(error) => panic!("{name}: STOP {error}"),
         }
     }
     assert_eq!(
@@ -140,29 +116,29 @@ async fn anonymous_catalog_slice() {
         "playlist search",
         client.search_playlists("Mozart", 0, 3).await,
     );
-    if let Some(track) = tracks.as_ref().and_then(|p| p.items.first()) {
-        report("song detail", client.songs(&[track.id]).await);
-        report("lyrics", client.lyrics(track.id).await);
-        report("standard media", client.media(track.id).await);
-    }
-    if let Some(album) = albums.as_ref().and_then(|p| p.items.first()) {
-        report("album content", client.album(album.id).await);
-    }
-    if let Some(artist) = artists.as_ref().and_then(|p| p.items.first()) {
-        report("artist tracks", client.artist_tracks(artist.id, 0, 3).await);
-        report("artist albums", client.artist_albums(artist.id, 0, 3).await);
-    }
-    if let Some(playlist) = playlists
-        .as_ref()
-        .and_then(|p| p.items.iter().find(|p| p.track_count <= 1000))
-    {
-        report(
-            "public playlist",
-            client.playlist_page(playlist.id, 0, 3).await,
-        );
-    }
+    let track = tracks.items.first().expect("public Track sample required");
+    report("song detail", client.songs(&[track.id]).await);
+    report("lyrics", client.lyrics(track.id).await);
+    report("standard media", client.media(track.id).await);
+    let album = albums.items.first().expect("public Album sample required");
+    report("album content", client.album(album.id).await);
+    let artist = artists
+        .items
+        .first()
+        .expect("public Artist sample required");
+    report("artist tracks", client.artist_tracks(artist.id, 0, 3).await);
+    report("artist albums", client.artist_albums(artist.id, 0, 3).await);
+    let playlist = playlists
+        .items
+        .iter()
+        .find(|p| p.track_count <= 1000)
+        .expect("bounded public Playlist sample required");
+    report(
+        "public playlist",
+        client.playlist_page(playlist.id, 0, 3).await,
+    );
     report("rankings", client.rankings().await);
     report("public recommendations", client.recommendations(3).await);
-    // The individual coarse outcomes are evidence, not a blanket all-capabilities assertion.
-    assert!(tracks.is_some());
+    // Every attempted capability must succeed; this remains evidence for these samples only.
+    assert!(!tracks.items.is_empty());
 }
