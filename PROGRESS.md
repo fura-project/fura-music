@@ -6,10 +6,12 @@ execution:
   acceptance_milestone: M1
   active_workstream: NETEASE_BUILT_IN_PROVIDER
   current_task: NETEASE_ANONYMOUS_CORE_VERTICAL_SLICE
-  next_action: PROTOCOL_EVIDENCE_AND_TRACK_SEARCH
+  next_action: COMPLETE_PUBLIC_FIXTURES_AND_AUTHENTICATED_FOUNDATION
 ---
 
 # Current State
+
+- NetEase P0 implementation checkpoint: two new crates, four Search traits, exact Track lookup, bounded public playlist/Album/Artist browsing, line lyrics, rankings/recommendations and normal standard media have implementations and 13 passing public live observations. No account used. Provider/transport negative coverage and static dispatch checks are still active work; then complete the authenticated fixture/state foundation. The Remaining Work Audit in `docs/research/netease-protocol-evidence.md` governs the stop check, per the Human continuation contract. No UI candidate was edited.
 
 - **2026-09-09 Human redirection (HD-023):** persist `AUTONOMOUS_DEVELOPMENT / CORE`; implement NetEase as the second built-in formal Provider while QQ remains first-class. Current UI candidates are retained with Human visual review deferred (neither accepted nor rejected). Flutter and visual iteration are frozen. Start: HEAD `317666a9913e91f13df5d8bf0bba10f4aee79a43`, clean working tree; `git status` and 30 commits inspected and captured in `/tmp/fura-netease-evidence/initial-git.txt`. Execute anonymous catalog/lyrics/media first, then evidence-backed authenticated foundations; real account evidence remains Human-operated. Local logical commits only, no push.
 

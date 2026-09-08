@@ -273,6 +273,15 @@ pub trait TrackSearchProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<TrackSearchPage, Self::Error>> + Send;
 }
 
+/// Lookup of one exact provider-owned Track. Missing catalog content is a valid empty result.
+pub trait TrackDetailsProvider: MusicProvider + Sync {
+    type Error;
+    fn track_details(
+        &self,
+        track_id: TrackId,
+    ) -> impl Future<Output = Result<Option<TrackSummary>, Self::Error>> + Send;
+}
+
 /// Provider-neutral Artist search. Query ranking and page conversion remain
 /// owned by the concrete Provider.
 pub trait ArtistSearchProvider: MusicProvider + Sync {
@@ -1039,9 +1048,70 @@ pub trait MediaSourceResolver: Sync {
     ) -> impl Future<Output = Result<ResolvedMediaSource, MediaResolutionError>> + Send;
 }
 
+/// Compile-time product choices authorized by HD-023. No runtime discovery.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuiltInProvider {
+    QQMusic,
+    NetEaseCloudMusic,
+}
+impl BuiltInProvider {
+    pub const ALL: [Self; 2] = [Self::QQMusic, Self::NetEaseCloudMusic];
+    #[must_use]
+    /// # Panics
+    /// Only if a compile-time Provider identifier violates Domain invariants.
+    pub fn id(self) -> ProviderId {
+        ProviderId::new(match self {
+            Self::QQMusic => "qq-music",
+            Self::NetEaseCloudMusic => "netease-cloud-music",
+        })
+        .expect("static provider ID")
+    }
+}
+
+/// Two explicitly assembled built-in resolvers, dispatched by exact `ProviderId`.
+/// A failed resolution is returned directly and never calls the other resolver.
+pub struct BuiltInMediaSources<Q, N> {
+    qq: Q,
+    netease: N,
+}
+impl<Q, N> BuiltInMediaSources<Q, N> {
+    #[must_use]
+    pub const fn new(qq: Q, netease: N) -> Self {
+        Self { qq, netease }
+    }
+}
+impl<Q: MediaSourceResolver, N: MediaSourceResolver> MediaSourceResolver
+    for BuiltInMediaSources<Q, N>
+{
+    fn supports(&self, id: &TrackId) -> bool {
+        if id.provider() == &BuiltInProvider::QQMusic.id() {
+            self.qq.supports(id)
+        } else if id.provider() == &BuiltInProvider::NetEaseCloudMusic.id() {
+            self.netease.supports(id)
+        } else {
+            false
+        }
+    }
+    async fn resolve_media(
+        &self,
+        id: TrackId,
+        quality: AudioQuality,
+    ) -> Result<ResolvedMediaSource, MediaResolutionError> {
+        if id.provider() == &BuiltInProvider::QQMusic.id() && self.qq.supports(&id) {
+            self.qq.resolve_media(id, quality).await
+        } else if id.provider() == &BuiltInProvider::NetEaseCloudMusic.id()
+            && self.netease.supports(&id)
+        {
+            self.netease.resolve_media(id, quality).await
+        } else {
+            Err(MediaResolutionError::Unavailable)
+        }
+    }
+}
+
 /// Small in-process routing authority for immediate playback sources.
 ///
-/// The current product deliberately assembles exactly one production resolver.
+/// The production edge assembles the two built-in resolvers through `BuiltInMediaSources`.
 /// This coordinator still owns the provider-identity support check so generic
 /// playback never reaches a catalog provider directly or asks a resolver to
 /// interpret another provider's opaque identity.
@@ -1202,5 +1272,71 @@ mod tests {
             Poll::Ready(value) => value,
             Poll::Pending => panic!("synthetic resolver unexpectedly blocked"),
         }
+    }
+}
+
+#[cfg(test)]
+mod built_in_routing_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Source<'a> {
+        owner: BuiltInProvider,
+        calls: &'a AtomicUsize,
+    }
+    impl MediaSourceResolver for Source<'_> {
+        fn supports(&self, id: &TrackId) -> bool {
+            id.provider() == &self.owner.id()
+        }
+        async fn resolve_media(
+            &self,
+            _id: TrackId,
+            _quality: AudioQuality,
+        ) -> Result<ResolvedMediaSource, MediaResolutionError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Err(MediaResolutionError::ServiceUnavailable)
+        }
+    }
+    #[test]
+    fn exact_dispatch_never_substitutes_after_owner_failure() {
+        let qq = AtomicUsize::new(0);
+        let ne = AtomicUsize::new(0);
+        let sources = BuiltInMediaSources::new(
+            Source {
+                owner: BuiltInProvider::QQMusic,
+                calls: &qq,
+            },
+            Source {
+                owner: BuiltInProvider::NetEaseCloudMusic,
+                calls: &ne,
+            },
+        );
+        let coordinator = MediaSourceCoordinator::new(sources);
+        for owner in BuiltInProvider::ALL {
+            let id = TrackId::new(owner.id(), "same-opaque-id").unwrap();
+            let mut future = std::pin::pin!(coordinator.resolve_media(id, AudioQuality::Standard));
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(matches!(
+                future.as_mut().poll(&mut context),
+                std::task::Poll::Ready(Err(MediaResolutionError::ServiceUnavailable))
+            ));
+            if owner == BuiltInProvider::QQMusic {
+                assert_eq!(ne.load(Ordering::SeqCst), 0);
+            }
+        }
+        assert_eq!(
+            (qq.load(Ordering::SeqCst), ne.load(Ordering::SeqCst)),
+            (1, 1)
+        );
+        let id = TrackId::new(ProviderId::new("not-built-in").unwrap(), "same-opaque-id").unwrap();
+        let mut future = std::pin::pin!(coordinator.resolve_media(id, AudioQuality::Standard));
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(matches!(
+            future.as_mut().poll(&mut context),
+            std::task::Poll::Ready(Err(MediaResolutionError::Unavailable))
+        ));
+        assert_eq!(
+            (qq.load(Ordering::SeqCst), ne.load(Ordering::SeqCst)),
+            (1, 1)
+        );
     }
 }
