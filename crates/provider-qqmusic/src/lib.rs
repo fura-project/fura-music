@@ -1786,7 +1786,9 @@ where
         let session = self
             .login
             .begin_channel(match channel {
-                QrAuthenticationChannel::Qq => QrLoginChannel::Qq,
+                QrAuthenticationChannel::Qq | QrAuthenticationChannel::ProviderDefault => {
+                    QrLoginChannel::Qq
+                }
                 QrAuthenticationChannel::Wechat => QrLoginChannel::Wechat,
             })
             .await

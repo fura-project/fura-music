@@ -39,7 +39,7 @@ impl fmt::Debug for Response {
             .finish_non_exhaustive()
     }
 }
-pub trait Transport: Sync {
+pub trait Transport: Send + Sync {
     fn send(&self, request: Request) -> impl Future<Output = Result<Response, Error>> + Send;
 }
 pub struct HttpsTransport {

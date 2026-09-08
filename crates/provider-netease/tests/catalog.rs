@@ -217,3 +217,26 @@ async fn recommendations_rankings_and_standard_media_map_without_raw_fields() {
     assert_eq!(source.quality(), AudioQuality::Standard);
     assert!(!format!("{source:?}").contains("fixture.invalid"));
 }
+
+#[tokio::test]
+async fn ranking_omissions_preserve_cursor_even_when_entire_window_is_unavailable() {
+    let detail = json!({"code":200,"playlist":{"id":4,"name":"Ranking","trackCount":3,"trackIds":[{"id":1},{"id":5},{"id":7}]}});
+    let (p, calls) = provider(vec![
+        detail.clone(),
+        json!({"code":200,"songs":[]}),
+        detail,
+        json!({"code":200,"songs":[s(7)]}),
+    ]);
+    let id = RankingId::new(provider_id(), "4").unwrap();
+    let first = p.ranking_tracks(id.clone(), 0, 2).await.unwrap();
+    assert!(first.tracks().is_empty());
+    assert_eq!(first.omitted_track_count(), 2);
+    assert_eq!(first.next_offset(), 2);
+    assert!(first.has_more());
+    let second = p.ranking_tracks(id, first.next_offset(), 2).await.unwrap();
+    assert_eq!(second.tracks()[0].id().opaque(), "7");
+    assert_eq!(second.omitted_track_count(), 0);
+    assert_eq!(second.next_offset(), 3);
+    assert!(!second.has_more());
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+}

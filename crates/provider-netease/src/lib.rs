@@ -1,5 +1,7 @@
 //! `NetEase` catalog and session owner. Opaque identity parsing stays here.
+mod auth;
 mod catalog;
+pub use auth::{NeteaseQrCancellation, NeteaseQrSession};
 pub use catalog::NeteaseMediaSourceResolver;
 use music_domain::{
     AlbumId, AlbumSearchPage, AlbumSummary, ArtistId, ArtistSearchPage, ArtistSummary, PlaylistId,
@@ -11,14 +13,19 @@ use provider_api::{
     AlbumSearchProvider, ArtistSearchProvider, MusicProvider, PlaylistSearchProvider,
     ProviderCapability, ProviderDescriptor, SearchError, TrackSearchProvider,
 };
+use std::sync::Arc;
 
 pub struct NeteaseProvider<T> {
-    client: NeteaseClient<T>,
+    client: Arc<NeteaseClient<T>>,
+    auth: Arc<auth::AuthOwner>,
 }
 impl<T> NeteaseProvider<T> {
     #[must_use]
-    pub const fn new(client: NeteaseClient<T>) -> Self {
-        Self { client }
+    pub fn new(client: NeteaseClient<T>) -> Self {
+        Self {
+            client: Arc::new(client),
+            auth: Arc::new(auth::AuthOwner::new()),
+        }
     }
 }
 #[must_use]
@@ -35,6 +42,8 @@ impl<T> MusicProvider for NeteaseProvider<T> {
                 ProviderCapability::Catalog,
                 ProviderCapability::Recommendations,
                 ProviderCapability::Lyrics,
+                ProviderCapability::Authentication,
+                ProviderCapability::UserLibrary,
             ],
         }
     }

@@ -1,4 +1,4 @@
-use crate::{Error, NeteaseClient, Transport};
+use crate::{Credential, Error, NeteaseClient, Transport};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -274,6 +274,47 @@ pub struct PlaylistPage {
     pub total: u32,
     pub omitted: u32,
 }
+/// One validated identity window, allowing the Provider to check its session
+/// generation before issuing the separate song-detail request.
+pub struct PlaylistSelection {
+    playlist: Playlist,
+    selected: Vec<u64>,
+    offset: u32,
+    next: u32,
+    total: u32,
+}
+impl PlaylistSelection {
+    #[must_use]
+    pub fn ids(&self) -> &[u64] {
+        &self.selected
+    }
+    /// # Errors
+    /// Rejects duplicate, malformed or unrelated song details. Missing IDs remain omissions.
+    pub fn with_songs(self, songs: Vec<Song>) -> Result<PlaylistPage, Error> {
+        let mut by_id = std::collections::HashMap::new();
+        for song in songs {
+            song.validate()?;
+            if !self.selected.contains(&song.id) || by_id.insert(song.id, song).is_some() {
+                return Err(Error::ResponseShapeMismatch);
+            }
+        }
+        let tracks: Vec<_> = self
+            .selected
+            .iter()
+            .filter_map(|id| by_id.remove(id))
+            .collect();
+        let omitted =
+            u32::try_from(self.selected.len() - tracks.len()).map_err(|_| Error::ResponseBound)?;
+        Ok(PlaylistPage {
+            playlist: self.playlist,
+            tracks,
+            offset: self.offset,
+            next: self.next,
+            total: self.total,
+            omitted,
+        })
+    }
+}
 pub struct AlbumContent {
     pub album: Album,
     pub songs: Vec<Song>,
@@ -282,6 +323,23 @@ impl<T: Transport> NeteaseClient<T> {
     /// # Errors
     /// Rejects invalid/duplicate IDs, oversized responses, unrelated returned IDs or upstream failures.
     pub async fn songs(&self, ids: &[u64]) -> Result<Vec<Song>, Error> {
+        self.songs_with_cookie(ids, None).await
+    }
+    /// # Errors
+    /// Applies the same exact-ID and response bounds as anonymous song details.
+    pub async fn authenticated_songs(
+        &self,
+        credential: &Credential,
+        ids: &[u64],
+    ) -> Result<Vec<Song>, Error> {
+        self.songs_with_cookie(ids, Some(&credential.cookie()))
+            .await
+    }
+    async fn songs_with_cookie(
+        &self,
+        ids: &[u64],
+        cookie: Option<&str>,
+    ) -> Result<Vec<Song>, Error> {
         if ids.is_empty() || ids.len() > 100 {
             return Err(Error::InputBound);
         }
@@ -295,7 +353,7 @@ impl<T: Transport> NeteaseClient<T> {
         let c = serde_json::to_string(&ids.iter().map(|id| json!({"id":id})).collect::<Vec<_>>())
             .map_err(|_| Error::InputBound)?;
         let (v, _) = self
-            .request("/api/v3/song/detail", json!({"c":c}), false, None)
+            .request("/api/v3/song/detail", json!({"c":c}), false, cookie)
             .await?;
         let songs: Vec<Song> = decode(
             v.get("songs")
@@ -323,6 +381,35 @@ impl<T: Transport> NeteaseClient<T> {
         offset: u32,
         size: u32,
     ) -> Result<PlaylistPage, Error> {
+        let selection = self
+            .playlist_selection(playlist, offset, size, None)
+            .await?;
+        let songs = if selection.ids().is_empty() {
+            vec![]
+        } else {
+            self.songs(selection.ids()).await?
+        };
+        selection.with_songs(songs)
+    }
+    /// # Errors
+    /// One authenticated metadata request; the caller controls subsequent detail requests.
+    pub async fn authenticated_playlist_selection(
+        &self,
+        credential: &Credential,
+        playlist: u64,
+        offset: u32,
+        size: u32,
+    ) -> Result<PlaylistSelection, Error> {
+        self.playlist_selection(playlist, offset, size, Some(&credential.cookie()))
+            .await
+    }
+    async fn playlist_selection(
+        &self,
+        playlist: u64,
+        offset: u32,
+        size: u32,
+        cookie: Option<&str>,
+    ) -> Result<PlaylistSelection, Error> {
         id(playlist)?;
         bounds(offset, size)?;
         let (v, _) = self
@@ -330,7 +417,7 @@ impl<T: Transport> NeteaseClient<T> {
                 "/api/v6/playlist/detail",
                 json!({"id":playlist,"n":100,"s":0}),
                 false,
-                None,
+                cookie,
             )
             .await?;
         let p = v.get("playlist").ok_or(Error::ResponseShapeMismatch)?;
@@ -364,26 +451,22 @@ impl<T: Transport> NeteaseClient<T> {
         let next = offset
             .checked_add(u32::try_from(selected.len()).map_err(|_| Error::ResponseBound)?)
             .ok_or(Error::InputBound)?;
-        let songs = if selected.is_empty() {
-            vec![]
-        } else {
-            self.songs(&selected).await?
-        };
-        // Restore exact upstream ordering; missing details are unavailable, never alternate tracks.
-        let mut by_id: std::collections::HashMap<_, _> =
-            songs.into_iter().map(|s| (s.id, s)).collect();
-        let tracks: Vec<_> = selected.iter().filter_map(|id| by_id.remove(id)).collect();
-        let omitted =
-            u32::try_from(selected.len() - tracks.len()).map_err(|_| Error::ResponseBound)?;
+        if selected
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            != selected.len()
+        {
+            return Err(Error::ResponseShapeMismatch);
+        }
         let playlist: Playlist = decode(p.clone())?;
         playlist.validate()?;
-        Ok(PlaylistPage {
+        Ok(PlaylistSelection {
             playlist,
-            tracks,
+            selected,
             offset,
             next,
             total,
-            omitted,
         })
     }
     /// # Errors
@@ -536,7 +619,13 @@ impl<T: Transport> NeteaseClient<T> {
         Ok(items)
     }
 }
-fn check_page(len: usize, offset: u32, size: u32, total: u32, more: bool) -> Result<(), Error> {
+pub(crate) fn check_page(
+    len: usize,
+    offset: u32,
+    size: u32,
+    total: u32,
+    more: bool,
+) -> Result<(), Error> {
     let next = offset
         .checked_add(u32::try_from(len).map_err(|_| Error::ResponseBound)?)
         .ok_or(Error::ResponseBound)?;

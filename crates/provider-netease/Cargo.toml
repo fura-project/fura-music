@@ -10,9 +10,12 @@ music-domain = { path = "../music-domain" }
 provider-api = { path = "../provider-api" }
 netease-client = { path = "../netease-client" }
 
+tokio = { version = "1.53.1", features = ["sync", "time"] }
+
 [dev-dependencies]
+tempfile = "3.27.0"
 serde_json = "1.0.149"
-tokio = { version = "1.53.1", features = ["macros", "rt"] }
+tokio = { version = "1.53.1", features = ["macros", "rt", "test-util"] }
 
 [lints]
 workspace = true

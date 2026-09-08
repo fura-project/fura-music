@@ -1955,6 +1955,8 @@ pub struct RankingTracksPage {
     total: u32,
     has_more: bool,
     tracks: Vec<TrackSummary>,
+    raw_next_offset: Option<u32>,
+    omitted_track_count: u32,
 }
 
 impl RankingTracksPage {
@@ -1972,7 +1974,30 @@ impl RankingTracksPage {
             total,
             has_more,
             tracks,
+            raw_next_offset: None,
+            omitted_track_count: 0,
         }
+    }
+
+    /// Preserve a Provider's raw cursor when unavailable entries consume positions.
+    #[must_use]
+    pub const fn with_raw_cursor(mut self, next_offset: u32, omitted_track_count: u32) -> Self {
+        self.raw_next_offset = Some(next_offset);
+        self.omitted_track_count = omitted_track_count;
+        self
+    }
+
+    #[must_use]
+    pub fn next_offset(&self) -> u32 {
+        self.raw_next_offset.unwrap_or_else(|| {
+            self.offset
+                .saturating_add(u32::try_from(self.tracks.len()).unwrap_or(u32::MAX))
+        })
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -2010,6 +2035,8 @@ impl fmt::Debug for RankingTracksPage {
             .field("total", &self.total)
             .field("has_more", &self.has_more)
             .field("track_count", &self.tracks.len())
+            .field("raw_next_offset", &self.raw_next_offset)
+            .field("omitted_track_count", &self.omitted_track_count)
             .finish()
     }
 }
@@ -2062,7 +2089,7 @@ pub struct TrackSearchPage {
 }
 
 /// One Track result plus optional catalog transitions evidenced by that
-/// result. Catalog identities remain absent when QQ omits their validated
+/// result. Catalog identities remain absent when the provider omits their validated
 /// minimum fields.
 #[derive(Clone, Eq, PartialEq)]
 pub struct TrackSearchItem {
@@ -2323,7 +2350,7 @@ impl fmt::Debug for PlaylistSearchPage {
     }
 }
 
-/// One bounded page of Album Tracks. QQ-specific pagination and Album route
+/// One bounded page of Album Tracks. Provider-specific pagination and Album route
 /// rules remain in the owning Provider.
 #[derive(Clone, Eq, PartialEq)]
 pub struct AlbumTracksPage {
@@ -2377,7 +2404,7 @@ impl fmt::Debug for AlbumTracksPage {
     }
 }
 
-/// One bounded page of Artist Tracks. QQ-specific pagination and Artist route
+/// One bounded page of Artist Tracks. Provider-specific pagination and Artist route
 /// rules remain in the owning Provider.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ArtistTracksPage {
@@ -2431,7 +2458,7 @@ impl fmt::Debug for ArtistTracksPage {
     }
 }
 
-/// One bounded page of an Artist's Albums. QQ-specific pagination and Artist
+/// One bounded page of an Artist's Albums. Provider-specific pagination and Artist
 /// route rules remain in the owning Provider.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ArtistAlbumsPage {
@@ -3240,6 +3267,11 @@ mod tests {
         assert_eq!(group.rankings()[0].track_count(), Some(100));
         assert_eq!(page.offset(), 0);
         assert_eq!(page.total(), 100);
+        assert_eq!(page.next_offset(), 1);
+        assert_eq!(page.omitted_track_count(), 0);
+        let raw_page = page.clone().with_raw_cursor(3, 2);
+        assert_eq!(raw_page.next_offset(), 3);
+        assert_eq!(raw_page.omitted_track_count(), 2);
         assert!(page.has_more());
         assert_eq!(page.tracks().len(), 1);
         let debug = format!("{group:?} {page:?}");

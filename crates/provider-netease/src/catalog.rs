@@ -52,19 +52,34 @@ impl<T: Transport> TrackDetailsProvider for NeteaseProvider<T> {
     }
 }
 impl<T: Transport> PlaylistDetailsProvider for NeteaseProvider<T> {
-    type Error = CatalogError;
+    type Error = provider_api::UserLibraryError;
     async fn playlist_tracks_page(
         &self,
         id: PlaylistId,
         offset: u32,
         size: u32,
     ) -> Result<PlaylistTracksPage, Self::Error> {
-        let id = identity(id.provider(), id.opaque()).map_err(catalog_error)?;
+        if id.provider() == &provider_id()
+            && let Some(tail) = id.opaque().strip_prefix("liked:")
+        {
+            let (owner, playlist) = tail
+                .split_once(':')
+                .ok_or(provider_api::UserLibraryError::InvalidResponse)?;
+            let owner = identity(id.provider(), owner)
+                .map_err(|_| provider_api::UserLibraryError::InvalidResponse)?;
+            let playlist = identity(id.provider(), playlist)
+                .map_err(|_| provider_api::UserLibraryError::InvalidResponse)?;
+            return self
+                .liked_page(owner, playlist, offset, size)
+                .await
+                .map_err(super::auth::library_error);
+        }
+        let map = |e| super::auth::library_error(super::auth::Failure::Client(e));
+        let id = identity(id.provider(), id.opaque()).map_err(map)?;
         let p = self
-            .client
-            .playlist_page(id, offset, size)
+            .playlist_source(id, offset, size)
             .await
-            .map_err(catalog_error)?;
+            .map_err(super::auth::library_error)?;
         Ok(PlaylistTracksPage::new_with_cursor(
             p.offset,
             p.next,
@@ -75,7 +90,7 @@ impl<T: Transport> PlaylistDetailsProvider for NeteaseProvider<T> {
                 .into_iter()
                 .map(song)
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(catalog_error)?,
+                .map_err(map)?,
         ))
     }
 }
@@ -221,10 +236,6 @@ impl<T: Transport> RankingsProvider for NeteaseProvider<T> {
             .playlist_page(id, offset, size)
             .await
             .map_err(catalog_error)?;
-        // This older contract has no raw omission cursor. Never silently advance by usable rows.
-        if p.omitted > 0 {
-            return Err(CatalogError::ServiceUnavailable);
-        }
         let ranking = RankingSummary::new(
             RankingId::new(provider_id(), id.to_string())
                 .map_err(|_| CatalogError::InvalidResponse)?,
@@ -243,7 +254,8 @@ impl<T: Transport> RankingsProvider for NeteaseProvider<T> {
                 .map(song)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(catalog_error)?,
-        ))
+        )
+        .with_raw_cursor(p.next, p.omitted))
     }
 }
 impl<T: Transport> LyricsProvider for NeteaseProvider<T> {
@@ -293,19 +305,26 @@ impl<T: Transport> MediaSourceResolver for NeteaseMediaSourceResolver<'_, T> {
     ) -> Result<ResolvedMediaSource, MediaResolutionError> {
         let id = identity(track.provider(), track.opaque())
             .map_err(|_| MediaResolutionError::Unavailable)?;
-        let media = self.provider.client.media(id).await.map_err(|e| match e {
-            Error::AuthenticationRequired => MediaResolutionError::AuthenticationRequired,
-            Error::CredentialRejected => MediaResolutionError::CredentialRejected,
-            Error::TrackUnavailable
-            | Error::EntitlementDenied
-            | Error::CopyrightRestricted
-            | Error::RegionRestricted => MediaResolutionError::Unavailable,
-            Error::TemporaryNetworkFailure => MediaResolutionError::Network,
-            Error::ResponseShapeMismatch | Error::ResponseBound | Error::InputBound => {
-                MediaResolutionError::InvalidResponse
-            }
-            _ => MediaResolutionError::ServiceUnavailable,
-        })?;
+        let media = self
+            .provider
+            .resolve_source(id)
+            .await
+            .map_err(|failure| match failure {
+                super::auth::Failure::Replaced => MediaResolutionError::Replaced,
+                super::auth::Failure::Client(e) => match e {
+                    Error::AuthenticationRequired => MediaResolutionError::AuthenticationRequired,
+                    Error::CredentialRejected => MediaResolutionError::CredentialRejected,
+                    Error::TrackUnavailable
+                    | Error::EntitlementDenied
+                    | Error::CopyrightRestricted
+                    | Error::RegionRestricted => MediaResolutionError::Unavailable,
+                    Error::TemporaryNetworkFailure => MediaResolutionError::Network,
+                    Error::ResponseShapeMismatch | Error::ResponseBound | Error::InputBound => {
+                        MediaResolutionError::InvalidResponse
+                    }
+                    _ => MediaResolutionError::ServiceUnavailable,
+                },
+            })?;
         ResolvedMediaSource::new(
             track,
             media.uri(),

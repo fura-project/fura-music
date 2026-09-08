@@ -141,7 +141,7 @@ impl fmt::Display for PersonalizedTracksError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::AuthenticationRequired => "personalized Tracks require authentication",
-            Self::CredentialRejected => "QQ Music rejected the current credential",
+            Self::CredentialRejected => "the provider rejected the current credential",
             Self::Network => "personalized-Track network request failed",
             Self::ServiceUnavailable => "personalized Tracks are unavailable",
             Self::InvalidResponse => "personalized Tracks returned an invalid response",
@@ -157,7 +157,7 @@ impl fmt::Display for PersonalizedPlaylistsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::AuthenticationRequired => "personalized playlists require authentication",
-            Self::CredentialRejected => "QQ Music rejected the current credential",
+            Self::CredentialRejected => "the provider rejected the current credential",
             Self::Network => "personalized-playlist network request failed",
             Self::ServiceUnavailable => "personalized playlists are unavailable",
             Self::InvalidResponse => "personalized playlists returned an invalid response",
@@ -175,7 +175,7 @@ impl fmt::Display for DailyRecommendationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::AuthenticationRequired => "Daily recommendations require authentication",
-            Self::CredentialRejected => "QQ Music rejected the current credential",
+            Self::CredentialRejected => "the provider rejected the current credential",
             Self::Network => "Daily recommendation network request failed",
             Self::ServiceUnavailable => "Daily recommendations are unavailable",
             Self::InvalidResponse => "Daily recommendations returned an invalid response",
@@ -193,7 +193,7 @@ impl fmt::Display for RadarRecommendationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::AuthenticationRequired => "Radar recommendations require authentication",
-            Self::CredentialRejected => "QQ Music rejected the current credential",
+            Self::CredentialRejected => "the provider rejected the current credential",
             Self::Network => "Radar recommendation network request failed",
             Self::ServiceUnavailable => "Radar recommendations are unavailable",
             Self::InvalidResponse => "Radar recommendations returned an invalid response",
@@ -440,6 +440,13 @@ pub trait PersonalizedTracksProvider: MusicProvider + Sync {
     ) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
 }
 
+/// A daily authenticated Track collection for services that do not expose a daily Playlist.
+/// It never invents a catalog Playlist identity for a transient recommendation batch.
+pub trait DailyTracksProvider: MusicProvider + Sync {
+    type Error;
+    fn daily_tracks(&self) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
+}
+
 /// Provider-neutral bounded Tracks related to one exact seed Track. The
 /// Provider owns source identity parsing; presentation owns section wording.
 pub trait RelatedTracksProvider: MusicProvider + Sync {
@@ -525,6 +532,8 @@ pub enum QrImageFormat {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QrAuthenticationChannel {
+    /// The owning Provider's native QR channel.
+    ProviderDefault,
     Qq,
     Wechat,
 }
