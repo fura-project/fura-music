@@ -146,4 +146,20 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Reassess when `audio_service_mpris` publishes a stable compatible release, the MPRIS specification changes, or a KDE/GNOME runtime retest exposes behavior not covered by the current protocol/session-bus gates.
 
+## TD-010 — Authenticated Flutter Shell concentrates unrelated state
+
+**Status:** Triggered
+
+**Problem:** `_UserLibraryPageState` remains the authenticated composition root for primary and retained-detail navigation, seven long-lived controllers/caches, focus restoration, Settings hierarchy, collapsed page headers, playback-quality orchestration, credential-rejection routing, and sign-out. These responsibilities are still layer-correct, but their shared lifecycle makes a local Shell change expensive to review and easy to couple to unrelated state.
+
+**Why accepted:** The current Human-gated repair extracted the duplicated playback-quality semantics, isolated current-Track identity from high-frequency playback notifications, and moved optimistic Settings persistence into a focused controller. A wholesale Shell rewrite or new state-management/navigation framework would exceed the reproduced regressions and risk accepted navigation, focus, and retained-page behavior.
+
+**Impact:** Changes to Settings, navigation, Liked/Discover header collapse, or playback composition still touch one large State class and often require broad Widget coverage even when the visible change is narrow.
+
+**Risk:** Another cross-cutting Shell feature could reintroduce broad listeners, duplicate lifecycle guards, or stale route/focus state. File size alone is not the trigger; a repeated change spanning multiple unrelated responsibilities is.
+
+**Suggested solution:** Incrementally extract one existing semantic owner at a time when a concrete change touches it: first retained Shell navigation/focus state, then Settings hierarchy composition, while keeping page controllers and the single Queue owner unchanged. Require before/after interaction tests and do not introduce a generic state-management framework.
+
+**Trigger condition:** Triggered by the 2026-09-08 audit after playback quality and large-playlist search both added state to the same composition root. Schedule the first extraction when the next authorized defect or feature must modify at least two of navigation/focus, Settings, collapsed headers, or playback orchestration.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

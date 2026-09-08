@@ -29,11 +29,11 @@ abstract class MediaResolutionHandle implements RustOpaqueInterface {
   Future<MediaResolution> run();
 }
 
-enum MediaFormat { mp3 }
+enum MediaFormat { mp3, m4A, flac }
 
-enum MediaQuality { standard, high }
+enum MediaQuality { standard, high, low, lossless }
 
-enum MediaQualityPreference { standard, high }
+enum MediaQualityPreference { standard, high, lossless }
 
 class MediaResolution {
   final ResolvedMediaSource? source;

@@ -39,7 +39,10 @@ class ForegroundPlaybackController extends ChangeNotifier {
   bool get canPause => _stage == ForegroundPlaybackStage.playing;
   bool get canResume => _stage == ForegroundPlaybackStage.paused;
 
-  Future<void> playRemote(Uri source) async {
+  Future<void> playRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async {
     final generation = ++_generation;
     final previous = _detachSession();
     _failure = null;
@@ -50,7 +53,7 @@ class ForegroundPlaybackController extends ChangeNotifier {
 
     late final ForegroundAudioSession session;
     try {
-      session = await _engine.loadRemote(source);
+      session = await _engine.loadRemote(source, format: format);
     } on ForegroundAudioException catch (error) {
       _fail(generation, error.failure);
       return;

@@ -31,7 +31,7 @@ use provider_api::{
     PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
     QrAuthenticationChallenge, QrAuthenticationChannel, QrAuthenticationProgress,
     QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-    RadarRecommendationsProvider, RankingsProvider, RecommendationError,
+    RadarRecommendationsProvider, RankingsProvider, RecentHistoryProvider, RecommendationError,
     RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider, SearchError,
     TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider,
     UserLibraryError, UserPlaylistsProvider,
@@ -41,7 +41,7 @@ use qqmusic_client::{
     HttpTransport, QqDesktopQuickLoginError, QqDesktopQuickLoginSession, QqMusicAlbumDetailsError,
     QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState, QqMusicAlbumSearchError,
     QqMusicAlbumSummary, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
-    QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicAudioQuality, QqMusicClient,
+    QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicAudioProfile, QqMusicClient,
     QqMusicCreatePlaylistError, QqMusicDailyRecommendation, QqMusicDailyRecommendationError,
     QqMusicDeletePlaylistError, QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError,
     QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
@@ -50,16 +50,18 @@ use qqmusic_client::{
     QqMusicPersonalizedPlaylist, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
     QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
     QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
-    QqMusicRankingsError, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
-    QqMusicRelatedTracksError, QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError,
-    QqMusicTrackLikeState, QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError,
-    QqMusicTrackSummary, QqQrError, QrImageMediaType, QrLoginChannel,
-    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    QqMusicRankingsError, QqMusicRecentPlaysError, QqMusicRecentTrackSummary,
+    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError,
+    QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
+    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError,
+    QrImageMediaType, QrLoginChannel, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
 const MAX_FAVORITE_PLAYLIST_PAGES: usize = 10;
+const MEDIA_ROUTE_COMPATIBILITY_CODE: i64 = 104_003;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicCredentialRestoreState {
@@ -581,6 +583,7 @@ impl<T> MusicProvider for QqMusicProvider<T> {
                 ProviderCapability::Recommendations,
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
+                ProviderCapability::RecentHistoryRead,
                 ProviderCapability::PlaylistMutation,
                 ProviderCapability::Lyrics,
                 ProviderCapability::Comments,
@@ -1026,8 +1029,9 @@ where
     async fn related_tracks(&self, seed: TrackId) -> Result<Vec<TrackSummary>, Self::Error> {
         let identity =
             parse_track_identity(&seed).map_err(|()| RelatedTracksError::InvalidTrack)?;
+        let song_id = identity.song_id.ok_or(RelatedTracksError::InvalidTrack)?;
         self.client()
-            .related_tracks(identity.song_id)
+            .related_tracks(song_id)
             .await
             .as_ref()
             .map_err(map_related_tracks_error)?
@@ -1327,7 +1331,10 @@ where
             }
         };
         let page = response.as_ref().map_err(map_playlist_detail_error)?;
-        if page.has_more() && page.tracks().is_empty() {
+        if page.next_offset() < page.offset()
+            || page.next_offset() > page.total()
+            || (page.has_more() && page.next_offset() == page.offset())
+        {
             return Err(UserLibraryError::InvalidResponse);
         }
         let tracks = page
@@ -1336,10 +1343,57 @@ where
             .map(map_track_summary)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|()| UserLibraryError::InvalidResponse)?;
-        Ok(PlaylistTracksPage::new(
+        Ok(PlaylistTracksPage::new_with_cursor(
             page.offset(),
+            page.next_offset(),
             page.total(),
             page.has_more(),
+            page.omitted_track_count(),
+            tracks,
+        ))
+    }
+}
+
+impl<T> RecentHistoryProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = UserLibraryError;
+
+    async fn recent_tracks_page(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> Result<PlaylistTracksPage, Self::Error> {
+        let candidate = self.authenticated_credential()?;
+        let response = self
+            .client()
+            .recent_plays_page(&candidate, offset, size)
+            .await;
+        self.finish_library_await(
+            &candidate,
+            matches!(response, Err(QqMusicRecentPlaysError::Rejected { .. })),
+        )?;
+        let page = response.as_ref().map_err(map_recent_plays_error)?;
+        if page.next_offset() < page.offset()
+            || page.next_offset() > page.total()
+            || (page.has_more() && page.next_offset() == page.offset())
+        {
+            return Err(UserLibraryError::InvalidResponse);
+        }
+        let tracks = page
+            .records()
+            .iter()
+            .map(|record| map_recent_track_summary(record.track()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|()| UserLibraryError::InvalidResponse)?;
+        Ok(PlaylistTracksPage::new_with_cursor_and_total_certainty(
+            page.offset(),
+            page.next_offset(),
+            page.total(),
+            page.total_is_exact(),
+            page.has_more(),
+            page.omitted_track_count(),
             tracks,
         ))
     }
@@ -1357,6 +1411,12 @@ where
             .map_err(map_library_state_to_mutation_error)?;
         let identity =
             parse_track_identity(&track_id).map_err(|()| LibraryMutationError::InvalidRequest)?;
+        let song_id = identity
+            .song_id
+            .ok_or(LibraryMutationError::InvalidRequest)?;
+        let primary_song_type = identity
+            .primary_song_type
+            .ok_or(LibraryMutationError::InvalidRequest)?;
         let state = if liked {
             QqMusicTrackLikeState::Liked
         } else {
@@ -1364,12 +1424,7 @@ where
         };
         let response = self
             .client()
-            .set_track_liked(
-                &candidate,
-                identity.song_id,
-                identity.primary_song_type,
-                state,
-            )
+            .set_track_liked(&candidate, song_id, primary_song_type, state)
             .await;
         self.finish_library_await(
             &candidate,
@@ -1429,6 +1484,12 @@ where
             .map_err(|()| LibraryMutationError::InvalidRequest)?;
         let identity =
             parse_track_identity(&track_id).map_err(|()| LibraryMutationError::InvalidRequest)?;
+        let song_id = identity
+            .song_id
+            .ok_or(LibraryMutationError::InvalidRequest)?;
+        let primary_song_type = identity
+            .primary_song_type
+            .ok_or(LibraryMutationError::InvalidRequest)?;
         let candidate = self
             .authenticated_credential()
             .map_err(map_library_state_to_mutation_error)?;
@@ -1442,8 +1503,8 @@ where
             .set_playlist_track_membership(
                 &candidate,
                 directory_id,
-                identity.song_id,
-                identity.primary_song_type,
+                song_id,
+                primary_song_type,
                 state,
             )
             .await;
@@ -1536,22 +1597,17 @@ where
         }
         let dispatch = dispatch_response.as_ref().map_err(map_media_error)?;
 
-        let qualities: &[QqMusicAudioQuality] = match (candidate.as_ref(), preferred_quality) {
-            (None, _) | (Some(_), AudioQuality::Standard) => &[QqMusicAudioQuality::Standard],
-            (Some(_), AudioQuality::High) => {
-                &[QqMusicAudioQuality::High, QqMusicAudioQuality::Standard]
-            }
-        };
-        for (index, quality) in qualities.iter().copied().enumerate() {
-            let source_response = match candidate.as_ref() {
+        let profiles = media_profiles(candidate.is_some(), preferred_quality);
+        for (index, profile) in profiles.iter().copied().enumerate() {
+            let mut source_response = match candidate.as_ref() {
                 Some(candidate) => {
                     self.provider
                         .client()
-                        .mp3_source(
+                        .media_source(
                             candidate,
                             route.song_mid,
                             route.file_media_mid,
-                            quality,
+                            profile,
                             dispatch,
                         )
                         .await
@@ -1559,9 +1615,10 @@ where
                 None => {
                     self.provider
                         .client()
-                        .anonymous_standard_mp3_source(
+                        .anonymous_media_source(
                             route.song_mid,
                             route.file_media_mid,
+                            profile,
                             dispatch,
                         )
                         .await
@@ -1572,23 +1629,42 @@ where
                     candidate,
                     matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
                 )?;
+                if matches!(
+                    source_response,
+                    Err(QqMusicMediaError::Unavailable {
+                        result_code: MEDIA_ROUTE_COMPATIBILITY_CODE
+                    })
+                ) {
+                    source_response = self
+                        .provider
+                        .client()
+                        .compatible_authenticated_media_source(
+                            candidate,
+                            route.song_mid,
+                            route.file_media_mid,
+                            profile,
+                            dispatch,
+                        )
+                        .await;
+                    self.provider.finish_media_await(
+                        candidate,
+                        matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
+                    )?;
+                }
             }
             match source_response {
                 Ok(source) => {
-                    let actual_quality = match source.quality() {
-                        QqMusicAudioQuality::Standard => AudioQuality::Standard,
-                        QqMusicAudioQuality::High => AudioQuality::High,
-                    };
+                    let (format, actual_quality) = map_media_profile(source.profile());
                     return ResolvedMediaSource::new(
                         track_id,
                         source.uri().to_owned(),
-                        AudioFormat::Mp3,
+                        format,
                         actual_quality,
                         source.valid_for_seconds(),
                     )
                     .map_err(|_| MediaResolutionError::InvalidResponse);
                 }
-                Err(QqMusicMediaError::Unavailable { .. }) if index + 1 < qualities.len() => {}
+                Err(QqMusicMediaError::Unavailable { .. }) if index + 1 < profiles.len() => {}
                 Err(QqMusicMediaError::Unavailable { .. }) if candidate.is_none() => {
                     return Err(MediaResolutionError::AuthenticationRequired);
                 }
@@ -1636,10 +1712,8 @@ where
         size: u32,
     ) -> Result<TrackCommentsPage, Self::Error> {
         let route = parse_track_identity(&track_id).map_err(|()| CommentsError::InvalidResponse)?;
-        let response = self
-            .client()
-            .track_comments(route.song_id, offset, size)
-            .await;
+        let song_id = route.song_id.ok_or(CommentsError::InvalidResponse)?;
+        let response = self.client().track_comments(song_id, offset, size).await;
         let page = response.as_ref().map_err(map_comments_error)?;
         if page.has_more() && page.latest_comments().is_empty() {
             return Err(CommentsError::InvalidResponse);
@@ -2105,10 +2179,10 @@ struct QqMusicLyricTrack<'a> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct QqMusicTrackIdentity<'a> {
-    song_id: u64,
+    song_id: Option<u64>,
     song_mid: &'a str,
     file_media_mid: Option<&'a str>,
-    primary_song_type: u32,
+    primary_song_type: Option<u32>,
 }
 
 fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, ()> {
@@ -2127,13 +2201,22 @@ fn parse_track_identity(track_id: &TrackId) -> Result<QqMusicTrackIdentity<'_>, 
     if prefix != Some("track") || extra.is_some() {
         return Err(());
     }
-    let numeric_song_id = raw_id
-        .and_then(|value| value.parse::<u64>().ok())
-        .filter(|value| *value != 0)
-        .ok_or(())?;
-    let primary_song_type = raw_primary_type
-        .and_then(|value| value.parse::<u32>().ok())
-        .ok_or(())?;
+    let numeric_song_id = match raw_id {
+        Some("-") => None,
+        Some(value) => Some(
+            value
+                .parse::<u64>()
+                .ok()
+                .filter(|value| *value != 0)
+                .ok_or(())?,
+        ),
+        None => return Err(()),
+    };
+    let primary_song_type = match raw_primary_type {
+        Some("-") => None,
+        Some(value) => Some(value.parse::<u32>().map_err(|_| ())?),
+        None => return Err(()),
+    };
     let song_mid = raw_song_mid
         .filter(|value| is_safe_track_mid(value))
         .ok_or(())?;
@@ -2163,11 +2246,47 @@ fn parse_media_track(track_id: &TrackId) -> Result<QqMusicMediaTrack<'_>, MediaR
     })
 }
 
+fn media_profiles(
+    authenticated: bool,
+    preferred_quality: AudioQuality,
+) -> &'static [QqMusicAudioProfile] {
+    match (authenticated, preferred_quality) {
+        (false, _) | (true, AudioQuality::Standard) => &[
+            QqMusicAudioProfile::StandardMp3,
+            QqMusicAudioProfile::LowM4a,
+        ],
+        (true, AudioQuality::High) => &[
+            QqMusicAudioProfile::HighMp3,
+            QqMusicAudioProfile::StandardMp3,
+            QqMusicAudioProfile::LowM4a,
+        ],
+        (true, AudioQuality::Lossless) => &[
+            QqMusicAudioProfile::LosslessFlac,
+            QqMusicAudioProfile::HighMp3,
+            QqMusicAudioProfile::StandardMp3,
+            QqMusicAudioProfile::LowM4a,
+        ],
+        (true, AudioQuality::Low) => &[QqMusicAudioProfile::LowM4a],
+    }
+}
+
+const fn map_media_profile(profile: QqMusicAudioProfile) -> (AudioFormat, AudioQuality) {
+    match profile {
+        QqMusicAudioProfile::LowM4a => (AudioFormat::M4a, AudioQuality::Low),
+        QqMusicAudioProfile::StandardMp3 => (AudioFormat::Mp3, AudioQuality::Standard),
+        QqMusicAudioProfile::HighMp3 => (AudioFormat::Mp3, AudioQuality::High),
+        QqMusicAudioProfile::LosslessFlac => (AudioFormat::Flac, AudioQuality::Lossless),
+    }
+}
+
 fn parse_lyrics_track(track_id: &TrackId) -> Result<QqMusicLyricTrack<'_>, LyricsError> {
     let identity = parse_track_identity(track_id).map_err(|()| LyricsError::InvalidResponse)?;
+    let song_type = identity
+        .primary_song_type
+        .ok_or(LyricsError::InvalidResponse)?;
     Ok(QqMusicLyricTrack {
         song_mid: identity.song_mid,
-        song_type: identity.primary_song_type,
+        song_type,
     })
 }
 
@@ -2434,6 +2553,60 @@ fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
         .map_err(|_| ())
 }
 
+fn map_recent_track_summary(track: &QqMusicRecentTrackSummary) -> Result<TrackSummary, ()> {
+    let file_media_mid = track.file_media_mid().unwrap_or("-");
+    let numeric_track_id = track
+        .track_id()
+        .map_or_else(|| "-".to_owned(), |value| value.to_string());
+    let song_type = track
+        .song_type()
+        .map_or_else(|| "-".to_owned(), |value| value.to_string());
+    let id = TrackId::new(
+        qq_music_provider_id(),
+        format!(
+            "track:{numeric_track_id}:{song_type}:{}:{file_media_mid}",
+            track.song_mid()
+        ),
+    )
+    .map_err(|_| ())?;
+    let artists = track
+        .artists()
+        .iter()
+        .map(|artist| artist.name().to_owned())
+        .collect();
+    let credited_artists = track
+        .artists()
+        .iter()
+        .filter_map(|artist| {
+            map_artist_summary(artist)
+                .or_else(|()| map_favorite_artist_summary(artist))
+                .ok()
+        })
+        .collect();
+    let album_title = track
+        .album()
+        .and_then(QqMusicAlbumSummary::name)
+        .map(str::to_owned);
+    let artwork_uri = track
+        .album()
+        .and_then(QqMusicAlbumSummary::media_mid)
+        .and_then(album_artwork_uri);
+    let album = track
+        .album()
+        .and_then(|album| map_album_summary(album).ok());
+    TrackSummary::new(id, track.title(), artists)
+        .map(|summary| {
+            summary
+                .with_subtitle(track.subtitle().map(str::to_owned))
+                .with_artists(credited_artists)
+                .with_album_title(album_title)
+                .with_album(album)
+                .with_artwork_uri(artwork_uri)
+                .with_duration_seconds(Some(track.duration_seconds()))
+        })
+        .map_err(|_| ())
+}
+
 fn map_comment(comment: &QqMusicTrackComment) -> Result<TrackComment, CommentsError> {
     let id = TrackCommentId::new(
         qq_music_provider_id(),
@@ -2654,8 +2827,29 @@ fn map_playlist_detail_error<E>(error: &QqMusicPlaylistDetailError<E>) -> UserLi
         | QqMusicPlaylistDetailError::MissingTotal
         | QqMusicPlaylistDetailError::MissingHasMore
         | QqMusicPlaylistDetailError::InvalidHasMore
+        | QqMusicPlaylistDetailError::InvalidPagination
         | QqMusicPlaylistDetailError::InvalidTrack { .. }
         | QqMusicPlaylistDetailError::InvalidArtist { .. } => UserLibraryError::InvalidResponse,
+    }
+}
+
+fn map_recent_plays_error<E>(error: &QqMusicRecentPlaysError<E>) -> UserLibraryError {
+    match error {
+        QqMusicRecentPlaysError::Transport(_) => UserLibraryError::Network,
+        QqMusicRecentPlaysError::Rejected { .. } => UserLibraryError::CredentialRejected,
+        QqMusicRecentPlaysError::HttpStatus(_)
+        | QqMusicRecentPlaysError::RateLimited { .. }
+        | QqMusicRecentPlaysError::Upstream { .. } => UserLibraryError::ServiceUnavailable,
+        QqMusicRecentPlaysError::InvalidPageSize { .. }
+        | QqMusicRecentPlaysError::Serialize
+        | QqMusicRecentPlaysError::Signing
+        | QqMusicRecentPlaysError::InvalidJson
+        | QqMusicRecentPlaysError::MissingGlobalCode
+        | QqMusicRecentPlaysError::MissingResult
+        | QqMusicRecentPlaysError::MissingResultCode
+        | QqMusicRecentPlaysError::MissingData
+        | QqMusicRecentPlaysError::MissingRecords
+        | QqMusicRecentPlaysError::InvalidPagination => UserLibraryError::InvalidResponse,
     }
 }
 
@@ -3437,7 +3631,7 @@ mod tests {
         PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
         ProviderCapability, QrAuthenticationChannel, QrAuthenticationProgress,
         QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-        RadarRecommendationsProvider, RankingsProvider, RecommendationError,
+        RadarRecommendationsProvider, RankingsProvider, RecentHistoryProvider, RecommendationError,
         RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider, SearchError,
         TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider,
         TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
@@ -3818,6 +4012,14 @@ mod tests {
     }
 
     #[derive(Clone)]
+    struct GatedCompatibilityMediaTransport {
+        gate_call: usize,
+        calls: Arc<AtomicUsize>,
+        request_started: Arc<Notify>,
+        release_request: Arc<Notify>,
+    }
+
+    #[derive(Clone)]
     struct GatedLyricsTransport {
         request_started: Arc<Notify>,
         release_request: Arc<Notify>,
@@ -3964,6 +4166,27 @@ mod tests {
         }
     }
 
+    impl HttpTransport for GatedCompatibilityMediaTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
+            if call == self.gate_call {
+                self.request_started.notify_one();
+                self.release_request.notified().await;
+            }
+            let response = match call {
+                1 => media_dispatch_json(),
+                2 => media_vkey_json(104_003, ""),
+                _ => media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=private-compatible-source"),
+            };
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&response).expect("fixture JSON"),
+            ))
+        }
+    }
+
     impl HttpTransport for GatedLyricsTransport {
         type Error = Infallible;
 
@@ -4088,6 +4311,7 @@ mod tests {
                 ProviderCapability::Recommendations,
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
+                ProviderCapability::RecentHistoryRead,
                 ProviderCapability::PlaylistMutation,
                 ProviderCapability::Lyrics,
                 ProviderCapability::Comments,
@@ -5800,6 +6024,18 @@ mod tests {
         response
     }
 
+    fn low_m4a_vkey_json(result: i64, path: &str) -> Value {
+        let mut response = media_vkey_json(result, path);
+        response["req_0"]["data"]["midurlinfo"][0]["filename"] = json!("C200fixtureFileMid1.m4a");
+        response
+    }
+
+    fn lossless_vkey_json(result: i64, path: &str) -> Value {
+        let mut response = media_vkey_json(result, path);
+        response["req_0"]["data"]["midurlinfo"][0]["filename"] = json!("F000fixtureFileMid1.flac");
+        response
+    }
+
     fn lyrics_success_json() -> Value {
         json!({
             "code": 0,
@@ -6337,6 +6573,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn recent_history_maps_mid_only_identity_and_clears_only_rejection() {
+        let provider =
+            QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([json!({
+                "code": 0,
+                "req_0": {
+                    "code": 0,
+                    "data": {
+                        "vecPlayRecord": [{
+                            "unPlayTime": 1_700_000_000_u64,
+                            "stSongInfo": {
+                                "mid": "recentTrackMid",
+                                "name": "Synthetic recent track",
+                                "interval": 203,
+                                "singer": [{"name": "Recent artist"}],
+                                "album": {"mid": "recentAlbumMid", "name": "Recent album"}
+                            }
+                        }]
+                    }
+                }
+            })])));
+        set_authenticated(&provider, "123456");
+
+        let page = provider
+            .recent_tracks_page(200, 100)
+            .await
+            .expect("recent history");
+
+        assert_eq!(page.offset(), 200);
+        assert_eq!(page.next_offset(), 201);
+        assert_eq!(page.total(), 201);
+        assert!(!page.total_is_exact());
+        assert!(!page.has_more());
+        assert_eq!(page.tracks().len(), 1);
+        let track = &page.tracks()[0];
+        assert_eq!(track.id().opaque(), "track:-:-:recentTrackMid:-");
+        assert_eq!(track.title(), "Synthetic recent track");
+        assert_eq!(track.artist_names(), ["Recent artist"]);
+        assert_eq!(track.album_title(), Some("Recent album"));
+        assert_eq!(track.duration_seconds(), Some(203));
+        assert!(provider.has_authenticated_credential());
+        let request = &provider.client().transport().requests()[0];
+        let body: Value = serde_json::from_slice(request.body_bytes().expect("request body"))
+            .expect("request JSON");
+        assert_eq!(body["req_0"]["param"]["begin"], 200);
+        assert_eq!(body["req_0"]["param"]["num"], 100);
+
+        let rejected = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
+            json!({"code": 0, "req_0": {"code": 1000, "data": {}}}),
+        ])));
+        set_authenticated(&rejected, "123456");
+        assert_eq!(
+            rejected.recent_tracks_page(0, 100).await,
+            Err(UserLibraryError::CredentialRejected)
+        );
+        assert!(!rejected.has_authenticated_credential());
+    }
+
+    #[tokio::test]
     async fn loads_public_catalog_playlist_without_account_state() {
         let provider = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
             playlist_detail_page_json(&playlist_track_fixture(), 1, false),
@@ -6358,6 +6652,42 @@ mod tests {
                 .iter()
                 .all(|(name, _)| name != "Cookie")
         );
+    }
+
+    #[tokio::test]
+    async fn omitted_playlist_row_keeps_the_provider_cursor_moving() {
+        let provider =
+            QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([json!({
+                "code": 0,
+                "music.srfDissInfo.DissInfo": {
+                    "code": 0,
+                    "data": {
+                        "code": 0,
+                        "songlist": [{
+                            "id": 0,
+                            "mid": "mustNotLeakMid",
+                            "title": "must-not-leak-title",
+                            "type": 0,
+                            "singer": []
+                        }],
+                        "total_song_num": 302,
+                        "hasmore": 1
+                    }
+                }
+            })])));
+        set_authenticated(&provider, "123456");
+
+        let page = provider
+            .playlist_tracks_page(qq_playlist_id("favorite:8001"), 300, 1)
+            .await
+            .expect("an unavailable row remains a consumed server position");
+
+        assert_eq!(page.offset(), 300);
+        assert_eq!(page.next_offset(), 301);
+        assert_eq!(page.omitted_track_count(), 1);
+        assert!(page.has_more());
+        assert!(page.tracks().is_empty());
+        assert!(!format!("{page:?}").contains("must-not-leak"));
     }
 
     #[tokio::test]
@@ -7004,6 +7334,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn authenticated_media_uses_desktop_compatibility_route_only_after_104003() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            media_vkey_json(104_003, ""),
+            media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=private-compatible-source"),
+        ])));
+        set_authenticated(&provider, "123456");
+
+        let source = provider
+            .media_source_resolver()
+            .resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::Standard,
+            )
+            .await
+            .expect("desktop-compatible authenticated source");
+
+        assert_eq!(source.quality(), AudioQuality::Standard);
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 3);
+        let primary: Value =
+            serde_json::from_slice(requests[1].body_bytes().expect("primary request body"))
+                .expect("primary request JSON");
+        let compatible: Value = serde_json::from_slice(
+            requests[2]
+                .body_bytes()
+                .expect("compatibility request body"),
+        )
+        .expect("compatibility request JSON");
+        assert_eq!(primary["req_0"]["method"], json!("UrlGetVkey"));
+        assert_eq!(compatible["req_0"]["method"], json!("CgiGetVkey"));
+        assert_eq!(compatible["comm"]["ct"], json!(19));
+        assert_eq!(compatible["comm"]["cv"], json!(0));
+        assert_eq!(compatible["req_0"]["param"]["loginflag"], json!(1));
+        assert_eq!(compatible["req_0"]["param"]["platform"], json!("20"));
+        assert!(
+            requests[2]
+                .headers()
+                .iter()
+                .any(|(name, _)| name == "Cookie")
+        );
+        assert!(!format!("{:?}", requests[2]).contains("private-key"));
+    }
+
+    #[tokio::test]
+    async fn authenticated_media_stops_when_compatibility_route_has_service_failure() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            media_vkey_json(104_003, ""),
+            json!({"code": 0, "req_0": {"code": 50_006}}),
+        ])));
+        set_authenticated(&provider, "123456");
+
+        assert_eq!(
+            provider
+                .media_source_resolver()
+                .resolve_media(
+                    qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                    AudioQuality::Standard,
+                )
+                .await,
+            Err(MediaResolutionError::ServiceUnavailable)
+        );
+        assert_eq!(provider.client().transport().requests().len(), 3);
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
     async fn signed_out_media_uses_anonymous_standard_quality_without_cookie() {
         let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
             media_dispatch_json(),
@@ -7039,10 +7437,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn signed_out_media_falls_back_to_low_m4a_only_after_mp3_is_unavailable() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            media_vkey_json(104_003, ""),
+            low_m4a_vkey_json(0, "C200fixtureFileMid1.m4a?vkey=public-low-source"),
+        ])));
+
+        let source = provider
+            .media_source_resolver()
+            .resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::Standard,
+            )
+            .await
+            .expect("anonymous low M4A fallback");
+
+        assert_eq!(source.format(), AudioFormat::M4a);
+        assert_eq!(source.quality(), AudioQuality::Low);
+        let requests = provider.client().transport().requests();
+        assert_eq!(requests.len(), 3);
+        assert!(
+            requests[1..]
+                .iter()
+                .all(|request| { !request.headers().iter().any(|(name, _)| name == "Cookie") })
+        );
+        let fallback: Value =
+            serde_json::from_slice(requests[2].body_bytes().expect("fallback request body"))
+                .expect("fallback request JSON");
+        assert_eq!(
+            fallback["req_0"]["param"]["filename"],
+            json!(["C200fixtureFileMid1.m4a"])
+        );
+    }
+
+    #[tokio::test]
     async fn signed_out_unavailable_media_invites_authentication_without_claiming_why() {
         let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
             media_dispatch_json(),
             media_vkey_json(104_003, ""),
+            low_m4a_vkey_json(104_003, ""),
         ])));
 
         assert_eq!(
@@ -7107,6 +7541,33 @@ mod tests {
             json!(["M500fixtureFileMid1.mp3"])
         );
 
+        let low_fallback = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            high_media_vkey_json(101_404, ""),
+            media_vkey_json(101_404, ""),
+            low_m4a_vkey_json(0, "C200fixtureFileMid1.m4a?vkey=private-low-source"),
+        ])));
+        set_authenticated(&low_fallback, "123456");
+        let low_source = low_fallback
+            .media_source_resolver()
+            .resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::High,
+            )
+            .await
+            .expect("low M4A fallback");
+        assert_eq!(low_source.format(), AudioFormat::M4a);
+        assert_eq!(low_source.quality(), AudioQuality::Low);
+        let requests = low_fallback.client().transport().requests();
+        assert_eq!(requests.len(), 4);
+        let low_request: Value =
+            serde_json::from_slice(requests[3].body_bytes().expect("low request body"))
+                .expect("low request JSON");
+        assert_eq!(
+            low_request["req_0"]["param"]["filename"],
+            json!(["C200fixtureFileMid1.m4a"])
+        );
+
         let service_failure = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
             media_dispatch_json(),
             json!({"code": 0, "req_0": {"code": 50_006}}),
@@ -7123,6 +7584,58 @@ mod tests {
             Err(MediaResolutionError::ServiceUnavailable)
         );
         assert_eq!(service_failure.client().transport().requests().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn lossless_quality_reports_flac_and_falls_back_in_quality_order() {
+        let lossless = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            lossless_vkey_json(0, "F000fixtureFileMid1.flac?vkey=private-lossless-source"),
+        ])));
+        set_authenticated(&lossless, "123456");
+        let source = lossless
+            .media_source_resolver()
+            .resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::Lossless,
+            )
+            .await
+            .expect("lossless media");
+        assert_eq!(source.format(), AudioFormat::Flac);
+        assert_eq!(source.quality(), AudioQuality::Lossless);
+
+        let fallback = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            media_dispatch_json(),
+            lossless_vkey_json(101_404, ""),
+            high_media_vkey_json(0, "M800fixtureFileMid1.mp3?vkey=private-high-source"),
+        ])));
+        set_authenticated(&fallback, "123456");
+        let source = fallback
+            .media_source_resolver()
+            .resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::Lossless,
+            )
+            .await
+            .expect("high fallback");
+        assert_eq!(source.format(), AudioFormat::Mp3);
+        assert_eq!(source.quality(), AudioQuality::High);
+        let requests = fallback.client().transport().requests();
+        assert_eq!(requests.len(), 3);
+        let lossless_request: Value =
+            serde_json::from_slice(requests[1].body_bytes().expect("lossless request body"))
+                .expect("lossless request JSON");
+        let high_request: Value =
+            serde_json::from_slice(requests[2].body_bytes().expect("high request body"))
+                .expect("high request JSON");
+        assert_eq!(
+            lossless_request["req_0"]["param"]["filename"],
+            json!(["F000fixtureFileMid1.flac"])
+        );
+        assert_eq!(
+            high_request["req_0"]["param"]["filename"],
+            json!(["M800fixtureFileMid1.mp3"])
+        );
     }
 
     #[tokio::test]
@@ -7159,6 +7672,16 @@ mod tests {
             .expect("missing file-media MID keeps the documented fallback");
         assert_eq!(fallback.song_mid, "fixtureTrackMid1");
         assert_eq!(fallback.file_media_mid, None);
+
+        let recent_mid_only = qq_track_id("track:-:-:recentTrackMid:-");
+        let playable = super::parse_media_track(&recent_mid_only)
+            .expect("recent history can resolve media from song MID alone");
+        assert_eq!(playable.song_mid, "recentTrackMid");
+        assert_eq!(playable.file_media_mid, None);
+        assert_eq!(
+            super::parse_lyrics_track(&recent_mid_only),
+            Err(LyricsError::InvalidResponse)
+        );
     }
 
     #[tokio::test]
@@ -7166,6 +7689,7 @@ mod tests {
         let unavailable = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
             media_dispatch_json(),
             media_vkey_json(101_404, ""),
+            low_m4a_vkey_json(101_404, ""),
         ])));
         set_authenticated(&unavailable, "123456");
         assert_eq!(
@@ -7233,6 +7757,39 @@ mod tests {
             let request = resolver.resolve_media(
                 qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
                 AudioQuality::High,
+            );
+            let replacement = async {
+                request_started.notified().await;
+                set_authenticated(&provider, "654321");
+                release_request.notify_one();
+            };
+            let (result, ()) = tokio::join!(request, replacement);
+
+            assert_eq!(result, Err(MediaResolutionError::Replaced));
+            assert_eq!(calls.load(Ordering::SeqCst), gate_call);
+            assert!(provider.has_authenticated_credential());
+        }
+    }
+
+    #[tokio::test]
+    async fn compatibility_route_rechecks_account_after_every_network_await() {
+        for gate_call in [1, 2, 3] {
+            let request_started = Arc::new(Notify::new());
+            let release_request = Arc::new(Notify::new());
+            let calls = Arc::new(AtomicUsize::new(0));
+            let provider =
+                QqMusicProvider::new(QqMusicClient::new(GatedCompatibilityMediaTransport {
+                    gate_call,
+                    calls: Arc::clone(&calls),
+                    request_started: Arc::clone(&request_started),
+                    release_request: Arc::clone(&release_request),
+                }));
+            set_authenticated(&provider, "123456");
+
+            let resolver = provider.media_source_resolver();
+            let request = resolver.resolve_media(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                AudioQuality::Standard,
             );
             let replacement = async {
                 request_started.notified().await;

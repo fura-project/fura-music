@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -83,7 +84,7 @@ void main() {
           jsonEncode(<String, Object>{
             'schemaVersion': 2,
             'theme': 'dark',
-            'playbackQuality': 'lossless',
+            'playbackQuality': 'ultra',
           }),
           AppSettingsLoadState.invalidDocument,
         ),
@@ -138,7 +139,33 @@ void main() {
       AppSettingsWriteResult.storageUnavailable,
     );
   });
+
+  test('serializes settings mutations in request order', () async {
+    final storage = _ControlledDocumentStorage();
+    final store = AppSettingsStore(storage: storage);
+    final first = store.save(const AppSettings(theme: AppThemePreference.dark));
+    final second = store.save(
+      const AppSettings(
+        theme: AppThemePreference.dark,
+        playbackQuality: AppPlaybackQualityPreference.lossless,
+      ),
+    );
+
+    await _flushTasks();
+    expect(storage.writes, hasLength(1));
+
+    storage.complete(0);
+    expect(await first, AppSettingsWriteResult.saved);
+    await _flushTasks();
+    expect(storage.writes, hasLength(2));
+
+    storage.complete(1);
+    expect(await second, AppSettingsWriteResult.saved);
+    expect(storage.document, contains('"playbackQuality":"lossless"'));
+  });
 }
+
+Future<void> _flushTasks() => Future<void>.delayed(Duration.zero);
 
 class _MemoryDocumentStorage implements AppSettingsDocumentStorage {
   _MemoryDocumentStorage({
@@ -174,4 +201,27 @@ class _MemoryDocumentStorage implements AppSettingsDocumentStorage {
     deleteCount += 1;
     document = null;
   }
+}
+
+class _ControlledDocumentStorage implements AppSettingsDocumentStorage {
+  String? document;
+  final List<String> writes = [];
+  final List<Completer<void>> _completions = [];
+
+  @override
+  Future<String?> read() async => document;
+
+  @override
+  Future<void> write(String document) async {
+    writes.add(document);
+    final completion = Completer<void>();
+    _completions.add(completion);
+    await completion.future;
+    this.document = document;
+  }
+
+  @override
+  Future<void> delete() async => document = null;
+
+  void complete(int index) => _completions[index].complete();
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 enum AppThemePreference { system, light, dark }
 
-enum AppPlaybackQualityPreference { standard, high }
+enum AppPlaybackQualityPreference { standard, high, lossless }
 
 extension AppThemePreferenceMaterial on AppThemePreference {
   ThemeMode get materialThemeMode => switch (this) {

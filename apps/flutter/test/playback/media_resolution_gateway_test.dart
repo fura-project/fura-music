@@ -35,6 +35,32 @@ void main() {
       ),
     );
     expect(high.source?.quality, PlaybackAudioQuality.high);
+
+    final low = mapBridgeMediaResolution(
+      const bridge.MediaResolution(
+        source: bridge.ResolvedMediaSource(
+          uri: 'https://audio.example.test/low.m4a',
+          format: bridge.MediaFormat.m4A,
+          quality: bridge.MediaQuality.low,
+          validForSeconds: 7_200,
+        ),
+      ),
+    );
+    expect(low.source?.format, PlaybackAudioFormat.m4a);
+    expect(low.source?.quality, PlaybackAudioQuality.low);
+
+    final lossless = mapBridgeMediaResolution(
+      const bridge.MediaResolution(
+        source: bridge.ResolvedMediaSource(
+          uri: 'https://audio.example.test/lossless.flac',
+          format: bridge.MediaFormat.flac,
+          quality: bridge.MediaQuality.lossless,
+          validForSeconds: 7_200,
+        ),
+      ),
+    );
+    expect(lossless.source?.format, PlaybackAudioFormat.flac);
+    expect(lossless.source?.quality, PlaybackAudioQuality.lossless);
   });
 
   test('maps every Bridge failure without collapsing availability', () {

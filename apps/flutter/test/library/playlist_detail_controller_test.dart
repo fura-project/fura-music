@@ -21,6 +21,7 @@ void main() {
       0,
       const PlaylistTrackPageResult(
         total: 2,
+        totalIsExact: false,
         hasMore: true,
         tracks: [
           PlaylistTrackSummary(
@@ -35,6 +36,7 @@ void main() {
     await content;
     expect(controller.stage, PlaylistDetailStage.content);
     expect(controller.total, 2);
+    expect(controller.totalIsExact, isFalse);
     expect(controller.hasMore, isTrue);
     expect(controller.tracks.single.title, 'Synthetic track');
     expect(gateway.requests.single.offset, 0);
@@ -45,7 +47,7 @@ void main() {
       1,
       const PlaylistTrackPageResult(
         offset: 1,
-        total: 2,
+        total: 3,
         tracks: [
           PlaylistTrackSummary(
             providerId: 'qq-music',
@@ -68,6 +70,7 @@ void main() {
       'Second track',
     ]);
     expect(controller.hasMore, isFalse);
+    expect(controller.totalIsExact, isTrue);
     expect(gateway.requests[1].offset, 1);
 
     final empty = controller.load();
@@ -168,6 +171,33 @@ void main() {
   });
 
   test(
+    'continues when total proves a premature has-more flag is false',
+    () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(playlist, gateway);
+      final first = controller.load();
+      gateway.complete(
+        0,
+        PlaylistTrackPageResult(total: 2, tracks: _tracks(0, 1)),
+      );
+      await first;
+
+      expect(controller.hasMore, isTrue);
+      final more = controller.loadMore();
+      gateway.complete(
+        1,
+        PlaylistTrackPageResult(offset: 1, total: 2, tracks: _tracks(1, 1)),
+      );
+      await more;
+
+      expect(gateway.requests.map((request) => request.offset), [0, 1]);
+      expect(controller.tracks, hasLength(2));
+      expect(controller.hasMore, isFalse);
+      controller.dispose();
+    },
+  );
+
+  test(
     'refresh retains the complete paged snapshot after transient failure',
     () async {
       final gateway = _FakeDetailGateway();
@@ -238,6 +268,321 @@ void main() {
       controller.dispose();
     },
   );
+
+  test(
+    'full loading drains every page beyond the old 300 Track boundary',
+    () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(
+        playlist,
+        gateway,
+        loadAllPageInterval: Duration.zero,
+      );
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        PlaylistTrackPageResult(
+          total: 350,
+          hasMore: true,
+          tracks: _tracks(0, 100),
+        ),
+      );
+      await initial;
+
+      final all = controller.loadAll();
+      expect(controller.isLoadingAll, isTrue);
+      expect(gateway.requests.last.offset, 100);
+      gateway.complete(
+        1,
+        PlaylistTrackPageResult(
+          offset: 100,
+          total: 350,
+          hasMore: true,
+          tracks: _tracks(100, 100),
+        ),
+      );
+      await _flushTasks();
+      expect(gateway.requests.last.offset, 200);
+      gateway.complete(
+        2,
+        PlaylistTrackPageResult(
+          offset: 200,
+          total: 350,
+          hasMore: true,
+          tracks: _tracks(200, 100),
+        ),
+      );
+      await _flushTasks();
+      expect(gateway.requests.last.offset, 300);
+      gateway.complete(
+        3,
+        PlaylistTrackPageResult(
+          offset: 300,
+          total: 350,
+          tracks: _tracks(300, 50),
+        ),
+      );
+      await all;
+
+      expect(gateway.requests.map((request) => request.offset), [
+        0,
+        100,
+        200,
+        300,
+      ]);
+      expect(controller.tracks, hasLength(350));
+      expect(controller.tracks.last.title, 'Track 349');
+      expect(controller.hasMore, isFalse);
+      expect(controller.isLoadingAll, isFalse);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'cancelling full loading stops after the current bounded page',
+    () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(
+        playlist,
+        gateway,
+        loadAllPageInterval: Duration.zero,
+      );
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        PlaylistTrackPageResult(
+          total: 400,
+          hasMore: true,
+          tracks: _tracks(0, 100),
+        ),
+      );
+      await initial;
+
+      final all = controller.loadAll();
+      expect(gateway.requests.last.offset, 100);
+      controller.cancelLoadAll();
+      expect(controller.isLoadingAll, isFalse);
+      gateway.complete(
+        1,
+        PlaylistTrackPageResult(
+          offset: 100,
+          total: 400,
+          hasMore: true,
+          tracks: _tracks(100, 100),
+        ),
+      );
+      await all;
+
+      expect(gateway.requests.map((request) => request.offset), [0, 100]);
+      expect(controller.tracks, hasLength(200));
+      expect(controller.hasMore, isTrue);
+      controller.dispose();
+    },
+  );
+
+  test('full loading uses the low-latency successful-page cadence', () async {
+    final gateway = _FakeDetailGateway();
+    final delays = <Duration>[];
+    final controller = PlaylistDetailController(
+      playlist,
+      gateway,
+      delay: (duration) async => delays.add(duration),
+    );
+    final initial = controller.load();
+    gateway.complete(
+      0,
+      PlaylistTrackPageResult(
+        total: 201,
+        hasMore: true,
+        tracks: _tracks(0, 100),
+      ),
+    );
+    await initial;
+
+    final all = controller.loadAll();
+    gateway.complete(
+      1,
+      PlaylistTrackPageResult(
+        offset: 100,
+        total: 201,
+        hasMore: true,
+        tracks: _tracks(100, 100),
+      ),
+    );
+    await _flushTasks();
+    gateway.complete(
+      2,
+      PlaylistTrackPageResult(offset: 200, total: 201, tracks: _tracks(200, 1)),
+    );
+    await all;
+
+    expect(delays, [const Duration(milliseconds: 180)]);
+    expect(controller.tracks, hasLength(201));
+    controller.dispose();
+  });
+
+  test('full loading stops on a permanent failure and resumes from the failed offset', () async {
+    final gateway = _FakeDetailGateway();
+    final controller = PlaylistDetailController(
+      playlist,
+      gateway,
+      loadAllPageInterval: Duration.zero,
+    );
+    final initial = controller.load();
+    gateway.complete(
+      0,
+      PlaylistTrackPageResult(total: 3, tracks: _tracks(0, 1)),
+    );
+    await initial;
+
+    final failing = controller.loadAll();
+    gateway.complete(
+      1,
+      const PlaylistTrackPageResult(
+        failure: UserLibraryFailure.invalidResponse,
+      ),
+    );
+    await failing;
+    expect(controller.tracks, hasLength(1));
+    expect(controller.appendFailure, UserLibraryFailure.invalidResponse);
+    expect(controller.isLoadingAll, isFalse);
+
+    final retry = controller.loadAll();
+    gateway.complete(
+      2,
+      PlaylistTrackPageResult(offset: 1, total: 3, tracks: _tracks(1, 2)),
+    );
+    await retry;
+
+    expect(gateway.requests.map((request) => request.offset), [0, 1, 1]);
+    expect(controller.tracks, hasLength(3));
+    expect(controller.appendFailure, isNull);
+    expect(controller.hasMore, isFalse);
+    controller.dispose();
+  });
+
+  test('full loading paces pages and backs off before retrying a transient boundary', () async {
+    final gateway = _FakeDetailGateway();
+    final delays = <Duration>[];
+    final controller = PlaylistDetailController(
+      playlist,
+      gateway,
+      loadAllPageInterval: const Duration(milliseconds: 100),
+      postTransientPageInterval: const Duration(milliseconds: 500),
+      transientRetryDelays: const [Duration(seconds: 1)],
+      delay: (duration) async => delays.add(duration),
+    );
+    final initial = controller.load();
+    gateway.complete(
+      0,
+      PlaylistTrackPageResult(
+        total: 400,
+        hasMore: true,
+        tracks: _tracks(0, 100),
+      ),
+    );
+    await initial;
+
+    final all = controller.loadAll();
+    gateway.complete(
+      1,
+      PlaylistTrackPageResult(
+        offset: 100,
+        total: 400,
+        hasMore: true,
+        tracks: _tracks(100, 100),
+      ),
+    );
+    await _flushTasks();
+    gateway.complete(
+      2,
+      const PlaylistTrackPageResult(
+        failure: UserLibraryFailure.serviceUnavailable,
+      ),
+    );
+    await _flushTasks();
+    expect(gateway.requests.last.offset, 200);
+    gateway.complete(
+      3,
+      PlaylistTrackPageResult(
+        offset: 200,
+        total: 400,
+        hasMore: true,
+        tracks: _tracks(200, 100),
+      ),
+    );
+    await _flushTasks();
+    gateway.complete(
+      4,
+      PlaylistTrackPageResult(
+        offset: 300,
+        total: 400,
+        tracks: _tracks(300, 100),
+      ),
+    );
+    await all;
+
+    expect(gateway.requests.map((request) => request.offset), [
+      0,
+      100,
+      200,
+      200,
+      300,
+    ]);
+    expect(delays, [
+      const Duration(milliseconds: 100),
+      const Duration(seconds: 1),
+      const Duration(milliseconds: 500),
+    ]);
+    expect(controller.tracks, hasLength(400));
+    expect(controller.appendFailure, isNull);
+    expect(controller.hasMore, isFalse);
+    controller.dispose();
+  });
+
+  test('an omitted page advances search to later usable tracks', () async {
+    final gateway = _FakeDetailGateway();
+    final controller = PlaylistDetailController(
+      playlist,
+      gateway,
+      loadAllPageInterval: Duration.zero,
+    );
+    final initial = controller.load();
+    gateway.complete(
+      0,
+      PlaylistTrackPageResult(
+        total: 201,
+        hasMore: true,
+        tracks: _tracks(0, 100),
+      ),
+    );
+    await initial;
+
+    final all = controller.loadAll();
+    gateway.complete(
+      1,
+      const PlaylistTrackPageResult(
+        offset: 100,
+        nextOffset: 200,
+        total: 201,
+        hasMore: true,
+        omittedTrackCount: 100,
+      ),
+    );
+    await _flushTasks();
+    gateway.complete(
+      2,
+      PlaylistTrackPageResult(offset: 200, total: 201, tracks: _tracks(200, 1)),
+    );
+    await all;
+
+    expect(gateway.requests.map((request) => request.offset), [0, 100, 200]);
+    expect(controller.processedCount, 201);
+    expect(controller.omittedTrackCount, 100);
+    expect(controller.tracks, hasLength(101));
+    expect(controller.tracks.last.title, 'Track 200');
+    controller.dispose();
+  });
 
   test('refresh clears loaded tracks after credential rejection', () async {
     final gateway = _FakeDetailGateway();
@@ -358,6 +703,218 @@ void main() {
     await third;
   });
 
+  group('viewport prefetch scheduling', () {
+    late _FakeDetailGateway gateway;
+    late PlaylistDetailController controller;
+
+    Future<void> prime({Future<void> Function(Duration)? delay}) async {
+      gateway = _FakeDetailGateway();
+      controller = PlaylistDetailController(
+        playlist,
+        gateway,
+        delay: delay ?? (_) async {},
+      );
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        PlaylistTrackPageResult(total: 1000, tracks: _tracks(0, 100)),
+      );
+      await initial;
+    }
+
+    void completePage(int request, int offset, {int count = 100}) {
+      gateway.complete(
+        request,
+        PlaylistTrackPageResult(
+          offset: offset,
+          total: 1000,
+          tracks: _tracks(offset, count),
+        ),
+      );
+    }
+
+    tearDown(() => controller.dispose());
+
+    test(
+      'one horizon serializes two pages and coalesces repeated demand',
+      () async {
+        await prime();
+        controller.prefetchTo(290);
+        controller.prefetchTo(295);
+        final joined = controller.loadMore();
+        expect(gateway.requests.map((r) => r.offset), [0, 100]);
+        completePage(1, 100);
+        await _flushTasks();
+        expect(gateway.requests.map((r) => r.offset), [0, 100, 200]);
+        completePage(2, 200);
+        await joined;
+        expect(controller.tracks, hasLength(300));
+        expect(controller.hasMore, isTrue);
+        expect(gateway.requests, hasLength(3));
+        controller.prefetchTo(290);
+        await _flushTasks();
+        expect(gateway.requests, hasLength(3));
+        expect(gateway.requests.every((r) => r.size == 100), isTrue);
+      },
+    );
+
+    test('ordinary lookahead stops after one page', () async {
+      await prime();
+      controller.prefetchTo(125);
+      completePage(1, 100);
+      await _flushTasks();
+      expect(controller.tracks, hasLength(200));
+      expect(gateway.requests, hasLength(2));
+    });
+
+    test(
+      'short and omitted pages cannot turn scrolling into a full drain',
+      () async {
+        await prime();
+        controller.prefetchTo(9999);
+        completePage(1, 100, count: 1);
+        await _flushTasks();
+        gateway.complete(
+          2,
+          const PlaylistTrackPageResult(
+            offset: 101,
+            nextOffset: 103,
+            omittedTrackCount: 2,
+            total: 1000,
+          ),
+        );
+        await _flushTasks();
+        expect(gateway.requests.map((r) => r.offset), [0, 100, 101]);
+        expect(controller.processedCount, 103);
+        expect(controller.tracks, hasLength(101));
+        expect(controller.hasMore, isTrue);
+      },
+    );
+
+    test(
+      'returning upward cancels pending pages but keeps the in-flight result',
+      () async {
+        await prime();
+        controller.prefetchTo(300);
+        controller.cancelPrefetch();
+        completePage(1, 100);
+        await _flushTasks();
+        expect(gateway.requests, hasLength(2));
+        expect(gateway.operations[1].cancelCalls, 0);
+        expect(controller.tracks, hasLength(200));
+        controller.prefetchTo(100);
+        await _flushTasks();
+        expect(gateway.requests, hasLength(2));
+      },
+    );
+
+    test('search promotes in-flight browse work and scroll cannot skip its cadence', () async {
+      final cooldown = Completer<void>();
+      await prime(delay: (_) => cooldown.future);
+      controller.prefetchTo(150);
+      final search = controller.loadAll();
+      expect(controller.isLoadingAll, isTrue);
+      expect(gateway.requests, hasLength(2));
+      completePage(1, 100);
+      await _flushTasks();
+      controller.prefetchTo(400);
+      final joined = controller.loadMore();
+      await _flushTasks();
+      expect(gateway.requests, hasLength(2));
+      cooldown.complete();
+      await _flushTasks();
+      expect(gateway.requests.map((r) => r.offset), [0, 100, 200]);
+      controller.cancelLoadAll();
+      completePage(2, 200);
+      await Future.wait([search, joined]);
+      expect(gateway.requests, hasLength(3));
+      expect(controller.tracks, hasLength(300));
+    });
+
+    test(
+      'stopping and restarting search during backoff keeps one retry owner',
+      () async {
+        final backoff = Completer<void>();
+        await prime(delay: (_) => backoff.future);
+        final search = controller.loadAll();
+        gateway.complete(
+          1,
+          const PlaylistTrackPageResult(
+            failure: UserLibraryFailure.serviceUnavailable,
+          ),
+        );
+        await _flushTasks();
+        controller.cancelLoadAll();
+        controller.prefetchTo(300);
+        final restarted = controller.loadAll();
+        final manual = controller.loadMore();
+        expect(gateway.requests, hasLength(2));
+        backoff.complete();
+        await _flushTasks();
+        expect(gateway.requests.map((r) => r.offset), [0, 100, 100]);
+        controller.cancelLoadAll();
+        completePage(2, 100);
+        await Future.wait([search, restarted, manual]);
+        expect(controller.tracks, hasLength(200));
+        expect(gateway.requests, hasLength(3));
+      },
+    );
+
+    test('scroll stops at failure until an explicit retry succeeds', () async {
+      await prime();
+      controller.prefetchTo(300);
+      gateway.complete(
+        1,
+        const PlaylistTrackPageResult(failure: UserLibraryFailure.network),
+      );
+      await _flushTasks();
+      controller.prefetchTo(300);
+      controller.prefetchTo(400);
+      await _flushTasks();
+      expect(gateway.requests, hasLength(2));
+      expect(controller.tracks, hasLength(100));
+      final retry = controller.loadMore();
+      completePage(2, 100);
+      await retry;
+      expect(gateway.requests.map((r) => r.offset), [0, 100, 100]);
+      expect(controller.appendFailure, isNull);
+    });
+
+    test('refresh supersedes prefetch and its late page cannot change the new snapshot', () async {
+      await prime();
+      controller.prefetchTo(300);
+      final refresh = controller.refresh();
+      expect(gateway.operations[1].cancelCalls, 1);
+      gateway.complete(
+        2,
+        PlaylistTrackPageResult(total: 1, tracks: _tracks(900, 1)),
+      );
+      await refresh;
+      completePage(1, 100);
+      await _flushTasks();
+      expect(controller.tracks.single.title, 'Track 900');
+      expect(controller.processedCount, 1);
+      expect(gateway.requests, hasLength(3));
+    });
+
+    test('dispose during cooldown suppresses queued pages and notifications', () async {
+      final cooldown = Completer<void>();
+      await prime(delay: (_) => cooldown.future);
+      controller.prefetchTo(300);
+      completePage(1, 100);
+      await _flushTasks();
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.dispose();
+      cooldown.complete();
+      await _flushTasks();
+      expect(gateway.requests, hasLength(2));
+      expect(notifications, 0);
+      // Keep the group teardown independent of this explicitly disposed owner.
+      controller = PlaylistDetailController(playlist, gateway);
+    });
+  });
+
   test('maps credential rejection to a sign-in state', () async {
     final gateway = _FakeDetailGateway();
     final controller = PlaylistDetailController(playlist, gateway);
@@ -381,6 +938,19 @@ class _Request {
   final int offset;
   final int size;
 }
+
+List<PlaylistTrackSummary> _tracks(int start, int count) => List.generate(
+  count,
+  (index) => PlaylistTrackSummary(
+    providerId: 'qq-music',
+    opaqueId: 'track:${start + index}',
+    title: 'Track ${start + index}',
+    artistNames: const ['Artist'],
+  ),
+  growable: false,
+);
+
+Future<void> _flushTasks() => Future<void>.delayed(Duration.zero);
 
 class _FakeDetailGateway implements PlaylistDetailGateway {
   final List<Completer<PlaylistTrackPageResult>> _results = [];

@@ -12,18 +12,23 @@ use crate::media_source::native_media_source_coordinator;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaFormat {
     Mp3,
+    M4a,
+    Flac,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaQuality {
     Standard,
     High,
+    Low,
+    Lossless,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaQualityPreference {
     Standard,
     High,
+    Lossless,
 }
 
 /// Short-lived playback input. The URI can contain authorization material and
@@ -119,6 +124,7 @@ impl MediaResolutionHandle {
                     let preferred_quality = match self.preferred_quality {
                         MediaQualityPreference::Standard => AudioQuality::Standard,
                         MediaQualityPreference::High => AudioQuality::High,
+                        MediaQualityPreference::Lossless => AudioQuality::Lossless,
                     };
                     self.await_resolution(coordinator.resolve_media(track_id, preferred_quality))
                         .await
@@ -190,10 +196,14 @@ fn map_resolution(
                 uri: source.uri().to_owned(),
                 format: match source.format() {
                     AudioFormat::Mp3 => MediaFormat::Mp3,
+                    AudioFormat::M4a => MediaFormat::M4a,
+                    AudioFormat::Flac => MediaFormat::Flac,
                 },
                 quality: match source.quality() {
+                    AudioQuality::Low => MediaQuality::Low,
                     AudioQuality::Standard => MediaQuality::Standard,
                     AudioQuality::High => MediaQuality::High,
+                    AudioQuality::Lossless => MediaQuality::Lossless,
                 },
                 valid_for_seconds: source.valid_for_seconds(),
             }),
@@ -282,6 +292,38 @@ mod tests {
             high.source.expect("mapped high source").quality,
             MediaQuality::High
         );
+
+        let low = map_resolution(Ok(ResolvedMediaSource::new(
+            TrackId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "track:41001:0:1:private-mid",
+            )
+            .expect("track ID"),
+            "http://audio.example.test/low.m4a?vkey=private",
+            AudioFormat::M4a,
+            AudioQuality::Low,
+            7_200,
+        )
+        .expect("low source")));
+        let low = low.source.expect("mapped low source");
+        assert_eq!(low.format, MediaFormat::M4a);
+        assert_eq!(low.quality, MediaQuality::Low);
+
+        let lossless = map_resolution(Ok(ResolvedMediaSource::new(
+            TrackId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "track:41001:0:1:private-mid",
+            )
+            .expect("track ID"),
+            "http://audio.example.test/lossless.flac?vkey=private",
+            AudioFormat::Flac,
+            AudioQuality::Lossless,
+            7_200,
+        )
+        .expect("lossless source")));
+        let lossless = lossless.source.expect("mapped lossless source");
+        assert_eq!(lossless.format, MediaFormat::Flac);
+        assert_eq!(lossless.quality, MediaQuality::Lossless);
     }
 
     #[test]

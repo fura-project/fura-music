@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
@@ -47,6 +49,9 @@ class HomePage extends StatefulWidget {
     this.lastOpenedRecommendation,
     this.recommendationReturnFocusNode,
     this.spotlightRotationInterval = const Duration(seconds: 12),
+    this.active = true,
+    this.refreshInterval = const Duration(minutes: 15),
+    this.now,
     super.key,
   });
 
@@ -63,31 +68,63 @@ class HomePage extends StatefulWidget {
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
   final Duration spotlightRotationInterval;
+  final bool active;
+  final Duration refreshInterval;
+  final DateTime Function()? now;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Timer? _spotlightTimer;
+  Timer? _spotlightProgressTimer;
+  Timer? _freshnessTimer;
+  final ValueNotifier<double> _spotlightProgress = ValueNotifier(0);
+  Duration _spotlightProgressElapsed = Duration.zero;
+  late DateTime _lastRefresh;
+  bool _returnToShelf = false;
+  bool _refreshing = false;
+  bool _foreground = true;
   DateTime? _spotlightDay;
   String? _spotlightIdentity;
+  int _spotlightMotionDirection = 1;
   bool _spotlightAutoPlaying = true;
   bool _animationsDisabled = false;
 
   @override
   void initState() {
     super.initState();
+    _lastRefresh = _now;
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
+    widget.homeController.setActive(widget.active && _foreground);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resumeHome();
+    });
+    _freshnessTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _refreshIfStale(),
+    );
     _startSpotlightTimer();
   }
 
   @override
   void didUpdateWidget(HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      widget.homeController.setActive(widget.active && _foreground);
+      _restartSpotlightTimer();
+      if (widget.active) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _resumeHome();
+        });
+      }
+    }
     if (oldWidget.spotlightRotationInterval !=
         widget.spotlightRotationInterval) {
-      _spotlightTimer?.cancel();
-      _startSpotlightTimer();
+      _restartSpotlightTimer();
     }
   }
 
@@ -97,22 +134,103 @@ class _HomePageState extends State<HomePage> {
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     if (_animationsDisabled == animationsDisabled) return;
     _animationsDisabled = animationsDisabled;
-    _spotlightTimer?.cancel();
-    _spotlightTimer = null;
-    _startSpotlightTimer();
+    _restartSpotlightTimer();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _freshnessTimer?.cancel();
     _spotlightTimer?.cancel();
+    _spotlightProgressTimer?.cancel();
+    _spotlightProgress.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    widget.homeController.setActive(widget.active && _foreground);
+    _restartSpotlightTimer();
+    if (_foreground) _resumeHome();
+  }
+
+  void _resumeHome() {
+    if (!mounted || !widget.active || !_foreground) return;
+    _refreshIfStale();
+    if (!_refreshing && widget.homeController.relatedSeed == null) {
+      widget.homeController.refreshRelatedTracks();
+    }
+  }
+
+  void _refreshIfStale() {
+    if (mounted &&
+        widget.active &&
+        _foreground &&
+        _now.difference(_lastRefresh) >= widget.refreshInterval) {
+      unawaited(_refresh());
+    }
+  }
+
+  Future<void> _refresh({bool manual = false}) async {
+    if (!mounted || _refreshing) return;
+    setState(() => _refreshing = true);
+    // Re-entry and the timer share one request group, including after failures.
+    _lastRefresh = _now;
+    try {
+      await Future.wait([
+        widget.recommendationController.load(),
+        widget.newSongController.load(),
+        if (widget.authenticated) widget.homeController.refresh(),
+        if (widget.authenticated) widget.radarController.load(),
+      ]);
+      if (!mounted) return;
+      if (!widget.authenticated && widget.active && _foreground) {
+        widget.homeController.refreshRelatedTracks();
+      }
+      if (manual && widget.active && _foreground) {
+        final failed =
+            widget.recommendationController.stage ==
+                RecommendedPlaylistStage.error ||
+            widget.newSongController.stage == NewSongStage.error ||
+            (widget.authenticated &&
+                (widget.homeController.refreshHasErrors ||
+                    widget.radarController.stage == RadarStage.error));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              failed
+                  ? 'Some recommendations could not refresh. You can retry each section.'
+                  : 'Recommendations refreshed. QQ Music may return the same picks.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  List<RecommendedPlaylistSummary> get _spotlightCandidates =>
+      widget.authenticated
+      ? widget.homeController.personalizedPlaylists
+      : widget.recommendationController.playlists;
+
+  DateTime get _now => widget.now?.call() ?? DateTime.now();
+
+  void _openFeatured(RecommendedPlaylistSummary playlist) {
+    _returnToShelf = false;
+    widget.onOpenRecommendation(playlist);
+  }
+
+  void _openShelf(RecommendedPlaylistSummary playlist) {
+    _returnToShelf = true;
+    widget.onOpenRecommendation(playlist);
+  }
+
   RecommendedPlaylistSummary? _resolveSpotlight() {
-    final playlists = widget.recommendationController.playlists;
-    if (widget.recommendationController.stage !=
-            RecommendedPlaylistStage.content ||
-        playlists.isEmpty) {
+    final playlists = _spotlightCandidates;
+    if (playlists.isEmpty) {
       _spotlightIdentity = null;
       return null;
     }
@@ -122,7 +240,10 @@ class _HomePageState extends State<HomePage> {
       (playlist) => _recommendationIdentity(playlist) == _spotlightIdentity,
     );
     if (_spotlightDay != day || selectedIndex < 0) {
-      final selected = selectHomeSpotlightForDay(playlists, day);
+      // Preserve the account feed's ranking; only the public feed uses a daily rotation.
+      final selected = widget.authenticated
+          ? playlists.first
+          : selectHomeSpotlightForDay(playlists, day);
       _spotlightDay = day;
       _spotlightIdentity = selected == null
           ? null
@@ -134,34 +255,67 @@ class _HomePageState extends State<HomePage> {
 
   void _startSpotlightTimer() {
     if (!_spotlightAutoPlaying ||
+        !widget.active ||
+        !_foreground ||
         _animationsDisabled ||
         widget.spotlightRotationInterval <= Duration.zero) {
       return;
     }
-    _spotlightTimer = Timer.periodic(
-      widget.spotlightRotationInterval,
-      (_) => _moveSpotlight(1),
+    _spotlightTimer = Timer.periodic(widget.spotlightRotationInterval, (_) {
+      _moveSpotlight(1);
+      _restartSpotlightProgressTimer();
+    });
+    _startSpotlightProgressTimer();
+  }
+
+  void _restartSpotlightTimer() {
+    _spotlightTimer?.cancel();
+    _spotlightTimer = null;
+    _spotlightProgressTimer?.cancel();
+    _spotlightProgressTimer = null;
+    _spotlightProgressElapsed = Duration.zero;
+    _spotlightProgress.value = 0;
+    _startSpotlightTimer();
+  }
+
+  void _startSpotlightProgressTimer() {
+    _spotlightProgressTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (_) {
+        if (!mounted || widget.spotlightRotationInterval <= Duration.zero) {
+          return;
+        }
+        _spotlightProgressElapsed += const Duration(milliseconds: 100);
+        final progress =
+            _spotlightProgressElapsed.inMicroseconds /
+            widget.spotlightRotationInterval.inMicroseconds;
+        _spotlightProgress.value = progress.clamp(0, 1);
+      },
     );
+  }
+
+  void _restartSpotlightProgressTimer() {
+    _spotlightProgressTimer?.cancel();
+    _spotlightProgressElapsed = Duration.zero;
+    _spotlightProgress.value = 0;
+    if (_spotlightTimer != null) _startSpotlightProgressTimer();
   }
 
   void _moveSpotlight(int offset, {bool restartTimer = false}) {
     if (!mounted) return;
-    final playlists = widget.recommendationController.playlists;
-    if (widget.recommendationController.stage !=
-            RecommendedPlaylistStage.content ||
-        playlists.length < 2) {
+    final playlists = _spotlightCandidates;
+    if (playlists.length < 2) {
       return;
     }
     final current = _resolveSpotlight();
     final currentIndex = current == null ? 0 : playlists.indexOf(current);
     final nextIndex = (currentIndex + offset) % playlists.length;
     setState(() {
+      _spotlightMotionDirection = offset < 0 ? -1 : 1;
       _spotlightIdentity = _recommendationIdentity(playlists[nextIndex]);
     });
     if (restartTimer) {
-      _spotlightTimer?.cancel();
-      _spotlightTimer = null;
-      _startSpotlightTimer();
+      _restartSpotlightTimer();
     }
   }
 
@@ -169,9 +323,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _spotlightAutoPlaying = !_spotlightAutoPlaying;
     });
-    _spotlightTimer?.cancel();
-    _spotlightTimer = null;
-    _startSpotlightTimer();
+    _restartSpotlightTimer();
   }
 
   @override
@@ -181,7 +333,7 @@ class _HomePageState extends State<HomePage> {
       widget.recommendationController,
       widget.newSongController,
       widget.radarController,
-      widget.queuePlaybackController,
+      widget.queuePlaybackController.currentTrackListenable,
     ]),
     builder: (context, _) {
       final spotlightPlaylist = _resolveSpotlight();
@@ -190,6 +342,9 @@ class _HomePageState extends State<HomePage> {
           builder: (context, constraints) {
             if (constraints.maxWidth < _HomeGeometry.compactBreakpoint) {
               return _HomeCompactLayout(
+                onRefresh: _refreshing
+                    ? null
+                    : () => unawaited(_refresh(manual: true)),
                 homeController: widget.homeController,
                 recommendationController: widget.recommendationController,
                 newSongController: widget.newSongController,
@@ -203,17 +358,27 @@ class _HomePageState extends State<HomePage> {
                 spotlightAutoPlaying:
                     _spotlightAutoPlaying && !_animationsDisabled,
                 spotlightAutoPlayAvailable: !_animationsDisabled,
+                spotlightMotionDirection: _spotlightMotionDirection,
+                spotlightProgress: _spotlightProgress,
                 onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
                 onOpenDiscover: widget.onOpenDiscover,
                 onOpenLibrary: widget.onOpenLibrary,
                 onAccountAction: widget.onAccountAction,
-                onOpenRecommendation: widget.onOpenRecommendation,
+                onOpenRecommendation: _openShelf,
+                onOpenFeatured: _openFeatured,
+                featuredReturnFocusNode: _returnToShelf
+                    ? null
+                    : widget.recommendationReturnFocusNode,
                 lastOpenedRecommendation: widget.lastOpenedRecommendation,
-                recommendationReturnFocusNode:
-                    widget.recommendationReturnFocusNode,
+                recommendationReturnFocusNode: _returnToShelf
+                    ? widget.recommendationReturnFocusNode
+                    : null,
               );
             }
             return _HomeWideLayout(
+              onRefresh: _refreshing
+                  ? null
+                  : () => unawaited(_refresh(manual: true)),
               homeController: widget.homeController,
               recommendationController: widget.recommendationController,
               newSongController: widget.newSongController,
@@ -226,13 +391,20 @@ class _HomePageState extends State<HomePage> {
               spotlightAutoPlaying:
                   _spotlightAutoPlaying && !_animationsDisabled,
               spotlightAutoPlayAvailable: !_animationsDisabled,
+              spotlightMotionDirection: _spotlightMotionDirection,
+              spotlightProgress: _spotlightProgress,
               onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
               onOpenDiscover: widget.onOpenDiscover,
               onOpenLibrary: widget.onOpenLibrary,
-              onOpenRecommendation: widget.onOpenRecommendation,
+              onOpenRecommendation: _openShelf,
+              onOpenFeatured: _openFeatured,
+              featuredReturnFocusNode: _returnToShelf
+                  ? null
+                  : widget.recommendationReturnFocusNode,
               lastOpenedRecommendation: widget.lastOpenedRecommendation,
-              recommendationReturnFocusNode:
-                  widget.recommendationReturnFocusNode,
+              recommendationReturnFocusNode: _returnToShelf
+                  ? widget.recommendationReturnFocusNode
+                  : null,
             );
           },
         ),
@@ -264,6 +436,9 @@ String _recommendationIdentity(RecommendedPlaylistSummary playlist) =>
 
 class _HomeWideLayout extends StatelessWidget {
   const _HomeWideLayout({
+    required this.onOpenFeatured,
+    required this.featuredReturnFocusNode,
+    required this.onRefresh,
     required this.homeController,
     required this.recommendationController,
     required this.newSongController,
@@ -275,6 +450,8 @@ class _HomeWideLayout extends StatelessWidget {
     required this.onNextSpotlight,
     required this.spotlightAutoPlaying,
     required this.spotlightAutoPlayAvailable,
+    required this.spotlightMotionDirection,
+    required this.spotlightProgress,
     required this.onToggleSpotlightAutoPlay,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
@@ -284,6 +461,9 @@ class _HomeWideLayout extends StatelessWidget {
   });
 
   final HomeController homeController;
+  final VoidCallback? onRefresh;
+  final ValueChanged<RecommendedPlaylistSummary> onOpenFeatured;
+  final FocusNode? featuredReturnFocusNode;
   final RecommendedPlaylistController recommendationController;
   final NewSongController newSongController;
   final RadarController radarController;
@@ -294,6 +474,8 @@ class _HomeWideLayout extends StatelessWidget {
   final VoidCallback onNextSpotlight;
   final bool spotlightAutoPlaying;
   final bool spotlightAutoPlayAvailable;
+  final int spotlightMotionDirection;
+  final ValueListenable<double> spotlightProgress;
   final VoidCallback onToggleSpotlightAutoPlay;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
@@ -326,11 +508,13 @@ class _HomeWideLayout extends StatelessWidget {
           onNextSpotlight: onNextSpotlight,
           spotlightAutoPlaying: spotlightAutoPlaying,
           spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
+          spotlightMotionDirection: spotlightMotionDirection,
+          spotlightProgress: spotlightProgress,
           onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
           compact: false,
-          onSelected: onOpenRecommendation,
+          onSelected: onOpenFeatured,
           lastOpened: lastOpenedRecommendation,
-          returnFocusNode: recommendationReturnFocusNode,
+          returnFocusNode: featuredReturnFocusNode,
         ),
         const SizedBox(height: _HomeGeometry.sectionGap),
         _HomeSectionHeader(
@@ -338,9 +522,9 @@ class _HomeWideLayout extends StatelessWidget {
           title: authenticated
               ? 'Your playlist treasures'
               : 'Popular playlists',
-          actionKey: const ValueKey('home-open-library'),
-          actionLabel: authenticated ? 'Liked' : 'Browse all',
-          onAction: authenticated ? onOpenLibrary : onOpenDiscover,
+          actionKey: const ValueKey('home-refresh-recommendations'),
+          actionLabel: onRefresh == null ? 'Refreshing…' : 'Refresh',
+          onAction: onRefresh,
         ),
         const SizedBox(height: _HomeGeometry.itemGap),
         if (authenticated)
@@ -395,7 +579,7 @@ class _HomeWideLayout extends StatelessWidget {
           const SizedBox(height: _HomeGeometry.sectionGap),
           _HomeSectionHeader(
             titleKey: const ValueKey('home-recommended-playlists-heading'),
-            title: 'Recommended playlists',
+            title: 'Public playlists',
             actionKey: const ValueKey('home-open-more-recommendations'),
             actionLabel: 'See all',
             onAction: onOpenDiscover,
@@ -411,9 +595,16 @@ class _HomeWideLayout extends StatelessWidget {
           ),
         ],
         const SizedBox(height: _HomeGeometry.sectionGap),
-        const _HomeSectionHeader(
-          titleKey: ValueKey('home-listening-two-heading'),
+        _HomeSectionHeader(
+          titleKey: const ValueKey('home-listening-two-heading'),
           title: 'More from your listening',
+          actionKey: const ValueKey('home-refresh-related'),
+          actionLabel: 'Change picks',
+          onAction:
+              homeController.relatedSeed == null ||
+                  homeController.relatedTracksStage == HomeResourceStage.loading
+              ? null
+              : homeController.refreshRelatedTracks,
         ),
         const SizedBox(height: _HomeGeometry.itemGap),
         _RelatedTrackSection(
@@ -428,6 +619,9 @@ class _HomeWideLayout extends StatelessWidget {
 
 class _HomeCompactLayout extends StatelessWidget {
   const _HomeCompactLayout({
+    required this.onOpenFeatured,
+    required this.featuredReturnFocusNode,
+    required this.onRefresh,
     required this.homeController,
     required this.recommendationController,
     required this.newSongController,
@@ -439,6 +633,8 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.onNextSpotlight,
     required this.spotlightAutoPlaying,
     required this.spotlightAutoPlayAvailable,
+    required this.spotlightMotionDirection,
+    required this.spotlightProgress,
     required this.onToggleSpotlightAutoPlay,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
@@ -449,6 +645,9 @@ class _HomeCompactLayout extends StatelessWidget {
   });
 
   final HomeController homeController;
+  final VoidCallback? onRefresh;
+  final ValueChanged<RecommendedPlaylistSummary> onOpenFeatured;
+  final FocusNode? featuredReturnFocusNode;
   final RecommendedPlaylistController recommendationController;
   final NewSongController newSongController;
   final RadarController radarController;
@@ -459,6 +658,8 @@ class _HomeCompactLayout extends StatelessWidget {
   final VoidCallback onNextSpotlight;
   final bool spotlightAutoPlaying;
   final bool spotlightAutoPlayAvailable;
+  final int spotlightMotionDirection;
+  final ValueListenable<double> spotlightProgress;
   final VoidCallback onToggleSpotlightAutoPlay;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
@@ -501,11 +702,13 @@ class _HomeCompactLayout extends StatelessWidget {
                 onNextSpotlight: onNextSpotlight,
                 spotlightAutoPlaying: spotlightAutoPlaying,
                 spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
+                spotlightMotionDirection: spotlightMotionDirection,
+                spotlightProgress: spotlightProgress,
                 onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
                 compact: true,
-                onSelected: onOpenRecommendation,
+                onSelected: onOpenFeatured,
                 lastOpened: lastOpenedRecommendation,
-                returnFocusNode: recommendationReturnFocusNode,
+                returnFocusNode: featuredReturnFocusNode,
               ),
               const SizedBox(height: 24),
               _CompactHomeActions(
@@ -518,9 +721,9 @@ class _HomeCompactLayout extends StatelessWidget {
                 title: authenticated
                     ? 'Your playlist treasures'
                     : 'Popular playlists',
-                actionKey: const ValueKey('home-open-library'),
-                actionLabel: authenticated ? 'Liked' : 'Browse all',
-                onAction: authenticated ? onOpenLibrary : onOpenDiscover,
+                actionKey: const ValueKey('home-refresh-recommendations'),
+                actionLabel: onRefresh == null ? 'Refreshing…' : 'Refresh',
+                onAction: onRefresh,
                 compact: true,
               ),
               const SizedBox(height: _HomeGeometry.itemGap),
@@ -580,7 +783,7 @@ class _HomeCompactLayout extends StatelessWidget {
                   titleKey: const ValueKey(
                     'home-recommended-playlists-heading',
                   ),
-                  title: 'Recommended playlists',
+                  title: 'Public playlists',
                   actionKey: const ValueKey('home-open-more-recommendations'),
                   actionLabel: 'See all',
                   onAction: onOpenDiscover,
@@ -597,10 +800,18 @@ class _HomeCompactLayout extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: _HomeGeometry.sectionGap),
-              const _HomeSectionHeader(
-                titleKey: ValueKey('home-listening-two-heading'),
+              _HomeSectionHeader(
+                titleKey: const ValueKey('home-listening-two-heading'),
                 title: 'More from your listening',
                 compact: true,
+                actionKey: const ValueKey('home-refresh-related'),
+                actionLabel: 'Change picks',
+                onAction:
+                    homeController.relatedSeed == null ||
+                        homeController.relatedTracksStage ==
+                            HomeResourceStage.loading
+                    ? null
+                    : homeController.refreshRelatedTracks,
               ),
               const SizedBox(height: _HomeGeometry.itemGap),
               _RelatedTrackSection(
@@ -813,6 +1024,8 @@ class _DailyRecommendationSection extends StatelessWidget {
     required this.onNextSpotlight,
     required this.spotlightAutoPlaying,
     required this.spotlightAutoPlayAvailable,
+    required this.spotlightMotionDirection,
+    required this.spotlightProgress,
     required this.onToggleSpotlightAutoPlay,
     required this.compact,
     required this.onSelected,
@@ -831,6 +1044,8 @@ class _DailyRecommendationSection extends StatelessWidget {
   final VoidCallback onNextSpotlight;
   final bool spotlightAutoPlaying;
   final bool spotlightAutoPlayAvailable;
+  final int spotlightMotionDirection;
+  final ValueListenable<double> spotlightProgress;
   final VoidCallback onToggleSpotlightAutoPlay;
   final bool compact;
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
@@ -852,38 +1067,73 @@ class _DailyRecommendationSection extends StatelessWidget {
                   : _recommendationIdentity(spotlightPlaylist!)),
         )
         .firstOrNull;
-    return _DailyRecommendationContent(
-      key: const ValueKey('home-recommendations-section'),
-      featuredPlaylist: spotlightPlaylist,
-      guestPopularPlaylist: supportingPlaylist,
-      publicPlaylistCount: publicPlaylists.length,
-      publicStage: controller.stage,
-      newSongController: newSongController,
-      dailyPlaylist: daily,
-      dailyStage: homeController.dailyStage,
-      radarController: radarController,
-      queueController: queueController,
-      authenticated: authenticated,
-      compact: compact,
-      onSelected: onSelected,
-      onRetryPublic: controller.retry,
-      onRetryDaily: homeController.retryDaily,
-      onPreviousSpotlight: onPreviousSpotlight,
-      onNextSpotlight: onNextSpotlight,
-      spotlightAutoPlaying: spotlightAutoPlaying,
-      spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
-      onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
-      lastOpened: lastOpened,
-      returnFocusNode: returnFocusNode,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (authenticated &&
+            homeController.refreshHasErrors &&
+            (homeController.personalizedPlaylists.isNotEmpty ||
+                daily != null ||
+                homeController.personalizedTracks.isNotEmpty))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Some picks could not refresh. Showing the last available recommendations; use Refresh to retry.',
+              key: const ValueKey('home-refresh-warning'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        _DailyRecommendationContent(
+          key: const ValueKey('home-recommendations-section'),
+          featuredPlaylist: spotlightPlaylist,
+          guestPopularPlaylist: supportingPlaylist,
+          publicStage: controller.stage,
+          featuredCount: authenticated
+              ? homeController.personalizedPlaylists.length
+              : publicPlaylists.length,
+          featuredStage: authenticated
+              ? homeController.personalizedPlaylistsStage
+              : switch (controller.stage) {
+                  RecommendedPlaylistStage.loading => HomeResourceStage.loading,
+                  RecommendedPlaylistStage.content => HomeResourceStage.content,
+                  RecommendedPlaylistStage.empty => HomeResourceStage.empty,
+                  RecommendedPlaylistStage.error => HomeResourceStage.error,
+                },
+          onRetryFeatured: authenticated
+              ? homeController.retryPersonalizedPlaylists
+              : controller.retry,
+          newSongController: newSongController,
+          dailyPlaylist: daily,
+          dailyStage: homeController.dailyStage,
+          radarController: radarController,
+          queueController: queueController,
+          authenticated: authenticated,
+          compact: compact,
+          onSelected: onSelected,
+          onRetryPublic: controller.retry,
+          onRetryDaily: homeController.retryDaily,
+          onPreviousSpotlight: onPreviousSpotlight,
+          onNextSpotlight: onNextSpotlight,
+          spotlightAutoPlaying: spotlightAutoPlaying,
+          spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
+          spotlightMotionDirection: spotlightMotionDirection,
+          spotlightProgress: spotlightProgress,
+          onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
+          lastOpened: lastOpened,
+          returnFocusNode: returnFocusNode,
+        ),
+      ],
     );
   }
 }
 
 class _DailyRecommendationContent extends StatelessWidget {
   const _DailyRecommendationContent({
+    required this.featuredCount,
+    required this.featuredStage,
+    required this.onRetryFeatured,
     required this.featuredPlaylist,
     required this.guestPopularPlaylist,
-    required this.publicPlaylistCount,
     required this.publicStage,
     required this.newSongController,
     required this.dailyPlaylist,
@@ -899,6 +1149,8 @@ class _DailyRecommendationContent extends StatelessWidget {
     required this.onNextSpotlight,
     required this.spotlightAutoPlaying,
     required this.spotlightAutoPlayAvailable,
+    required this.spotlightMotionDirection,
+    required this.spotlightProgress,
     required this.onToggleSpotlightAutoPlay,
     required this.lastOpened,
     required this.returnFocusNode,
@@ -906,8 +1158,10 @@ class _DailyRecommendationContent extends StatelessWidget {
   });
 
   final RecommendedPlaylistSummary? featuredPlaylist;
+  final int featuredCount;
+  final HomeResourceStage featuredStage;
+  final VoidCallback onRetryFeatured;
   final RecommendedPlaylistSummary? guestPopularPlaylist;
-  final int publicPlaylistCount;
   final RecommendedPlaylistStage publicStage;
   final NewSongController newSongController;
   final RecommendedPlaylistSummary? dailyPlaylist;
@@ -923,6 +1177,8 @@ class _DailyRecommendationContent extends StatelessWidget {
   final VoidCallback onNextSpotlight;
   final bool spotlightAutoPlaying;
   final bool spotlightAutoPlayAvailable;
+  final int spotlightMotionDirection;
+  final ValueListenable<double> spotlightProgress;
   final VoidCallback onToggleSpotlightAutoPlay;
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
@@ -934,46 +1190,35 @@ class _DailyRecommendationContent extends StatelessWidget {
   Widget _featuredSlot(BuildContext context) {
     final playlist = featuredPlaylist;
     if (playlist != null) {
-      return AnimatedSwitcher(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 360),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.035, 0),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
-          ),
-        ),
-        child: _FeaturedRecommendationCard(
-          key: ValueKey(_recommendationIdentity(playlist)),
-          playlist: playlist,
-          eyebrow: 'DAILY SPOTLIGHT',
-          height: compact ? _HomeGeometry.compactHeroHeight : null,
-          itemKey: const ValueKey('home-recommendation-0'),
-          onSelected: onSelected,
-          focusNode: _focusMatches(playlist) ? returnFocusNode : null,
-          showCarouselControls: publicPlaylistCount > 1,
-          onPrevious: onPreviousSpotlight,
-          onNext: onNextSpotlight,
-          autoPlaying: spotlightAutoPlaying,
-          autoPlayAvailable: spotlightAutoPlayAvailable,
-          onToggleAutoPlay: onToggleSpotlightAutoPlay,
-        ),
+      return _FeaturedRecommendationCard(
+        playlist: playlist,
+        eyebrow: authenticated ? 'FOR YOU' : 'PUBLIC SPOTLIGHT',
+        height: compact ? _HomeGeometry.compactHeroHeight : null,
+        itemKey: const ValueKey('home-recommendation-0'),
+        onSelected: onSelected,
+        focusNode: _focusMatches(playlist) ? returnFocusNode : null,
+        showCarouselControls: featuredCount > 1,
+        onPrevious: onPreviousSpotlight,
+        onNext: onNextSpotlight,
+        autoPlaying: spotlightAutoPlaying,
+        autoPlayAvailable: spotlightAutoPlayAvailable,
+        motionDirection: spotlightMotionDirection,
+        rotationProgress: spotlightProgress,
+        onToggleAutoPlay: onToggleSpotlightAutoPlay,
       );
     }
     return _RecommendationSlotState(
       key: const ValueKey('home-recommendation-hero-state'),
-      title: "Today's pick",
-      detail: _publicStateDetail(publicStage),
-      loading: publicStage == RecommendedPlaylistStage.loading,
-      onRetry: publicStage == RecommendedPlaylistStage.error
-          ? onRetryPublic
+      title: authenticated ? 'Selected for you' : "Today's pick",
+      detail: switch (featuredStage) {
+        HomeResourceStage.loading => 'Loading recommendations…',
+        HomeResourceStage.error =>
+          'Recommendations are unavailable. Please try again.',
+        _ => 'No recommendations right now. You can browse Discover.',
+      },
+      loading: featuredStage == HomeResourceStage.loading,
+      onRetry: featuredStage == HomeResourceStage.error
+          ? onRetryFeatured
           : null,
       compact: compact,
       featured: true,
@@ -1294,9 +1539,10 @@ class _FeaturedRecommendationCard extends StatelessWidget {
     required this.onNext,
     required this.autoPlaying,
     required this.autoPlayAvailable,
+    required this.motionDirection,
+    required this.rotationProgress,
     required this.onToggleAutoPlay,
     this.height,
-    super.key,
   });
 
   final RecommendedPlaylistSummary playlist;
@@ -1309,12 +1555,15 @@ class _FeaturedRecommendationCard extends StatelessWidget {
   final VoidCallback onNext;
   final bool autoPlaying;
   final bool autoPlayAvailable;
+  final int motionDirection;
+  final ValueListenable<double> rotationProgress;
   final VoidCallback onToggleAutoPlay;
   final double? height;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final sceneKey = ValueKey(_recommendationIdentity(playlist));
     return SizedBox(
       height: height,
       child: Semantics(
@@ -1328,79 +1577,38 @@ class _FeaturedRecommendationCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _HomeArtwork(
-                uri: playlist.artworkUri,
-                placeholderIcon: Icons.auto_awesome_rounded,
-                radius: BorderRadius.zero,
-              ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      colors.scrim.withValues(alpha: 0.04),
-                      colors.scrim.withValues(alpha: 0.78),
-                    ],
-                  ),
+              AnimatedSwitcher(
+                key: const ValueKey('home-spotlight-scene-switcher'),
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 420),
+                switchInCurve: Easing.emphasizedDecelerate,
+                switchOutCurve: Easing.emphasizedAccelerate,
+                layoutBuilder: (currentChild, previousChildren) => Stack(
+                  fit: StackFit.expand,
+                  children: [...previousChildren, ?currentChild],
                 ),
-              ),
-              Positioned(
-                left: 24,
-                right: 24,
-                bottom: 24,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            eyebrow,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: colors.inversePrimary,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            playlist.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _recommendationDetail(playlist),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.white70),
-                          ),
-                        ],
-                      ),
+                transitionBuilder: (child, animation) {
+                  final incoming = child.key == sceneKey;
+                  final direction = motionDirection < 0 ? -1.0 : 1.0;
+                  final begin = incoming
+                      ? Offset(0.08 * direction, 0)
+                      : Offset(-0.08 * direction, 0);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: begin,
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
                     ),
-                    const SizedBox(width: 16),
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        color: colors.onPrimary,
-                      ),
-                    ),
-                  ],
+                  );
+                },
+                child: _FeaturedRecommendationScene(
+                  key: sceneKey,
+                  playlist: playlist,
+                  eyebrow: eyebrow,
                 ),
               ),
               Positioned.fill(
@@ -1455,10 +1663,127 @@ class _FeaturedRecommendationCard extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (showCarouselControls && autoPlayAvailable)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: ExcludeSemantics(
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: rotationProgress,
+                      builder: (context, progress, _) =>
+                          LinearProgressIndicator(
+                            key: const ValueKey('home-spotlight-progress'),
+                            value: progress,
+                            minHeight: 3,
+                            color: colors.primary,
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.24,
+                            ),
+                          ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FeaturedRecommendationScene extends StatelessWidget {
+  const _FeaturedRecommendationScene({
+    required this.playlist,
+    required this.eyebrow,
+    super.key,
+  });
+
+  final RecommendedPlaylistSummary playlist;
+  final String eyebrow;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _HomeArtwork(
+          uri: playlist.artworkUri,
+          placeholderIcon: Icons.auto_awesome_rounded,
+          radius: BorderRadius.zero,
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                colors.scrim.withValues(alpha: 0.04),
+                colors.scrim.withValues(alpha: 0.78),
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 24,
+          right: 24,
+          bottom: 24,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      eyebrow,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colors.inversePrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      playlist.title,
+                      key: const ValueKey('home-spotlight-title'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _recommendationDetail(playlist),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  color: colors.onPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1935,7 +2260,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
         key: const ValueKey('home-library-empty'),
         icon: Icons.library_music_outlined,
         title: 'No personalized playlists right now',
-        detail: 'Open Library to browse the playlists you saved.',
+        detail: 'Try refreshing later, or browse public playlists in Discover.',
         compactFootprint: true,
       ),
       HomeResourceStage.error => _HomeInlineState(
@@ -1957,7 +2282,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
       HomeResourceStage.content => _PlaylistShelf<RecommendedPlaylistSummary>(
         key: const ValueKey('home-library-section'),
         layoutKey: const ValueKey('home-library-shelf'),
-        items: controller.personalizedPlaylists.take(6).toList(growable: false),
+        items: controller.personalizedPlaylists,
         compact: compact,
         title: (playlist) => playlist.title,
         artworkUri: (playlist) => playlist.artworkUri,
@@ -2118,14 +2443,13 @@ class _RelatedTrackSection extends StatelessWidget {
       HomeResourceStage.loading => _HomeTrackLoading(
         compact: compact,
         semanticLabel:
-            'Loading songs related to ${seed?.title ?? 'the current song'}',
+            'Loading songs related to ${seed?.title ?? 'your recent listening'}',
       ),
       HomeResourceStage.empty when seed == null => const _HomeInlineState(
         key: ValueKey('home-related-tracks-no-seed'),
         icon: Icons.music_note_outlined,
-        title: 'No recommendation seed yet',
-        detail:
-            'Personalized songs or your current queue song will appear here.',
+        title: 'Start listening to discover more',
+        detail: 'After listening in fura, picks inspired by a recently heard song appear here. Listening history stays in this session.',
         compactFootprint: true,
       ),
       HomeResourceStage.empty => _HomeInlineState(
@@ -2157,7 +2481,7 @@ class _RelatedTrackSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Inspired by “${seed?.title ?? 'your current song'}”',
+            'Because you listened to “${seed?.title ?? 'a recent song'}”',
             key: const ValueKey('home-related-tracks-seed'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -2445,7 +2769,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
   }
 }
 
-class _PlaylistShelf<T> extends StatelessWidget {
+class _PlaylistShelf<T> extends StatefulWidget {
   const _PlaylistShelf({
     required this.layoutKey,
     required this.items,
@@ -2472,66 +2796,138 @@ class _PlaylistShelf<T> extends StatelessWidget {
   final IconData placeholderIcon;
 
   @override
-  Widget build(BuildContext context) {
-    if (compact) {
-      return SizedBox(
-        key: layoutKey,
-        height: _HomeGeometry.compactShelfWidth + 48,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: items.length,
-          separatorBuilder: (_, _) =>
-              const SizedBox(width: _HomeGeometry.itemGap),
-          itemBuilder: (context, index) => _PlaylistArtworkCard<T>(
-            width: _HomeGeometry.compactShelfWidth,
-            item: items[index],
-            itemKey: itemKey(index),
-            title: title,
-            artworkUri: artworkUri,
-            semanticLabel: semanticLabel,
-            placeholderIcon: placeholderIcon,
-            onSelected: onSelected,
-            focusNode: focusNode(items[index]),
-          ),
+  State<_PlaylistShelf<T>> createState() => _PlaylistShelfState<T>();
+}
+
+class _PlaylistShelfState<T> extends State<_PlaylistShelf<T>> {
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _move(double distance) {
+    if (!_scroll.hasClients || !_scroll.position.hasContentDimensions) return;
+    final target = (_scroll.offset + distance).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _scroll.jumpTo(target);
+    } else {
+      unawaited(
+        _scroll.animateTo(
+          target,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
         ),
       );
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final availableColumns =
-            ((constraints.maxWidth + _HomeGeometry.itemGap) /
-                    (_HomeGeometry.wideShelfMinWidth + _HomeGeometry.itemGap))
-                .floor()
-                .clamp(1, 6);
-        final fittedWidth =
-            (constraints.maxWidth -
-                _HomeGeometry.itemGap * (availableColumns - 1)) /
-            availableColumns;
-        final cardWidth = fittedWidth > _HomeGeometry.wideShelfMaxWidth
-            ? _HomeGeometry.wideShelfMaxWidth
-            : fittedWidth;
-        return Wrap(
-          key: layoutKey,
-          spacing: _HomeGeometry.itemGap,
-          runSpacing: _HomeGeometry.itemGap,
-          children: [
-            for (var index = 0; index < items.length; index++)
-              _PlaylistArtworkCard<T>(
-                width: cardWidth,
-                item: items[index],
-                itemKey: itemKey(index),
-                title: title,
-                artworkUri: artworkUri,
-                semanticLabel: semanticLabel,
-                placeholderIcon: placeholderIcon,
-                onSelected: onSelected,
-                focusNode: focusNode(items[index]),
-              ),
-          ],
-        );
-      },
-    );
   }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final availableColumns =
+          ((constraints.maxWidth + _HomeGeometry.itemGap) /
+                  (_HomeGeometry.wideShelfMinWidth + _HomeGeometry.itemGap))
+              .floor()
+              .clamp(1, 6);
+      final fittedWidth =
+          (constraints.maxWidth -
+              _HomeGeometry.itemGap * (availableColumns - 1)) /
+          availableColumns;
+      final cardWidth = widget.compact
+          ? _HomeGeometry.compactShelfWidth
+          : fittedWidth > _HomeGeometry.wideShelfMaxWidth
+          ? _HomeGeometry.wideShelfMaxWidth
+          : fittedWidth;
+      final overflowing =
+          (cardWidth + _HomeGeometry.itemGap) * widget.items.length -
+              _HomeGeometry.itemGap >
+          constraints.maxWidth + 0.5;
+      return Column(
+        key: widget.layoutKey,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          SizedBox(
+            height: cardWidth + MediaQuery.textScalerOf(context).scale(48) + 12,
+            child: NotificationListener<ScrollMetricsNotification>(
+              onNotification: (_) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() {});
+                });
+                return false;
+              },
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  scrollbars: false,
+                  dragDevices: {
+                    PointerDeviceKind.touch,
+                    PointerDeviceKind.mouse,
+                    PointerDeviceKind.trackpad,
+                    PointerDeviceKind.stylus,
+                  },
+                ),
+                child: Scrollbar(
+                  controller: _scroll,
+                  thumbVisibility: overflowing && !widget.compact,
+                  child: ListView.separated(
+                    key: PageStorageKey(widget.layoutKey),
+                    controller: _scroll,
+                    scrollDirection: Axis.horizontal,
+                    itemCount: widget.items.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(width: _HomeGeometry.itemGap),
+                    itemBuilder: (context, index) => _PlaylistArtworkCard<T>(
+                      width: cardWidth,
+                      item: widget.items[index],
+                      itemKey: widget.itemKey(index),
+                      title: widget.title,
+                      artworkUri: widget.artworkUri,
+                      semanticLabel: widget.semanticLabel,
+                      placeholderIcon: widget.placeholderIcon,
+                      onSelected: widget.onSelected,
+                      focusNode: widget.focusNode(widget.items[index]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (overflowing && !widget.compact)
+            ListenableBuilder(
+              listenable: _scroll,
+              builder: (context, _) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Previous playlists',
+                    onPressed: _scroll.hasClients && _scroll.offset > 0.5
+                        ? () => _move(-constraints.maxWidth * 0.8)
+                        : null,
+                    icon: const Icon(Icons.chevron_left_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Next playlists',
+                    onPressed:
+                        !_scroll.hasClients ||
+                            !_scroll.position.hasContentDimensions ||
+                            _scroll.offset <
+                                _scroll.position.maxScrollExtent - 0.5
+                        ? () => _move(constraints.maxWidth * 0.8)
+                        : null,
+                    icon: const Icon(Icons.chevron_right_rounded),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    },
+  );
 }
 
 class _PlaylistArtworkCard<T> extends StatelessWidget {

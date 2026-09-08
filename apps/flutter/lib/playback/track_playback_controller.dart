@@ -28,6 +28,7 @@ class TrackPlaybackController extends ChangeNotifier {
   PlaylistTrackSummary? _track;
   MediaResolutionFailure? _resolutionFailure;
   ForegroundAudioFailure? _engineFailure;
+  PlaybackAudioQuality? _resolvedQuality;
   MediaResolutionOperation? _resolutionOperation;
   Future<void> _activationTail = Future<void>.value();
   int _generation = 0;
@@ -40,6 +41,7 @@ class TrackPlaybackController extends ChangeNotifier {
   PlaylistTrackSummary? get track => _track;
   MediaResolutionFailure? get resolutionFailure => _resolutionFailure;
   ForegroundAudioFailure? get engineFailure => _engineFailure;
+  PlaybackAudioQuality? get resolvedQuality => _resolvedQuality;
   int get positionMs => _playback.positionMs;
   double get volume => _playback.volume;
   int? get durationMs {
@@ -113,6 +115,7 @@ class TrackPlaybackController extends ChangeNotifier {
     _track = track;
     _resolutionFailure = null;
     _engineFailure = null;
+    _resolvedQuality = null;
     _resolving = true;
     _setStage(TrackPlaybackStage.resolving);
     await _playback.stop();
@@ -139,7 +142,15 @@ class TrackPlaybackController extends ChangeNotifier {
     }
 
     _resolving = false;
-    await _playback.playRemote(source.uri);
+    _resolvedQuality = source.quality;
+    await _playback.playRemote(
+      source.uri,
+      format: switch (source.format) {
+        PlaybackAudioFormat.mp3 => ForegroundAudioFormat.mp3,
+        PlaybackAudioFormat.m4a => ForegroundAudioFormat.m4a,
+        PlaybackAudioFormat.flac => ForegroundAudioFormat.flac,
+      },
+    );
   }
 
   Future<void> pause() => canPause ? _playback.pause() : Future.value();
@@ -166,6 +177,7 @@ class TrackPlaybackController extends ChangeNotifier {
     _resolving = false;
     _resolutionFailure = null;
     _engineFailure = null;
+    _resolvedQuality = null;
     _setStage(TrackPlaybackStage.stopped);
     await _playback.stop();
   }

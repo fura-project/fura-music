@@ -58,6 +58,7 @@ mod tests {
                 "Recommendations",
                 "Authentication",
                 "UserLibrary",
+                "RecentHistoryRead",
                 "PlaylistMutation",
                 "Lyrics",
                 "Comments",

@@ -319,7 +319,10 @@ class _FakeEngine implements ForegroundAudioEngine {
   int _next = 0;
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) {
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) {
     final failure = _failure;
     if (failure != null) return Future.error(failure);
     return _loads[_next++];

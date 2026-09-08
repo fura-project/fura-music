@@ -10,7 +10,7 @@ import 'artist.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `bridge_playlist_summary`, `bridge_track_summary`, `domain_album_summary`, `domain_artist_summary`, `domain_playlist_id`, `domain_track_summary`, `failed_load`, `failed_track_page`, `map_error`, `map_load`, `map_track_page_error`, `map_track_page_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicUserPlaylistLoadHandle beginQqMusicUserPlaylistLoad() =>
     RustLib.instance.api.crateApiLibraryBeginQqMusicUserPlaylistLoad();
@@ -27,9 +27,26 @@ QqMusicPlaylistTrackPageLoadHandle beginQqMusicPlaylistTrackPageLoad({
   size: size,
 );
 
+QqMusicRecentTrackPageLoadHandle beginQqMusicRecentTrackPageLoad({
+  required int offset,
+  required int size,
+}) => RustLib.instance.api.crateApiLibraryBeginQqMusicRecentTrackPageLoad(
+  offset: offset,
+  size: size,
+);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPlaylistTrackPageLoadHandle>>
 abstract class QqMusicPlaylistTrackPageLoadHandle
     implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicPlaylistTrackPageLoad> run();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRecentTrackPageLoadHandle>>
+abstract class QqMusicRecentTrackPageLoadHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
@@ -148,15 +165,21 @@ class LibraryTrackSummary {
 
 class QqMusicPlaylistTrackPageLoad {
   final int offset;
+  final int nextOffset;
   final int total;
+  final bool totalIsExact;
   final bool hasMore;
+  final int omittedTrackCount;
   final List<LibraryTrackSummary> tracks;
   final QqMusicPlaylistTrackPageLoadFailure? failure;
 
   const QqMusicPlaylistTrackPageLoad({
     required this.offset,
+    required this.nextOffset,
     required this.total,
+    required this.totalIsExact,
     required this.hasMore,
+    required this.omittedTrackCount,
     required this.tracks,
     this.failure,
   });
@@ -164,8 +187,11 @@ class QqMusicPlaylistTrackPageLoad {
   @override
   int get hashCode =>
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
+      totalIsExact.hashCode ^
       hasMore.hashCode ^
+      omittedTrackCount.hashCode ^
       tracks.hashCode ^
       failure.hashCode;
 
@@ -175,8 +201,11 @@ class QqMusicPlaylistTrackPageLoad {
       other is QqMusicPlaylistTrackPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
+          totalIsExact == other.totalIsExact &&
           hasMore == other.hasMore &&
+          omittedTrackCount == other.omittedTrackCount &&
           tracks == other.tracks &&
           failure == other.failure;
 }

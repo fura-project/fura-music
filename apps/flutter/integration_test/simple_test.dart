@@ -38,6 +38,7 @@ void main() {
       'Recommendations',
       'Authentication',
       'UserLibrary',
+      'RecentHistoryRead',
       'PlaylistMutation',
       'Lyrics',
       'Comments',

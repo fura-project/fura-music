@@ -19,12 +19,21 @@ class QueuePlaybackController extends ChangeNotifier {
   final LyricController? lyrics;
 
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
+  final ValueNotifier<PlaylistTrackSummary?> _currentTrack = ValueNotifier(
+    null,
+  );
   PlaybackQueueFailure? _failure;
   bool _completionHandled = false;
   bool _disposed = false;
   String? _lyricTrackKey;
 
   PlaybackQueueSnapshot get snapshot => _snapshot;
+
+  /// Notifies only when the provider-scoped current Track identity changes.
+  /// Playback position, state, volume, and lyric updates stay on this
+  /// controller's broader [Listenable].
+  ValueListenable<PlaylistTrackSummary?> get currentTrackListenable =>
+      _currentTrack;
   PlaybackQueueFailure? get failure => _failure;
   TrackPlaybackController get playback => _playback;
   List<PlaylistTrackSummary> get tracks => _snapshot.tracks;
@@ -77,6 +86,36 @@ class QueuePlaybackController extends ChangeNotifier {
 
   Future<void> clear() => _apply(_gateway.clear(), playChangedCurrent: true);
 
+  /// Re-resolves the current Track after an explicit playback-quality change.
+  /// Active playback keeps its approximate position and paused/playing state;
+  /// an idle, stopped, completed, or failed Track uses the new preference only
+  /// on its next normal activation.
+  Future<void> reloadCurrentSource() async {
+    if (_disposed ||
+        (_playback.stage != TrackPlaybackStage.playing &&
+            _playback.stage != TrackPlaybackStage.paused)) {
+      return;
+    }
+    final current = _snapshot.current;
+    if (current == null) return;
+    final providerId = current.providerId;
+    final opaqueId = current.opaqueId;
+    final positionMs = _playback.positionMs;
+    final remainPaused = _playback.stage == TrackPlaybackStage.paused;
+
+    _completionHandled = false;
+    await _playback.playTrack(current);
+    if (_disposed ||
+        _snapshot.current?.providerId != providerId ||
+        _snapshot.current?.opaqueId != opaqueId) {
+      return;
+    }
+    if (_playback.canSeek && positionMs > 0) {
+      await _playback.seekToMs(positionMs);
+    }
+    if (remainPaused && _playback.canPause) await _playback.pause();
+  }
+
   Future<void> _completeCurrent() =>
       _apply(_gateway.completeCurrent(), playChangedCurrent: true);
 
@@ -105,7 +144,11 @@ class QueuePlaybackController extends ChangeNotifier {
       return false;
     }
     _failure = null;
+    final previousCurrent = _snapshot.current;
     _snapshot = snapshot;
+    if (!_sameTrack(previousCurrent, _snapshot.current)) {
+      _currentTrack.value = _snapshot.current;
+    }
     _syncLyricTrack();
     if (!_disposed) notifyListeners();
     return true;
@@ -153,7 +196,12 @@ class QueuePlaybackController extends ChangeNotifier {
       lyrics?.removeListener(_onLyricsChanged);
       lyrics?.dispose();
       _playback.dispose();
+      _currentTrack.dispose();
     }
     super.dispose();
   }
 }
+
+bool _sameTrack(PlaylistTrackSummary? first, PlaylistTrackSummary? second) =>
+    first?.providerId == second?.providerId &&
+    first?.opaqueId == second?.opaqueId;

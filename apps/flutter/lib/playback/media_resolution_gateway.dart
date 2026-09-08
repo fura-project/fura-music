@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/src/rust/api/media.dart' as bridge;
 
-enum PlaybackAudioFormat { mp3 }
+enum PlaybackAudioFormat { mp3, m4a, flac }
 
-enum PlaybackAudioQuality { standard, high }
+enum PlaybackAudioQuality { low, standard, high, lossless }
 
-enum PlaybackAudioQualityPreference { standard, high }
+enum PlaybackAudioQualityPreference { standard, high, lossless }
 
 enum MediaResolutionFailure {
   coreUnavailable,
@@ -101,6 +101,8 @@ MediaResolutionOperation _beginRustResolution(
       PlaybackAudioQualityPreference.standard =>
         bridge.MediaQualityPreference.standard,
       PlaybackAudioQualityPreference.high => bridge.MediaQualityPreference.high,
+      PlaybackAudioQualityPreference.lossless =>
+        bridge.MediaQualityPreference.lossless,
     },
   ),
 );
@@ -154,10 +156,14 @@ MediaResolutionResult mapBridgeMediaResolution(bridge.MediaResolution result) {
       uri: uri,
       format: switch (bridgeSource.format) {
         bridge.MediaFormat.mp3 => PlaybackAudioFormat.mp3,
+        bridge.MediaFormat.m4A => PlaybackAudioFormat.m4a,
+        bridge.MediaFormat.flac => PlaybackAudioFormat.flac,
       },
       quality: switch (bridgeSource.quality) {
+        bridge.MediaQuality.low => PlaybackAudioQuality.low,
         bridge.MediaQuality.standard => PlaybackAudioQuality.standard,
         bridge.MediaQuality.high => PlaybackAudioQuality.high,
+        bridge.MediaQuality.lossless => PlaybackAudioQuality.lossless,
       },
       validForSeconds: bridgeSource.validForSeconds,
     ),

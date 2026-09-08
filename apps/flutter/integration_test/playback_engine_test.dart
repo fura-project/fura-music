@@ -41,7 +41,9 @@ void main() {
     final fixture = base64Decode(_silentMp3Base64);
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final requests = server.listen(
-      (request) => unawaited(_serveFixture(request, fixture)),
+      (request) => unawaited(
+        _serveFixture(request, fixture, ContentType('audio', 'mpeg')),
+      ),
     );
     final engine = AudioplayersForegroundAudioEngine();
     ForegroundAudioSession? session;
@@ -100,11 +102,109 @@ void main() {
       await server.close(force: true);
     }
   }, skip: !Platform.isLinux);
+
+  testWidgets('project adapter decodes the selected low M4A fallback', (
+    tester,
+  ) async {
+    final fixture = base64Decode(_silentM4aBase64);
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final requests = server.listen(
+      (request) => unawaited(
+        _serveFixture(request, fixture, ContentType('audio', 'mp4')),
+      ),
+    );
+    final engine = AudioplayersForegroundAudioEngine();
+    ForegroundAudioSession? session;
+
+    try {
+      session = await engine.loadRemote(
+        Uri.parse(
+          'http://${server.address.address}:${server.port}/probe.m4a'
+          '?vkey=must-not-leak',
+        ),
+        format: ForegroundAudioFormat.m4a,
+      );
+      await session.setVolume(0);
+      final progressed = session.positionMs.firstWhere(
+        (positionMs) => positionMs > 0,
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.playing,
+        session.play,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        await progressed.timeout(const Duration(seconds: 5)),
+        greaterThan(0),
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.stopped,
+        session.stop,
+      );
+    } finally {
+      await session?.dispose();
+      await requests.cancel();
+      await server.close(force: true);
+    }
+  }, skip: !Platform.isLinux);
+
+  testWidgets('project adapter decodes the selected SQ FLAC source', (
+    tester,
+  ) async {
+    final fixture = base64Decode(_silentFlacBase64);
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final requests = server.listen(
+      (request) => unawaited(
+        _serveFixture(request, fixture, ContentType('audio', 'flac')),
+      ),
+    );
+    final engine = AudioplayersForegroundAudioEngine();
+    ForegroundAudioSession? session;
+
+    try {
+      session = await engine.loadRemote(
+        Uri.parse(
+          'http://${server.address.address}:${server.port}/probe.flac'
+          '?vkey=must-not-leak',
+        ),
+        format: ForegroundAudioFormat.flac,
+      );
+      await session.setVolume(0);
+      final progressed = session.positionMs.firstWhere(
+        (positionMs) => positionMs > 0,
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.playing,
+        session.play,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        await progressed.timeout(const Duration(seconds: 5)),
+        greaterThan(0),
+      );
+      await _expectStateAfter(
+        session,
+        ForegroundAudioState.stopped,
+        session.stop,
+      );
+    } finally {
+      await session?.dispose();
+      await requests.cancel();
+      await server.close(force: true);
+    }
+  }, skip: !Platform.isLinux);
 }
 
-Future<void> _serveFixture(HttpRequest request, List<int> fixture) async {
+Future<void> _serveFixture(
+  HttpRequest request,
+  List<int> fixture,
+  ContentType contentType,
+) async {
   final response = request.response;
-  response.headers.contentType = ContentType('audio', 'mpeg');
+  response.headers.contentType = contentType;
   response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
   final range = request.headers.value(HttpHeaders.rangeHeader);
   if (range == null) {
@@ -154,6 +254,17 @@ Future<void> _expectStateAfter(
   await operation();
   await reached.timeout(const Duration(seconds: 5));
 }
+
+// 0.5 seconds of silent 8 kHz mono AAC in an M4A container generated with
+// FFmpeg 9.0. It verifies the C200 playback format without network or account
+// data and is not shipped in the application bundle.
+const _silentM4aBase64 =
+    'AAAAHGZ0eXBNNEEgAAACAE00QSBpc29taXNvMgAAAw5tb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAB9AAAAPoAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACOXRyYWsAAABcdGtoZAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAPoAAAAAAAAAAAAAAAAQEAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAACRlZHRzAAAAHGVsc3QAAAAAAAAAAQAAD6AAAAQAAAEAAAAAAbFtZGlhAAAAIG1kaGQAAAAAAAAAAAAAAAAAAB9AAAAToFXEAAAAAAAtaGRscgAAAAAAAAAAc291bgAAAAAAAAAAAAAAAFNvdW5kSGFuZGxlcgAAAAFcbWluZgAAABBzbWhkAAAAAAAAAAAAAAAkZGluZgAAABxkcmVmAAAAAAAAAAEAAAAMdXJsIAAAAAEAAAEgc3RibAAAAGpzdHNkAAAAAAAAAAEAAABabXA0YQAAAAAAAAABAAAAAAAAAAAAAQAQAAAAAB9AAAAAAAA2ZXNkcwAAAAADgICAJQABAASAgIAXQBUAAAAAALuAAAABvQWAgIAFFYhW5QAGgICAAQIAAAAgc3R0cwAAAAAAAAACAAAABAAABAAAAAABAAADoAAAABxzdHNjAAAAAAAAAAEAAAABAAAABQAAAAEAAAAoc3RzegAAAAAAAAAAAAAABQAAABMAAAAEAAAABAAAAAQAAAAEAAAAFHN0Y28AAAAAAAAAAQAAAzoAAAAac2dwZAEAAAByb2xsAAAAAgAAAAH//wAAABxzYmdwAAAAAHJvbGwAAAABAAAABQAAAAEAAABhdWR0YQAAAFltZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAACxpbHN0AAAAJKl0b28AAAAcZGF0YQAAAAEAAAAATGF2ZjYzLjEuMTAxAAAACGZyZWUAAAArbWRhdNwATGF2YzYzLjEuMTAxAAIwQA4BGCAHARggBwEYIAcBGCAH';
+
+// 0.5 seconds of silent 8 kHz mono FLAC generated with libFLAC 1.5.0.
+// It verifies the F000 playback format without network or account data.
+const _silentFlacBase64 =
+    'ZkxhQwAAACIQABAAAAANAAANAfQA8AAAD6BYEBJJx2tzW9dM5TArAJMXhAAAKCAAAAByZWZlcmVuY2UgbGliRkxBQyAxLjUuMCAyMDI1MDIxMQAAAAD/+HQIAA+fggAAAFLj';
 
 // 0.5 seconds of silent 8 kHz mono MP3 generated with FFmpeg 9.0. It lives in
 // test code so no playback fixture is shipped in the application bundle.

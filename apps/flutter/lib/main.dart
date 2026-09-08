@@ -6,10 +6,11 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/authentication/qq_music_media_credential_cleanup.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
-import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
@@ -30,14 +31,13 @@ Future<void> main() async {
   final playlistDetailGateway = RustPlaylistDetailGateway(
     credentialVault: credentialVault,
   );
+  final recentPlaysGateway = RustRecentPlaysGateway(
+    credentialVault: credentialVault,
+  );
   final settingsStore = AppSettingsStore();
   final settingsLoad = await settingsStore.load();
   final rustMediaResolutionGateway = RustMediaResolutionGateway(
-    preferredQuality: switch (settingsLoad.settings.playbackQuality) {
-      AppPlaybackQualityPreference.standard =>
-        PlaybackAudioQualityPreference.standard,
-      AppPlaybackQualityPreference.high => PlaybackAudioQualityPreference.high,
-    },
+    preferredQuality: settingsLoad.settings.playbackQuality.audioPreference,
   );
   final mediaResolutionGateway =
       QqMusicCredentialCleaningMediaResolutionGateway(
@@ -58,18 +58,16 @@ Future<void> main() async {
           defaultTargetPlatform == TargetPlatform.macOS,
       libraryGateway: libraryGateway,
       playlistDetailGateway: playlistDetailGateway,
+      recentPlaysGateway: recentPlaysGateway,
       mediaResolutionGateway: mediaResolutionGateway,
       lyricGateway: lyricGateway,
       systemPlaybackBinding: systemPlaybackBinding,
       initialSettings: settingsLoad.settings,
       settingsStore: settingsStore,
       onPlaybackQualityChanged: (preference) {
-        rustMediaResolutionGateway.updatePreferredQuality(switch (preference) {
-          AppPlaybackQualityPreference.standard =>
-            PlaybackAudioQualityPreference.standard,
-          AppPlaybackQualityPreference.high =>
-            PlaybackAudioQualityPreference.high,
-        });
+        rustMediaResolutionGateway.updatePreferredQuality(
+          preference.audioPreference,
+        );
       },
       initialCredentialRestore: credentialRestore,
     ),

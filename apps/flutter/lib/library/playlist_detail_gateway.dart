@@ -34,17 +34,25 @@ class PlaylistTrackSummary {
 class PlaylistTrackPageResult {
   const PlaylistTrackPageResult({
     this.offset = 0,
+    this.nextOffset,
     this.total = 0,
+    this.totalIsExact = true,
     this.hasMore = false,
+    this.omittedTrackCount = 0,
     this.tracks = const [],
     this.failure,
   });
 
   final int offset;
+  final int? nextOffset;
   final int total;
+  final bool totalIsExact;
   final bool hasMore;
+  final int omittedTrackCount;
   final List<PlaylistTrackSummary> tracks;
   final UserLibraryFailure? failure;
+
+  int get continuationOffset => nextOffset ?? offset + tracks.length;
 }
 
 abstract interface class PlaylistDetailGateway {
@@ -131,8 +139,11 @@ class _RustTrackPageLoadOperation implements PlaylistTrackPageLoadOperation {
       }
       return PlaylistTrackPageResult(
         offset: result.offset,
+        nextOffset: result.nextOffset,
         total: result.total,
+        totalIsExact: result.totalIsExact,
         hasMore: result.hasMore,
+        omittedTrackCount: result.omittedTrackCount,
         tracks: List.unmodifiable(tracks),
       );
     } catch (_) {

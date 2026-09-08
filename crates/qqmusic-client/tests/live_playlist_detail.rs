@@ -39,3 +39,45 @@ async fn loads_one_public_playlist_page_without_account() {
         assert!(!page.tracks().is_empty());
     }
 }
+
+/// Opt-in compatibility probe for continuation beyond the first three
+/// 100-Track windows. It prints and retains no playlist identity or content.
+#[tokio::test]
+#[ignore = "live QQ Music service; run explicitly with QQMUSIC_LIVE_TESTS=1"]
+async fn loads_a_public_playlist_page_beyond_three_hundred_tracks() {
+    if std::env::var("QQMUSIC_LIVE_TESTS").as_deref() != Ok("1") {
+        eprintln!("skipped: set QQMUSIC_LIVE_TESTS=1 for the live request");
+        return;
+    }
+
+    let client = QqMusicClient::new(ReqwestTransport::new().expect("native HTTPS transport"));
+    let recommendations = client
+        .recommended_playlists(0, 30)
+        .await
+        .expect("bounded anonymous recommendation request remains compatible");
+    let Some(playlist) = recommendations
+        .playlists()
+        .iter()
+        .find(|playlist| playlist.track_count().is_some_and(|count| count > 300))
+    else {
+        eprintln!("inconclusive: bounded recommendation page had no 300+ Track sample");
+        return;
+    };
+
+    let preceding_page = client
+        .public_playlist_tracks_page(playlist.playlist_id(), 200, 100)
+        .await
+        .expect("anonymous public playlist detail accepts the third page");
+    assert_eq!(preceding_page.offset(), 200);
+    assert!(preceding_page.total() > 300);
+    assert!(!preceding_page.tracks().is_empty());
+    assert!(preceding_page.has_more());
+
+    let page = client
+        .public_playlist_tracks_page(playlist.playlist_id(), 300, 1)
+        .await
+        .expect("anonymous public playlist detail accepts offset 300");
+    assert_eq!(page.offset(), 300);
+    assert!(page.total() > 300);
+    assert_eq!(page.tracks().len(), 1);
+}

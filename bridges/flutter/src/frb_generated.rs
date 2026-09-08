@@ -35,6 +35,7 @@ use crate::api::comments::*;
 use crate::api::favorite_albums::*;
 use crate::api::favorite_artists::*;
 use crate::api::library::*;
+use crate::api::listening::*;
 use crate::api::lyrics::*;
 use crate::api::media::*;
 use crate::api::music_video::*;
@@ -60,7 +61,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2033040876;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -447072128;
 
 // Section: executor
 
@@ -4961,6 +4962,170 @@ fn wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_run_impl(
         },
     )
 }
+fn wire__crate__api__library__QqMusicRecentTrackPageLoadHandle_cancel_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "QqMusicRecentTrackPageLoadHandle_cancel",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                    QqMusicRecentTrackPageLoadHandle,
+                >,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>(
+                    crate::api::library::QqMusicRecentTrackPageLoadHandle::cancel(&*api_that_guard),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__library__QqMusicRecentTrackPageLoadHandle_is_active_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "QqMusicRecentTrackPageLoadHandle_is_active",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                    QqMusicRecentTrackPageLoadHandle,
+                >,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>(
+                    crate::api::library::QqMusicRecentTrackPageLoadHandle::is_active(
+                        &*api_that_guard,
+                    ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__library__QqMusicRecentTrackPageLoadHandle_run_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "QqMusicRecentTrackPageLoadHandle_run",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                    QqMusicRecentTrackPageLoadHandle,
+                >,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = Ok::<_, ()>(
+                            crate::api::library::QqMusicRecentTrackPageLoadHandle::run(
+                                &*api_that_guard,
+                            )
+                            .await,
+                        )?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_cancel_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -5880,6 +6045,111 @@ fn wire__crate__api__library__QqMusicUserPlaylistLoadHandle_run_impl(
                     .await,
                 )
             }
+        },
+    )
+}
+fn wire__crate__api__listening__RecentListeningHandle_choose_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "RecentListeningHandle_choose",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>(crate::api::listening::RecentListeningHandle::choose(
+                    &*api_that_guard,
+                ))?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__listening__RecentListeningHandle_observe_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "RecentListeningHandle_observe",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_track =
+                <Option<crate::api::library::LibraryTrackSummary>>::sse_decode(&mut deserializer);
+            let api_position_ms = <u32>::sse_decode(&mut deserializer);
+            let api_playing = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let mut api_that_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_that, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_that_guard = api_that_guard.unwrap();
+                let output_ok = Ok::<_, ()>({
+                    crate::api::listening::RecentListeningHandle::observe(
+                        &*api_that_guard,
+                        api_track,
+                        api_position_ms,
+                        api_playing,
+                    );
+                })?;
+                std::result::Result::Ok(output_ok)
+            })())
         },
     )
 }
@@ -6923,6 +7193,40 @@ fn wire__crate__api__rankings__begin_qq_music_ranking_track_page_load_impl(
         },
     )
 }
+fn wire__crate__api__library__begin_qq_music_recent_track_page_load_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "begin_qq_music_recent_track_page_load",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_offset = <u32>::sse_decode(&mut deserializer);
+            let api_size = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Ok::<_, ()>(crate::api::library::begin_qq_music_recent_track_page_load(
+                        api_offset, api_size,
+                    ))?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__recommendations__begin_qq_music_recommended_playlist_page_load_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -7359,6 +7663,35 @@ fn wire__crate__api__queue__create_playback_queue_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Ok::<_, ()>(crate::api::queue::create_playback_queue())?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__listening__create_recent_listening_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_recent_listening",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(crate::api::listening::create_recent_listening())?;
                 std::result::Result::Ok(output_ok)
             })())
         },
@@ -7901,6 +8234,9 @@ flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRankingTrackPageLoadHandle>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRecentTrackPageLoadHandle>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
         QqMusicRecommendedPlaylistPageLoadHandle,
     >
@@ -7919,6 +8255,9 @@ flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TrackMusicVideoLoadHandle>
@@ -8242,6 +8581,18 @@ impl SseDecode for QqMusicRankingTrackPageLoadHandle {
     }
 }
 
+impl SseDecode for QqMusicRecentTrackPageLoadHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicRecentTrackPageLoadHandle,
+            >,
+        >>::sse_decode(deserializer);
+        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+    }
+}
+
 impl SseDecode for QqMusicRecommendedPlaylistPageLoadHandle {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8303,6 +8654,16 @@ impl SseDecode for QqMusicUserPlaylistLoadHandle {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <RustOpaqueMoi<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>,
+        >>::sse_decode(deserializer);
+        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+    }
+}
+
+impl SseDecode for RecentListeningHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>,
         >>::sse_decode(deserializer);
         return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
     }
@@ -8666,6 +9027,18 @@ impl SseDecode
 
 impl SseDecode
     for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRecentTrackPageLoadHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <usize>::sse_decode(deserializer);
+        return decode_rust_opaque_moi(inner);
+    }
+}
+
+impl SseDecode
+    for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
             QqMusicRecommendedPlaylistPageLoadHandle,
         >,
@@ -8729,6 +9102,18 @@ impl SseDecode
 impl SseDecode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <usize>::sse_decode(deserializer);
+        return decode_rust_opaque_moi(inner);
+    }
+}
+
+impl SseDecode
+    for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>,
     >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9153,6 +9538,8 @@ impl SseDecode for crate::api::media::MediaFormat {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::media::MediaFormat::Mp3,
+            1 => crate::api::media::MediaFormat::M4a,
+            2 => crate::api::media::MediaFormat::Flac,
             _ => unreachable!("Invalid variant for MediaFormat: {}", inner),
         };
     }
@@ -9165,6 +9552,8 @@ impl SseDecode for crate::api::media::MediaQuality {
         return match inner {
             0 => crate::api::media::MediaQuality::Standard,
             1 => crate::api::media::MediaQuality::High,
+            2 => crate::api::media::MediaQuality::Low,
+            3 => crate::api::media::MediaQuality::Lossless,
             _ => unreachable!("Invalid variant for MediaQuality: {}", inner),
         };
     }
@@ -9177,6 +9566,7 @@ impl SseDecode for crate::api::media::MediaQualityPreference {
         return match inner {
             0 => crate::api::media::MediaQualityPreference::Standard,
             1 => crate::api::media::MediaQualityPreference::High,
+            2 => crate::api::media::MediaQualityPreference::Lossless,
             _ => unreachable!("Invalid variant for MediaQualityPreference: {}", inner),
         };
     }
@@ -9308,6 +9698,19 @@ impl SseDecode for Option<crate::api::library::LibraryPlaylistSummary> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::library::LibraryPlaylistSummary>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::library::LibraryTrackSummary> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::library::LibraryTrackSummary>::sse_decode(
                 deserializer,
             ));
         } else {
@@ -11121,8 +11524,11 @@ impl SseDecode for crate::api::library::QqMusicPlaylistTrackPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
+        let mut var_totalIsExact = <bool>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -11131,8 +11537,11 @@ impl SseDecode for crate::api::library::QqMusicPlaylistTrackPageLoad {
             );
         return crate::api::library::QqMusicPlaylistTrackPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
+            total_is_exact: var_totalIsExact,
             has_more: var_hasMore,
+            omitted_track_count: var_omittedTrackCount,
             tracks: var_tracks,
             failure: var_failure,
         };
@@ -11977,68 +12386,74 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_run_impl(
+        95 => wire__crate__api__library__QqMusicRecentTrackPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__api__recommendations__QqMusicRelatedTracksLoadHandle_run_impl(
+        98 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_run_impl(
+        101 => wire__crate__api__recommendations__QqMusicRelatedTracksLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_run_impl(
+        104 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_run_impl(
+        107 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        110 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_run_impl(
+        110 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_run_impl(
+        113 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        153 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
-        161 => wire__crate__api__authentication__start_qq_music_desktop_quick_login_impl(
+        118 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        162 => wire__crate__api__authentication__start_qq_music_qr_login_impl(
+        160 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
+        168 => wire__crate__api__authentication__start_qq_music_desktop_quick_login_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        163 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
+        169 => wire__crate__api__authentication__start_qq_music_qr_login_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        164 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(
+        170 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        171 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(
             port,
             ptr,
             rust_vec_len,
@@ -12121,66 +12536,72 @@ fn pde_ffi_dispatcher_sync_impl(
 88 => wire__crate__api__rankings__QqMusicRankingGroupLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
 90 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
 91 => wire__crate__api__rankings__QqMusicRankingTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-93 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-94 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-96 => wire__crate__api__recommendations__QqMusicRelatedTracksLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-97 => wire__crate__api__recommendations__QqMusicRelatedTracksLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-99 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-100 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-102 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
-103 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
-105 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-106 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-108 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-109 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-111 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
-112 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-114 => wire__crate__api__media__begin_media_resolution_impl(ptr, rust_vec_len, data_len),
-115 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
-116 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
-117 => wire__crate__api__album_favorites__begin_qq_music_album_favorite_mutation_impl(ptr, rust_vec_len, data_len),
-118 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
-119 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
-120 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
-121 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
-122 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
-123 => wire__crate__api__recommendations__begin_qq_music_daily_recommendation_load_impl(ptr, rust_vec_len, data_len),
-124 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
-125 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
-126 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
-127 => wire__crate__api__new_albums__begin_qq_music_new_album_page_load_impl(ptr, rust_vec_len, data_len),
-128 => wire__crate__api__new_songs__begin_qq_music_new_songs_load_impl(ptr, rust_vec_len, data_len),
-129 => wire__crate__api__recommendations__begin_qq_music_personalized_playlists_load_impl(ptr, rust_vec_len, data_len),
-130 => wire__crate__api__recommendations__begin_qq_music_personalized_tracks_load_impl(ptr, rust_vec_len, data_len),
-131 => wire__crate__api__playlist_creation__begin_qq_music_playlist_creation_impl(ptr, rust_vec_len, data_len),
-132 => wire__crate__api__playlist_deletion__begin_qq_music_playlist_deletion_impl(ptr, rust_vec_len, data_len),
-133 => wire__crate__api__search__begin_qq_music_playlist_search_page_load_impl(ptr, rust_vec_len, data_len),
-134 => wire__crate__api__playlist_tracks__begin_qq_music_playlist_track_mutation_impl(ptr, rust_vec_len, data_len),
-135 => wire__crate__api__library__begin_qq_music_playlist_track_page_load_impl(ptr, rust_vec_len, data_len),
-136 => wire__crate__api__recommendations__begin_qq_music_radar_track_page_load_impl(ptr, rust_vec_len, data_len),
-137 => wire__crate__api__rankings__begin_qq_music_ranking_group_load_impl(ptr, rust_vec_len, data_len),
-138 => wire__crate__api__rankings__begin_qq_music_ranking_track_page_load_impl(ptr, rust_vec_len, data_len),
-139 => wire__crate__api__recommendations__begin_qq_music_recommended_playlist_page_load_impl(ptr, rust_vec_len, data_len),
-140 => wire__crate__api__recommendations__begin_qq_music_related_tracks_load_impl(ptr, rust_vec_len, data_len),
-141 => wire__crate__api__comments__begin_qq_music_track_comment_page_load_impl(ptr, rust_vec_len, data_len),
-142 => wire__crate__api__track_likes__begin_qq_music_track_like_mutation_impl(ptr, rust_vec_len, data_len),
-143 => wire__crate__api__search__begin_qq_music_track_search_page_load_impl(ptr, rust_vec_len, data_len),
-144 => wire__crate__api__library__begin_qq_music_user_playlist_load_impl(ptr, rust_vec_len, data_len),
-145 => wire__crate__api__music_video__begin_track_music_video_load_impl(ptr, rust_vec_len, data_len),
-146 => wire__crate__api__bootstrap__bootstrap_status_impl(ptr, rust_vec_len, data_len),
-147 => wire__crate__api__authentication__cancel_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
-148 => wire__crate__api__authentication__cancel_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
-149 => wire__crate__api__authentication__cancel_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
-150 => wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
-151 => wire__crate__api__queue__create_playback_queue_impl(ptr, rust_vec_len, data_len),
-152 => wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
-154 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
-155 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
-156 => wire__crate__api__authentication__reserve_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
-157 => wire__crate__api__authentication__reserve_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
-158 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
-159 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
-160 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
+93 => wire__crate__api__library__QqMusicRecentTrackPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+94 => wire__crate__api__library__QqMusicRecentTrackPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+96 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+97 => wire__crate__api__recommendations__QqMusicRecommendedPlaylistPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+99 => wire__crate__api__recommendations__QqMusicRelatedTracksLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+100 => wire__crate__api__recommendations__QqMusicRelatedTracksLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+102 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+103 => wire__crate__api__comments__QqMusicTrackCommentPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+105 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_cancel_impl(ptr, rust_vec_len, data_len),
+106 => wire__crate__api__track_likes__QqMusicTrackLikeMutationHandle_is_active_impl(ptr, rust_vec_len, data_len),
+108 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+109 => wire__crate__api__search__QqMusicTrackSearchPageLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+111 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+112 => wire__crate__api__library__QqMusicUserPlaylistLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+114 => wire__crate__api__listening__RecentListeningHandle_choose_impl(ptr, rust_vec_len, data_len),
+115 => wire__crate__api__listening__RecentListeningHandle_observe_impl(ptr, rust_vec_len, data_len),
+116 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
+117 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
+119 => wire__crate__api__media__begin_media_resolution_impl(ptr, rust_vec_len, data_len),
+120 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
+121 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
+122 => wire__crate__api__album_favorites__begin_qq_music_album_favorite_mutation_impl(ptr, rust_vec_len, data_len),
+123 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
+124 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
+125 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
+126 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
+127 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
+128 => wire__crate__api__recommendations__begin_qq_music_daily_recommendation_load_impl(ptr, rust_vec_len, data_len),
+129 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
+130 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
+131 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
+132 => wire__crate__api__new_albums__begin_qq_music_new_album_page_load_impl(ptr, rust_vec_len, data_len),
+133 => wire__crate__api__new_songs__begin_qq_music_new_songs_load_impl(ptr, rust_vec_len, data_len),
+134 => wire__crate__api__recommendations__begin_qq_music_personalized_playlists_load_impl(ptr, rust_vec_len, data_len),
+135 => wire__crate__api__recommendations__begin_qq_music_personalized_tracks_load_impl(ptr, rust_vec_len, data_len),
+136 => wire__crate__api__playlist_creation__begin_qq_music_playlist_creation_impl(ptr, rust_vec_len, data_len),
+137 => wire__crate__api__playlist_deletion__begin_qq_music_playlist_deletion_impl(ptr, rust_vec_len, data_len),
+138 => wire__crate__api__search__begin_qq_music_playlist_search_page_load_impl(ptr, rust_vec_len, data_len),
+139 => wire__crate__api__playlist_tracks__begin_qq_music_playlist_track_mutation_impl(ptr, rust_vec_len, data_len),
+140 => wire__crate__api__library__begin_qq_music_playlist_track_page_load_impl(ptr, rust_vec_len, data_len),
+141 => wire__crate__api__recommendations__begin_qq_music_radar_track_page_load_impl(ptr, rust_vec_len, data_len),
+142 => wire__crate__api__rankings__begin_qq_music_ranking_group_load_impl(ptr, rust_vec_len, data_len),
+143 => wire__crate__api__rankings__begin_qq_music_ranking_track_page_load_impl(ptr, rust_vec_len, data_len),
+144 => wire__crate__api__library__begin_qq_music_recent_track_page_load_impl(ptr, rust_vec_len, data_len),
+145 => wire__crate__api__recommendations__begin_qq_music_recommended_playlist_page_load_impl(ptr, rust_vec_len, data_len),
+146 => wire__crate__api__recommendations__begin_qq_music_related_tracks_load_impl(ptr, rust_vec_len, data_len),
+147 => wire__crate__api__comments__begin_qq_music_track_comment_page_load_impl(ptr, rust_vec_len, data_len),
+148 => wire__crate__api__track_likes__begin_qq_music_track_like_mutation_impl(ptr, rust_vec_len, data_len),
+149 => wire__crate__api__search__begin_qq_music_track_search_page_load_impl(ptr, rust_vec_len, data_len),
+150 => wire__crate__api__library__begin_qq_music_user_playlist_load_impl(ptr, rust_vec_len, data_len),
+151 => wire__crate__api__music_video__begin_track_music_video_load_impl(ptr, rust_vec_len, data_len),
+152 => wire__crate__api__bootstrap__bootstrap_status_impl(ptr, rust_vec_len, data_len),
+153 => wire__crate__api__authentication__cancel_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
+154 => wire__crate__api__authentication__cancel_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
+155 => wire__crate__api__authentication__cancel_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
+156 => wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
+157 => wire__crate__api__queue__create_playback_queue_impl(ptr, rust_vec_len, data_len),
+158 => wire__crate__api__listening__create_recent_listening_impl(ptr, rust_vec_len, data_len),
+159 => wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
+161 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
+162 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
+163 => wire__crate__api__authentication__reserve_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
+164 => wire__crate__api__authentication__reserve_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
+165 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
+166 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
+167 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -12746,6 +13167,26 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<QqMusicRankingTrackPageLoadHan
 }
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<QqMusicRecentTrackPageLoadHandle> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
+            .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<QqMusicRecentTrackPageLoadHandle>
+{
+}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<QqMusicRecentTrackPageLoadHandle>>
+    for QqMusicRecentTrackPageLoadHandle
+{
+    fn into_into_dart(self) -> FrbWrapper<QqMusicRecentTrackPageLoadHandle> {
+        self.into()
+    }
+}
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<QqMusicRecommendedPlaylistPageLoadHandle> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
@@ -12861,6 +13302,26 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<QqMusicUserPlaylistLoadHandle>
     for QqMusicUserPlaylistLoadHandle
 {
     fn into_into_dart(self) -> FrbWrapper<QqMusicUserPlaylistLoadHandle> {
+        self.into()
+    }
+}
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<RecentListeningHandle> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
+            .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<RecentListeningHandle>
+{
+}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<RecentListeningHandle>>
+    for RecentListeningHandle
+{
+    fn into_into_dart(self) -> FrbWrapper<RecentListeningHandle> {
         self.into()
     }
 }
@@ -13130,6 +13591,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::media::MediaFormat {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::Mp3 => 0.into_dart(),
+            Self::M4a => 1.into_dart(),
+            Self::Flac => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -13151,6 +13614,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::media::MediaQuality {
         match self {
             Self::Standard => 0.into_dart(),
             Self::High => 1.into_dart(),
+            Self::Low => 2.into_dart(),
+            Self::Lossless => 3.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -13172,6 +13637,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::media::MediaQualityPreference
         match self {
             Self::Standard => 0.into_dart(),
             Self::High => 1.into_dart(),
+            Self::Lossless => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -14785,8 +15251,11 @@ impl flutter_rust_bridge::IntoDart for crate::api::library::QqMusicPlaylistTrack
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
+            self.total_is_exact.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.tracks.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16066,6 +16535,20 @@ impl SseEncode for QqMusicRankingTrackPageLoadHandle {
     }
 }
 
+impl SseEncode for QqMusicRecentTrackPageLoadHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicRecentTrackPageLoadHandle,
+            >,
+        >>::sse_encode(
+            flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for QqMusicRecommendedPlaylistPageLoadHandle {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -16137,6 +16620,18 @@ impl SseEncode for QqMusicUserPlaylistLoadHandle {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <RustOpaqueMoi<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>,
+        >>::sse_encode(
+            flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for RecentListeningHandle {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>,
         >>::sse_encode(
             flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
             serializer,
@@ -16532,6 +17027,19 @@ impl SseEncode
 
 impl SseEncode
     for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRecentTrackPageLoadHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        let (ptr, size) = self.sse_encode_raw();
+        <usize>::sse_encode(ptr, serializer);
+        <i32>::sse_encode(size, serializer);
+    }
+}
+
+impl SseEncode
+    for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
             QqMusicRecommendedPlaylistPageLoadHandle,
         >,
@@ -16600,6 +17108,19 @@ impl SseEncode
 impl SseEncode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        let (ptr, size) = self.sse_encode_raw();
+        <usize>::sse_encode(ptr, serializer);
+        <i32>::sse_encode(size, serializer);
+    }
+}
+
+impl SseEncode
+    for RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>,
     >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -16913,6 +17434,8 @@ impl SseEncode for crate::api::media::MediaFormat {
         <i32>::sse_encode(
             match self {
                 crate::api::media::MediaFormat::Mp3 => 0,
+                crate::api::media::MediaFormat::M4a => 1,
+                crate::api::media::MediaFormat::Flac => 2,
                 _ => {
                     unimplemented!("");
                 }
@@ -16929,6 +17452,8 @@ impl SseEncode for crate::api::media::MediaQuality {
             match self {
                 crate::api::media::MediaQuality::Standard => 0,
                 crate::api::media::MediaQuality::High => 1,
+                crate::api::media::MediaQuality::Low => 2,
+                crate::api::media::MediaQuality::Lossless => 3,
                 _ => {
                     unimplemented!("");
                 }
@@ -16945,6 +17470,7 @@ impl SseEncode for crate::api::media::MediaQualityPreference {
             match self {
                 crate::api::media::MediaQualityPreference::Standard => 0,
                 crate::api::media::MediaQualityPreference::High => 1,
+                crate::api::media::MediaQualityPreference::Lossless => 2,
                 _ => {
                     unimplemented!("");
                 }
@@ -17062,6 +17588,16 @@ impl SseEncode for Option<crate::api::library::LibraryPlaylistSummary> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::library::LibraryPlaylistSummary>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::library::LibraryTrackSummary> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::library::LibraryTrackSummary>::sse_encode(value, serializer);
         }
     }
 }
@@ -18582,8 +19118,11 @@ impl SseEncode for crate::api::library::QqMusicPlaylistTrackPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
+        <bool>::sse_encode(self.total_is_exact, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
         <Option<crate::api::library::QqMusicPlaylistTrackPageLoadFailure>>::sse_encode(
             self.failure,
@@ -19189,6 +19728,7 @@ mod io {
     use crate::api::favorite_albums::*;
     use crate::api::favorite_artists::*;
     use crate::api::library::*;
+    use crate::api::listening::*;
     use crate::api::lyrics::*;
     use crate::api::media::*;
     use crate::api::music_video::*;
@@ -19773,6 +20313,28 @@ mod io {
     }
 
     #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecentTrackPageLoadHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicRecentTrackPageLoadHandle,
+            >,
+        >::increment_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecentTrackPageLoadHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicRecentTrackPageLoadHandle,
+            >,
+        >::decrement_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
     pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
         ptr: *const std::ffi::c_void,
     ) {
@@ -19893,6 +20455,20 @@ mod io {
     }
 
     #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRecentListeningHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>>::increment_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRecentListeningHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>>::decrement_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
     pub extern "C" fn frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTrackMusicVideoLoadHandle(
         ptr: *const std::ffi::c_void,
     ) {
@@ -19926,6 +20502,7 @@ mod web {
     use crate::api::favorite_albums::*;
     use crate::api::favorite_artists::*;
     use crate::api::library::*;
+    use crate::api::listening::*;
     use crate::api::lyrics::*;
     use crate::api::media::*;
     use crate::api::music_video::*;
@@ -20512,6 +21089,28 @@ mod web {
     }
 
     #[wasm_bindgen]
+    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecentTrackPageLoadHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicRecentTrackPageLoadHandle,
+            >,
+        >::increment_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecentTrackPageLoadHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<
+                QqMusicRecentTrackPageLoadHandle,
+            >,
+        >::decrement_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
     pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerQqMusicRecommendedPlaylistPageLoadHandle(
         ptr: *const std::ffi::c_void,
     ) {
@@ -20629,6 +21228,20 @@ mod web {
         MoiArc::<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>,
         >::decrement_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRecentListeningHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>>::increment_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRecentListeningHandle(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentListeningHandle>>::decrement_strong_count(ptr as _);
     }
 
     #[wasm_bindgen]

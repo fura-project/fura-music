@@ -53,6 +53,7 @@ pub enum QqMusicPlaylistDetailError<E> {
     MissingTotal,
     MissingHasMore,
     InvalidHasMore,
+    InvalidPagination,
     InvalidTrack {
         index: usize,
         field: PlaylistDetailTrackField,
@@ -103,6 +104,7 @@ impl<E> fmt::Debug for QqMusicPlaylistDetailError<E> {
             Self::MissingTotal => formatter.write_str("MissingTotal"),
             Self::MissingHasMore => formatter.write_str("MissingHasMore"),
             Self::InvalidHasMore => formatter.write_str("InvalidHasMore"),
+            Self::InvalidPagination => formatter.write_str("InvalidPagination"),
             Self::InvalidTrack { index, field } => formatter
                 .debug_struct("InvalidTrack")
                 .field("index", index)
@@ -172,6 +174,9 @@ impl<E> fmt::Display for QqMusicPlaylistDetailError<E> {
             }
             Self::InvalidHasMore => {
                 formatter.write_str("playlist-detail continuation flag is invalid")
+            }
+            Self::InvalidPagination => {
+                formatter.write_str("playlist-detail pagination did not advance safely")
             }
             Self::InvalidTrack { index, field } => {
                 write!(formatter, "playlist track {index} has an invalid {field:?}")
@@ -395,8 +400,10 @@ impl fmt::Debug for QqMusicTrackSummary {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicPlaylistTracksPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<QqMusicTrackSummary>,
 }
 
@@ -404,6 +411,11 @@ impl QqMusicPlaylistTracksPage {
     #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
     }
 
     #[must_use]
@@ -417,6 +429,11 @@ impl QqMusicPlaylistTracksPage {
     }
 
     #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
+    }
+
+    #[must_use]
     pub fn tracks(&self) -> &[QqMusicTrackSummary] {
         &self.tracks
     }
@@ -427,8 +444,10 @@ impl fmt::Debug for QqMusicPlaylistTracksPage {
         formatter
             .debug_struct("QqMusicPlaylistTracksPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -728,39 +747,39 @@ impl RawHasMore {
 }
 
 #[derive(Deserialize)]
-struct RawTrack {
-    id: Option<u64>,
-    mid: Option<String>,
-    name: Option<String>,
-    title: Option<String>,
-    subtitle: Option<String>,
+pub(crate) struct RawTrack {
+    pub(crate) id: Option<u64>,
+    pub(crate) mid: Option<String>,
+    pub(crate) name: Option<String>,
+    pub(crate) title: Option<String>,
+    pub(crate) subtitle: Option<String>,
     #[serde(rename = "type")]
-    song_type: Option<u32>,
-    interval: Option<u32>,
-    singer: Option<Vec<RawArtist>>,
-    album: Option<RawAlbum>,
-    file: Option<RawFile>,
+    pub(crate) song_type: Option<u32>,
+    pub(crate) interval: Option<u32>,
+    pub(crate) singer: Option<Vec<RawArtist>>,
+    pub(crate) album: Option<RawAlbum>,
+    pub(crate) file: Option<RawFile>,
 }
 
 #[derive(Deserialize)]
-struct RawFile {
-    media_mid: Option<String>,
+pub(crate) struct RawFile {
+    pub(crate) media_mid: Option<String>,
 }
 
 #[derive(Deserialize)]
-struct RawArtist {
-    id: Option<u64>,
-    mid: Option<String>,
-    name: Option<String>,
+pub(crate) struct RawArtist {
+    pub(crate) id: Option<u64>,
+    pub(crate) mid: Option<String>,
+    pub(crate) name: Option<String>,
 }
 
 #[derive(Deserialize)]
-struct RawAlbum {
-    id: Option<u64>,
-    mid: Option<String>,
-    pmid: Option<String>,
-    name: Option<String>,
-    title: Option<String>,
+pub(crate) struct RawAlbum {
+    pub(crate) id: Option<u64>,
+    pub(crate) mid: Option<String>,
+    pub(crate) pmid: Option<String>,
+    pub(crate) name: Option<String>,
+    pub(crate) title: Option<String>,
 }
 
 fn map_response<E>(
@@ -831,21 +850,41 @@ fn map_response<E>(
         .ok_or(QqMusicPlaylistDetailError::MissingHasMore)?
         .value()
         .ok_or(QqMusicPlaylistDetailError::InvalidHasMore)?;
-    let tracks = raw_tracks
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_track(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let raw_count = u32::try_from(raw_tracks.len())
+        .map_err(|_| QqMusicPlaylistDetailError::InvalidPagination)?;
+    let next_offset = offset
+        .checked_add(raw_count)
+        .filter(|next_offset| *next_offset <= total)
+        .ok_or(QqMusicPlaylistDetailError::InvalidPagination)?;
+    if next_offset == offset && (has_more || offset < total) {
+        return Err(QqMusicPlaylistDetailError::InvalidPagination);
+    }
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    let mut omitted_track_count = 0_u32;
+    for (index, raw) in raw_tracks.into_iter().enumerate() {
+        match map_track(raw, index) {
+            Ok(track) => tracks.push(track),
+            Err(
+                QqMusicPlaylistDetailError::InvalidTrack { .. }
+                | QqMusicPlaylistDetailError::InvalidArtist { .. },
+            ) => {
+                omitted_track_count += 1;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 
     Ok(QqMusicPlaylistTracksPage {
         offset,
+        next_offset,
         total,
         has_more,
+        omitted_track_count,
         tracks,
     })
 }
 
-fn map_track<E>(
+pub(crate) fn map_track<E>(
     raw: RawTrack,
     index: usize,
 ) -> Result<QqMusicTrackSummary, QqMusicPlaylistDetailError<E>> {
@@ -922,11 +961,11 @@ fn map_track<E>(
     })
 }
 
-fn nonblank(value: Option<String>) -> Option<String> {
+pub(crate) fn nonblank(value: Option<String>) -> Option<String> {
     value.filter(|value| !value.trim().is_empty())
 }
 
-fn safe_media_mid(value: Option<String>) -> Option<String> {
+pub(crate) fn safe_media_mid(value: Option<String>) -> Option<String> {
     nonblank(value)
         .filter(|value| value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric()))
 }
@@ -940,7 +979,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{PlaylistDetailTrackField, QqMusicPlaylistDetailError};
+    use super::QqMusicPlaylistDetailError;
     use crate::{
         Credential, CredentialSessionSecrets, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
         LoginType, QqMusicClient,
@@ -1046,8 +1085,10 @@ mod tests {
             .await
             .expect("fixture playlist page");
         assert_eq!(page.offset(), 50);
+        assert_eq!(page.next_offset(), 51);
         assert_eq!(page.total(), 51);
         assert!(page.has_more());
+        assert_eq!(page.omitted_track_count(), 0);
         let track = &page.tracks()[0];
         assert_eq!(track.track_id(), 41001);
         assert_eq!(track.song_mid(), "fixtureTrackMid1");
@@ -1138,6 +1179,7 @@ mod tests {
             .await
             .expect("valid empty public playlist page");
         assert_eq!(page.offset(), 0);
+        assert_eq!(page.next_offset(), 0);
         assert_eq!(page.total(), 0);
         assert!(!page.has_more());
         assert!(page.tracks().is_empty());
@@ -1151,6 +1193,7 @@ mod tests {
             .as_object_mut()
             .expect("fixture data")
             .remove("code");
+        fixture["music.srfDissInfo.DissInfo"]["data"]["total_song_num"] = json!(201);
         let client = QqMusicClient::new(FakeTransport::new([fixture]));
 
         client
@@ -1253,7 +1296,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_invalid_pagination_and_rows_without_leaking_content() {
+    async fn rejects_invalid_pagination_and_omits_unusable_rows_without_leaking_content() {
         let client = QqMusicClient::new(FakeTransport::new([
             json!({
                 "code": 0,
@@ -1291,18 +1334,47 @@ mod tests {
             client.playlist_tracks_page(&credential(), 1, 0, 100).await,
             Err(QqMusicPlaylistDetailError::InvalidHasMore)
         ));
-        let error = client
+        let page = client
             .playlist_tracks_page(&credential(), 1, 0, 100)
             .await
-            .expect_err("empty artist name must fail");
-        assert!(matches!(
-            error,
-            QqMusicPlaylistDetailError::InvalidArtist {
-                track_index: 0,
-                artist_index: 0,
-                field: PlaylistDetailTrackField::ArtistName,
+            .expect("one unusable row must not block later playlist pages");
+        assert_eq!(page.next_offset(), 1);
+        assert_eq!(page.omitted_track_count(), 1);
+        assert!(page.tracks().is_empty());
+        assert!(!format!("{page:?}").contains("must-not-leak"));
+    }
+
+    #[tokio::test]
+    async fn unusable_continuation_row_still_advances_the_server_cursor() {
+        let client = QqMusicClient::new(FakeTransport::new([json!({
+            "code": 0,
+            "music.srfDissInfo.DissInfo": {
+                "code": 0,
+                "data": {
+                    "code": 0,
+                    "songlist": [{
+                        "id": 0,
+                        "mid": "mustNotLeakMid",
+                        "title": "must-not-leak-title",
+                        "type": 0,
+                        "singer": []
+                    }],
+                    "total_song_num": 302,
+                    "hasmore": true
+                }
             }
-        ));
-        assert!(!format!("{error:?}").contains("must-not-leak"));
+        })]));
+
+        let page = client
+            .playlist_tracks_page(&credential(), 1, 300, 1)
+            .await
+            .expect("unusable row remains a consumed server position");
+
+        assert_eq!(page.offset(), 300);
+        assert_eq!(page.next_offset(), 301);
+        assert_eq!(page.omitted_track_count(), 1);
+        assert!(page.has_more());
+        assert!(page.tracks().is_empty());
+        assert!(!format!("{page:?}").contains("must-not-leak"));
     }
 }

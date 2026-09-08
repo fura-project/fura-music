@@ -31,3 +31,26 @@ Expanded Now Playing remains pending maintainer visual acceptance. This record p
 - Catalog selection still verifies the exact current Track/index before dispatch, so a Track change while the chooser is open cannot navigate using stale context.
 
 This revision does not add a second player, change Queue/audio/lyric ownership, or claim that automated screenshots constitute maintainer visual acceptance.
+
+## Playback-quality selector revision
+
+**Design source:** Maintainer request to expose QQ Music-style Standard, HQ,
+and SQ selection on the persistent player, 2026-09-07.
+
+- Compact, desktop, and Expanded Now Playing controls expose one 48 px
+  `STD`/`HQ`/`SQ` menu target. It uses the existing Material popup grammar and
+  does not introduce another toolbar or change player height.
+- The selected preference is persisted through the existing Settings owner.
+  Changing it during active playback re-resolves the exact current Track,
+  retains its approximate position and paused/playing state, and does not
+  modify Queue identity or lyrics ownership.
+- The menu and tooltip distinguish the requested preference from the actual
+  resolved quality. A snackbar reports exact success or a truthful lower-tier
+  fallback without exposing media URLs or account data.
+- SQ means the F000 FLAC candidate. It falls back only on typed per-item
+  unavailability through HQ, Standard, and Low; network, credential, service,
+  malformed-response, and replacement failures stop immediately.
+
+The adaptive renders and automated interaction checks do not establish
+authenticated SQ/HQ availability. Exact profile selection remains a
+maintainer-operated observation.

@@ -14,10 +14,12 @@ import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
+import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
@@ -36,6 +38,7 @@ class AuthenticatedHomeDependencies {
     required this.personalizedPlaylistsGateway,
     required this.personalizedTracksGateway,
     required this.relatedTracksGateway,
+    this.recentListeningFactory,
   });
 
   final AccountSummaryGateway accountSummaryGateway;
@@ -43,6 +46,7 @@ class AuthenticatedHomeDependencies {
   final PersonalizedPlaylistsGateway personalizedPlaylistsGateway;
   final PersonalizedTracksGateway personalizedTracksGateway;
   final RelatedTracksGateway relatedTracksGateway;
+  final RecentListeningGateway Function()? recentListeningFactory;
 }
 
 @immutable
@@ -56,6 +60,7 @@ class AuthenticatedLibraryDependencies {
     required this.artistAlbumGateway,
     required this.favoriteAlbumGateway,
     required this.favoriteArtistGateway,
+    this.recentPlaysGateway,
   });
 
   final UserLibraryGateway libraryGateway;
@@ -66,6 +71,7 @@ class AuthenticatedLibraryDependencies {
   final ArtistAlbumGateway artistAlbumGateway;
   final FavoriteAlbumGateway favoriteAlbumGateway;
   final FavoriteArtistGateway favoriteArtistGateway;
+  final RecentPlaysGateway? recentPlaysGateway;
 }
 
 @immutable

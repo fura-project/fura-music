@@ -4,7 +4,13 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_section_selector.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 
-enum AuthenticatedPrimaryDestination { home, discover, search, library }
+enum AuthenticatedPrimaryDestination {
+  home,
+  discover,
+  search,
+  library,
+  recentPlays,
+}
 
 enum PlaylistRouteOrigin {
   library,

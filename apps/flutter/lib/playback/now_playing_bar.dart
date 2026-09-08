@@ -9,13 +9,19 @@ import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_panel.dart';
+import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 
 const _desktopNowPlayingHeight = 88.0;
 const _desktopNowPlayingVerticalInset = 8.0;
 const _mobileNowPlayingHeight = 68.0;
+
+typedef PlaybackQualityPreferenceChanged = Future<void> Function(
+  AppPlaybackQualityPreference preference,
+);
 
 /// Presentation-only callbacks for opening already-validated catalog context
 /// from the retained now-playing experience. The authenticated page owns the
@@ -44,17 +50,23 @@ class NowPlayingBar extends StatelessWidget {
   const NowPlayingBar({
     required this.controller,
     required this.onSignInAgain,
+    this.qualityPreference,
+    this.onQualityPreferenceChanged,
     super.key,
   }) : _expanded = false;
 
   const NowPlayingBar.expanded({
     required this.controller,
     required this.onSignInAgain,
+    this.qualityPreference,
+    this.onQualityPreferenceChanged,
     super.key,
   }) : _expanded = true;
 
   final QueuePlaybackController controller;
   final VoidCallback onSignInAgain;
+  final AppPlaybackQualityPreference? qualityPreference;
+  final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
   final bool _expanded;
 
   @override
@@ -82,6 +94,8 @@ class NowPlayingBar extends StatelessWidget {
           track: track,
           authenticationFailure: authenticationFailure,
           onSignInAgain: onSignInAgain,
+          qualityPreference: qualityPreference,
+          onQualityPreferenceChanged: onQualityPreferenceChanged,
         );
       } else if (MediaQuery.sizeOf(context).width < 640) {
         bar = _CompactNowPlayingBar(
@@ -91,6 +105,8 @@ class NowPlayingBar extends StatelessWidget {
           error: error,
           onSignInAgain: onSignInAgain,
           onOpenExpanded: expandedNavigation?.onOpen,
+          qualityPreference: qualityPreference,
+          onQualityPreferenceChanged: onQualityPreferenceChanged,
         );
       } else {
         bar = SafeArea(
@@ -115,6 +131,8 @@ class NowPlayingBar extends StatelessWidget {
                   error: error,
                   onSignInAgain: onSignInAgain,
                   onOpenExpanded: expandedNavigation?.onOpen,
+                  qualityPreference: qualityPreference,
+                  onQualityPreferenceChanged: onQualityPreferenceChanged,
                 ),
               ),
             ),
@@ -167,6 +185,8 @@ class _CompactNowPlayingBar extends StatelessWidget {
     required this.error,
     required this.onSignInAgain,
     required this.onOpenExpanded,
+    required this.qualityPreference,
+    required this.onQualityPreferenceChanged,
   });
 
   final QueuePlaybackController controller;
@@ -175,6 +195,8 @@ class _CompactNowPlayingBar extends StatelessWidget {
   final bool error;
   final VoidCallback onSignInAgain;
   final VoidCallback? onOpenExpanded;
+  final AppPlaybackQualityPreference? qualityPreference;
+  final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +240,13 @@ class _CompactNowPlayingBar extends StatelessWidget {
                 ),
                 icon: Icon(_primaryIcon(playback.stage)),
               ),
+            if (qualityPreference case final preference?)
+              if (onQualityPreferenceChanged case final onChanged?)
+                _PlaybackQualityButton(
+                  preference: preference,
+                  actualQuality: playback.resolvedQuality,
+                  onChanged: onChanged,
+                ),
             _QueueButton(controller: controller),
           ],
         ),
@@ -269,6 +298,8 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
     required this.error,
     required this.onSignInAgain,
     required this.onOpenExpanded,
+    required this.qualityPreference,
+    required this.onQualityPreferenceChanged,
   });
 
   final QueuePlaybackController controller;
@@ -277,6 +308,8 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
   final bool error;
   final VoidCallback onSignInAgain;
   final VoidCallback? onOpenExpanded;
+  final AppPlaybackQualityPreference? qualityPreference;
+  final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -354,6 +387,13 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
               key: const ValueKey('now-playing-utility-zone'),
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (qualityPreference case final preference?)
+                  if (onQualityPreferenceChanged case final onChanged?)
+                    _PlaybackQualityButton(
+                      preference: preference,
+                      actualQuality: playback.resolvedQuality,
+                      onChanged: onChanged,
+                    ),
                 if (controller.lyrics != null)
                   _LyricsButton(
                     controller: controller,
@@ -376,12 +416,16 @@ class _ExpandedPlaybackControls extends StatelessWidget {
     required this.track,
     required this.authenticationFailure,
     required this.onSignInAgain,
+    required this.qualityPreference,
+    required this.onQualityPreferenceChanged,
   });
 
   final QueuePlaybackController controller;
   final PlaylistTrackSummary track;
   final bool authenticationFailure;
   final VoidCallback onSignInAgain;
+  final AppPlaybackQualityPreference? qualityPreference;
+  final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -431,6 +475,13 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                     prominentPrimary: true,
                   );
                   final utilities = <Widget>[
+                    if (qualityPreference case final preference?)
+                      if (onQualityPreferenceChanged case final onChanged?)
+                        _PlaybackQualityButton(
+                          preference: preference,
+                          actualQuality: playback.resolvedQuality,
+                          onChanged: onChanged,
+                        ),
                     _VolumeButton(controller: controller),
                     _QueueButton(controller: controller),
                   ];
@@ -475,6 +526,81 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                 },
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaybackQualityButton extends StatefulWidget {
+  const _PlaybackQualityButton({
+    required this.preference,
+    required this.actualQuality,
+    required this.onChanged,
+  });
+
+  final AppPlaybackQualityPreference preference;
+  final PlaybackAudioQuality? actualQuality;
+  final PlaybackQualityPreferenceChanged onChanged;
+
+  @override
+  State<_PlaybackQualityButton> createState() => _PlaybackQualityButtonState();
+}
+
+class _PlaybackQualityButtonState extends State<_PlaybackQualityButton> {
+  bool _saving = false;
+
+  Future<void> _select(AppPlaybackQualityPreference preference) async {
+    if (_saving || preference == widget.preference) return;
+    setState(() => _saving = true);
+    try {
+      await widget.onChanged(preference);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tooltip = playbackQualityTooltip(
+      widget.preference,
+      widget.actualQuality,
+    );
+    return Semantics(
+      button: true,
+      enabled: !_saving,
+      label: tooltip,
+      excludeSemantics: true,
+      child: PopupMenuButton<AppPlaybackQualityPreference>(
+        key: const ValueKey('now-playing-quality'),
+        enabled: !_saving,
+        tooltip: tooltip,
+        onSelected: (value) => unawaited(_select(value)),
+        itemBuilder: (context) => [
+          for (final preference in AppPlaybackQualityPreference.values)
+            CheckedPopupMenuItem(
+              key: ValueKey('now-playing-quality-${preference.name}'),
+              value: preference,
+              checked: preference == widget.preference,
+              child: Text(preference.menuLabel),
+            ),
+        ],
+        child: SizedBox.square(
+          dimension: 48,
+          child: Center(
+            child: _saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    widget.preference.shortLabel,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
           ),
         ),
       ),

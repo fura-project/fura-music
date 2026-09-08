@@ -39,6 +39,7 @@ mod qq_quick_login;
 mod qrc_cipher;
 mod radar_recommendations;
 mod rankings;
+mod recent_plays;
 mod recommendations;
 mod search;
 mod track_likes;
@@ -85,7 +86,7 @@ pub use lyrics::{
     QqMusicLyricsError, QqMusicTimedLyricLine, QqMusicTimedLyricSegment,
 };
 pub use media_resolution::{
-    MediaProtocolPhase, MediaResponseField, QqMusicAudioQuality, QqMusicCdnDispatch,
+    MediaProtocolPhase, MediaResponseField, QqMusicAudioProfile, QqMusicCdnDispatch,
     QqMusicMediaError, QqMusicMediaSource,
 };
 pub use music_video::{
@@ -125,6 +126,9 @@ pub use radar_recommendations::{QqMusicRadarError, QqMusicRadarTrackPage, RadarT
 pub use rankings::{
     QqMusicRankingGroup, QqMusicRankingSummary, QqMusicRankingTrackPage, QqMusicRankingsError,
     RankingField, RankingGroupField, RankingTrackField,
+};
+pub use recent_plays::{
+    QqMusicRecentPlay, QqMusicRecentPlaysError, QqMusicRecentPlaysPage, QqMusicRecentTrackSummary,
 };
 pub use recommendations::{
     QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRecommendedPlaylistsPage,

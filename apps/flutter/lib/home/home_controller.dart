@@ -7,6 +7,7 @@ import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
+import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 enum HomeResourceStage { loading, content, empty, error }
@@ -17,14 +18,16 @@ class HomeController extends ChangeNotifier {
     this._dailyGateway,
     this._personalizedPlaylistsGateway,
     this._personalizedTracksGateway,
-    this._relatedTracksGateway,
-  );
+    this._relatedTracksGateway, {
+    RecentListeningGateway? recentListening,
+  }) : _recentListening = recentListening ?? RustRecentListeningGateway();
 
   final AccountSummaryGateway _accountGateway;
   final DailyRecommendationGateway _dailyGateway;
   final PersonalizedPlaylistsGateway _personalizedPlaylistsGateway;
   final PersonalizedTracksGateway _personalizedTracksGateway;
   final RelatedTracksGateway _relatedTracksGateway;
+  final RecentListeningGateway _recentListening;
 
   HomeResourceStage _accountStage = HomeResourceStage.loading;
   HomeResourceStage _dailyStage = HomeResourceStage.loading;
@@ -35,7 +38,6 @@ class HomeController extends ChangeNotifier {
   RecommendedPlaylistSummary? _dailyPlaylist;
   List<RecommendedPlaylistSummary> _personalizedPlaylists = const [];
   List<PlaylistTrackSummary> _personalizedTracks = const [];
-  PlaylistTrackSummary? _preferredRelatedSeed;
   PlaylistTrackSummary? _relatedSeed;
   List<PlaylistTrackSummary> _relatedTracks = const [];
   AccountSummaryFailure? _accountFailure;
@@ -54,6 +56,18 @@ class HomeController extends ChangeNotifier {
   int _personalizedTracksGeneration = 0;
   int _relatedTracksGeneration = 0;
   bool _disposed = false;
+  Future<void>? _refreshFuture;
+  bool _active = true;
+
+  bool get isRefreshing => _refreshFuture != null;
+  bool get refreshHasErrors =>
+      _dailyFailure != null ||
+      _personalizedPlaylistsFailure != null ||
+      _personalizedTracksFailure != null;
+
+  void setActive(bool active) {
+    _active = active;
+  }
 
   HomeResourceStage get accountStage => _accountStage;
   HomeResourceStage get dailyStage => _dailyStage;
@@ -91,6 +105,25 @@ class HomeController extends ChangeNotifier {
     ]);
   }
 
+  Future<void> refresh() {
+    if (_disposed) return Future.value();
+    return _refreshFuture ??= _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      await Future.wait([
+        _loadDaily(),
+        _loadPersonalizedPlaylists(),
+        _loadPersonalizedTracks(),
+      ]);
+      if (!_disposed && _active) refreshRelatedTracks();
+    } finally {
+      _refreshFuture = null;
+      _notify();
+    }
+  }
+
   void retryAccount() => unawaited(_loadAccount());
   void retryDaily() => unawaited(_loadDaily());
   void retryPersonalizedPlaylists() => unawaited(_loadPersonalizedPlaylists());
@@ -100,13 +133,19 @@ class HomeController extends ChangeNotifier {
     if (seed != null) unawaited(_loadRelatedTracks(seed));
   }
 
-  void updateRelatedSeed(PlaylistTrackSummary? seed) {
-    _preferredRelatedSeed = seed;
-    _reconcileRelatedSeed();
+  void observePlayback(
+    PlaylistTrackSummary? track,
+    int positionMs,
+    bool playing,
+  ) {
+    if (_disposed) return;
+    _recentListening.observe(track, positionMs, playing);
+    if (_active && _relatedSeed == null) refreshRelatedTracks();
   }
 
-  void _reconcileRelatedSeed() {
-    final seed = _preferredRelatedSeed ?? _personalizedTracks.firstOrNull;
+  void refreshRelatedTracks() {
+    if (_disposed) return;
+    final seed = _recentListening.choose();
     final previous = _relatedSeed;
     if (previous?.providerId == seed?.providerId &&
         previous?.opaqueId == seed?.opaqueId) {
@@ -162,20 +201,29 @@ class HomeController extends ChangeNotifier {
     try {
       operation = _dailyGateway.beginLoad();
     } on Object {
-      _dailyPlaylist = null;
       _dailyFailure = DailyRecommendationFailure.coreUnavailable;
-      _dailyStage = HomeResourceStage.error;
+      _dailyStage = _dailyPlaylist == null
+          ? HomeResourceStage.error
+          : HomeResourceStage.content;
       _notify();
       return;
     }
     _dailyOperation = operation;
-    _dailyPlaylist = null;
     _dailyFailure = null;
-    _dailyStage = HomeResourceStage.loading;
+    _dailyStage = _dailyPlaylist == null
+        ? HomeResourceStage.loading
+        : HomeResourceStage.content;
     _notify();
     final result = await operation.run();
     if (identical(_dailyOperation, operation)) _dailyOperation = null;
     if (!_dailyCurrent(generation)) return;
+    if (result.failure != null &&
+        !_dailyRequiresSignIn(result.failure) &&
+        _dailyPlaylist != null) {
+      _dailyFailure = result.failure;
+      _notify();
+      return;
+    }
     _dailyPlaylist = result.playlist;
     _dailyFailure = result.failure;
     _dailyStage = result.failure != null
@@ -193,23 +241,32 @@ class HomeController extends ChangeNotifier {
     try {
       operation = _personalizedPlaylistsGateway.beginLoad();
     } on Object {
-      _personalizedPlaylists = const [];
       _personalizedPlaylistsFailure =
           PersonalizedPlaylistsFailure.coreUnavailable;
-      _personalizedPlaylistsStage = HomeResourceStage.error;
+      _personalizedPlaylistsStage = _personalizedPlaylists.isEmpty
+          ? HomeResourceStage.error
+          : HomeResourceStage.content;
       _notify();
       return;
     }
     _personalizedPlaylistsOperation = operation;
-    _personalizedPlaylists = const [];
     _personalizedPlaylistsFailure = null;
-    _personalizedPlaylistsStage = HomeResourceStage.loading;
+    _personalizedPlaylistsStage = _personalizedPlaylists.isEmpty
+        ? HomeResourceStage.loading
+        : HomeResourceStage.content;
     _notify();
     final result = await operation.run();
     if (identical(_personalizedPlaylistsOperation, operation)) {
       _personalizedPlaylistsOperation = null;
     }
     if (!_personalizedPlaylistsCurrent(generation)) return;
+    if (result.failure != null &&
+        !_playlistsRequireSignIn(result.failure) &&
+        _personalizedPlaylists.isNotEmpty) {
+      _personalizedPlaylistsFailure = result.failure;
+      _notify();
+      return;
+    }
     _personalizedPlaylists = List.unmodifiable(result.playlists);
     _personalizedPlaylistsFailure = result.failure;
     _personalizedPlaylistsStage = result.failure != null
@@ -227,23 +284,31 @@ class HomeController extends ChangeNotifier {
     try {
       operation = _personalizedTracksGateway.beginLoad();
     } on Object {
-      _personalizedTracks = const [];
       _personalizedTracksFailure = PersonalizedTracksFailure.coreUnavailable;
-      _personalizedTracksStage = HomeResourceStage.error;
-      _reconcileRelatedSeed();
+      _personalizedTracksStage = _personalizedTracks.isEmpty
+          ? HomeResourceStage.error
+          : HomeResourceStage.content;
       _notify();
       return;
     }
     _personalizedTracksOperation = operation;
-    _personalizedTracks = const [];
     _personalizedTracksFailure = null;
-    _personalizedTracksStage = HomeResourceStage.loading;
+    _personalizedTracksStage = _personalizedTracks.isEmpty
+        ? HomeResourceStage.loading
+        : HomeResourceStage.content;
     _notify();
     final result = await operation.run();
     if (identical(_personalizedTracksOperation, operation)) {
       _personalizedTracksOperation = null;
     }
     if (!_personalizedTracksCurrent(generation)) return;
+    if (result.failure != null &&
+        !_tracksRequireSignIn(result.failure) &&
+        _personalizedTracks.isNotEmpty) {
+      _personalizedTracksFailure = result.failure;
+      _notify();
+      return;
+    }
     _personalizedTracks = List.unmodifiable(result.tracks);
     _personalizedTracksFailure = result.failure;
     _personalizedTracksStage = result.failure != null
@@ -251,7 +316,6 @@ class HomeController extends ChangeNotifier {
         : result.tracks.isEmpty
         ? HomeResourceStage.empty
         : HomeResourceStage.content;
-    _reconcileRelatedSeed();
     _notify();
   }
 
@@ -309,6 +373,7 @@ class HomeController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _recentListening.dispose();
     ++_accountGeneration;
     ++_dailyGeneration;
     ++_personalizedPlaylistsGeneration;

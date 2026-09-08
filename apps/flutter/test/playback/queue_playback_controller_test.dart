@@ -172,6 +172,76 @@ void main() {
     controller.dispose();
   });
 
+  test('current Track signal ignores playback-only notifications', () async {
+    final gateway = _ScriptedQueueGateway(
+      replaceResults: [
+        _result([first, second], 0, changed: true),
+      ],
+      advanceResults: [
+        _result([first, second], 1, changed: true),
+      ],
+    );
+    final firstSession = _FakeAudioSession();
+    final controller = _controller(
+      gateway,
+      _FakeMediaGateway(['first', 'second']),
+      _FakeAudioEngine([firstSession, _FakeAudioSession()]),
+    );
+    var currentTrackChanges = 0;
+    controller.currentTrackListenable.addListener(() {
+      currentTrackChanges += 1;
+    });
+
+    await controller.replaceAndPlay([first, second], 0);
+    expect(controller.currentTrackListenable.value, same(first));
+    expect(currentTrackChanges, 1);
+
+    firstSession.emitPosition(1250);
+    firstSession.emit(ForegroundAudioState.paused);
+    await _flush();
+    expect(currentTrackChanges, 1);
+
+    await controller.advance();
+    expect(controller.currentTrackListenable.value, same(second));
+    expect(currentTrackChanges, 2);
+    controller.dispose();
+  });
+
+  test('quality reload preserves the current paused position', () async {
+    const qualityTrack = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'quality-track',
+      title: 'Quality track',
+      artistNames: ['Artist'],
+      durationSeconds: 120,
+    );
+    final gateway = _ScriptedQueueGateway(
+      replaceResults: [
+        _result([qualityTrack], 0, changed: true),
+      ],
+    );
+    final firstSession = _FakeAudioSession();
+    final secondSession = _FakeAudioSession();
+    final media = _FakeMediaGateway(['standard', 'lossless']);
+    final controller = _controller(
+      gateway,
+      media,
+      _FakeAudioEngine([firstSession, secondSession]),
+    );
+
+    await controller.replaceAndPlay([qualityTrack], 0);
+    firstSession.emitPosition(4250);
+    await _flush();
+    await controller.playback.pause();
+    await controller.reloadCurrentSource();
+
+    expect(media.requests, [qualityTrack.opaqueId, qualityTrack.opaqueId]);
+    expect(secondSession.seekPositions, [4250]);
+    expect(secondSession.pauseCalls, 1);
+    expect(controller.playback.stage, TrackPlaybackStage.paused);
+    controller.dispose();
+  });
+
   test('queue failure retains the last valid snapshot and playback', () async {
     final gateway = _ScriptedQueueGateway(
       replaceResults: [
@@ -451,8 +521,10 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
   int _next = 0;
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) async =>
-      sessions[_next++];
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async => sessions[_next++];
 }
 
 class _FakeAudioSession implements ForegroundAudioSession {
@@ -461,6 +533,8 @@ class _FakeAudioSession implements ForegroundAudioSession {
   final StreamController<ForegroundAudioFailure> _failures =
       StreamController.broadcast();
   final StreamController<int> _positions = StreamController.broadcast();
+  final List<int> seekPositions = [];
+  int pauseCalls = 0;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -475,10 +549,16 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> play() async => emit(ForegroundAudioState.playing);
 
   @override
-  Future<void> pause() async => emit(ForegroundAudioState.paused);
+  Future<void> pause() async {
+    pauseCalls += 1;
+    emit(ForegroundAudioState.paused);
+  }
 
   @override
-  Future<void> seekToMs(int positionMs) async {}
+  Future<void> seekToMs(int positionMs) async {
+    seekPositions.add(positionMs);
+    emitPosition(positionMs);
+  }
 
   @override
   Future<void> setVolume(double volume) async {}

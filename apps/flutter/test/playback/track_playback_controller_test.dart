@@ -92,6 +92,58 @@ void main() {
     controller.dispose();
   });
 
+  test('forwards a low M4A fallback as an M4A player source', () async {
+    final engine = _FakeAudioEngine([_FakeAudioSession()]);
+    final controller = TrackPlaybackController(
+      _FakeResolutionGateway([
+        _ImmediateResolution(
+          MediaResolutionResult(
+            source: ResolvedPlaybackSource(
+              uri: Uri.parse('https://audio.example.test/fallback.m4a'),
+              format: PlaybackAudioFormat.m4a,
+              quality: PlaybackAudioQuality.low,
+              validForSeconds: 7_200,
+            ),
+          ),
+        ),
+      ]),
+      ForegroundPlaybackController(engine),
+    );
+
+    await controller.playTrack(firstTrack);
+
+    expect(engine.requestedFormats, [ForegroundAudioFormat.m4a]);
+    expect(controller.resolvedQuality, PlaybackAudioQuality.low);
+    expect(controller.stage, TrackPlaybackStage.playing);
+    controller.dispose();
+  });
+
+  test('forwards an SQ FLAC source and exposes the actual quality', () async {
+    final engine = _FakeAudioEngine([_FakeAudioSession()]);
+    final controller = TrackPlaybackController(
+      _FakeResolutionGateway([
+        _ImmediateResolution(
+          MediaResolutionResult(
+            source: ResolvedPlaybackSource(
+              uri: Uri.parse('https://audio.example.test/lossless.flac'),
+              format: PlaybackAudioFormat.flac,
+              quality: PlaybackAudioQuality.lossless,
+              validForSeconds: 7_200,
+            ),
+          ),
+        ),
+      ]),
+      ForegroundPlaybackController(engine),
+    );
+
+    await controller.playTrack(firstTrack);
+
+    expect(engine.requestedFormats, [ForegroundAudioFormat.flac]);
+    expect(controller.resolvedQuality, PlaybackAudioQuality.lossless);
+    expect(controller.stage, TrackPlaybackStage.playing);
+    controller.dispose();
+  });
+
   test(
     'serializes repeated activation against current transport state',
     () async {
@@ -322,11 +374,16 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
   final List<ForegroundAudioSession> _sessions;
   final Object? failure;
   final List<Uri> requestedUris = [];
+  final List<ForegroundAudioFormat> requestedFormats = [];
   int _next = 0;
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) async {
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async {
     requestedUris.add(source);
+    requestedFormats.add(format);
     final failure = this.failure;
     if (failure != null) throw failure;
     return _sessions[_next++];

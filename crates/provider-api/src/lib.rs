@@ -20,6 +20,8 @@ pub enum ProviderCapability {
     Catalog,
     Recommendations,
     UserLibrary,
+    RecentHistoryRead,
+    RecentHistoryWrite,
     PlaylistMutation,
     Lyrics,
     Comments,
@@ -935,6 +937,19 @@ pub trait PlaylistDetailsProvider: MusicProvider + Sync {
     fn playlist_tracks_page(
         &self,
         playlist_id: PlaylistId,
+        offset: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<PlaylistTracksPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral, account-scoped recent Track history. Read and write are
+/// deliberately separate capabilities; implementing this trait does not imply
+/// that a provider can report playback back to its cloud history.
+pub trait RecentHistoryProvider: MusicProvider + Sync {
+    type Error;
+
+    fn recent_tracks_page(
+        &self,
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<PlaylistTracksPage, Self::Error>> + Send;

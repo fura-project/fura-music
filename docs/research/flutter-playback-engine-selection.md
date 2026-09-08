@@ -1,8 +1,8 @@
 # Flutter playback-engine selection
 
-- **Status:** `audioplayers` selected for the bounded M1 single-track proof
-- **Last checked:** 2026-08-26
-- **Scope:** Foreground standard-MP3 playback on Android, iOS, Linux, macOS, and Windows. This does not select background playback, lock-screen integration, downloads, video, or a queue model.
+- **Status:** `audioplayers` selected; Linux MP3, low-M4A, and FLAC adapter decoding verified
+- **Last checked:** 2026-09-07
+- **Scope:** Foreground MP3 playback, evidence-selected C200 M4A fallback, and F000 SQ FLAC on Android, iOS, Linux, macOS, and Windows. This does not select downloads, video, or a second queue/player model.
 
 ## Required boundary
 
@@ -24,7 +24,7 @@ The [published package](https://pub.dev/packages/audioplayers/versions/6.8.1) de
 
 At upstream commit [`cd475c7`](https://github.com/bluefireteam/audioplayers/tree/cd475c760b2e730c4306c1f102f3ac6f4313109e), the [feature-parity table](https://github.com/bluefireteam/audioplayers/blob/cd475c760b2e730c4306c1f102f3ac6f4313109e/feature_parity_table.md) marks local files, local assets, external URL files/streams, resume/pause/stop, release, seek, and duration/position/state/completion events as supported across all six targets. Its [lifecycle guide](https://github.com/bluefireteam/audioplayers/blob/cd475c760b2e730c4306c1f102f3ac6f4313109e/getting_started.md) distinguishes pause, stop, release, and terminal dispose. The repository and published package use the MIT license.
 
-Linux uses an endorsed GStreamer implementation and requires the GStreamer core, app, and audio development modules. This environment reports 1.28.6 for all three. Runtime codec availability still needs an actual local MP3/WAV probe and cannot be inferred from compilation.
+Linux uses an endorsed GStreamer implementation and requires the GStreamer core, app, and audio development modules. This environment reports 1.28.6 for all three. Runtime codec availability cannot be inferred from compilation; packaged loopback integrations now prove MP3, AAC-in-M4A, and FLAC decoding on this Linux host only.
 
 The package intentionally does not own a playlist. That is acceptable for the first slice: application queue semantics should be derived after one real resolved-track flow rather than imported prematurely from an engine.
 
@@ -47,6 +47,6 @@ Do not expose plugin classes through controllers or Rust. Do not add `audio_serv
 ## Validation required before UI wiring
 
 1. Build the Linux release bundle with the endorsed plugin.
-2. In a packaged Linux integration, generate a disposable local audio file, then exercise load/play, pause, resume, stop, and dispose with cleanup. **Completed:** a test-only silent MP3 passed this path on 2026-08-26 and was deleted in `finally`.
+2. In a packaged Linux integration, generate a disposable local audio file, then exercise load/play, pause, resume, stop, and dispose with cleanup. **Completed:** a test-only silent MP3 passed this path on 2026-08-26. On 2026-09-07 separate embedded synthetic C200-shaped M4A and F000-shaped FLAC fixtures passed load/play/progress/stop through the project adapter with `audio/mp4` and `audio/flac`; none of these fixtures ships in the application bundle.
 3. Put those operations behind a minimal adapter and cover late state/completion/error events after stop, source replacement, and dispose with fakes before connecting QQ media resolution. **Completed:** the per-source adapter/controller and seven lifecycle/security regressions passed on 2026-08-26.
 4. Keep authenticated QQ URLs out of logs, fixtures, and test failure descriptions. **Implemented boundary:** plugin logging is disabled before player construction because its upstream exception text includes the source; project failures contain no cause or URI. A loopback integration with a synthetic vkey passed, but a real authenticated source remains deliberately untested.

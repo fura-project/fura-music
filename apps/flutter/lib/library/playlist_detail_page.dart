@@ -8,6 +8,7 @@ import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 
@@ -148,26 +149,29 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       key: ValueKey('playlist-detail-loading'),
       child: CircularProgressIndicator(),
     ),
-    PlaylistDetailStage.content => _TrackCollection(
+    PlaylistDetailStage.content => PlaylistScrollPrefetch(
       key: const ValueKey('playlist-detail-content'),
-      tracks: _controller.tracks,
-      total: _controller.total,
-      hasMore: _controller.hasMore,
-      isLoadingMore: _controller.isLoadingMore,
-      appendFailure: _controller.appendFailure,
-      onLoadMore: _controller.loadMore,
-      onRetryMore: _controller.retryMore,
-      onTrackSelected: (index) => unawaited(
-        widget.queuePlaybackController.replaceAndPlay(
-          _controller.tracks,
-          index,
+      controller: _controller,
+      child: _TrackCollection(
+        tracks: _controller.tracks,
+        total: _controller.total,
+        hasMore: _controller.hasMore,
+        isLoadingMore: _controller.isLoadingMore,
+        appendFailure: _controller.appendFailure,
+        onLoadMore: _controller.loadMore,
+        onRetryMore: _controller.retryMore,
+        onTrackSelected: (index) => unawaited(
+          widget.queuePlaybackController.replaceAndPlay(
+            _controller.tracks,
+            index,
+          ),
         ),
+        onTrackQueued: _addToQueue,
+        onOpenAlbum: widget.onOpenAlbum,
+        onOpenArtist: widget.onOpenArtist,
+        desktop: desktop,
+        current: widget.queuePlaybackController.current,
       ),
-      onTrackQueued: _addToQueue,
-      onOpenAlbum: widget.onOpenAlbum,
-      onOpenArtist: widget.onOpenArtist,
-      desktop: desktop,
-      current: widget.queuePlaybackController.current,
     ),
     PlaylistDetailStage.empty => const _DetailMessage(
       key: ValueKey('playlist-detail-empty'),
@@ -295,7 +299,6 @@ class _TrackCollection extends StatefulWidget {
     required this.onOpenArtist,
     required this.desktop,
     required this.current,
-    super.key,
   });
 
   final List<PlaylistTrackSummary> tracks;

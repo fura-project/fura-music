@@ -7,6 +7,7 @@ pub mod comments;
 pub mod favorite_albums;
 pub mod favorite_artists;
 pub mod library;
+pub mod listening;
 pub mod lyrics;
 pub mod media;
 pub mod music_video;

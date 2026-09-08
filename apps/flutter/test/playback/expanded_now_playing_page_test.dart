@@ -492,6 +492,8 @@ class _AudioEngine implements ForegroundAudioEngine {
   const _AudioEngine();
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) =>
-      throw StateError('not used by this presentation test');
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) => throw StateError('not used by this presentation test');
 }

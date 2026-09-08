@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -29,10 +30,7 @@ extension SettingsSectionPresentation on SettingsSection {
       AppThemePreference.light => 'Light theme',
       AppThemePreference.dark => 'Dark theme',
     },
-    SettingsSection.playback => switch (settings.playbackQuality) {
-      AppPlaybackQualityPreference.standard => 'Standard quality',
-      AppPlaybackQualityPreference.high => 'High quality',
-    },
+    SettingsSection.playback => settings.playbackQuality.settingsSummary,
   };
 
   bool matches(String normalizedQuery) {
@@ -381,7 +379,12 @@ class _SettingsPageState extends State<SettingsPage> {
         ButtonSegment(
           value: AppPlaybackQualityPreference.high,
           icon: Icon(Icons.high_quality_rounded),
-          label: Text('High'),
+          label: Text('HQ'),
+        ),
+        ButtonSegment(
+          value: AppPlaybackQualityPreference.lossless,
+          icon: Icon(Icons.graphic_eq_rounded),
+          label: Text('SQ'),
         ),
       ],
       selected: {widget.settings.playbackQuality},

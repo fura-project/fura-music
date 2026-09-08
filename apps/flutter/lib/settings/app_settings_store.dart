@@ -57,6 +57,7 @@ class AppSettingsStore {
     : _storage = storage ?? SharedPreferencesAppSettingsDocumentStorage();
 
   final AppSettingsDocumentStorage _storage;
+  Future<void> _mutationTail = Future.value();
 
   Future<AppSettingsLoadResult> load() async {
     final String? document;
@@ -156,26 +157,36 @@ class AppSettingsStore {
     );
   }
 
-  Future<AppSettingsWriteResult> save(AppSettings settings) async {
-    final document = jsonEncode(<String, Object>{
-      'schemaVersion': AppSettings.currentSchemaVersion,
-      'theme': settings.theme.name,
-      'playbackQuality': settings.playbackQuality.name,
-    });
-    try {
-      await _storage.write(document);
-      return AppSettingsWriteResult.saved;
-    } on Object {
-      return AppSettingsWriteResult.storageUnavailable;
-    }
-  }
+  Future<AppSettingsWriteResult> save(AppSettings settings) =>
+      _serializeMutation(() async {
+        final document = jsonEncode(<String, Object>{
+          'schemaVersion': AppSettings.currentSchemaVersion,
+          'theme': settings.theme.name,
+          'playbackQuality': settings.playbackQuality.name,
+        });
+        try {
+          await _storage.write(document);
+          return AppSettingsWriteResult.saved;
+        } on Object {
+          return AppSettingsWriteResult.storageUnavailable;
+        }
+      });
 
-  Future<AppSettingsWriteResult> reset() async {
+  Future<AppSettingsWriteResult> reset() => _serializeMutation(() async {
     try {
       await _storage.delete();
       return AppSettingsWriteResult.saved;
     } on Object {
       return AppSettingsWriteResult.storageUnavailable;
     }
+  });
+
+  Future<T> _serializeMutation<T>(Future<T> Function() mutation) {
+    final result = _mutationTail.then((_) => mutation());
+    _mutationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
   }
 }

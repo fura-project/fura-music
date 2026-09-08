@@ -215,4 +215,12 @@
 
 **Consequences:** This supersedes HD-011 only for signed-out Home presentation. It authorizes no new QQ endpoint, fake Daily/Radar content, listening-history inference, additional Provider, Shell/navigation redesign, or generic feed framework. Public recommendation and new-song failures remain truthful and retryable, and guest playback keeps the existing availability and authorization rules.
 
+## HD-018 — Recent plays and guest navigation
+
+**Status:** Product scope authorized by the maintainer on 2026-09-08; implementation/visual acceptance pending.
+
+**Decision:** In Human-gated regression mode, hide personal music navigation while signed out and add a Material 3 recent-plays page, using the supplied generated desktop reference and the existing Liked long-list behavior. Investigate and implement same-account QQ Music cloud-history interoperability when supported by actual protocol evidence. Extract shared loading logic where existing pages demonstrate duplication.
+
+**Consequences:** This authorizes the specific navigation/page capability and the maintainer-directed, evidence-backed ordinary-session cloud read. The production read now uses `RecentPlayList/GetRecentPlayList` behind the existing Provider/typed Bridge and remains pending real-account Human acceptance. Cloud reporting is separately blocked: the IoT/H5 `reportRecentPlay` API is not authorization to transplant another credential environment or automate a stored account. This decision does not authorize autonomous real-account writes, video history, downloads, a new Provider, or unrelated page work. See `docs/design/recent-plays.md` and `docs/research/qqmusic-recent-plays-evidence.md`.
+
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.

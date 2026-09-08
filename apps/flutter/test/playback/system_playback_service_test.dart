@@ -275,7 +275,10 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
   final List<_FakeAudioSession> sessions = [];
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) async {
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async {
     final session = _FakeAudioSession();
     sessions.add(session);
     return session;

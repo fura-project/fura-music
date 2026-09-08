@@ -1,5 +1,5 @@
 use qqmusic_client::{
-    QqMusicAudioQuality, QqMusicClient, QqMusicMediaError, QqMusicNewSongCategory, ReqwestTransport,
+    QqMusicAudioProfile, QqMusicClient, QqMusicMediaError, QqMusicNewSongCategory, ReqwestTransport,
 };
 
 /// Opt-in compatibility probe using only a bounded public new-song collection
@@ -29,11 +29,16 @@ async fn resolves_one_public_catalog_track_without_account() {
     let mut found_source = false;
     for track in collection.tracks().iter().take(10) {
         match client
-            .anonymous_standard_mp3_source(track.song_mid(), track.file_media_mid(), &dispatch)
+            .anonymous_media_source(
+                track.song_mid(),
+                track.file_media_mid(),
+                QqMusicAudioProfile::StandardMp3,
+                &dispatch,
+            )
             .await
         {
             Ok(source) => {
-                assert_eq!(source.quality(), QqMusicAudioQuality::Standard);
+                assert_eq!(source.profile(), QqMusicAudioProfile::StandardMp3);
                 assert!(source.valid_for_seconds() > 0);
                 found_source = true;
                 break;

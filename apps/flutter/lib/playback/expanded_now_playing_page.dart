@@ -12,6 +12,7 @@ import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
 import 'package:flutterustmusic/music_video/track_music_video_surface.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 typedef ArtworkImageProviderBuilder = ImageProvider<Object> Function(
@@ -100,6 +101,8 @@ class ExpandedNowPlayingPage extends StatefulWidget {
     required this.controller,
     required this.onBack,
     required this.onSignInAgain,
+    this.qualityPreference,
+    this.onQualityPreferenceChanged,
     this.commentsGateway = const RustTrackCommentGateway(),
     this.musicVideoGateway = const RustTrackMusicVideoGateway(),
     this.musicVideoEngine = const MediaKitTrackMusicVideoEngine(),
@@ -112,6 +115,8 @@ class ExpandedNowPlayingPage extends StatefulWidget {
   final QueuePlaybackController controller;
   final VoidCallback onBack;
   final VoidCallback onSignInAgain;
+  final AppPlaybackQualityPreference? qualityPreference;
+  final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
   final TrackCommentGateway commentsGateway;
   final TrackMusicVideoGateway musicVideoGateway;
   final TrackMusicVideoEngine musicVideoEngine;
@@ -222,6 +227,8 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
           bottomNavigationBar: NowPlayingBar.expanded(
             controller: widget.controller,
             onSignInAgain: widget.onSignInAgain,
+            qualityPreference: widget.qualityPreference,
+            onQualityPreferenceChanged: widget.onQualityPreferenceChanged,
           ),
         ),
       ),

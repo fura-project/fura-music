@@ -1,10 +1,10 @@
 # QQ Music playlist-detail evidence
 
 - **Status:** Production route with separate public-anonymous and account-authenticated contexts
-- **Last checked:** 2026-09-03
+- **Last checked:** 2026-09-08
 - **Scope:** Public catalog, account-owned/favorite, and built-in liked-songs playlist pages.
 
-This note records protocol behavior and boundaries, not reusable third-party source code. No account credential or user-derived response was used.
+This note records protocol behavior and boundaries, not reusable third-party source code. No account credential or response body was read; Human-operated account checks contribute only coarse counts and outcomes.
 
 ## Sources inspected
 
@@ -14,6 +14,9 @@ This note records protocol behavior and boundaries, not reusable third-party sou
 4. [feeluown-qqmusic at `241a967`](https://github.com/feeluown/feeluown-qqmusic/tree/241a9678bcd26e88d19e08e5da8048018f06e330), especially its sanitized `get_diss_info` fixture and playlist-to-track mapping. Its current ordinary playlist call uses a legacy endpoint, so it corroborates response fields rather than this request envelope.
 5. A no-account probe against a public playlist on 2026-08-26. It returned zero global, named-result, and data codes, one requested row, `total_song_num`, numeric `hasmore`, and the documented song/artist/album fields. A 100-row request returned about 128 KiB. The public playlist ID and all content values are deliberately absent from project fixtures and diagnostics.
 6. The default-ignored production-path gate on 2026-09-03 made exactly two serial anonymous reads: three public recommendation summaries followed by one requested playlist row. The request and decoder passed without Cookie or account fields. It retained no playlist identity, title, Track content, response body, or account material.
+7. A second default-ignored, explicitly opted-in anonymous gate on 2026-09-08 selected an unrecorded public recommendation whose reported count exceeded 300. A request for 100 rows at offset 200 returned a non-empty page and still reported continuation; a one-row request at offset 300 also returned one row. The gate logs and fixtures retain no playlist identity, title, Track metadata, response body, or account material.
+8. A maintainer-operated authenticated check on 2026-09-08 reported that Liked search consistently stopped after 300 of more than 1,000 rows and that an immediate retry did not advance. This disproves the earlier assumption that public offset-300 compatibility plus Flutter pagination was sufficient. The coarse observation does not distinguish a temporary QQ request limit from one unrepresentable account row, so the repair covers both without recording the query, playlist identity, Track content, or response body.
+9. A maintainer-operated follow-up with the cursor/omission repair reached all 1,032 reported Liked rows and disclosed one omitted row, without sharing account or Track identity. This establishes authenticated continuation beyond 300 for that account and closes the original depth failure. The same observation found the complete local search perceptibly slow; it does not establish a universally safe request rate, so the UI retains serialized bounded pages and transient backoff while tuning only the successful-page cadence.
 
 ## Shared endpoint and response
 
@@ -26,6 +29,8 @@ method CgiGetDiss
 ```
 
 The page offset and size are `song_begin` and `song_num`. Current implementations read `songlist`, `total_song_num`, and `hasmore` from the named result's `data`. `hasmore` is observed as numeric `0` or `1`; the project also accepts the independently observed boolean form but rejects other values. Global and named-result codes are required and checked; the nested data code is checked when present because independently tested liked-songs fixtures omit it. Response bodies are capped at 2 MiB with a 30-second timeout, and page size is restricted to `1..=100`.
+
+The `1..=100` restriction is a per-request safety bound, not a total playlist limit. The 2026-09-08 anonymous gate proves that the public route accepts offsets beyond 300. The product therefore advances a distinct continuation cursor by the number of raw rows returned rather than by the number of usable Track summaries. A row without the minimum safe identity is counted as omitted and does not block later pages; a response with no raw row and a claimed continuation remains incompatible because it cannot advance. Full-playlist drains pace requests by 500 ms and apply a finite one-second/three-second backoff to transient network or service failures, while a permanent failure still stops for explicit retry. Account-scoped liked depth beyond 300 remains Human-operated acceptance because automated tests must not load stored credentials.
 
 The minimum raw track boundary preserves:
 

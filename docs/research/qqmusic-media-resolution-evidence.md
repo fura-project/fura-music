@@ -1,8 +1,8 @@
 # QQ Music media-resolution evidence
 
-- **Status:** Anonymous standard plus authenticated standard/high MP3 selection implemented; authenticated playback retest pending
-- **Last checked:** 2026-09-01
-- **Scope:** Anonymous standard MP3, authenticated standard/high MP3, actual-quality reporting, and one bounded fallback policy.
+- **Status:** Standard/HQ plus F000 SQ selection and evidence-selected low-M4A fallback implemented; exact authenticated quality result pending maintainer observation
+- **Last checked:** 2026-09-07
+- **Scope:** Anonymous/authenticated M500 MP3, authenticated M800 MP3 and F000 FLAC, C200 M4A last-resort fallback, actual-format/quality reporting, and bounded fallback policy.
 
 This note records independently implemented protocol behavior and two bounded no-account probes. It does not copy reusable third-party code. No account credential, user library, media URL, vkey, or response content was retained.
 
@@ -76,19 +76,21 @@ and uses `sip`, `expiration`, `refreshTime`, and `cacheTime`. Yakult independent
 The resolved provider-neutral source needs only:
 
 - a redacted-in-diagnostics HTTP(S) URI;
-- MP3 format plus the actual standard/high quality that produced the source;
+- the actual MP3/M4A/FLAC format plus low/standard/high/lossless quality that produced the source;
 - the response validity in seconds.
 
-It does not expose QQ filename, vkey, result code, CDN list, payment payload, or raw response models. When signed out, the Provider requests only M500 standard quality with QQ Music's anonymous `uin=0` comm, sends no Cookie or synthetic credential, and accepts only an exact correlated source. If that source is unavailable, the product offers sign-in without claiming a subscription, copyright, or region reason. Authenticated global or request-level credential rejection follows the existing explicit rejection rules; transport and unrelated upstream failures do not sign the user out. Authenticated account state is rechecked after every await.
+It does not expose QQ filename, vkey, result code, CDN list, payment payload, or raw response models. When signed out, the Provider first requests M500 standard quality with QQ Music's anonymous `uin=0` comm, sends no Cookie or synthetic credential, and accepts only an exact correlated source. It tries C200 M4A only after an explicit per-item unavailable result. If both profiles are unavailable, the product offers sign-in without claiming a subscription, copyright, or region reason. Authenticated global or request-level credential rejection follows the existing explicit rejection rules; transport and unrelated upstream failures do not sign the user out. Authenticated account state is rechecked after every await.
 
-The reusable fallback rule is intentionally narrower than a generic quality
-ladder. A `Standard` preference requests only `M500`. A `High` preference
-requests `M800` first and retries `M500` only when the high item is explicitly
-unavailable through a nonzero per-item result. Network, HTTP, service,
-credential, randomness, malformed-response, and replacement failures never
-trigger fallback. The returned source reports which request actually
-succeeded, so a standard fallback is never relabeled as high quality. FLAC,
-OGG, encrypted media, payment state, and VIP inference remain outside this
+The reusable fallback rule is intentionally narrower than a generic codec
+ladder. A `Standard` preference requests `M500`, then `C200` only when the MP3
+item is explicitly unavailable. A signed-in `High` preference requests `M800`,
+then `M500`, then `C200`. A signed-in `Lossless` preference requests the
+independently corroborated `F000` FLAC profile before the same High, Standard,
+and Low ladder. Every step advances only after typed item unavailability.
+Network, HTTP, service, credential, randomness, malformed-response, and
+replacement failures never trigger fallback. The returned source reports the
+actual format and quality, so an HQ/Standard/Low fallback is never relabeled as
+SQ. OGG, encrypted media, payment state, and VIP inference remain outside this
 slice.
 
 ## Controlled live probes
@@ -117,12 +119,62 @@ playable source without retaining Track or source data. This prevents an
 independent Search rate limit from creating a false media-resolution failure;
 it does not weaken either capability's failure semantics.
 
-The first authorized Linux product smoke restored the user's real account and loaded playlist/detail data, but every attempted ordinary or VIP track mapped to unavailable before reaching the audio engine. The anonymous batch probe above reproduced the exact all-`101404` behavior from the forwarded `songtype: 13`, establishing a protocol-mapping root cause without inspecting the user's credential, identifiers, source URLs, or response bodies. The correction has offline regressions and a passing anonymous live client probe; a fresh authorized product retest is still required before claiming playback success.
+On 2026-09-07 a deeper anonymous comparison sampled four Tracks from each of
+six public new-song categories (24 total). The test submitted the same 165
+bounded candidates to `UrlGetVkey` and `CgiGetVkey`, chunked below an observed
+100-item response limit, and recorded only aggregate outcomes. Both routes
+resolved the same 17 Tracks; neither had an exclusive success. Canonical
+file-media-MID and song-MID-plus-file-MID forms covered the same Tracks, while
+song-MID-only was worse. M500 and C400 also covered the same 17 Tracks, so
+neither endpoint switching, alternate filename construction, nor C400 added
+coverage in this sample.
+
+The seven base failures then received 42 canonical extended-format candidates
+on both routes. Both routes again agreed exactly. One Hong Kong/Taiwan sample
+Track was rescued by O600, O400, and C200; F000, O800, and C600 rescued none.
+Bounded range reads validated representative M500 as MP3 and C400/C200 as
+M4A, plus O600 as Ogg, without printing or retaining URLs, keys, identities,
+filenames, or response bodies. The production fallback therefore keeps the
+already-primary `UrlGetVkey` route and canonical filename, and selects C200
+M4A as the smallest demonstrated coverage gain. Ogg is not selected for the
+cross-platform path because Apple playback compatibility remains unproven.
+This sample is comparative evidence, not a catalog-wide availability rate.
+
+On 2026-09-07 the maintainer reported one exact signed-in Track as unavailable
+in Fura but fully playable with the same account in official QQ Music. A
+bounded public reproduction requested that exact Track through both
+`UrlGetVkey` and `CgiGetVkey`, across F000/M800/M500/C400/C200 and the three
+previously compared filename identities. All 30 items returned `104003` with
+no source; public catalog metadata simultaneously reported encoded MP3 files,
+disabled ordinary play actions, and a separate 60-second trial. This rules out
+quality, filename, and anonymous endpoint selection as the cause while the
+maintainer's official-client result establishes a signed-in route compatibility
+gap. Production therefore retains `UrlGetVkey` as the first authenticated
+request, but an exact per-item `104003` now permits one same-profile
+`CgiGetVkey` request using the independently evidenced desktop `ct=19`
+credential envelope. Every other unavailable code continues directly through
+the existing quality ladder; credential, replacement, network, service, and
+malformed outcomes still stop. Offline fixtures prove request shape, order,
+redaction, STOP behavior, and the credential recheck after both awaits. Whether
+the compatibility route resolves this exact real-account Track remains a
+maintainer-operated retest.
+
+The packaged Linux playback integration also decoded offline synthetic
+AAC-in-M4A and FLAC fixtures through the same project adapter and explicit
+`audio/mp4`/`audio/flac` selection, observed positive playback progress, and
+stopped cleanly. This proves the selected codecs on the current Linux/GStreamer
+environment; it does not prove a remote QQ source, Android hardware, or
+Apple/Windows decoding.
+
+The first authorized Linux product smoke restored the user's real account and loaded playlist/detail data, but every attempted ordinary or VIP track mapped to unavailable before reaching the audio engine. The anonymous batch probe above reproduced the exact all-`101404` behavior from the forwarded `songtype: 13`, establishing a protocol-mapping root cause without inspecting the user's credential, identifiers, source URLs, or response bodies. After the correction, the maintainer reported on 2026-09-07 that authenticated product playback succeeds. Because that build did not expose the actual resolved profile, this is evidence for the corrected end-to-end playback path, not evidence that M800, F000, or a particular fallback succeeded.
 
 ## Evidence still required
 
-1. A sanitized authenticated success proving the corrected standard source can be read by the selected Linux playback engine without exposing its URL.
+1. A maintainer-operated retry of the reported official-client-playable Track,
+   recording only whether full playback starts and the displayed actual
+   F000/M800/M500/C200 quality.
 2. Sanitized outcomes for unpaid, region-filtered, unavailable, and device-restricted tracks before exposing specific restriction reasons.
 3. Platform evidence for QQ Music's cleartext CDN bases. Do not globally enable Android cleartext traffic or silently rewrite the scheme without a narrow host policy and a real playback probe.
-4. A maintainer-operated authenticated observation of high success or truthful standard fallback before calling account-specific quality behavior live-verified.
-5. Separate evidence and product authority before considering lossless/encrypted media, decryption, download, or membership-specific behavior.
+4. A maintainer-operated authenticated observation of SQ/HQ success or truthful lower-quality fallback before calling account-specific quality behavior live-verified.
+5. Real-device C200 and FLAC decoding on every distributed target, especially Apple targets; current Core/Bridge/Flutter tests prove typed routing rather than hardware decoding.
+6. Separate evidence and product authority before considering Hi-Res, encrypted media, decryption, download, or membership-specific behavior.

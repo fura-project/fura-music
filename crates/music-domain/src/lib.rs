@@ -4,6 +4,8 @@ use std::fmt;
 
 mod lyrics;
 mod playback_queue;
+mod recent_listening;
+pub use recent_listening::RecentListening;
 
 pub use lyrics::{
     InvalidLyricTiming, InvalidSynchronizedLyrics, LyricTimingField, SynchronizedLyricLine,
@@ -1073,12 +1075,16 @@ impl fmt::Debug for AlbumDetails {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioFormat {
     Mp3,
+    M4a,
+    Flac,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioQuality {
+    Low,
     Standard,
     High,
+    Lossless,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1768,8 +1774,11 @@ impl fmt::Debug for TrackCommentsPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct PlaylistTracksPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
+    total_is_exact: bool,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<TrackSummary>,
 }
 
@@ -2657,11 +2666,56 @@ impl fmt::Debug for NewAlbumReleasesPage {
 
 impl PlaylistTracksPage {
     #[must_use]
-    pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+    pub fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+        let visible_count = u32::try_from(tracks.len()).unwrap_or(u32::MAX);
         Self {
             offset,
+            next_offset: offset.saturating_add(visible_count),
             total,
+            total_is_exact: true,
             has_more,
+            omitted_track_count: 0,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn new_with_cursor(
+        offset: u32,
+        next_offset: u32,
+        total: u32,
+        has_more: bool,
+        omitted_track_count: u32,
+        tracks: Vec<TrackSummary>,
+    ) -> Self {
+        Self {
+            offset,
+            next_offset,
+            total,
+            total_is_exact: true,
+            has_more,
+            omitted_track_count,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn new_with_cursor_and_total_certainty(
+        offset: u32,
+        next_offset: u32,
+        total: u32,
+        total_is_exact: bool,
+        has_more: bool,
+        omitted_track_count: u32,
+        tracks: Vec<TrackSummary>,
+    ) -> Self {
+        Self {
+            offset,
+            next_offset,
+            total,
+            total_is_exact,
+            has_more,
+            omitted_track_count,
             tracks,
         }
     }
@@ -2672,13 +2726,28 @@ impl PlaylistTracksPage {
     }
 
     #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
     pub const fn total(&self) -> u32 {
         self.total
     }
 
     #[must_use]
+    pub const fn total_is_exact(&self) -> bool {
+        self.total_is_exact
+    }
+
+    #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -2692,8 +2761,11 @@ impl fmt::Debug for PlaylistTracksPage {
         formatter
             .debug_struct("PlaylistTracksPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
+            .field("total_is_exact", &self.total_is_exact)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -3235,8 +3307,10 @@ mod tests {
 
         let page = PlaylistTracksPage::new(100, 100, false, Vec::new());
         assert_eq!(page.offset(), 100);
+        assert_eq!(page.next_offset(), 100);
         assert_eq!(page.total(), 100);
         assert!(!page.has_more());
+        assert_eq!(page.omitted_track_count(), 0);
         assert!(page.tracks().is_empty());
 
         let album_page = AlbumTracksPage::new(30, 30, false, Vec::new());

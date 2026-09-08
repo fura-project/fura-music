@@ -16,6 +16,7 @@ import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 void main() {
@@ -244,6 +245,49 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('quality selector persists SQ and reloads the active source', (
+    tester,
+  ) async {
+    final settingsStorage = _MemorySettingsStorage();
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('standard')),
+      _ImmediateMediaOperation(
+        _qualitySuccess(
+          'lossless',
+          format: PlaybackAudioFormat.flac,
+          quality: PlaybackAudioQuality.lossless,
+        ),
+      ),
+    ]);
+    final audio = _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: audio,
+      settingsStore: AppSettingsStore(storage: settingsStorage),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('STD'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
+    await tester.pumpAndSettle();
+    expect(find.text('SQ · FLAC lossless'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('now-playing-quality-lossless')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('SQ'), findsOneWidget);
+    expect(find.text('Playing SQ quality.'), findsOneWidget);
+    expect(media.requests, [('qq-music', 'first'), ('qq-music', 'first')]);
+    expect(audio.requestedFormats, [
+      ForegroundAudioFormat.mp3,
+      ForegroundAudioFormat.flac,
+    ]);
+    expect(settingsStorage.document, contains('"playbackQuality":"lossless"'));
+  });
 
   testWidgets(
     'desktop identity area opens lyrics before the Artist catalog chooser',
@@ -1789,6 +1833,7 @@ Future<void> _openDetail(
   List<ArtistSummary> artists = const [],
   QqMusicAuthenticationGateway? authenticationGateway,
   TrackCommentGateway? comments,
+  AppSettingsStore? settingsStore,
 }) async {
   await tester.pumpWidget(
     MusicApp(
@@ -1815,6 +1860,7 @@ Future<void> _openDetail(
       playbackQueueGateway: queue ?? _WidgetQueueGateway(),
       trackCommentGateway: comments,
       audioEngine: audio,
+      settingsStore: settingsStore,
     ),
   );
   await tester.pumpAndSettle();
@@ -2238,6 +2284,19 @@ MediaResolutionResult _success(String vkey) => MediaResolutionResult(
   ),
 );
 
+MediaResolutionResult _qualitySuccess(
+  String vkey, {
+  required PlaybackAudioFormat format,
+  required PlaybackAudioQuality quality,
+}) => MediaResolutionResult(
+  source: ResolvedPlaybackSource(
+    uri: Uri.parse('https://audio.example.test/source?vkey=$vkey'),
+    format: format,
+    quality: quality,
+    validForSeconds: 7200,
+  ),
+);
+
 LyricLoadResult _lyricSuccess(String text) => LyricLoadResult(
   lyrics: SynchronizedLyrics([
     SynchronizedLyricLine(
@@ -2331,13 +2390,31 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
 
   final List<ForegroundAudioSession> sessions;
   final List<Uri> requestedUris = [];
+  final List<ForegroundAudioFormat> requestedFormats = [];
   int _next = 0;
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) async {
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async {
     requestedUris.add(source);
+    requestedFormats.add(format);
     return sessions[_next++];
   }
+}
+
+class _MemorySettingsStorage implements AppSettingsDocumentStorage {
+  String? document;
+
+  @override
+  Future<void> delete() async => document = null;
+
+  @override
+  Future<String?> read() async => document;
+
+  @override
+  Future<void> write(String document) async => this.document = document;
 }
 
 class _FakeAudioSession implements ForegroundAudioSession {

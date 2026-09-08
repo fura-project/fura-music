@@ -1,7 +1,9 @@
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use provider_api::{PlaylistDetailsProvider, UserLibraryError, UserPlaylistsProvider};
+use provider_api::{
+    PlaylistDetailsProvider, RecentHistoryProvider, UserLibraryError, UserPlaylistsProvider,
+};
 use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
@@ -242,8 +244,11 @@ pub enum QqMusicPlaylistTrackPageLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicPlaylistTrackPageLoad {
     pub offset: u32,
+    pub next_offset: u32,
     pub total: u32,
+    pub total_is_exact: bool,
     pub has_more: bool,
+    pub omitted_track_count: u32,
     pub tracks: Vec<LibraryTrackSummary>,
     pub failure: Option<QqMusicPlaylistTrackPageLoadFailure>,
 }
@@ -253,8 +258,11 @@ impl fmt::Debug for QqMusicPlaylistTrackPageLoad {
         formatter
             .debug_struct("QqMusicPlaylistTrackPageLoad")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
+            .field("total_is_exact", &self.total_is_exact)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .field("failure", &self.failure)
             .finish()
@@ -355,6 +363,89 @@ pub fn begin_qq_music_playlist_track_page_load(
     }
 }
 
+/// One cancellable, single-use account recent-history page load. QQ request
+/// details and credentials remain behind the Provider boundary.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicRecentTrackPageLoadHandle {
+    offset: u32,
+    size: u32,
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl fmt::Debug for QqMusicRecentTrackPageLoadHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRecentTrackPageLoadHandle")
+            .field("offset", &self.offset)
+            .field("size", &self.size)
+            .field("active", &self.is_active())
+            .field("running", &self.running.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl QqMusicRecentTrackPageLoadHandle {
+    pub async fn run(&self) -> QqMusicPlaylistTrackPageLoad {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled);
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_track_page(QqMusicPlaylistTrackPageLoadFailure::AlreadyRunning);
+        }
+
+        let outcome = match native_qq_music_provider() {
+            Ok(provider) => {
+                tokio::select! {
+                    () = self.cancelled.notified() => {
+                        failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+                    }
+                    result = provider.recent_tracks_page(self.offset, self.size) => {
+                        if self.active.load(Ordering::SeqCst) {
+                            map_track_page_load(result)
+                        } else {
+                            failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+                        }
+                    }
+                }
+            }
+            Err(()) => failed_track_page(QqMusicPlaylistTrackPageLoadFailure::CoreUnavailable),
+        };
+        self.running.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        outcome
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_qq_music_recent_track_page_load(
+    offset: u32,
+    size: u32,
+) -> QqMusicRecentTrackPageLoadHandle {
+    QqMusicRecentTrackPageLoadHandle {
+        offset,
+        size,
+        active: AtomicBool::new(true),
+        running: AtomicBool::new(false),
+        cancelled: Notify::new(),
+    }
+}
+
 fn domain_playlist_id(
     provider_id: &str,
     opaque_playlist_id: &str,
@@ -369,8 +460,11 @@ fn map_track_page_load(
     match result {
         Ok(page) => QqMusicPlaylistTrackPageLoad {
             offset: page.offset(),
+            next_offset: page.next_offset(),
             total: page.total(),
+            total_is_exact: page.total_is_exact(),
             has_more: page.has_more(),
+            omitted_track_count: page.omitted_track_count(),
             tracks: page.tracks().iter().map(bridge_track_summary).collect(),
             failure: None,
         },
@@ -450,8 +544,11 @@ const fn failed_track_page(
 ) -> QqMusicPlaylistTrackPageLoad {
     QqMusicPlaylistTrackPageLoad {
         offset: 0,
+        next_offset: 0,
         total: 0,
+        total_is_exact: true,
         has_more: false,
+        omitted_track_count: 0,
         tracks: Vec::new(),
         failure: Some(failure),
     }
@@ -484,8 +581,9 @@ mod tests {
 
     use super::{
         QqMusicPlaylistTrackPageLoadFailure, QqMusicUserPlaylistLoadFailure,
-        begin_qq_music_playlist_track_page_load, begin_qq_music_user_playlist_load, map_error,
-        map_load, map_track_page_error, map_track_page_load,
+        begin_qq_music_playlist_track_page_load, begin_qq_music_recent_track_page_load,
+        begin_qq_music_user_playlist_load, map_error, map_load, map_track_page_error,
+        map_track_page_load,
     };
 
     #[test]
@@ -597,11 +695,23 @@ mod tests {
             ))
             .with_duration_seconds(Some(245));
 
-        let mapped = map_track_page_load(Ok(PlaylistTracksPage::new(100, 101, true, vec![track])));
+        let mapped =
+            map_track_page_load(Ok(PlaylistTracksPage::new_with_cursor_and_total_certainty(
+                100,
+                102,
+                103,
+                false,
+                true,
+                1,
+                vec![track],
+            )));
 
         assert_eq!(mapped.offset, 100);
-        assert_eq!(mapped.total, 101);
+        assert_eq!(mapped.next_offset, 102);
+        assert_eq!(mapped.total, 103);
+        assert!(!mapped.total_is_exact);
         assert!(mapped.has_more);
+        assert_eq!(mapped.omitted_track_count, 1);
         assert_eq!(mapped.tracks.len(), 1);
         assert_eq!(mapped.tracks[0].provider_id, "qq-music");
         assert_eq!(mapped.tracks[0].opaque_id, "track:41001:0:1:opaque-mid");
@@ -663,5 +773,20 @@ mod tests {
             Some(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
         );
         assert!(!format!("{handle:?}").contains("8001"));
+    }
+
+    #[tokio::test]
+    async fn recent_page_cancellation_is_exact_and_terminal() {
+        let handle = begin_qq_music_recent_track_page_load(100, 100);
+
+        assert!(handle.is_active());
+        assert!(handle.cancel());
+        assert!(!handle.cancel());
+        let outcome = handle.run().await;
+        assert_eq!(
+            outcome.failure,
+            Some(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+        );
+        assert!(!handle.is_active());
     }
 }

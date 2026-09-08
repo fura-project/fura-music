@@ -238,6 +238,8 @@ class _NeverAudioEngine implements ForegroundAudioEngine {
   const _NeverAudioEngine();
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) =>
-      throw StateError('audio should not load for an unavailable source');
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) => throw StateError('audio should not load for an unavailable source');
 }

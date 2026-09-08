@@ -8,9 +8,153 @@ import 'package:flutterustmusic/home/home_controller.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
+import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 void main() {
+  test(
+    'changing recent seeds cancels old related work and ignores late replies',
+    () async {
+      const first = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'first',
+        title: 'First',
+        artistNames: [],
+      );
+      const second = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'second',
+        title: 'Second',
+        artistNames: [],
+      );
+      final recent = _RecentListening()..next = first;
+      final related = _ControlledRelatedGateway();
+      final controller = HomeController(
+        _AccountGateway(const AccountSummaryLoadResult()),
+        _DailyGateway(const DailyRecommendationResult()),
+        _PlaylistsGateway(const PersonalizedPlaylistsResult()),
+        _TracksGateway(const PersonalizedTracksResult()),
+        related,
+        recentListening: recent,
+      );
+      controller.refreshRelatedTracks();
+      recent.next = second;
+      controller.refreshRelatedTracks();
+      expect(related.operations.first.cancelCalls, 1);
+      related.operations.first.result.complete(
+        const RelatedTracksResult(tracks: [first]),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.relatedSeed, same(second));
+      expect(controller.relatedTracks, isEmpty);
+      expect(controller.relatedTracksStage, HomeResourceStage.loading);
+      controller.dispose();
+      expect(related.operations.last.cancelCalls, 1);
+      related.operations.last.result.complete(
+        const RelatedTracksResult(tracks: [second]),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.relatedTracks, isEmpty);
+    },
+  );
+
+  test('refresh coalesces work, retains transient failures, and clears rejected personal data', () async {
+    const playlist = RecommendedPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'personal:1',
+      title: 'Personal',
+    );
+    const track = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'song:1',
+      title: 'Song',
+      artistNames: [],
+    );
+    final account = _AccountGateway(const AccountSummaryLoadResult());
+    final daily = _DailyGateway(
+      const DailyRecommendationResult(playlist: playlist),
+    );
+    final playlists = _PlaylistsGateway(
+      const PersonalizedPlaylistsResult(playlists: [playlist]),
+    );
+    final tracks = _TracksGateway(
+      const PersonalizedTracksResult(tracks: [track]),
+    );
+    final controller = HomeController(
+      account,
+      daily,
+      playlists,
+      tracks,
+      _RelatedGateway(const RelatedTracksResult()),
+      recentListening: _RecentListening(),
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    daily.result = const DailyRecommendationResult(
+      failure: DailyRecommendationFailure.network,
+    );
+    playlists.result = const PersonalizedPlaylistsResult(
+      failure: PersonalizedPlaylistsFailure.network,
+    );
+    tracks.result = const PersonalizedTracksResult(
+      failure: PersonalizedTracksFailure.network,
+    );
+    final refresh = controller.refresh();
+    expect(controller.refresh(), same(refresh));
+    expect(controller.dailyPlaylist, same(playlist));
+    expect(controller.personalizedPlaylistsStage, HomeResourceStage.content);
+    await refresh;
+    expect(account.beginCalls, 1);
+    expect(playlists.beginCalls, 2);
+    expect(tracks.beginCalls, 2);
+    expect(controller.refreshHasErrors, isTrue);
+    expect(controller.personalizedTracks, [same(track)]);
+    playlists.result = const PersonalizedPlaylistsResult(
+      failure: PersonalizedPlaylistsFailure.credentialRejected,
+    );
+    tracks.result = const PersonalizedTracksResult(
+      failure: PersonalizedTracksFailure.credentialRejected,
+    );
+    daily.result = const DailyRecommendationResult(
+      failure: DailyRecommendationFailure.credentialRejected,
+    );
+    await controller.refresh();
+    expect(controller.requiresSignIn, isTrue);
+    expect(controller.dailyPlaylist, isNull);
+    expect(controller.personalizedPlaylists, isEmpty);
+    expect(controller.personalizedTracks, isEmpty);
+  });
+
+  test(
+    'hidden Home records listening without requesting until revisited',
+    () async {
+      const seed = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'seed',
+        title: 'Recent',
+        artistNames: [],
+      );
+      final recent = _RecentListening()..next = seed;
+      final related = _RelatedGateway(const RelatedTracksResult());
+      final controller = HomeController(
+        _AccountGateway(const AccountSummaryLoadResult()),
+        _DailyGateway(const DailyRecommendationResult()),
+        _PlaylistsGateway(const PersonalizedPlaylistsResult()),
+        _TracksGateway(const PersonalizedTracksResult()),
+        related,
+        recentListening: recent,
+      );
+      addTearDown(controller.dispose);
+      controller.setActive(false);
+      controller.observePlayback(seed, 31000, true);
+      expect(related.seeds, isEmpty);
+      controller.setActive(true);
+      controller.refreshRelatedTracks();
+      await Future<void>.delayed(Duration.zero);
+      expect(related.seeds, [seed]);
+    },
+  );
+
   test('keeps independent Home resources truthful when one fails', () async {
     final controller = HomeController(
       _AccountGateway(
@@ -165,62 +309,10 @@ void main() {
     expect(controller.dailyStage, HomeResourceStage.loading);
   });
 
-  test('loads a distinct related set from the current queue seed', () async {
-    final related = _RelatedGateway(
-      const RelatedTracksResult(
-        tracks: [
-          PlaylistTrackSummary(
-            providerId: 'qq-music',
-            opaqueId: 'track:22:0:related-mid:-',
-            title: 'Related',
-            artistNames: ['Artist'],
-          ),
-        ],
-      ),
-    );
-    final controller = HomeController(
-      _AccountGateway(const AccountSummaryLoadResult()),
-      _DailyGateway(const DailyRecommendationResult()),
-      _PlaylistsGateway(const PersonalizedPlaylistsResult()),
-      _TracksGateway(const PersonalizedTracksResult()),
-      related,
-    );
-    addTearDown(controller.dispose);
-    const seed = PlaylistTrackSummary(
-      providerId: 'qq-music',
-      opaqueId: 'track:11:0:seed-mid:-',
-      title: 'Seed',
-      artistNames: ['Artist'],
-    );
-
-    controller.updateRelatedSeed(seed);
-    await Future<void>.delayed(Duration.zero);
-
-    expect(related.seeds, [same(seed)]);
-    expect(controller.relatedSeed, same(seed));
-    expect(controller.relatedTracksStage, HomeResourceStage.content);
-    expect(controller.relatedTracks.single.title, 'Related');
-
-    controller.updateRelatedSeed(null);
-    expect(controller.relatedTracksStage, HomeResourceStage.empty);
-    expect(controller.relatedTracks, isEmpty);
-  });
-
   test(
-    'uses the first personalized song until a queue seed is available',
+    'uses qualified recent listening and keeps picks stable during playback',
     () async {
-      const personalizedSeed = PlaylistTrackSummary(
-        providerId: 'qq-music',
-        opaqueId: 'track:11:0:personalized-mid:-',
-        title: 'Personalized seed',
-        artistNames: ['Artist'],
-      );
-      const queueSeed = PlaylistTrackSummary(
-        providerId: 'qq-music',
-        opaqueId: 'track:12:0:queue-mid:-',
-        title: 'Queue seed',
-        artistNames: ['Artist'],
-      );
+      final recent = _RecentListening();
       final related = _RelatedGateway(
         const RelatedTracksResult(
           tracks: [
@@ -237,35 +329,104 @@ void main() {
         _AccountGateway(const AccountSummaryLoadResult()),
         _DailyGateway(const DailyRecommendationResult()),
         _PlaylistsGateway(const PersonalizedPlaylistsResult()),
-        _TracksGateway(
-          const PersonalizedTracksResult(tracks: [personalizedSeed]),
-        ),
+        _TracksGateway(const PersonalizedTracksResult()),
         related,
+        recentListening: recent,
       );
       addTearDown(controller.dispose);
+      const seed = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:11:0:seed-mid:-',
+        title: 'Seed',
+        artistNames: ['Artist'],
+      );
 
-      await controller.load();
+      controller.observePlayback(seed, 0, true);
+      expect(related.seeds, isEmpty);
+      recent.next = seed;
+      controller.observePlayback(seed, 30000, true);
       await Future<void>.delayed(Duration.zero);
 
-      expect(related.seeds, [same(personalizedSeed)]);
-      expect(controller.relatedSeed, same(personalizedSeed));
+      expect(related.seeds, [same(seed)]);
+      expect(controller.relatedSeed, same(seed));
       expect(controller.relatedTracksStage, HomeResourceStage.content);
+      expect(controller.relatedTracks.single.title, 'Related');
 
-      controller.updateRelatedSeed(queueSeed);
-      await Future<void>.delayed(Duration.zero);
-      expect(related.seeds, [same(personalizedSeed), same(queueSeed)]);
-      expect(controller.relatedSeed, same(queueSeed));
-
-      controller.updateRelatedSeed(null);
-      await Future<void>.delayed(Duration.zero);
-      expect(related.seeds, [
-        same(personalizedSeed),
-        same(queueSeed),
-        same(personalizedSeed),
-      ]);
-      expect(controller.relatedSeed, same(personalizedSeed));
+      controller.observePlayback(null, 0, false);
+      expect(controller.relatedSeed, same(seed));
+      expect(related.seeds, hasLength(1));
     },
   );
+
+  test('does not treat personalized songs as history and changes seed only on refresh', () async {
+    const personalizedSeed = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:11:0:personalized-mid:-',
+      title: 'Personalized seed',
+      artistNames: ['Artist'],
+    );
+    const queueSeed = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:12:0:queue-mid:-',
+      title: 'Queue seed',
+      artistNames: ['Artist'],
+    );
+    final related = _RelatedGateway(
+      const RelatedTracksResult(
+        tracks: [
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track:22:0:related-mid:-',
+            title: 'Related',
+            artistNames: ['Artist'],
+          ),
+        ],
+      ),
+    );
+    final recent = _RecentListening();
+    final controller = HomeController(
+      _AccountGateway(const AccountSummaryLoadResult()),
+      _DailyGateway(const DailyRecommendationResult()),
+      _PlaylistsGateway(const PersonalizedPlaylistsResult()),
+      _TracksGateway(
+        const PersonalizedTracksResult(tracks: [personalizedSeed]),
+      ),
+      related,
+      recentListening: recent,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(related.seeds, isEmpty);
+    expect(controller.relatedSeed, isNull);
+    expect(controller.relatedTracksStage, HomeResourceStage.empty);
+
+    recent.next = personalizedSeed;
+    controller.observePlayback(queueSeed, 30000, true);
+    await Future<void>.delayed(Duration.zero);
+    expect(related.seeds, [same(personalizedSeed)]);
+    expect(controller.relatedSeed, same(personalizedSeed));
+
+    recent.next = queueSeed;
+    controller.observePlayback(queueSeed, 31000, true);
+    expect(related.seeds, hasLength(1));
+    controller.refreshRelatedTracks();
+    await Future<void>.delayed(Duration.zero);
+    expect(related.seeds, [same(personalizedSeed), same(queueSeed)]);
+    expect(controller.relatedSeed, same(queueSeed));
+  });
+}
+
+class _RecentListening implements RecentListeningGateway {
+  PlaylistTrackSummary? next;
+  @override
+  PlaylistTrackSummary? choose() => next;
+  @override
+  void observe(PlaylistTrackSummary? track, int positionMs, bool playing) {}
+  @override
+  void dispose() {}
 }
 
 class _AccountGateway implements AccountSummaryGateway {
@@ -402,6 +563,29 @@ class _RelatedGateway implements RelatedTracksGateway {
     seeds.add(seed);
     return _RelatedOperation(result);
   }
+}
+
+class _ControlledRelatedGateway implements RelatedTracksGateway {
+  final operations = <_ControlledRelatedOperation>[];
+  @override
+  RelatedTracksLoadOperation beginLoad(PlaylistTrackSummary seed) {
+    final operation = _ControlledRelatedOperation();
+    operations.add(operation);
+    return operation;
+  }
+}
+
+class _ControlledRelatedOperation implements RelatedTracksLoadOperation {
+  final result = Completer<RelatedTracksResult>();
+  int cancelCalls = 0;
+  @override
+  bool cancel() {
+    cancelCalls++;
+    return true;
+  }
+
+  @override
+  Future<RelatedTracksResult> run() => result.future;
 }
 
 class _RelatedOperation implements RelatedTracksLoadOperation {

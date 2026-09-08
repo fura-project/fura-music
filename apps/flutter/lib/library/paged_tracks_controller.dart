@@ -1,0 +1,434 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+
+enum PlaylistDetailStage {
+  loading,
+  content,
+  empty,
+  error,
+  authenticationRequired,
+  credentialRejected,
+}
+
+/// Shared ordered track-page loader for playlists and account collections.
+/// A page supplies the operation factory; collection identity stays outside.
+class PagedTracksController extends ChangeNotifier {
+  PagedTracksController(
+    this._beginLoad, {
+    this.loadAllPageInterval = const Duration(milliseconds: 180),
+    this.postTransientPageInterval = const Duration(milliseconds: 500),
+    this.transientRetryDelays = const [
+      Duration(seconds: 1),
+      Duration(seconds: 3),
+    ],
+    Future<void> Function(Duration)? delay,
+  }) : _delay = delay ?? ((duration) => Future<void>.delayed(duration));
+
+  static const pageSize = 100;
+
+  final PlaylistTrackPageLoadOperation Function(int offset, int size)
+  _beginLoad;
+  final Duration loadAllPageInterval;
+  final Duration postTransientPageInterval;
+  final List<Duration> transientRetryDelays;
+  final Future<void> Function(Duration) _delay;
+
+  PlaylistDetailStage _stage = PlaylistDetailStage.loading;
+  List<PlaylistTrackSummary> _tracks = const [];
+  UserLibraryFailure? _failure;
+  int _total = 0;
+  bool _totalIsExact = true;
+  bool _hasMore = false;
+  int _nextOffset = 0;
+  int _omittedTrackCount = 0;
+  bool _isLoadingMore = false;
+  bool _isLoadingAll = false;
+  bool _isRefreshing = false;
+  UserLibraryFailure? _appendFailure;
+  UserLibraryFailure? _refreshFailure;
+  PlaylistTrackPageLoadOperation? _operation;
+  int _generation = 0;
+  Completer<void>? _appendPump;
+  bool _manualPageRequested = false;
+  int _prefetchTarget = 0;
+  int _prefetchPages = 0;
+  Duration _estimatedPageLatency = const Duration(milliseconds: 350);
+  bool _disposed = false;
+
+  PlaylistDetailStage get stage => _stage;
+  List<PlaylistTrackSummary> get tracks => _tracks;
+  UserLibraryFailure? get failure => _failure;
+  int get total => _total;
+  bool get totalIsExact => _totalIsExact;
+  int get processedCount => _nextOffset;
+  int get omittedTrackCount => _omittedTrackCount;
+  bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get isLoadingAll => _isLoadingAll;
+  bool get isLoading => _operation != null;
+  bool get isRefreshing => _isRefreshing;
+  Duration get estimatedPageLatency => _estimatedPageLatency;
+  UserLibraryFailure? get appendFailure => _appendFailure;
+  UserLibraryFailure? get refreshFailure => _refreshFailure;
+  bool get canLoadMore =>
+      _stage == PlaylistDetailStage.content &&
+      _hasMore &&
+      _appendFailure == null &&
+      !_isLoadingMore &&
+      !_isRefreshing;
+  bool get canRetryMore => !_isRefreshing && _isRetryable(_appendFailure);
+
+  bool get canRetry =>
+      _stage == PlaylistDetailStage.error && _isRetryable(_failure);
+
+  bool get canRetryRefresh => _isRetryable(_refreshFailure);
+
+  Future<void> load() => _load(preserveSnapshot: false);
+
+  Future<void> refresh() => _load(
+    preserveSnapshot:
+        _stage == PlaylistDetailStage.content ||
+        _stage == PlaylistDetailStage.empty,
+  );
+
+  Future<void> _load({required bool preserveSnapshot}) async {
+    if (_disposed) return;
+    final generation = ++_generation;
+    _appendPump = null;
+    _manualPageRequested = false;
+    cancelPrefetch();
+    _isLoadingAll = false;
+    _operation?.cancel();
+    final operation = _beginLoad(0, pageSize);
+    _operation = operation;
+    _failure = null;
+    _isLoadingMore = false;
+    _isRefreshing = preserveSnapshot;
+    _appendFailure = null;
+    _refreshFailure = null;
+    if (!preserveSnapshot) {
+      _tracks = const [];
+      _total = 0;
+      _totalIsExact = true;
+      _hasMore = false;
+      _nextOffset = 0;
+      _omittedTrackCount = 0;
+      _stage = PlaylistDetailStage.loading;
+    }
+    _notify();
+
+    final latency = Stopwatch()..start();
+    final result = await operation.run();
+    if (identical(_operation, operation)) _operation = null;
+    if (!_isCurrent(generation)) return;
+
+    _isRefreshing = false;
+    final nextOffset = result.continuationOffset;
+    final hasMore = _pageHasMore(result, nextOffset);
+    final validSuccess =
+        result.failure == null &&
+        result.offset == 0 &&
+        _validPage(result, nextOffset, hasMore);
+    if (validSuccess) {
+      _recordPageLatency(latency.elapsed);
+      _tracks = List.unmodifiable(result.tracks);
+      _total = result.total;
+      _totalIsExact = result.totalIsExact;
+      _hasMore = hasMore;
+      _nextOffset = nextOffset;
+      _omittedTrackCount = result.omittedTrackCount;
+      _failure = null;
+      _stage = _tracks.isEmpty
+          ? PlaylistDetailStage.empty
+          : PlaylistDetailStage.content;
+    } else if (preserveSnapshot &&
+        _canRetainSnapshot(
+          result.failure ?? UserLibraryFailure.invalidResponse,
+        )) {
+      _failure = null;
+      _refreshFailure = result.failure ?? UserLibraryFailure.invalidResponse;
+    } else {
+      _tracks = const [];
+      _total = 0;
+      _totalIsExact = true;
+      _hasMore = false;
+      _nextOffset = 0;
+      _omittedTrackCount = 0;
+      _failure = result.failure ?? UserLibraryFailure.invalidResponse;
+      _stage = switch (_failure!) {
+        UserLibraryFailure.authenticationRequired ||
+        UserLibraryFailure.replaced ||
+        UserLibraryFailure.cancelled =>
+          PlaylistDetailStage.authenticationRequired,
+        UserLibraryFailure.credentialRejected ||
+        UserLibraryFailure.credentialRejectedStorageCleanupFailed =>
+          PlaylistDetailStage.credentialRejected,
+        UserLibraryFailure.coreUnavailable ||
+        UserLibraryFailure.network ||
+        UserLibraryFailure.serviceUnavailable ||
+        UserLibraryFailure.invalidResponse ||
+        UserLibraryFailure.alreadyRunning => PlaylistDetailStage.error,
+      };
+    }
+    _notify();
+  }
+
+  /// Manual loading, scrolling and search share one paced, single-flight pump.
+  /// Repeated clicks join its work; they never queue another identical page.
+  Future<void> loadMore() {
+    if (_disposed) return Future.value();
+    if (_appendPump case final pump?) return pump.future;
+    if (!canLoadMore && !canRetryMore) return Future.value();
+    _manualPageRequested = true;
+    return _ensureAppendPump();
+  }
+
+  /// A viewport-local demand, not an instruction to drain the collection.
+  /// At most two transport pages (including any in flight) are budgeted. Short,
+  /// duplicate or omitted pages cannot turn one scroll event into an unbounded
+  /// fetch. A later scroll can supply fresh demand without discarding old rows.
+  void prefetchTo(int trackCount) {
+    if (_disposed ||
+        _isLoadingAll ||
+        _isRefreshing ||
+        _stage != PlaylistDetailStage.content ||
+        !_hasMore ||
+        _appendFailure != null) {
+      return;
+    }
+    _prefetchTarget = trackCount.clamp(0, _tracks.length + 2 * pageSize);
+    final missing = (_prefetchTarget - _tracks.length).clamp(0, 2 * pageSize);
+    _prefetchPages =
+        ((missing + pageSize - 1) ~/ pageSize) - (_isLoadingMore ? 1 : 0);
+    if (_prefetchPages < 0) _prefetchPages = 0;
+    if (_wantsAppend) unawaited(_ensureAppendPump());
+  }
+
+  void cancelPrefetch() {
+    _prefetchTarget = 0;
+    _prefetchPages = 0;
+  }
+
+  bool get _wantsAppend =>
+      _isLoadingAll ||
+      _manualPageRequested ||
+      (_prefetchPages > 0 && _tracks.length < _prefetchTarget);
+
+  Future<void> _loadNextPage() async {
+    if (!canLoadMore && !canRetryMore) return;
+    final generation = _generation;
+    final expectedOffset = _nextOffset;
+    final operation = _beginLoad(expectedOffset, pageSize);
+    _operation = operation;
+    _isLoadingMore = true;
+    _appendFailure = null;
+    _notify();
+
+    final latency = Stopwatch()..start();
+    final result = await operation.run();
+    if (identical(_operation, operation)) _operation = null;
+    if (!_isCurrent(generation)) return;
+    _isLoadingMore = false;
+
+    final pageEnd = result.continuationOffset;
+    final hasMore = _pageHasMore(result, pageEnd);
+    if (result.failure == null &&
+        result.offset == expectedOffset &&
+        _validPage(result, pageEnd, hasMore)) {
+      _recordPageLatency(latency.elapsed);
+      final seen = _tracks
+          .map((track) => '${track.providerId}\u0000${track.opaqueId}')
+          .toSet();
+      final additions = result.tracks.where(
+        (track) => seen.add('${track.providerId}\u0000${track.opaqueId}'),
+      );
+      _tracks = List.unmodifiable([..._tracks, ...additions]);
+      _nextOffset = pageEnd;
+      _omittedTrackCount += result.omittedTrackCount;
+      _total = result.total;
+      _totalIsExact = result.totalIsExact;
+      _hasMore = hasMore;
+      _appendFailure = null;
+    } else {
+      final failure = result.failure ?? UserLibraryFailure.invalidResponse;
+      if (failure == UserLibraryFailure.authenticationRequired ||
+          failure == UserLibraryFailure.replaced ||
+          failure == UserLibraryFailure.cancelled ||
+          failure == UserLibraryFailure.credentialRejected ||
+          failure ==
+              UserLibraryFailure.credentialRejectedStorageCleanupFailed) {
+        _tracks = const [];
+        _total = 0;
+        _totalIsExact = true;
+        _hasMore = false;
+        _nextOffset = 0;
+        _omittedTrackCount = 0;
+        _failure = failure;
+        _stage =
+            failure == UserLibraryFailure.credentialRejected ||
+                failure ==
+                    UserLibraryFailure.credentialRejectedStorageCleanupFailed
+            ? PlaylistDetailStage.credentialRejected
+            : PlaylistDetailStage.authenticationRequired;
+      } else {
+        _appendFailure = failure;
+      }
+    }
+    _notify();
+  }
+
+  /// Search promotes an existing browse request instead of starting a second
+  /// loader. Its matches can use every page as soon as that page is published.
+  Future<void> loadAll() {
+    if (_disposed ||
+        _isRefreshing ||
+        !_hasMore ||
+        _stage != PlaylistDetailStage.content) {
+      return Future.value();
+    }
+    _isLoadingAll = true;
+    cancelPrefetch();
+    final future = _ensureAppendPump();
+    _notify();
+    return future;
+  }
+
+  Future<void> _ensureAppendPump() {
+    if (_appendPump case final pump?) return pump.future;
+    final pump = Completer<void>();
+    _appendPump = pump; // Install before notifications can reenter this owner.
+    unawaited(_runAppendPump(pump, _generation));
+    return pump.future;
+  }
+
+  Future<void> _runAppendPump(Completer<void> pump, int generation) async {
+    var retryIndex = 0;
+    var nextPageInterval = loadAllPageInterval;
+    if (_isLoadingAll &&
+        _isTransientForAutomaticRetry(_appendFailure) &&
+        transientRetryDelays.isNotEmpty) {
+      await _delay(transientRetryDelays.first);
+      retryIndex = 1;
+      nextPageInterval = postTransientPageInterval;
+    }
+
+    while (_isCurrent(generation) &&
+        _wantsAppend &&
+        (canLoadMore || canRetryMore)) {
+      _manualPageRequested = false;
+      if (_prefetchPages > 0) --_prefetchPages;
+      await _loadNextPage();
+      if (!_isCurrent(generation)) break;
+      final appendFailure = _appendFailure;
+      if (appendFailure != null) {
+        if (_isLoadingAll &&
+            _isTransientForAutomaticRetry(appendFailure) &&
+            retryIndex < transientRetryDelays.length) {
+          final retryDelay = transientRetryDelays[retryIndex++];
+          await _delay(retryDelay);
+          nextPageInterval = postTransientPageInterval;
+          continue;
+        }
+        break;
+      }
+      retryIndex = 0;
+      if (_wantsAppend && canLoadMore && nextPageInterval > Duration.zero) {
+        await _delay(nextPageInterval);
+      }
+      nextPageInterval = loadAllPageInterval;
+    }
+
+    if (_isCurrent(generation) && identical(_appendPump, pump)) {
+      _appendPump = null;
+      _manualPageRequested = false;
+      cancelPrefetch();
+      _isLoadingAll = false;
+      _notify();
+    }
+    pump.complete();
+  }
+
+  /// Stops automatic full-playlist loading after the current bounded page.
+  /// The in-flight page is still allowed to finish and remains usable.
+  void cancelLoadAll() {
+    if (!_isLoadingAll) return;
+    _isLoadingAll = false;
+    _notify();
+  }
+
+  void retry() {
+    if (canRetry) unawaited(load());
+  }
+
+  void retryMore() {
+    if (canRetryMore) unawaited(loadMore());
+  }
+
+  void retryRefresh() {
+    if (canRetryRefresh) unawaited(refresh());
+  }
+
+  void dismissRefreshFailure() {
+    if (_refreshFailure == null) return;
+    _refreshFailure = null;
+    _notify();
+  }
+
+  bool _isRetryable(UserLibraryFailure? failure) =>
+      failure == UserLibraryFailure.network ||
+      failure == UserLibraryFailure.serviceUnavailable ||
+      failure == UserLibraryFailure.invalidResponse ||
+      failure == UserLibraryFailure.coreUnavailable;
+
+  bool _canRetainSnapshot(UserLibraryFailure? failure) =>
+      _isRetryable(failure) || failure == UserLibraryFailure.alreadyRunning;
+
+  bool _isTransientForAutomaticRetry(UserLibraryFailure? failure) =>
+      failure == UserLibraryFailure.network ||
+      failure == UserLibraryFailure.serviceUnavailable;
+
+  bool _pageHasMore(PlaylistTrackPageResult result, int pageEnd) =>
+      result.hasMore || pageEnd < result.total;
+
+  bool _validPage(
+    PlaylistTrackPageResult result,
+    int nextOffset,
+    bool hasMore,
+  ) {
+    final consumedCount = nextOffset - result.offset;
+    return result.total >= 0 &&
+        result.omittedTrackCount >= 0 &&
+        consumedCount >= 0 &&
+        nextOffset <= result.total &&
+        result.tracks.length + result.omittedTrackCount <= consumedCount &&
+        (!hasMore || nextOffset > result.offset);
+  }
+
+  bool _isCurrent(int generation) => !_disposed && generation == _generation;
+
+  void _recordPageLatency(Duration elapsed) {
+    final micros = elapsed.inMicroseconds.clamp(50000, 10000000);
+    _estimatedPageLatency = Duration(
+      microseconds: (_estimatedPageLatency.inMicroseconds * 3 + micros) ~/ 4,
+    );
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    ++_generation;
+    cancelPrefetch();
+    _operation?.cancel();
+    _operation = null;
+    _isRefreshing = false;
+    _isLoadingAll = false;
+    super.dispose();
+  }
+}

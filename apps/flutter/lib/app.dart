@@ -21,14 +21,17 @@ import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
+import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
@@ -36,6 +39,7 @@ import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/settings/app_settings_controller.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -46,6 +50,7 @@ class MusicApp extends StatefulWidget {
     QqMusicAuthenticationGateway? authenticationGateway,
     UserLibraryGateway? libraryGateway,
     PlaylistDetailGateway? playlistDetailGateway,
+    RecentPlaysGateway? recentPlaysGateway,
     MediaResolutionGateway? mediaResolutionGateway,
     LyricGateway? lyricGateway,
     PlaybackQueueGateway? playbackQueueGateway,
@@ -67,6 +72,7 @@ class MusicApp extends StatefulWidget {
     PersonalizedPlaylistsGateway? personalizedPlaylistsGateway,
     PersonalizedTracksGateway? personalizedTracksGateway,
     RelatedTracksGateway? relatedTracksGateway,
+    RecentListeningGateway Function()? recentListeningFactory,
     FavoriteAlbumGateway? favoriteAlbumGateway,
     FavoriteArtistGateway? favoriteArtistGateway,
     TrackCommentGateway? trackCommentGateway,
@@ -108,7 +114,7 @@ class MusicApp extends StatefulWidget {
       );
       if (mediaResolutionGateway == null) {
         defaultMediaResolutionGateway = RustMediaResolutionGateway(
-          preferredQuality: _playbackQuality(initialSettings.playbackQuality),
+          preferredQuality: initialSettings.playbackQuality.audioPreference,
         );
         mediaResolutionGateway =
             QqMusicCredentialCleaningMediaResolutionGateway(
@@ -145,6 +151,7 @@ class MusicApp extends StatefulWidget {
       bootstrap: bootstrap,
       authenticationGateway: authenticationGateway,
       homeDependencies: AuthenticatedHomeDependencies(
+        recentListeningFactory: recentListeningFactory,
         accountSummaryGateway: accountSummaryGateway,
         dailyRecommendationGateway: dailyRecommendationGateway,
         personalizedPlaylistsGateway: personalizedPlaylistsGateway,
@@ -153,6 +160,7 @@ class MusicApp extends StatefulWidget {
             relatedTracksGateway ?? const RustRelatedTracksGateway(),
       ),
       libraryDependencies: AuthenticatedLibraryDependencies(
+        recentPlaysGateway: recentPlaysGateway,
         libraryGateway: libraryGateway,
         playlistDetailGateway: playlistDetailGateway,
         albumTrackGateway: albumTrackGateway ?? const RustAlbumTrackGateway(),
@@ -199,7 +207,7 @@ class MusicApp extends StatefulWidget {
           (defaultMediaResolutionGateway == null
               ? null
               : (preference) => defaultMediaResolutionGateway!
-                    .updatePreferredQuality(_playbackQuality(preference))),
+                    .updatePreferredQuality(preference.audioPreference)),
       initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
@@ -237,35 +245,31 @@ class MusicApp extends StatefulWidget {
 }
 
 class _MusicAppState extends State<MusicApp> {
-  late AppSettings _settings;
-  AppSettingsStore? _settingsStore;
+  late final AppSettingsController _settingsController;
 
   @override
   void initState() {
     super.initState();
-    _settings = widget.initialSettings;
-    _settingsStore = widget.settingsStore;
+    _settingsController = AppSettingsController(
+      widget.settingsStore,
+      widget.onPlaybackQualityChanged,
+      initialSettings: widget.initialSettings,
+    )..addListener(_onSettingsChanged);
   }
 
-  Future<AppSettingsWriteResult> _updateSettings(AppSettings settings) async {
-    if (settings == _settings) return AppSettingsWriteResult.saved;
-    final previous = _settings;
-    setState(() => _settings = settings);
-    widget.onPlaybackQualityChanged?.call(settings.playbackQuality);
-    var result = AppSettingsWriteResult.storageUnavailable;
-    try {
-      final store = _settingsStore ??= AppSettingsStore();
-      result = await store.save(settings);
-    } on Object {
-      result = AppSettingsWriteResult.storageUnavailable;
-    }
-    if (result == AppSettingsWriteResult.storageUnavailable &&
-        mounted &&
-        _settings == settings) {
-      setState(() => _settings = previous);
-      widget.onPlaybackQualityChanged?.call(previous.playbackQuality);
-    }
-    return result;
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<AppSettingsWriteResult> _updateSettings(AppSettings settings) =>
+      _settingsController.update(settings);
+
+  @override
+  void dispose() {
+    _settingsController
+      ..removeListener(_onSettingsChanged)
+      ..dispose();
+    super.dispose();
   }
 
   @override
@@ -274,7 +278,7 @@ class _MusicAppState extends State<MusicApp> {
     title: 'fura music',
     theme: MusicMaterialTheme.light(),
     darkTheme: MusicMaterialTheme.dark(),
-    themeMode: _settings.theme.materialThemeMode,
+    themeMode: _settingsController.settings.theme.materialThemeMode,
     home: LoginPage(
       bootstrap: widget.bootstrap,
       authenticationGateway: widget.authenticationGateway,
@@ -283,20 +287,12 @@ class _MusicAppState extends State<MusicApp> {
       discoveryDependencies: widget.discoveryDependencies,
       playbackDependencies: widget.playbackDependencies,
       desktopQuickLoginEnabled: widget.desktopQuickLoginEnabled,
-      settings: _settings,
+      settings: _settingsController.settings,
       onSettingsChanged: _updateSettings,
       initialCredentialRestore: widget.initialCredentialRestore,
     ),
   );
 }
-
-PlaybackAudioQualityPreference _playbackQuality(
-  AppPlaybackQualityPreference preference,
-) => switch (preference) {
-  AppPlaybackQualityPreference.standard =>
-    PlaybackAudioQualityPreference.standard,
-  AppPlaybackQualityPreference.high => PlaybackAudioQualityPreference.high,
-};
 
 class LoginPage extends StatefulWidget {
   const LoginPage({

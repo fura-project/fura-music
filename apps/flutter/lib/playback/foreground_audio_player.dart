@@ -6,6 +6,8 @@ enum ForegroundAudioState { stopped, playing, paused, completed }
 
 enum ForegroundAudioFailure { load, playback, coreUnavailable }
 
+enum ForegroundAudioFormat { mp3, m4a, flac }
+
 class ForegroundAudioException implements Exception {
   const ForegroundAudioException(this.failure);
 
@@ -16,7 +18,10 @@ class ForegroundAudioException implements Exception {
 }
 
 abstract interface class ForegroundAudioEngine {
-  Future<ForegroundAudioSession> loadRemote(Uri source);
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  });
 }
 
 abstract interface class ForegroundAudioSession {
@@ -41,7 +46,10 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
   }
 
   @override
-  Future<ForegroundAudioSession> loadRemote(Uri source) async {
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async {
     if ((source.scheme != 'http' && source.scheme != 'https') ||
         !source.hasAuthority) {
       throw const ForegroundAudioException(ForegroundAudioFailure.load);
@@ -49,7 +57,7 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
 
     final session = _AudioplayersForegroundAudioSession(audio.AudioPlayer());
     try {
-      await session.prepare(source);
+      await session.prepare(source, format);
       return session;
     } on Object {
       await session.dispose();
@@ -100,10 +108,18 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
   @override
   Stream<int> get positionMs => _positions.stream;
 
-  Future<void> prepare(Uri source) => _invoke(() async {
-    await _player.setReleaseMode(audio.ReleaseMode.stop);
-    await _player.setSourceUrl(source.toString(), mimeType: 'audio/mpeg');
-  }, ForegroundAudioFailure.load);
+  Future<void> prepare(Uri source, ForegroundAudioFormat format) =>
+      _invoke(() async {
+        await _player.setReleaseMode(audio.ReleaseMode.stop);
+        await _player.setSourceUrl(
+          source.toString(),
+          mimeType: switch (format) {
+            ForegroundAudioFormat.mp3 => 'audio/mpeg',
+            ForegroundAudioFormat.m4a => 'audio/mp4',
+            ForegroundAudioFormat.flac => 'audio/flac',
+          },
+        );
+      }, ForegroundAudioFailure.load);
 
   @override
   Future<void> play() =>
