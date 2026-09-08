@@ -2,16 +2,18 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: CORE
-  state: ACTIVE
+  state: AWAITING_HUMAN_EVIDENCE
   acceptance_milestone: M1
   active_workstream: NETEASE_BUILT_IN_PROVIDER
-  current_task: NETEASE_ANONYMOUS_CORE_VERTICAL_SLICE
-  next_action: COMPLETE_PUBLIC_FIXTURES_AND_AUTHENTICATED_FOUNDATION
+  current_task: NETEASE_CORE_MACHINE_VERIFICATION_COMPLETE
+  next_action: HUMAN_NETEASE_QR_AND_ACCOUNT_READ_EVIDENCE
 ---
 
 # Current State
 
-- NetEase P0 implementation checkpoint: two new crates, four Search traits, exact Track lookup, bounded public playlist/Album/Artist browsing, line lyrics, rankings/recommendations and normal standard media have implementations and 13 passing public live observations. No account used. Provider/transport negative coverage and static dispatch checks are still active work; then complete the authenticated fixture/state foundation. The Remaining Work Audit in `docs/research/netease-protocol-evidence.md` governs the stop check, per the Human continuation contract. No UI candidate was edited.
+- **2026-09-09 NetEase machine verification complete:** `netease-client` and `provider-netease` implement all four Search types, exact Track detail, bounded public playlist/Album/Artist browsing, line lyrics, rankings/public recommendations and ordinary standard media. Thirteen anonymous capability observations passed under a serial, ignored, 16-request live budget; no account or media download was used. The authenticated Core foundation includes opaque QR/PNG/cancellation, provider-owned versioned credential import/export/verified restore, account summary, bounded user/owned/private/liked/favorite collections, daily Tracks, Personal FM, personalized playlists and authenticated standard media. Synthetic tests cover explicit rejection, deadline, late completion, replacement and between-request cancellation. Ranking pages preserve raw cursor/omissions even for an unavailable window. Provider API adds only exact Track details, daily Track batches, native QR selection and the static QQ/NetEase enum/resolver pair. Private native media composition initializes NetEase only on its exact route; public Bridge APIs, generated Dart and Flutter are unchanged. Final offline Rust gates: 482 passed / 0 failed / 14 ignored, workspace/all-target tests, fmt and strict Clippy; pinned FRB 2.13.0 generation and API orphan audit pass. These machine checks do not establish real-account behavior or audio playback. See the exhaustive [Remaining Work Audit](docs/research/netease-remaining-work-audit.md), [protocol evidence](docs/research/netease-protocol-evidence.md), and [auth evidence](docs/research/netease-auth-evidence.md). All safe authorized implementation is complete; only the listed real-account/entitlement/environment observations remain `HUMAN_EVIDENCE_REQUIRED`. Execution mode stays autonomous CORE while this evidence is pending. Current UI candidates remain retained and visually unreviewed. No push.
+
+- NetEase local implementation commits: `f1470c2` (HD-023/product/mode), `a9ab2fc` (public Provider and exact static media routing), `1cffbfa` (authenticated sessions/reads and omission/cancellation regressions), `99088eb` (bounded serial compatibility gates). The final documentation checkpoint records this audit; all commits are local and no push was performed.
 
 - **2026-09-09 Human redirection (HD-023):** persist `AUTONOMOUS_DEVELOPMENT / CORE`; implement NetEase as the second built-in formal Provider while QQ remains first-class. Current UI candidates are retained with Human visual review deferred (neither accepted nor rejected). Flutter and visual iteration are frozen. Start: HEAD `317666a9913e91f13df5d8bf0bba10f4aee79a43`, clean working tree; `git status` and 30 commits inspected and captured in `/tmp/fura-netease-evidence/initial-git.txt`. Execute anonymous catalog/lyrics/media first, then evidence-backed authenticated foundations; real account evidence remains Human-operated. Local logical commits only, no push.
 

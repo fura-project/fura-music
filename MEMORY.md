@@ -6,7 +6,7 @@
 - Current-Track related recommendations use the signed anonymous `rcmusic.similarSongRadioServer/get_simsongs` request and flat `songInfoList` response. The modern anonymous Web-profile `GetSimilarSongs` request can return a successful but empty envelope; L-1124's working modern path includes Android device/QIMEI session context and is not equivalent. Keep this separate from personalized Tracks: Flutter supplies only the current queue Track as seed and must not claim persistent listening-history or autoplay semantics.
 
 - The repository started from a single MIT `LICENSE` commit (`f439866`) on 2026-08-25; no legacy architecture or implementation needs preservation.
-- The product contract is QQ Music-first. Additional providers are for proven fallback or local-library needs, not breadth marketing.
+- The product contract remains QQ Music-first. HD-023 authorizes NetEase Cloud Music as the second built-in formal Core Provider, with no cross-service aggregation/matching/substitution, third Provider, dynamic runtime or UI integration.
 - Divide Flutter and Rust by lifecycle: reusable product/domain behavior belongs in Rust; presentation-driven state belongs in Dart.
 - Normal runtime communication is an in-process typed bridge. Do not introduce a localhost API sidecar.
 - External QQ Music behavior must be isolated behind `QQMusicClient`; project domain models must not become aliases for raw response models.

@@ -21,11 +21,11 @@ Rust application/core API
 
 There is no runtime HTTP sidecar between Flutter and the Rust core.
 
-HD-023 authorizes exactly two built-in Providers. `BuiltInProvider` has deterministic QQ/NetEase choices, and `BuiltInMediaSources` dispatches the coordinator to exactly the owning resolver. No independent registry, runtime discovery, cross-provider matching, or fallback exists. The presentation bootstrap remains QQ-default while UI integration is frozen.
+HD-023 authorizes exactly two built-in Providers. `BuiltInProvider` has deterministic QQ/NetEase choices, and `BuiltInMediaSources` dispatches the coordinator to exactly the owning resolver. No independent registry, runtime discovery, cross-provider matching, or fallback exists. The presentation bootstrap remains QQ-default while UI integration is frozen. NetEase HTTPS initialization is lazy on its exact media route, so initialization failure cannot disable QQ playback. RankingTracksPage now carries an optional raw continuation offset and omitted-row count; its existing constructor remains compatible with QQ. This lets Core advance through unavailable NetEase ranking entries without confusing usable row count with upstream positions.
 
 ## Dependency direction
 
-- Presentation depends on generated or explicit bridge types, never raw QQ Music response models.
+- Presentation depends on generated or explicit bridge types, never raw QQ Music or NetEase response models.
 - The bridge adapts calls and data ownership. It does not contain product business rules.
 - Provider implementations depend on provider interfaces and project domain models.
 - `QQMusicProvider` maps raw protocol results from `QQMusicClient` into stable project domain models.
@@ -277,3 +277,5 @@ random-key Linux integration proves native read/write/delete and cleanup.
 `TrackDetailsProvider` adds a neutral exact lookup contract because Search cannot stand in for canonical identity lookup; an unavailable song is `None`, never another Provider's result. Other public browsing contracts are reused. Private `bridges/flutter/src/media_source.rs` assembles the existing QQ owner and one anonymous NetEase owner; generated/public Bridge DTOs and Flutter remain unchanged.
 
 Source resolution preserves preferred/actual quality semantics: the initial NetEase resolver returns only the verified standard profile and never escalates a trial or switches service. Returned URI/TTL stay short-lived and redacted. Protocol and validation boundaries are in `docs/research/netease-protocol-evidence.md`.
+
+NetEase authentication now uses its own single state owner and generation watcher. Public Core offers the ProviderDefault QR channel, an opaque PNG challenge/session/cancellation authority, and explicit import/export/verify functions. Neither restored bytes nor a QR scan alone install an account. Exact server account/profile validation, generation advancement at replacement/installation, cancellation and post-await guards protect library/media/recommendation results. Real account acceptance remains Human-only. User collections, liked windows, favorite collections, daily songs and Personal FM use existing neutral Domain types; DailyTracksProvider adds only the absent daily Track batch semantic.

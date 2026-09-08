@@ -1,6 +1,6 @@
 # Core / Backend Development
 
-Use this guide for QQ Music protocol, Provider and Domain behavior, authentication and credential semantics, media resolution, Queue rules, lyric parsing/timing, remote mutation semantics, recommendation capability, Settings business models, reusable non-visual logic, Rust platform-neutral behavior, and typed Bridge contracts. A small Flutter adapter needed to expose a capability remains Core work; visual design does not.
+Use this guide for QQ Music and NetEase protocol, Provider and Domain behavior, authentication and credential semantics, media resolution, Queue rules, lyric parsing/timing, remote mutation semantics, recommendation capability, Settings business models, reusable non-visual logic, Rust platform-neutral behavior, and typed Bridge contracts. A small Flutter adapter needed to expose a capability remains Core work; visual design does not.
 
 The shared authority, execution-mode, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply.
 
@@ -14,7 +14,7 @@ The Agent designs the bounded implementation.
 
 Inside an authorized capability, implementation details such as Rust models, Provider contracts, Domain representation, Bridge DTOs, cancellation, stale-result rules, error semantics, tests, and internal factoring normally do not require Human approval. This does not authorize a new product category, Provider, stored-account automation, real-account mutation, speculative framework, or visual redesign.
 
-Keep raw QQ models and protocol behavior inside `QQMusicClient`; keep Provider identity opaque outside `QQMusicProvider`; keep reusable business behavior in Rust; keep the Bridge typed, coarse, cancellable, provider-neutral, and free of product business rules.
+Keep raw QQ/NetEase models and protocol behavior inside their respective clients; keep Provider identity opaque outside the owning Provider; keep reusable business behavior in Rust; keep the Bridge typed, coarse, cancellable, provider-neutral, and free of product business rules.
 
 ## Execution-mode interpretation
 

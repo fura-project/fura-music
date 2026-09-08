@@ -42,22 +42,79 @@ HTTP has a 20-second deadline, no redirects, a 2 MiB streaming body ceiling, and
 
 2026-09-09: four one-request Search observations (first three identified a structural mapping issue; fourth passed after regression repair). Public artist credits can have ID 0 with a valid display name; retain the name, do not fabricate a navigable Artist identity. No endpoint was changed.
 
-Then one explicit ignored serial catalog gate, hard budget 16 HTTPS requests and a one-second minimum cadence, passed all 13 observed capability points: Track/Artist/Album/Playlist Search, Song detail, Lyrics, standard Media, Album content, Artist Tracks/Albums, public Playlist, Rankings and public recommendations. The playlist path made two requests. Only coarse outcomes and redacted field/type diagnostics were retained, never raw bodies, song titles, account data, lyrics or media URIs. The test's selected samples establish compatibility, not all-catalog availability, licensed-region coverage or account behavior.
+Then one explicit ignored serial catalog gate, hard budget 16 HTTPS requests and a one-second minimum cadence, passed all 13 observed capability points: Track/Artist/Album/Playlist Search, Song detail, Lyrics, standard Media, Album content, Artist Tracks/Albums, public Playlist, Rankings and public recommendations. The playlist path permits at most two serial requests per window. Only coarse outcomes and redacted field/type diagnostics were retained, never raw bodies, song titles, account data, lyrics or media URIs. The test's selected samples establish compatibility, not all-catalog availability, licensed-region coverage or account behavior.
 
 ## Error interpretation
 
-`Result::Ok` with actual empty collections is ValidEmpty; it is distinct from malformed output and missing count fields. HTTP 429 is RateLimited. Envelope 301 is AuthenticationRequired. Unknown envelope or media codes are UpstreamUnknown and STOP. Explicit returned trial metadata is EntitlementDenied for this full-source contract; a null source is TrackUnavailable, not an inferred copyright/region/VIP reason. The private error vocabulary also reserves credential rejection, security verification, account restriction, copyright and region outcomes, but no undocumented code is assigned these meanings. Live observations conservatively stop their window on any non-success envelope.
+`Result::Ok` with actual empty collections is ValidEmpty; it is distinct from malformed output and missing count fields. HTTP 429 is RateLimited. Envelope 301 is AuthenticationRequired for anonymous requests and CredentialRejected for explicit authenticated requests. Unknown envelope or media codes are UpstreamUnknown and STOP. Explicit returned trial metadata is EntitlementDenied for this full-source contract; a null source is TrackUnavailable, not an inferred copyright/region/VIP reason. The private error vocabulary also reserves credential rejection, security verification, account restriction, copyright and region outcomes, but no undocumented code is assigned these meanings. Live observations conservatively stop their window on any non-success envelope.
 
-## Remaining Work Audit
+## Current reference tests and account research
 
-This audit must contain zero `REMAINING_AUTONOMOUS_WORK` before a final report. A local Human/live blocker never blocks independent fixture, mapping, documentation or architecture work. Ordinary implementation/test failures are work to repair. Checkpoints do not end the active workstream.
+Enhanced `test/search.test.js` checks one cloudsearch song name and `test/album.test.js` checks success status through its own server. Both were inspected but **not executed or used as Fura's runtime**; these weak current tests do not establish Fura correctness. Fura instead has deterministic transport/mapping/negative tests and the bounded direct Rust observations above. Enhanced `module/comment_music.js` corroborates the weapi `v1/resource/comments/R_SO_4_<id>` read; comments are researched but not part of this P0/P1 implementation. No comment capability is advertised.
 
-| Area | Status | Remaining acceptance |
+Current QR key/poll, account, user playlist, like-list, daily/Personal FM and favorite Album/Artist module request shapes were inspected. The current MusicBox implementation explicitly documents QR codes 800 expired / 801 waiting / 802 scanned / 803 confirmed, the local `login?codekey=` image payload, and account/profile verification. See [authenticated evidence](netease-auth-evidence.md). `specialType=5` is corroborated by the MusicBox author's historical [playlist protocol sample](https://gist.github.com/darknessomi/5eb366ac2cbf1dd49192); this semantic is not promoted to real-account VERIFIED without Human observation. No personal sample content is retained.
+
+## Provider contract audit
+
+`SUPPORTED` means the bounded public Core contract is implemented and mapped. `PARTIAL` explicitly denotes a bounded semantic limitation or authenticated implementation awaiting Human live evidence. `NOT_SUPPORTED` is not an advertised capability. These statuses do not turn unimplemented capabilities into a generic Provider interface.
+
+| Existing/new provider-api trait | NetEase status | Evidence / boundary |
 |---|---|---|
-| P0 public catalog, lyrics, media | REMAINING_AUTONOMOUS_WORK | Public live sample passed; finish negative fixtures, mapping and regression review |
-| Protocol crypto/error/redaction/bounds | REMAINING_AUTONOMOUS_WORK | Expand transport/request and error STOP tests |
-| P1 QR/session/restore/account/library/media/recommendations | REMAINING_AUTONOMOUS_WORK | Evidence-backed offline implementation and race tests |
-| Static built-in composition and exact Resolver dispatch | REMAINING_AUTONOMOUS_WORK | Wiring and dispatch regression checks |
-| Full tests/fmt/Clippy/docs/complexity review | REMAINING_AUTONOMOUS_WORK | Final checkpoint gates after all changes |
-| Real account confirmation and authenticated behavior | HUMAN_EVIDENCE_REQUIRED | Human approval and actual-account read/restore observation |
-| UI integration | NOT_APPLICABLE | Frozen by HD-023; no picker or page changes |
+| MusicProvider | SUPPORTED | Explicit built-in descriptor, tested Search/Catalog/Recommendations/Lyrics/Authentication/UserLibrary |
+| TrackSearchProvider | SUPPORTED | Anonymous direct sample, bounded mapping/negative fixtures |
+| ArtistSearchProvider | SUPPORTED | Anonymous sample, exact Artist identity |
+| AlbumSearchProvider | SUPPORTED | Anonymous sample, HTTPS artwork |
+| PlaylistSearchProvider | SUPPORTED | Anonymous sample, exact playlist identity/count |
+| TrackDetailsProvider (new) | SUPPORTED | Exact lookup, missing detail is None, never Search/fuzzy matching |
+| PlaylistDetailsProvider | SUPPORTED | Public bounded windows; ordinary authenticated/private and account-scoped liked routes are implemented with generation checks but separately HUMAN_EVIDENCE_REQUIRED |
+| AlbumDetailsProvider | SUPPORTED | Canonical metadata, bounded whole response |
+| AlbumTracksProvider | SUPPORTED | Requested local window over strict bounded whole response |
+| ArtistTracksProvider | SUPPORTED | True upstream offset/total/more |
+| ArtistAlbumsProvider | SUPPORTED | True upstream offset/total/more |
+| LyricsProvider | SUPPORTED | True LRC starts, exact-time translation, zero unknown durations and no fabricated words |
+| RankingsProvider | SUPPORTED | Bounded list and Track windows; neutral raw next-offset and omitted-count preserve continuation even when all details in a window are unavailable |
+| RecommendedPlaylistsProvider | PARTIAL | One bounded public sample at offset 0; no fake pagination or account personalization |
+| MediaSourceResolver | SUPPORTED | Exact static routing; normal standard source only; authenticated behavior awaits Human |
+| QrAuthenticationProvider | PARTIAL | Native ProviderDefault channel, PNG-only challenge; Human QR approval not performed |
+| QrAuthenticationSession | PARTIAL | Offline tested generation/cancel/drop/deadline/terminal/rejection transitions |
+| AccountSummaryProvider | PARTIAL | Current credential generation, exact account/profile correlation; Human account evidence required |
+| UserPlaylistsProvider | PARTIAL | Explicit complete contract bounded to 10×100 rows; owned/saved and liked-purpose mapping |
+| OwnedPlaylistsProvider | PARTIAL | Filters exact creator identity after bounded complete collection |
+| FavoriteAlbumsProvider | PARTIAL | Typed bounded page/total/continuation and synthetic tests; Human evidence required |
+| FavoriteArtistsProvider | PARTIAL | Typed bounded page/total/continuation and synthetic tests; Human evidence required |
+| PersonalizedPlaylistsProvider | PARTIAL | Explicit authenticated recommend/resource; no public substitutes |
+| PersonalizedTracksProvider | PARTIAL | One bounded Personal FM batch; no autoplay, feedback, or continuation |
+| DailyRecommendationProvider | NOT_SUPPORTED | Daily songs are not a canonical Playlist. Gap resolved with neutral DailyTracksProvider instead of a fake identity |
+| DailyTracksProvider (new) | PARTIAL | Bounded authenticated daily songs; Human evidence required |
+| NewAlbumReleasesProvider | NOT_SUPPORTED | Outside this selected P0/P1 slice |
+| NewSongsProvider | NOT_SUPPORTED | Outside this selected P0/P1 slice |
+| RelatedTracksProvider | NOT_SUPPORTED | No current-Track recommendation expansion in this slice |
+| RadarRecommendationsProvider | NOT_SUPPORTED | QQ Radar semantics are not relabeled as NetEase daily/FM |
+| TrackCommentsProvider | NOT_SUPPORTED | Protocol researched only; no advertised Comments capability |
+| TrackMusicVideoProvider | NOT_SUPPORTED | Outside this slice |
+| DesktopQuickAuthenticationProvider | NOT_SUPPORTED | No local-client credential discovery/extraction |
+| DesktopQuickAuthenticationSession | NOT_SUPPORTED | No local-client credential discovery/extraction |
+| TrackLikeMutationProvider | NOT_SUPPORTED | No writes implemented or performed |
+| AlbumFavoriteMutationProvider | NOT_SUPPORTED | No writes implemented or performed |
+| PlaylistTrackMutationProvider | NOT_SUPPORTED | No writes implemented or performed |
+| PlaylistCreationProvider | NOT_SUPPORTED | No writes implemented or performed |
+| PlaylistDeletionProvider | NOT_SUPPORTED | No writes implemented or performed |
+| RecentHistoryProvider | NOT_SUPPORTED | QQ recent history is not reused or cross-source merged |
+
+Before implementation, native QR selection and daily Track delivery were `NEEDS_PROVIDER_API_EXTENSION`: existing channels offered only QQ/WeChat and the daily contract returned an optional Playlist. The implemented ProviderDefault variant and DailyTracksProvider resolve these neutral gaps without NetEase-specific traits. TrackDetailsProvider likewise supplies a neutral exact-lookup contract absent from the original API.
+
+## Complexity and boundary review
+
+Two protocol/provider crates are the only new production packages. Separate short modules own transport/crypto/catalog/lyrics/media/auth; three small operation-local mapping macros share proven repeated typed mapping. No framework, runtime discovery, generic injection system, sidecar, or provider-neutral raw JSON was introduced. Existing QQ transport was intentionally not pulled into NetEase or refactored across unrelated QR/local-loopback behavior.
+
+The static enum and resolver pair are in provider-api; they do not contain endpoint/crypto/cookie/identity-decoding logic. Native composition instantiates NetEase only for its selected media route, preserving QQ behavior even if NetEase HTTPS initialization fails. Default presentation remains QQ. Existing Domain identities and catalog entities are reused. RankingTracksPage gains a provider-neutral raw next-offset and omitted-count, matching the existing Playlist page semantics; its original constructor preserves QQ behavior. QQ-specific explanatory comments were made neutral. Existing coarse error messages no longer misidentify a NetEase credential rejection as QQ.
+
+Known finite bounds are intentional rather than silent partial success: public playlist identities and whole Album responses ≤1,000; account playlist collection ≤1,000 with failure on further continuation; liked IDs ≤1,000; normal source profile only; no fabricated lyric duration or word timing. Further quality/large-catalog/protocol work needs evidence, not speculative endpoint fallback.
+
+The exhaustive stop audit is [netease-remaining-work-audit.md](netease-remaining-work-audit.md).
+
+## Final machine checkpoint
+
+`cargo test --workspace` and `cargo test --workspace --all-targets`: **482 passed, 0 failed, 14 ignored** (the latter are explicit live/Human gates). `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` pass. Pinned FRB 2.13.0 regeneration and the 23-module API orphan audit pass; no public/generated Bridge or Flutter diff remains. The added NetEase/dispatch suite contributes 46 offline tests beyond the starting 436-test workspace.
+
+The final Remaining Work Audit records 49 DONE implementation/validation items, six real-account/environment HUMAN_EVIDENCE_REQUIRED groups and three excluded NOT_APPLICABLE groups; zero REMAINING_AUTONOMOUS_WORK and no task-caused failure remain. No actual account observation is promoted to VERIFIED.

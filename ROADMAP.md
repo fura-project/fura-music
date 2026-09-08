@@ -128,7 +128,7 @@ This local evidence gap does not block independently authorized maintenance. No 
 
 ## Later Evidence-Gated Direction
 
-The Core-capability checkpoint is complete. M7 is active only for the current Human-approved page; the next page remains gated on acceptance and separate visual direction. Automated tests do not establish visual product completion.
+The preceding QQ Core-capability checkpoint is complete. M7 records retained Human visual candidates; HD-023 now freezes that UI workstream and makes NetEase CORE the active workstream below. Automated tests do not establish visual product completion.
 
 Offline/cache behavior, a narrow local-library capability, or media fallback require demonstrated user value and separate Roadmap authority. They must not turn the product into a multi-service aggregator. Release identity/signing and external distribution remain governed by HD-001 and the linked technical debt.
 
@@ -137,3 +137,5 @@ Offline/cache behavior, a narrow local-library capability, or media fallback req
 Implement `netease-client` → `provider-netease` → existing provider-neutral contracts with exact provider-scoped identities. Track Search is the first vertical slice; public Playlist Detail follows. Complete bounded Album/Artist Search and browsing, Track detail, line-synchronized lyrics, evidence-backed rankings/public recommendations, and standard authorized media resolution. Audit each current Provider trait; extend only proven provider-neutral gaps. Prefer simple static built-in selection and exact resolver routing.
 
 Anonymous evidence must be serial, read-only, explicitly gated, ignored by default and hard-budgeted; fixtures establish deterministic safety. Then implement evidence-backed QR/session/restore/account/library/authenticated recommendation foundations up to `HUMAN_EVIDENCE_REQUIRED`. Do not automate real accounts. No Flutter integration, cross-service aggregation/matching/substitution, third Provider, dynamic runtime, sidecar, or access-control bypass. Finish with workspace tests, formatting, strict all-target Clippy, and logical local commits without push.
+
+**NetEase machine checkpoint, 2026-09-09:** anonymous/public Core and authenticated offline foundations are implemented; the full remaining-work audit and verification checkpoint live in `docs/research/netease-remaining-work-audit.md`. Real-account QR/restore/library/recommendation/media claims remain `HUMAN_EVIDENCE_REQUIRED`. This does not activate UI integration or resume deferred visual candidates.
