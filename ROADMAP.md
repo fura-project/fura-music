@@ -45,7 +45,9 @@ This local evidence gap does not block independently authorized maintenance. No 
 - **Evidence boundary:** this is selected direct-client compatibility, not full-application behavior, authenticated playback, remote MV playback, broad catalog quality, or release readiness.
 - **Checkpoint:** 2026-08-27 — [M6 review](docs/development/m6-checkpoint-review.md).
 
-## Active Workstream — M7 Page-by-Page Product UI Integration
+## Deferred Workstream — M7 Page-by-Page Product UI Integration
+
+**2026-09-09 scheduling override (HD-023):** retain every current visual candidate without editing or accepting it. Human visual review is deferred while NetEase Core work is active. The sequence below is historical UI scope, not current execution.
 
 **Goal:** integrate the existing product one page at a time against Human-approved Stitch/Figma sources so it reads as a mature QQ Music-familiar Material 3 client, using only truthful capabilities and no copied branding, proprietary assets, fake personalization, or new framework.
 
@@ -129,3 +131,9 @@ This local evidence gap does not block independently authorized maintenance. No 
 The Core-capability checkpoint is complete. M7 is active only for the current Human-approved page; the next page remains gated on acceptance and separate visual direction. Automated tests do not establish visual product completion.
 
 Offline/cache behavior, a narrow local-library capability, or media fallback require demonstrated user value and separate Roadmap authority. They must not turn the product into a multi-service aggregator. Release identity/signing and external distribution remain governed by HD-001 and the linked technical debt.
+
+## Active Core Workstream — NetEase second built-in Provider (HD-023)
+
+Implement `netease-client` → `provider-netease` → existing provider-neutral contracts with exact provider-scoped identities. Track Search is the first vertical slice; public Playlist Detail follows. Complete bounded Album/Artist Search and browsing, Track detail, line-synchronized lyrics, evidence-backed rankings/public recommendations, and standard authorized media resolution. Audit each current Provider trait; extend only proven provider-neutral gaps. Prefer simple static built-in selection and exact resolver routing.
+
+Anonymous evidence must be serial, read-only, explicitly gated, ignored by default and hard-budgeted; fixtures establish deterministic safety. Then implement evidence-backed QR/session/restore/account/library/authenticated recommendation foundations up to `HUMAN_EVIDENCE_REQUIRED`. Do not automate real accounts. No Flutter integration, cross-service aggregation/matching/substitution, third Provider, dynamic runtime, sidecar, or access-control bypass. Finish with workspace tests, formatting, strict all-target Clippy, and logical local commits without push.

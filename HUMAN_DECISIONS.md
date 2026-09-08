@@ -224,3 +224,15 @@
 **Consequences:** This authorizes the specific navigation/page capability and the maintainer-directed, evidence-backed ordinary-session cloud read. The production read now uses `RecentPlayList/GetRecentPlayList` behind the existing Provider/typed Bridge and remains pending real-account Human acceptance. Cloud reporting is separately blocked: the IoT/H5 `reportRecentPlay` API is not authorization to transplant another credential environment or automate a stored account. This decision does not authorize autonomous real-account writes, video history, downloads, a new Provider, or unrelated page work. See `docs/design/recent-plays.md` and `docs/research/qqmusic-recent-plays-evidence.md`.
 
 When a decision is needed, record its context, options, blocked and unblocked work, and the current autonomous action. A pending decision blocks only its affected scope unless every legitimate task depends on it.
+
+## HD-023 — NetEase Cloud Music as second built-in Provider
+
+**Status:** Accepted by explicit Human instruction on 2026-09-09.
+
+**Decision:** QQ Music remains first-class. NetEase Cloud Music becomes the second built-in formal Provider. Switch and persist execution mode to `AUTONOMOUS_DEVELOPMENT`, work domain `CORE`. Retain current UI candidates and defer Human visual review; this neither accepts, rejects, deletes, nor authorizes editing them.
+
+**Authorized:** independent Rust `netease-client` and `provider-netease`, existing provider-neutral Domain/API reuse, exact provider-scoped identity, a second MediaSourceResolver and minimal deterministic static composition. Research public protocol families and licenses; implement bounded anonymous Search first, public Playlist next, Album/Artist browsing, detail, lyrics, rankings/recommendations and normally authorized standard media. Use deterministic fixtures and ignored, anonymous, read-only, serial, hard-budget live evidence. After the anonymous slice, implement evidence-backed QR/session/restore/account/library/authenticated recommendation foundations; real-account confirmation remains `HUMAN_EVIDENCE_REQUIRED`. Commit logical local changes, never push.
+
+**Excluded:** cross-Provider aggregation, fuzzy matching, automatic source substitution, shared collections/credentials, account migration, third Providers, dynamic plugins/marketplace/runtime, Node/Python/JS/Lua/WASM runtime, hosted/localhost sidecars, credential extraction, automated real login or writes, and any VIP/copyright/region bypass or third-party unlocking. Flutter/UI product integration requires separate Human authority. Unknown/risk/access-control outcomes STOP; no endpoint/profile rotation.
+
+**Consequences:** supersedes prior QQ-only production-provider restrictions only for this second built-in Core Provider. First-class QQ behavior, in-process HTTPS architecture, opaque identities, unique credential owners, short-lived redacted media, and existing pending release/account/visual acceptance gates remain authoritative. This is real multi-Provider foundation, not a universal aggregator.

@@ -1,14 +1,17 @@
 ---
 execution:
-  mode: HUMAN_GATED_REGRESSION
+  mode: AUTONOMOUS_DEVELOPMENT
+  work_domain: CORE
   state: ACTIVE
   acceptance_milestone: M1
-  active_workstream: UI_ANIMATION_REGRESSION
-  current_task: PLAYLIST_SHELL_AND_HOME_SPOTLIGHT_ANIMATION_CANDIDATE_COMPLETE
-  next_action: HUMAN_VISUAL_REVIEW
+  active_workstream: NETEASE_BUILT_IN_PROVIDER
+  current_task: NETEASE_ANONYMOUS_CORE_VERTICAL_SLICE
+  next_action: PROTOCOL_EVIDENCE_AND_TRACK_SEARCH
 ---
 
 # Current State
+
+- **2026-09-09 Human redirection (HD-023):** persist `AUTONOMOUS_DEVELOPMENT / CORE`; implement NetEase as the second built-in formal Provider while QQ remains first-class. Current UI candidates are retained with Human visual review deferred (neither accepted nor rejected). Flutter and visual iteration are frozen. Start: HEAD `317666a9913e91f13df5d8bf0bba10f4aee79a43`, clean working tree; `git status` and 30 commits inspected and captured in `/tmp/fura-netease-evidence/initial-git.txt`. Execute anonymous catalog/lyrics/media first, then evidence-backed authenticated foundations; real account evidence remains Human-operated. Local logical commits only, no push.
 
 - The maintainer reported three exact UI regressions without reopening the accepted Shell, playlist, pagination, or Home composition. The extended sidebar now derives a personal-playlist selection from the active typed `PlaylistLocalRoute`: opening a sidebar playlist removes the stale Liked indicator and applies the existing selected-container grammar to that exact playlist row. The retained Shell transition now gives both Settings and playlist details their own fully opaque moving `surface`, while fading only page contents, so a playlist cannot paint text or artwork over the previous page before its background arrives. Home's Spotlight keeps the Hero Material/card geometry stationary and switches only its internal artwork/text scene; Next sends the outgoing scene left and receives the new scene from the right, while Previous reverses both directions. A 3 px in-card progress indicator follows the same 12-second rotation interval, resets with manual navigation/lifecycle changes, stops while auto-rotation is paused, and remains absent when reduced motion disables auto-rotation. Focus and input ownership remain unchanged. Targeted transition assertions cover selected state, an opaque 120 ms entry frame, stable Hero bounds, paired directions, and paused progress. `dart analyze`, the full 232-file Flutter Dart source format gate, all 498 Flutter tests, and Linux Release pass. Inspected temporary 1440×900 transition, 1440×960 Home, and 390×844 Home/playlist renders show no overflow or background flash; aesthetics and perceived motion remain Human review. The maintainer authorized this candidate for the accumulated Git checkpoint and push; visual acceptance remains separately Human-gated.
 
