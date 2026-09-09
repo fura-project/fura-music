@@ -10,14 +10,14 @@ pub(crate) type NativeNeteaseProvider = NeteaseProvider<HttpsTransport>;
 /// credential can never be installed into a provider that playback bypasses.
 pub(crate) fn native_netease_provider() -> Result<&'static NativeNeteaseProvider, ()> {
     static PROVIDER: OnceLock<Result<NativeNeteaseProvider, ()>> = OnceLock::new();
-    PROVIDER
-        .get_or_init(|| {
-            HttpsTransport::new()
-                .map(|transport| NeteaseProvider::new(NeteaseClient::new(transport)))
-                .map_err(|_| ())
-        })
-        .as_ref()
-        .map_err(|()| ())
+    match PROVIDER.get_or_init(|| {
+        HttpsTransport::new()
+            .map(|transport| NeteaseProvider::new(NeteaseClient::new(transport)))
+            .map_err(|_| ())
+    }) {
+        Ok(provider) => Ok(provider),
+        Err(()) => Err(()),
+    }
 }
 
 #[cfg(test)]
