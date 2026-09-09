@@ -77,6 +77,16 @@ impl AuthOwner {
         let (c, u) = s.active.clone().ok_or(Error::AuthenticationRequired)?;
         Ok((s.generation, c, u))
     }
+    fn retain_pending(&self, generation: u64, credential: Credential) -> Result<(), Failure> {
+        let mut state = self.lock();
+        if state.generation != generation {
+            return Err(Failure::Replaced);
+        }
+        state.active = None;
+        state.liked_playlist = None;
+        state.pending = Some(credential);
+        Ok(())
+    }
     pub(super) async fn run<R>(
         &self,
         generation: u64,
@@ -174,7 +184,7 @@ impl<T: Transport> NeteaseProvider<T> {
     /// Explicit candidate verification; transient errors retain the candidate, rejection clears it.
     /// # Errors
     /// Authentication, response, network and generation failures remain distinct.
-    pub async fn verify_restored_credential(&self) -> Result<(), AccountSummaryError> {
+    pub async fn verify_pending_credential(&self) -> Result<(), AccountSummaryError> {
         let (g, c) = {
             let s = self.auth.lock();
             (
@@ -190,6 +200,15 @@ impl<T: Transport> NeteaseProvider<T> {
             .await
             .map_err(account_error)?;
         self.auth.install(g, c, account.id).map_err(account_error)
+    }
+
+    /// Backwards-compatible name for callers restoring an exported credential.
+    /// QR confirmation and credential restore intentionally share the same
+    /// pending-candidate verification path.
+    /// # Errors
+    /// Authentication, response, network and generation failures remain distinct.
+    pub async fn verify_restored_credential(&self) -> Result<(), AccountSummaryError> {
+        self.verify_pending_credential().await
     }
 }
 impl<T: Transport> AccountSummaryProvider for NeteaseProvider<T> {
@@ -372,6 +391,9 @@ impl<T: Transport> QrAuthenticationSession for NeteaseQrSession<T> {
                 Ok(QrAuthenticationProgress::Expired)
             }
             QrPoll::Confirmed(c) => {
+                self.auth
+                    .retain_pending(self.generation, c.clone())
+                    .map_err(auth_error)?;
                 self.finish();
                 let a = tokio::time::timeout_at(
                     self.deadline,

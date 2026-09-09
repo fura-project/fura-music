@@ -173,6 +173,154 @@ async fn qr_wait_scan_confirm_and_account_validation_are_one_generation() {
     drop(qr);
     assert!(p.has_authenticated_credential());
 }
+
+#[tokio::test]
+async fn confirmed_qr_candidate_survives_transient_account_validation() {
+    let (p, calls, authenticated_calls) = provider(vec![
+        key(),
+        Reply::Confirmed,
+        Reply::Failure(Error::TemporaryNetworkFailure),
+        Reply::Json(account()),
+    ]);
+    let mut qr = p
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+    assert_eq!(qr.advance().await, Err(AuthenticationError::Network));
+    assert!(!qr.is_active());
+    assert!(!p.has_authenticated_credential());
+    assert!(p.export_credential().unwrap().is_none());
+
+    p.verify_pending_credential().await.unwrap();
+
+    assert!(p.has_authenticated_credential());
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn rejected_or_signed_out_qr_candidates_cannot_be_retried() {
+    let (rejected, _, _) = provider(vec![
+        key(),
+        Reply::Confirmed,
+        Reply::Json(json!({"code":301})),
+    ]);
+    let mut qr = rejected
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+    assert_eq!(qr.advance().await, Err(AuthenticationError::Rejected));
+    assert_eq!(
+        rejected.verify_pending_credential().await,
+        Err(AccountSummaryError::AuthenticationRequired)
+    );
+
+    let (signed_out, _, _) = provider(vec![
+        key(),
+        Reply::Confirmed,
+        Reply::Failure(Error::TemporaryNetworkFailure),
+    ]);
+    let mut qr = signed_out
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+    assert_eq!(qr.advance().await, Err(AuthenticationError::Network));
+    signed_out.sign_out();
+    assert_eq!(
+        signed_out.verify_pending_credential().await,
+        Err(AccountSummaryError::AuthenticationRequired)
+    );
+}
+
+#[tokio::test]
+async fn a_new_qr_generation_replaces_an_unverified_confirmed_candidate() {
+    let (p, _, _) = provider(vec![
+        key(),
+        Reply::Confirmed,
+        Reply::Failure(Error::TemporaryNetworkFailure),
+        key(),
+    ]);
+    let mut old = p
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+    assert_eq!(old.advance().await, Err(AuthenticationError::Network));
+    let new = p
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+    assert!(new.is_active());
+    assert_eq!(
+        p.verify_pending_credential().await,
+        Err(AccountSummaryError::AuthenticationRequired)
+    );
+}
+
+#[tokio::test]
+async fn in_flight_qr_candidate_validation_cannot_install_after_replacement() {
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let (p, _, _) = provider(vec![
+        key(),
+        Reply::Confirmed,
+        Reply::Blocked(started.clone(), release, account()),
+        key(),
+    ]);
+    let mut old = p
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+    let old = tokio::spawn(async move { old.advance().await });
+    started.notified().await;
+
+    let replacement = p
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+
+    assert_eq!(old.await.unwrap(), Err(AuthenticationError::Replaced));
+    assert!(replacement.is_active());
+    assert!(!p.has_authenticated_credential());
+}
+
+#[tokio::test]
+async fn pending_qr_candidate_is_never_used_for_authenticated_media() {
+    let (p, _, authenticated_calls) = provider(vec![
+        key(),
+        Reply::Confirmed,
+        Reply::Failure(Error::TemporaryNetworkFailure),
+        Reply::Json(json!({
+            "code":200,
+            "data":[{
+                "id":1,
+                "code":200,
+                "url":"https://fixture.invalid/anonymous-source",
+                "type":"mp3",
+                "expi":600,
+                "freeTrialInfo":null,
+                "level":"standard"
+            }]
+        })),
+    ]);
+    let mut qr = p
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+        .unwrap();
+    assert_eq!(qr.advance().await, Err(AuthenticationError::Network));
+    assert!(!p.has_authenticated_credential());
+
+    p.media_source_resolver()
+        .resolve_media(
+            TrackId::new(provider_id(), "1").unwrap(),
+            AudioQuality::Standard,
+        )
+        .await
+        .unwrap();
+
+    // Only the failed account verification carried the pending cookie. Media
+    // used the anonymous route because pending state is not authenticated state.
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 1);
+}
 #[tokio::test]
 async fn cancel_old_qr_cannot_cancel_new_attempt_and_drop_invalidates_active_attempt() {
     let (p, _, _) = provider(vec![key(), key(), Reply::Json(json!({"code":801}))]);
