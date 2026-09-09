@@ -87,6 +87,11 @@ fn key() -> Reply {
 fn song() -> Value {
     json!({"id":1,"name":"Fixture","ar":[{"id":2,"name":"Artist"}],"al":{"id":3,"name":"Album"},"dt":123_000})
 }
+fn sized_song(id: u64) -> Value {
+    let mut value = song();
+    value["id"] = json!(id);
+    value
+}
 #[tokio::test]
 async fn restore_requires_verification_and_preserves_transient_candidate() {
     let (p, c, _) = provider(vec![
@@ -448,6 +453,32 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
     assert_eq!(p.personalized_tracks().await.unwrap().len(), 1);
     assert!(p.personalized_playlists().await.unwrap().is_empty());
     assert_eq!(a.load(Ordering::SeqCst), 8);
+}
+
+#[tokio::test]
+async fn liked_collection_above_the_old_ceiling_pages_by_raw_identity() {
+    let ids: Vec<_> = (1..=1001).collect();
+    let playlist =
+        json!({"id":4,"name":"Liked","trackCount":1001,"specialType":5,"creator":{"userId":42}});
+    let (p, calls, authenticated_calls) = provider(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Json(json!({"code":200,"ids":ids})),
+        Reply::Json(json!({"code":200,"songs":[sized_song(1001)]})),
+    ]);
+    p.import_credential(&credential()).unwrap();
+    p.verify_pending_credential().await.unwrap();
+    let playlist = p.user_playlists().await.unwrap().remove(0);
+    let page = p
+        .playlist_tracks_page(playlist.id().clone(), 1000, 1)
+        .await
+        .unwrap();
+
+    assert_eq!(page.tracks()[0].id().opaque(), "1001");
+    assert_eq!(page.next_offset(), 1001);
+    assert!(!page.has_more());
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 4);
 }
 #[tokio::test]
 async fn authenticated_media_rejection_clears_session_without_source_substitution() {

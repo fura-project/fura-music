@@ -1,4 +1,4 @@
-use crate::catalog::{bounds, decode, id, text};
+use crate::catalog::{MAX_COLLECTION_IDENTITIES, bounds, decode, id, text};
 use crate::{Error, NeteaseClient, Playlist, Song, Transport};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -312,7 +312,7 @@ impl<T: Transport> NeteaseClient<T> {
     }
     /// Unordered liked identities; never pretend to be recent-play order.
     /// # Errors
-    /// Rejects lists over 1,000 IDs, duplicates and invalid identities.
+    /// Rejects lists above the body-budget-derived identity ceiling, duplicates and invalid IDs.
     pub async fn liked_ids(&self, credential: &Credential, user: u64) -> Result<Vec<u64>, Error> {
         id(user)?;
         let (v, _) = self
@@ -324,7 +324,7 @@ impl<T: Transport> NeteaseClient<T> {
             )
             .await?;
         let ids: Vec<u64> = decode(v.get("ids").cloned().ok_or(Error::ResponseShapeMismatch)?)?;
-        if ids.len() > 1000 {
+        if ids.len() > MAX_COLLECTION_IDENTITIES {
             return Err(Error::ResponseBound);
         }
         let mut unique = std::collections::HashSet::new();

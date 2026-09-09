@@ -532,7 +532,7 @@ impl<T: Transport> NeteaseProvider<T> {
         offset: u32,
         size: u32,
     ) -> Result<PlaylistTracksPage, Failure> {
-        if size == 0 || size > 100 || offset > 1000 {
+        if size == 0 || size > 100 || offset as usize > netease_client::MAX_COLLECTION_IDENTITIES {
             return Err(Error::InputBound.into());
         }
         let (g, c, user) = self.auth.snapshot()?;

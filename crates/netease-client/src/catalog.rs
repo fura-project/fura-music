@@ -1,6 +1,16 @@
-use crate::{Credential, Error, NeteaseClient, Transport};
+use crate::{Credential, Error, MAX_RESPONSE_BYTES, NeteaseClient, Transport};
 use serde::Deserialize;
 use serde_json::{Value, json};
+
+/// Whole-response identity ceiling derived from the transport body budget.
+/// Reserving 128 bytes per identity keeps the decoded table and duplicate set
+/// bounded independently from the 2 MiB wire-body ceiling.
+pub const MAX_COLLECTION_IDENTITIES: usize = MAX_RESPONSE_BYTES / 128;
+
+/// Whole Album payload ceiling derived from the transport body budget. Album
+/// song objects are substantially larger than bare identities, so reserve at
+/// least 512 bytes of decoded-memory policy per row.
+pub const MAX_ALBUM_TRACKS: usize = MAX_RESPONSE_BYTES / 512;
 
 /// Raw endpoint model, never a Domain or Bridge identity.
 #[derive(Clone, Deserialize)]
@@ -373,7 +383,7 @@ impl<T: Transport> NeteaseClient<T> {
         Ok(songs)
     }
     /// # Errors
-    /// A playlist exceeding 1,000 identity entries stops instead of being silently truncated.
+    /// A playlist exceeding the body-budget-derived identity ceiling stops instead of truncating.
     /// At most two serial requests retrieve one requested window, never the complete Track list.
     pub async fn playlist_page(
         &self,
@@ -415,7 +425,7 @@ impl<T: Transport> NeteaseClient<T> {
         let (v, _) = self
             .request(
                 "/api/v6/playlist/detail",
-                json!({"id":playlist,"n":100,"s":0}),
+                json!({"id":playlist,"n":MAX_COLLECTION_IDENTITIES,"s":0}),
                 false,
                 cookie,
             )
@@ -433,7 +443,7 @@ impl<T: Transport> NeteaseClient<T> {
             .get("trackIds")
             .and_then(Value::as_array)
             .ok_or(Error::ResponseShapeMismatch)?;
-        if total > 1000 || ids.len() > 1000 {
+        if total as usize > MAX_COLLECTION_IDENTITIES || ids.len() > MAX_COLLECTION_IDENTITIES {
             return Err(Error::ResponseBound);
         }
         if ids.len() != total as usize {
@@ -470,7 +480,7 @@ impl<T: Transport> NeteaseClient<T> {
         })
     }
     /// # Errors
-    /// Rejects a mismatched Album and whole responses above 1,000 Tracks; never hides a drain loop.
+    /// Rejects mismatched Albums and whole responses above the body-budget-derived Track ceiling.
     pub async fn album(&self, album: u64) -> Result<AlbumContent, Error> {
         id(album)?;
         let (v, _) = self
@@ -490,7 +500,7 @@ impl<T: Transport> NeteaseClient<T> {
                 .cloned()
                 .ok_or(Error::ResponseShapeMismatch)?,
         )?;
-        if songs.len() > 1000 {
+        if songs.len() > MAX_ALBUM_TRACKS {
             return Err(Error::ResponseBound);
         }
         for song in &songs {

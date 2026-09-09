@@ -143,12 +143,31 @@ async fn empty_playlist_never_requests_song_details() {
     assert_eq!(c.load(Ordering::SeqCst), 1);
 }
 #[tokio::test]
-async fn playlist_whole_list_ceiling_is_an_error_not_silent_truncation() {
+async fn playlist_above_the_old_ceiling_pages_without_silent_truncation() {
+    let ids: Vec<_> = (1..=1001).map(|id| json!({"id":id})).collect();
     let (p, c) = provider(vec![
-        json!({"code":200,"playlist":{"id":4,"name":"Oversized","trackCount":1001,"trackIds":[]}}),
+        json!({"code":200,"playlist":{"id":4,"name":"Large","trackCount":1001,"trackIds":ids}}),
+        json!({"code":200,"songs":[s(1001)]}),
+    ]);
+    let page = p
+        .playlist_tracks_page(PlaylistId::new(provider_id(), "4").unwrap(), 1000, 1)
+        .await
+        .unwrap();
+    assert_eq!(page.tracks()[0].id().opaque(), "1001");
+    assert_eq!(page.next_offset(), 1001);
+    assert!(!page.has_more());
+    assert_eq!(c.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn playlist_identity_table_still_has_a_derived_memory_ceiling() {
+    let count = netease_client::MAX_COLLECTION_IDENTITIES + 1;
+    let ids: Vec<_> = (1..=count).map(|id| json!({"id":id})).collect();
+    let (p, c) = provider(vec![
+        json!({"code":200,"playlist":{"id":4,"name":"Too large","trackCount":count,"trackIds":ids}}),
     ]);
     assert!(
-        p.playlist_tracks_page(PlaylistId::new(provider_id(), "4").unwrap(), 0, 3)
+        p.playlist_tracks_page(PlaylistId::new(provider_id(), "4").unwrap(), 0, 1)
             .await
             .is_err()
     );
@@ -172,6 +191,30 @@ async fn album_tracks_metadata_and_artist_pages_are_bounded() {
     assert!(p.artist_tracks(id.clone(), 0, 1).await.unwrap().has_more());
     assert!(!p.artist_albums(id, 0, 1).await.unwrap().has_more());
     assert_eq!(c.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn album_above_the_old_ceiling_remains_windowed_and_bounded() {
+    let songs: Vec<_> = (1..=1001).map(s).collect();
+    let (p, c) = provider(vec![json!({"code":200,"album":a(),"songs":songs})]);
+    let page = p
+        .album_tracks(AlbumId::new(provider_id(), "3").unwrap(), 1000, 1)
+        .await
+        .unwrap();
+    assert_eq!(page.tracks()[0].id().opaque(), "1001");
+    assert_eq!(page.total(), 1001);
+    assert!(!page.has_more());
+    assert_eq!(c.load(Ordering::SeqCst), 1);
+
+    let count = netease_client::MAX_ALBUM_TRACKS + 1;
+    let songs: Vec<_> = (1..=count).map(|id| s(id as u64)).collect();
+    let (p, c) = provider(vec![json!({"code":200,"album":a(),"songs":songs})]);
+    assert!(
+        p.album_tracks(AlbumId::new(provider_id(), "3").unwrap(), 0, 1)
+            .await
+            .is_err()
+    );
+    assert_eq!(c.load(Ordering::SeqCst), 1);
 }
 #[tokio::test]
 async fn lyrics_keep_only_exact_translation_alignment_and_no_invented_words() {
