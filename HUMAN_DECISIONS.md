@@ -238,3 +238,11 @@ When a decision is needed, record its context, options, blocked and unblocked wo
 **Consequences:** supersedes prior QQ-only production-provider restrictions only for this second built-in Core Provider. First-class QQ behavior, in-process HTTPS architecture, opaque identities, unique credential owners, short-lived redacted media, and existing pending release/account/visual acceptance gates remain authoritative. This is real multi-Provider foundation, not a universal aggregator.
 
 **HD-023 continuation clarification (same Human instruction):** checkpoints, commits, individual endpoint completion, or isolated Human/live blockers do not end this autonomous workstream. Before final reporting, perform the exhaustive Remaining Work Audit. Continue while any authorized item is `REMAINING_AUTONOMOUS_WORK`; ordinary implementation/test failures must be fixed, while risk outcomes stop only live probing. No automatic execution-mode switch is authorized.
+
+## HD-024 — NetEase Core hardening and read-capability parity
+
+**Status:** Accepted by explicit Human continuation instruction on 2026-09-09.
+
+**Decision:** Continue HD-023 in `AUTONOMOUS_DEVELOPMENT / CORE` for one bounded hardening and provider-neutral read-parity pass. Unify all native NetEase edges behind one process-level Provider/session owner; retain a QR-confirmed credential as pending across transient account verification; add an explicit ignored Human account-read matrix; replace the unexplained 1,000-row Playlist/liked/Album ceilings with evidence-backed resource bounds; and implement current, read-only Comments, related Tracks, new songs, new Albums and exact Track-associated MV where existing neutral contracts can express the service semantics.
+
+**Consequences:** Anonymous, serial, hard-budget live observations may support these read paths. Natural category mismatches must fail before transport rather than relabel NetEase's broader Chinese-language catalog as a narrower QQ region. Recent-history stays research-only without a current ordinary-session endpoint with clear pagination. This decision does not authorize Flutter/UI changes, Provider selection UI, account automation, writes, scrobbling, cross-Provider matching/substitution, unlock/bypass behavior, a third Provider, dynamic runtime or sidecar. Logical commits remain local; no push is authorized.

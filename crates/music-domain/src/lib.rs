@@ -2512,9 +2512,9 @@ impl fmt::Debug for ArtistAlbumsPage {
     }
 }
 
-/// Provider-neutral regions currently exposed by QQ Music's new-release
-/// catalog. Providers that cannot map these regions do not implement the
-/// corresponding capability.
+/// Provider-neutral new-release regions currently required by built-in
+/// providers. A provider must reject values it cannot map exactly rather than
+/// broadening or narrowing their meaning.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum NewAlbumRegion {
     MainlandChina,
@@ -2525,9 +2525,8 @@ pub enum NewAlbumRegion {
     Other,
 }
 
-/// Provider-neutral categories exposed by QQ Music's bounded new-song
-/// collection. Providers that cannot map these categories do not implement
-/// the corresponding capability.
+/// Provider-neutral categories for bounded new-song collections. A provider
+/// may support only the values it can map without semantic substitution.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum NewSongCategory {
     MainlandChina,

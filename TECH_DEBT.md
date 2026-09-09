@@ -162,4 +162,20 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Triggered by the 2026-09-08 audit after playback quality and large-playlist search both added state to the same composition root. Schedule the first extraction when the next authorized defect or feature must modify at least two of navigation/focus, Settings, collapsed headers, or playback orchestration.
 
+## TD-011 — NetEase large collection windows refetch whole upstream metadata
+
+**Status:** Open
+
+**Problem:** Current NetEase public/private Playlist detail returns the complete `trackIds` table, liked songs returns one complete ID list, and Album detail returns the complete song array. Fura resolves only a requested at-most-100 row window, but a later Playlist/Album page can repeat the whole metadata request because no evidenced server-side identity cursor exists.
+
+**Why accepted:** Current `api-enhanced` and its Rust-port counterpart `ncm-api-rs` both expose local slicing over whole Playlist metadata; the authenticated liked and Album operations likewise provide no evidenced page cursor. Fura now rejects bodies above 2 MiB and uses decoded-memory caps derived from that budget instead of silently truncating at 1,000. Inventing offset parameters or an unbounded cache would be less reliable.
+
+**Impact:** Legitimate collections up to 16,384 Playlist/liked identities and 4,096 Album Tracks are readable, but distant-page navigation can repeat bandwidth and decoding work.
+
+**Risk:** Very large but in-bound collections may feel slower or consume avoidable network traffic, while collections above the caps fail explicitly.
+
+**Suggested solution:** If real usage demonstrates this cost, cache the validated identity/Album snapshot inside the exact Provider generation with bounded lifetime and replacement/sign-out invalidation, or adopt a current server-side cursor only after protocol evidence. Keep Track-detail windows at 100 and never return partial identity tables as complete.
+
+**Trigger condition:** Reassess after a Human large-account latency observation, a service response above the derived caps, or reliable evidence of a true server-side paging operation.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.
