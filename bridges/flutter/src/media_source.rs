@@ -1,14 +1,12 @@
 use crate::api::authentication::native_qq_music_provider;
+use crate::native_netease::native_netease_provider;
 use music_domain::{AudioQuality, ResolvedMediaSource, TrackId};
-use netease_client::{HttpsTransport, NeteaseClient};
 use provider_api::{
     BuiltInMediaSources, BuiltInProvider, MediaResolutionError, MediaSourceCoordinator,
     MediaSourceResolver,
 };
-use provider_netease::NeteaseProvider;
 use provider_qqmusic::QqMusicMediaSourceResolver;
 use qqmusic_client::ReqwestTransport;
-use std::sync::OnceLock;
 
 pub(crate) type NativeMediaSourceCoordinator = MediaSourceCoordinator<
     BuiltInMediaSources<
@@ -32,15 +30,8 @@ impl MediaSourceResolver for NativeNeteaseResolver {
         if !self.supports(&id) {
             return Err(MediaResolutionError::Unavailable);
         }
-        static NETEASE: OnceLock<Result<NeteaseProvider<HttpsTransport>, ()>> = OnceLock::new();
-        let provider = match NETEASE.get_or_init(|| {
-            HttpsTransport::new()
-                .map(|t| NeteaseProvider::new(NeteaseClient::new(t)))
-                .map_err(|_| ())
-        }) {
-            Ok(provider) => provider,
-            Err(()) => return Err(MediaResolutionError::CoreUnavailable),
-        };
+        let provider =
+            native_netease_provider().map_err(|()| MediaResolutionError::CoreUnavailable)?;
         provider
             .media_source_resolver()
             .resolve_media(id, quality)

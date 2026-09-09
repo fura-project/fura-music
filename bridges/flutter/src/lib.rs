@@ -3,3 +3,4 @@ mod android_platform_verifier;
 pub mod api;
 mod frb_generated;
 mod media_source;
+mod native_netease;
