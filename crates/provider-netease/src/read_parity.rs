@@ -1,0 +1,218 @@
+use super::{NeteaseProvider, album, artist, provider_id, song};
+use music_domain::{
+    MusicVideo, MusicVideoId, MusicVideoQuality, MusicVideoSource, NewAlbumRegion, NewAlbumRelease,
+    NewAlbumReleasesPage, NewSongCategory, NewSongCollection, TrackComment, TrackCommentId,
+    TrackCommentsPage, TrackId, TrackSummary,
+};
+use netease_client::{Error, NewAlbumArea, NewSongArea, Transport};
+use provider_api::{
+    CatalogError, CommentsError, MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider,
+    RelatedTracksError, RelatedTracksProvider, TrackCommentsProvider, TrackMusicVideoProvider,
+};
+
+fn comments_error(error: Error) -> CommentsError {
+    match error {
+        Error::TemporaryNetworkFailure => CommentsError::Network,
+        Error::InputBound | Error::ResponseBound | Error::ResponseShapeMismatch => {
+            CommentsError::InvalidResponse
+        }
+        _ => CommentsError::ServiceUnavailable,
+    }
+}
+
+fn related_error(error: Error) -> RelatedTracksError {
+    match error {
+        Error::InputBound => RelatedTracksError::InvalidTrack,
+        Error::TemporaryNetworkFailure => RelatedTracksError::Network,
+        Error::ResponseBound | Error::ResponseShapeMismatch => RelatedTracksError::InvalidResponse,
+        _ => RelatedTracksError::ServiceUnavailable,
+    }
+}
+
+fn video_error(error: Error) -> MusicVideoError {
+    match error {
+        Error::TemporaryNetworkFailure => MusicVideoError::Network,
+        Error::TrackUnavailable | Error::EntitlementDenied => MusicVideoError::SourceUnavailable,
+        Error::InputBound | Error::ResponseBound | Error::ResponseShapeMismatch => {
+            MusicVideoError::InvalidResponse
+        }
+        _ => MusicVideoError::ServiceUnavailable,
+    }
+}
+
+impl<T: Transport> TrackCommentsProvider for NeteaseProvider<T> {
+    type Error = CommentsError;
+
+    async fn track_comments(
+        &self,
+        track_id: TrackId,
+        offset: u32,
+        size: u32,
+    ) -> Result<TrackCommentsPage, Self::Error> {
+        let id = super::catalog::identity(track_id.provider(), track_id.opaque())
+            .map_err(comments_error)?;
+        let page = self
+            .client
+            .comments(id, offset, size)
+            .await
+            .map_err(comments_error)?;
+        let map = |comment: netease_client::Comment| {
+            TrackComment::new(
+                TrackCommentId::new(provider_id(), comment.id.to_string())
+                    .map_err(|_| CommentsError::InvalidResponse)?,
+                comment.user.nickname,
+                comment.content,
+                comment.time / 1000,
+                comment.praise_count,
+            )
+            .map_err(|_| CommentsError::InvalidResponse)
+        };
+        Ok(TrackCommentsPage::new(
+            page.offset,
+            page.total,
+            page.more,
+            page.hot
+                .into_iter()
+                .map(map)
+                .collect::<Result<Vec<_>, _>>()?,
+            page.latest
+                .into_iter()
+                .map(map)
+                .collect::<Result<Vec<_>, _>>()?,
+        ))
+    }
+}
+
+impl<T: Transport> RelatedTracksProvider for NeteaseProvider<T> {
+    type Error = RelatedTracksError;
+
+    async fn related_tracks(&self, seed: TrackId) -> Result<Vec<TrackSummary>, Self::Error> {
+        let seed =
+            super::catalog::identity(seed.provider(), seed.opaque()).map_err(related_error)?;
+        self.client
+            .related_tracks(seed)
+            .await
+            .map_err(related_error)?
+            .into_iter()
+            .map(song)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(related_error)
+    }
+}
+
+impl<T: Transport> NewSongsProvider for NeteaseProvider<T> {
+    type Error = CatalogError;
+
+    async fn new_songs(&self, category: NewSongCategory) -> Result<NewSongCollection, Self::Error> {
+        let area = match category {
+            NewSongCategory::Latest => NewSongArea::All,
+            NewSongCategory::Western => NewSongArea::Western,
+            NewSongCategory::Japan => NewSongArea::Japan,
+            NewSongCategory::Korea => NewSongArea::Korea,
+            // NetEase's `ZH`/area 7 means the broader Chinese-language market;
+            // it is not an exact Mainland or Hong Kong/Taiwan category.
+            NewSongCategory::MainlandChina | NewSongCategory::HongKongTaiwan => {
+                return Err(CatalogError::InvalidResponse);
+            }
+        };
+        let tracks = self
+            .client
+            .new_songs(area)
+            .await
+            .map_err(super::catalog::catalog_error)?
+            .into_iter()
+            .map(song)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(super::catalog::catalog_error)?;
+        Ok(NewSongCollection::new(category, tracks))
+    }
+}
+
+impl<T: Transport> NewAlbumReleasesProvider for NeteaseProvider<T> {
+    type Error = CatalogError;
+
+    async fn new_album_releases(
+        &self,
+        region: NewAlbumRegion,
+        offset: u32,
+        size: u32,
+    ) -> Result<NewAlbumReleasesPage, Self::Error> {
+        let area = match region {
+            NewAlbumRegion::Western => NewAlbumArea::Western,
+            NewAlbumRegion::Korea => NewAlbumArea::Korea,
+            NewAlbumRegion::Japan => NewAlbumArea::Japan,
+            // `ZH` is not an exact match for either QQ-derived region, and the
+            // NetEase `ALL` catalog has no provider-neutral enum value here.
+            NewAlbumRegion::MainlandChina
+            | NewAlbumRegion::HongKongTaiwan
+            | NewAlbumRegion::Other => return Err(CatalogError::InvalidResponse),
+        };
+        let page = self
+            .client
+            .new_albums(area, offset, size)
+            .await
+            .map_err(super::catalog::catalog_error)?;
+        let releases = page
+            .items
+            .into_iter()
+            .map(|release| {
+                let artists = release
+                    .album
+                    .artists
+                    .clone()
+                    .into_iter()
+                    .filter(|artist| artist.id > 0)
+                    .map(artist)
+                    .collect::<Result<Vec<_>, _>>()?;
+                // `publishTime` is retained by the protocol client. Domain
+                // display-date conversion is deliberately omitted until its
+                // service timezone semantics are evidenced.
+                Ok(NewAlbumRelease::new(album(release.album)?, artists, None))
+            })
+            .collect::<Result<Vec<_>, Error>>()
+            .map_err(super::catalog::catalog_error)?;
+        Ok(NewAlbumReleasesPage::new(
+            region,
+            page.offset,
+            page.total,
+            page.more,
+            releases,
+        ))
+    }
+}
+
+impl<T: Transport> TrackMusicVideoProvider for NeteaseProvider<T> {
+    type Error = MusicVideoError;
+
+    async fn track_music_video(
+        &self,
+        track_id: TrackId,
+    ) -> Result<Option<MusicVideo>, Self::Error> {
+        let id = super::catalog::identity(track_id.provider(), track_id.opaque())
+            .map_err(video_error)?;
+        let Some(video) = self.client.music_video(id).await.map_err(video_error)? else {
+            return Ok(None);
+        };
+        let quality = match video.source.resolution {
+            1080 => MusicVideoQuality::FullHd,
+            720 => MusicVideoQuality::Hd,
+            480 => MusicVideoQuality::Sd,
+            240 | 360 => MusicVideoQuality::Low,
+            _ => return Err(MusicVideoError::InvalidResponse),
+        };
+        let source = MusicVideoSource::new(video.source.uri(), quality)
+            .map_err(|_| MusicVideoError::InvalidResponse)?;
+        Ok(Some(
+            MusicVideo::new(
+                MusicVideoId::new(provider_id(), video.id.to_string())
+                    .map_err(|_| MusicVideoError::InvalidResponse)?,
+                video.title,
+                video.artist_names,
+                source,
+            )
+            .map_err(|_| MusicVideoError::InvalidResponse)?
+            .with_artwork_uri(video.artwork)
+            .with_duration_seconds(Some(video.duration_millis / 1000)),
+        ))
+    }
+}

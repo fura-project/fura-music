@@ -41,6 +41,8 @@ pub struct Song {
     pub album: Album,
     #[serde(alias = "dt")]
     pub duration: u32,
+    #[serde(default, rename = "mv", alias = "mvid")]
+    pub mv_id: u64,
 }
 #[derive(Clone, Deserialize)]
 pub struct Playlist {
@@ -162,6 +164,9 @@ impl Song {
         self.album.validate()?;
         if self.artists.len() > 32 || self.duration > 86_400_000 {
             return Err(Error::ResponseBound);
+        }
+        if self.mv_id > 0 {
+            id(self.mv_id)?;
         }
         for a in &self.artists {
             text(&a.name)?;

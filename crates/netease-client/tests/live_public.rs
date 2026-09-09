@@ -142,3 +142,126 @@ async fn anonymous_catalog_slice() {
     // Every attempted capability must succeed; this remains evidence for these samples only.
     assert!(!tracks.items.is_empty());
 }
+
+#[tokio::test]
+#[ignore = "explicit anonymous serial read-parity observation; hard maximum 9 HTTPS requests"]
+async fn anonymous_read_parity_slice() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    struct Budget {
+        http: HttpsTransport,
+        count: AtomicUsize,
+        stop: AtomicBool,
+    }
+    impl Transport for Budget {
+        async fn send(&self, request: Request) -> Result<Response, Error> {
+            if self.stop.load(Ordering::SeqCst) || self.count.fetch_add(1, Ordering::SeqCst) >= 9 {
+                return Err(Error::InputBound);
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            let response = self.http.send(request).await?;
+            if response.status == 429 {
+                self.stop.store(true, Ordering::SeqCst);
+            }
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&response.body)
+                && value.get("code").and_then(serde_json::Value::as_i64) != Some(200)
+            {
+                self.stop.store(true, Ordering::SeqCst);
+            }
+            Ok(response)
+        }
+    }
+    fn report<T>(name: &str, result: Result<T, Error>) -> T {
+        match result {
+            Ok(value) => {
+                println!("{name}: PASS");
+                value
+            }
+            Err(error) => panic!("{name}: STOP {error}"),
+        }
+    }
+    assert_eq!(
+        std::env::var("FURA_NETEASE_READ_PARITY_PROBE").as_deref(),
+        Ok("1")
+    );
+    let client = NeteaseClient::new(Budget {
+        http: HttpsTransport::new().unwrap(),
+        count: AtomicUsize::new(0),
+        stop: AtomicBool::new(false),
+    });
+    let tracks = report(
+        "MV-seed search",
+        client.search_tracks("Jay Chou", 0, 10).await,
+    );
+    let track = tracks
+        .items
+        .iter()
+        .find(|track| track.mv_id > 0)
+        .expect("bounded public MV-associated sample required");
+    report("comments", client.comments(track.id, 0, 3).await);
+    report("related Tracks", client.related_tracks(track.id).await);
+    report(
+        "new songs",
+        client.new_songs(netease_client::NewSongArea::All).await,
+    );
+    report(
+        "new Albums",
+        client
+            .new_albums(netease_client::NewAlbumArea::Japan, 0, 3)
+            .await,
+    );
+    report("associated MV", client.music_video(track.id).await)
+        .expect("selected exact Track must retain its MV association");
+}
+
+#[tokio::test]
+#[ignore = "explicit anonymous large-playlist observation; hard maximum 3 HTTPS requests"]
+async fn anonymous_playlist_above_one_thousand() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Budget {
+        http: HttpsTransport,
+        count: AtomicUsize,
+    }
+    impl Transport for Budget {
+        async fn send(&self, request: Request) -> Result<Response, Error> {
+            if self.count.fetch_add(1, Ordering::SeqCst) >= 3 {
+                return Err(Error::InputBound);
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            let response = self.http.send(request).await?;
+            if response.status == 429 {
+                return Err(Error::RateLimited);
+            }
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&response.body)
+                && value.get("code").and_then(serde_json::Value::as_i64) != Some(200)
+            {
+                return Err(Error::UpstreamUnknown);
+            }
+            Ok(response)
+        }
+    }
+    assert_eq!(
+        std::env::var("FURA_NETEASE_LARGE_PLAYLIST_PROBE").as_deref(),
+        Ok("1")
+    );
+    let client = NeteaseClient::new(Budget {
+        http: HttpsTransport::new().unwrap(),
+        count: AtomicUsize::new(0),
+    });
+    let playlists = client
+        .search_playlists("Chinese music", 0, 30)
+        .await
+        .expect("playlist search must pass");
+    let playlist = playlists
+        .items
+        .iter()
+        .find(|playlist| playlist.track_count > 1000)
+        .expect("public playlist above the former 1,000-row ceiling required");
+    let page = client
+        .playlist_page(playlist.id, 1000, 1)
+        .await
+        .expect("large public playlist window must pass");
+    assert_eq!(page.offset, 1000);
+    assert_eq!(page.next, 1001);
+    assert!(page.total > 1000);
+    println!("large public Playlist: PASS");
+}

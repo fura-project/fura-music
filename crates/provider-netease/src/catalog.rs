@@ -13,7 +13,7 @@ use provider_api::{
     TrackDetailsProvider,
 };
 
-fn catalog_error(error: Error) -> CatalogError {
+pub(super) fn catalog_error(error: Error) -> CatalogError {
     match error {
         Error::TemporaryNetworkFailure => CatalogError::Network,
         Error::InputBound | Error::ResponseBound | Error::ResponseShapeMismatch => {
@@ -22,7 +22,7 @@ fn catalog_error(error: Error) -> CatalogError {
         _ => CatalogError::ServiceUnavailable,
     }
 }
-fn identity(provider: &music_domain::ProviderId, opaque: &str) -> Result<u64, Error> {
+pub(super) fn identity(provider: &music_domain::ProviderId, opaque: &str) -> Result<u64, Error> {
     if provider != &provider_id()
         || opaque.starts_with('0')
         || opaque.len() > 16
@@ -120,7 +120,7 @@ impl<T: Transport> AlbumTracksProvider for NeteaseProvider<T> {
         offset: u32,
         size: u32,
     ) -> Result<AlbumTracksPage, Self::Error> {
-        if size == 0 || size > 100 || offset > 1000 {
+        if size == 0 || size > 100 || offset as usize > netease_client::MAX_ALBUM_TRACKS {
             return Err(CatalogError::InvalidResponse);
         }
         let id = identity(id.provider(), id.opaque()).map_err(catalog_error)?;

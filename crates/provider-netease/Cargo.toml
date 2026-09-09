@@ -10,7 +10,7 @@ music-domain = { path = "../music-domain" }
 provider-api = { path = "../provider-api" }
 netease-client = { path = "../netease-client" }
 
-tokio = { version = "1.53.1", features = ["sync", "time"] }
+tokio = { version = "1.53.1", features = ["macros", "sync", "time"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

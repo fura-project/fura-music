@@ -1,6 +1,7 @@
 //! `NetEase` catalog and session owner. Opaque identity parsing stays here.
 mod auth;
 mod catalog;
+mod read_parity;
 pub use auth::{NeteaseQrCancellation, NeteaseQrSession};
 pub use catalog::NeteaseMediaSourceResolver;
 use music_domain::{
@@ -44,6 +45,8 @@ impl<T> MusicProvider for NeteaseProvider<T> {
                 ProviderCapability::Lyrics,
                 ProviderCapability::Authentication,
                 ProviderCapability::UserLibrary,
+                ProviderCapability::Comments,
+                ProviderCapability::MusicVideo,
             ],
         }
     }
