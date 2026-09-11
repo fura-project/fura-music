@@ -43,6 +43,10 @@ Without an explicit human product decision, this project will not become:
 
 Complete a mainstream, Home-first QQ Music product experience over the proven vertical slice while keeping Library, Discover, Search, playback, and Now Playing coherent and independently truthful. Extend capability only from demonstrated user needs or an accepted product decision, keep provider differences explicit, and prefer measurable correctness and reliability over speculative extensibility. A later focused or quiet experience may be evaluated as a separate product phase; it is not part of the first-release baseline.
 
-HD-023 initially authorizes anonymous NetEase Core catalog, lyrics, and normal media resolution, followed by an authenticated foundation. UI integration is separately Human-gated. Access-control bypass, third-party unlocking, automatic real-account access/writes, and shared credentials are excluded.
+HD-023 initially authorized the NetEase Core and authenticated foundation;
+HD-025 authorizes its integration through the existing product surfaces with a
+persisted QQ-default Provider selection. Access-control bypass, third-party
+unlocking, mixed Search, automatic substitution, automatic real-account
+access/writes, and shared credentials remain excluded.
 
 Changes to this document's product definition require an entry in `HUMAN_DECISIONS.md`.

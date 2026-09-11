@@ -2,6 +2,27 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Active Mixed Workstream — Existing UI integration for built-in Providers (HD-025)
+
+**Goal:** expose the completed QQ Music and NetEase Cloud Music Core through
+the existing product UI, selected persistently in Settings with QQ Music as the
+default.
+
+**Bounded exit criteria:** settings migration and rollback; static two-Provider
+Bootstrap inventory; exact typed Bridge dispatch for the shared catalog,
+account and Track-adjacent reads; independent credential vaults and NetEase QR;
+truthful Home/Discover/Library composition; unsupported NetEase Radar, Recent
+Plays and writes hidden; existing Queue/current playback retained across
+selection; stale provider-scoped results rejected; full Rust/Flutter/FRB/native
+machine gates and synthetic visual candidates.
+
+**Boundaries:** reuse the present pages and Shell. No mixed Search,
+cross-Provider identity interpretation, source matching/substitution, unified
+likes, account migration, NetEase writes, third Provider, runtime registry,
+plugin system, sidecar, stored-account automation, visual redesign or
+access-control bypass. Real NetEase account behavior and aesthetics remain
+Human review.
+
 ## Acceptance Milestone — M1 First QQ Music Vertical Slice
 
 **Goal:** sign in and restore credentials, browse the user's playlists and details, play a Track through the Rust-backed positional Queue, and follow synchronized/word-timed lyrics.

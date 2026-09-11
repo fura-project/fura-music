@@ -246,3 +246,33 @@ When a decision is needed, record its context, options, blocked and unblocked wo
 **Decision:** Continue HD-023 in `AUTONOMOUS_DEVELOPMENT / CORE` for one bounded hardening and provider-neutral read-parity pass. Unify all native NetEase edges behind one process-level Provider/session owner; retain a QR-confirmed credential as pending across transient account verification; add an explicit ignored Human account-read matrix; replace the unexplained 1,000-row Playlist/liked/Album ceilings with evidence-backed resource bounds; and implement current, read-only Comments, related Tracks, new songs, new Albums and exact Track-associated MV where existing neutral contracts can express the service semantics.
 
 **Consequences:** Anonymous, serial, hard-budget live observations may support these read paths. Natural category mismatches must fail before transport rather than relabel NetEase's broader Chinese-language catalog as a narrower QQ region. Recent-history stays research-only without a current ordinary-session endpoint with clear pagination. This decision does not authorize Flutter/UI changes, Provider selection UI, account automation, writes, scrobbling, cross-Provider matching/substitution, unlock/bypass behavior, a third Provider, dynamic runtime or sidecar. Logical commits remain local; no push is authorized.
+
+## HD-025 — Existing UI integration for built-in Providers
+
+**Status:** Accepted by explicit Human instruction on 2026-09-12.
+
+**Decision:** Reuse the existing Material 3 product surfaces for the two fixed
+built-in Providers. Settings owns one persisted catalog/account Provider
+selection, defaulting and migrating to QQ Music. NetEase Cloud Music is wired
+through the same Home, Discover, Search, Library, detail, playback-adjacent and
+authentication presentation rather than receiving copied pages. Provider
+credentials and session owners remain independently namespaced. Changing the
+selection resets provider-scoped catalog/account navigation and rejects late
+results, but does not sign either Provider out, clear the Queue, stop the
+current Track, or rewrite an existing provider-scoped identity. Media, lyrics,
+comments, MV and related reads continue to route from the owning entity's exact
+`ProviderId`. Presentation hides capabilities and mutations that the selected
+or owning Provider does not implement, and uses NetEase Daily Tracks and
+Personal FM only under their truthful semantics.
+
+**Consequences:** This supersedes HD-023/HD-024 only where they deferred
+Flutter integration. It authorizes a small static QQ/NetEase dispatch, a
+provider-aware typed Bridge, independent secure-vault keys, NetEase QR
+presentation, settings migration, capability-aware navigation and synthetic
+integration tests. It does not authorize mixed Search, cross-Provider matching,
+automatic source substitution, unified likes, account migration, a shared
+credential, NetEase writes, a third Provider, runtime Provider discovery,
+plugins, a sidecar, credential extraction, stored-account automation, real
+account writes, or access-control bypass. NetEase real-account and visual/runtime
+acceptance remain Human evidence. Logical commits stay local; no push is
+authorized.

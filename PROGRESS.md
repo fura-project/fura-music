@@ -2,14 +2,29 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: AWAITING_HUMAN_REVIEW
+  state: IN_PROGRESS
   acceptance_milestone: M1
-  active_workstream: ANDROID_SYSTEM_MEDIA_AND_CREDENTIAL_TRANSFER_GO_NO_GO
-  current_task: MACHINE_IMPLEMENTATION_COMPLETE
-  next_action: HUMAN_CROSS_DEVICE_AND_ANDROID_SYSTEM_MEDIA_REVIEW
+  active_workstream: BUILT_IN_PROVIDER_UI_INTEGRATION
+  current_task: HD_025_MACHINE_IMPLEMENTATION
+  next_action: SETTINGS_BOOTSTRAP_BRIDGE_AND_EXISTING_UI_WIRING
 ---
 
 # Current State
+
+- **2026-09-12 HD-025 built-in Provider UI integration authorized and in
+  progress:** the maintainer authorizes the existing Material 3 product
+  surfaces to serve QQ Music and NetEase Cloud Music through one persisted,
+  QQ-default Provider selection. Credentials remain separately namespaced;
+  catalog/account state changes with the selection while the Queue and current
+  provider-owned Track survive. Exact entity identity continues to own media,
+  lyrics, comments, MV and related routing. Mixed Search, cross-Provider
+  matching/substitution, shared likes/credentials, NetEase writes, a third
+  Provider, runtime plugins and sidecars remain excluded. Machine work covers
+  Settings migration, static Bootstrap inventory, typed Bridge dispatch,
+  provider-scoped authentication/composition, capability hiding, synthetic
+  races and native builds. NetEase real-account and visual/runtime acceptance
+  remain Human evidence. Starting HEAD is `e1715ee7c5763d2fbcfd3df5d9bb4708f684be76`
+  with a clean worktree; logical local commits only and no push.
 
 - **2026-09-11 Android system media and credential-transfer Go/No-Go
   checkpoint:** the QQ login dialog now presents desktop Quick login and QQ QR
