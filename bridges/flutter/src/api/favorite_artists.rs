@@ -5,7 +5,7 @@ use provider_api::{FavoriteArtistsProvider, UserLibraryError};
 use tokio::sync::Notify;
 
 use super::artist::{CatalogArtistSummary, bridge_artist_summary};
-use super::authentication::native_qq_music_provider;
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicFavoriteArtistPageLoadFailure {
@@ -46,6 +46,7 @@ impl fmt::Debug for QqMusicFavoriteArtistPageLoad {
 /// handle contains only provider-neutral pagination, never account material.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicFavoriteArtistPageLoadHandle {
+    provider_id: String,
     offset: u32,
     size: u32,
     active: AtomicBool,
@@ -73,8 +74,9 @@ impl QqMusicFavoriteArtistPageLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_load(QqMusicFavoriteArtistPageLoadFailure::AlreadyRunning);
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_load(QqMusicFavoriteArtistPageLoadFailure::Cancelled)
@@ -87,9 +89,9 @@ impl QqMusicFavoriteArtistPageLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_load(QqMusicFavoriteArtistPageLoadFailure::CoreUnavailable),
-        };
+            },
+            failed_load(QqMusicFavoriteArtistPageLoadFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -112,10 +114,12 @@ impl QqMusicFavoriteArtistPageLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_favorite_artist_page_load(
+    provider_id: String,
     offset: u32,
     size: u32,
 ) -> QqMusicFavoriteArtistPageLoadHandle {
     QqMusicFavoriteArtistPageLoadHandle {
+        provider_id,
         offset,
         size,
         active: AtomicBool::new(true),
@@ -243,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_favorite_artist_page_load(0, 20);
+        let handle = begin_qq_music_favorite_artist_page_load("qq-music".into(), 0, 20);
 
         assert!(handle.is_active());
         assert!(handle.cancel());

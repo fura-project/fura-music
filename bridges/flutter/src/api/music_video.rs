@@ -5,8 +5,8 @@ use music_domain::{MusicVideo, MusicVideoQuality};
 use provider_api::{MusicVideoError, TrackMusicVideoProvider};
 use tokio::sync::Notify;
 
-use super::authentication::native_qq_music_provider;
 use super::domain_track_id;
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrackMusicVideoLoadFailure {
@@ -102,26 +102,26 @@ impl TrackMusicVideoLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_load(TrackMusicVideoLoadFailure::AlreadyRunning);
         }
-        let outcome = match (
-            native_qq_music_provider(),
-            domain_track_id(&self.provider_id, &self.opaque_track_id),
-        ) {
-            (Ok(provider), Ok(track_id)) => {
-                tokio::select! {
-                    () = self.cancelled.notified() => {
-                        failed_load(TrackMusicVideoLoadFailure::Cancelled)
-                    }
-                    result = provider.track_music_video(track_id) => {
-                        if self.active.load(Ordering::SeqCst) {
-                            map_load(result)
-                        } else {
+        let outcome = match domain_track_id(&self.provider_id, &self.opaque_track_id) {
+            Ok(track_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
+                    tokio::select! {
+                        () = self.cancelled.notified() => {
                             failed_load(TrackMusicVideoLoadFailure::Cancelled)
                         }
+                        result = provider.track_music_video(track_id) => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_load(result)
+                            } else {
+                                failed_load(TrackMusicVideoLoadFailure::Cancelled)
+                            }
+                        }
                     }
-                }
-            }
-            (Err(()), _) => failed_load(TrackMusicVideoLoadFailure::CoreUnavailable),
-            (_, Err(())) => failed_load(TrackMusicVideoLoadFailure::InvalidResponse),
+                },
+                failed_load(TrackMusicVideoLoadFailure::CoreUnavailable)
+            ),
+            Err(()) => failed_load(TrackMusicVideoLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);

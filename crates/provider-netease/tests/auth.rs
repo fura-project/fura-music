@@ -117,6 +117,42 @@ async fn restore_requires_verification_and_preserves_transient_candidate() {
     assert!(!p.has_authenticated_credential());
     assert!(p.export_credential().unwrap().is_none());
 }
+
+#[tokio::test]
+async fn cancelled_restore_verification_keeps_candidate_for_an_explicit_retry() {
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let (p, calls, _) = provider(vec![
+        Reply::Blocked(started.clone(), release, account()),
+        Reply::Json(account()),
+    ]);
+    p.import_credential(&credential()).unwrap();
+
+    let verifier = p.clone();
+    let old = tokio::spawn(async move { verifier.verify_restored_credential().await });
+    started.notified().await;
+
+    assert!(p.cancel_pending_credential_verification());
+    assert_eq!(old.await.unwrap(), Err(AccountSummaryError::Replaced));
+    assert!(!p.has_authenticated_credential());
+
+    p.verify_restored_credential().await.unwrap();
+    assert!(p.has_authenticated_credential());
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn cancelling_verification_without_a_pending_candidate_is_a_noop() {
+    let (p, _, _) = provider(vec![Reply::Json(account())]);
+    assert!(!p.cancel_pending_credential_verification());
+
+    p.import_credential(&credential()).unwrap();
+    p.verify_restored_credential().await.unwrap();
+    assert!(p.has_authenticated_credential());
+    assert!(!p.cancel_pending_credential_verification());
+    assert!(p.has_authenticated_credential());
+}
+
 #[test]
 fn credential_documents_reject_foreign_versions_injections_and_oversize() {
     let bytes = credential();

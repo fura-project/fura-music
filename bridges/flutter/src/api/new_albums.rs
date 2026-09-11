@@ -6,7 +6,7 @@ use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
 use super::artist::{CatalogArtistSummary, bridge_artist_summary};
-use super::authentication::native_qq_music_provider;
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicNewAlbumRegion {
@@ -74,6 +74,7 @@ impl fmt::Debug for QqMusicNewAlbumPageLoad {
 /// and pagination remain inside the Rust Provider stack.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicNewAlbumPageLoadHandle {
+    provider_id: String,
     region: QqMusicNewAlbumRegion,
     offset: u32,
     size: u32,
@@ -103,8 +104,9 @@ impl QqMusicNewAlbumPageLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_load(self.region, QqMusicNewAlbumPageLoadFailure::AlreadyRunning);
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_load(self.region, QqMusicNewAlbumPageLoadFailure::Cancelled)
@@ -121,9 +123,9 @@ impl QqMusicNewAlbumPageLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_load(self.region, QqMusicNewAlbumPageLoadFailure::CoreUnavailable),
-        };
+            },
+            failed_load(self.region, QqMusicNewAlbumPageLoadFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -146,11 +148,13 @@ impl QqMusicNewAlbumPageLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_new_album_page_load(
+    provider_id: String,
     region: QqMusicNewAlbumRegion,
     offset: u32,
     size: u32,
 ) -> QqMusicNewAlbumPageLoadHandle {
     QqMusicNewAlbumPageLoadHandle {
+        provider_id,
         region,
         offset,
         size,
@@ -314,7 +318,12 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_new_album_page_load(QqMusicNewAlbumRegion::Western, 0, 20);
+        let handle = begin_qq_music_new_album_page_load(
+            "qq-music".into(),
+            QqMusicNewAlbumRegion::Western,
+            0,
+            20,
+        );
         assert!(handle.is_active());
         assert!(handle.cancel());
         assert!(!handle.cancel());

@@ -16,6 +16,7 @@ import 'api/listening.dart';
 import 'api/lyrics.dart';
 import 'api/media.dart';
 import 'api/music_video.dart';
+import 'api/netease_authentication.dart';
 import 'api/new_albums.dart';
 import 'api/new_songs.dart';
 import 'api/playlist_creation.dart';
@@ -46,6 +47,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_MediaResolutionHandlePtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandlePtr;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_NeteaseQrLoginSessionHandlePtr => wire
+      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandlePtr;
 
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_PlaybackQueueHandlePtr => wire
@@ -194,6 +199,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   MediaResolutionHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
+    dynamic raw,
+  );
+
+  @protected
+  NeteaseQrLoginSessionHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
     dynamic raw,
   );
 
@@ -420,6 +431,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseQrLoginSessionHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    dynamic raw,
+  );
+
+  @protected
   PlaybackQueueHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
     dynamic raw,
@@ -638,6 +655,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   MediaResolutionHandle
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
+    dynamic raw,
+  );
+
+  @protected
+  NeteaseQrLoginSessionHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
     dynamic raw,
   );
 
@@ -865,6 +888,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BootstrapStatus dco_decode_bootstrap_status(dynamic raw);
+
+  @protected
+  NeteaseQrLoginSessionHandle
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    dynamic raw,
+  );
 
   @protected
   QqMusicDesktopQuickLoginSessionHandle
@@ -1189,6 +1218,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ProviderStatus> dco_decode_list_provider_status(dynamic raw);
+
+  @protected
   List<QqMusicDesktopQuickLoginAccount>
   dco_decode_list_qq_music_desktop_quick_login_account(dynamic raw);
 
@@ -1225,7 +1257,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaResolutionFailure dco_decode_media_resolution_failure(dynamic raw);
 
   @protected
+  NeteaseQrLoginStart dco_decode_netease_qr_login_start(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  NeteaseQrLoginSessionHandle?
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    dynamic raw,
+  );
 
   @protected
   QqMusicDesktopQuickLoginSessionHandle?
@@ -1957,6 +1998,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseQrLoginSessionHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlaybackQueueHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
     SseDeserializer deserializer,
@@ -2179,6 +2226,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseQrLoginSessionHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlaybackQueueHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
     SseDeserializer deserializer,
@@ -2397,6 +2450,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   MediaResolutionHandle
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseQrLoginSessionHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
     SseDeserializer deserializer,
   );
 
@@ -2624,6 +2683,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BootstrapStatus sse_decode_bootstrap_status(SseDeserializer deserializer);
+
+  @protected
+  NeteaseQrLoginSessionHandle
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   QqMusicDesktopQuickLoginSessionHandle
@@ -3048,6 +3113,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<ProviderStatus> sse_decode_list_provider_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<QqMusicDesktopQuickLoginAccount>
   sse_decode_list_qq_music_desktop_quick_login_account(
     SseDeserializer deserializer,
@@ -3094,7 +3164,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseQrLoginStart sse_decode_netease_qr_login_start(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  NeteaseQrLoginSessionHandle?
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   QqMusicDesktopQuickLoginSessionHandle?
@@ -3978,6 +4059,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    NeteaseQrLoginSessionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
     PlaybackQueueHandle self,
     SseSerializer serializer,
@@ -4232,6 +4320,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle(
     MediaResolutionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    NeteaseQrLoginSessionHandle self,
     SseSerializer serializer,
   );
 
@@ -4496,6 +4591,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    NeteaseQrLoginSessionHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPlaybackQueueHandle(
     PlaybackQueueHandle self,
     SseSerializer serializer,
@@ -4755,6 +4857,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_bootstrap_status(
     BootstrapStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    NeteaseQrLoginSessionHandle self,
     SseSerializer serializer,
   );
 
@@ -5220,6 +5329,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_provider_status(
+    List<ProviderStatus> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_qq_music_desktop_quick_login_account(
     List<QqMusicDesktopQuickLoginAccount> self,
     SseSerializer serializer,
@@ -5274,7 +5389,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_netease_qr_login_start(
+    NeteaseQrLoginStart self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    NeteaseQrLoginSessionHandle? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
@@ -6310,6 +6438,40 @@ class RustLibWire implements BaseWire {
       );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandle =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMediaResolutionHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_flutterustmusic_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle',
+      );
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_flutterustmusic_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle',
+      );
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandle =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNeteaseQrLoginSessionHandlePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void

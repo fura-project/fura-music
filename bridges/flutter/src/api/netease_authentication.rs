@@ -1,0 +1,360 @@
+use std::fmt;
+use std::sync::Mutex as StdMutex;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+use netease_client::HttpsTransport;
+use provider_api::{
+    AccountSummaryError, AuthenticationError, QrAuthenticationChannel, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+};
+use provider_netease::{NeteaseQrCancellation, NeteaseQrSession};
+use tokio::sync::Mutex as AsyncMutex;
+
+use super::authentication::{
+    QqMusicCredentialExport, QqMusicCredentialExportFailure, QqMusicCredentialRestore,
+    QqMusicCredentialRestoreFailure, QqMusicCredentialRestoreState, QqMusicCredentialVerification,
+    QqMusicCredentialVerificationFailure, QqMusicCredentialVerificationState, QqMusicQrChallenge,
+    QqMusicQrImageFormat, QqMusicQrLoginFailure, QqMusicQrLoginState, QqMusicQrLoginUpdate,
+};
+
+type NativeSession = NeteaseQrSession<HttpsTransport>;
+
+static NEXT_ATTEMPT: AtomicU32 = AtomicU32::new(1);
+static ACTIVE_START: StdMutex<Option<u32>> = StdMutex::new(None);
+static ACTIVE_VERIFICATION: StdMutex<Option<u32>> = StdMutex::new(None);
+
+pub struct NeteaseQrLoginStart {
+    pub session: Option<NeteaseQrLoginSessionHandle>,
+    pub challenge: Option<QqMusicQrChallenge>,
+    pub failure: Option<QqMusicQrLoginFailure>,
+}
+
+impl fmt::Debug for NeteaseQrLoginStart {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NeteaseQrLoginStart")
+            .field("has_session", &self.session.is_some())
+            .field("challenge", &self.challenge)
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+#[flutter_rust_bridge::frb(opaque)]
+pub struct NeteaseQrLoginSessionHandle {
+    session: AsyncMutex<NativeSession>,
+    cancellation: NeteaseQrCancellation,
+    active: AtomicBool,
+}
+
+impl NeteaseQrLoginSessionHandle {
+    pub async fn advance(&self) -> QqMusicQrLoginUpdate {
+        let Ok(mut session) = self.session.try_lock() else {
+            return QqMusicQrLoginUpdate {
+                state: None,
+                failure: Some(QqMusicQrLoginFailure::AdvanceAlreadyInProgress),
+                session_active: self.active.load(Ordering::SeqCst),
+            };
+        };
+        let update = match session.advance().await {
+            Ok(progress) => QqMusicQrLoginUpdate {
+                state: Some(map_progress(progress)),
+                failure: None,
+                session_active: session.is_active(),
+            },
+            Err(error) => QqMusicQrLoginUpdate {
+                state: None,
+                failure: Some(map_auth_error(error)),
+                session_active: session.is_active(),
+            },
+        };
+        self.active.store(update.session_active, Ordering::SeqCst);
+        update
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        was_active && self.cancellation.cancel()
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn reserve_netease_qr_login_start() -> u32 {
+    let attempt = next_attempt();
+    *lock_attempt(&ACTIVE_START) = Some(attempt);
+    attempt
+}
+
+pub async fn start_netease_qr_login(attempt_id: u32) -> NeteaseQrLoginStart {
+    if *lock_attempt(&ACTIVE_START) != Some(attempt_id) {
+        return failed_start(QqMusicQrLoginFailure::Replaced);
+    }
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        clear_attempt(&ACTIVE_START, attempt_id);
+        return failed_start(QqMusicQrLoginFailure::CoreUnavailable);
+    };
+    let session = match provider
+        .begin_qr_authentication(QrAuthenticationChannel::ProviderDefault)
+        .await
+    {
+        Ok(session) => session,
+        Err(error) => {
+            clear_attempt(&ACTIVE_START, attempt_id);
+            return failed_start(map_auth_error(error));
+        }
+    };
+    if *lock_attempt(&ACTIVE_START) != Some(attempt_id) {
+        session.cancel();
+        return failed_start(QqMusicQrLoginFailure::Replaced);
+    }
+    clear_attempt(&ACTIVE_START, attempt_id);
+    let challenge = session.challenge();
+    let cancellation = session.cancellation_handle();
+    NeteaseQrLoginStart {
+        session: Some(NeteaseQrLoginSessionHandle {
+            session: AsyncMutex::new(session),
+            cancellation,
+            active: AtomicBool::new(true),
+        }),
+        challenge: Some(QqMusicQrChallenge {
+            image_format: match challenge.image_format() {
+                QrImageFormat::Png => QqMusicQrImageFormat::Png,
+                QrImageFormat::Jpeg => QqMusicQrImageFormat::Jpeg,
+            },
+            image_bytes: challenge.image_bytes().to_vec(),
+        }),
+        failure: None,
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_netease_qr_login_start(attempt_id: u32) -> bool {
+    let mut active = lock_attempt(&ACTIVE_START);
+    if *active != Some(attempt_id) {
+        return false;
+    }
+    *active = None;
+    true
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn netease_has_authenticated_credential() -> bool {
+    crate::native_netease::native_netease_provider()
+        .is_ok_and(QrAuthenticationProvider::has_authenticated_credential)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_netease_credential_for_secure_storage() -> QqMusicCredentialExport {
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return failed_export(QqMusicCredentialExportFailure::NoAuthenticatedCredential);
+    };
+    match provider.export_credential() {
+        Ok(Some(secret_bytes)) => QqMusicCredentialExport {
+            secret_bytes: Some(secret_bytes),
+            failure: None,
+        },
+        Ok(None) => failed_export(QqMusicCredentialExportFailure::NoAuthenticatedCredential),
+        Err(_) => failed_export(QqMusicCredentialExportFailure::SerializationFailed),
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn restore_netease_credential_from_secure_storage(
+    secret_bytes: Option<Vec<u8>>,
+) -> QqMusicCredentialRestore {
+    let Some(secret_bytes) = secret_bytes else {
+        return QqMusicCredentialRestore {
+            state: Some(QqMusicCredentialRestoreState::SignedOut),
+            failure: None,
+        };
+    };
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return failed_restore(QqMusicCredentialRestoreFailure::CoreUnavailable);
+    };
+    match provider.import_credential(&secret_bytes) {
+        Ok(()) => QqMusicCredentialRestore {
+            state: Some(QqMusicCredentialRestoreState::VerificationRequired),
+            failure: None,
+        },
+        Err(AccountSummaryError::InvalidResponse) => {
+            failed_restore(QqMusicCredentialRestoreFailure::InvalidDocument)
+        }
+        Err(_) => failed_restore(QqMusicCredentialRestoreFailure::InvalidCredential),
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn reserve_netease_credential_verification() -> Option<u32> {
+    let attempt = next_attempt();
+    *lock_attempt(&ACTIVE_VERIFICATION) = Some(attempt);
+    Some(attempt)
+}
+
+pub async fn verify_restored_netease_credential(attempt_id: u32) -> QqMusicCredentialVerification {
+    if *lock_attempt(&ACTIVE_VERIFICATION) != Some(attempt_id) {
+        return failed_verification(QqMusicCredentialVerificationFailure::Replaced);
+    }
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        clear_attempt(&ACTIVE_VERIFICATION, attempt_id);
+        return failed_verification(QqMusicCredentialVerificationFailure::CoreUnavailable);
+    };
+    let result = provider.verify_restored_credential().await;
+    if *lock_attempt(&ACTIVE_VERIFICATION) != Some(attempt_id) {
+        return failed_verification(QqMusicCredentialVerificationFailure::Replaced);
+    }
+    clear_attempt(&ACTIVE_VERIFICATION, attempt_id);
+    match result {
+        Ok(()) => QqMusicCredentialVerification {
+            state: Some(QqMusicCredentialVerificationState::Authenticated),
+            failure: None,
+        },
+        Err(AccountSummaryError::CredentialRejected) => QqMusicCredentialVerification {
+            state: Some(QqMusicCredentialVerificationState::Rejected),
+            failure: None,
+        },
+        Err(AccountSummaryError::AuthenticationRequired) => {
+            failed_verification(QqMusicCredentialVerificationFailure::NoRestoredCredential)
+        }
+        Err(AccountSummaryError::Network) => {
+            failed_verification(QqMusicCredentialVerificationFailure::Network)
+        }
+        Err(AccountSummaryError::ServiceUnavailable) => {
+            failed_verification(QqMusicCredentialVerificationFailure::ServiceUnavailable)
+        }
+        Err(AccountSummaryError::InvalidResponse) => {
+            failed_verification(QqMusicCredentialVerificationFailure::InvalidResponse)
+        }
+        Err(AccountSummaryError::Replaced) => {
+            failed_verification(QqMusicCredentialVerificationFailure::Replaced)
+        }
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_netease_credential_verification(attempt_id: u32) -> bool {
+    let mut active = lock_attempt(&ACTIVE_VERIFICATION);
+    if *active != Some(attempt_id) {
+        return false;
+    }
+    *active = None;
+    let _ = crate::native_netease::native_netease_provider()
+        .is_ok_and(provider_netease::NeteaseProvider::cancel_pending_credential_verification);
+    true
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn sign_out_netease() -> bool {
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return false;
+    };
+    *lock_attempt(&ACTIVE_START) = None;
+    *lock_attempt(&ACTIVE_VERIFICATION) = None;
+    QrAuthenticationProvider::sign_out(provider);
+    true
+}
+
+fn next_attempt() -> u32 {
+    NEXT_ATTEMPT
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            Some(if current == u32::MAX { 1 } else { current + 1 })
+        })
+        .expect("attempt update closure always returns Some")
+}
+
+fn lock_attempt(lock: &StdMutex<Option<u32>>) -> std::sync::MutexGuard<'_, Option<u32>> {
+    lock.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn clear_attempt(lock: &StdMutex<Option<u32>>, attempt: u32) {
+    let mut active = lock_attempt(lock);
+    if *active == Some(attempt) {
+        *active = None;
+    }
+}
+
+const fn failed_start(failure: QqMusicQrLoginFailure) -> NeteaseQrLoginStart {
+    NeteaseQrLoginStart {
+        session: None,
+        challenge: None,
+        failure: Some(failure),
+    }
+}
+
+const fn failed_export(failure: QqMusicCredentialExportFailure) -> QqMusicCredentialExport {
+    QqMusicCredentialExport {
+        secret_bytes: None,
+        failure: Some(failure),
+    }
+}
+
+const fn failed_restore(failure: QqMusicCredentialRestoreFailure) -> QqMusicCredentialRestore {
+    QqMusicCredentialRestore {
+        state: None,
+        failure: Some(failure),
+    }
+}
+
+const fn failed_verification(
+    failure: QqMusicCredentialVerificationFailure,
+) -> QqMusicCredentialVerification {
+    QqMusicCredentialVerification {
+        state: None,
+        failure: Some(failure),
+    }
+}
+
+const fn map_progress(progress: QrAuthenticationProgress) -> QqMusicQrLoginState {
+    match progress {
+        QrAuthenticationProgress::WaitingForScan => QqMusicQrLoginState::WaitingForScan,
+        QrAuthenticationProgress::ScannedAwaitingConfirmation => {
+            QqMusicQrLoginState::ScannedAwaitingConfirmation
+        }
+        QrAuthenticationProgress::Authenticated => QqMusicQrLoginState::Authenticated,
+        QrAuthenticationProgress::Expired => QqMusicQrLoginState::Expired,
+        QrAuthenticationProgress::Refused => QqMusicQrLoginState::Refused,
+        QrAuthenticationProgress::TimedOut => QqMusicQrLoginState::TimedOut,
+    }
+}
+
+const fn map_auth_error(error: AuthenticationError) -> QqMusicQrLoginFailure {
+    match error {
+        AuthenticationError::Network => QqMusicQrLoginFailure::Network,
+        AuthenticationError::ServiceUnavailable => QqMusicQrLoginFailure::ServiceUnavailable,
+        AuthenticationError::InvalidResponse => QqMusicQrLoginFailure::InvalidResponse,
+        AuthenticationError::Rejected => QqMusicQrLoginFailure::Rejected,
+        AuthenticationError::Cancelled => QqMusicQrLoginFailure::Cancelled,
+        AuthenticationError::Replaced => QqMusicQrLoginFailure::Replaced,
+        AuthenticationError::SessionClosed => QqMusicQrLoginFailure::SessionClosed,
+        AuthenticationError::SessionFinished => QqMusicQrLoginFailure::SessionFinished,
+        AuthenticationError::TimedOut => QqMusicQrLoginFailure::TimedOut,
+        AuthenticationError::TooManyNetworkFailures => {
+            QqMusicQrLoginFailure::TooManyNetworkFailures
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absent_vault_document_is_signed_out_without_touching_qq() {
+        let result = restore_netease_credential_from_secure_storage(None);
+        assert_eq!(result.state, Some(QqMusicCredentialRestoreState::SignedOut));
+        assert_eq!(result.failure, None);
+    }
+
+    #[test]
+    fn stale_start_attempt_is_rejected_before_transport() {
+        let attempt = reserve_netease_qr_login_start();
+        assert!(cancel_netease_qr_login_start(attempt));
+        assert!(!cancel_netease_qr_login_start(attempt));
+    }
+}

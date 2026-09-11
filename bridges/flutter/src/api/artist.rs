@@ -5,8 +5,8 @@ use provider_api::{ArtistAlbumsProvider, ArtistTracksProvider, CatalogError};
 use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
-use super::authentication::native_qq_music_provider;
 use super::library::{LibraryTrackSummary, bridge_track_summary};
+use super::with_native_provider;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct CatalogArtistSummary {
@@ -103,8 +103,9 @@ impl QqMusicArtistTrackPageLoadHandle {
             return failed_load(QqMusicArtistTrackPageLoadFailure::AlreadyRunning);
         }
         let outcome = match artist_id(&self.provider_id, &self.opaque_artist_id) {
-            Ok(artist_id) => match native_qq_music_provider() {
-                Ok(provider) => {
+            Ok(artist_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
                     tokio::select! {
                         () = self.cancelled.notified() => {
                             failed_load(QqMusicArtistTrackPageLoadFailure::Cancelled)
@@ -117,9 +118,9 @@ impl QqMusicArtistTrackPageLoadHandle {
                             }
                         }
                     }
-                }
-                Err(()) => failed_load(QqMusicArtistTrackPageLoadFailure::CoreUnavailable),
-            },
+                },
+                failed_load(QqMusicArtistTrackPageLoadFailure::CoreUnavailable)
+            ),
             Err(()) => failed_load(QqMusicArtistTrackPageLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);
@@ -264,8 +265,9 @@ impl QqMusicArtistAlbumPageLoadHandle {
             return failed_album_load(QqMusicArtistAlbumPageLoadFailure::AlreadyRunning);
         }
         let outcome = match artist_id(&self.provider_id, &self.opaque_artist_id) {
-            Ok(artist_id) => match native_qq_music_provider() {
-                Ok(provider) => {
+            Ok(artist_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
                     tokio::select! {
                         () = self.cancelled.notified() => {
                             failed_album_load(QqMusicArtistAlbumPageLoadFailure::Cancelled)
@@ -278,9 +280,9 @@ impl QqMusicArtistAlbumPageLoadHandle {
                             }
                         }
                     }
-                }
-                Err(()) => failed_album_load(QqMusicArtistAlbumPageLoadFailure::CoreUnavailable),
-            },
+                },
+                failed_album_load(QqMusicArtistAlbumPageLoadFailure::CoreUnavailable)
+            ),
             Err(()) => failed_album_load(QqMusicArtistAlbumPageLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);

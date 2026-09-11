@@ -57,8 +57,11 @@ bool cancelQqMusicQrLoginStart({required int attemptId}) => RustLib.instance.api
 bool qqMusicHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiAuthenticationQqMusicHasAuthenticatedCredential();
 
-QqMusicAccountSummaryLoadHandle beginQqMusicAccountSummaryLoad() =>
-    RustLib.instance.api.crateApiAuthenticationBeginQqMusicAccountSummaryLoad();
+QqMusicAccountSummaryLoadHandle beginQqMusicAccountSummaryLoad({
+  required String providerId,
+}) => RustLib.instance.api.crateApiAuthenticationBeginQqMusicAccountSummaryLoad(
+  providerId: providerId,
+);
 
 /// Clears the process-local QQ Music credential and cancels authentication
 /// work. The Flutter platform edge deletes the separately stored vault entry

@@ -2,14 +2,15 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use provider_api::{
-    AlbumSearchProvider, ArtistSearchProvider, PlaylistSearchProvider, SearchError,
-    TrackSearchProvider,
+    AlbumSearchProvider, ArtistSearchProvider, BuiltInProvider, PlaylistSearchProvider,
+    SearchError, TrackSearchProvider,
 };
 use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
 use super::artist::{CatalogArtistSummary, bridge_artist_summary};
 use super::authentication::native_qq_music_provider;
+use super::built_in_provider;
 use super::library::{
     LibraryPlaylistSummary, LibraryTrackSummary, bridge_playlist_summary, bridge_track_summary,
 };
@@ -68,6 +69,7 @@ impl fmt::Debug for QqMusicTrackSearchPageLoad {
 /// this opaque handle and is always redacted from diagnostics.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicTrackSearchPageLoadHandle {
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
@@ -98,19 +100,41 @@ impl QqMusicTrackSearchPageLoadHandle {
             return failed_load(QqMusicTrackSearchPageLoadFailure::AlreadyRunning);
         }
 
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
-                tokio::select! {
-                    () = self.cancelled.notified() => {
-                        failed_load(QqMusicTrackSearchPageLoadFailure::Cancelled)
-                    }
-                    result = provider.search_tracks(self.query.clone(), self.page, self.size) => {
-                        if self.active.load(Ordering::SeqCst) {
-                            map_load(result)
-                        } else {
+        let outcome = match built_in_provider(&self.provider_id) {
+            Ok(BuiltInProvider::QQMusic) => match native_qq_music_provider() {
+                Ok(provider) => {
+                    tokio::select! {
+                        () = self.cancelled.notified() => {
                             failed_load(QqMusicTrackSearchPageLoadFailure::Cancelled)
                         }
+                        result = provider.search_tracks(self.query.clone(), self.page, self.size) => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_load(result)
+                            } else {
+                                failed_load(QqMusicTrackSearchPageLoadFailure::Cancelled)
+                            }
+                        }
                     }
+                }
+                Err(()) => failed_load(QqMusicTrackSearchPageLoadFailure::CoreUnavailable),
+            },
+            Ok(BuiltInProvider::NetEaseCloudMusic) => {
+                match crate::native_netease::native_netease_provider() {
+                    Ok(provider) => {
+                        tokio::select! {
+                            () = self.cancelled.notified() => {
+                                failed_load(QqMusicTrackSearchPageLoadFailure::Cancelled)
+                            }
+                            result = provider.search_tracks(self.query.clone(), self.page, self.size) => {
+                                if self.active.load(Ordering::SeqCst) {
+                                    map_load(result)
+                                } else {
+                                    failed_load(QqMusicTrackSearchPageLoadFailure::Cancelled)
+                                }
+                            }
+                        }
+                    }
+                    Err(()) => failed_load(QqMusicTrackSearchPageLoadFailure::CoreUnavailable),
                 }
             }
             Err(()) => failed_load(QqMusicTrackSearchPageLoadFailure::CoreUnavailable),
@@ -137,11 +161,13 @@ impl QqMusicTrackSearchPageLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_track_search_page_load(
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
 ) -> QqMusicTrackSearchPageLoadHandle {
     QqMusicTrackSearchPageLoadHandle {
+        provider_id,
         query,
         page,
         size,
@@ -228,6 +254,7 @@ impl fmt::Debug for QqMusicArtistSearchPageLoad {
 /// this opaque handle and is always redacted from diagnostics.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicArtistSearchPageLoadHandle {
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
@@ -258,18 +285,42 @@ impl QqMusicArtistSearchPageLoadHandle {
             return failed_artist_load(QqMusicArtistSearchPageLoadFailure::AlreadyRunning);
         }
 
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
-                tokio::select! {
-                    () = self.cancelled.notified() => {
-                        failed_artist_load(QqMusicArtistSearchPageLoadFailure::Cancelled)
-                    }
-                    result = provider.search_artists(self.query.clone(), self.page, self.size) => {
-                        if self.active.load(Ordering::SeqCst) {
-                            map_artist_load(result)
-                        } else {
+        let outcome = match built_in_provider(&self.provider_id) {
+            Ok(BuiltInProvider::QQMusic) => match native_qq_music_provider() {
+                Ok(provider) => {
+                    tokio::select! {
+                        () = self.cancelled.notified() => {
                             failed_artist_load(QqMusicArtistSearchPageLoadFailure::Cancelled)
                         }
+                        result = provider.search_artists(self.query.clone(), self.page, self.size) => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_artist_load(result)
+                            } else {
+                                failed_artist_load(QqMusicArtistSearchPageLoadFailure::Cancelled)
+                            }
+                        }
+                    }
+                }
+                Err(()) => failed_artist_load(QqMusicArtistSearchPageLoadFailure::CoreUnavailable),
+            },
+            Ok(BuiltInProvider::NetEaseCloudMusic) => {
+                match crate::native_netease::native_netease_provider() {
+                    Ok(provider) => {
+                        tokio::select! {
+                            () = self.cancelled.notified() => {
+                                failed_artist_load(QqMusicArtistSearchPageLoadFailure::Cancelled)
+                            }
+                            result = provider.search_artists(self.query.clone(), self.page, self.size) => {
+                                if self.active.load(Ordering::SeqCst) {
+                                    map_artist_load(result)
+                                } else {
+                                    failed_artist_load(QqMusicArtistSearchPageLoadFailure::Cancelled)
+                                }
+                            }
+                        }
+                    }
+                    Err(()) => {
+                        failed_artist_load(QqMusicArtistSearchPageLoadFailure::CoreUnavailable)
                     }
                 }
             }
@@ -297,11 +348,13 @@ impl QqMusicArtistSearchPageLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_artist_search_page_load(
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
 ) -> QqMusicArtistSearchPageLoadHandle {
     QqMusicArtistSearchPageLoadHandle {
+        provider_id,
         query,
         page,
         size,
@@ -382,6 +435,7 @@ impl fmt::Debug for QqMusicAlbumSearchPageLoad {
 /// this opaque handle and is always redacted from diagnostics.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicAlbumSearchPageLoadHandle {
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
@@ -412,18 +466,42 @@ impl QqMusicAlbumSearchPageLoadHandle {
             return failed_album_load(QqMusicAlbumSearchPageLoadFailure::AlreadyRunning);
         }
 
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
-                tokio::select! {
-                    () = self.cancelled.notified() => {
-                        failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled)
-                    }
-                    result = provider.search_albums(self.query.clone(), self.page, self.size) => {
-                        if self.active.load(Ordering::SeqCst) {
-                            map_album_load(result)
-                        } else {
+        let outcome = match built_in_provider(&self.provider_id) {
+            Ok(BuiltInProvider::QQMusic) => match native_qq_music_provider() {
+                Ok(provider) => {
+                    tokio::select! {
+                        () = self.cancelled.notified() => {
                             failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled)
                         }
+                        result = provider.search_albums(self.query.clone(), self.page, self.size) => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_album_load(result)
+                            } else {
+                                failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled)
+                            }
+                        }
+                    }
+                }
+                Err(()) => failed_album_load(QqMusicAlbumSearchPageLoadFailure::CoreUnavailable),
+            },
+            Ok(BuiltInProvider::NetEaseCloudMusic) => {
+                match crate::native_netease::native_netease_provider() {
+                    Ok(provider) => {
+                        tokio::select! {
+                            () = self.cancelled.notified() => {
+                                failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled)
+                            }
+                            result = provider.search_albums(self.query.clone(), self.page, self.size) => {
+                                if self.active.load(Ordering::SeqCst) {
+                                    map_album_load(result)
+                                } else {
+                                    failed_album_load(QqMusicAlbumSearchPageLoadFailure::Cancelled)
+                                }
+                            }
+                        }
+                    }
+                    Err(()) => {
+                        failed_album_load(QqMusicAlbumSearchPageLoadFailure::CoreUnavailable)
                     }
                 }
             }
@@ -451,11 +529,13 @@ impl QqMusicAlbumSearchPageLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_album_search_page_load(
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
 ) -> QqMusicAlbumSearchPageLoadHandle {
     QqMusicAlbumSearchPageLoadHandle {
+        provider_id,
         query,
         page,
         size,
@@ -536,6 +616,7 @@ impl fmt::Debug for QqMusicPlaylistSearchPageLoad {
 /// this opaque handle and is always redacted from diagnostics.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicPlaylistSearchPageLoadHandle {
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
@@ -566,18 +647,44 @@ impl QqMusicPlaylistSearchPageLoadHandle {
             return failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::AlreadyRunning);
         }
 
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
-                tokio::select! {
-                    () = self.cancelled.notified() => {
-                        failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::Cancelled)
-                    }
-                    result = provider.search_playlists(self.query.clone(), self.page, self.size) => {
-                        if self.active.load(Ordering::SeqCst) {
-                            map_playlist_load(result)
-                        } else {
+        let outcome = match built_in_provider(&self.provider_id) {
+            Ok(BuiltInProvider::QQMusic) => match native_qq_music_provider() {
+                Ok(provider) => {
+                    tokio::select! {
+                        () = self.cancelled.notified() => {
                             failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::Cancelled)
                         }
+                        result = provider.search_playlists(self.query.clone(), self.page, self.size) => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_playlist_load(result)
+                            } else {
+                                failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::Cancelled)
+                            }
+                        }
+                    }
+                }
+                Err(()) => {
+                    failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::CoreUnavailable)
+                }
+            },
+            Ok(BuiltInProvider::NetEaseCloudMusic) => {
+                match crate::native_netease::native_netease_provider() {
+                    Ok(provider) => {
+                        tokio::select! {
+                            () = self.cancelled.notified() => {
+                                failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::Cancelled)
+                            }
+                            result = provider.search_playlists(self.query.clone(), self.page, self.size) => {
+                                if self.active.load(Ordering::SeqCst) {
+                                    map_playlist_load(result)
+                                } else {
+                                    failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::Cancelled)
+                                }
+                            }
+                        }
+                    }
+                    Err(()) => {
+                        failed_playlist_load(QqMusicPlaylistSearchPageLoadFailure::CoreUnavailable)
                     }
                 }
             }
@@ -605,11 +712,13 @@ impl QqMusicPlaylistSearchPageLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_playlist_search_page_load(
+    provider_id: String,
     query: String,
     page: u32,
     size: u32,
 ) -> QqMusicPlaylistSearchPageLoadHandle {
     QqMusicPlaylistSearchPageLoadHandle {
+        provider_id,
         query,
         page,
         size,
@@ -863,7 +972,12 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_terminal_and_query_is_redacted() {
-        let handle = begin_qq_music_track_search_page_load("private search query".into(), 1, 30);
+        let handle = begin_qq_music_track_search_page_load(
+            "qq-music".into(),
+            "private search query".into(),
+            1,
+            30,
+        );
 
         assert!(handle.is_active());
         assert!(handle.cancel());
@@ -878,7 +992,12 @@ mod tests {
 
     #[tokio::test]
     async fn artist_cancellation_is_exact_terminal_and_query_is_redacted() {
-        let handle = begin_qq_music_artist_search_page_load("private search query".into(), 1, 30);
+        let handle = begin_qq_music_artist_search_page_load(
+            "qq-music".into(),
+            "private search query".into(),
+            1,
+            30,
+        );
 
         assert!(handle.is_active());
         assert!(handle.cancel());
@@ -893,7 +1012,12 @@ mod tests {
 
     #[tokio::test]
     async fn album_cancellation_is_exact_terminal_and_query_is_redacted() {
-        let handle = begin_qq_music_album_search_page_load("private search query".into(), 1, 30);
+        let handle = begin_qq_music_album_search_page_load(
+            "qq-music".into(),
+            "private search query".into(),
+            1,
+            30,
+        );
 
         assert!(handle.is_active());
         assert!(handle.cancel());
@@ -908,7 +1032,12 @@ mod tests {
 
     #[tokio::test]
     async fn playlist_cancellation_is_exact_terminal_and_query_is_redacted() {
-        let handle = begin_qq_music_playlist_search_page_load("private search query".into(), 1, 30);
+        let handle = begin_qq_music_playlist_search_page_load(
+            "qq-music".into(),
+            "private search query".into(),
+            1,
+            30,
+        );
 
         assert!(handle.is_active());
         assert!(handle.cancel());

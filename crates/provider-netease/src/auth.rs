@@ -210,6 +210,19 @@ impl<T: Transport> NeteaseProvider<T> {
     pub async fn verify_restored_credential(&self) -> Result<(), AccountSummaryError> {
         self.verify_pending_credential().await
     }
+
+    /// Cancels an in-flight pending-credential verification without discarding
+    /// the candidate. A later explicit verification can therefore retry after
+    /// navigation or a provider switch.
+    #[must_use]
+    pub fn cancel_pending_credential_verification(&self) -> bool {
+        let mut state = self.auth.lock();
+        if state.pending.is_none() {
+            return false;
+        }
+        self.auth.bump(&mut state);
+        true
+    }
 }
 impl<T: Transport> AccountSummaryProvider for NeteaseProvider<T> {
     type Error = AccountSummaryError;

@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use provider_api::{CatalogError, NewSongsProvider};
 use tokio::sync::Notify;
 
-use super::authentication::native_qq_music_provider;
 use super::library::{LibraryTrackSummary, bridge_track_summary};
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicNewSongCategory {
@@ -49,6 +49,7 @@ impl fmt::Debug for QqMusicNewSongsLoad {
 /// values and response validation remain inside the Rust Provider stack.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicNewSongsLoadHandle {
+    provider_id: String,
     category: QqMusicNewSongCategory,
     active: AtomicBool,
     running: AtomicBool,
@@ -74,8 +75,9 @@ impl QqMusicNewSongsLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_load(self.category, QqMusicNewSongsLoadFailure::AlreadyRunning);
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_load(self.category, QqMusicNewSongsLoadFailure::Cancelled)
@@ -88,9 +90,9 @@ impl QqMusicNewSongsLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_load(self.category, QqMusicNewSongsLoadFailure::CoreUnavailable),
-        };
+            },
+            failed_load(self.category, QqMusicNewSongsLoadFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -113,9 +115,11 @@ impl QqMusicNewSongsLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_new_songs_load(
+    provider_id: String,
     category: QqMusicNewSongCategory,
 ) -> QqMusicNewSongsLoadHandle {
     QqMusicNewSongsLoadHandle {
+        provider_id,
         category,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
@@ -233,7 +237,8 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_new_songs_load(QqMusicNewSongCategory::Western);
+        let handle =
+            begin_qq_music_new_songs_load("qq-music".into(), QqMusicNewSongCategory::Western);
         assert!(handle.is_active());
         assert!(handle.cancel());
         assert!(!handle.cancel());

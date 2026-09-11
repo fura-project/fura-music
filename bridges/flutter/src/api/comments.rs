@@ -5,8 +5,8 @@ use music_domain::{TrackComment, TrackCommentsPage};
 use provider_api::{CommentsError, TrackCommentsProvider};
 use tokio::sync::Notify;
 
-use super::authentication::native_qq_music_provider;
 use super::domain_track_id;
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicTrackCommentPageLoadFailure {
@@ -101,26 +101,26 @@ impl QqMusicTrackCommentPageLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_load(QqMusicTrackCommentPageLoadFailure::AlreadyRunning);
         }
-        let outcome = match (
-            native_qq_music_provider(),
-            domain_track_id(&self.provider_id, &self.opaque_track_id),
-        ) {
-            (Ok(provider), Ok(track_id)) => {
-                tokio::select! {
-                    () = self.cancelled.notified() => {
-                        failed_load(QqMusicTrackCommentPageLoadFailure::Cancelled)
-                    }
-                    result = provider.track_comments(track_id, self.offset, self.size) => {
-                        if self.active.load(Ordering::SeqCst) {
-                            map_load(result)
-                        } else {
+        let outcome = match domain_track_id(&self.provider_id, &self.opaque_track_id) {
+            Ok(track_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
+                    tokio::select! {
+                        () = self.cancelled.notified() => {
                             failed_load(QqMusicTrackCommentPageLoadFailure::Cancelled)
                         }
+                        result = provider.track_comments(track_id, self.offset, self.size) => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_load(result)
+                            } else {
+                                failed_load(QqMusicTrackCommentPageLoadFailure::Cancelled)
+                            }
+                        }
                     }
-                }
-            }
-            (Err(()), _) => failed_load(QqMusicTrackCommentPageLoadFailure::CoreUnavailable),
-            (_, Err(())) => failed_load(QqMusicTrackCommentPageLoadFailure::InvalidResponse),
+                },
+                failed_load(QqMusicTrackCommentPageLoadFailure::CoreUnavailable)
+            ),
+            Err(()) => failed_load(QqMusicTrackCommentPageLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);

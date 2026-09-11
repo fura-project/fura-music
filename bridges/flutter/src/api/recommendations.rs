@@ -2,17 +2,17 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use provider_api::{
-    DailyRecommendationError, DailyRecommendationProvider, PersonalizedPlaylistsError,
-    PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
-    RadarRecommendationError, RadarRecommendationsProvider, RecommendationError,
-    RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider,
+    BuiltInProvider, DailyRecommendationError, DailyRecommendationProvider, DailyTracksProvider,
+    PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
+    PersonalizedTracksProvider, RadarRecommendationError, RadarRecommendationsProvider,
+    RecommendationError, RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider,
 };
 use tokio::sync::Notify;
 
-use super::authentication::native_qq_music_provider;
 use super::library::{
     LibraryPlaylistSummary, LibraryTrackSummary, bridge_playlist_summary, bridge_track_summary,
 };
+use super::{authentication::native_qq_music_provider, built_in_provider, with_native_provider};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicRecommendedPlaylistPageLoadFailure {
@@ -48,6 +48,7 @@ impl fmt::Debug for QqMusicRecommendedPlaylistPageLoad {
 /// source-specific request fields remain inside the Rust Provider stack.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicRecommendedPlaylistPageLoadHandle {
+    provider_id: String,
     offset: u32,
     size: u32,
     active: AtomicBool,
@@ -75,8 +76,9 @@ impl QqMusicRecommendedPlaylistPageLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_load(QqMusicRecommendedPlaylistPageLoadFailure::AlreadyRunning);
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_load(QqMusicRecommendedPlaylistPageLoadFailure::Cancelled)
@@ -89,9 +91,9 @@ impl QqMusicRecommendedPlaylistPageLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_load(QqMusicRecommendedPlaylistPageLoadFailure::CoreUnavailable),
-        };
+            },
+            failed_load(QqMusicRecommendedPlaylistPageLoadFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -114,10 +116,12 @@ impl QqMusicRecommendedPlaylistPageLoadHandle {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_qq_music_recommended_playlist_page_load(
+    provider_id: String,
     offset: u32,
     size: u32,
 ) -> QqMusicRecommendedPlaylistPageLoadHandle {
     QqMusicRecommendedPlaylistPageLoadHandle {
+        provider_id,
         offset,
         size,
         active: AtomicBool::new(true),
@@ -183,6 +187,7 @@ pub enum QqMusicDailyRecommendationLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicDailyRecommendationLoad {
     pub playlist: Option<LibraryPlaylistSummary>,
+    pub tracks: Vec<LibraryTrackSummary>,
     pub failure: Option<QqMusicDailyRecommendationLoadFailure>,
 }
 
@@ -191,6 +196,7 @@ impl fmt::Debug for QqMusicDailyRecommendationLoad {
         formatter
             .debug_struct("QqMusicDailyRecommendationLoad")
             .field("has_playlist", &self.playlist.is_some())
+            .field("track_count", &self.tracks.len())
             .field("failure", &self.failure)
             .finish()
     }
@@ -200,6 +206,7 @@ impl fmt::Debug for QqMusicDailyRecommendationLoad {
 /// selection and credentials remain inside the Rust Provider stack.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicDailyRecommendationLoadHandle {
+    provider_id: String,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
@@ -223,9 +230,9 @@ impl QqMusicDailyRecommendationLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_daily_load(QqMusicDailyRecommendationLoadFailure::AlreadyRunning);
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
-                tokio::select! {
+        let outcome = match built_in_provider(&self.provider_id) {
+            Ok(BuiltInProvider::QQMusic) => match native_qq_music_provider() {
+                Ok(provider) => tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_daily_load(QqMusicDailyRecommendationLoadFailure::Cancelled)
                     }
@@ -235,6 +242,28 @@ impl QqMusicDailyRecommendationLoadHandle {
                         } else {
                             failed_daily_load(QqMusicDailyRecommendationLoadFailure::Cancelled)
                         }
+                    }
+                },
+                Err(()) => {
+                    failed_daily_load(QqMusicDailyRecommendationLoadFailure::CoreUnavailable)
+                }
+            },
+            Ok(BuiltInProvider::NetEaseCloudMusic) => {
+                match crate::native_netease::native_netease_provider() {
+                    Ok(provider) => tokio::select! {
+                        () = self.cancelled.notified() => {
+                            failed_daily_load(QqMusicDailyRecommendationLoadFailure::Cancelled)
+                        }
+                        result = provider.daily_tracks() => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_daily_tracks_load(result)
+                            } else {
+                                failed_daily_load(QqMusicDailyRecommendationLoadFailure::Cancelled)
+                            }
+                        }
+                    },
+                    Err(()) => {
+                        failed_daily_load(QqMusicDailyRecommendationLoadFailure::CoreUnavailable)
                     }
                 }
             }
@@ -261,8 +290,11 @@ impl QqMusicDailyRecommendationLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_daily_recommendation_load() -> QqMusicDailyRecommendationLoadHandle {
+pub fn begin_qq_music_daily_recommendation_load(
+    provider_id: String,
+) -> QqMusicDailyRecommendationLoadHandle {
     QqMusicDailyRecommendationLoadHandle {
+        provider_id,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -275,6 +307,20 @@ fn map_daily_load(
     match result {
         Ok(playlist) => QqMusicDailyRecommendationLoad {
             playlist: playlist.as_ref().map(bridge_playlist_summary),
+            tracks: Vec::new(),
+            failure: None,
+        },
+        Err(error) => failed_daily_load(map_daily_error(error)),
+    }
+}
+
+fn map_daily_tracks_load(
+    result: Result<Vec<music_domain::TrackSummary>, DailyRecommendationError>,
+) -> QqMusicDailyRecommendationLoad {
+    match result {
+        Ok(tracks) => QqMusicDailyRecommendationLoad {
+            playlist: None,
+            tracks: tracks.iter().map(bridge_track_summary).collect(),
             failure: None,
         },
         Err(error) => failed_daily_load(map_daily_error(error)),
@@ -286,6 +332,7 @@ const fn failed_daily_load(
 ) -> QqMusicDailyRecommendationLoad {
     QqMusicDailyRecommendationLoad {
         playlist: None,
+        tracks: Vec::new(),
         failure: Some(failure),
     }
 }
@@ -342,6 +389,7 @@ impl fmt::Debug for QqMusicPersonalizedPlaylistsLoad {
 /// load. QQ feed structure and credentials remain in the Rust Provider stack.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicPersonalizedPlaylistsLoadHandle {
+    provider_id: String,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
@@ -369,8 +417,9 @@ impl QqMusicPersonalizedPlaylistsLoadHandle {
                 QqMusicPersonalizedPlaylistsLoadFailure::AlreadyRunning,
             );
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_personalized_playlists_load(
@@ -387,11 +436,11 @@ impl QqMusicPersonalizedPlaylistsLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_personalized_playlists_load(
+            },
+            failed_personalized_playlists_load(
                 QqMusicPersonalizedPlaylistsLoadFailure::CoreUnavailable,
-            ),
-        };
+            )
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -413,8 +462,11 @@ impl QqMusicPersonalizedPlaylistsLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_personalized_playlists_load() -> QqMusicPersonalizedPlaylistsLoadHandle {
+pub fn begin_qq_music_personalized_playlists_load(
+    provider_id: String,
+) -> QqMusicPersonalizedPlaylistsLoadHandle {
     QqMusicPersonalizedPlaylistsLoadHandle {
+        provider_id,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -496,6 +548,7 @@ impl fmt::Debug for QqMusicPersonalizedTracksLoad {
 /// QQ radio identity, request fields, and credentials remain in Rust Core.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicPersonalizedTracksLoadHandle {
+    provider_id: String,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
@@ -523,8 +576,9 @@ impl QqMusicPersonalizedTracksLoadHandle {
                 QqMusicPersonalizedTracksLoadFailure::AlreadyRunning,
             );
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_personalized_tracks_load(
@@ -541,11 +595,9 @@ impl QqMusicPersonalizedTracksLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_personalized_tracks_load(
-                QqMusicPersonalizedTracksLoadFailure::CoreUnavailable,
-            ),
-        };
+            },
+            failed_personalized_tracks_load(QqMusicPersonalizedTracksLoadFailure::CoreUnavailable,)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -567,8 +619,11 @@ impl QqMusicPersonalizedTracksLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_personalized_tracks_load() -> QqMusicPersonalizedTracksLoadHandle {
+pub fn begin_qq_music_personalized_tracks_load(
+    provider_id: String,
+) -> QqMusicPersonalizedTracksLoadHandle {
     QqMusicPersonalizedTracksLoadHandle {
+        provider_id,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -677,25 +732,26 @@ impl QqMusicRelatedTracksLoadHandle {
         let seed = music_domain::ProviderId::new(self.provider_id.clone())
             .ok()
             .and_then(|provider| music_domain::TrackId::new(provider, self.opaque_id.clone()).ok());
-        let outcome = match (native_qq_music_provider(), seed) {
-            (Ok(provider), Some(seed)) => {
-                tokio::select! {
-                    () = self.cancelled.notified() => {
-                        failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::Cancelled)
-                    }
-                    result = provider.related_tracks(seed) => {
-                        if self.active.load(Ordering::SeqCst) {
-                            map_related_tracks_load(result)
-                        } else {
+        let outcome = match seed {
+            Some(seed) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
+                    tokio::select! {
+                        () = self.cancelled.notified() => {
                             failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::Cancelled)
                         }
+                        result = provider.related_tracks(seed) => {
+                            if self.active.load(Ordering::SeqCst) {
+                                map_related_tracks_load(result)
+                            } else {
+                                failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::Cancelled)
+                            }
+                        }
                     }
-                }
-            }
-            (Err(()), _) => {
+                },
                 failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::CoreUnavailable)
-            }
-            (_, None) => failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::InvalidTrack),
+            ),
+            None => failed_related_tracks_load(QqMusicRelatedTracksLoadFailure::InvalidTrack),
         };
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
@@ -932,10 +988,10 @@ mod tests {
         begin_qq_music_daily_recommendation_load, begin_qq_music_personalized_playlists_load,
         begin_qq_music_personalized_tracks_load, begin_qq_music_radar_track_page_load,
         begin_qq_music_recommended_playlist_page_load, begin_qq_music_related_tracks_load,
-        map_daily_error, map_daily_load, map_error, map_load, map_personalized_playlists_error,
-        map_personalized_playlists_load, map_personalized_tracks_error,
-        map_personalized_tracks_load, map_radar_error, map_radar_load, map_related_tracks_error,
-        map_related_tracks_load,
+        map_daily_error, map_daily_load, map_daily_tracks_load, map_error, map_load,
+        map_personalized_playlists_error, map_personalized_playlists_load,
+        map_personalized_tracks_error, map_personalized_tracks_load, map_radar_error,
+        map_radar_load, map_related_tracks_error, map_related_tracks_load,
     };
 
     #[test]
@@ -1146,6 +1202,39 @@ mod tests {
     }
 
     #[test]
+    fn maps_netease_daily_tracks_without_fabricating_a_playlist() {
+        let track = TrackSummary::new(
+            TrackId::new(
+                ProviderId::new("netease-cloud-music").expect("provider"),
+                "track:private-daily-id",
+            )
+            .expect("Track ID"),
+            "must-not-leak-daily-track",
+            vec!["private-daily-artist".into()],
+        )
+        .expect("Track");
+        let mapped = map_daily_tracks_load(Ok(vec![track]));
+
+        assert!(mapped.failure.is_none());
+        assert!(mapped.playlist.is_none());
+        assert_eq!(mapped.tracks.len(), 1);
+        assert_eq!(mapped.tracks[0].provider_id, "netease-cloud-music");
+        let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
+        for private in [
+            "must-not-leak-daily-track",
+            "private-daily-artist",
+            "private-daily-id",
+        ] {
+            assert!(!debug.contains(private));
+        }
+
+        let empty = map_daily_tracks_load(Ok(Vec::new()));
+        assert!(empty.failure.is_none());
+        assert!(empty.playlist.is_none());
+        assert!(empty.tracks.is_empty());
+    }
+
+    #[test]
     fn maps_personalized_playlists_without_exposing_content() {
         let playlist = PlaylistSummary::new(
             PlaylistId::new(
@@ -1260,7 +1349,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_recommended_playlist_page_load(0, 20);
+        let handle = begin_qq_music_recommended_playlist_page_load("qq-music".into(), 0, 20);
         assert!(handle.is_active());
         assert!(handle.cancel());
         assert!(!handle.cancel());
@@ -1279,7 +1368,7 @@ mod tests {
             Some(QqMusicRadarTrackPageLoadFailure::Cancelled)
         );
 
-        let daily = begin_qq_music_daily_recommendation_load();
+        let daily = begin_qq_music_daily_recommendation_load("qq-music".into());
         assert!(daily.is_active());
         assert!(daily.cancel());
         assert!(!daily.cancel());
@@ -1288,7 +1377,7 @@ mod tests {
             Some(QqMusicDailyRecommendationLoadFailure::Cancelled)
         );
 
-        let personalized = begin_qq_music_personalized_playlists_load();
+        let personalized = begin_qq_music_personalized_playlists_load("qq-music".into());
         assert!(personalized.is_active());
         assert!(personalized.cancel());
         assert!(!personalized.cancel());
@@ -1297,7 +1386,7 @@ mod tests {
             Some(QqMusicPersonalizedPlaylistsLoadFailure::Cancelled)
         );
 
-        let personalized_tracks = begin_qq_music_personalized_tracks_load();
+        let personalized_tracks = begin_qq_music_personalized_tracks_load("qq-music".into());
         assert!(personalized_tracks.is_active());
         assert!(personalized_tracks.cancel());
         assert!(!personalized_tracks.cancel());

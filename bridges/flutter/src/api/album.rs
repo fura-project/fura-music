@@ -5,8 +5,8 @@ use provider_api::{AlbumDetailsProvider, AlbumTracksProvider, CatalogError};
 use tokio::sync::Notify;
 
 use super::artist::{CatalogArtistSummary, bridge_artist_summary};
-use super::authentication::native_qq_music_provider;
 use super::library::{LibraryTrackSummary, bridge_track_summary};
+use super::with_native_provider;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct CatalogAlbumSummary {
@@ -123,8 +123,9 @@ impl QqMusicAlbumDetailsLoadHandle {
             return failed_details_load(QqMusicAlbumDetailsLoadFailure::AlreadyRunning);
         }
         let outcome = match album_id(&self.provider_id, &self.opaque_album_id) {
-            Ok(album_id) => match native_qq_music_provider() {
-                Ok(provider) => {
+            Ok(album_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
                     tokio::select! {
                         () = self.cancelled.notified() => {
                             failed_details_load(QqMusicAlbumDetailsLoadFailure::Cancelled)
@@ -137,9 +138,9 @@ impl QqMusicAlbumDetailsLoadHandle {
                             }
                         }
                     }
-                }
-                Err(()) => failed_details_load(QqMusicAlbumDetailsLoadFailure::CoreUnavailable),
-            },
+                },
+                failed_details_load(QqMusicAlbumDetailsLoadFailure::CoreUnavailable)
+            ),
             Err(()) => failed_details_load(QqMusicAlbumDetailsLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);
@@ -242,8 +243,9 @@ impl QqMusicAlbumTrackPageLoadHandle {
             return failed_load(QqMusicAlbumTrackPageLoadFailure::AlreadyRunning);
         }
         let outcome = match album_id(&self.provider_id, &self.opaque_album_id) {
-            Ok(album_id) => match native_qq_music_provider() {
-                Ok(provider) => {
+            Ok(album_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
                     tokio::select! {
                         () = self.cancelled.notified() => {
                             failed_load(QqMusicAlbumTrackPageLoadFailure::Cancelled)
@@ -256,9 +258,9 @@ impl QqMusicAlbumTrackPageLoadHandle {
                             }
                         }
                     }
-                }
-                Err(()) => failed_load(QqMusicAlbumTrackPageLoadFailure::CoreUnavailable),
-            },
+                },
+                failed_load(QqMusicAlbumTrackPageLoadFailure::CoreUnavailable)
+            ),
             Err(()) => failed_load(QqMusicAlbumTrackPageLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);

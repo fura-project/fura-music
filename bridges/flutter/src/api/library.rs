@@ -8,7 +8,7 @@ use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
 use super::artist::{CatalogArtistSummary, bridge_artist_summary};
-use super::authentication::native_qq_music_provider;
+use super::{authentication::native_qq_music_provider, with_native_provider};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LibraryPlaylistOwnership {
@@ -94,6 +94,7 @@ impl fmt::Debug for QqMusicUserPlaylistLoad {
 /// credential or QQ Music protocol identifier.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicUserPlaylistLoadHandle {
+    provider_id: String,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
@@ -118,8 +119,9 @@ impl QqMusicUserPlaylistLoadHandle {
             return failed_load(QqMusicUserPlaylistLoadFailure::AlreadyRunning);
         }
 
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_load(QqMusicUserPlaylistLoadFailure::Cancelled)
@@ -132,9 +134,9 @@ impl QqMusicUserPlaylistLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_load(QqMusicUserPlaylistLoadFailure::CoreUnavailable),
-        };
+            },
+            failed_load(QqMusicUserPlaylistLoadFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -156,8 +158,9 @@ impl QqMusicUserPlaylistLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_user_playlist_load() -> QqMusicUserPlaylistLoadHandle {
+pub fn begin_qq_music_user_playlist_load(provider_id: String) -> QqMusicUserPlaylistLoadHandle {
     QqMusicUserPlaylistLoadHandle {
+        provider_id,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -306,8 +309,9 @@ impl QqMusicPlaylistTrackPageLoadHandle {
         }
 
         let outcome = match domain_playlist_id(&self.provider_id, &self.opaque_playlist_id) {
-            Ok(playlist_id) => match native_qq_music_provider() {
-                Ok(provider) => {
+            Ok(playlist_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
                     tokio::select! {
                         () = self.cancelled.notified() => {
                             failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
@@ -320,9 +324,9 @@ impl QqMusicPlaylistTrackPageLoadHandle {
                             }
                         }
                     }
-                }
-                Err(()) => failed_track_page(QqMusicPlaylistTrackPageLoadFailure::CoreUnavailable),
-            },
+                },
+                failed_track_page(QqMusicPlaylistTrackPageLoadFailure::CoreUnavailable)
+            ),
             Err(()) => failed_track_page(QqMusicPlaylistTrackPageLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);
@@ -648,7 +652,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_user_playlist_load();
+        let handle = begin_qq_music_user_playlist_load("qq-music".into());
 
         assert!(handle.is_active());
         assert!(handle.cancel());

@@ -14,40 +14,48 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicTrackSearchPageLoadHandle beginQqMusicTrackSearchPageLoad({
+  required String providerId,
   required String query,
   required int page,
   required int size,
 }) => RustLib.instance.api.crateApiSearchBeginQqMusicTrackSearchPageLoad(
+  providerId: providerId,
   query: query,
   page: page,
   size: size,
 );
 
 QqMusicArtistSearchPageLoadHandle beginQqMusicArtistSearchPageLoad({
+  required String providerId,
   required String query,
   required int page,
   required int size,
 }) => RustLib.instance.api.crateApiSearchBeginQqMusicArtistSearchPageLoad(
+  providerId: providerId,
   query: query,
   page: page,
   size: size,
 );
 
 QqMusicAlbumSearchPageLoadHandle beginQqMusicAlbumSearchPageLoad({
+  required String providerId,
   required String query,
   required int page,
   required int size,
 }) => RustLib.instance.api.crateApiSearchBeginQqMusicAlbumSearchPageLoad(
+  providerId: providerId,
   query: query,
   page: page,
   size: size,
 );
 
 QqMusicPlaylistSearchPageLoadHandle beginQqMusicPlaylistSearchPageLoad({
+  required String providerId,
   required String query,
   required int page,
   required int size,
 }) => RustLib.instance.api.crateApiSearchBeginQqMusicPlaylistSearchPageLoad(
+  providerId: providerId,
   query: query,
   page: page,
   size: size,

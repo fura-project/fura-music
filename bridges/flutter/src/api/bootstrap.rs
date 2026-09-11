@@ -1,4 +1,6 @@
-use provider_api::MusicProvider;
+use netease_client::NeteaseClient;
+use provider_api::{BuiltInProvider, MusicProvider};
+use provider_netease::NeteaseProvider;
 use provider_qqmusic::QqMusicProvider;
 use qqmusic_client::QqMusicClient;
 
@@ -6,7 +8,8 @@ use qqmusic_client::QqMusicClient;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BootstrapStatus {
     pub core_version: String,
-    pub provider: ProviderStatus,
+    pub providers: Vec<ProviderStatus>,
+    pub default_provider_id: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,20 +21,24 @@ pub struct ProviderStatus {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn bootstrap_status() -> BootstrapStatus {
-    let provider = QqMusicProvider::new(QqMusicClient::new(()));
-    let descriptor = provider.descriptor();
+    let qq = QqMusicProvider::new(QqMusicClient::new(()));
+    let netease = NeteaseProvider::new(NeteaseClient::new(()));
 
     BootstrapStatus {
         core_version: env!("CARGO_PKG_VERSION").into(),
-        provider: ProviderStatus {
-            id: descriptor.id.to_string(),
-            display_name: descriptor.display_name,
-            implemented_capabilities: descriptor
-                .capabilities
-                .into_iter()
-                .map(|capability| format!("{capability:?}"))
-                .collect(),
-        },
+        providers: [qq.descriptor(), netease.descriptor()]
+            .into_iter()
+            .map(|descriptor| ProviderStatus {
+                id: descriptor.id.to_string(),
+                display_name: descriptor.display_name,
+                implemented_capabilities: descriptor
+                    .capabilities
+                    .into_iter()
+                    .map(|capability| format!("{capability:?}"))
+                    .collect(),
+            })
+            .collect(),
+        default_provider_id: BuiltInProvider::QQMusic.id().to_string(),
     }
 }
 
@@ -48,10 +55,12 @@ mod tests {
     fn bridge_exposes_project_state_without_raw_provider_types() {
         let status = bootstrap_status();
 
-        assert_eq!(status.provider.id, "qq-music");
-        assert_eq!(status.provider.display_name, "QQ Music");
+        assert_eq!(status.default_provider_id, "qq-music");
+        assert_eq!(status.providers.len(), 2);
+        assert_eq!(status.providers[0].id, "qq-music");
+        assert_eq!(status.providers[0].display_name, "QQ Music");
         assert_eq!(
-            status.provider.implemented_capabilities,
+            status.providers[0].implemented_capabilities,
             [
                 "Search",
                 "Catalog",
@@ -61,6 +70,21 @@ mod tests {
                 "RecentHistoryRead",
                 "PlaylistMutation",
                 "Lyrics",
+                "Comments",
+                "MusicVideo"
+            ]
+        );
+        assert_eq!(status.providers[1].id, "netease-cloud-music");
+        assert_eq!(status.providers[1].display_name, "NetEase Cloud Music");
+        assert_eq!(
+            status.providers[1].implemented_capabilities,
+            [
+                "Search",
+                "Catalog",
+                "Recommendations",
+                "Lyrics",
+                "Authentication",
+                "UserLibrary",
                 "Comments",
                 "MusicVideo"
             ]

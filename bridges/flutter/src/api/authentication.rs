@@ -23,6 +23,8 @@ use qqmusic_client::{
 };
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
+use super::with_native_provider;
+
 pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
 type NativeDesktopQuickSession = QqMusicDesktopQuickAuthenticationSession<ReqwestTransport>;
@@ -613,6 +615,7 @@ pub fn qq_music_has_authenticated_credential() -> bool {
 /// account identifier and returns only presentation-safe identity fields.
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicAccountSummaryLoadHandle {
+    provider_id: String,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
@@ -626,8 +629,9 @@ impl QqMusicAccountSummaryLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_account_summary(QqMusicAccountSummaryFailure::AlreadyRunning);
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_account_summary(QqMusicAccountSummaryFailure::Cancelled)
@@ -640,9 +644,9 @@ impl QqMusicAccountSummaryLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_account_summary(QqMusicAccountSummaryFailure::CoreUnavailable),
-        };
+            },
+            failed_account_summary(QqMusicAccountSummaryFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -664,8 +668,9 @@ impl QqMusicAccountSummaryLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_account_summary_load() -> QqMusicAccountSummaryLoadHandle {
+pub fn begin_qq_music_account_summary_load(provider_id: String) -> QqMusicAccountSummaryLoadHandle {
     QqMusicAccountSummaryLoadHandle {
+        provider_id,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -1419,7 +1424,7 @@ mod tests {
 
     #[tokio::test]
     async fn account_summary_load_cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_account_summary_load();
+        let handle = begin_qq_music_account_summary_load("qq-music".into());
         assert!(handle.is_active());
         assert!(handle.cancel());
         assert!(!handle.cancel());

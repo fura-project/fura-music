@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use provider_api::{CatalogError, RankingsProvider};
 use tokio::sync::Notify;
 
-use super::authentication::native_qq_music_provider;
 use super::library::{LibraryTrackSummary, bridge_track_summary};
+use super::with_native_provider;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct CatalogRankingSummary {
@@ -75,6 +75,7 @@ impl fmt::Debug for QqMusicRankingGroupLoad {
 
 #[flutter_rust_bridge::frb(opaque)]
 pub struct QqMusicRankingGroupLoadHandle {
+    provider_id: String,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
@@ -98,8 +99,9 @@ impl QqMusicRankingGroupLoadHandle {
         if self.running.swap(true, Ordering::SeqCst) {
             return failed_group_load(QqMusicRankingLoadFailure::AlreadyRunning);
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
                         failed_group_load(QqMusicRankingLoadFailure::Cancelled)
@@ -112,9 +114,9 @@ impl QqMusicRankingGroupLoadHandle {
                         }
                     }
                 }
-            }
-            Err(()) => failed_group_load(QqMusicRankingLoadFailure::CoreUnavailable),
-        };
+            },
+            failed_group_load(QqMusicRankingLoadFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -136,8 +138,9 @@ impl QqMusicRankingGroupLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_ranking_group_load() -> QqMusicRankingGroupLoadHandle {
+pub fn begin_qq_music_ranking_group_load(provider_id: String) -> QqMusicRankingGroupLoadHandle {
     QqMusicRankingGroupLoadHandle {
+        provider_id,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
         cancelled: Notify::new(),
@@ -202,8 +205,9 @@ impl QqMusicRankingTrackPageLoadHandle {
             return failed_track_load(QqMusicRankingLoadFailure::AlreadyRunning);
         }
         let outcome = match ranking_id(&self.provider_id, &self.opaque_ranking_id) {
-            Ok(ranking_id) => match native_qq_music_provider() {
-                Ok(provider) => {
+            Ok(ranking_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
                     tokio::select! {
                         () = self.cancelled.notified() => {
                             failed_track_load(QqMusicRankingLoadFailure::Cancelled)
@@ -216,9 +220,9 @@ impl QqMusicRankingTrackPageLoadHandle {
                             }
                         }
                     }
-                }
-                Err(()) => failed_track_load(QqMusicRankingLoadFailure::CoreUnavailable),
-            },
+                },
+                failed_track_load(QqMusicRankingLoadFailure::CoreUnavailable)
+            ),
             Err(()) => failed_track_load(QqMusicRankingLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);
@@ -429,7 +433,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_terminal_and_identity_is_redacted() {
-        let groups = begin_qq_music_ranking_group_load();
+        let groups = begin_qq_music_ranking_group_load("qq-music".into());
         assert!(groups.is_active());
         assert!(groups.cancel());
         assert!(!groups.cancel());

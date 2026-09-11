@@ -13,8 +13,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `bridge_ranking_summary`, `failed_group_load`, `failed_track_load`, `map_error`, `map_group_load`, `map_track_load`, `ranking_id`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
-QqMusicRankingGroupLoadHandle beginQqMusicRankingGroupLoad() =>
-    RustLib.instance.api.crateApiRankingsBeginQqMusicRankingGroupLoad();
+QqMusicRankingGroupLoadHandle beginQqMusicRankingGroupLoad({
+  required String providerId,
+}) => RustLib.instance.api.crateApiRankingsBeginQqMusicRankingGroupLoad(
+  providerId: providerId,
+);
 
 QqMusicRankingTrackPageLoadHandle beginQqMusicRankingTrackPageLoad({
   required String providerId,

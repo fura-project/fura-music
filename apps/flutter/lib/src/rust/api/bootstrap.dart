@@ -15,12 +15,18 @@ BootstrapStatus bootstrapStatus() =>
 /// Presentation-safe startup information used to prove the bridge boundary.
 class BootstrapStatus {
   final String coreVersion;
-  final ProviderStatus provider;
+  final List<ProviderStatus> providers;
+  final String defaultProviderId;
 
-  const BootstrapStatus({required this.coreVersion, required this.provider});
+  const BootstrapStatus({
+    required this.coreVersion,
+    required this.providers,
+    required this.defaultProviderId,
+  });
 
   @override
-  int get hashCode => coreVersion.hashCode ^ provider.hashCode;
+  int get hashCode =>
+      coreVersion.hashCode ^ providers.hashCode ^ defaultProviderId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -28,7 +34,8 @@ class BootstrapStatus {
       other is BootstrapStatus &&
           runtimeType == other.runtimeType &&
           coreVersion == other.coreVersion &&
-          provider == other.provider;
+          providers == other.providers &&
+          defaultProviderId == other.defaultProviderId;
 }
 
 class ProviderStatus {

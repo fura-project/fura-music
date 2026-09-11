@@ -6,7 +6,7 @@ use music_domain::SynchronizedLyrics;
 use provider_api::{LyricsError, LyricsProvider};
 use tokio::sync::Notify;
 
-use super::{authentication::native_qq_music_provider, domain_track_id};
+use super::{domain_track_id, with_native_provider};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicTimedLyricSegment {
@@ -131,10 +131,11 @@ impl QqMusicLyricLoadHandle {
         }
 
         let outcome = match domain_track_id(&self.provider_id, &self.opaque_track_id) {
-            Ok(track_id) => match native_qq_music_provider() {
-                Ok(provider) => self.await_load(provider.lyrics(track_id)).await,
-                Err(()) => failed_load(QqMusicLyricLoadFailure::CoreUnavailable),
-            },
+            Ok(track_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| { self.await_load(provider.lyrics(track_id)).await },
+                failed_load(QqMusicLyricLoadFailure::CoreUnavailable)
+            ),
             Err(()) => failed_load(QqMusicLyricLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);

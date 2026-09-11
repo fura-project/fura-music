@@ -10,30 +10,41 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_personalized_tracks_load`, `failed_radar_load`, `failed_related_tracks_load`, `map_daily_error`, `map_daily_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_personalized_tracks_error`, `map_personalized_tracks_load`, `map_radar_error`, `map_radar_load`, `map_related_tracks_error`, `map_related_tracks_load`
+// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_personalized_tracks_load`, `failed_radar_load`, `failed_related_tracks_load`, `map_daily_error`, `map_daily_load`, `map_daily_tracks_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_personalized_tracks_error`, `map_personalized_tracks_load`, `map_radar_error`, `map_radar_load`, `map_related_tracks_error`, `map_related_tracks_load`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 QqMusicRecommendedPlaylistPageLoadHandle
 beginQqMusicRecommendedPlaylistPageLoad({
+  required String providerId,
   required int offset,
   required int size,
 }) => RustLib.instance.api
     .crateApiRecommendationsBeginQqMusicRecommendedPlaylistPageLoad(
+      providerId: providerId,
       offset: offset,
       size: size,
     );
 
-QqMusicDailyRecommendationLoadHandle beginQqMusicDailyRecommendationLoad() =>
-    RustLib.instance.api
-        .crateApiRecommendationsBeginQqMusicDailyRecommendationLoad();
+QqMusicDailyRecommendationLoadHandle beginQqMusicDailyRecommendationLoad({
+  required String providerId,
+}) => RustLib.instance.api
+    .crateApiRecommendationsBeginQqMusicDailyRecommendationLoad(
+      providerId: providerId,
+    );
 
-QqMusicPersonalizedPlaylistsLoadHandle
-beginQqMusicPersonalizedPlaylistsLoad() => RustLib.instance.api
-    .crateApiRecommendationsBeginQqMusicPersonalizedPlaylistsLoad();
+QqMusicPersonalizedPlaylistsLoadHandle beginQqMusicPersonalizedPlaylistsLoad({
+  required String providerId,
+}) => RustLib.instance.api
+    .crateApiRecommendationsBeginQqMusicPersonalizedPlaylistsLoad(
+      providerId: providerId,
+    );
 
-QqMusicPersonalizedTracksLoadHandle beginQqMusicPersonalizedTracksLoad() =>
-    RustLib.instance.api
-        .crateApiRecommendationsBeginQqMusicPersonalizedTracksLoad();
+QqMusicPersonalizedTracksLoadHandle beginQqMusicPersonalizedTracksLoad({
+  required String providerId,
+}) => RustLib.instance.api
+    .crateApiRecommendationsBeginQqMusicPersonalizedTracksLoad(
+      providerId: providerId,
+    );
 
 QqMusicRelatedTracksLoadHandle beginQqMusicRelatedTracksLoad({
   required String providerId,
@@ -108,12 +119,17 @@ abstract class QqMusicRelatedTracksLoadHandle implements RustOpaqueInterface {
 
 class QqMusicDailyRecommendationLoad {
   final LibraryPlaylistSummary? playlist;
+  final List<LibraryTrackSummary> tracks;
   final QqMusicDailyRecommendationLoadFailure? failure;
 
-  const QqMusicDailyRecommendationLoad({this.playlist, this.failure});
+  const QqMusicDailyRecommendationLoad({
+    this.playlist,
+    required this.tracks,
+    this.failure,
+  });
 
   @override
-  int get hashCode => playlist.hashCode ^ failure.hashCode;
+  int get hashCode => playlist.hashCode ^ tracks.hashCode ^ failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -121,6 +137,7 @@ class QqMusicDailyRecommendationLoad {
       other is QqMusicDailyRecommendationLoad &&
           runtimeType == other.runtimeType &&
           playlist == other.playlist &&
+          tracks == other.tracks &&
           failure == other.failure;
 }
 
