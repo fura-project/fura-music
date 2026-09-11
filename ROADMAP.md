@@ -2,7 +2,7 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
-## Active Mixed Workstream — Existing UI integration for built-in Providers (HD-025)
+## Machine-complete Review Workstream — Existing UI integration for built-in Providers (HD-025)
 
 **Goal:** expose the completed QQ Music and NetEase Cloud Music Core through
 the existing product UI, selected persistently in Settings with QQ Music as the
@@ -22,6 +22,14 @@ likes, account migration, NetEase writes, third Provider, runtime registry,
 plugin system, sidecar, stored-account automation, visual redesign or
 access-control bypass. Real NetEase account behavior and aesthetics remain
 Human review.
+
+**2026-09-12 machine checkpoint:** all bounded implementation exit criteria are
+complete. Pinned FRB generation, 535 Rust tests with 20 explicit live/Human
+tests ignored, 527 Flutter tests, Dart/Rust format and analysis/lint gates,
+Linux Release, Android ARM64 Release, and the required synthetic review frames
+pass. The workstream now waits only for the real NetEase account matrix and
+Human visual/runtime acceptance documented in the focused audit; it contains
+no remaining autonomous implementation item.
 
 ## Acceptance Milestone — M1 First QQ Music Vertical Slice
 

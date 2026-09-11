@@ -56,3 +56,81 @@ They cannot prove a real NetEase QR approval, account Library contents,
 personalized recommendations, authenticated media entitlement, target secure
 storage behavior or visual acceptance. Those remain explicit Human or
 environment evidence.
+
+## Machine checkpoint
+
+The implementation reuses the existing page tree and keeps the Queue owner
+outside the provider-scoped controller lifecycle. Shared Bridge operations take
+or derive an exact Provider ID; private QQ and NetEase protocol types remain in
+their Providers. Search, recommendation, release, ranking, library, detail,
+related, lyrics, comments and MV paths dispatch only to that owner. The two
+credential vault keys and rejection-cleanup paths are tested independently.
+
+The NetEase authentication adapter reuses the existing login controller and QR
+dialog but exposes only the Provider-default channel. Switching while QR
+creation or stored-credential verification is active invalidates that UI work.
+Cancellation is not sign-out: a pending NetEase credential remains available
+for an explicit retry, and inactive Provider state is not cleared.
+
+Final local machine evidence on 2026-09-12:
+
+- pinned `flutter_rust_bridge_codegen 2.13.0` completed; no generated API file
+  was deleted or left orphaned;
+- Rust format, workspace tests, all-target tests and strict Clippy passed: 535
+  passed, 0 failed, 20 explicit live/Human tests ignored;
+- 237 Dart files passed the format gate, `dart analyze` reported no issues and
+  all 527 Flutter tests passed;
+- Linux Release built successfully;
+- Android ARM64 Release built successfully as a 43,768,152-byte APK;
+- desktop/compact Settings, compact signed-out NetEase, desktop NetEase Search
+  and desktop synthetic signed-in NetEase Library frames were inspected for
+  overflow, provider-copy leakage and unsupported controls. Their aesthetic
+  acceptance remains Human-owned.
+
+## Remaining Work Audit
+
+| Area | Classification | Evidence boundary |
+| --- | --- | --- |
+| Settings Provider selection | DONE | Material 3 single selection is searchable, keyboard/touch reachable and persisted. |
+| Provider settings migration | DONE | v1/v2 default to QQ; QQ, NetEase, unknown v3, rollback and rapid serialized writes are tested. |
+| Provider bootstrap inventory | DONE | Typed bootstrap contains exactly QQ, NetEase and QQ default. |
+| QQ credential vault | DONE | Existing key and restore compatibility retained. |
+| NetEase credential vault | DONE | Independent key, serialized access and isolated cleanup tested. |
+| QQ auth | DONE | Existing desktop Quick Login and QQ/WeChat QR composition retained. |
+| NetEase auth | HUMAN_EVIDENCE_REQUIRED | QR/restore/sign-out and cancellation are machine-wired; real approval remains Human-operated. |
+| Search x4 | DONE | Selected gateway bundle routes all four categories without aggregation. |
+| Home | DONE | Anonymous/authenticated slots are capability- and Provider-truthful in synthetic tests. |
+| Discover | DONE | Supported releases/rankings/playlists reuse the existing page; Radar is capability-gated. |
+| Library | DONE | Provider-scoped account/playlists/favorite collections are wired and stale state is replaced. |
+| Liked | DONE | Existing paged page consumes the owning typed liked-playlist identity. |
+| Playlist Detail | DONE | Exact entity Provider ID drives paged loading. |
+| Album | DONE | Details and Tracks route by the Album owner. |
+| Artist | DONE | Tracks and Albums route by the Artist owner. |
+| Rankings | DONE | Groups and raw-cursor Track pages route by selected/entity Provider. |
+| New Songs | DONE | Only categories with exact Provider semantics are shown. |
+| New Albums | DONE | Only regions with exact Provider semantics are shown. |
+| Related Tracks | DONE | Seed Track Provider owns the request. |
+| Lyrics | DONE | NetEase line timing and exact translation work without invented word timing. |
+| Comments | DONE | Current Track Provider owns paged hot/newest reads. |
+| MV | DONE | Current Track Provider owns exact associated-MV resolution. |
+| Media resolution | DONE | Both resolvers remain statically available; preferred versus actual quality stays truthful. |
+| Queue | DONE | Mixed QQ/NetEase positions and same opaque IDs preserve exact next/previous routing. |
+| Now Playing | DONE | Current Track identity, not Settings selection, owns playback-adjacent reads. |
+| Provider switching races | DONE | Search, controller, QR and verification late work is suppressed/cancelled without sign-out; playback survives. |
+| Capability hiding | DONE | NetEase Radar and cloud Recent Plays destinations are absent. |
+| Unsupported mutations | DONE | No NetEase remote-write control or QQ write fallback is composed. Queue-local actions remain available. |
+| Signed-out QQ | DONE | Existing public Shell remains available. |
+| Signed-out NetEase | DONE | Public Home/Discover/Search remain; account-only content is absent and CTA names NetEase. |
+| Synthetic signed-in NetEase | DONE | Account, Library, Daily Tracks and Personal FM composition is covered. |
+| FRB | DONE | Pinned generation and generated-source consistency passed. |
+| Rust tests | DONE | 535 passed, 0 failed, 20 ignored. |
+| Flutter tests | DONE | 527 passed. |
+| Linux build | DONE | Release bundle produced locally. |
+| Android build | DONE | ARM64 Release APK produced locally. |
+| Visual synthetic renders | HUMAN_EVIDENCE_REQUIRED | Required frames exist and passed machine inspection; aesthetics are not self-accepted. |
+| Human NetEase real account | HUMAN_EVIDENCE_REQUIRED | QR, Library, favorites, Daily Tracks, Personal FM and authenticated media require maintainer observation. |
+| Human current pending platform reviews | HUMAN_EVIDENCE_REQUIRED | Existing Android system-media and credential-transfer Go/No-Go gates remain unchanged. |
+
+There is no `REMAINING_AUTONOMOUS_WORK` item in this bounded HD-025 scope.
+Real-account evidence must not be inferred from fixtures, builds or generated
+bindings.

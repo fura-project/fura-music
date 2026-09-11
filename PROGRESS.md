@@ -2,29 +2,42 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: IN_PROGRESS
+  state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
   active_workstream: BUILT_IN_PROVIDER_UI_INTEGRATION
-  current_task: HD_025_MACHINE_IMPLEMENTATION
-  next_action: SETTINGS_BOOTSTRAP_BRIDGE_AND_EXISTING_UI_WIRING
+  current_task: HD_025_HUMAN_ACCEPTANCE
+  next_action: HUMAN_NETEASE_ACCOUNT_AND_VISUAL_RUNTIME_REVIEW
 ---
 
 # Current State
 
-- **2026-09-12 HD-025 built-in Provider UI integration authorized and in
-  progress:** the maintainer authorizes the existing Material 3 product
-  surfaces to serve QQ Music and NetEase Cloud Music through one persisted,
-  QQ-default Provider selection. Credentials remain separately namespaced;
-  catalog/account state changes with the selection while the Queue and current
-  provider-owned Track survive. Exact entity identity continues to own media,
-  lyrics, comments, MV and related routing. Mixed Search, cross-Provider
-  matching/substitution, shared likes/credentials, NetEase writes, a third
-  Provider, runtime plugins and sidecars remain excluded. Machine work covers
-  Settings migration, static Bootstrap inventory, typed Bridge dispatch,
-  provider-scoped authentication/composition, capability hiding, synthetic
-  races and native builds. NetEase real-account and visual/runtime acceptance
-  remain Human evidence. Starting HEAD is `e1715ee7c5763d2fbcfd3df5d9bb4708f684be76`
-  with a clean worktree; logical local commits only and no push.
+- **2026-09-12 HD-025 built-in Provider UI integration machine checkpoint:**
+  the existing Material 3 product surfaces now serve QQ Music and NetEase Cloud
+  Music through one persisted, QQ-default Provider selection. Settings schema
+  v3 migrates legacy values, safely defaults unknown values and rolls back
+  failed serialized writes. Bootstrap exposes both fixed Providers. Shared
+  typed Bridge reads dispatch by exact Provider identity; QQ and NetEase have
+  isolated vault keys, authentication/session owners and rejection cleanup.
+  Startup restores only the selected Provider, while later selection lazily
+  restores its stored credential. NetEase uses only Provider-default QR; QQ
+  keeps QQ/WeChat QR and supported desktop Quick Login. Provider-scoped Home,
+  Discover, Search, Library and detail state is replaced on selection, with
+  old completion suppression and non-destructive QR/credential-verification
+  cancellation. The Queue and current provider-owned Track remain mounted and
+  exact media/lyrics/comments/MV/related routing remains independent of the
+  Settings selection. NetEase hides Radar, cloud Recent Plays and remote writes;
+  Daily Tracks and Personal FM retain truthful names. Pinned FRB 2.13.0
+  generation passes with no deleted/orphaned generated API file. Final machine
+  gates pass: Rust format, workspace and all-target tests at 535 passed / 0
+  failed / 20 explicitly ignored, strict Clippy, 237-file Dart format, `dart
+  analyze`, all 527 Flutter tests, Linux Release and Android ARM64 Release
+  (43,768,152-byte APK). Required synthetic desktop/compact Settings, signed-out
+  NetEase, Search and signed-in Library frames were rendered and inspected for
+  overflow, wrong Provider copy and unsupported actions; aesthetic acceptance
+  remains Human-only. Starting HEAD was
+  `e1715ee7c5763d2fbcfd3df5d9bb4708f684be76`; logical commits remain local and
+  no push is authorized. The exhaustive status is in
+  [the HD-025 audit](docs/development/built-in-provider-ui-integration.md).
 
 - **2026-09-11 Android system media and credential-transfer Go/No-Go
   checkpoint:** the QQ login dialog now presents desktop Quick login and QQ QR
