@@ -45,6 +45,29 @@ void main() {
     expect(await vault.read(), isNull);
   });
 
+  test(
+    'keeps QQ Music and NetEase credentials in separate vault keys',
+    () async {
+      final store = _MemorySecureStringStore();
+      final qq = PlatformCredentialVault(
+        store: store,
+        credentialKey: PlatformCredentialVault.qqMusicCredentialKey,
+      );
+      final netease = PlatformCredentialVault(
+        store: store,
+        credentialKey: PlatformCredentialVault.netEaseCredentialKey,
+      );
+
+      await qq.write(Uint8List.fromList(<int>[1, 2, 3]));
+      await netease.write(Uint8List.fromList(<int>[7, 8, 9]));
+      await qq.delete();
+
+      expect(await qq.read(), isNull);
+      expect(await netease.read(), orderedEquals(<int>[7, 8, 9]));
+      expect(store.values.keys, [PlatformCredentialVault.netEaseCredentialKey]);
+    },
+  );
+
   test('orders operations shared by independently wrapped gateways', () async {
     final inner = _GatedCredentialVault();
     final shared = SerializedCredentialVault(inner);

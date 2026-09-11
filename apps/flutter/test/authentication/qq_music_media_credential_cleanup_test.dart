@@ -81,6 +81,66 @@ void main() {
       );
     },
   );
+
+  test(
+    'provider-aware cleanup deletes only the rejected owner vault',
+    () async {
+      final qqVault = _FakeVault();
+      final netEaseVault = _FakeVault();
+      final gateway = ProviderCredentialCleaningMediaResolutionGateway(
+        _Gateway(
+          const MediaResolutionResult(
+            failure: MediaResolutionFailure.credentialRejected,
+          ),
+        ),
+        credentialVaults: {
+          'qq-music': qqVault,
+          'netease-cloud-music': netEaseVault,
+        },
+      );
+
+      await gateway
+          .beginResolution(
+            providerId: 'netease-cloud-music',
+            opaqueTrackId: 'same-opaque-id',
+          )
+          .run();
+      expect(qqVault.deleteCalls, 0);
+      expect(netEaseVault.deleteCalls, 1);
+
+      await gateway
+          .beginResolution(
+            providerId: 'qq-music',
+            opaqueTrackId: 'same-opaque-id',
+          )
+          .run();
+      expect(qqVault.deleteCalls, 1);
+      expect(netEaseVault.deleteCalls, 1);
+    },
+  );
+
+  test('unknown providers cannot delete a built-in credential', () async {
+    final qqVault = _FakeVault();
+    final netEaseVault = _FakeVault();
+    final gateway = ProviderCredentialCleaningMediaResolutionGateway(
+      _Gateway(
+        const MediaResolutionResult(
+          failure: MediaResolutionFailure.credentialRejected,
+        ),
+      ),
+      credentialVaults: {
+        'qq-music': qqVault,
+        'netease-cloud-music': netEaseVault,
+      },
+    );
+
+    final result = await gateway
+        .beginResolution(providerId: 'future-provider', opaqueTrackId: 'opaque')
+        .run();
+    expect(result.failure, MediaResolutionFailure.credentialRejected);
+    expect(qqVault.deleteCalls, 0);
+    expect(netEaseVault.deleteCalls, 0);
+  });
 }
 
 class _Gateway implements MediaResolutionGateway {

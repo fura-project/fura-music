@@ -31,8 +31,12 @@ void main() {
   testWidgets('loads typed provider status from Rust', (tester) async {
     final status = bootstrapStatus();
 
-    expect(status.provider.id, 'qq-music');
-    expect(status.provider.implementedCapabilities, [
+    expect(status.defaultProviderId, 'qq-music');
+    expect(status.providers.map((provider) => provider.id), [
+      'qq-music',
+      'netease-cloud-music',
+    ]);
+    expect(status.providers.first.implementedCapabilities, [
       'Search',
       'Catalog',
       'Recommendations',
@@ -67,7 +71,9 @@ void main() {
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
     final unusedQrStart = reserveQqMusicQrLoginStart();
     expect(cancelQqMusicQrLoginStart(attemptId: unusedQrStart), isFalse);
-    final unusedLibraryLoad = beginQqMusicUserPlaylistLoad();
+    final unusedLibraryLoad = beginQqMusicUserPlaylistLoad(
+      providerId: 'qq-music',
+    );
     expect(unusedLibraryLoad.isActive, isTrue);
     expect(unusedLibraryLoad.cancel(), isTrue);
     final cancelledLibraryLoad = await unusedLibraryLoad.run();
@@ -89,6 +95,7 @@ void main() {
       QqMusicPlaylistTrackPageLoadFailure.cancelled,
     );
     final unusedSearchLoad = beginQqMusicTrackSearchPageLoad(
+      providerId: 'qq-music',
       query: 'synthetic query',
       page: 1,
       size: 30,
@@ -101,6 +108,7 @@ void main() {
       QqMusicTrackSearchPageLoadFailure.cancelled,
     );
     final unusedArtistSearchLoad = beginQqMusicArtistSearchPageLoad(
+      providerId: 'qq-music',
       query: 'synthetic query',
       page: 1,
       size: 30,
@@ -113,6 +121,7 @@ void main() {
       QqMusicArtistSearchPageLoadFailure.cancelled,
     );
     final unusedAlbumSearchLoad = beginQqMusicAlbumSearchPageLoad(
+      providerId: 'qq-music',
       query: 'synthetic query',
       page: 1,
       size: 30,
@@ -125,6 +134,7 @@ void main() {
       QqMusicAlbumSearchPageLoadFailure.cancelled,
     );
     final unusedPlaylistSearchLoad = beginQqMusicPlaylistSearchPageLoad(
+      providerId: 'qq-music',
       query: 'synthetic query',
       page: 1,
       size: 30,
@@ -187,6 +197,7 @@ void main() {
       QqMusicArtistAlbumPageLoadFailure.cancelled,
     );
     final unusedNewAlbumLoad = beginQqMusicNewAlbumPageLoad(
+      providerId: 'qq-music',
       region: QqMusicNewAlbumRegion.western,
       offset: 0,
       size: 20,
@@ -200,6 +211,7 @@ void main() {
       QqMusicNewAlbumPageLoadFailure.cancelled,
     );
     final unusedNewSongsLoad = beginQqMusicNewSongsLoad(
+      providerId: 'qq-music',
       category: QqMusicNewSongCategory.latest,
     );
     expect(unusedNewSongsLoad.isActive, isTrue);
@@ -208,6 +220,7 @@ void main() {
     expect(cancelledNewSongsLoad.category, QqMusicNewSongCategory.latest);
     expect(cancelledNewSongsLoad.failure, QqMusicNewSongsLoadFailure.cancelled);
     final unusedFavoriteAlbumLoad = beginQqMusicFavoriteAlbumPageLoad(
+      providerId: 'qq-music',
       offset: 0,
       size: 20,
     );
@@ -219,6 +232,7 @@ void main() {
       QqMusicFavoriteAlbumPageLoadFailure.cancelled,
     );
     final unusedRecommendationLoad = beginQqMusicRecommendedPlaylistPageLoad(
+      providerId: 'qq-music',
       offset: 0,
       size: 20,
     );
@@ -229,7 +243,9 @@ void main() {
       cancelledRecommendationLoad.failure,
       QqMusicRecommendedPlaylistPageLoadFailure.cancelled,
     );
-    final unusedDailyRecommendationLoad = beginQqMusicDailyRecommendationLoad();
+    final unusedDailyRecommendationLoad = beginQqMusicDailyRecommendationLoad(
+      providerId: 'qq-music',
+    );
     expect(unusedDailyRecommendationLoad.isActive, isTrue);
     expect(unusedDailyRecommendationLoad.cancel(), isTrue);
     final cancelledDailyRecommendationLoad = await unusedDailyRecommendationLoad
@@ -239,7 +255,7 @@ void main() {
       QqMusicDailyRecommendationLoadFailure.cancelled,
     );
     final unusedPersonalizedPlaylistsLoad =
-        beginQqMusicPersonalizedPlaylistsLoad();
+        beginQqMusicPersonalizedPlaylistsLoad(providerId: 'qq-music');
     expect(unusedPersonalizedPlaylistsLoad.isActive, isTrue);
     expect(unusedPersonalizedPlaylistsLoad.cancel(), isTrue);
     final cancelledPersonalizedPlaylistsLoad =
@@ -248,7 +264,9 @@ void main() {
       cancelledPersonalizedPlaylistsLoad.failure,
       QqMusicPersonalizedPlaylistsLoadFailure.cancelled,
     );
-    final unusedPersonalizedTracksLoad = beginQqMusicPersonalizedTracksLoad();
+    final unusedPersonalizedTracksLoad = beginQqMusicPersonalizedTracksLoad(
+      providerId: 'qq-music',
+    );
     expect(unusedPersonalizedTracksLoad.isActive, isTrue);
     expect(unusedPersonalizedTracksLoad.cancel(), isTrue);
     final cancelledPersonalizedTracksLoad = await unusedPersonalizedTracksLoad
@@ -265,7 +283,9 @@ void main() {
       cancelledRadarLoad.failure,
       QqMusicRadarTrackPageLoadFailure.cancelled,
     );
-    final unusedRankingGroupLoad = beginQqMusicRankingGroupLoad();
+    final unusedRankingGroupLoad = beginQqMusicRankingGroupLoad(
+      providerId: 'qq-music',
+    );
     expect(unusedRankingGroupLoad.isActive, isTrue);
     expect(unusedRankingGroupLoad.cancel(), isTrue);
     final cancelledRankingGroupLoad = await unusedRankingGroupLoad.run();

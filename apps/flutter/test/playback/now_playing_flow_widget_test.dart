@@ -2085,11 +2085,14 @@ PlaybackQueueSnapshot _makeSnapshot(
 
 const _bootstrap = BootstrapStatus(
   coreVersion: '0.1.0-test',
-  provider: ProviderStatus(
-    id: 'qq-music',
-    displayName: 'QQ Music',
-    implementedCapabilities: ['Authentication', 'MediaResolution'],
-  ),
+  providers: [
+    ProviderStatus(
+      id: 'qq-music',
+      displayName: 'QQ Music',
+      implementedCapabilities: ['Authentication', 'MediaResolution'],
+    ),
+  ],
+  defaultProviderId: 'qq-music',
 );
 
 class _AuthenticatedGateway implements QqMusicAuthenticationGateway {

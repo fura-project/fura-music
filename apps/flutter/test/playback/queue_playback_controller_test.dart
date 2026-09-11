@@ -54,6 +54,74 @@ void main() {
   );
 
   test(
+    'mixed-provider queue keeps ownership across next and previous navigation',
+    () async {
+      const qqFirst = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'shared-id',
+        title: 'QQ first',
+        artistNames: ['QQ artist'],
+      );
+      const netEaseFirst = PlaylistTrackSummary(
+        providerId: 'netease-cloud-music',
+        opaqueId: 'shared-id',
+        title: 'NetEase first',
+        artistNames: ['NetEase artist'],
+      );
+      const qqSecond = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'qq-second',
+        title: 'QQ second',
+        artistNames: ['QQ artist'],
+      );
+      const netEaseSecond = PlaylistTrackSummary(
+        providerId: 'netease-cloud-music',
+        opaqueId: 'netease-second',
+        title: 'NetEase second',
+        artistNames: ['NetEase artist'],
+      );
+      const tracks = [qqFirst, netEaseFirst, qqSecond, netEaseSecond];
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [_result(tracks, 0, changed: true)],
+        advanceResults: [
+          _result(tracks, 1, changed: true),
+          _result(tracks, 2, changed: true),
+          _result(tracks, 3, changed: true),
+        ],
+        rewindResults: [_result(tracks, 2, changed: true)],
+      );
+      final media = _FakeMediaGateway([
+        'qq-first',
+        'netease-first',
+        'qq-second',
+        'netease-second',
+        'qq-second-again',
+      ]);
+      final controller = _controller(
+        queue,
+        media,
+        _FakeAudioEngine(List.generate(5, (_) => _FakeAudioSession())),
+      );
+
+      await controller.replaceAndPlay(tracks, 0);
+      await controller.advance();
+      await controller.advance();
+      await controller.advance();
+      await controller.rewind();
+
+      expect(media.providerRequests, [
+        (providerId: 'qq-music', opaqueTrackId: 'shared-id'),
+        (providerId: 'netease-cloud-music', opaqueTrackId: 'shared-id'),
+        (providerId: 'qq-music', opaqueTrackId: 'qq-second'),
+        (providerId: 'netease-cloud-music', opaqueTrackId: 'netease-second'),
+        (providerId: 'qq-music', opaqueTrackId: 'qq-second'),
+      ]);
+      expect(controller.current, same(qqSecond));
+      controller.dispose();
+    },
+  );
+
+  test(
     'completion advances exactly once and terminal completion stays put',
     () async {
       final gateway = _ScriptedQueueGateway(
@@ -483,6 +551,7 @@ class _FakeMediaGateway implements MediaResolutionGateway {
 
   final List<String> vkeys;
   final List<String> requests = [];
+  final List<({String providerId, String opaqueTrackId})> providerRequests = [];
   int _next = 0;
 
   @override
@@ -491,6 +560,10 @@ class _FakeMediaGateway implements MediaResolutionGateway {
     required String opaqueTrackId,
   }) {
     requests.add(opaqueTrackId);
+    providerRequests.add((
+      providerId: providerId,
+      opaqueTrackId: opaqueTrackId,
+    ));
     return _ImmediateMediaOperation(vkeys[_next++]);
   }
 }

@@ -10,6 +10,7 @@ void main() {
   test('maps an optional valid Daily 30 playlist', () {
     final available = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
+        tracks: [],
         playlist: bridge_library.LibraryPlaylistSummary(
           isLikedSongs: false,
           providerId: 'qq-music',
@@ -28,10 +29,65 @@ void main() {
     );
 
     final absent = mapBridgeDailyRecommendation(
-      const bridge.QqMusicDailyRecommendationLoad(),
+      const bridge.QqMusicDailyRecommendationLoad(tracks: []),
     );
     expect(absent.failure, isNull);
     expect(absent.playlist, isNull);
+  });
+
+  test('maps NetEase Daily Tracks without fabricating a playlist', () {
+    final result = mapBridgeDailyRecommendation(
+      const bridge.QqMusicDailyRecommendationLoad(
+        tracks: [
+          bridge_library.LibraryTrackSummary(
+            providerId: 'netease-cloud-music',
+            opaqueId: 'track:42',
+            title: 'Daily track',
+            artistNames: ['Daily artist'],
+            artists: [],
+            albumTitle: 'Daily album',
+            durationSeconds: 183,
+          ),
+        ],
+      ),
+    );
+
+    expect(result.failure, isNull);
+    expect(result.playlist, isNull);
+    expect(result.tracks, hasLength(1));
+    expect(result.tracks.single.providerId, 'netease-cloud-music');
+    expect(result.tracks.single.opaqueId, 'track:42');
+    expect(result.tracks.single.title, 'Daily track');
+  });
+
+  test('rejects duplicate or mixed daily payloads', () {
+    const track = bridge_library.LibraryTrackSummary(
+      providerId: 'netease-cloud-music',
+      opaqueId: 'track:42',
+      title: 'Daily track',
+      artistNames: ['Daily artist'],
+      artists: [],
+    );
+    final duplicate = mapBridgeDailyRecommendation(
+      const bridge.QqMusicDailyRecommendationLoad(tracks: [track, track]),
+    );
+    expect(duplicate.failure, DailyRecommendationFailure.invalidResponse);
+    expect(duplicate.tracks, isEmpty);
+
+    final mixed = mapBridgeDailyRecommendation(
+      const bridge.QqMusicDailyRecommendationLoad(
+        playlist: bridge_library.LibraryPlaylistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'catalog:daily',
+          title: 'Daily 30',
+          isLikedSongs: false,
+        ),
+        tracks: [track],
+      ),
+    );
+    expect(mixed.failure, DailyRecommendationFailure.invalidResponse);
+    expect(mixed.playlist, isNull);
+    expect(mixed.tracks, isEmpty);
   });
 
   test('maps every Bridge failure and rejects contradictory content', () {
@@ -61,6 +117,7 @@ void main() {
 
     final conflict = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
+        tracks: [],
         playlist: bridge_library.LibraryPlaylistSummary(
           isLikedSongs: false,
           providerId: 'qq-music',
@@ -104,7 +161,10 @@ void main() {
     ]) {
       expect(
         mapBridgeDailyRecommendation(
-          bridge.QqMusicDailyRecommendationLoad(playlist: playlist),
+          bridge.QqMusicDailyRecommendationLoad(
+            playlist: playlist,
+            tracks: const [],
+          ),
         ).failure,
         DailyRecommendationFailure.invalidResponse,
       );

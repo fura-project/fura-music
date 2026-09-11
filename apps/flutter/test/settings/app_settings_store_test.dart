@@ -15,29 +15,29 @@ void main() {
     expect(result.settings, AppSettings.defaults);
   });
 
-  test('round trips every supported theme and playback quality', () async {
+  test('round trips every supported setting', () async {
     for (final theme in AppThemePreference.values) {
       for (final playbackQuality in AppPlaybackQualityPreference.values) {
-        final storage = _MemoryDocumentStorage();
-        final store = AppSettingsStore(storage: storage);
+        for (final musicProvider in AppMusicProvider.values) {
+          final storage = _MemoryDocumentStorage();
+          final store = AppSettingsStore(storage: storage);
+          final settings = AppSettings(
+            theme: theme,
+            playbackQuality: playbackQuality,
+            musicProvider: musicProvider,
+          );
 
-        expect(
-          await store.save(
-            AppSettings(theme: theme, playbackQuality: playbackQuality),
-          ),
-          AppSettingsWriteResult.saved,
-        );
-        final stored = jsonDecode(storage.document!) as Map<String, dynamic>;
-        expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
-        expect(stored['theme'], theme.name);
-        expect(stored['playbackQuality'], playbackQuality.name);
+          expect(await store.save(settings), AppSettingsWriteResult.saved);
+          final stored = jsonDecode(storage.document!) as Map<String, dynamic>;
+          expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
+          expect(stored['theme'], theme.name);
+          expect(stored['playbackQuality'], playbackQuality.name);
+          expect(stored['musicProvider'], musicProvider.name);
 
-        final loaded = await store.load();
-        expect(loaded.state, AppSettingsLoadState.stored);
-        expect(
-          loaded.settings,
-          AppSettings(theme: theme, playbackQuality: playbackQuality),
-        );
+          final loaded = await store.load();
+          expect(loaded.state, AppSettingsLoadState.stored);
+          expect(loaded.settings, settings);
+        }
       }
     }
   });
@@ -66,6 +66,51 @@ void main() {
     },
   );
 
+  test('migrates version 2 documents to QQ Music', () async {
+    final storage = _MemoryDocumentStorage(
+      document: jsonEncode(<String, Object>{
+        'schemaVersion': 2,
+        'theme': 'light',
+        'playbackQuality': 'high',
+      }),
+    );
+
+    final result = await AppSettingsStore(storage: storage).load();
+
+    expect(result.state, AppSettingsLoadState.migrated);
+    expect(
+      result.settings,
+      const AppSettings(
+        theme: AppThemePreference.light,
+        playbackQuality: AppPlaybackQualityPreference.high,
+        musicProvider: AppMusicProvider.qqMusic,
+      ),
+    );
+  });
+
+  test('unknown provider safely falls back to QQ Music', () async {
+    final storage = _MemoryDocumentStorage(
+      document: jsonEncode(<String, Object>{
+        'schemaVersion': AppSettings.currentSchemaVersion,
+        'theme': 'dark',
+        'playbackQuality': 'lossless',
+        'musicProvider': 'futureProvider',
+      }),
+    );
+
+    final result = await AppSettingsStore(storage: storage).load();
+
+    expect(result.state, AppSettingsLoadState.migrated);
+    expect(
+      result.settings,
+      const AppSettings(
+        theme: AppThemePreference.dark,
+        playbackQuality: AppPlaybackQualityPreference.lossless,
+        musicProvider: AppMusicProvider.qqMusic,
+      ),
+    );
+  });
+
   test(
     'uses defaults without rewriting malformed or future documents',
     () async {
@@ -77,7 +122,7 @@ void main() {
           AppSettingsLoadState.invalidDocument,
         ),
         (
-          jsonEncode(<String, Object>{'schemaVersion': 3, 'theme': 'dark'}),
+          jsonEncode(<String, Object>{'schemaVersion': 4, 'theme': 'dark'}),
           AppSettingsLoadState.unsupportedVersion,
         ),
         (

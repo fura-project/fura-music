@@ -22,6 +22,7 @@ void main() {
     _,
   ) async {
     final result = await beginQqMusicTrackSearchPageLoad(
+      providerId: 'qq-music',
       query: '周杰伦',
       page: 1,
       size: 1,
@@ -41,6 +42,7 @@ void main() {
     'resolves HTTPS and advances one anonymous Android playback session',
     (tester) async {
       final search = await beginQqMusicTrackSearchPageLoad(
+        providerId: 'qq-music',
         query: 'Take me hand',
         page: 1,
         size: 8,

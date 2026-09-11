@@ -198,6 +198,38 @@ void main() {
     );
     expect(failingVault.deleteCalls, 1);
   });
+
+  test(
+    'credential rejection cleanup follows the lyric Track provider',
+    () async {
+      final qqVault = _FakeVault();
+      final netEaseVault = _FakeVault();
+      final gateway = RustLyricGateway(
+        credentialVaults: {
+          'qq-music': qqVault,
+          'netease-cloud-music': netEaseVault,
+        },
+        operationFactory: (_, _) => _ImmediateOperation(
+          const LyricLoadResult(failure: LyricFailure.credentialRejected),
+        ),
+      );
+
+      await gateway
+          .beginLoad(
+            providerId: 'netease-cloud-music',
+            opaqueTrackId: 'same-opaque-id',
+          )
+          .run();
+      expect(qqVault.deleteCalls, 0);
+      expect(netEaseVault.deleteCalls, 1);
+
+      await gateway
+          .beginLoad(providerId: 'qq-music', opaqueTrackId: 'same-opaque-id')
+          .run();
+      expect(qqVault.deleteCalls, 1);
+      expect(netEaseVault.deleteCalls, 1);
+    },
+  );
 }
 
 bridge.QqMusicLyricLoad _validBridgeLoad() => const bridge.QqMusicLyricLoad(

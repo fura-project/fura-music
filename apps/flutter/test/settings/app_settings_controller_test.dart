@@ -93,6 +93,67 @@ void main() {
     expect(await update, AppSettingsWriteResult.storageUnavailable);
     expect(qualityChanges, [AppPlaybackQualityPreference.lossless]);
   });
+
+  test(
+    'provider persistence failure rolls back to persisted provider',
+    () async {
+      final storage = _ControlledDocumentStorage();
+      final controller = AppSettingsController(
+        AppSettingsStore(storage: storage),
+        null,
+        initialSettings: AppSettings.defaults,
+      );
+
+      final update = controller.update(
+        AppSettings.defaults.copyWith(
+          musicProvider: AppMusicProvider.netEaseCloudMusic,
+        ),
+      );
+      expect(
+        controller.settings.musicProvider,
+        AppMusicProvider.netEaseCloudMusic,
+      );
+      await _flushTasks();
+      storage.fail(0);
+
+      expect(await update, AppSettingsWriteResult.storageUnavailable);
+      expect(controller.settings.musicProvider, AppMusicProvider.qqMusic);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'rapid provider writes serialize and retain the final success',
+    () async {
+      final storage = _ControlledDocumentStorage();
+      final controller = AppSettingsController(
+        AppSettingsStore(storage: storage),
+        null,
+        initialSettings: AppSettings.defaults,
+      );
+
+      final netEase = controller.update(
+        AppSettings.defaults.copyWith(
+          musicProvider: AppMusicProvider.netEaseCloudMusic,
+        ),
+      );
+      final qq = controller.update(AppSettings.defaults);
+      expect(controller.settings.musicProvider, AppMusicProvider.qqMusic);
+
+      await _flushTasks();
+      expect(storage.writes, hasLength(1));
+      storage.complete(0);
+      expect(await netEase, AppSettingsWriteResult.saved);
+      await _flushTasks();
+      expect(storage.writes, hasLength(2));
+      storage.complete(1);
+      expect(await qq, AppSettingsWriteResult.saved);
+
+      expect(controller.settings.musicProvider, AppMusicProvider.qqMusic);
+      expect(storage.writes.last, contains('"musicProvider":"qqMusic"'));
+      controller.dispose();
+    },
+  );
 }
 
 Future<void> _flushTasks() => Future<void>.delayed(Duration.zero);

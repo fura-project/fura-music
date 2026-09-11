@@ -12,6 +12,7 @@ import 'package:flutter/material.dart'
         AppBar,
         AppLifecycleState,
         Brightness,
+        BuildContext,
         CustomScrollView,
         Divider,
         FadeTransition,
@@ -19,6 +20,7 @@ import 'package:flutter/material.dart'
         Focus,
         FocusManager,
         FontWeight,
+        GlobalKey,
         GridView,
         Icon,
         Icons,
@@ -42,12 +44,16 @@ import 'package:flutter/material.dart'
         SegmentedButton,
         Semantics,
         SizedBox,
+        State,
+        StatefulWidget,
         TabBar,
         TabIndicatorAnimation,
         Text,
         TextField,
         TextInputAction,
         Theme,
+        ThemeData,
+        Widget,
         kToolbarHeight;
 import 'package:flutter/services.dart'
     show LogicalKeyboardKey, FontLoader, rootBundle;
@@ -55,12 +61,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
@@ -746,11 +754,14 @@ void main() {
 
     const bootstrap = BootstrapStatus(
       coreVersion: '0.1.0-test',
-      provider: ProviderStatus(
-        id: 'qq-music',
-        displayName: 'QQ Music',
-        implementedCapabilities: ['Authentication'],
-      ),
+      providers: [
+        ProviderStatus(
+          id: 'qq-music',
+          displayName: 'QQ Music',
+          implementedCapabilities: ['Authentication'],
+        ),
+      ],
+      defaultProviderId: 'qq-music',
     );
 
     final session = _WaitingSession();
@@ -982,11 +993,14 @@ void main() {
       MusicApp(
         bootstrap: const BootstrapStatus(
           coreVersion: '0.1.0-test',
-          provider: ProviderStatus(
-            id: 'qq-music',
-            displayName: 'QQ Music',
-            implementedCapabilities: ['Authentication'],
-          ),
+          providers: [
+            ProviderStatus(
+              id: 'qq-music',
+              displayName: 'QQ Music',
+              implementedCapabilities: ['Authentication'],
+            ),
+          ],
+          defaultProviderId: 'qq-music',
         ),
         authenticationGateway: _WidgetGateway(session),
       ),
@@ -7628,9 +7642,9 @@ void main() {
     'settings shell replaces navigation and top actions with symmetric motion',
     (tester) async {
       await _loadRecentReviewFonts(tester);
-      const captureReviewImage = bool.fromEnvironment(
-        'SETTINGS_SHELL_VISUAL_REVIEW',
-      );
+      const captureReviewImage =
+          bool.fromEnvironment('SETTINGS_SHELL_VISUAL_REVIEW') ||
+          bool.fromEnvironment('BUILT_IN_PROVIDER_VISUAL_REVIEW');
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -7744,6 +7758,10 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.byKey(const ValueKey('settings-nav-musicService')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const ValueKey('settings-nav-playback')),
         findsOneWidget,
       );
@@ -7773,6 +7791,29 @@ void main() {
         await expectLater(
           find.byType(MusicApp),
           matchesGoldenFile(Uri.file('/tmp/fura-settings-shell-desktop.png')),
+        );
+      }
+
+      await tester.tap(find.byKey(const ValueKey('settings-nav-musicService')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-music-service-section')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-provider-qq-music')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-provider-netease')),
+        findsOneWidget,
+      );
+      if (captureReviewImage) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-provider-settings-desktop.png'),
+          ),
         );
       }
 
@@ -7849,9 +7890,9 @@ void main() {
     'mobile settings navigate from categories into searchable detail pages',
     (tester) async {
       await _loadRecentReviewFonts(tester);
-      const captureReviewImages = bool.fromEnvironment(
-        'MOBILE_SETTINGS_VISUAL_REVIEW',
-      );
+      const captureReviewImages =
+          bool.fromEnvironment('MOBILE_SETTINGS_VISUAL_REVIEW') ||
+          bool.fromEnvironment('BUILT_IN_PROVIDER_VISUAL_REVIEW');
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -7881,6 +7922,10 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('settings-compact-appearance')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-compact-musicService')),
         findsOneWidget,
       );
       expect(
@@ -7951,6 +7996,29 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Dark theme'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('settings-compact-musicService')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-provider-qq-music')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-provider-netease')),
+        findsOneWidget,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-provider-settings-compact.png'),
+          ),
+        );
+      }
+      await tester.tap(find.byKey(const ValueKey('settings-back')));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('settings-compact-playback')));
       await tester.pumpAndSettle();
@@ -8250,16 +8318,527 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Scan with WeChat'), findsOneWidget);
   });
+
+  testWidgets(
+    'provider switch cancels an open QR session and replaces auth UI',
+    (tester) async {
+      final qqSession = _WaitingSession();
+      final harnessKey = GlobalKey<_LoginProviderHarnessState>();
+      final qq = _providerFixture(
+        authenticationGateway: _WidgetGateway(qqSession),
+        capabilities: MusicProviderCapabilities.qqMusic,
+        providerId: 'qq-music',
+        accountName: 'QQ Account',
+        searchGateway: _WidgetSearchGateway(const TrackSearchPageResult()),
+      );
+      final netEase = _providerFixture(
+        authenticationGateway: _ProviderWidgetGateway(
+          providerDisplayName: 'NetEase Cloud Music',
+          qrActionLabel: 'Scan with NetEase Cloud Music',
+        ),
+        capabilities: MusicProviderCapabilities.netEaseCloudMusic,
+        providerId: 'netease-cloud-music',
+        accountName: 'NetEase Account',
+        searchGateway: _WidgetSearchGateway(const TrackSearchPageResult()),
+      );
+
+      await tester.pumpWidget(
+        _LoginProviderHarness(key: harnessKey, qq: qq, netEase: netEase),
+      );
+      await tester.pumpAndSettle();
+      await _openSignInDialog(tester);
+      await tester.tap(find.byKey(const ValueKey('start-qq-login-button')));
+      await tester.pump();
+      expect(find.text('Scan with QQ'), findsWidgets);
+
+      harnessKey.currentState!.select(AppMusicProvider.netEaseCloudMusic);
+      await tester.pumpAndSettle();
+
+      expect(qqSession.cancelCalls, 1);
+      expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('signed-out-main-page')),
+        findsOneWidget,
+      );
+      await _openSignInDialog(tester);
+      expect(find.text('Scan with NetEase Cloud Music'), findsOneWidget);
+      expect(find.text('Scan with QQ'), findsNothing);
+      expect(find.text('Scan with WeChat'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'provider switch replaces catalog state but preserves provider-owned playback',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'BUILT_IN_PROVIDER_VISUAL_REVIEW',
+      );
+      tester.view.physicalSize = const Size(1440, 960);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const qqTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'same-opaque-id',
+        title: 'QQ Queue Survivor',
+        artistNames: ['QQ artist'],
+        durationSeconds: 181,
+      );
+      const netEaseTrack = PlaylistTrackSummary(
+        providerId: 'netease-cloud-music',
+        opaqueId: 'same-opaque-id',
+        title: 'NetEase Personal FM Track',
+        artistNames: ['NetEase artist'],
+        durationSeconds: 202,
+      );
+      final staleQqRecommendations =
+          _ControlledWidgetRecommendedPlaylistGateway();
+      final qqSearch = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: qqTrack)],
+        ),
+      );
+      final netEaseSearch = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: netEaseTrack)],
+        ),
+      );
+      final queue = _WidgetPlaybackQueueGateway();
+      final settingsStorage = _WidgetSettingsDocumentStorage();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _dualProviderBootstrap,
+          providerDependencies: BuiltInProviderDependencies(
+            qqMusic: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerDisplayName: 'QQ Music',
+                qrActionLabel: 'Scan with QQ',
+                authenticated: true,
+              ),
+              capabilities: MusicProviderCapabilities.qqMusic,
+              providerId: 'qq-music',
+              accountName: 'QQ Account',
+              searchGateway: qqSearch,
+              recommendedPlaylistGateway: staleQqRecommendations,
+              personalizedTracks: const [qqTrack],
+            ),
+            netEase: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerDisplayName: 'NetEase Cloud Music',
+                qrActionLabel: 'Scan with NetEase Cloud Music',
+                authenticated: true,
+              ),
+              capabilities: MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: 'netease-cloud-music',
+              accountName: 'NetEase Account',
+              searchGateway: netEaseSearch,
+              personalizedTracks: const [netEaseTrack],
+              dailyTracks: const [netEaseTrack],
+            ),
+          ),
+          playbackQueueGateway: queue,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+          settingsStore: AppSettingsStore(storage: settingsStorage),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('QQ Account'), findsOneWidget);
+      expect(find.text('Songs picked for you'), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-recent-plays')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('home-personalized-track-1')));
+      await tester.pumpAndSettle();
+      expect(queue.replacements.single.$1.single.providerId, 'qq-music');
+
+      await _switchProviderFromDesktopSettings(
+        tester,
+        const ValueKey('settings-provider-netease'),
+        reviewImagePath: captureReviewImages
+            ? '/tmp/fura-provider-settings-desktop-integration.png'
+            : null,
+      );
+      expect(find.text('NetEase Account'), findsOneWidget);
+      expect(find.text('Personal FM'), findsOneWidget);
+      expect(find.text('Daily tracks'), findsWidgets);
+      expect(find.text('NetEase Personal FM Track'), findsWidgets);
+      expect(find.byKey(const ValueKey('open-liked-songs')), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-recent-plays')), findsNothing);
+      expect(find.text('QQ Queue Survivor'), findsOneWidget);
+      if (captureReviewImages) {
+        await tester.tap(find.byKey(const ValueKey('open-liked-songs')));
+        await tester.pumpAndSettle();
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-netease-library-desktop.png')),
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('primary-home-destination')),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      staleQqRecommendations.complete(
+        const RecommendedPlaylistPageResult(
+          playlists: [
+            RecommendedPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'stale',
+              title: 'Stale QQ result must stay hidden',
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Stale QQ result must stay hidden'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('discover-type-radar')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'same id',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text('NetEase Personal FM Track'), findsWidgets);
+      expect(netEaseSearch.requests, hasLength(1));
+      expect(qqSearch.requests, isEmpty);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-netease-search-desktop.png')),
+        );
+      }
+
+      await _switchProviderFromDesktopSettings(
+        tester,
+        const ValueKey('settings-provider-qq-music'),
+      );
+      expect(find.text('QQ Account'), findsOneWidget);
+      expect(find.text('QQ Queue Survivor'), findsWidgets);
+      expect(find.byKey(const ValueKey('open-recent-plays')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'signed-out NetEase keeps public shell and exposes only NetEase QR',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'BUILT_IN_PROVIDER_VISUAL_REVIEW',
+      );
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const publicTrack = PlaylistTrackSummary(
+        providerId: 'netease-cloud-music',
+        opaqueId: 'public-track',
+        title: 'NetEase Public Track',
+        artistNames: ['Public artist'],
+      );
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _dualProviderBootstrap,
+          initialSettings: const AppSettings(
+            theme: AppThemePreference.system,
+            musicProvider: AppMusicProvider.netEaseCloudMusic,
+          ),
+          providerDependencies: BuiltInProviderDependencies(
+            qqMusic: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerDisplayName: 'QQ Music',
+                qrActionLabel: 'Scan with QQ',
+              ),
+              capabilities: MusicProviderCapabilities.qqMusic,
+              providerId: 'qq-music',
+              accountName: 'QQ Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            ),
+            netEase: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerDisplayName: 'NetEase Cloud Music',
+                qrActionLabel: 'Scan with NetEase Cloud Music',
+              ),
+              capabilities: MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: 'netease-cloud-music',
+              accountName: 'NetEase Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(
+                  page: 1,
+                  total: 1,
+                  items: [TrackSearchItem(track: publicTrack)],
+                ),
+              ),
+              newSongs: const [publicTrack],
+            ),
+          ),
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('signed-out-main-page')),
+        findsOneWidget,
+      );
+      expect(find.text('NetEase Public Track'), findsWidgets);
+      expect(find.byKey(const ValueKey('sign-in')), findsOneWidget);
+      expect(find.text('Radar'), findsNothing);
+      expect(find.byKey(const ValueKey('open-recent-plays')), findsNothing);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-netease-signed-out-compact.png'),
+          ),
+        );
+      }
+
+      await _openSignInDialog(tester);
+      expect(find.text('Scan with NetEase Cloud Music'), findsOneWidget);
+      expect(find.text('Scan with QQ'), findsNothing);
+      expect(find.text('Scan with WeChat'), findsNothing);
+      expect(find.text('Quick login'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+}
+
+Future<void> _switchProviderFromDesktopSettings(
+  WidgetTester tester,
+  ValueKey<String> providerKey, {
+  String? reviewImagePath,
+}) async {
+  await tester.tap(find.byKey(const ValueKey('open-settings')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('settings-nav-musicService')));
+  await tester.pumpAndSettle();
+  if (reviewImagePath != null) {
+    await expectLater(
+      find.byType(MusicApp),
+      matchesGoldenFile(Uri.file(reviewImagePath)),
+    );
+  }
+  await tester.tap(find.byKey(providerKey));
+  await tester.pumpAndSettle();
 }
 
 const _bootstrap = BootstrapStatus(
   coreVersion: '0.1.0-test',
-  provider: ProviderStatus(
-    id: 'qq-music',
-    displayName: 'QQ Music',
-    implementedCapabilities: ['Authentication'],
-  ),
+  providers: [
+    ProviderStatus(
+      id: 'qq-music',
+      displayName: 'QQ Music',
+      implementedCapabilities: ['Authentication'],
+    ),
+  ],
+  defaultProviderId: 'qq-music',
 );
+
+const _dualProviderBootstrap = BootstrapStatus(
+  coreVersion: '0.1.0-test',
+  providers: [
+    ProviderStatus(
+      id: 'qq-music',
+      displayName: 'QQ Music',
+      implementedCapabilities: ['Authentication', 'Search'],
+    ),
+    ProviderStatus(
+      id: 'netease-cloud-music',
+      displayName: 'NetEase Cloud Music',
+      implementedCapabilities: ['Authentication', 'Search'],
+    ),
+  ],
+  defaultProviderId: 'qq-music',
+);
+
+MusicProviderDependencies _providerFixture({
+  required QqMusicAuthenticationGateway authenticationGateway,
+  required MusicProviderCapabilities capabilities,
+  required String providerId,
+  required String accountName,
+  required TrackSearchGateway searchGateway,
+  RecommendedPlaylistGateway? recommendedPlaylistGateway,
+  List<PlaylistTrackSummary> personalizedTracks = const [],
+  List<PlaylistTrackSummary> dailyTracks = const [],
+  List<PlaylistTrackSummary> newSongs = const [],
+}) {
+  final initialAlbumRegion = capabilities.supportedNewAlbumRegions.first;
+  final initialNewSongCategory =
+      capabilities.supportedNewSongCategories.contains(NewSongCategory.latest)
+      ? NewSongCategory.latest
+      : capabilities.supportedNewSongCategories.first;
+  final libraryResult = UserLibraryResult(
+    playlists: [
+      UserPlaylistSummary(
+        providerId: providerId,
+        opaqueId: 'liked',
+        title: 'Liked on $accountName',
+        isLikedSongs: true,
+        trackCount: 0,
+      ),
+    ],
+  );
+  return MusicProviderDependencies(
+    authenticationGateway: authenticationGateway,
+    home: AuthenticatedHomeDependencies(
+      accountSummaryGateway: _WidgetAccountSummaryGateway(
+        AccountSummaryLoadResult(
+          summary: AuthenticatedAccountSummary(displayName: accountName),
+        ),
+      ),
+      dailyRecommendationGateway: _WidgetDailyRecommendationGateway(
+        DailyRecommendationResult(tracks: dailyTracks),
+      ),
+      personalizedPlaylistsGateway: const _WidgetPersonalizedPlaylistsGateway(
+        PersonalizedPlaylistsResult(),
+      ),
+      personalizedTracksGateway: _WidgetPersonalizedTracksGateway(
+        PersonalizedTracksResult(tracks: personalizedTracks),
+      ),
+      relatedTracksGateway: const _WidgetRelatedTracksGateway(
+        RelatedTracksResult(),
+      ),
+    ),
+    library: AuthenticatedLibraryDependencies(
+      libraryGateway: _WidgetLibraryGateway([
+        libraryResult,
+        libraryResult,
+        libraryResult,
+      ]),
+      playlistDetailGateway: _WidgetDetailGateway([
+        const PlaylistTrackPageResult(),
+      ]),
+      albumTrackGateway: _WidgetAlbumGateway(const AlbumTrackPageResult()),
+      albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
+      artistTrackGateway: _WidgetArtistGateway(const ArtistTrackPageResult()),
+      artistAlbumGateway: _WidgetArtistAlbumGateway(
+        const ArtistAlbumPageResult(),
+      ),
+      favoriteAlbumGateway: _WidgetFavoriteAlbumGateway(
+        const FavoriteAlbumPageResult(),
+      ),
+      favoriteArtistGateway: _WidgetFavoriteArtistGateway(
+        const FavoriteArtistPageResult(),
+      ),
+    ),
+    discovery: AuthenticatedDiscoveryDependencies(
+      trackSearchGateway: searchGateway,
+      artistSearchGateway: _WidgetArtistSearchGateway(
+        const ArtistSearchPageResult(),
+      ),
+      albumSearchGateway: _WidgetAlbumSearchGateway(
+        const AlbumSearchPageResult(),
+      ),
+      playlistSearchGateway: _WidgetPlaylistSearchGateway(
+        const PlaylistSearchPageResult(),
+      ),
+      recommendedPlaylistGateway:
+          recommendedPlaylistGateway ??
+          _WidgetRecommendedPlaylistGateway(
+            RecommendedPlaylistPageResult(
+              playlists: [
+                RecommendedPlaylistSummary(
+                  providerId: providerId,
+                  opaqueId: 'public-playlist',
+                  title: '$accountName Public Playlist',
+                  trackCount: 20,
+                ),
+              ],
+            ),
+          ),
+      newAlbumGateway: _WidgetNewAlbumGateway(
+        NewAlbumPageResult(region: initialAlbumRegion),
+      ),
+      newSongGateway: _WidgetNewSongGateway({
+        initialNewSongCategory: NewSongResult(
+          category: initialNewSongCategory,
+          tracks: newSongs,
+        ),
+      }),
+      rankingGateway: _WidgetRankingGateway(
+        const RankingGroupResult(),
+        const RankingTrackPageResult(),
+      ),
+      radarGateway: _WidgetRadarGateway(const RadarTrackPageResult(page: 1)),
+    ),
+    capabilities: capabilities,
+    initialCredentialRestore: CredentialRestoreResult.signedOut,
+  );
+}
+
+class _LoginProviderHarness extends StatefulWidget {
+  const _LoginProviderHarness({
+    required this.qq,
+    required this.netEase,
+    super.key,
+  });
+
+  final MusicProviderDependencies qq;
+  final MusicProviderDependencies netEase;
+
+  @override
+  State<_LoginProviderHarness> createState() => _LoginProviderHarnessState();
+}
+
+class _LoginProviderHarnessState extends State<_LoginProviderHarness> {
+  AppMusicProvider _provider = AppMusicProvider.qqMusic;
+  late final AuthenticatedPlaybackDependencies _playback =
+      AuthenticatedPlaybackDependencies(
+        mediaResolutionGateway: const _UnavailableMediaGateway(),
+        lyricGateway: const _WidgetLyricGateway(),
+        playbackQueueGateway: _WidgetPlaybackQueueGateway(),
+        trackCommentGateway: const RustTrackCommentGateway(),
+        audioEngine: AudioplayersForegroundAudioEngine(),
+      );
+
+  void select(AppMusicProvider provider) =>
+      setState(() => _provider = provider);
+
+  @override
+  Widget build(BuildContext context) {
+    final dependencies = switch (_provider) {
+      AppMusicProvider.qqMusic => widget.qq,
+      AppMusicProvider.netEaseCloudMusic => widget.netEase,
+    };
+    final settings = AppSettings.defaults.copyWith(musicProvider: _provider);
+    return MaterialApp(
+      theme: ThemeData(useMaterial3: true),
+      home: LoginPage(
+        bootstrap: _dualProviderBootstrap,
+        authenticationGateway: dependencies.authenticationGateway,
+        homeDependencies: dependencies.home,
+        libraryDependencies: dependencies.library,
+        discoveryDependencies: dependencies.discovery,
+        playbackDependencies: _playback,
+        capabilities: dependencies.capabilities,
+        desktopQuickLoginEnabled: dependencies.desktopQuickLoginEnabled,
+        settings: settings,
+        onSettingsChanged: (next) async {
+          select(next.musicProvider);
+          return AppSettingsWriteResult.saved;
+        },
+        initialCredentialRestore: dependencies.initialCredentialRestore,
+      ),
+    );
+  }
+}
 
 class _WidgetSettingsDocumentStorage implements AppSettingsDocumentStorage {
   String? document;
@@ -8351,6 +8930,69 @@ class _WidgetGateway
       authenticated = false;
     }
     return result;
+  }
+}
+
+class _ProviderWidgetGateway
+    implements
+        QqMusicAuthenticationGateway,
+        ProviderAuthenticationPresentation {
+  _ProviderWidgetGateway({
+    required this.providerDisplayName,
+    required this.qrActionLabel,
+    this.authenticated = false,
+  });
+
+  @override
+  final String providerDisplayName;
+
+  @override
+  final String qrActionLabel;
+
+  bool authenticated;
+  int restoreCalls = 0;
+  int signOutCalls = 0;
+
+  @override
+  bool get hasAuthenticatedCredential => authenticated;
+
+  @override
+  LoginStartOperation beginStart() => _WidgetStartOperation(
+    LoginStart(
+      session: _WaitingSession(),
+      challenge: LoginChallenge(
+        imageFormat: LoginImageFormat.png,
+        imageBytes: Uint8List.fromList(
+          base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'
+            'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          ),
+        ),
+      ),
+    ),
+  );
+
+  @override
+  CredentialVerificationOperation beginCredentialVerification() =>
+      const _ImmediateWidgetVerification(
+        CredentialVerificationResult.noRestoredCredential,
+      );
+
+  @override
+  Future<CredentialPersistenceResult> persistAuthenticatedCredential() async =>
+      CredentialPersistenceResult.stored;
+
+  @override
+  Future<CredentialRestoreResult> restoreCredential() async {
+    restoreCalls += 1;
+    return CredentialRestoreResult.signedOut;
+  }
+
+  @override
+  Future<CredentialSignOutResult> signOut() async {
+    signOutCalls += 1;
+    authenticated = false;
+    return CredentialSignOutResult.signedOut;
   }
 }
 
