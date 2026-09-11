@@ -10,6 +10,7 @@ import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 
 class RankingPage extends StatefulWidget {
   const RankingPage({
@@ -113,17 +114,21 @@ class _RankingPageState extends State<RankingPage> {
       key: ValueKey('ranking-tracks-loading'),
       label: 'Loading Ranking Tracks',
     ),
-    RankingTrackStage.empty => const MusicContentStatePanel(
-      key: ValueKey('ranking-tracks-empty'),
+    RankingTrackStage.empty => MusicContentStatePanel(
+      key: const ValueKey('ranking-tracks-empty'),
       icon: Icons.leaderboard_outlined,
       title: 'This ranking has no available Tracks',
-      detail: 'QQ Music returned an empty current-ranking Track list.',
+      detail:
+          '${builtInProviderDisplayName(widget.ranking.providerId)} returned an empty current-ranking Track list.',
     ),
     RankingTrackStage.error => MusicContentStatePanel(
       key: const ValueKey('ranking-tracks-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this ranking',
-      detail: rankingFailureCopy(_controller.failure),
+      detail: rankingFailureCopy(
+        _controller.failure,
+        providerName: builtInProviderDisplayName(widget.ranking.providerId),
+      ),
       liveRegion: true,
       action: _controller.canRetry
           ? FilledButton.tonal(
@@ -518,14 +523,17 @@ class RankingArtwork extends StatelessWidget {
   }
 }
 
-String rankingFailureCopy(RankingFailure? failure) => switch (failure) {
+String rankingFailureCopy(
+  RankingFailure? failure, {
+  String providerName = 'QQ Music',
+}) => switch (failure) {
   RankingFailure.network => 'Check your connection and try again.',
   RankingFailure.serviceUnavailable =>
-    'QQ Music rankings are temporarily unavailable.',
+    '$providerName rankings are temporarily unavailable.',
   RankingFailure.cancelled => 'The ranking request was cancelled.',
   RankingFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   RankingFailure.invalidResponse ||
   RankingFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected ranking response.',
+  null => '$providerName returned an unexpected ranking response.',
 };

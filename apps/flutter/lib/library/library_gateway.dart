@@ -56,23 +56,28 @@ typedef UserLibraryLoadOperationFactory = UserLibraryLoadOperation Function();
 
 class RustUserLibraryGateway implements UserLibraryGateway {
   RustUserLibraryGateway({
+    this.providerId = 'qq-music',
     CredentialVault? credentialVault,
-    UserLibraryLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustUserLibraryLoad,
-       _credentialVault = SerializedCredentialVault(
+    this.operationFactory,
+  }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
 
   final CredentialVault _credentialVault;
-  final UserLibraryLoadOperationFactory _operationFactory;
+  final String providerId;
+  final UserLibraryLoadOperationFactory? operationFactory;
 
   @override
-  UserLibraryLoadOperation beginLoad() =>
-      _VaultCleaningLibraryLoadOperation(_operationFactory(), _credentialVault);
+  UserLibraryLoadOperation beginLoad() => _VaultCleaningLibraryLoadOperation(
+    operationFactory?.call() ?? _beginRustUserLibraryLoad(providerId),
+    _credentialVault,
+  );
 }
 
-UserLibraryLoadOperation _beginRustUserLibraryLoad() =>
-    _RustUserLibraryLoadOperation(bridge.beginQqMusicUserPlaylistLoad());
+UserLibraryLoadOperation _beginRustUserLibraryLoad(String providerId) =>
+    _RustUserLibraryLoadOperation(
+      bridge.beginQqMusicUserPlaylistLoad(providerId: providerId),
+    );
 
 class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
   const _RustUserLibraryLoadOperation(this._handle);

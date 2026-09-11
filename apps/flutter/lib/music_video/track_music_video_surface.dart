@@ -9,6 +9,7 @@ import 'package:flutterustmusic/music_video/track_music_video_engine.dart';
 import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 Future<void> showTrackMusicVideoSurface({
@@ -158,11 +159,12 @@ class _TrackMusicVideoPanelState extends State<TrackMusicVideoPanel> {
       key: ValueKey('track-music-video-loading'),
       label: 'Loading music video',
     ),
-    TrackMusicVideoStage.unavailable => const MusicContentStatePanel(
-      key: ValueKey('track-music-video-unavailable'),
+    TrackMusicVideoStage.unavailable => MusicContentStatePanel(
+      key: const ValueKey('track-music-video-unavailable'),
       icon: Icons.music_video_outlined,
       title: 'No music video for this Track',
-      detail: 'QQ Music did not associate an MV with this Track.',
+      detail:
+          '${builtInProviderDisplayName(widget.track.providerId)} did not associate an MV with this Track.',
     ),
     TrackMusicVideoStage.error => MusicContentStatePanel(
       key: const ValueKey('track-music-video-error'),
@@ -170,7 +172,10 @@ class _TrackMusicVideoPanelState extends State<TrackMusicVideoPanel> {
       title: _controller.failure == TrackMusicVideoFailure.sourceUnavailable
           ? 'Music video unavailable'
           : 'Couldn’t play music video',
-      detail: _failureCopy(_controller.failure),
+      detail: _failureCopy(
+        _controller.failure,
+        builtInProviderDisplayName(widget.track.providerId),
+      ),
       action: _controller.canRetry
           ? FilledButton.tonal(
               key: const ValueKey('track-music-video-retry'),
@@ -322,15 +327,18 @@ String _formatDuration(Duration value) {
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }
 
-String _failureCopy(TrackMusicVideoFailure? failure) => switch (failure) {
+String _failureCopy(
+  TrackMusicVideoFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
   TrackMusicVideoFailure.sourceUnavailable =>
-    'QQ Music did not provide a supported playable MV source.',
+    '$providerDisplayName did not provide a supported playable MV source.',
   TrackMusicVideoFailure.network =>
-    'The MV request could not reach QQ Music. Check your connection.',
+    'The MV request could not reach $providerDisplayName. Check your connection.',
   TrackMusicVideoFailure.serviceUnavailable =>
-    'QQ Music could not serve this MV right now.',
+    '$providerDisplayName could not serve this MV right now.',
   TrackMusicVideoFailure.invalidResponse =>
-    'QQ Music returned MV data the app could not safely use.',
+    '$providerDisplayName returned MV data the app could not safely use.',
   TrackMusicVideoFailure.cancelled => 'The MV request was cancelled.',
   TrackMusicVideoFailure.alreadyRunning =>
     'Another MV request is already running. Try again shortly.',

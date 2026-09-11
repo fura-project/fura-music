@@ -13,6 +13,7 @@ import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 
 class ArtistPage extends StatefulWidget {
   const ArtistPage({
@@ -200,17 +201,21 @@ class _ArtistPageState extends State<ArtistPage> {
       key: ValueKey('artist-loading'),
       label: 'Loading Artist Tracks',
     ),
-    ArtistTrackStage.empty => const MusicContentStatePanel(
-      key: ValueKey('artist-empty'),
+    ArtistTrackStage.empty => MusicContentStatePanel(
+      key: const ValueKey('artist-empty'),
       icon: Icons.person_off_outlined,
       title: 'This Artist has no available Tracks',
-      detail: 'QQ Music returned an empty Artist Track list.',
+      detail:
+          '${builtInProviderDisplayName(widget.artist.providerId)} returned an empty Artist Track list.',
     ),
     ArtistTrackStage.error => MusicContentStatePanel(
       key: const ValueKey('artist-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this Artist',
-      detail: _failureCopy(_controller.failure),
+      detail: _failureCopy(
+        _controller.failure,
+        builtInProviderDisplayName(widget.artist.providerId),
+      ),
       liveRegion: true,
       action: _controller.canRetry
           ? FilledButton.tonal(
@@ -240,17 +245,21 @@ class _ArtistPageState extends State<ArtistPage> {
       key: ValueKey('artist-albums-loading'),
       label: 'Loading Artist Albums',
     ),
-    ArtistAlbumStage.empty => const MusicContentStatePanel(
-      key: ValueKey('artist-albums-empty'),
+    ArtistAlbumStage.empty => MusicContentStatePanel(
+      key: const ValueKey('artist-albums-empty'),
       icon: Icons.album_outlined,
       title: 'This Artist has no available Albums',
-      detail: 'QQ Music returned an empty Artist Album list.',
+      detail:
+          '${builtInProviderDisplayName(widget.artist.providerId)} returned an empty Artist Album list.',
     ),
     ArtistAlbumStage.error => MusicContentStatePanel(
       key: const ValueKey('artist-albums-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this Artist’s Albums',
-      detail: _albumFailureCopy(_albumController.failure),
+      detail: _albumFailureCopy(
+        _albumController.failure,
+        builtInProviderDisplayName(widget.artist.providerId),
+      ),
       liveRegion: true,
       action: _albumController.canRetry
           ? FilledButton.tonal(
@@ -775,26 +784,28 @@ class _ArtistFooter extends StatelessWidget {
   );
 }
 
-String _failureCopy(ArtistTrackFailure? failure) => switch (failure) {
-  ArtistTrackFailure.network => 'Check your connection and try again.',
-  ArtistTrackFailure.serviceUnavailable =>
-    'QQ Music Artist browsing is temporarily unavailable.',
-  ArtistTrackFailure.cancelled => 'The Artist request was cancelled.',
-  ArtistTrackFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  ArtistTrackFailure.invalidResponse ||
-  ArtistTrackFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected Artist response.',
-};
+String _failureCopy(ArtistTrackFailure? failure, String providerName) =>
+    switch (failure) {
+      ArtistTrackFailure.network => 'Check your connection and try again.',
+      ArtistTrackFailure.serviceUnavailable =>
+        '$providerName Artist browsing is temporarily unavailable.',
+      ArtistTrackFailure.cancelled => 'The Artist request was cancelled.',
+      ArtistTrackFailure.coreUnavailable =>
+        'The local music core is unavailable. Restart the app and try again.',
+      ArtistTrackFailure.invalidResponse ||
+      ArtistTrackFailure.alreadyRunning ||
+      null => '$providerName returned an unexpected Artist response.',
+    };
 
-String _albumFailureCopy(ArtistAlbumFailure? failure) => switch (failure) {
-  ArtistAlbumFailure.network => 'Check your connection and try again.',
-  ArtistAlbumFailure.serviceUnavailable =>
-    'QQ Music Artist Album browsing is temporarily unavailable.',
-  ArtistAlbumFailure.cancelled => 'The Artist Album request was cancelled.',
-  ArtistAlbumFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  ArtistAlbumFailure.invalidResponse ||
-  ArtistAlbumFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected Artist Album response.',
-};
+String _albumFailureCopy(ArtistAlbumFailure? failure, String providerName) =>
+    switch (failure) {
+      ArtistAlbumFailure.network => 'Check your connection and try again.',
+      ArtistAlbumFailure.serviceUnavailable =>
+        '$providerName Artist Album browsing is temporarily unavailable.',
+      ArtistAlbumFailure.cancelled => 'The Artist Album request was cancelled.',
+      ArtistAlbumFailure.coreUnavailable =>
+        'The local music core is unavailable. Restart the app and try again.',
+      ArtistAlbumFailure.invalidResponse ||
+      ArtistAlbumFailure.alreadyRunning ||
+      null => '$providerName returned an unexpected Artist Album response.',
+    };

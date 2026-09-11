@@ -29,31 +29,40 @@ class RecommendedPlaylistsPage extends StatefulWidget {
     required this.newSongGateway,
     required this.rankingGateway,
     required this.radarGateway,
+    this.radarEnabled = true,
+    this.supportedNewAlbumRegions = NewAlbumRegion.values,
+    this.supportedNewSongCategories = NewSongCategory.values,
     required this.queuePlaybackController,
     required this.onBack,
     required this.onOpenPlaylist,
     required this.onOpenRanking,
     required this.onOpenAlbum,
     required this.onSignInAgain,
+    this.providerDisplayName = 'QQ Music',
     this.controller,
     this.onOpenTrackAlbum,
     this.onOpenTrackArtist,
     this.onHeaderCollapsedChanged,
     this.embedded = false,
     super.key,
-  });
+  }) : assert(supportedNewAlbumRegions.length > 0),
+       assert(supportedNewSongCategories.length > 0);
 
   final RecommendedPlaylistGateway gateway;
   final NewAlbumGateway newAlbumGateway;
   final NewSongGateway newSongGateway;
   final RankingGateway rankingGateway;
   final RadarGateway radarGateway;
+  final bool radarEnabled;
+  final List<NewAlbumRegion> supportedNewAlbumRegions;
+  final List<NewSongCategory> supportedNewSongCategories;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final ValueChanged<RecommendedPlaylistSummary> onOpenPlaylist;
   final ValueChanged<RankingSummary> onOpenRanking;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
+  final String providerDisplayName;
   final RecommendedPlaylistController? controller;
   final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
   final ValueChanged<ArtistSummary>? onOpenTrackArtist;
@@ -82,24 +91,41 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
   bool _newAlbumsVisited = false;
   bool _newSongsVisited = false;
 
+  List<_DiscoverType> get _types => [
+    _DiscoverType.playlists,
+    _DiscoverType.rankings,
+    if (widget.radarEnabled) _DiscoverType.radar,
+    _DiscoverType.newAlbums,
+    _DiscoverType.newSongs,
+  ];
+
   @override
   void initState() {
     super.initState();
     _ownsPlaylistController = widget.controller == null;
     _controller =
         widget.controller ?? RecommendedPlaylistController(widget.gateway);
-    _newAlbumController = NewAlbumController(widget.newAlbumGateway);
-    _newSongController = NewSongController(widget.newSongGateway);
+    _newAlbumController = NewAlbumController(
+      widget.newAlbumGateway,
+      initialRegion:
+          widget.supportedNewAlbumRegions.contains(NewAlbumRegion.mainlandChina)
+          ? NewAlbumRegion.mainlandChina
+          : widget.supportedNewAlbumRegions.first,
+    );
+    _newSongController = NewSongController(
+      widget.newSongGateway,
+      initialCategory:
+          widget.supportedNewSongCategories.contains(NewSongCategory.latest)
+          ? NewSongCategory.latest
+          : widget.supportedNewSongCategories.first,
+    );
     _rankingController = RankingGroupController(widget.rankingGateway);
     _radarController = RadarController(
       widget.radarGateway,
       initialPrefetchTarget: 10,
       maxInitialPrefetchPages: 2,
     );
-    _tabController = TabController(
-      length: _DiscoverType.values.length,
-      vsync: this,
-    );
+    _tabController = TabController(length: _types.length, vsync: this);
     if (_ownsPlaylistController) unawaited(_controller.load());
   }
 
@@ -139,8 +165,12 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
                 _DiscoverHeader(
                   desktop: desktop,
                   collapsed: _headerCollapsed,
+                  subtitle: widget.radarEnabled
+                      ? 'Playlists, charts, Radar, and new releases from ${widget.providerDisplayName}'
+                      : 'Playlists, charts, and new releases from ${widget.providerDisplayName}',
                   tabs: _DiscoverTabs(
                     controller: _tabController,
+                    types: _types,
                     onSelected: _selectType,
                   ),
                 ),
@@ -189,11 +219,12 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       key: ValueKey('recommendations-loading'),
       label: 'Loading Recommended Playlists',
     ),
-    RecommendedPlaylistStage.empty => const MusicContentStatePanel(
+    RecommendedPlaylistStage.empty => MusicContentStatePanel(
       key: ValueKey('recommendations-empty'),
       icon: Icons.explore_off_outlined,
       title: 'No recommendations right now',
-      detail: 'QQ Music returned an empty recommended-playlist page.',
+      detail:
+          '${widget.providerDisplayName} returned an empty recommended-playlist page.',
     ),
     RecommendedPlaylistStage.error => MusicContentStatePanel(
       key: const ValueKey('recommendations-error'),
@@ -223,15 +254,15 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
 
   Widget _rankingBody(double bottomPadding) =>
       switch (_rankingController.stage) {
-        RankingGroupStage.loading => const MusicLoadingPanel(
+        RankingGroupStage.loading => MusicLoadingPanel(
           key: ValueKey('rankings-loading'),
-          label: 'Loading QQ Music Rankings',
+          label: 'Loading ${widget.providerDisplayName} Rankings',
         ),
-        RankingGroupStage.empty => const MusicContentStatePanel(
+        RankingGroupStage.empty => MusicContentStatePanel(
           key: ValueKey('rankings-empty'),
           icon: Icons.leaderboard_outlined,
           title: 'No rankings right now',
-          detail: 'QQ Music returned no current ranking groups.',
+          detail: '${widget.providerDisplayName} returned no current rankings.',
         ),
         RankingGroupStage.error => MusicContentStatePanel(
           key: const ValueKey('rankings-error'),
@@ -296,6 +327,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
   Widget _newAlbumBody(double bottomPadding) => _NewAlbumShell(
     key: const ValueKey('new-albums-shell'),
     region: _newAlbumController.region,
+    regions: widget.supportedNewAlbumRegions,
     onRegionSelected: _newAlbumController.selectRegion,
     child: AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
@@ -304,11 +336,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
           key: ValueKey('new-albums-loading'),
           label: 'Loading New Albums',
         ),
-        NewAlbumStage.empty => const MusicContentStatePanel(
+        NewAlbumStage.empty => MusicContentStatePanel(
           key: ValueKey('new-albums-empty'),
           icon: Icons.album_outlined,
           title: 'No new albums right now',
-          detail: 'QQ Music returned an empty page for this region.',
+          detail: '${widget.providerDisplayName} returned no albums here.',
         ),
         NewAlbumStage.error => MusicContentStatePanel(
           key: const ValueKey('new-albums-error'),
@@ -342,6 +374,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
   Widget _newSongBody(double bottomPadding) => _NewSongShell(
     key: const ValueKey('new-songs-shell'),
     category: _newSongController.category,
+    categories: widget.supportedNewSongCategories,
     onCategorySelected: _newSongController.selectCategory,
     onPlay:
         _newSongController.stage == NewSongStage.content &&
@@ -355,11 +388,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
           key: ValueKey('new-songs-loading'),
           label: 'Loading New Songs',
         ),
-        NewSongStage.empty => const MusicContentStatePanel(
+        NewSongStage.empty => MusicContentStatePanel(
           key: ValueKey('new-songs-empty'),
           icon: Icons.music_off_rounded,
           title: 'No new songs right now',
-          detail: 'QQ Music returned no Tracks for this category.',
+          detail: '${widget.providerDisplayName} returned no Tracks here.',
         ),
         NewSongStage.error => MusicContentStatePanel(
           key: const ValueKey('new-songs-error'),
@@ -454,8 +487,10 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
 
   void _selectType(_DiscoverType type) {
     if (_type == type) return;
-    if (_tabController.index != type.index) {
-      _tabController.animateTo(type.index);
+    final tabIndex = _types.indexOf(type);
+    if (tabIndex < 0) return;
+    if (_tabController.index != tabIndex) {
+      _tabController.animateTo(tabIndex);
     }
     setState(() => _type = type);
     _setHeaderCollapsed(false);
@@ -512,11 +547,13 @@ class _DiscoverHeader extends StatelessWidget {
   const _DiscoverHeader({
     required this.desktop,
     required this.collapsed,
+    required this.subtitle,
     required this.tabs,
   });
 
   final bool desktop;
   final bool collapsed;
+  final String subtitle;
   final Widget tabs;
 
   @override
@@ -569,7 +606,7 @@ class _DiscoverHeader extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Playlists, charts, Radar, and new releases from QQ Music',
+                            subtitle,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: Theme.of(context)
@@ -594,9 +631,14 @@ class _DiscoverHeader extends StatelessWidget {
 }
 
 class _DiscoverTabs extends StatelessWidget {
-  const _DiscoverTabs({required this.controller, required this.onSelected});
+  const _DiscoverTabs({
+    required this.controller,
+    required this.types,
+    required this.onSelected,
+  });
 
   final TabController controller;
+  final List<_DiscoverType> types;
   final ValueChanged<_DiscoverType> onSelected;
 
   @override
@@ -610,9 +652,9 @@ class _DiscoverTabs extends StatelessWidget {
     indicatorSize: TabBarIndicatorSize.label,
     indicatorWeight: 3,
     labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-    onTap: (index) => onSelected(_DiscoverType.values[index]),
+    onTap: (index) => onSelected(types[index]),
     tabs: [
-      for (final type in _DiscoverType.values)
+      for (final type in types)
         Tab(
           key: ValueKey(switch (type) {
             _DiscoverType.playlists => 'discover-type-playlists',
@@ -637,6 +679,7 @@ class _DiscoverTabs extends StatelessWidget {
 class _NewSongShell extends StatelessWidget {
   const _NewSongShell({
     required this.category,
+    required this.categories,
     required this.onCategorySelected,
     required this.onPlay,
     required this.child,
@@ -644,6 +687,7 @@ class _NewSongShell extends StatelessWidget {
   });
 
   final NewSongCategory category;
+  final List<NewSongCategory> categories;
   final ValueChanged<NewSongCategory> onCategorySelected;
   final VoidCallback? onPlay;
   final Widget child;
@@ -658,6 +702,7 @@ class _NewSongShell extends StatelessWidget {
             Expanded(
               child: _NewSongCategoryPicker(
                 category: category,
+                categories: categories,
                 onSelected: onCategorySelected,
                 padding: EdgeInsets.zero,
               ),
@@ -762,11 +807,13 @@ class _NewSongCollection extends StatelessWidget {
 class _NewSongCategoryPicker extends StatelessWidget {
   const _NewSongCategoryPicker({
     required this.category,
+    required this.categories,
     required this.onSelected,
     this.padding = const EdgeInsets.fromLTRB(20, 4, 20, 12),
   });
 
   final NewSongCategory category;
+  final List<NewSongCategory> categories;
   final ValueChanged<NewSongCategory> onSelected;
   final EdgeInsetsGeometry padding;
 
@@ -777,7 +824,7 @@ class _NewSongCategoryPicker extends StatelessWidget {
     padding: padding,
     child: SegmentedButton<NewSongCategory>(
       segments: [
-        for (final value in NewSongCategory.values)
+        for (final value in categories)
           ButtonSegment(
             value: value,
             label: Text(
@@ -797,19 +844,25 @@ class _NewSongCategoryPicker extends StatelessWidget {
 class _NewAlbumShell extends StatelessWidget {
   const _NewAlbumShell({
     required this.region,
+    required this.regions,
     required this.onRegionSelected,
     required this.child,
     super.key,
   });
 
   final NewAlbumRegion region;
+  final List<NewAlbumRegion> regions;
   final ValueChanged<NewAlbumRegion> onRegionSelected;
   final Widget child;
 
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      _NewAlbumRegionPicker(region: region, onSelected: onRegionSelected),
+      _NewAlbumRegionPicker(
+        region: region,
+        regions: regions,
+        onSelected: onRegionSelected,
+      ),
       Expanded(child: child),
     ],
   );
@@ -898,9 +951,14 @@ class _NewAlbumCollection extends StatelessWidget {
 }
 
 class _NewAlbumRegionPicker extends StatelessWidget {
-  const _NewAlbumRegionPicker({required this.region, required this.onSelected});
+  const _NewAlbumRegionPicker({
+    required this.region,
+    required this.regions,
+    required this.onSelected,
+  });
 
   final NewAlbumRegion region;
+  final List<NewAlbumRegion> regions;
   final ValueChanged<NewAlbumRegion> onSelected;
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -909,7 +967,7 @@ class _NewAlbumRegionPicker extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
     child: SegmentedButton<NewAlbumRegion>(
       segments: [
-        for (final value in NewAlbumRegion.values)
+        for (final value in regions)
           ButtonSegment(
             value: value,
             label: Text(
@@ -1866,7 +1924,7 @@ class _RecommendationGridItem extends StatelessWidget {
         Text(
           playlist.trackCount != null
               ? '${playlist.trackCount} tracks'
-              : 'QQ Music playlist',
+              : 'Music service playlist',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall
@@ -1964,14 +2022,14 @@ bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
 String _failureCopy(RecommendedPlaylistFailure? failure) => switch (failure) {
   RecommendedPlaylistFailure.network => 'Check your connection and try again.',
   RecommendedPlaylistFailure.serviceUnavailable =>
-    'QQ Music recommendations are temporarily unavailable.',
+    'Recommendations are temporarily unavailable.',
   RecommendedPlaylistFailure.cancelled =>
     'The recommendation request was cancelled.',
   RecommendedPlaylistFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   RecommendedPlaylistFailure.invalidResponse ||
   RecommendedPlaylistFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected recommendation response.',
+  null => 'The music service returned an unexpected recommendation response.',
 };
 
 bool _radarRequiresSignIn(RadarFailure? failure) =>
@@ -2012,13 +2070,13 @@ String newAlbumRegionLabel(NewAlbumRegion region) => switch (region) {
 String newAlbumFailureCopy(NewAlbumFailure? failure) => switch (failure) {
   NewAlbumFailure.network => 'Check your connection and try again.',
   NewAlbumFailure.serviceUnavailable =>
-    'QQ Music new albums are temporarily unavailable.',
+    'New albums are temporarily unavailable.',
   NewAlbumFailure.cancelled => 'The new-album request was cancelled.',
   NewAlbumFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   NewAlbumFailure.invalidResponse ||
   NewAlbumFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected new-album response.',
+  null => 'The music service returned an unexpected new-album response.',
 };
 
 String newSongCategoryLabel(NewSongCategory category) => switch (category) {
@@ -2032,12 +2090,11 @@ String newSongCategoryLabel(NewSongCategory category) => switch (category) {
 
 String newSongFailureCopy(NewSongFailure? failure) => switch (failure) {
   NewSongFailure.network => 'Check your connection and try again.',
-  NewSongFailure.serviceUnavailable =>
-    'QQ Music new songs are temporarily unavailable.',
+  NewSongFailure.serviceUnavailable => 'New songs are temporarily unavailable.',
   NewSongFailure.cancelled => 'The new-song request was cancelled.',
   NewSongFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   NewSongFailure.invalidResponse ||
   NewSongFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected new-song response.',
+  null => 'The music service returned an unexpected new-song response.',
 };

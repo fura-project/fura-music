@@ -31,6 +31,7 @@ class LikedSongsPage extends StatefulWidget {
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
     this.collapsedHeaderActions,
+    this.providerDisplayName = 'QQ Music',
     super.key,
   });
 
@@ -48,6 +49,7 @@ class LikedSongsPage extends StatefulWidget {
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
   final Widget? collapsedHeaderActions;
+  final String providerDisplayName;
 
   @override
   State<LikedSongsPage> createState() => _LikedSongsPageState();
@@ -264,7 +266,10 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                   controller?.refreshFailure != null)
                 LibraryRefreshFailureBanner(
                   key: const ValueKey('liked-songs-refresh-failure'),
-                  message: _refreshFailureCopy(controller!.refreshFailure!),
+                  message: _refreshFailureCopy(
+                    controller!.refreshFailure!,
+                    widget.providerDisplayName,
+                  ),
                   canRetry: controller.canRetryRefresh,
                   onRetry: controller.retryRefresh,
                   onDismiss: controller.dismissRefreshFailure,
@@ -291,6 +296,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                           onOpenPlaylist: widget.onOpenPlaylist,
                           lastOpenedPlaylist: widget.lastOpenedPlaylist,
                           returnFocusNode: widget.playlistReturnFocusNode,
+                          providerDisplayName: widget.providerDisplayName,
                         ),
                       ),
                       _RetainedLikedSection(
@@ -309,15 +315,17 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                                 embedded: true,
                                 showHeader: false,
                                 filterQuery: _query,
+                                providerDisplayName: widget.providerDisplayName,
                               )
                             : const SizedBox.shrink(),
                       ),
-                      const _RetainedLikedSection(
+                      _RetainedLikedSection(
                         child: _UnavailableLikedCollection(
-                          key: ValueKey('liked-programs-unavailable'),
+                          key: const ValueKey('liked-programs-unavailable'),
                           icon: Icons.podcasts_rounded,
                           title: '有声节目收藏尚未接入',
-                          detail: '当前 Core 没有经过验证的 QQ Music 有声节目收藏读取能力。',
+                          detail:
+                              '当前 Core 没有经过验证的 ${widget.providerDisplayName} 有声节目收藏读取能力。',
                         ),
                       ),
                       const _RetainedLikedSection(
@@ -346,20 +354,20 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   }) {
     final controller = _controller;
     if (controller == null) {
-      return const _LikedSongsMessage(
-        key: ValueKey('liked-songs-unavailable'),
+      return _LikedSongsMessage(
+        key: const ValueKey('liked-songs-unavailable'),
         icon: Icons.favorite_border_rounded,
         title: '暂时无法找到喜欢歌单',
-        detail: 'QQ Music 未返回内建喜欢歌单；其他收藏仍可从上方标签进入。',
+        detail: '${widget.providerDisplayName} 未返回内建喜欢歌单；其他收藏仍可从上方标签进入。',
       );
     }
     return switch (controller.stage) {
-      PlaylistDetailStage.loading => const _LikedSongsMessage(
-        key: ValueKey('liked-songs-loading'),
+      PlaylistDetailStage.loading => _LikedSongsMessage(
+        key: const ValueKey('liked-songs-loading'),
         loading: true,
         icon: Icons.favorite_rounded,
         title: '正在加载喜欢的歌曲…',
-        detail: '正在从 QQ Music 读取收藏。',
+        detail: '正在从 ${widget.providerDisplayName} 读取收藏。',
       ),
       PlaylistDetailStage.content when tracks.isEmpty => _searchEmpty(
         controller,
@@ -397,14 +405,15 @@ class _LikedSongsPageState extends State<LikedSongsPage>
           ),
         ),
       ),
-      PlaylistDetailStage.empty => const _LikedSongsMessage(
-        key: ValueKey('liked-songs-empty'),
+      PlaylistDetailStage.empty => _LikedSongsMessage(
+        key: const ValueKey('liked-songs-empty'),
         icon: Icons.favorite_border_rounded,
         title: '还没有喜欢的歌曲',
-        detail: '在 QQ Music 中喜欢的歌曲会显示在这里。',
+        detail: '在 ${widget.providerDisplayName} 中喜欢的歌曲会显示在这里。',
       ),
       PlaylistDetailStage.error => _LikedSongsFailure(
         failure: controller.failure,
+        providerDisplayName: widget.providerDisplayName,
         canRetry: controller.canRetry,
         showSignInAgain: false,
         onRetry: controller.retry,
@@ -413,6 +422,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       PlaylistDetailStage.authenticationRequired ||
       PlaylistDetailStage.credentialRejected => _LikedSongsFailure(
         failure: controller.failure,
+        providerDisplayName: widget.providerDisplayName,
         canRetry: false,
         showSignInAgain: true,
         onRetry: controller.retry,
@@ -729,6 +739,7 @@ class _LikedPlaylistsCollection extends StatelessWidget {
     required this.onOpenPlaylist,
     required this.lastOpenedPlaylist,
     required this.returnFocusNode,
+    required this.providerDisplayName,
   });
 
   final List<UserPlaylistSummary> playlists;
@@ -736,6 +747,7 @@ class _LikedPlaylistsCollection extends StatelessWidget {
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final UserPlaylistSummary? lastOpenedPlaylist;
   final FocusNode? returnFocusNode;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -758,7 +770,9 @@ class _LikedPlaylistsCollection extends StatelessWidget {
         key: const ValueKey('liked-playlists-empty'),
         icon: searching ? Icons.search_off_rounded : Icons.queue_music_rounded,
         title: searching ? '未找到匹配的歌单' : '还没有其他歌单',
-        detail: searching ? '请尝试其他关键词。' : '你创建或收藏的 QQ Music 歌单会显示在这里。',
+        detail: searching
+            ? '请尝试其他关键词。'
+            : '你创建或收藏的 $providerDisplayName 歌单会显示在这里。',
       );
     }
     return LayoutBuilder(
@@ -1568,6 +1582,7 @@ class _LikedTrackFooter extends StatelessWidget {
 class _LikedSongsFailure extends StatelessWidget {
   const _LikedSongsFailure({
     required this.failure,
+    required this.providerDisplayName,
     required this.canRetry,
     required this.showSignInAgain,
     required this.onRetry,
@@ -1575,6 +1590,7 @@ class _LikedSongsFailure extends StatelessWidget {
   });
 
   final UserLibraryFailure? failure;
+  final String providerDisplayName;
   final bool canRetry;
   final bool showSignInAgain;
   final VoidCallback onRetry;
@@ -1582,7 +1598,7 @@ class _LikedSongsFailure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final copy = _failureCopy(failure);
+    final copy = _failureCopy(failure, providerDisplayName);
     return _LikedSongsMessage(
       key: const ValueKey('liked-songs-error'),
       icon: showSignInAgain
@@ -1664,10 +1680,13 @@ bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
     left.providerId == right.providerId &&
     left.opaqueId == right.opaqueId;
 
-(String, String) _failureCopy(UserLibraryFailure? failure) => switch (failure) {
+(String, String) _failureCopy(
+  UserLibraryFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
   UserLibraryFailure.network => ('网络不可用', '请检查网络后重试。'),
   UserLibraryFailure.serviceUnavailable => (
-    'QQ Music 暂时无法加载',
+    '$providerDisplayName 暂时无法加载',
     '你的会话状态保持不变，稍后重试即可。',
   ),
   UserLibraryFailure.credentialRejected ||
@@ -1677,16 +1696,19 @@ bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
   ),
   UserLibraryFailure.authenticationRequired ||
   UserLibraryFailure.replaced ||
-  UserLibraryFailure.cancelled => ('需要登录', '请登录 QQ Music 后继续。'),
+  UserLibraryFailure.cancelled => ('需要登录', '请登录 $providerDisplayName 后继续。'),
   UserLibraryFailure.invalidResponse => ('无法安全读取喜欢的歌曲', '请重试；当前结果未被部分显示。'),
   UserLibraryFailure.coreUnavailable ||
   UserLibraryFailure.alreadyRunning => ('无法加载喜欢的歌曲', '请重试，或重启应用后再试。'),
   null => ('无法加载喜欢的歌曲', '请重试。'),
 };
 
-String _refreshFailureCopy(UserLibraryFailure failure) => switch (failure) {
+String _refreshFailureCopy(
+  UserLibraryFailure failure,
+  String providerDisplayName,
+) => switch (failure) {
   UserLibraryFailure.network => '刷新失败：请检查网络。',
-  UserLibraryFailure.serviceUnavailable => 'QQ Music 暂时无法刷新。',
+  UserLibraryFailure.serviceUnavailable => '$providerDisplayName 暂时无法刷新。',
   UserLibraryFailure.invalidResponse => '无法安全读取刷新结果。',
   _ => '刷新失败，仍保留上一次结果。',
 };

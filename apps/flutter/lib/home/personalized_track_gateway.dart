@@ -37,27 +37,28 @@ typedef PersonalizedTracksLoadOperationFactory =
 
 class RustPersonalizedTracksGateway implements PersonalizedTracksGateway {
   RustPersonalizedTracksGateway({
+    this.providerId = 'qq-music',
     CredentialVault? credentialVault,
-    PersonalizedTracksLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad,
-       _credentialVault = SerializedCredentialVault(
+    this.operationFactory,
+  }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
 
   final CredentialVault _credentialVault;
-  final PersonalizedTracksLoadOperationFactory _operationFactory;
+  final String providerId;
+  final PersonalizedTracksLoadOperationFactory? operationFactory;
 
   @override
   PersonalizedTracksLoadOperation beginLoad() =>
       _VaultCleaningPersonalizedTracksLoadOperation(
-        _operationFactory(),
+        operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
       );
 }
 
-PersonalizedTracksLoadOperation _beginRustLoad() =>
+PersonalizedTracksLoadOperation _beginRustLoad(String providerId) =>
     _RustPersonalizedTracksLoadOperation(
-      bridge.beginQqMusicPersonalizedTracksLoad(),
+      bridge.beginQqMusicPersonalizedTracksLoad(providerId: providerId),
     );
 
 class _RustPersonalizedTracksLoadOperation

@@ -56,6 +56,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.capabilities,
     required this.settings,
     required this.onSettingsChanged,
     required this.authenticated,
@@ -69,6 +70,7 @@ class UserLibraryPage extends StatefulWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final MusicProviderCapabilities capabilities;
   final AppSettings settings;
   final Future<AppSettingsWriteResult> Function(AppSettings settings)
   onSettingsChanged;
@@ -527,13 +529,13 @@ class _SettingsShellNavigationTransitionState
 }
 
 class _UserLibraryPageState extends State<UserLibraryPage> {
-  late final UserLibraryController _controller;
-  late final HomeController _homeController;
+  late UserLibraryController _controller;
+  late HomeController _homeController;
   late final QueuePlaybackController _queuePlaybackController;
   late final ArtworkColorSchemeCache _expandedNowPlayingPalette;
-  late final RecommendedPlaylistController _recommendedPlaylistController;
-  late final NewSongController _homeNewSongController;
-  late final RadarController _homeRadarController;
+  late RecommendedPlaylistController _recommendedPlaylistController;
+  late NewSongController _homeNewSongController;
+  late RadarController _homeRadarController;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -555,14 +557,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final FocusNode _backShortcutFallbackFocusNode = FocusNode(
     debugLabel: 'authenticated back shortcut fallback',
   );
-  final PageStorageBucket _pageStorageBucket = PageStorageBucket();
-  final GlobalKey<TrackSearchPageState> _trackSearchPageKey =
+  PageStorageBucket _pageStorageBucket = PageStorageBucket();
+  GlobalKey<TrackSearchPageState> _trackSearchPageKey =
       GlobalKey<TrackSearchPageState>(debugLabel: 'primary track search');
   final TextEditingController _topSearchController = TextEditingController();
   final TextEditingController _settingsSearchController =
       TextEditingController();
-  final AuthenticatedNavigationState _navigation =
-      AuthenticatedNavigationState();
+  AuthenticatedNavigationState _navigation = AuthenticatedNavigationState();
   UserPlaylistSummary? _lastOpenedPlaylist;
   RecommendedPlaylistSummary? _lastOpenedHomeRecommendation;
   bool _handledLyricCredentialRejection = false;
@@ -584,6 +585,22 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   @override
   void initState() {
     super.initState();
+    _initializeProviderControllers();
+    _queuePlaybackController = QueuePlaybackController(
+      _playback.playbackQueueGateway,
+      TrackPlaybackController(
+        _playback.mediaResolutionGateway,
+        ForegroundPlaybackController(_playback.audioEngine),
+      ),
+      lyrics: LyricController(_playback.lyricGateway),
+    );
+    _expandedNowPlayingPalette = ArtworkColorSchemeCache();
+    _playback.systemPlaybackBinding.attach(_queuePlaybackController);
+    _queuePlaybackController.addListener(_onQueuePlaybackChanged);
+    _loadProviderRoot();
+  }
+
+  void _initializeProviderControllers() {
     _controller = UserLibraryController(_library.libraryGateway);
     _homeController = HomeController(
       _home.accountSummaryGateway,
@@ -598,26 +615,65 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     _homeNewSongController = NewSongController(_discovery.newSongGateway);
     _homeRadarController = RadarController(_discovery.radarGateway);
-    _queuePlaybackController = QueuePlaybackController(
-      _playback.playbackQueueGateway,
-      TrackPlaybackController(
-        _playback.mediaResolutionGateway,
-        ForegroundPlaybackController(_playback.audioEngine),
-      ),
-      lyrics: LyricController(_playback.lyricGateway),
-    );
-    _expandedNowPlayingPalette = ArtworkColorSchemeCache();
-    _playback.systemPlaybackBinding.attach(_queuePlaybackController);
-    _queuePlaybackController.addListener(_onQueuePlaybackChanged);
     _homeController.addListener(_onHomeChanged);
     _homeRadarController.addListener(_onHomeChanged);
+  }
+
+  void _loadProviderRoot() {
     unawaited(_recommendedPlaylistController.load());
     unawaited(_homeNewSongController.load());
     if (widget.authenticated) {
       unawaited(_controller.load());
       unawaited(_homeController.load());
-      unawaited(_homeRadarController.load());
+      if (widget.capabilities.radar) {
+        unawaited(_homeRadarController.load());
+      }
     }
+  }
+
+  void _disposeProviderControllers() {
+    _controller.dispose();
+    _homeController.removeListener(_onHomeChanged);
+    _homeController.dispose();
+    _recommendedPlaylistController.dispose();
+    _homeNewSongController.dispose();
+    _homeRadarController.removeListener(_onHomeChanged);
+    _homeRadarController.dispose();
+  }
+
+  @override
+  void didUpdateWidget(UserLibraryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final providerChanged =
+        oldWidget.settings.musicProvider != widget.settings.musicProvider;
+    final authenticationChanged =
+        oldWidget.authenticated != widget.authenticated;
+    if (!providerChanged && !authenticationChanged) return;
+
+    _disposeProviderControllers();
+    _navigation = AuthenticatedNavigationState();
+    _pageStorageBucket = PageStorageBucket();
+    _trackSearchPageKey = GlobalKey<TrackSearchPageState>(
+      debugLabel: 'primary track search',
+    );
+    _topSearchController.clear();
+    _settingsSearchController.clear();
+    _lastOpenedPlaylist = null;
+    _lastOpenedHomeRecommendation = null;
+    _handledLyricCredentialRejection = false;
+    _handledHomeCredentialRejection = false;
+    _overlayPageActive = false;
+    _settingsSection = SettingsSection.appearance;
+    _compactSettingsSectionOpen = false;
+    _settingsSearchQuery = '';
+    _likedHeaderCollapsed = false;
+    _recentHeaderCollapsed = false;
+    _topSearchFocused = false;
+    _discoverHeaderCollapsed = false;
+    _collectionDetailHeaderCollapsed = false;
+    _collectionDetailCollapsedByRoute.clear();
+    _initializeProviderControllers();
+    _loadProviderRoot();
   }
 
   AuthenticatedHomeDependencies get _home => widget.homeDependencies;
@@ -689,13 +745,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   @override
   void dispose() {
-    _controller.dispose();
-    _homeController.removeListener(_onHomeChanged);
-    _homeController.dispose();
-    _recommendedPlaylistController.dispose();
-    _homeNewSongController.dispose();
-    _homeRadarController.removeListener(_onHomeChanged);
-    _homeRadarController.dispose();
+    _disposeProviderControllers();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _playback.systemPlaybackBinding.detach(_queuePlaybackController);
     _queuePlaybackController.dispose();
@@ -782,16 +832,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         child: expandedNowPlayingPage,
       ),
     );
-    return PageStorage(
-      bucket: _pageStorageBucket,
-      child: PopScope<void>(
-        canPop: !hasLocalPage,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop && hasLocalPage) {
-            _returnFromLocalPage();
-          }
-        },
-        child: shortcutPage,
+    return KeyedSubtree(
+      key: ValueKey(
+        widget.authenticated ? 'user-library-page' : 'signed-out-main-page',
+      ),
+      child: PageStorage(
+        bucket: _pageStorageBucket,
+        child: PopScope<void>(
+          canPop: !hasLocalPage,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && hasLocalPage) {
+              _returnFromLocalPage();
+            }
+          },
+          child: shortcutPage,
+        ),
       ),
     );
   }
@@ -1103,6 +1158,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           _navigation.routes.single is SettingsLocalRoute);
 
   void _selectPrimaryDestination(AuthenticatedPrimaryDestination destination) {
+    if (destination == AuthenticatedPrimaryDestination.recentPlays &&
+        !widget.capabilities.recentHistory) {
+      return;
+    }
     if (!widget.authenticated &&
         (destination == AuthenticatedPrimaryDestination.library ||
             destination == AuthenticatedPrimaryDestination.recentPlays)) {
@@ -1448,8 +1507,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               title: 'Your playlists',
               subtitle: switch (_controller.stage) {
                 UserLibraryStage.content || UserLibraryStage.empty =>
-                  '${_controller.playlists.length} saved on QQ Music',
-                _ => 'Saved on QQ Music',
+                  '${_controller.playlists.length} saved on ${widget.settings.musicProvider.displayName}',
+                _ => 'Saved on ${widget.settings.musicProvider.displayName}',
               },
               refreshKey: const ValueKey('user-playlists-refresh'),
               refreshTooltip: _controller.isRefreshing
@@ -1472,6 +1531,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   onOpenAlbum: _openFavoriteAlbum,
                   onSignInAgain: widget.onSignInAgain,
                   embedded: true,
+                  providerDisplayName:
+                      widget.settings.musicProvider.displayName,
                 )
               else
                 const SizedBox.shrink(),
@@ -1484,6 +1545,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   onOpenArtist: _openFavoriteArtist,
                   onSignInAgain: widget.onSignInAgain,
                   embedded: true,
+                  providerDisplayName:
+                      widget.settings.musicProvider.displayName,
                 )
               else
                 const SizedBox.shrink(),
@@ -1525,6 +1588,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         onSignInAgain: widget.onSignInAgain,
         onHeaderCollapsedChanged: _updateLikedHeaderCollapsed,
         collapsedHeaderActions: collapsedHeaderActions,
+        providerDisplayName: widget.settings.musicProvider.displayName,
       ),
     };
   }
@@ -1634,8 +1698,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             recommendationController: _recommendedPlaylistController,
             newSongController: _homeNewSongController,
             radarController: _homeRadarController,
+            radarEnabled: widget.capabilities.radar,
+            dailyTracksEnabled: widget.capabilities.dailyTracks,
+            personalFmEnabled: widget.capabilities.personalFm,
             queuePlaybackController: _queuePlaybackController,
             authenticated: widget.authenticated,
+            providerDisplayName: widget.settings.musicProvider.displayName,
             active:
                 destination == AuthenticatedPrimaryDestination.home &&
                 embeddedShellRoute == null &&
@@ -1654,23 +1722,34 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           if (_navigation.visitedDestination(
             AuthenticatedPrimaryDestination.discover,
           ))
-            RecommendedPlaylistsPage(
+            KeyedSubtree(
               key: const ValueKey('recommended-playlists-page'),
-              gateway: _discovery.recommendedPlaylistGateway,
-              newAlbumGateway: _discovery.newAlbumGateway,
-              newSongGateway: _discovery.newSongGateway,
-              rankingGateway: _discovery.rankingGateway,
-              radarGateway: _discovery.radarGateway,
-              queuePlaybackController: _queuePlaybackController,
-              onBack: _returnFromLocalPage,
-              onOpenPlaylist: _openRecommendedPlaylist,
-              onOpenRanking: _openRanking,
-              onOpenAlbum: _openRecommendedAlbum,
-              onOpenTrackAlbum: _openTrackContextAlbum,
-              onOpenTrackArtist: _openTrackContextArtist,
-              onSignInAgain: widget.onSignInAgain,
-              onHeaderCollapsedChanged: _updateDiscoverHeaderCollapsed,
-              embedded: true,
+              child: RecommendedPlaylistsPage(
+                key: ValueKey(
+                  'recommended-playlists-page-${widget.settings.musicProvider.providerId}',
+                ),
+                gateway: _discovery.recommendedPlaylistGateway,
+                newAlbumGateway: _discovery.newAlbumGateway,
+                newSongGateway: _discovery.newSongGateway,
+                rankingGateway: _discovery.rankingGateway,
+                radarGateway: _discovery.radarGateway,
+                radarEnabled: widget.capabilities.radar,
+                supportedNewAlbumRegions:
+                    widget.capabilities.supportedNewAlbumRegions,
+                supportedNewSongCategories:
+                    widget.capabilities.supportedNewSongCategories,
+                queuePlaybackController: _queuePlaybackController,
+                onBack: _returnFromLocalPage,
+                onOpenPlaylist: _openRecommendedPlaylist,
+                onOpenRanking: _openRanking,
+                onOpenAlbum: _openRecommendedAlbum,
+                onOpenTrackAlbum: _openTrackContextAlbum,
+                onOpenTrackArtist: _openTrackContextArtist,
+                onSignInAgain: widget.onSignInAgain,
+                providerDisplayName: widget.settings.musicProvider.displayName,
+                onHeaderCollapsedChanged: _updateDiscoverHeaderCollapsed,
+                embedded: true,
+              ),
             )
           else
             const SizedBox.shrink(),
@@ -1689,6 +1768,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               onOpenArtist: _openArtist,
               onOpenPlaylist: _openSearchPlaylist,
               onSignInAgain: widget.onSignInAgain,
+              providerDisplayName: widget.settings.musicProvider.displayName,
               embedded: true,
             )
           else
@@ -1705,6 +1785,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             ),
           ),
           if (widget.authenticated &&
+              widget.capabilities.recentHistory &&
               _navigation.visitedDestination(
                 AuthenticatedPrimaryDestination.recentPlays,
               ))
@@ -1795,7 +1876,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                         AuthenticatedPrimaryDestination.home => 'Home',
                         AuthenticatedPrimaryDestination.discover => 'Discover',
                         AuthenticatedPrimaryDestination.search =>
-                          'Search QQ Music',
+                          'Search ${widget.settings.musicProvider.displayName}',
                         AuthenticatedPrimaryDestination.library => '喜欢',
                         AuthenticatedPrimaryDestination.recentPlays => '最近播放',
                       },
@@ -1814,7 +1895,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                       extendedSidebar &&
                       destination != AuthenticatedPrimaryDestination.search,
                   searchKey: const ValueKey('top-search-shortcut'),
-                  searchHint: 'Search QQ Music',
+                  searchHint:
+                      'Search ${widget.settings.musicProvider.displayName}',
                   searchController: _topSearchController,
                   onSearchChanged: null,
                   onSearchSubmitted: _submitTopSearch,
@@ -1869,6 +1951,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           homeController: _homeController,
           libraryController: _controller,
           authenticated: widget.authenticated,
+          providerDisplayName: widget.settings.musicProvider.displayName,
+          supportsRecentHistory: widget.capabilities.recentHistory,
           recommendationsFocusNode: _recommendationsReturnFocusNode,
           searchFocusNode: _searchReturnFocusNode,
           settingsSelected: settingsOpen,
@@ -1914,7 +1998,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                         labelType: NavigationRailLabelType.all,
                         minWidth: MusicSizes.desktopRail,
                         minExtendedWidth: MusicSizes.desktopSidebar,
-                        leading: const _MusicSidebarBrand(expanded: false),
+                        leading: _MusicSidebarBrand(
+                          expanded: false,
+                          providerDisplayName:
+                              widget.settings.musicProvider.displayName,
+                        ),
                         onDestinationSelected: _selectPrimaryDestinationByIndex,
                         destinations: _navigationRailDestinations(),
                       ),
@@ -2124,7 +2212,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         selectedIcon: Icon(Icons.favorite_rounded),
         label: Text('喜欢'),
       ),
-    if (widget.authenticated)
+    if (widget.authenticated && widget.capabilities.recentHistory)
       const NavigationRailDestination(
         icon: Icon(Icons.history_rounded, key: ValueKey('open-recent-plays')),
         label: Text('最近播放'),
@@ -2167,7 +2255,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         selectedIcon: Icon(Icons.favorite_rounded),
         label: '喜欢',
       ),
-    if (widget.authenticated)
+    if (widget.authenticated && widget.capabilities.recentHistory)
       const NavigationDestination(
         icon: Icon(Icons.history_rounded, key: ValueKey('open-recent-plays')),
         label: '最近播放',
@@ -2212,7 +2300,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (showAccount)
       IconButton(
         key: ValueKey(widget.authenticated ? 'sign-out' : 'sign-in'),
-        tooltip: widget.authenticated ? 'Sign out' : 'Sign in to QQ Music',
+        tooltip: widget.authenticated
+            ? 'Sign out'
+            : 'Sign in to ${widget.settings.musicProvider.displayName}',
         onPressed: widget.authenticated
             ? (_signingOut ? null : _confirmSignOut)
             : widget.onRequestSignIn,
@@ -2236,7 +2326,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           if (_controller.refreshFailure case final failure?)
             LibraryRefreshFailureBanner(
               key: const ValueKey('user-library-refresh-failure'),
-              message: _refreshFailureCopy(failure),
+              message: _refreshFailureCopy(
+                failure,
+                widget.settings.musicProvider.displayName,
+              ),
               canRetry: _controller.canRetryRefresh,
               onRetry: _controller.retryRefresh,
               onDismiss: _controller.dismissRefreshFailure,
@@ -2263,7 +2356,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       LibrarySection.likedSongs => Icons.favorite_border_rounded,
     },
     title: 'Sign in to see your music',
-    detail: 'Your QQ Music playlists, liked songs, albums, and artists will appear here.',
+    detail:
+        'Your ${widget.settings.musicProvider.displayName} playlists, liked songs, albums, and artists will appear here.',
     actions: [
       FilledButton.icon(
         key: const ValueKey('signed-out-library-sign-in'),
@@ -2279,7 +2373,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       context,
       title: 'Sign out on this device?',
       message:
-          'This will stop playback and remove the saved QQ Music session '
+          'This will stop playback and remove the saved ${widget.settings.musicProvider.displayName} session '
           'from this device.',
       confirmLabel: 'Sign out',
       cancelKey: const ValueKey('sign-out-cancel'),
@@ -2317,8 +2411,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       returnFocusPlaylist: _lastOpenedPlaylist,
       returnFocusNode: _playlistReturnFocusNode,
     ),
-    UserLibraryStage.empty => const _LibraryEmpty(
-      key: ValueKey('user-library-empty'),
+    UserLibraryStage.empty => _LibraryEmpty(
+      key: const ValueKey('user-library-empty'),
+      providerDisplayName: widget.settings.musicProvider.displayName,
     ),
     UserLibraryStage.error => _LibraryFailure(
       key: const ValueKey('user-library-error'),
@@ -2327,6 +2422,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       showSignInAgain: false,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
+      providerDisplayName: widget.settings.musicProvider.displayName,
     ),
     UserLibraryStage.authenticationRequired ||
     UserLibraryStage.credentialRejected => _LibraryFailure(
@@ -2336,6 +2432,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       showSignInAgain: true,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
+      providerDisplayName: widget.settings.musicProvider.displayName,
     ),
   };
 }
@@ -2459,6 +2556,8 @@ class _DesktopMusicSidebar extends StatelessWidget {
     required this.homeController,
     required this.libraryController,
     required this.authenticated,
+    required this.providerDisplayName,
+    required this.supportsRecentHistory,
     required this.recommendationsFocusNode,
     required this.searchFocusNode,
     required this.settingsSelected,
@@ -2477,6 +2576,8 @@ class _DesktopMusicSidebar extends StatelessWidget {
   final HomeController homeController;
   final UserLibraryController libraryController;
   final bool authenticated;
+  final String providerDisplayName;
+  final bool supportsRecentHistory;
   final FocusNode recommendationsFocusNode;
   final FocusNode searchFocusNode;
   final bool settingsSelected;
@@ -2503,6 +2604,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
                 authenticated: authenticated,
                 displayName: homeController.account?.displayName,
                 avatarUri: homeController.account?.avatarUri,
+                providerDisplayName: providerDisplayName,
                 onRequestSignIn: onRequestSignIn,
                 onRequestSignOut: onRequestSignOut,
               ),
@@ -2568,18 +2670,19 @@ class _DesktopMusicSidebar extends StatelessWidget {
                         label: '喜欢',
                         onTap: onOpenLikedSongs,
                       ),
-                      _SidebarDestinationTile(
-                        key: const ValueKey('open-recent-plays'),
-                        selected:
-                            destination ==
+                      if (supportsRecentHistory)
+                        _SidebarDestinationTile(
+                          key: const ValueKey('open-recent-plays'),
+                          selected:
+                              destination ==
+                              AuthenticatedPrimaryDestination.recentPlays,
+                          icon: Icons.history_rounded,
+                          selectedIcon: Icons.history_rounded,
+                          label: '最近播放',
+                          onTap: () => onDestinationSelected(
                             AuthenticatedPrimaryDestination.recentPlays,
-                        icon: Icons.history_rounded,
-                        selectedIcon: Icons.history_rounded,
-                        label: '最近播放',
-                        onTap: () => onDestinationSelected(
-                          AuthenticatedPrimaryDestination.recentPlays,
+                          ),
                         ),
-                      ),
                       if (libraryController.stage == UserLibraryStage.content &&
                           libraryController.playlists.isNotEmpty) ...[
                         const SizedBox(height: MusicSpacing.contentGap),
@@ -2653,6 +2756,7 @@ class _SidebarIdentity extends StatelessWidget {
     required this.authenticated,
     required this.displayName,
     required this.avatarUri,
+    required this.providerDisplayName,
     required this.onRequestSignIn,
     required this.onRequestSignOut,
   });
@@ -2660,6 +2764,7 @@ class _SidebarIdentity extends StatelessWidget {
   final bool authenticated;
   final String? displayName;
   final String? avatarUri;
+  final String providerDisplayName;
   final VoidCallback onRequestSignIn;
   final VoidCallback? onRequestSignOut;
 
@@ -2675,7 +2780,7 @@ class _SidebarIdentity extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       child: Tooltip(
-        message: authenticated ? 'Sign out' : 'Sign in to QQ Music',
+        message: authenticated ? 'Sign out' : 'Sign in to $providerDisplayName',
         child: InkWell(
           key: const ValueKey('sidebar-account'),
           onTap: action,
@@ -2709,8 +2814,9 @@ class _SidebarIdentity extends StatelessWidget {
                       ),
                       Text(
                         authenticated
-                            ? displayName ?? 'Loading QQ Music account…'
-                            : 'Sign in to QQ Music',
+                            ? displayName ??
+                                  'Loading $providerDisplayName account…'
+                            : 'Sign in to $providerDisplayName',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall
@@ -2789,9 +2895,13 @@ class _SidebarDestinationTile extends StatelessWidget {
 }
 
 class _MusicSidebarBrand extends StatelessWidget {
-  const _MusicSidebarBrand({required this.expanded});
+  const _MusicSidebarBrand({
+    required this.expanded,
+    required this.providerDisplayName,
+  });
 
   final bool expanded;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -2825,7 +2935,7 @@ class _MusicSidebarBrand extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         Text(
-                          'QQ Music client',
+                          '$providerDisplayName client',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.labelMedium
@@ -3264,13 +3374,16 @@ class _LibraryLoading extends StatelessWidget {
 }
 
 class _LibraryEmpty extends StatelessWidget {
-  const _LibraryEmpty({super.key});
+  const _LibraryEmpty({required this.providerDisplayName, super.key});
+
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) => _CenteredLibraryMessage(
     icon: Icons.library_music_outlined,
     title: 'No playlists yet',
-    detail: 'Playlists you create or save in QQ Music will appear here.',
+    detail:
+        'Playlists you create or save in $providerDisplayName will appear here.',
     actions: const [],
   );
 }
@@ -3282,6 +3395,7 @@ class _LibraryFailure extends StatelessWidget {
     required this.showSignInAgain,
     required this.onRetry,
     required this.onSignInAgain,
+    required this.providerDisplayName,
     super.key,
   });
 
@@ -3290,10 +3404,11 @@ class _LibraryFailure extends StatelessWidget {
   final bool showSignInAgain;
   final VoidCallback onRetry;
   final VoidCallback onSignInAgain;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
-    final (title, detail) = _failureCopy(failure);
+    final (title, detail) = _failureCopy(failure, providerDisplayName);
     return _CenteredLibraryMessage(
       icon:
           failure == UserLibraryFailure.credentialRejected ||
@@ -3406,27 +3521,30 @@ class _CenteredLibraryMessage extends StatelessWidget {
   }
 }
 
-(String, String) _failureCopy(UserLibraryFailure? failure) => switch (failure) {
+(String, String) _failureCopy(
+  UserLibraryFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
   UserLibraryFailure.network => (
-    'Couldn’t reach QQ Music',
+    'Couldn’t reach $providerDisplayName',
     'Your session is still active. Check your connection and try again.',
   ),
   UserLibraryFailure.serviceUnavailable => (
-    'QQ Music is unavailable',
+    '$providerDisplayName is unavailable',
     'Your session was kept unchanged. Try loading your playlists again later.',
   ),
   UserLibraryFailure.invalidResponse => (
     'Couldn’t read the complete library',
-    'QQ Music returned a collection this build could not safely finish. '
+    '$providerDisplayName returned a collection this build could not safely finish. '
         'No partial list is shown.',
   ),
   UserLibraryFailure.credentialRejected => (
     'Your saved session was rejected',
-    'QQ Music no longer accepts it, so the stored session was removed.',
+    '$providerDisplayName no longer accepts it, so the stored session was removed.',
   ),
   UserLibraryFailure.credentialRejectedStorageCleanupFailed => (
     'Your saved session was rejected',
-    'QQ Music no longer accepts it, but secure storage could not remove it.',
+    '$providerDisplayName no longer accepts it, but secure storage could not remove it.',
   ),
   UserLibraryFailure.authenticationRequired ||
   UserLibraryFailure.replaced ||
@@ -3444,19 +3562,22 @@ class _CenteredLibraryMessage extends StatelessWidget {
   ),
   null => (
     'Couldn’t load your playlists',
-    'Try again or sign in with a fresh QQ Music session.',
+    'Try again or sign in with a fresh $providerDisplayName session.',
   ),
 };
 
-String _refreshFailureCopy(UserLibraryFailure failure) => switch (failure) {
+String _refreshFailureCopy(
+  UserLibraryFailure failure,
+  String providerDisplayName,
+) => switch (failure) {
   UserLibraryFailure.network =>
     'Couldn’t refresh playlists. Check your connection; the previous results '
         'are still shown.',
   UserLibraryFailure.serviceUnavailable =>
-    'QQ Music couldn’t refresh playlists. The previous results are still '
+    '$providerDisplayName couldn’t refresh playlists. The previous results are still '
         'shown.',
   UserLibraryFailure.invalidResponse =>
-    'QQ Music returned an incomplete refresh. The previous complete results '
+    '$providerDisplayName returned an incomplete refresh. The previous complete results '
         'are still shown.',
   UserLibraryFailure.coreUnavailable =>
     'The music core couldn’t refresh playlists. The previous results are '

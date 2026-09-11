@@ -83,6 +83,7 @@ class MusicApp extends StatefulWidget {
         const NoopSystemPlaybackBinding(),
     AppSettings initialSettings = AppSettings.defaults,
     AppSettingsStore? settingsStore,
+    BuiltInProviderDependencies? providerDependencies,
     ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
@@ -148,10 +149,9 @@ class MusicApp extends StatefulWidget {
         credentialVault: fallbackCredentialVault,
       );
     }
-    return MusicApp._(
-      bootstrap: bootstrap,
+    final configuredProvider = MusicProviderDependencies(
       authenticationGateway: authenticationGateway,
-      homeDependencies: AuthenticatedHomeDependencies(
+      home: AuthenticatedHomeDependencies(
         recentListeningFactory: recentListeningFactory,
         accountSummaryGateway: accountSummaryGateway,
         dailyRecommendationGateway: dailyRecommendationGateway,
@@ -160,7 +160,7 @@ class MusicApp extends StatefulWidget {
         relatedTracksGateway:
             relatedTracksGateway ?? const RustRelatedTracksGateway(),
       ),
-      libraryDependencies: AuthenticatedLibraryDependencies(
+      library: AuthenticatedLibraryDependencies(
         recentPlaysGateway: recentPlaysGateway,
         libraryGateway: libraryGateway,
         playlistDetailGateway: playlistDetailGateway,
@@ -174,7 +174,7 @@ class MusicApp extends StatefulWidget {
         favoriteAlbumGateway: favoriteAlbumGateway,
         favoriteArtistGateway: favoriteArtistGateway,
       ),
-      discoveryDependencies: AuthenticatedDiscoveryDependencies(
+      discovery: AuthenticatedDiscoveryDependencies(
         trackSearchGateway: searchGateway ?? const RustTrackSearchGateway(),
         artistSearchGateway:
             artistSearchGateway ?? const RustArtistSearchGateway(),
@@ -190,6 +190,18 @@ class MusicApp extends StatefulWidget {
         rankingGateway: rankingGateway ?? const RustRankingGateway(),
         radarGateway: radarGateway,
       ),
+      capabilities: MusicProviderCapabilities.qqMusic,
+      desktopQuickLoginEnabled: desktopQuickLoginEnabled,
+      initialCredentialRestore: initialCredentialRestore,
+    );
+    return MusicApp._(
+      bootstrap: bootstrap,
+      providerDependencies:
+          providerDependencies ??
+          BuiltInProviderDependencies(
+            qqMusic: configuredProvider,
+            netEase: configuredProvider,
+          ),
       playbackDependencies: AuthenticatedPlaybackDependencies(
         mediaResolutionGateway: mediaResolutionGateway,
         lyricGateway: lyricGateway,
@@ -200,7 +212,6 @@ class MusicApp extends StatefulWidget {
         audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
         systemPlaybackBinding: systemPlaybackBinding,
       ),
-      desktopQuickLoginEnabled: desktopQuickLoginEnabled,
       initialSettings: initialSettings,
       settingsStore: settingsStore,
       onPlaybackQualityChanged:
@@ -209,37 +220,26 @@ class MusicApp extends StatefulWidget {
               ? null
               : (preference) => defaultMediaResolutionGateway!
                     .updatePreferredQuality(preference.audioPreference)),
-      initialCredentialRestore: initialCredentialRestore,
       key: key,
     );
   }
 
   const MusicApp._({
     required this.bootstrap,
-    required this.authenticationGateway,
-    required this.homeDependencies,
-    required this.libraryDependencies,
-    required this.discoveryDependencies,
+    required this.providerDependencies,
     required this.playbackDependencies,
-    required this.desktopQuickLoginEnabled,
     required this.initialSettings,
     required this.settingsStore,
     required this.onPlaybackQualityChanged,
-    required this.initialCredentialRestore,
     super.key,
   });
 
   final BootstrapStatus bootstrap;
-  final QqMusicAuthenticationGateway authenticationGateway;
-  final AuthenticatedHomeDependencies homeDependencies;
-  final AuthenticatedLibraryDependencies libraryDependencies;
-  final AuthenticatedDiscoveryDependencies discoveryDependencies;
+  final BuiltInProviderDependencies providerDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
-  final bool desktopQuickLoginEnabled;
   final AppSettings initialSettings;
   final AppSettingsStore? settingsStore;
   final ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged;
-  final CredentialRestoreResult initialCredentialRestore;
 
   @override
   State<MusicApp> createState() => _MusicAppState();
@@ -274,25 +274,30 @@ class _MusicAppState extends State<MusicApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    title: 'fura music',
-    theme: MusicMaterialTheme.light(),
-    darkTheme: MusicMaterialTheme.dark(),
-    themeMode: _settingsController.settings.theme.materialThemeMode,
-    home: LoginPage(
-      bootstrap: widget.bootstrap,
-      authenticationGateway: widget.authenticationGateway,
-      homeDependencies: widget.homeDependencies,
-      libraryDependencies: widget.libraryDependencies,
-      discoveryDependencies: widget.discoveryDependencies,
-      playbackDependencies: widget.playbackDependencies,
-      desktopQuickLoginEnabled: widget.desktopQuickLoginEnabled,
-      settings: _settingsController.settings,
-      onSettingsChanged: _updateSettings,
-      initialCredentialRestore: widget.initialCredentialRestore,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final settings = _settingsController.settings;
+    final provider = widget.providerDependencies.select(settings.musicProvider);
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'fura music',
+      theme: MusicMaterialTheme.light(),
+      darkTheme: MusicMaterialTheme.dark(),
+      themeMode: settings.theme.materialThemeMode,
+      home: LoginPage(
+        bootstrap: widget.bootstrap,
+        authenticationGateway: provider.authenticationGateway,
+        homeDependencies: provider.home,
+        libraryDependencies: provider.library,
+        discoveryDependencies: provider.discovery,
+        playbackDependencies: widget.playbackDependencies,
+        capabilities: provider.capabilities,
+        desktopQuickLoginEnabled: provider.desktopQuickLoginEnabled,
+        settings: settings,
+        onSettingsChanged: _updateSettings,
+        initialCredentialRestore: provider.initialCredentialRestore,
+      ),
+    );
+  }
 }
 
 class LoginPage extends StatefulWidget {
@@ -303,6 +308,7 @@ class LoginPage extends StatefulWidget {
     required this.libraryDependencies,
     required this.discoveryDependencies,
     required this.playbackDependencies,
+    required this.capabilities,
     required this.desktopQuickLoginEnabled,
     required this.settings,
     required this.onSettingsChanged,
@@ -316,6 +322,7 @@ class LoginPage extends StatefulWidget {
   final AuthenticatedLibraryDependencies libraryDependencies;
   final AuthenticatedDiscoveryDependencies discoveryDependencies;
   final AuthenticatedPlaybackDependencies playbackDependencies;
+  final MusicProviderCapabilities capabilities;
   final bool desktopQuickLoginEnabled;
   final AppSettings settings;
   final Future<AppSettingsWriteResult> Function(AppSettings settings)
@@ -327,24 +334,61 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  late final LoginController _controller;
+  late LoginController _controller;
   bool _authenticationDialogOpen = false;
   LoginStage? _previousStage;
 
   @override
   void initState() {
     super.initState();
-    _controller = LoginController(
-      widget.authenticationGateway,
-      desktopQuickLoginEnabled: widget.desktopQuickLoginEnabled,
-      initialCredentialRestore: widget.initialCredentialRestore,
-    );
+    _controller = _createController();
+    _listenToController();
+  }
+
+  LoginController _createController() => LoginController(
+    widget.authenticationGateway,
+    desktopQuickLoginEnabled: widget.desktopQuickLoginEnabled,
+    initialCredentialRestore: widget.initialCredentialRestore,
+  );
+
+  void _listenToController() {
     _previousStage = _controller.stage;
     _controller.addListener(_onAuthenticationChanged);
     if (widget.initialCredentialRestore ==
         CredentialRestoreResult.verificationRequired) {
       unawaited(_controller.verifyRestoredCredential());
     }
+  }
+
+  @override
+  void didUpdateWidget(LoginPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(
+          oldWidget.authenticationGateway,
+          widget.authenticationGateway,
+        ) &&
+        oldWidget.settings.musicProvider == widget.settings.musicProvider) {
+      return;
+    }
+
+    final retiredController = _controller;
+    retiredController.removeListener(_onAuthenticationChanged);
+    final closeAuthenticationDialog = _authenticationDialogOpen;
+    if (closeAuthenticationDialog) _authenticationDialogOpen = false;
+    _controller = _createController();
+    _listenToController();
+    if (widget.initialCredentialRestore == CredentialRestoreResult.signedOut) {
+      unawaited(_controller.restoreCredential());
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      retiredController.cancel();
+      if (mounted &&
+          closeAuthenticationDialog &&
+          Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      retiredController.dispose();
+    });
   }
 
   @override
@@ -372,15 +416,16 @@ class _LoginPageState extends State<LoginPage> {
     if (reset && _controller.stage != LoginStage.idle) {
       _controller.cancel();
     }
+    final dialogController = _controller;
     _authenticationDialogOpen = true;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (context) => _AuthenticationDialog(
-        controller: _controller,
+        controller: dialogController,
         onClose: () {
-          if (_controller.stage != LoginStage.authenticated) {
-            _controller.cancel();
+          if (dialogController.stage != LoginStage.authenticated) {
+            dialogController.cancel();
           }
           Navigator.of(context).pop();
         },
@@ -404,13 +449,12 @@ class _LoginPageState extends State<LoginPage> {
       builder: (context, _) {
         final authenticated = _controller.stage == LoginStage.authenticated;
         return UserLibraryPage(
-          key: ValueKey(
-            authenticated ? 'user-library-page' : 'signed-out-main-page',
-          ),
+          key: const ValueKey('provider-library-shell'),
           homeDependencies: widget.homeDependencies,
           libraryDependencies: widget.libraryDependencies,
           discoveryDependencies: widget.discoveryDependencies,
           playbackDependencies: widget.playbackDependencies,
+          capabilities: widget.capabilities,
           settings: widget.settings,
           onSettingsChanged: widget.onSettingsChanged,
           authenticated: authenticated,
@@ -577,12 +621,14 @@ class _AuthenticationContent extends StatelessWidget {
       const _PanelIcon(icon: Icons.qr_code_2_rounded),
       const SizedBox(height: 24),
       Text(
-        'Sign in to QQ Music',
+        'Sign in to ${controller.providerDisplayName}',
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 12),
       Text(
-        'Authorize with QQ or WeChat QR. Passwords are never collected.',
+        controller.supportsMultipleQrMethods
+            ? 'Authorize with QQ or WeChat QR. Passwords are never collected.'
+            : 'Use the official ${controller.providerDisplayName} app to scan this code. Passwords are never collected.',
         style: _supportingStyle(context),
       ),
       const SizedBox(height: 28),
@@ -590,17 +636,21 @@ class _AuthenticationContent extends StatelessWidget {
         key: const ValueKey('start-qq-login-button'),
         onPressed: controller.supportsDesktopQuickLogin
             ? controller.startDesktopQqAuthorization
-            : () => controller.startQr(LoginQrChannel.qq),
+            : controller.supportsMultipleQrMethods
+            ? () => controller.startQr(LoginQrChannel.qq)
+            : controller.start,
         icon: const Icon(Icons.qr_code_2_rounded),
-        label: const Text('Scan with QQ'),
+        label: Text(controller.qrActionLabel),
       ),
-      const SizedBox(height: 10),
-      OutlinedButton.icon(
-        key: const ValueKey('start-wechat-login-button'),
-        onPressed: () => controller.startQr(LoginQrChannel.wechat),
-        icon: const Icon(Icons.qr_code_scanner_rounded),
-        label: const Text('Scan with WeChat'),
-      ),
+      if (controller.supportsMultipleQrMethods) ...[
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          key: const ValueKey('start-wechat-login-button'),
+          onPressed: () => controller.startQr(LoginQrChannel.wechat),
+          icon: const Icon(Icons.qr_code_scanner_rounded),
+          label: const Text('Scan with WeChat'),
+        ),
+      ],
     ],
   );
 
@@ -619,7 +669,9 @@ class _AuthenticationContent extends StatelessWidget {
       ),
       const SizedBox(height: 10),
       Text(
-        controller.qrChannel == LoginQrChannel.qq
+        !controller.supportsMultipleQrMethods
+            ? 'Connecting directly to ${controller.providerDisplayName}.'
+            : controller.qrChannel == LoginQrChannel.qq
             ? 'Connecting directly to QQ authorization.'
             : 'Connecting directly to WeChat and QQ Music.',
         style: _supportingStyle(context),
@@ -651,8 +703,8 @@ class _AuthenticationContent extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           verifying
-              ? 'Confirming it directly with QQ Music before restoring access.'
-              : 'It passed local checks but still needs QQ Music verification.',
+              ? 'Confirming it directly with ${controller.providerDisplayName} before restoring access.'
+              : 'It passed local checks but still needs ${controller.providerDisplayName} verification.',
           textAlign: TextAlign.center,
           style: _supportingStyle(context),
         ),
@@ -671,15 +723,18 @@ class _AuthenticationContent extends StatelessWidget {
     final (title, detail) = switch (controller.stage) {
       LoginStage.signOutStorageCleanupFailed => (
         'Signed out, but saved session remains',
-        'The active QQ Music session was cleared, but secure storage could not '
+        'The active ${controller.providerDisplayName} session was cleared, but secure storage could not '
             'remove its saved copy. It may appear again after restart.',
       ),
-      LoginStage.credentialRejected || LoginStage.verificationError =>
-        _verificationTerminalCopy(controller.credentialVerificationResult),
+      LoginStage.credentialRejected ||
+      LoginStage.verificationError => _verificationTerminalCopy(
+        controller.credentialVerificationResult,
+        controller.providerDisplayName,
+      ),
       _ => switch (result) {
         CredentialRestoreResult.locallyExpired => (
           'Saved session expired',
-          'QQ Music’s advertised lifetime has ended. Sign in again to continue.',
+          '${controller.providerDisplayName}’s advertised lifetime has ended. Sign in again to continue.',
         ),
         CredentialRestoreResult.unsupportedStoredCredential => (
           'Saved session is from another version',
@@ -740,26 +795,27 @@ class _AuthenticationContent extends StatelessWidget {
 
   (String, String) _verificationTerminalCopy(
     CredentialVerificationResult? result,
+    String providerName,
   ) => switch (result) {
     CredentialVerificationResult.rejected => (
       'Saved session was rejected',
-      'QQ Music no longer accepts it, so the stored session was removed.',
+      '$providerName no longer accepts it, so the stored session was removed.',
     ),
     CredentialVerificationResult.rejectedStorageCleanupFailed => (
       'Saved session was rejected',
-      'QQ Music no longer accepts it, but secure storage could not remove it. '
+      '$providerName no longer accepts it, but secure storage could not remove it. '
           'It may appear again after restart.',
     ),
     CredentialVerificationResult.network => (
-      'Couldn’t reach QQ Music',
+      'Couldn’t reach $providerName',
       'The saved session is still available. Check your connection and try again.',
     ),
     CredentialVerificationResult.serviceUnavailable => (
-      'QQ Music is unavailable',
+      '$providerName is unavailable',
       'The saved session was kept unchanged. Try verification again later.',
     ),
     CredentialVerificationResult.invalidResponse => (
-      'QQ Music changed its response',
+      '$providerName changed its response',
       'The saved session was kept instead of being treated as signed out.',
     ),
     CredentialVerificationResult.coreUnavailable => (
@@ -783,21 +839,29 @@ class _AuthenticationContent extends StatelessWidget {
         ? 'Confirm on your phone'
         : reconnecting
         ? 'Reconnecting…'
+        : !controller.supportsMultipleQrMethods
+        ? controller.qrActionLabel
         : controller.qrChannel == LoginQrChannel.qq
         ? 'Scan with QQ'
         : 'Scan with WeChat';
     final qrDetail = scanned
-        ? controller.qrChannel == LoginQrChannel.qq
+        ? !controller.supportsMultipleQrMethods
+              ? 'The code was scanned. Approve the sign-in in the official app.'
+              : controller.qrChannel == LoginQrChannel.qq
               ? 'The code was scanned. Approve the sign-in in QQ.'
               : 'The code was scanned. Approve the sign-in in WeChat.'
         : reconnecting
         ? 'Your code is still active. We’ll retry the connection.'
+        : !controller.supportsMultipleQrMethods
+        ? 'Open ${controller.providerDisplayName}, choose Scan, then point your camera here.'
         : controller.qrChannel == LoginQrChannel.qq
         ? 'Open QQ, choose Scan, then point your camera here.'
         : 'Open WeChat, choose Scan, then point your camera here.';
     final qrMethod = _QrAuthenticationMethod(
       image: image,
-      semanticLabel: controller.qrChannel == LoginQrChannel.qq
+      semanticLabel: !controller.supportsMultipleQrMethods
+          ? '${controller.providerDisplayName} sign-in QR code'
+          : controller.qrChannel == LoginQrChannel.qq
           ? 'QQ sign-in QR code'
           : 'WeChat sign-in QR code',
       title: qrTitle,
@@ -897,7 +961,7 @@ class _AuthenticationContent extends StatelessWidget {
     final (icon, detail) = switch (saveState) {
       CredentialSaveState.saving => (
         Icons.lock_clock_outlined,
-        'QQ Music accepted this session. Saving it to platform secure storage…',
+        '${controller.providerDisplayName} accepted this session. Saving it to platform secure storage…',
       ),
       CredentialSaveState.saved => (
         Icons.lock_rounded,
@@ -910,7 +974,7 @@ class _AuthenticationContent extends StatelessWidget {
       ),
       CredentialSaveState.none => (
         Icons.check_rounded,
-        'QQ Music accepted this session. Secure storage has not been confirmed.',
+        '${controller.providerDisplayName} accepted this session. Secure storage has not been confirmed.',
       ),
     };
 
@@ -935,7 +999,11 @@ class _AuthenticationContent extends StatelessWidget {
   }
 
   Widget _terminal(BuildContext context) {
-    final (title, detail) = _terminalCopy(controller.stage, controller.failure);
+    final (title, detail) = _terminalCopy(
+      controller.stage,
+      controller.failure,
+      controller.providerDisplayName,
+    );
 
     return Column(
       key: const ValueKey('login-terminal'),
@@ -994,7 +1062,11 @@ class _AuthenticationContent extends StatelessWidget {
         height: 1.45,
       );
 
-  (String, String) _terminalCopy(LoginStage stage, LoginFailure? failure) {
+  (String, String) _terminalCopy(
+    LoginStage stage,
+    LoginFailure? failure,
+    String providerName,
+  ) {
     if (stage == LoginStage.expired || stage == LoginStage.timedOut) {
       return (
         'This code expired',
@@ -1010,7 +1082,7 @@ class _AuthenticationContent extends StatelessWidget {
 
     return switch (failure) {
       LoginFailure.serviceUnavailable => (
-        'QQ Music is unavailable',
+        '$providerName is unavailable',
         'The service did not accept this request. Try again in a moment.',
       ),
       LoginFailure.rejected => (
@@ -1022,7 +1094,7 @@ class _AuthenticationContent extends StatelessWidget {
         'Check your network, then create a fresh code.',
       ),
       LoginFailure.invalidResponse => (
-        'QQ Music changed its response',
+        '$providerName changed its response',
         'This client stopped safely instead of guessing. Try a new code later.',
       ),
       _ => (

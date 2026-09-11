@@ -34,6 +34,64 @@ class QqMusicCredentialCleaningMediaResolutionGateway
   );
 }
 
+/// Deletes only the credential namespace owned by the provider whose media
+/// request was explicitly rejected. Unknown providers never trigger cleanup.
+class ProviderCredentialCleaningMediaResolutionGateway
+    implements MediaResolutionGateway {
+  ProviderCredentialCleaningMediaResolutionGateway(
+    this._inner, {
+    required Map<String, CredentialVault> credentialVaults,
+  }) : _credentialVaults = Map.unmodifiable(credentialVaults);
+
+  final MediaResolutionGateway _inner;
+  final Map<String, CredentialVault> _credentialVaults;
+
+  @override
+  MediaResolutionOperation beginResolution({
+    required String providerId,
+    required String opaqueTrackId,
+  }) {
+    final operation = _inner.beginResolution(
+      providerId: providerId,
+      opaqueTrackId: opaqueTrackId,
+    );
+    final vault = _credentialVaults[providerId];
+    return vault == null
+        ? operation
+        : _ProviderCredentialCleaningMediaResolutionOperation(operation, vault);
+  }
+}
+
+class _ProviderCredentialCleaningMediaResolutionOperation
+    implements MediaResolutionOperation {
+  const _ProviderCredentialCleaningMediaResolutionOperation(
+    this._inner,
+    this._vault,
+  );
+
+  final MediaResolutionOperation _inner;
+  final CredentialVault _vault;
+
+  @override
+  bool cancel() => _inner.cancel();
+
+  @override
+  Future<MediaResolutionResult> run() async {
+    final result = await _inner.run();
+    if (result.failure != MediaResolutionFailure.credentialRejected) {
+      return result;
+    }
+    try {
+      await _vault.delete();
+      return result;
+    } on Object {
+      return const MediaResolutionResult(
+        failure: MediaResolutionFailure.credentialRejectedStorageCleanupFailed,
+      );
+    }
+  }
+}
+
 class _QqMusicCredentialCleaningMediaResolutionOperation
     implements MediaResolutionOperation {
   const _QqMusicCredentialCleaningMediaResolutionOperation(

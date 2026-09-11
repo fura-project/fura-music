@@ -12,6 +12,7 @@ import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 
 class AlbumPage extends StatefulWidget {
   const AlbumPage({
@@ -130,17 +131,21 @@ class _AlbumPageState extends State<AlbumPage> {
       key: ValueKey('album-loading'),
       label: 'Loading Album Tracks',
     ),
-    AlbumTrackStage.empty => const MusicContentStatePanel(
-      key: ValueKey('album-empty'),
+    AlbumTrackStage.empty => MusicContentStatePanel(
+      key: const ValueKey('album-empty'),
       icon: Icons.album_outlined,
       title: 'This Album has no available Tracks',
-      detail: 'QQ Music returned an empty Album Track list.',
+      detail:
+          '${builtInProviderDisplayName(widget.album.providerId)} returned an empty Album Track list.',
     ),
     AlbumTrackStage.error => MusicContentStatePanel(
       key: const ValueKey('album-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load this Album',
-      detail: _failureCopy(_controller.failure),
+      detail: _failureCopy(
+        _controller.failure,
+        builtInProviderDisplayName(widget.album.providerId),
+      ),
       liveRegion: true,
       action: _controller.canRetry
           ? FilledButton.tonal(
@@ -329,7 +334,7 @@ class _AlbumHeader extends StatelessWidget {
     ];
     final summary = total != null
         ? '$total ${total == 1 ? 'Track' : 'Tracks'}'
-        : 'QQ Music Album';
+        : '${builtInProviderDisplayName(album.providerId)} Album';
     return MusicCollectionDetailHeader(
       collapseProgress: collapseProgress,
       desktop: desktop,
@@ -754,17 +759,18 @@ class _AlbumFooter extends StatelessWidget {
   );
 }
 
-String _failureCopy(AlbumTrackFailure? failure) => switch (failure) {
-  AlbumTrackFailure.network => 'Check your connection and try again.',
-  AlbumTrackFailure.serviceUnavailable =>
-    'QQ Music Album browsing is temporarily unavailable.',
-  AlbumTrackFailure.cancelled => 'The Album request was cancelled.',
-  AlbumTrackFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  AlbumTrackFailure.invalidResponse ||
-  AlbumTrackFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected Album response.',
-};
+String _failureCopy(AlbumTrackFailure? failure, String providerName) =>
+    switch (failure) {
+      AlbumTrackFailure.network => 'Check your connection and try again.',
+      AlbumTrackFailure.serviceUnavailable =>
+        '$providerName Album browsing is temporarily unavailable.',
+      AlbumTrackFailure.cancelled => 'The Album request was cancelled.',
+      AlbumTrackFailure.coreUnavailable =>
+        'The local music core is unavailable. Restart the app and try again.',
+      AlbumTrackFailure.invalidResponse ||
+      AlbumTrackFailure.alreadyRunning ||
+      null => '$providerName returned an unexpected Album response.',
+    };
 
 String _detailsFailureCopy(AlbumDetailsFailure? failure) => switch (failure) {
   AlbumDetailsFailure.network => 'Album details are offline.',

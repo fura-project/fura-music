@@ -53,27 +53,36 @@ typedef TrackSearchPageLoadOperationFactory =
 
 class RustTrackSearchGateway implements TrackSearchGateway {
   const RustTrackSearchGateway({
-    TrackSearchPageLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad;
+    this.providerId = 'qq-music',
+    this.operationFactory,
+  });
 
-  final TrackSearchPageLoadOperationFactory _operationFactory;
+  final String providerId;
+  final TrackSearchPageLoadOperationFactory? operationFactory;
 
   @override
   TrackSearchPageLoadOperation beginLoad({
     required String query,
     required int page,
     required int size,
-  }) => _operationFactory(query, page, size);
+  }) =>
+      operationFactory?.call(query, page, size) ??
+      _beginRustLoad(providerId, query, page, size);
 }
 
-TrackSearchPageLoadOperation _beginRustLoad(String query, int page, int size) =>
-    _RustTrackSearchPageLoadOperation(
-      bridge.beginQqMusicTrackSearchPageLoad(
-        query: query,
-        page: page,
-        size: size,
-      ),
-    );
+TrackSearchPageLoadOperation _beginRustLoad(
+  String providerId,
+  String query,
+  int page,
+  int size,
+) => _RustTrackSearchPageLoadOperation(
+  bridge.beginQqMusicTrackSearchPageLoad(
+    providerId: providerId,
+    query: query,
+    page: page,
+    size: size,
+  ),
+);
 
 class _RustTrackSearchPageLoadOperation
     implements TrackSearchPageLoadOperation {

@@ -49,30 +49,39 @@ typedef FavoriteArtistPageLoadOperationFactory =
 
 class RustFavoriteArtistGateway implements FavoriteArtistGateway {
   RustFavoriteArtistGateway({
+    this.providerId = 'qq-music',
     CredentialVault? credentialVault,
-    FavoriteArtistPageLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad,
-       _credentialVault = SerializedCredentialVault(
+    this.operationFactory,
+  }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
 
   final CredentialVault _credentialVault;
-  final FavoriteArtistPageLoadOperationFactory _operationFactory;
+  final String providerId;
+  final FavoriteArtistPageLoadOperationFactory? operationFactory;
 
   @override
   FavoriteArtistPageLoadOperation beginLoad({
     required int offset,
     required int size,
   }) => _VaultCleaningFavoriteArtistPageLoadOperation(
-    _operationFactory(offset, size),
+    operationFactory?.call(offset, size) ??
+        _beginRustLoad(providerId, offset, size),
     _credentialVault,
   );
 }
 
-FavoriteArtistPageLoadOperation _beginRustLoad(int offset, int size) =>
-    _RustFavoriteArtistPageLoadOperation(
-      bridge.beginQqMusicFavoriteArtistPageLoad(offset: offset, size: size),
-    );
+FavoriteArtistPageLoadOperation _beginRustLoad(
+  String providerId,
+  int offset,
+  int size,
+) => _RustFavoriteArtistPageLoadOperation(
+  bridge.beginQqMusicFavoriteArtistPageLoad(
+    providerId: providerId,
+    offset: offset,
+    size: size,
+  ),
+);
 
 class _RustFavoriteArtistPageLoadOperation
     implements FavoriteArtistPageLoadOperation {

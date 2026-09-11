@@ -39,27 +39,36 @@ typedef AlbumSearchPageLoadOperationFactory =
 
 class RustAlbumSearchGateway implements AlbumSearchGateway {
   const RustAlbumSearchGateway({
-    AlbumSearchPageLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad;
+    this.providerId = 'qq-music',
+    this.operationFactory,
+  });
 
-  final AlbumSearchPageLoadOperationFactory _operationFactory;
+  final String providerId;
+  final AlbumSearchPageLoadOperationFactory? operationFactory;
 
   @override
   AlbumSearchPageLoadOperation beginLoad({
     required String query,
     required int page,
     required int size,
-  }) => _operationFactory(query, page, size);
+  }) =>
+      operationFactory?.call(query, page, size) ??
+      _beginRustLoad(providerId, query, page, size);
 }
 
-AlbumSearchPageLoadOperation _beginRustLoad(String query, int page, int size) =>
-    _RustAlbumSearchPageLoadOperation(
-      bridge.beginQqMusicAlbumSearchPageLoad(
-        query: query,
-        page: page,
-        size: size,
-      ),
-    );
+AlbumSearchPageLoadOperation _beginRustLoad(
+  String providerId,
+  String query,
+  int page,
+  int size,
+) => _RustAlbumSearchPageLoadOperation(
+  bridge.beginQqMusicAlbumSearchPageLoad(
+    providerId: providerId,
+    query: query,
+    page: page,
+    size: size,
+  ),
+);
 
 class _RustAlbumSearchPageLoadOperation
     implements AlbumSearchPageLoadOperation {

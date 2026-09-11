@@ -48,26 +48,29 @@ typedef AccountSummaryLoadOperationFactory =
 
 class RustAccountSummaryGateway implements AccountSummaryGateway {
   RustAccountSummaryGateway({
+    this.providerId = 'qq-music',
     CredentialVault? credentialVault,
-    AccountSummaryLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad,
-       _credentialVault = SerializedCredentialVault(
+    this.operationFactory,
+  }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
 
   final CredentialVault _credentialVault;
-  final AccountSummaryLoadOperationFactory _operationFactory;
+  final String providerId;
+  final AccountSummaryLoadOperationFactory? operationFactory;
 
   @override
   AccountSummaryLoadOperation beginLoad() =>
       _VaultCleaningAccountSummaryLoadOperation(
-        _operationFactory(),
+        operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
       );
 }
 
-AccountSummaryLoadOperation _beginRustLoad() =>
-    _RustAccountSummaryLoadOperation(bridge.beginQqMusicAccountSummaryLoad());
+AccountSummaryLoadOperation _beginRustLoad(String providerId) =>
+    _RustAccountSummaryLoadOperation(
+      bridge.beginQqMusicAccountSummaryLoad(providerId: providerId),
+    );
 
 class _RustAccountSummaryLoadOperation implements AccountSummaryLoadOperation {
   const _RustAccountSummaryLoadOperation(this._handle);

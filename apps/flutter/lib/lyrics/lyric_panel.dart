@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 
 Future<void> showLyrics(
   BuildContext context,
@@ -161,18 +162,25 @@ class LyricPanel extends StatelessWidget {
       onSeek: seekEnabled ? onSeek : null,
       immersive: immersive,
     ),
-    LyricStage.unavailable => const _LyricMessage(
-      key: ValueKey('lyrics-unavailable'),
+    LyricStage.unavailable => _LyricMessage(
+      key: const ValueKey('lyrics-unavailable'),
       icon: Icons.lyrics_outlined,
       title: 'No synchronized lyrics',
-      detail: 'QQ Music did not provide lyrics for this track.',
+      detail:
+          '${builtInProviderDisplayName(controller.track?.providerId ?? '')} did not provide lyrics for this track.',
       announce: true,
     ),
     LyricStage.error => _LyricMessage(
       key: const ValueKey('lyrics-error'),
       icon: Icons.cloud_off_rounded,
-      title: _errorTitle(controller.failure),
-      detail: _errorDetail(controller.failure),
+      title: _errorTitle(
+        controller.failure,
+        builtInProviderDisplayName(controller.track?.providerId ?? ''),
+      ),
+      detail: _errorDetail(
+        controller.failure,
+        builtInProviderDisplayName(controller.track?.providerId ?? ''),
+      ),
       announce: true,
       action: controller.canRetry
           ? FilledButton.tonal(
@@ -186,7 +194,8 @@ class LyricPanel extends StatelessWidget {
       key: const ValueKey('lyrics-authentication-required'),
       icon: Icons.lock_outline_rounded,
       title: 'Sign in to load lyrics',
-      detail: 'Your current session cannot request QQ Music lyrics.',
+      detail:
+          'Your current session cannot request ${builtInProviderDisplayName(controller.track?.providerId ?? '')} lyrics.',
       announce: true,
       action: TextButton(
         key: const ValueKey('lyrics-sign-in-again'),
@@ -197,7 +206,8 @@ class LyricPanel extends StatelessWidget {
     LyricStage.credentialRejected => _LyricMessage(
       key: const ValueKey('lyrics-credential-rejected'),
       icon: Icons.lock_reset_rounded,
-      title: 'QQ Music session rejected',
+      title:
+          '${builtInProviderDisplayName(controller.track?.providerId ?? '')} session rejected',
       detail: 'Sign in again before requesting lyrics.',
       announce: true,
       action: TextButton(
@@ -640,14 +650,18 @@ double _progress(TimedLyricSegment segment, int positionMs) {
   return (positionMs - segment.startMs) / segment.durationMs;
 }
 
-String _errorTitle(LyricFailure? failure) => switch (failure) {
-  LyricFailure.network => 'Couldn’t reach QQ Music',
-  LyricFailure.serviceUnavailable => 'Lyrics are unavailable right now',
-  LyricFailure.alreadyRunning => 'Another lyric request is still running',
-  _ => 'Couldn’t load synchronized lyrics',
-};
+String _errorTitle(LyricFailure? failure, String providerDisplayName) =>
+    switch (failure) {
+      LyricFailure.network => 'Couldn’t reach $providerDisplayName',
+      LyricFailure.serviceUnavailable => 'Lyrics are unavailable right now',
+      LyricFailure.alreadyRunning => 'Another lyric request is still running',
+      _ => 'Couldn’t load synchronized lyrics',
+    };
 
-String _errorDetail(LyricFailure? failure) => switch (failure) {
+String _errorDetail(
+  LyricFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
   LyricFailure.network =>
     'Your session is unchanged. Check your connection and try again.',
   LyricFailure.serviceUnavailable =>
@@ -656,5 +670,6 @@ String _errorDetail(LyricFailure? failure) => switch (failure) {
     'Wait for the current request to finish before trying again.',
   LyricFailure.cancelled || LyricFailure.replaced =>
     'The lyric request was replaced before it completed.',
-  _ => 'QQ Music returned lyrics this build could not safely present.',
+  _ =>
+    '$providerDisplayName returned lyrics this build could not safely present.',
 };

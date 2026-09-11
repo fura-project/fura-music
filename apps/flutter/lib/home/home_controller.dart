@@ -36,6 +36,7 @@ class HomeController extends ChangeNotifier {
   HomeResourceStage _relatedTracksStage = HomeResourceStage.empty;
   AuthenticatedAccountSummary? _account;
   RecommendedPlaylistSummary? _dailyPlaylist;
+  List<PlaylistTrackSummary> _dailyTracks = const [];
   List<RecommendedPlaylistSummary> _personalizedPlaylists = const [];
   List<PlaylistTrackSummary> _personalizedTracks = const [];
   PlaylistTrackSummary? _relatedSeed;
@@ -77,6 +78,7 @@ class HomeController extends ChangeNotifier {
   HomeResourceStage get relatedTracksStage => _relatedTracksStage;
   AuthenticatedAccountSummary? get account => _account;
   RecommendedPlaylistSummary? get dailyPlaylist => _dailyPlaylist;
+  List<PlaylistTrackSummary> get dailyTracks => _dailyTracks;
   List<RecommendedPlaylistSummary> get personalizedPlaylists =>
       _personalizedPlaylists;
   List<PlaylistTrackSummary> get personalizedTracks => _personalizedTracks;
@@ -202,7 +204,7 @@ class HomeController extends ChangeNotifier {
       operation = _dailyGateway.beginLoad();
     } on Object {
       _dailyFailure = DailyRecommendationFailure.coreUnavailable;
-      _dailyStage = _dailyPlaylist == null
+      _dailyStage = _dailyPlaylist == null && _dailyTracks.isEmpty
           ? HomeResourceStage.error
           : HomeResourceStage.content;
       _notify();
@@ -210,7 +212,7 @@ class HomeController extends ChangeNotifier {
     }
     _dailyOperation = operation;
     _dailyFailure = null;
-    _dailyStage = _dailyPlaylist == null
+    _dailyStage = _dailyPlaylist == null && _dailyTracks.isEmpty
         ? HomeResourceStage.loading
         : HomeResourceStage.content;
     _notify();
@@ -219,16 +221,17 @@ class HomeController extends ChangeNotifier {
     if (!_dailyCurrent(generation)) return;
     if (result.failure != null &&
         !_dailyRequiresSignIn(result.failure) &&
-        _dailyPlaylist != null) {
+        (_dailyPlaylist != null || _dailyTracks.isNotEmpty)) {
       _dailyFailure = result.failure;
       _notify();
       return;
     }
     _dailyPlaylist = result.playlist;
+    _dailyTracks = List.unmodifiable(result.tracks);
     _dailyFailure = result.failure;
     _dailyStage = result.failure != null
         ? HomeResourceStage.error
-        : result.playlist == null
+        : result.playlist == null && result.tracks.isEmpty
         ? HomeResourceStage.empty
         : HomeResourceStage.content;
     _notify();

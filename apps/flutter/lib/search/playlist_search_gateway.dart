@@ -39,25 +39,31 @@ typedef PlaylistSearchPageLoadOperationFactory =
 
 class RustPlaylistSearchGateway implements PlaylistSearchGateway {
   const RustPlaylistSearchGateway({
-    PlaylistSearchPageLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad;
+    this.providerId = 'qq-music',
+    this.operationFactory,
+  });
 
-  final PlaylistSearchPageLoadOperationFactory _operationFactory;
+  final String providerId;
+  final PlaylistSearchPageLoadOperationFactory? operationFactory;
 
   @override
   PlaylistSearchPageLoadOperation beginLoad({
     required String query,
     required int page,
     required int size,
-  }) => _operationFactory(query, page, size);
+  }) =>
+      operationFactory?.call(query, page, size) ??
+      _beginRustLoad(providerId, query, page, size);
 }
 
 PlaylistSearchPageLoadOperation _beginRustLoad(
+  String providerId,
   String query,
   int page,
   int size,
 ) => _RustPlaylistSearchPageLoadOperation(
   bridge.beginQqMusicPlaylistSearchPageLoad(
+    providerId: providerId,
     query: query,
     page: page,
     size: size,

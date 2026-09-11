@@ -40,12 +40,16 @@ class HomePage extends StatefulWidget {
     required this.recommendationController,
     required this.newSongController,
     required this.radarController,
+    this.radarEnabled = true,
+    this.dailyTracksEnabled = false,
+    this.personalFmEnabled = false,
     required this.queuePlaybackController,
     required this.authenticated,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
     required this.onAccountAction,
     required this.onOpenRecommendation,
+    this.providerDisplayName = 'QQ Music',
     this.lastOpenedRecommendation,
     this.recommendationReturnFocusNode,
     this.spotlightRotationInterval = const Duration(seconds: 12),
@@ -59,12 +63,16 @@ class HomePage extends StatefulWidget {
   final RecommendedPlaylistController recommendationController;
   final NewSongController newSongController;
   final RadarController radarController;
+  final bool radarEnabled;
+  final bool dailyTracksEnabled;
+  final bool personalFmEnabled;
   final QueuePlaybackController queuePlaybackController;
   final bool authenticated;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
   final VoidCallback onAccountAction;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
+  final String providerDisplayName;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
   final Duration spotlightRotationInterval;
@@ -182,7 +190,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         widget.recommendationController.load(),
         widget.newSongController.load(),
         if (widget.authenticated) widget.homeController.refresh(),
-        if (widget.authenticated) widget.radarController.load(),
+        if (widget.authenticated && widget.radarEnabled)
+          widget.radarController.load(),
       ]);
       if (!mounted) return;
       if (!widget.authenticated && widget.active && _foreground) {
@@ -195,13 +204,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             widget.newSongController.stage == NewSongStage.error ||
             (widget.authenticated &&
                 (widget.homeController.refreshHasErrors ||
-                    widget.radarController.stage == RadarStage.error));
+                    (widget.radarEnabled &&
+                        widget.radarController.stage == RadarStage.error)));
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(
               failed
                   ? 'Some recommendations could not refresh. You can retry each section.'
-                  : 'Recommendations refreshed. QQ Music may return the same picks.',
+                  : 'Recommendations refreshed. ${widget.providerDisplayName} may return the same picks.',
             ),
           ),
         );
@@ -349,8 +359,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 recommendationController: widget.recommendationController,
                 newSongController: widget.newSongController,
                 radarController: widget.radarController,
+                radarEnabled: widget.radarEnabled,
+                dailyTracksEnabled: widget.dailyTracksEnabled,
+                personalFmEnabled: widget.personalFmEnabled,
                 queuePlaybackController: widget.queuePlaybackController,
                 authenticated: widget.authenticated,
+                providerDisplayName: widget.providerDisplayName,
                 spotlightPlaylist: spotlightPlaylist,
                 onPreviousSpotlight: () =>
                     _moveSpotlight(-1, restartTimer: true),
@@ -383,8 +397,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               recommendationController: widget.recommendationController,
               newSongController: widget.newSongController,
               radarController: widget.radarController,
+              radarEnabled: widget.radarEnabled,
+              dailyTracksEnabled: widget.dailyTracksEnabled,
+              personalFmEnabled: widget.personalFmEnabled,
               queuePlaybackController: widget.queuePlaybackController,
               authenticated: widget.authenticated,
+              providerDisplayName: widget.providerDisplayName,
               spotlightPlaylist: spotlightPlaylist,
               onPreviousSpotlight: () => _moveSpotlight(-1, restartTimer: true),
               onNextSpotlight: () => _moveSpotlight(1, restartTimer: true),
@@ -443,8 +461,12 @@ class _HomeWideLayout extends StatelessWidget {
     required this.recommendationController,
     required this.newSongController,
     required this.radarController,
+    required this.radarEnabled,
+    required this.dailyTracksEnabled,
+    required this.personalFmEnabled,
     required this.queuePlaybackController,
     required this.authenticated,
+    required this.providerDisplayName,
     required this.spotlightPlaylist,
     required this.onPreviousSpotlight,
     required this.onNextSpotlight,
@@ -467,8 +489,12 @@ class _HomeWideLayout extends StatelessWidget {
   final RecommendedPlaylistController recommendationController;
   final NewSongController newSongController;
   final RadarController radarController;
+  final bool radarEnabled;
+  final bool dailyTracksEnabled;
+  final bool personalFmEnabled;
   final QueuePlaybackController queuePlaybackController;
   final bool authenticated;
+  final String providerDisplayName;
   final RecommendedPlaylistSummary? spotlightPlaylist;
   final VoidCallback onPreviousSpotlight;
   final VoidCallback onNextSpotlight;
@@ -501,6 +527,9 @@ class _HomeWideLayout extends StatelessWidget {
           controller: recommendationController,
           newSongController: newSongController,
           radarController: radarController,
+          radarEnabled: radarEnabled,
+          dailyTracksEnabled: dailyTracksEnabled,
+          providerDisplayName: providerDisplayName,
           queueController: queuePlaybackController,
           authenticated: authenticated,
           spotlightPlaylist: spotlightPlaylist,
@@ -531,6 +560,7 @@ class _HomeWideLayout extends StatelessWidget {
           _PersonalizedPlaylistSection(
             controller: homeController,
             compact: false,
+            providerDisplayName: providerDisplayName,
             onSelected: onOpenRecommendation,
             lastOpened: lastOpenedRecommendation,
             returnFocusNode: recommendationReturnFocusNode,
@@ -543,11 +573,16 @@ class _HomeWideLayout extends StatelessWidget {
             onSelected: onOpenRecommendation,
             lastOpened: lastOpenedRecommendation,
             returnFocusNode: recommendationReturnFocusNode,
+            providerDisplayName: providerDisplayName,
           ),
         const SizedBox(height: _HomeGeometry.sectionGap),
         _HomeSectionHeader(
           titleKey: const ValueKey('home-listening-one-heading'),
-          title: authenticated ? 'Songs picked for you' : 'New songs',
+          title: authenticated
+              ? personalFmEnabled
+                    ? 'Personal FM'
+                    : 'Songs picked for you'
+              : 'New songs',
         ),
         const SizedBox(height: _HomeGeometry.itemGap),
         if (authenticated)
@@ -555,6 +590,7 @@ class _HomeWideLayout extends StatelessWidget {
             controller: homeController,
             queueController: queuePlaybackController,
             compact: false,
+            personalFm: personalFmEnabled,
           )
         else
           _NewSongSection(
@@ -562,6 +598,7 @@ class _HomeWideLayout extends StatelessWidget {
             queueController: queuePlaybackController,
             compact: false,
             authenticated: false,
+            providerDisplayName: providerDisplayName,
           ),
         if (authenticated) ...[
           const SizedBox(height: _HomeGeometry.sectionGap),
@@ -575,6 +612,7 @@ class _HomeWideLayout extends StatelessWidget {
             queueController: queuePlaybackController,
             compact: false,
             authenticated: true,
+            providerDisplayName: providerDisplayName,
           ),
           const SizedBox(height: _HomeGeometry.sectionGap),
           _HomeSectionHeader(
@@ -626,8 +664,12 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.recommendationController,
     required this.newSongController,
     required this.radarController,
+    required this.radarEnabled,
+    required this.dailyTracksEnabled,
+    required this.personalFmEnabled,
     required this.queuePlaybackController,
     required this.authenticated,
+    required this.providerDisplayName,
     required this.spotlightPlaylist,
     required this.onPreviousSpotlight,
     required this.onNextSpotlight,
@@ -651,8 +693,12 @@ class _HomeCompactLayout extends StatelessWidget {
   final RecommendedPlaylistController recommendationController;
   final NewSongController newSongController;
   final RadarController radarController;
+  final bool radarEnabled;
+  final bool dailyTracksEnabled;
+  final bool personalFmEnabled;
   final QueuePlaybackController queuePlaybackController;
   final bool authenticated;
+  final String providerDisplayName;
   final RecommendedPlaylistSummary? spotlightPlaylist;
   final VoidCallback onPreviousSpotlight;
   final VoidCallback onNextSpotlight;
@@ -678,6 +724,7 @@ class _HomeCompactLayout extends StatelessWidget {
         _CompactCategoryBar(
           onOpenDiscover: onOpenDiscover,
           authenticated: authenticated,
+          providerDisplayName: providerDisplayName,
           onAccountAction: onAccountAction,
         ),
         Padding(
@@ -695,6 +742,9 @@ class _HomeCompactLayout extends StatelessWidget {
                 controller: recommendationController,
                 newSongController: newSongController,
                 radarController: radarController,
+                radarEnabled: radarEnabled,
+                dailyTracksEnabled: dailyTracksEnabled,
+                providerDisplayName: providerDisplayName,
                 queueController: queuePlaybackController,
                 authenticated: authenticated,
                 spotlightPlaylist: spotlightPlaylist,
@@ -731,6 +781,7 @@ class _HomeCompactLayout extends StatelessWidget {
                 _PersonalizedPlaylistSection(
                   controller: homeController,
                   compact: true,
+                  providerDisplayName: providerDisplayName,
                   onSelected: onOpenRecommendation,
                   lastOpened: lastOpenedRecommendation,
                   returnFocusNode: recommendationReturnFocusNode,
@@ -743,11 +794,16 @@ class _HomeCompactLayout extends StatelessWidget {
                   onSelected: onOpenRecommendation,
                   lastOpened: lastOpenedRecommendation,
                   returnFocusNode: recommendationReturnFocusNode,
+                  providerDisplayName: providerDisplayName,
                 ),
               const SizedBox(height: _HomeGeometry.sectionGap),
               _HomeSectionHeader(
                 titleKey: const ValueKey('home-listening-one-heading'),
-                title: authenticated ? 'Songs picked for you' : 'New songs',
+                title: authenticated
+                    ? personalFmEnabled
+                          ? 'Personal FM'
+                          : 'Songs picked for you'
+                    : 'New songs',
                 compact: true,
               ),
               const SizedBox(height: _HomeGeometry.itemGap),
@@ -756,6 +812,7 @@ class _HomeCompactLayout extends StatelessWidget {
                   controller: homeController,
                   queueController: queuePlaybackController,
                   compact: true,
+                  personalFm: personalFmEnabled,
                 )
               else
                 _NewSongSection(
@@ -763,6 +820,7 @@ class _HomeCompactLayout extends StatelessWidget {
                   queueController: queuePlaybackController,
                   compact: true,
                   authenticated: false,
+                  providerDisplayName: providerDisplayName,
                 ),
               if (authenticated) ...[
                 const SizedBox(height: _HomeGeometry.sectionGap),
@@ -777,6 +835,7 @@ class _HomeCompactLayout extends StatelessWidget {
                   queueController: queuePlaybackController,
                   compact: true,
                   authenticated: true,
+                  providerDisplayName: providerDisplayName,
                 ),
                 const SizedBox(height: _HomeGeometry.sectionGap),
                 _HomeSectionHeader(
@@ -843,11 +902,13 @@ class _CompactCategoryBar extends StatelessWidget {
   const _CompactCategoryBar({
     required this.onOpenDiscover,
     required this.authenticated,
+    required this.providerDisplayName,
     required this.onAccountAction,
   });
 
   final VoidCallback onOpenDiscover;
   final bool authenticated;
+  final String providerDisplayName;
   final VoidCallback onAccountAction;
 
   @override
@@ -884,7 +945,9 @@ class _CompactCategoryBar extends StatelessWidget {
             IconButton(
               key: ValueKey(authenticated ? 'sign-out' : 'sign-in'),
               onPressed: onAccountAction,
-              tooltip: authenticated ? 'Sign out' : 'Sign in to QQ Music',
+              tooltip: authenticated
+                  ? 'Sign out'
+                  : 'Sign in to $providerDisplayName',
               icon: Icon(
                 authenticated ? Icons.more_vert_rounded : Icons.login_rounded,
               ),
@@ -1017,6 +1080,9 @@ class _DailyRecommendationSection extends StatelessWidget {
     required this.controller,
     required this.newSongController,
     required this.radarController,
+    required this.radarEnabled,
+    required this.dailyTracksEnabled,
+    required this.providerDisplayName,
     required this.queueController,
     required this.authenticated,
     required this.spotlightPlaylist,
@@ -1037,6 +1103,9 @@ class _DailyRecommendationSection extends StatelessWidget {
   final RecommendedPlaylistController controller;
   final NewSongController newSongController;
   final RadarController radarController;
+  final bool radarEnabled;
+  final bool dailyTracksEnabled;
+  final String providerDisplayName;
   final QueuePlaybackController queueController;
   final bool authenticated;
   final RecommendedPlaylistSummary? spotlightPlaylist;
@@ -1055,6 +1124,7 @@ class _DailyRecommendationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final daily = homeController.dailyPlaylist;
+    final dailyTracks = homeController.dailyTracks;
     final publicPlaylists = controller.stage == RecommendedPlaylistStage.content
         ? controller.playlists
         : const <RecommendedPlaylistSummary>[];
@@ -1074,6 +1144,7 @@ class _DailyRecommendationSection extends StatelessWidget {
             homeController.refreshHasErrors &&
             (homeController.personalizedPlaylists.isNotEmpty ||
                 daily != null ||
+                dailyTracks.isNotEmpty ||
                 homeController.personalizedTracks.isNotEmpty))
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -1104,8 +1175,12 @@ class _DailyRecommendationSection extends StatelessWidget {
               : controller.retry,
           newSongController: newSongController,
           dailyPlaylist: daily,
+          dailyTracks: dailyTracks,
+          dailyTracksEnabled: dailyTracksEnabled,
+          providerDisplayName: providerDisplayName,
           dailyStage: homeController.dailyStage,
           radarController: radarController,
+          radarEnabled: radarEnabled,
           queueController: queueController,
           authenticated: authenticated,
           compact: compact,
@@ -1137,8 +1212,12 @@ class _DailyRecommendationContent extends StatelessWidget {
     required this.publicStage,
     required this.newSongController,
     required this.dailyPlaylist,
+    required this.dailyTracks,
+    required this.dailyTracksEnabled,
+    required this.providerDisplayName,
     required this.dailyStage,
     required this.radarController,
+    required this.radarEnabled,
     required this.queueController,
     required this.authenticated,
     required this.compact,
@@ -1165,8 +1244,12 @@ class _DailyRecommendationContent extends StatelessWidget {
   final RecommendedPlaylistStage publicStage;
   final NewSongController newSongController;
   final RecommendedPlaylistSummary? dailyPlaylist;
+  final List<PlaylistTrackSummary> dailyTracks;
+  final bool dailyTracksEnabled;
+  final String providerDisplayName;
   final HomeResourceStage dailyStage;
   final RadarController radarController;
+  final bool radarEnabled;
   final QueuePlaybackController queueController;
   final bool authenticated;
   final bool compact;
@@ -1251,7 +1334,10 @@ class _DailyRecommendationContent extends StatelessWidget {
         key: const ValueKey('home-guest-popular-state'),
         headingKey: const ValueKey('home-guest-popular-heading'),
         title: 'Popular playlist',
-        detail: _publicStateDetail(publicStage),
+        detail: _publicStateDetail(
+          publicStage,
+          providerDisplayName: providerDisplayName,
+        ),
         loading: publicStage == RecommendedPlaylistStage.loading,
         onRetry: publicStage == RecommendedPlaylistStage.error
             ? onRetryPublic
@@ -1260,11 +1346,14 @@ class _DailyRecommendationContent extends StatelessWidget {
       );
     }
     final playlist = dailyPlaylist;
+    final dailyLabel = dailyTracksEnabled
+        ? 'Daily tracks'
+        : 'Daily recommendation';
     if (playlist != null) {
       return compact
           ? _CompactRecommendationCard(
               playlist: playlist,
-              eyebrow: 'Daily recommendation',
+              eyebrow: dailyLabel,
               eyebrowKey: const ValueKey('home-daily-heading'),
               itemKey: const ValueKey('home-daily-recommendation'),
               onSelected: onSelected,
@@ -1272,18 +1361,28 @@ class _DailyRecommendationContent extends StatelessWidget {
             )
           : _WideRecommendationCard(
               playlist: playlist,
-              eyebrow: 'Daily recommendation',
+              eyebrow: dailyLabel,
               eyebrowKey: const ValueKey('home-daily-heading'),
               itemKey: const ValueKey('home-daily-recommendation'),
               onSelected: onSelected,
               focusNode: _focusMatches(playlist) ? returnFocusNode : null,
             );
     }
+    if (dailyTracks.isNotEmpty) {
+      return _TrackRecommendationCard(
+        track: dailyTracks.first,
+        label: 'Daily tracks',
+        itemKey: const ValueKey('home-daily-tracks'),
+        placeholderIcon: Icons.today_rounded,
+        compact: compact,
+        onPlay: () => unawaited(queueController.replaceAndPlay(dailyTracks, 0)),
+      );
+    }
     return _RecommendationSlotState(
       key: const ValueKey('home-daily-recommendation-state'),
       headingKey: const ValueKey('home-daily-heading'),
-      title: 'Daily recommendation',
-      detail: _dailyStateDetail(dailyStage),
+      title: dailyLabel,
+      detail: _dailyStateDetail(dailyStage, dailyTracks: dailyTracksEnabled),
       loading: dailyStage == HomeResourceStage.loading,
       onRetry: dailyStage == HomeResourceStage.error ? onRetryDaily : null,
       compact: compact,
@@ -1307,7 +1406,10 @@ class _DailyRecommendationContent extends StatelessWidget {
       return _RecommendationSlotState(
         key: const ValueKey('home-guest-new-song-state'),
         title: 'New songs',
-        detail: _newSongStateDetail(newSongController.stage),
+        detail: _newSongStateDetail(
+          newSongController.stage,
+          providerDisplayName: providerDisplayName,
+        ),
         loading: newSongController.stage == NewSongStage.loading,
         onRetry: newSongController.canRetry ? newSongController.retry : null,
         compact: compact,
@@ -1343,14 +1445,17 @@ class _DailyRecommendationContent extends StatelessWidget {
         children: [
           _featuredSlot(context),
           const SizedBox(height: _HomeGeometry.itemGap),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _dailySlot()),
-              const SizedBox(width: _HomeGeometry.itemGap),
-              Expanded(child: _radarSlot()),
-            ],
-          ),
+          if (radarEnabled)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _dailySlot()),
+                const SizedBox(width: _HomeGeometry.itemGap),
+                Expanded(child: _radarSlot()),
+              ],
+            )
+          else
+            _dailySlot(),
         ],
       );
     }
@@ -1366,8 +1471,10 @@ class _DailyRecommendationContent extends StatelessWidget {
             child: Column(
               children: [
                 Expanded(child: _dailySlot()),
-                const SizedBox(height: _HomeGeometry.itemGap),
-                Expanded(child: _radarSlot()),
+                if (radarEnabled) ...[
+                  const SizedBox(height: _HomeGeometry.itemGap),
+                  Expanded(child: _radarSlot()),
+                ],
               ],
             ),
           ),
@@ -1394,8 +1501,9 @@ class _TrackRecommendationCard extends StatelessWidget {
   final bool compact;
   final VoidCallback onPlay;
 
-  String get _artists =>
-      track.artistNames.isEmpty ? 'QQ Music' : track.artistNames.join(' · ');
+  String get _artists => track.artistNames.isEmpty
+      ? 'Music service'
+      : track.artistNames.join(' · ');
 
   @override
   Widget build(BuildContext context) {
@@ -2099,6 +2207,7 @@ class _GuestPlaylistSection extends StatelessWidget {
     required this.onSelected,
     required this.lastOpened,
     required this.returnFocusNode,
+    required this.providerDisplayName,
   });
 
   final RecommendedPlaylistController controller;
@@ -2107,6 +2216,7 @@ class _GuestPlaylistSection extends StatelessWidget {
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -2116,17 +2226,21 @@ class _GuestPlaylistSection extends StatelessWidget {
         compact: compact,
         semanticLabel: 'Loading public playlists',
       ),
-      RecommendedPlaylistStage.empty => const _HomeInlineState(
-        key: ValueKey('home-guest-playlists-empty'),
+      RecommendedPlaylistStage.empty => _HomeInlineState(
+        key: const ValueKey('home-guest-playlists-empty'),
         icon: Icons.queue_music_outlined,
         title: 'No public playlists right now',
-        detail: 'QQ Music did not return any public playlist recommendations.',
+        detail:
+            '$providerDisplayName did not return any public playlist recommendations.',
       ),
       RecommendedPlaylistStage.error => _HomeInlineState(
         key: const ValueKey('home-guest-playlists-error'),
         icon: Icons.cloud_off_outlined,
         title: 'Couldn’t load public playlists',
-        detail: _publicStateDetail(controller.stage),
+        detail: _publicStateDetail(
+          controller.stage,
+          providerDisplayName: providerDisplayName,
+        ),
         liveRegion: true,
         action: controller.canRetry
             ? FilledButton.tonal(
@@ -2183,12 +2297,14 @@ class _NewSongSection extends StatelessWidget {
     required this.queueController,
     required this.compact,
     required this.authenticated,
+    required this.providerDisplayName,
   });
 
   final NewSongController controller;
   final QueuePlaybackController queueController;
   final bool compact;
   final bool authenticated;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -2203,7 +2319,8 @@ class _NewSongSection extends StatelessWidget {
         ),
         icon: Icons.new_releases_outlined,
         title: 'No new songs right now',
-        detail: 'QQ Music did not return a public new-song collection.',
+        detail:
+            '$providerDisplayName did not return a public new-song collection.',
       ),
       NewSongStage.error => _HomeInlineState(
         key: ValueKey(
@@ -2211,7 +2328,10 @@ class _NewSongSection extends StatelessWidget {
         ),
         icon: Icons.cloud_off_outlined,
         title: 'Couldn’t load new songs',
-        detail: _newSongFailureDetail(controller.failure),
+        detail: _newSongFailureDetail(
+          controller.failure,
+          providerDisplayName: providerDisplayName,
+        ),
         liveRegion: true,
         action: controller.canRetry
             ? FilledButton.tonal(
@@ -2240,6 +2360,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
     required this.onSelected,
     required this.lastOpened,
     required this.returnFocusNode,
+    required this.providerDisplayName,
   });
 
   final HomeController controller;
@@ -2247,6 +2368,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -2271,6 +2393,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
         ),
         detail: _personalizedPlaylistFailureDetail(
           controller.personalizedPlaylistsFailure,
+          providerDisplayName: providerDisplayName,
         ),
         liveRegion: true,
         compactFootprint: true,
@@ -2382,30 +2505,38 @@ class _PersonalizedTrackSection extends StatelessWidget {
     required this.controller,
     required this.queueController,
     required this.compact,
+    required this.personalFm,
   });
 
   final HomeController controller;
   final QueuePlaybackController queueController;
   final bool compact;
+  final bool personalFm;
 
   @override
   Widget build(BuildContext context) {
     return switch (controller.personalizedTracksStage) {
       HomeResourceStage.loading => _HomeTrackLoading(
         compact: compact,
-        semanticLabel: 'Loading personalized songs',
+        semanticLabel: personalFm
+            ? 'Loading Personal FM'
+            : 'Loading personalized songs',
       ),
-      HomeResourceStage.empty => const _HomeInlineState(
-        key: ValueKey('home-personalized-tracks-empty'),
+      HomeResourceStage.empty => _HomeInlineState(
+        key: const ValueKey('home-personalized-tracks-empty'),
         icon: Icons.music_note_outlined,
-        title: 'No personalized songs right now',
+        title: personalFm
+            ? 'Personal FM has no songs right now'
+            : 'No personalized songs right now',
         detail: 'Public playlists and your Library remain available.',
         compactFootprint: true,
       ),
       HomeResourceStage.error => _HomeInlineState(
         key: const ValueKey('home-personalized-tracks-error'),
         icon: Icons.cloud_off_rounded,
-        title: 'Couldn’t load personalized songs',
+        title: personalFm
+            ? 'Couldn’t load Personal FM'
+            : 'Couldn’t load personalized songs',
         detail: 'Other Home sections are still available.',
         liveRegion: true,
         compactFootprint: true,
@@ -2456,7 +2587,8 @@ class _RelatedTrackSection extends StatelessWidget {
         key: const ValueKey('home-related-tracks-empty'),
         icon: Icons.music_note_outlined,
         title: 'No related songs right now',
-        detail: 'QQ Music returned no related songs for “${seed!.title}”.',
+        detail:
+            'The track’s music service returned no related songs for “${seed!.title}”.',
         compactFootprint: true,
       ),
       HomeResourceStage.error => _HomeInlineState(
@@ -3181,13 +3313,15 @@ String _personalizedPlaylistFailureTitle(
 };
 
 String _personalizedPlaylistFailureDetail(
-  PersonalizedPlaylistsFailure? failure,
-) => switch (failure) {
-  PersonalizedPlaylistsFailure.invalidResponse => 'QQ Music returned a personalized-playlist structure this client does not recognize. No account content was recorded.',
+  PersonalizedPlaylistsFailure? failure, {
+  required String providerDisplayName,
+}) => switch (failure) {
+  PersonalizedPlaylistsFailure.invalidResponse =>
+    '$providerDisplayName returned a personalized-playlist structure this client does not recognize. No account content was recorded.',
   PersonalizedPlaylistsFailure.network =>
     'Check the network connection, then try again.',
   PersonalizedPlaylistsFailure.serviceUnavailable =>
-    'QQ Music rejected or could not serve this request. Try again later.',
+    '$providerDisplayName rejected or could not serve this request. Try again later.',
   PersonalizedPlaylistsFailure.replaced =>
     'A newer authenticated recommendation request replaced this one.',
   PersonalizedPlaylistsFailure.cancelled =>
@@ -3216,12 +3350,11 @@ String _relatedTracksFailureDetail(
   PlaylistTrackSummary? seed,
 ) => switch (failure) {
   RelatedTracksFailure.invalidTrack =>
-    '“${seed?.title ?? 'This song'}” has no usable QQ Music identity.',
+    '“${seed?.title ?? 'This song'}” has no usable music-service identity.',
   RelatedTracksFailure.network =>
     'Check the network connection, then try again.',
-  RelatedTracksFailure.serviceUnavailable =>
-    'QQ Music could not serve related songs for this seed right now.',
-  RelatedTracksFailure.invalidResponse => 'QQ Music returned a related-song structure this client does not recognize.',
+  RelatedTracksFailure.serviceUnavailable => 'The track’s music service could not serve related songs for this seed right now.',
+  RelatedTracksFailure.invalidResponse => 'The track’s music service returned a related-song structure this client does not recognize.',
   RelatedTracksFailure.cancelled =>
     'The seed changed before related songs were returned.',
   RelatedTracksFailure.alreadyRunning =>
@@ -3229,21 +3362,33 @@ String _relatedTracksFailureDetail(
   _ => 'The related-song Core capability could not be reached.',
 };
 
-String _publicStateDetail(RecommendedPlaylistStage stage) => switch (stage) {
+String _publicStateDetail(
+  RecommendedPlaylistStage stage, {
+  required String providerDisplayName,
+}) => switch (stage) {
   RecommendedPlaylistStage.loading => 'Loading public recommendations…',
   RecommendedPlaylistStage.content =>
     'No additional public recommendation is available right now.',
   RecommendedPlaylistStage.empty =>
-    'QQ Music has no public recommendation available right now.',
+    '$providerDisplayName has no public recommendation available right now.',
   RecommendedPlaylistStage.error =>
     'Public recommendations could not be loaded.',
 };
 
-String _dailyStateDetail(HomeResourceStage stage) => switch (stage) {
-  HomeResourceStage.loading => 'Loading your Daily 30…',
-  HomeResourceStage.content => 'Daily 30 is unavailable right now.',
-  HomeResourceStage.empty => 'Daily 30 is unavailable right now.',
-  HomeResourceStage.error => 'Daily 30 could not be loaded.',
+String _dailyStateDetail(
+  HomeResourceStage stage, {
+  required bool dailyTracks,
+}) => switch (stage) {
+  HomeResourceStage.loading =>
+    dailyTracks ? 'Loading your daily tracks…' : 'Loading your Daily 30…',
+  HomeResourceStage.content || HomeResourceStage.empty =>
+    dailyTracks
+        ? 'Daily tracks are unavailable right now.'
+        : 'Daily 30 is unavailable right now.',
+  HomeResourceStage.error =>
+    dailyTracks
+        ? 'Daily tracks could not be loaded.'
+        : 'Daily 30 could not be loaded.',
 };
 
 String _radarStateDetail(RadarStage stage) => switch (stage) {
@@ -3253,22 +3398,29 @@ String _radarStateDetail(RadarStage stage) => switch (stage) {
   RadarStage.error => 'Radar recommendations could not be loaded.',
 };
 
-String _newSongStateDetail(NewSongStage stage) => switch (stage) {
+String _newSongStateDetail(
+  NewSongStage stage, {
+  required String providerDisplayName,
+}) => switch (stage) {
   NewSongStage.loading => 'Loading public new songs…',
   NewSongStage.content => 'No public new song is available right now.',
-  NewSongStage.empty => 'QQ Music has no public new songs right now.',
+  NewSongStage.empty =>
+    '$providerDisplayName has no public new songs right now.',
   NewSongStage.error => 'Public new songs could not be loaded.',
 };
 
-String _newSongFailureDetail(NewSongFailure? failure) => switch (failure) {
+String _newSongFailureDetail(
+  NewSongFailure? failure, {
+  required String providerDisplayName,
+}) => switch (failure) {
   NewSongFailure.network => 'Check your connection, then try again.',
   NewSongFailure.serviceUnavailable =>
-    'QQ Music new songs are temporarily unavailable.',
+    '$providerDisplayName new songs are temporarily unavailable.',
   NewSongFailure.cancelled => 'The new-song request was cancelled.',
   NewSongFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   NewSongFailure.invalidResponse =>
-    'QQ Music returned a new-song response this client does not recognize.',
+    '$providerDisplayName returned a new-song response this client does not recognize.',
   NewSongFailure.alreadyRunning =>
     'Wait for the active new-song request to finish.',
   null => 'Public new songs could not be loaded.',
@@ -3276,12 +3428,12 @@ String _newSongFailureDetail(NewSongFailure? failure) => switch (failure) {
 
 String _recommendationDetail(RecommendedPlaylistSummary playlist) =>
     playlist.trackCount == null
-    ? 'QQ Music playlist'
+    ? 'Music playlist'
     : '${playlist.trackCount} tracks';
 
 String _recommendationSemanticLabel(RecommendedPlaylistSummary playlist) =>
     playlist.trackCount == null
-    ? '${playlist.title}, QQ Music playlist'
+    ? '${playlist.title}, music playlist'
     : '${playlist.title}, ${playlist.trackCount} tracks';
 
 String _durationLabel(int seconds) {

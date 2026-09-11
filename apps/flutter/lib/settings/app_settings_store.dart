@@ -100,7 +100,9 @@ class AppSettingsStore {
         state: AppSettingsLoadState.invalidDocument,
       );
     }
-    if (version != 1 && version != AppSettings.currentSchemaVersion) {
+    if (version != 1 &&
+        version != 2 &&
+        version != AppSettings.currentSchemaVersion) {
       return const AppSettingsLoadResult(
         settings: AppSettings.defaults,
         state: AppSettingsLoadState.unsupportedVersion,
@@ -124,26 +126,12 @@ class AppSettingsStore {
       );
     }
 
-    if (version == 1) {
-      return AppSettingsLoadResult(
-        settings: AppSettings(
-          theme: theme,
-          playbackQuality: AppPlaybackQualityPreference.standard,
-        ),
-        state: AppSettingsLoadState.migrated,
-      );
-    }
-
     final playbackQualityName = decoded['playbackQuality'];
-    if (playbackQualityName is! String) {
-      return const AppSettingsLoadResult(
-        settings: AppSettings.defaults,
-        state: AppSettingsLoadState.invalidDocument,
-      );
-    }
-    final playbackQuality = AppPlaybackQualityPreference.values
-        .where((candidate) => candidate.name == playbackQualityName)
-        .firstOrNull;
+    final playbackQuality = version == 1
+        ? AppPlaybackQualityPreference.standard
+        : AppPlaybackQualityPreference.values
+              .where((candidate) => candidate.name == playbackQualityName)
+              .firstOrNull;
     if (playbackQuality == null) {
       return const AppSettingsLoadResult(
         settings: AppSettings.defaults,
@@ -151,9 +139,29 @@ class AppSettingsStore {
       );
     }
 
+    final providerName = decoded['musicProvider'];
+    final musicProvider = version < AppSettings.currentSchemaVersion
+        ? AppMusicProvider.qqMusic
+        : AppMusicProvider.values
+                  .where((candidate) => candidate.name == providerName)
+                  .firstOrNull ??
+              AppMusicProvider.qqMusic;
+    final migrated =
+        version < AppSettings.currentSchemaVersion ||
+        (version == AppSettings.currentSchemaVersion &&
+            !AppMusicProvider.values.any(
+              (candidate) => candidate.name == providerName,
+            ));
+
     return AppSettingsLoadResult(
-      settings: AppSettings(theme: theme, playbackQuality: playbackQuality),
-      state: AppSettingsLoadState.stored,
+      settings: AppSettings(
+        theme: theme,
+        playbackQuality: playbackQuality,
+        musicProvider: musicProvider,
+      ),
+      state: migrated
+          ? AppSettingsLoadState.migrated
+          : AppSettingsLoadState.stored,
     );
   }
 
@@ -163,6 +171,7 @@ class AppSettingsStore {
           'schemaVersion': AppSettings.currentSchemaVersion,
           'theme': settings.theme.name,
           'playbackQuality': settings.playbackQuality.name,
+          'musicProvider': settings.musicProvider.name,
         });
         try {
           await _storage.write(document);

@@ -13,6 +13,7 @@ import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 
 const _desktopNowPlayingHeight = 88.0;
@@ -1388,6 +1389,9 @@ String _statusCopy(QueuePlaybackController controller) {
   final queueFailure = controller.failure;
   if (queueFailure != null) return _queueFailureCopy(queueFailure);
   final playback = controller.playback;
+  final providerDisplayName = builtInProviderDisplayName(
+    controller.currentTrackListenable.value?.providerId ?? '',
+  );
   return switch (playback.stage) {
     TrackPlaybackStage.idle => 'Ready to play',
     TrackPlaybackStage.resolving => 'Finding a playable source…',
@@ -1398,6 +1402,7 @@ String _statusCopy(QueuePlaybackController controller) {
     TrackPlaybackStage.completed => 'Finished',
     TrackPlaybackStage.resolutionError => _resolutionFailureCopy(
       playback.resolutionFailure,
+      providerDisplayName,
     ),
     TrackPlaybackStage.engineError => 'Playback failed. Try this track again.',
   };
@@ -1413,26 +1418,29 @@ String _queueFailureCopy(PlaybackQueueFailure failure) => switch (failure) {
     'The music core returned an invalid queue state.',
 };
 
-String _resolutionFailureCopy(MediaResolutionFailure? failure) =>
-    switch (failure) {
-      MediaResolutionFailure.authenticationRequired ||
-      MediaResolutionFailure.replaced ||
-      MediaResolutionFailure.cancelled =>
-        'Sign in to try account-authorized playback.',
-      MediaResolutionFailure.credentialRejected =>
-        'Your QQ Music session was rejected and removed.',
-      MediaResolutionFailure.credentialRejectedStorageCleanupFailed =>
-        'Your session was rejected, but secure storage could not remove it.',
-      MediaResolutionFailure.unavailable =>
-        'QQ Music did not provide a playable source.',
-      MediaResolutionFailure.network => 'Couldn’t reach QQ Music. Try again.',
-      MediaResolutionFailure.serviceUnavailable =>
-        'QQ Music playback is unavailable right now.',
-      MediaResolutionFailure.invalidResponse =>
-        'QQ Music returned a source this build could not safely play.',
-      MediaResolutionFailure.coreUnavailable =>
-        'The music core could not resolve this track.',
-      MediaResolutionFailure.alreadyRunning =>
-        'Another media request is still running.',
-      null => 'This track could not be resolved.',
-    };
+String _resolutionFailureCopy(
+  MediaResolutionFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
+  MediaResolutionFailure.authenticationRequired ||
+  MediaResolutionFailure.replaced ||
+  MediaResolutionFailure.cancelled =>
+    'Sign in to try account-authorized playback.',
+  MediaResolutionFailure.credentialRejected =>
+    'Your $providerDisplayName session was rejected and removed.',
+  MediaResolutionFailure.credentialRejectedStorageCleanupFailed =>
+    'Your session was rejected, but secure storage could not remove it.',
+  MediaResolutionFailure.unavailable =>
+    '$providerDisplayName did not provide a playable source.',
+  MediaResolutionFailure.network =>
+    'Couldn’t reach $providerDisplayName. Try again.',
+  MediaResolutionFailure.serviceUnavailable =>
+    '$providerDisplayName playback is unavailable right now.',
+  MediaResolutionFailure.invalidResponse =>
+    '$providerDisplayName returned a source this build could not safely play.',
+  MediaResolutionFailure.coreUnavailable =>
+    'The music core could not resolve this track.',
+  MediaResolutionFailure.alreadyRunning =>
+    'Another media request is still running.',
+  null => 'This track could not be resolved.',
+};

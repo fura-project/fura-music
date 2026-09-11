@@ -28,6 +28,7 @@ class TrackSearchPage extends StatefulWidget {
     required this.onOpenArtist,
     required this.onOpenPlaylist,
     required this.onSignInAgain,
+    this.providerDisplayName = 'QQ Music',
     this.artistGateway,
     this.albumGateway,
     this.playlistGateway,
@@ -42,6 +43,7 @@ class TrackSearchPage extends StatefulWidget {
   final ValueChanged<ArtistSummary> onOpenArtist;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final VoidCallback onSignInAgain;
+  final String providerDisplayName;
   final ArtistSearchGateway? artistGateway;
   final AlbumSearchGateway? albumGateway;
   final PlaylistSearchGateway? playlistGateway;
@@ -203,7 +205,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Search QQ Music'),
+        title: Text('Search ${widget.providerDisplayName}'),
       ),
       body: body,
       bottomNavigationBar: NowPlayingBar(
@@ -222,15 +224,15 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _trackBody(bool desktop) => switch (_controller.stage) {
-    TrackSearchStage.idle => const MusicContentStatePanel(
+    TrackSearchStage.idle => MusicContentStatePanel(
       key: ValueKey('track-search-idle'),
       icon: Icons.search_rounded,
-      title: 'Find Tracks on QQ Music',
+      title: 'Find Tracks on ${widget.providerDisplayName}',
       detail: 'Search by song, Artist, or Album name.',
     ),
-    TrackSearchStage.loading => const MusicLoadingPanel(
+    TrackSearchStage.loading => MusicLoadingPanel(
       key: ValueKey('track-search-loading'),
-      label: 'Searching QQ Music Tracks',
+      label: 'Searching ${widget.providerDisplayName} Tracks',
     ),
     TrackSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('track-search-empty'),
@@ -268,15 +270,15 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _artistBody(bool desktop) => switch (_artistController.stage) {
-    ArtistSearchStage.idle => const MusicContentStatePanel(
+    ArtistSearchStage.idle => MusicContentStatePanel(
       key: ValueKey('artist-search-idle'),
       icon: Icons.person_search_rounded,
-      title: 'Find Artists on QQ Music',
+      title: 'Find Artists on ${widget.providerDisplayName}',
       detail: 'Search by an Artist or group name.',
     ),
-    ArtistSearchStage.loading => const MusicLoadingPanel(
+    ArtistSearchStage.loading => MusicLoadingPanel(
       key: ValueKey('artist-search-loading'),
-      label: 'Searching QQ Music Artists',
+      label: 'Searching ${widget.providerDisplayName} Artists',
     ),
     ArtistSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('artist-search-empty'),
@@ -311,15 +313,15 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _albumBody(bool desktop) => switch (_albumController.stage) {
-    AlbumSearchStage.idle => const MusicContentStatePanel(
+    AlbumSearchStage.idle => MusicContentStatePanel(
       key: ValueKey('album-search-idle'),
       icon: Icons.album_rounded,
-      title: 'Find Albums on QQ Music',
+      title: 'Find Albums on ${widget.providerDisplayName}',
       detail: 'Search by an Album name.',
     ),
-    AlbumSearchStage.loading => const MusicLoadingPanel(
+    AlbumSearchStage.loading => MusicLoadingPanel(
       key: ValueKey('album-search-loading'),
-      label: 'Searching QQ Music Albums',
+      label: 'Searching ${widget.providerDisplayName} Albums',
     ),
     AlbumSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('album-search-empty'),
@@ -354,15 +356,15 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   };
 
   Widget _playlistBody(bool desktop) => switch (_playlistController.stage) {
-    PlaylistSearchStage.idle => const MusicContentStatePanel(
+    PlaylistSearchStage.idle => MusicContentStatePanel(
       key: ValueKey('playlist-search-idle'),
       icon: Icons.queue_music_rounded,
-      title: 'Find Playlists on QQ Music',
+      title: 'Find Playlists on ${widget.providerDisplayName}',
       detail: 'Search by a public Playlist name.',
     ),
-    PlaylistSearchStage.loading => const MusicLoadingPanel(
+    PlaylistSearchStage.loading => MusicLoadingPanel(
       key: ValueKey('playlist-search-loading'),
-      label: 'Searching QQ Music Playlists',
+      label: 'Searching ${widget.providerDisplayName} Playlists',
     ),
     PlaylistSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('playlist-search-empty'),
@@ -405,7 +407,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   }) => MusicContentStatePanel(
     key: key,
     icon: Icons.cloud_off_rounded,
-    title: 'Couldn’t search QQ Music',
+    title: 'Couldn’t search ${widget.providerDisplayName}',
     detail: detail,
     liveRegion: true,
     action: Wrap(
@@ -1153,47 +1155,47 @@ class _SearchFooter extends StatelessWidget {
 String _trackFailureCopy(SearchFailure? failure) => switch (failure) {
   SearchFailure.network => 'Check your connection and try again.',
   SearchFailure.serviceUnavailable =>
-    'QQ Music search is temporarily unavailable.',
+    'This music service’s search is temporarily unavailable.',
   SearchFailure.cancelled => 'The search was cancelled.',
   SearchFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   SearchFailure.invalidResponse ||
   SearchFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected search response.',
+  null => 'The music service returned an unexpected search response.',
 };
 
 String _artistFailureCopy(SearchFailure? failure) => switch (failure) {
   SearchFailure.network => 'Check your connection and try again.',
   SearchFailure.serviceUnavailable =>
-    'QQ Music Artist search is temporarily unavailable.',
+    'Artist search is temporarily unavailable.',
   SearchFailure.cancelled => 'The Artist search was cancelled.',
   SearchFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   SearchFailure.invalidResponse ||
   SearchFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected Artist search response.',
+  null => 'The music service returned an unexpected Artist search response.',
 };
 
 String _albumFailureCopy(SearchFailure? failure) => switch (failure) {
   SearchFailure.network => 'Check your connection and try again.',
   SearchFailure.serviceUnavailable =>
-    'QQ Music Album search is temporarily unavailable.',
+    'Album search is temporarily unavailable.',
   SearchFailure.cancelled => 'The Album search was cancelled.',
   SearchFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   SearchFailure.invalidResponse ||
   SearchFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected Album search response.',
+  null => 'The music service returned an unexpected Album search response.',
 };
 
 String _playlistFailureCopy(SearchFailure? failure) => switch (failure) {
   SearchFailure.network => 'Check your connection and try again.',
   SearchFailure.serviceUnavailable =>
-    'QQ Music Playlist search is temporarily unavailable.',
+    'Playlist search is temporarily unavailable.',
   SearchFailure.cancelled => 'The Playlist search was cancelled.',
   SearchFailure.coreUnavailable =>
     'The local music core is unavailable. Restart the app and try again.',
   SearchFailure.invalidResponse ||
   SearchFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected Playlist search response.',
+  null => 'The music service returned an unexpected Playlist search response.',
 };

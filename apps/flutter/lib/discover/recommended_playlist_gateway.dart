@@ -66,25 +66,33 @@ typedef RecommendedPlaylistPageLoadOperationFactory =
 
 class RustRecommendedPlaylistGateway implements RecommendedPlaylistGateway {
   const RustRecommendedPlaylistGateway({
-    RecommendedPlaylistPageLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad;
+    this.providerId = 'qq-music',
+    this.operationFactory,
+  });
 
-  final RecommendedPlaylistPageLoadOperationFactory _operationFactory;
+  final String providerId;
+  final RecommendedPlaylistPageLoadOperationFactory? operationFactory;
 
   @override
   RecommendedPlaylistPageLoadOperation beginLoad({
     required int offset,
     required int size,
-  }) => _operationFactory(offset, size);
+  }) =>
+      operationFactory?.call(offset, size) ??
+      _beginRustLoad(providerId, offset, size);
 }
 
-RecommendedPlaylistPageLoadOperation _beginRustLoad(int offset, int size) =>
-    _RustRecommendedPlaylistPageLoadOperation(
-      bridge.beginQqMusicRecommendedPlaylistPageLoad(
-        offset: offset,
-        size: size,
-      ),
-    );
+RecommendedPlaylistPageLoadOperation _beginRustLoad(
+  String providerId,
+  int offset,
+  int size,
+) => _RustRecommendedPlaylistPageLoadOperation(
+  bridge.beginQqMusicRecommendedPlaylistPageLoad(
+    providerId: providerId,
+    offset: offset,
+    size: size,
+  ),
+);
 
 class _RustRecommendedPlaylistPageLoadOperation
     implements RecommendedPlaylistPageLoadOperation {

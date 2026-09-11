@@ -52,27 +52,29 @@ class SerializedCredentialVault implements CredentialVault {
 }
 
 class FlutterSecureStringStore implements SecureStringStore {
-  FlutterSecureStringStore({FlutterSecureStorage? storage})
-    : _storage =
-          storage ??
-          const FlutterSecureStorage(
-            aOptions: AndroidOptions(
-              resetOnError: false,
-              storageNamespace: 'flutterustmusic_auth',
-            ),
-            iOptions: IOSOptions(
-              accountName: 'dev.axiaobo.flutterustmusic',
-              accessibility: KeychainAccessibility.first_unlock_this_device,
-              synchronizable: false,
-              label: 'QQ Music session',
-            ),
-            mOptions: MacOsOptions(
-              accountName: 'dev.axiaobo.flutterustmusic',
-              accessibility: KeychainAccessibility.first_unlock_this_device,
-              synchronizable: false,
-              label: 'QQ Music session',
-            ),
-          );
+  FlutterSecureStringStore({
+    FlutterSecureStorage? storage,
+    String platformLabel = 'QQ Music session',
+  }) : _storage =
+           storage ??
+           FlutterSecureStorage(
+             aOptions: const AndroidOptions(
+               resetOnError: false,
+               storageNamespace: 'flutterustmusic_auth',
+             ),
+             iOptions: IOSOptions(
+               accountName: 'dev.axiaobo.flutterustmusic',
+               accessibility: KeychainAccessibility.first_unlock_this_device,
+               synchronizable: false,
+               label: platformLabel,
+             ),
+             mOptions: MacOsOptions(
+               accountName: 'dev.axiaobo.flutterustmusic',
+               accessibility: KeychainAccessibility.first_unlock_this_device,
+               synchronizable: false,
+               label: platformLabel,
+             ),
+           );
 
   final FlutterSecureStorage _storage;
 
@@ -88,23 +90,36 @@ class FlutterSecureStringStore implements SecureStringStore {
 }
 
 class PlatformCredentialVault implements CredentialVault {
-  PlatformCredentialVault({SecureStringStore? store})
-    : _store = store ?? FlutterSecureStringStore();
+  PlatformCredentialVault({
+    this.credentialKey = qqMusicCredentialKey,
+    String? platformLabel,
+    SecureStringStore? store,
+  }) : _store =
+           store ??
+           FlutterSecureStringStore(
+             platformLabel:
+                 platformLabel ??
+                 (credentialKey == netEaseCredentialKey
+                     ? 'NetEase Cloud Music session'
+                     : 'QQ Music session'),
+           );
 
-  static const _credentialKey = 'qq_music_credential_v1';
+  static const qqMusicCredentialKey = 'qq_music_credential_v1';
+  static const netEaseCredentialKey = 'netease_cloud_music_credential_v1';
 
   final SecureStringStore _store;
+  final String credentialKey;
 
   @override
   Future<void> write(Uint8List secretBytes) =>
-      _store.write(key: _credentialKey, value: base64Encode(secretBytes));
+      _store.write(key: credentialKey, value: base64Encode(secretBytes));
 
   @override
   Future<Uint8List?> read() async {
-    final value = await _store.read(key: _credentialKey);
+    final value = await _store.read(key: credentialKey);
     return value == null ? null : base64Decode(value);
   }
 
   @override
-  Future<void> delete() => _store.delete(key: _credentialKey);
+  Future<void> delete() => _store.delete(key: credentialKey);
 }

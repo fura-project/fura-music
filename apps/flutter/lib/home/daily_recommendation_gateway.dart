@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart' as bridge;
 
 enum DailyRecommendationFailure {
@@ -17,9 +18,14 @@ enum DailyRecommendationFailure {
 }
 
 class DailyRecommendationResult {
-  const DailyRecommendationResult({this.playlist, this.failure});
+  const DailyRecommendationResult({
+    this.playlist,
+    this.tracks = const [],
+    this.failure,
+  });
 
   final RecommendedPlaylistSummary? playlist;
+  final List<PlaylistTrackSummary> tracks;
   final DailyRecommendationFailure? failure;
 }
 
@@ -37,27 +43,28 @@ typedef DailyRecommendationLoadOperationFactory =
 
 class RustDailyRecommendationGateway implements DailyRecommendationGateway {
   RustDailyRecommendationGateway({
+    this.providerId = 'qq-music',
     CredentialVault? credentialVault,
-    DailyRecommendationLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad,
-       _credentialVault = SerializedCredentialVault(
+    this.operationFactory,
+  }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
 
   final CredentialVault _credentialVault;
-  final DailyRecommendationLoadOperationFactory _operationFactory;
+  final String providerId;
+  final DailyRecommendationLoadOperationFactory? operationFactory;
 
   @override
   DailyRecommendationLoadOperation beginLoad() =>
       _VaultCleaningDailyRecommendationLoadOperation(
-        _operationFactory(),
+        operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
       );
 }
 
-DailyRecommendationLoadOperation _beginRustLoad() =>
+DailyRecommendationLoadOperation _beginRustLoad(String providerId) =>
     _RustDailyRecommendationLoadOperation(
-      bridge.beginQqMusicDailyRecommendationLoad(),
+      bridge.beginQqMusicDailyRecommendationLoad(providerId: providerId),
     );
 
 class _RustDailyRecommendationLoadOperation
@@ -118,8 +125,9 @@ DailyRecommendationResult mapBridgeDailyRecommendation(
 ) {
   final failure = result.failure;
   final playlist = result.playlist;
+  final bridgeTracks = result.tracks;
   if (failure != null) {
-    if (playlist != null) {
+    if (playlist != null || bridgeTracks.isNotEmpty) {
       return const DailyRecommendationResult(
         failure: DailyRecommendationFailure.invalidResponse,
       );
@@ -127,6 +135,26 @@ DailyRecommendationResult mapBridgeDailyRecommendation(
     return DailyRecommendationResult(
       failure: mapBridgeDailyRecommendationFailure(failure),
     );
+  }
+  if (playlist != null && bridgeTracks.isNotEmpty) {
+    return const DailyRecommendationResult(
+      failure: DailyRecommendationFailure.invalidResponse,
+    );
+  }
+  if (bridgeTracks.isNotEmpty) {
+    final identities = <String>{};
+    final tracks = <PlaylistTrackSummary>[];
+    for (final bridgeTrack in bridgeTracks) {
+      final track = mapBridgeLibraryTrackSummary(bridgeTrack);
+      if (track == null ||
+          !identities.add('${track.providerId}\u0000${track.opaqueId}')) {
+        return const DailyRecommendationResult(
+          failure: DailyRecommendationFailure.invalidResponse,
+        );
+      }
+      tracks.add(track);
+    }
+    return DailyRecommendationResult(tracks: List.unmodifiable(tracks));
   }
   if (playlist == null) return const DailyRecommendationResult();
   if (playlist.providerId.trim().isEmpty ||

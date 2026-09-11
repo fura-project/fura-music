@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
+import 'package:flutterustmusic/src/rust/api/netease_authentication.dart'
+    as netease_bridge;
 
 enum LoginImageFormat { png, jpeg }
 
@@ -173,6 +175,11 @@ abstract interface class QqMusicAuthenticationGateway {
   Future<CredentialSignOutResult> signOut();
 }
 
+abstract interface class ProviderAuthenticationPresentation {
+  String get providerDisplayName;
+  String get qrActionLabel;
+}
+
 abstract interface class MultiMethodQqMusicAuthenticationGateway {
   LoginStartOperation beginQrStart(LoginQrChannel channel);
 }
@@ -194,6 +201,7 @@ abstract interface class CredentialVerificationOperation {
 class RustQqMusicAuthenticationGateway
     implements
         QqMusicAuthenticationGateway,
+        ProviderAuthenticationPresentation,
         MultiMethodQqMusicAuthenticationGateway,
         DesktopQuickQqMusicAuthenticationGateway {
   RustQqMusicAuthenticationGateway({
@@ -214,6 +222,12 @@ class RustQqMusicAuthenticationGateway
   final CredentialRestoreImporter _credentialImporter;
   final CredentialVerificationOperationFactory _verificationOperationFactory;
   final CredentialSignOutCore _credentialSignOutCore;
+
+  @override
+  String get providerDisplayName => 'QQ Music';
+
+  @override
+  String get qrActionLabel => 'Scan with QQ';
 
   @override
   bool get hasAuthenticatedCredential =>
@@ -291,6 +305,96 @@ class RustQqMusicAuthenticationGateway
       await _credentialVault.delete();
       return CredentialSignOutResult.signedOut;
     } catch (_) {
+      return CredentialSignOutResult.storageCleanupFailed;
+    }
+  }
+}
+
+class RustNeteaseAuthenticationGateway
+    implements
+        QqMusicAuthenticationGateway,
+        ProviderAuthenticationPresentation {
+  RustNeteaseAuthenticationGateway({CredentialVault? credentialVault})
+    : _credentialVault = SerializedCredentialVault(
+        credentialVault ??
+            PlatformCredentialVault(
+              credentialKey: PlatformCredentialVault.netEaseCredentialKey,
+            ),
+      );
+
+  final CredentialVault _credentialVault;
+
+  @override
+  String get providerDisplayName => 'NetEase Cloud Music';
+
+  @override
+  String get qrActionLabel => 'Scan with NetEase Cloud Music';
+
+  @override
+  bool get hasAuthenticatedCredential =>
+      netease_bridge.neteaseHasAuthenticatedCredential();
+
+  @override
+  LoginStartOperation beginStart() => _RustNeteaseLoginStartOperation(
+    netease_bridge.reserveNeteaseQrLoginStart(),
+  );
+
+  @override
+  CredentialVerificationOperation beginCredentialVerification() =>
+      _VaultCleaningCredentialVerificationOperation(
+        _reserveRustNeteaseCredentialVerification(),
+        _credentialVault,
+      );
+
+  @override
+  Future<CredentialPersistenceResult> persistAuthenticatedCredential() async {
+    final export = netease_bridge.exportNeteaseCredentialForSecureStorage();
+    final secretBytes = export.secretBytes;
+    if (secretBytes == null) {
+      return CredentialPersistenceResult.noAuthenticatedCredential;
+    }
+    try {
+      await _credentialVault.write(secretBytes);
+      return CredentialPersistenceResult.stored;
+    } on Object {
+      return CredentialPersistenceResult.storageUnavailable;
+    } finally {
+      secretBytes.fillRange(0, secretBytes.length, 0);
+    }
+  }
+
+  @override
+  Future<CredentialRestoreResult> restoreCredential() async {
+    Uint8List? secretBytes;
+    try {
+      secretBytes = await _credentialVault.read();
+    } on FormatException {
+      return CredentialRestoreResult.invalidStoredCredential;
+    } on Object {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+    try {
+      return _restoreNeteaseCredentialInRust(secretBytes);
+    } on Object {
+      return CredentialRestoreResult.coreUnavailable;
+    } finally {
+      secretBytes?.fillRange(0, secretBytes.length, 0);
+    }
+  }
+
+  @override
+  Future<CredentialSignOutResult> signOut() async {
+    try {
+      if (!netease_bridge.signOutNetease()) {
+        return CredentialSignOutResult.coreUnavailable;
+      }
+    } on Object {
+      return CredentialSignOutResult.coreUnavailable;
+    }
+    try {
+      await _credentialVault.delete();
+      return CredentialSignOutResult.signedOut;
+    } on Object {
       return CredentialSignOutResult.storageCleanupFailed;
     }
   }
@@ -418,6 +522,88 @@ CredentialRestoreResult _restoreQqMusicCredentialInRust(
   };
 }
 
+CredentialRestoreResult _restoreNeteaseCredentialInRust(
+  Uint8List? secretBytes,
+) {
+  final outcome = netease_bridge.restoreNeteaseCredentialFromSecureStorage(
+    secretBytes: secretBytes,
+  );
+  final state = outcome.state;
+  if (state != null) {
+    return switch (state) {
+      bridge.QqMusicCredentialRestoreState.signedOut =>
+        CredentialRestoreResult.signedOut,
+      bridge.QqMusicCredentialRestoreState.verificationRequired =>
+        CredentialRestoreResult.verificationRequired,
+      bridge.QqMusicCredentialRestoreState.locallyExpired =>
+        CredentialRestoreResult.locallyExpired,
+    };
+  }
+  return switch (outcome.failure) {
+    bridge.QqMusicCredentialRestoreFailure.invalidDocument ||
+    bridge.QqMusicCredentialRestoreFailure.invalidCredential =>
+      CredentialRestoreResult.invalidStoredCredential,
+    bridge.QqMusicCredentialRestoreFailure.unsupportedVersion =>
+      CredentialRestoreResult.unsupportedStoredCredential,
+    bridge.QqMusicCredentialRestoreFailure.coreUnavailable ||
+    null => CredentialRestoreResult.coreUnavailable,
+  };
+}
+
+CredentialVerificationOperation _reserveRustNeteaseCredentialVerification() {
+  final attemptId = netease_bridge.reserveNeteaseCredentialVerification();
+  return attemptId == null
+      ? const _ImmediateCredentialVerificationOperation(
+          CredentialVerificationResult.noRestoredCredential,
+        )
+      : _RustNeteaseCredentialVerificationOperation(attemptId);
+}
+
+class _RustNeteaseCredentialVerificationOperation
+    implements CredentialVerificationOperation {
+  const _RustNeteaseCredentialVerificationOperation(this._attemptId);
+
+  final int _attemptId;
+
+  @override
+  bool cancel() =>
+      netease_bridge.cancelNeteaseCredentialVerification(attemptId: _attemptId);
+
+  @override
+  Future<CredentialVerificationResult> run() async {
+    try {
+      final outcome = await netease_bridge.verifyRestoredNeteaseCredential(
+        attemptId: _attemptId,
+      );
+      final state = outcome.state;
+      if (state != null) {
+        return switch (state) {
+          bridge.QqMusicCredentialVerificationState.authenticated =>
+            CredentialVerificationResult.authenticated,
+          bridge.QqMusicCredentialVerificationState.rejected =>
+            CredentialVerificationResult.rejected,
+        };
+      }
+      return switch (outcome.failure) {
+        bridge.QqMusicCredentialVerificationFailure.network =>
+          CredentialVerificationResult.network,
+        bridge.QqMusicCredentialVerificationFailure.serviceUnavailable =>
+          CredentialVerificationResult.serviceUnavailable,
+        bridge.QqMusicCredentialVerificationFailure.invalidResponse =>
+          CredentialVerificationResult.invalidResponse,
+        bridge.QqMusicCredentialVerificationFailure.noRestoredCredential =>
+          CredentialVerificationResult.noRestoredCredential,
+        bridge.QqMusicCredentialVerificationFailure.replaced =>
+          CredentialVerificationResult.replaced,
+        bridge.QqMusicCredentialVerificationFailure.coreUnavailable ||
+        null => CredentialVerificationResult.coreUnavailable,
+      };
+    } on Object {
+      return CredentialVerificationResult.coreUnavailable;
+    }
+  }
+}
+
 class _RustDesktopQuickLoginStartOperation
     implements DesktopQuickLoginStartOperation {
   const _RustDesktopQuickLoginStartOperation(this._attemptId);
@@ -517,6 +703,69 @@ DesktopQuickLoginFailure _mapDesktopQuickFailure(
   bridge.QqMusicDesktopQuickLoginFailure.alreadyRunning =>
     DesktopQuickLoginFailure.alreadyRunning,
 };
+
+class _RustNeteaseLoginStartOperation implements LoginStartOperation {
+  const _RustNeteaseLoginStartOperation(this._attemptId);
+
+  final int _attemptId;
+
+  @override
+  bool cancel() =>
+      netease_bridge.cancelNeteaseQrLoginStart(attemptId: _attemptId);
+
+  @override
+  Future<LoginStart> run() async {
+    try {
+      final outcome = await netease_bridge.startNeteaseQrLogin(
+        attemptId: _attemptId,
+      );
+      final session = outcome.session;
+      final challenge = outcome.challenge;
+      final failure = outcome.failure;
+      if (session == null || challenge == null) {
+        return LoginStart(
+          failure: failure == null
+              ? LoginFailure.invalidResponse
+              : _mapFailure(failure),
+        );
+      }
+      return LoginStart(
+        session: _RustNeteaseLoginSession(session),
+        challenge: LoginChallenge(
+          imageFormat: switch (challenge.imageFormat) {
+            bridge.QqMusicQrImageFormat.png => LoginImageFormat.png,
+            bridge.QqMusicQrImageFormat.jpeg => LoginImageFormat.jpeg,
+          },
+          imageBytes: challenge.imageBytes,
+        ),
+      );
+    } on Object {
+      return const LoginStart(failure: LoginFailure.coreUnavailable);
+    }
+  }
+}
+
+class _RustNeteaseLoginSession implements LoginSession {
+  const _RustNeteaseLoginSession(this._inner);
+
+  final netease_bridge.NeteaseQrLoginSessionHandle _inner;
+
+  @override
+  bool cancel() => _inner.cancel();
+
+  @override
+  bool get isActive => _inner.isActive;
+
+  @override
+  Future<LoginUpdate> advance() async {
+    final update = await _inner.advance();
+    return LoginUpdate(
+      progress: update.state == null ? null : _mapProgress(update.state!),
+      failure: update.failure == null ? null : _mapFailure(update.failure!),
+      sessionActive: update.sessionActive,
+    );
+  }
+}
 
 class _RustLoginStartOperation implements LoginStartOperation {
   const _RustLoginStartOperation(this._attemptId, this._channel);

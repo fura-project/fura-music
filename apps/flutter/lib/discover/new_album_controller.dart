@@ -6,13 +6,16 @@ import 'package:flutterustmusic/discover/new_album_gateway.dart';
 enum NewAlbumStage { loading, content, empty, error }
 
 class NewAlbumController extends ChangeNotifier {
-  NewAlbumController(this._gateway);
+  NewAlbumController(
+    this._gateway, {
+    NewAlbumRegion initialRegion = NewAlbumRegion.mainlandChina,
+  }) : _region = initialRegion;
 
   static const pageSize = 20;
 
   final NewAlbumGateway _gateway;
 
-  NewAlbumRegion _region = NewAlbumRegion.mainlandChina;
+  NewAlbumRegion _region;
   NewAlbumStage _stage = NewAlbumStage.loading;
   List<NewAlbumRelease> _releases = const [];
   NewAlbumFailure? _failure;

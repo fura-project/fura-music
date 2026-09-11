@@ -72,26 +72,32 @@ typedef NewAlbumPageLoadOperationFactory = NewAlbumPageLoadOperation Function(
 
 class RustNewAlbumGateway implements NewAlbumGateway {
   const RustNewAlbumGateway({
-    NewAlbumPageLoadOperationFactory? operationFactory,
-  }) : _operationFactory = operationFactory ?? _beginRustLoad;
+    this.providerId = 'qq-music',
+    this.operationFactory,
+  });
 
-  final NewAlbumPageLoadOperationFactory _operationFactory;
+  final String providerId;
+  final NewAlbumPageLoadOperationFactory? operationFactory;
 
   @override
   NewAlbumPageLoadOperation beginLoad({
     required NewAlbumRegion region,
     required int offset,
     required int size,
-  }) => _operationFactory(region, offset, size);
+  }) =>
+      operationFactory?.call(region, offset, size) ??
+      _beginRustLoad(providerId, region, offset, size);
 }
 
 NewAlbumPageLoadOperation _beginRustLoad(
+  String providerId,
   NewAlbumRegion region,
   int offset,
   int size,
 ) => _RustNewAlbumPageLoadOperation(
   region,
   bridge.beginQqMusicNewAlbumPageLoad(
+    providerId: providerId,
     region: _bridgeRegion(region),
     offset: offset,
     size: size,

@@ -7,11 +7,14 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 enum NewSongStage { loading, content, empty, error }
 
 class NewSongController extends ChangeNotifier {
-  NewSongController(this._gateway);
+  NewSongController(
+    this._gateway, {
+    NewSongCategory initialCategory = NewSongCategory.latest,
+  }) : _category = initialCategory;
 
   final NewSongGateway _gateway;
 
-  NewSongCategory _category = NewSongCategory.latest;
+  NewSongCategory _category;
   NewSongStage _stage = NewSongStage.loading;
   List<PlaylistTrackSummary> _tracks = const [];
   NewSongFailure? _failure;

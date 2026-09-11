@@ -102,6 +102,16 @@ class LoginController extends ChangeNotifier {
       ? _desktopQuickStage
       : DesktopQuickLoginStage.disabled;
   int? get desktopQuickSelectionId => _desktopQuickSelectionId;
+  String get providerDisplayName =>
+      (_gateway is ProviderAuthenticationPresentation)
+      ? (_gateway as ProviderAuthenticationPresentation).providerDisplayName
+      : 'QQ Music';
+  String get qrActionLabel => (_gateway is ProviderAuthenticationPresentation)
+      ? (_gateway as ProviderAuthenticationPresentation).qrActionLabel
+      : 'Scan with QQ';
+  bool get supportsMultipleQrMethods =>
+      _gateway is MultiMethodQqMusicAuthenticationGateway ||
+      _gateway is! ProviderAuthenticationPresentation;
   bool get canAuthorizeDesktopQuickAccount =>
       _desktopQuickSession?.isActive ?? false;
 
@@ -126,6 +136,59 @@ class LoginController extends ChangeNotifier {
 
   bool get canRetrySignOut =>
       _stage == LoginStage.signOutStorageCleanupFailed && !isSigningOut;
+
+  /// Restores only the provider that has just become the active UI context.
+  ///
+  /// Inactive provider vaults are deliberately not probed at startup. A
+  /// generation change makes a late restore or verification result harmless
+  /// when the user switches provider again.
+  Future<void> restoreCredential() async {
+    if (_disposed) return;
+    if (_gateway.hasAuthenticatedCredential) {
+      _credentialRestoreResult = CredentialRestoreResult.verificationRequired;
+      _stage = LoginStage.authenticated;
+      _notify();
+      return;
+    }
+
+    final generation = ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
+    _startOperation?.cancel();
+    _startOperation = null;
+    _session?.cancel();
+    _session = null;
+    _clearDesktopQuickLogin();
+    _qrImageBytes = null;
+    _failure = null;
+    _credentialSaveState = CredentialSaveState.none;
+    _credentialVerificationResult = null;
+
+    CredentialRestoreResult result;
+    try {
+      result = await _gateway.restoreCredential();
+    } on Object {
+      result = CredentialRestoreResult.coreUnavailable;
+    }
+    if (!_isCurrent(generation)) return;
+
+    _credentialRestoreResult = result;
+    _stage = switch (result) {
+      CredentialRestoreResult.signedOut => LoginStage.idle,
+      CredentialRestoreResult.verificationRequired =>
+        LoginStage.verificationRequired,
+      CredentialRestoreResult.locallyExpired =>
+        LoginStage.storedCredentialExpired,
+      CredentialRestoreResult.invalidStoredCredential ||
+      CredentialRestoreResult.unsupportedStoredCredential ||
+      CredentialRestoreResult.storageUnavailable ||
+      CredentialRestoreResult.coreUnavailable => LoginStage.restoreError,
+    };
+    _notify();
+    if (result == CredentialRestoreResult.verificationRequired) {
+      await verifyRestoredCredential();
+    }
+  }
 
   Future<CredentialSignOutResult> signOut() {
     final activeOperation = _signOutOperation;

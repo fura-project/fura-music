@@ -91,16 +91,18 @@ typedef RankingTrackPageLoadOperationFactory =
 
 class RustRankingGateway implements RankingGateway {
   const RustRankingGateway({
-    RankingGroupLoadOperationFactory? groupOperationFactory,
+    this.providerId = 'qq-music',
+    this.groupOperationFactory,
     RankingTrackPageLoadOperationFactory? trackOperationFactory,
-  }) : _groupOperationFactory = groupOperationFactory ?? _beginRustGroupLoad,
-       _trackOperationFactory = trackOperationFactory ?? _beginRustTrackLoad;
+  }) : _trackOperationFactory = trackOperationFactory ?? _beginRustTrackLoad;
 
-  final RankingGroupLoadOperationFactory _groupOperationFactory;
+  final String providerId;
+  final RankingGroupLoadOperationFactory? groupOperationFactory;
   final RankingTrackPageLoadOperationFactory _trackOperationFactory;
 
   @override
-  RankingGroupLoadOperation beginGroupLoad() => _groupOperationFactory();
+  RankingGroupLoadOperation beginGroupLoad() =>
+      groupOperationFactory?.call() ?? _beginRustGroupLoad(providerId);
 
   @override
   RankingTrackPageLoadOperation beginTrackLoad({
@@ -110,8 +112,10 @@ class RustRankingGateway implements RankingGateway {
   }) => _trackOperationFactory(ranking, offset, size);
 }
 
-RankingGroupLoadOperation _beginRustGroupLoad() =>
-    _RustRankingGroupLoadOperation(bridge.beginQqMusicRankingGroupLoad());
+RankingGroupLoadOperation _beginRustGroupLoad(String providerId) =>
+    _RustRankingGroupLoadOperation(
+      bridge.beginQqMusicRankingGroupLoad(providerId: providerId),
+    );
 
 RankingTrackPageLoadOperation _beginRustTrackLoad(
   RankingSummary ranking,

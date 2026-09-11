@@ -39,6 +39,27 @@ abstract interface class RadarTrackPageLoadOperation {
   bool cancel();
 }
 
+/// A truthful composition guard for providers that do not expose Radar.
+class UnsupportedRadarGateway implements RadarGateway {
+  const UnsupportedRadarGateway();
+
+  @override
+  RadarTrackPageLoadOperation beginLoad({required int page}) =>
+      const _UnsupportedRadarTrackPageLoadOperation();
+}
+
+class _UnsupportedRadarTrackPageLoadOperation
+    implements RadarTrackPageLoadOperation {
+  const _UnsupportedRadarTrackPageLoadOperation();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<RadarTrackPageResult> run() async =>
+      const RadarTrackPageResult(failure: RadarFailure.serviceUnavailable);
+}
+
 typedef RadarTrackPageLoadOperationFactory =
     RadarTrackPageLoadOperation Function(int page);
 

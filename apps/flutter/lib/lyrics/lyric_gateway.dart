@@ -104,23 +104,32 @@ typedef LyricLoadOperationFactory = LyricLoadOperation Function(
 class RustLyricGateway implements LyricGateway {
   RustLyricGateway({
     CredentialVault? credentialVault,
+    Map<String, CredentialVault>? credentialVaults,
     LyricLoadOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustLoad,
-       _credentialVault = SerializedCredentialVault(
-         credentialVault ?? PlatformCredentialVault(),
+       _credentialVaults = Map.unmodifiable(
+         credentialVaults ??
+             {
+               'qq-music': SerializedCredentialVault(
+                 credentialVault ?? PlatformCredentialVault(),
+               ),
+             },
        );
 
-  final CredentialVault _credentialVault;
+  final Map<String, CredentialVault> _credentialVaults;
   final LyricLoadOperationFactory _operationFactory;
 
   @override
   LyricLoadOperation beginLoad({
     required String providerId,
     required String opaqueTrackId,
-  }) => _VaultCleaningLyricLoadOperation(
-    _operationFactory(providerId, opaqueTrackId),
-    _credentialVault,
-  );
+  }) {
+    final operation = _operationFactory(providerId, opaqueTrackId);
+    final vault = _credentialVaults[providerId];
+    return vault == null
+        ? operation
+        : _VaultCleaningLyricLoadOperation(operation, vault);
+  }
 }
 
 LyricLoadOperation _beginRustLoad(String providerId, String opaqueTrackId) =>

@@ -46,21 +46,29 @@ typedef NewSongLoadOperationFactory = NewSongLoadOperation Function(
 );
 
 class RustNewSongGateway implements NewSongGateway {
-  const RustNewSongGateway({NewSongLoadOperationFactory? operationFactory})
-    : _operationFactory = operationFactory ?? _beginRustLoad;
+  const RustNewSongGateway({
+    this.providerId = 'qq-music',
+    this.operationFactory,
+  });
 
-  final NewSongLoadOperationFactory _operationFactory;
+  final String providerId;
+  final NewSongLoadOperationFactory? operationFactory;
 
   @override
   NewSongLoadOperation beginLoad({required NewSongCategory category}) =>
-      _operationFactory(category);
+      operationFactory?.call(category) ?? _beginRustLoad(providerId, category);
 }
 
-NewSongLoadOperation _beginRustLoad(NewSongCategory category) =>
-    _RustNewSongLoadOperation(
-      category,
-      bridge.beginQqMusicNewSongsLoad(category: _bridgeCategory(category)),
-    );
+NewSongLoadOperation _beginRustLoad(
+  String providerId,
+  NewSongCategory category,
+) => _RustNewSongLoadOperation(
+  category,
+  bridge.beginQqMusicNewSongsLoad(
+    providerId: providerId,
+    category: _bridgeCategory(category),
+  ),
+);
 
 class _RustNewSongLoadOperation implements NewSongLoadOperation {
   const _RustNewSongLoadOperation(this._expectedCategory, this._handle);

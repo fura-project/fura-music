@@ -11,6 +11,7 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 
 class PlaylistDetailPage extends StatefulWidget {
   const PlaylistDetailPage({
@@ -115,7 +116,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               if (_controller.refreshFailure case final failure?)
                 LibraryRefreshFailureBanner(
                   key: const ValueKey('playlist-detail-refresh-failure'),
-                  message: _refreshFailureCopy(failure),
+                  message: _refreshFailureCopy(
+                    failure,
+                    builtInProviderDisplayName(widget.playlist.providerId),
+                  ),
                   canRetry: _controller.canRetryRefresh,
                   onRetry: _controller.retryRefresh,
                   onDismiss: _controller.dismissRefreshFailure,
@@ -177,11 +181,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         current: widget.queuePlaybackController.current,
       ),
     ),
-    PlaylistDetailStage.empty => const _DetailMessage(
-      key: ValueKey('playlist-detail-empty'),
+    PlaylistDetailStage.empty => _DetailMessage(
+      key: const ValueKey('playlist-detail-empty'),
       icon: Icons.music_off_outlined,
       title: 'This playlist is empty',
-      detail: 'Tracks added in QQ Music will appear here.',
+      detail:
+          'Tracks added in ${builtInProviderDisplayName(widget.playlist.providerId)} will appear here.',
     ),
     PlaylistDetailStage.error => _DetailFailure(
       key: const ValueKey('playlist-detail-error'),
@@ -190,6 +195,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       showSignInAgain: false,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
+      providerName: builtInProviderDisplayName(widget.playlist.providerId),
     ),
     PlaylistDetailStage.authenticationRequired ||
     PlaylistDetailStage.credentialRejected => _DetailFailure(
@@ -199,6 +205,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       showSignInAgain: true,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
+      providerName: builtInProviderDisplayName(widget.playlist.providerId),
     ),
   };
 
@@ -248,7 +255,9 @@ class _PlaylistHeader extends StatelessWidget {
     eyebrow: 'PLAYLIST',
     title: playlist.title,
     titleKey: const ValueKey('playlist-detail-title'),
-    summary: trackCount == null ? 'QQ Music' : '$trackCount tracks · QQ Music',
+    summary: trackCount == null
+        ? builtInProviderDisplayName(playlist.providerId)
+        : '$trackCount tracks · ${builtInProviderDisplayName(playlist.providerId)}',
     onBack: onBack,
     backKey: const ValueKey('playlist-detail-back'),
     backTooltip: 'Back to playlists',
@@ -658,6 +667,7 @@ class _DetailFailure extends StatelessWidget {
     required this.showSignInAgain,
     required this.onRetry,
     required this.onSignInAgain,
+    required this.providerName,
     super.key,
   });
 
@@ -666,10 +676,11 @@ class _DetailFailure extends StatelessWidget {
   final bool showSignInAgain;
   final VoidCallback onRetry;
   final VoidCallback onSignInAgain;
+  final String providerName;
 
   @override
   Widget build(BuildContext context) {
-    final (title, detail) = _failureCopy(failure);
+    final (title, detail) = _failureCopy(failure, providerName);
     return _DetailMessage(
       icon: failure == UserLibraryFailure.credentialRejected
           ? Icons.lock_reset_rounded
@@ -748,26 +759,29 @@ class _DetailMessage extends StatelessWidget {
   }
 }
 
-(String, String) _failureCopy(UserLibraryFailure? failure) => switch (failure) {
+(String, String) _failureCopy(
+  UserLibraryFailure? failure,
+  String providerName,
+) => switch (failure) {
   UserLibraryFailure.network => (
-    'Couldn’t reach QQ Music',
+    'Couldn’t reach $providerName',
     'Your session is still active. Check your connection and try again.',
   ),
   UserLibraryFailure.serviceUnavailable => (
-    'QQ Music is unavailable',
+    '$providerName is unavailable',
     'The playlist could not be loaded right now. Your session was kept.',
   ),
   UserLibraryFailure.invalidResponse => (
     'Couldn’t read this playlist',
-    'QQ Music returned data this build could not safely present.',
+    '$providerName returned data this build could not safely present.',
   ),
   UserLibraryFailure.credentialRejected => (
     'Your saved session was rejected',
-    'QQ Music no longer accepts it, so the stored session was removed.',
+    '$providerName no longer accepts it, so the stored session was removed.',
   ),
   UserLibraryFailure.credentialRejectedStorageCleanupFailed => (
     'Your saved session was rejected',
-    'QQ Music rejected it, but secure storage could not remove it.',
+    '$providerName rejected it, but secure storage could not remove it.',
   ),
   UserLibraryFailure.authenticationRequired ||
   UserLibraryFailure.replaced ||
@@ -786,15 +800,18 @@ class _DetailMessage extends StatelessWidget {
   null => ('Couldn’t load this playlist', 'Try again or sign in again.'),
 };
 
-String _refreshFailureCopy(UserLibraryFailure failure) => switch (failure) {
+String _refreshFailureCopy(
+  UserLibraryFailure failure,
+  String providerName,
+) => switch (failure) {
   UserLibraryFailure.network =>
     'Couldn’t refresh this playlist. Check your connection; the previous '
         'tracks are still shown.',
   UserLibraryFailure.serviceUnavailable =>
-    'QQ Music couldn’t refresh this playlist. The previous tracks are still '
+    '$providerName couldn’t refresh this playlist. The previous tracks are still '
         'shown.',
   UserLibraryFailure.invalidResponse =>
-    'QQ Music returned an incomplete refresh. The previous complete tracks '
+    '$providerName returned an incomplete refresh. The previous complete tracks '
         'are still shown.',
   UserLibraryFailure.coreUnavailable =>
     'The music core couldn’t refresh this playlist. The previous tracks are '

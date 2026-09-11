@@ -17,6 +17,7 @@ class FavoriteAlbumsPage extends StatefulWidget {
     required this.onBack,
     required this.onOpenAlbum,
     required this.onSignInAgain,
+    this.providerDisplayName = 'QQ Music',
     this.embedded = false,
     this.showHeader = true,
     this.filterQuery = '',
@@ -28,6 +29,7 @@ class FavoriteAlbumsPage extends StatefulWidget {
   final VoidCallback onBack;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
+  final String providerDisplayName;
   final bool embedded;
   final bool showHeader;
   final String filterQuery;
@@ -70,8 +72,8 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
                   title: 'Your favorite albums',
                   subtitle: switch (_controller.stage) {
                     FavoriteAlbumStage.content || FavoriteAlbumStage.empty =>
-                      '${_controller.total} saved on QQ Music',
-                    _ => 'Saved on QQ Music',
+                      '${_controller.total} saved on ${widget.providerDisplayName}',
+                    _ => 'Saved on ${widget.providerDisplayName}',
                   },
                   refreshKey: widget.embedded
                       ? const ValueKey('favorite-albums-refresh')
@@ -135,11 +137,12 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       key: ValueKey('favorite-albums-loading'),
       label: 'Loading Favorite Albums',
     ),
-    FavoriteAlbumStage.empty => const MusicContentStatePanel(
-      key: ValueKey('favorite-albums-empty'),
+    FavoriteAlbumStage.empty => MusicContentStatePanel(
+      key: const ValueKey('favorite-albums-empty'),
       icon: Icons.album_outlined,
       title: 'No favorite albums yet',
-      detail: 'Albums you save in QQ Music will appear here.',
+      detail:
+          'Albums you save in ${widget.providerDisplayName} will appear here.',
     ),
     FavoriteAlbumStage.content
         when _visibleAlbums.isEmpty && widget.filterQuery.trim().isNotEmpty =>
@@ -164,7 +167,10 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       key: const ValueKey('favorite-albums-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load favorite albums',
-      detail: _failureCopy(_controller.failure),
+      detail: _failureCopy(
+        _controller.failure,
+        providerDisplayName: widget.providerDisplayName,
+      ),
       action: _controller.canRetry
           ? FilledButton.tonal(
               onPressed: _controller.retry,
@@ -187,12 +193,12 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
     FavoriteAlbumStage.credentialRejected => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-credential-rejected'),
       icon: Icons.lock_reset_rounded,
-      title: 'QQ Music session rejected',
+      title: '${widget.providerDisplayName} session rejected',
       detail:
           _controller.failure ==
               FavoriteAlbumFailure.credentialRejectedStorageCleanupFailed
-          ? 'QQ Music rejected this session, and its saved copy could not be removed.'
-          : 'QQ Music no longer accepts this saved session.',
+          ? '${widget.providerDisplayName} rejected this session, and its saved copy could not be removed.'
+          : '${widget.providerDisplayName} no longer accepts this saved session.',
       action: TextButton(
         onPressed: widget.onSignInAgain,
         child: const Text('Sign in again'),
@@ -453,13 +459,16 @@ class _CollectionFooter extends StatelessWidget {
   }
 }
 
-String _failureCopy(FavoriteAlbumFailure? failure) => switch (failure) {
+String _failureCopy(
+  FavoriteAlbumFailure? failure, {
+  String providerDisplayName = 'QQ Music',
+}) => switch (failure) {
   FavoriteAlbumFailure.network =>
-    'Couldn’t reach QQ Music. Check the connection and try again.',
+    'Couldn’t reach $providerDisplayName. Check the connection and try again.',
   FavoriteAlbumFailure.serviceUnavailable =>
-    'QQ Music could not load favorite albums right now.',
+    '$providerDisplayName could not load favorite albums right now.',
   FavoriteAlbumFailure.invalidResponse =>
-    'QQ Music returned an unreadable favorite-album page.',
+    '$providerDisplayName returned an unreadable favorite-album page.',
   FavoriteAlbumFailure.coreUnavailable =>
     'The music core is unavailable. Try again.',
   FavoriteAlbumFailure.alreadyRunning =>
@@ -469,6 +478,6 @@ String _failureCopy(FavoriteAlbumFailure? failure) => switch (failure) {
   FavoriteAlbumFailure.cancelled => 'Sign in again to continue.',
   FavoriteAlbumFailure.credentialRejected ||
   FavoriteAlbumFailure.credentialRejectedStorageCleanupFailed =>
-    'QQ Music no longer accepts this saved session.',
+    '$providerDisplayName no longer accepts this saved session.',
   null => 'Couldn’t load favorite albums.',
 };

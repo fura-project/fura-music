@@ -6,22 +6,25 @@ import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
-enum SettingsSection { appearance, playback }
+enum SettingsSection { appearance, musicService, playback }
 
 extension SettingsSectionPresentation on SettingsSection {
   String get label => switch (this) {
     SettingsSection.appearance => 'Appearance',
+    SettingsSection.musicService => 'Music service',
     SettingsSection.playback => 'Playback',
   };
 
   IconData get icon => switch (this) {
     SettingsSection.appearance => Icons.palette_outlined,
+    SettingsSection.musicService => Icons.library_music_outlined,
     SettingsSection.playback => Icons.headphones_outlined,
   };
 
   String get description => switch (this) {
     SettingsSection.appearance => 'Theme mode and system appearance',
-    SettingsSection.playback => 'Streaming quality for QQ Music',
+    SettingsSection.musicService => 'Catalog and account source',
+    SettingsSection.playback => 'Preferred streaming quality',
   };
 
   String summary(AppSettings settings) => switch (this) {
@@ -30,6 +33,7 @@ extension SettingsSectionPresentation on SettingsSection {
       AppThemePreference.light => 'Light theme',
       AppThemePreference.dark => 'Dark theme',
     },
+    SettingsSection.musicService => settings.musicProvider.displayName,
     SettingsSection.playback => settings.playbackQuality.settingsSummary,
   };
 
@@ -43,6 +47,14 @@ extension SettingsSectionPresentation on SettingsSection {
         'light',
         'dark',
         'color',
+      ],
+      SettingsSection.musicService => const [
+        'provider',
+        'music service',
+        'source',
+        'qq music',
+        'netease',
+        '网易云',
       ],
       SettingsSection.playback => const [
         'playback',
@@ -291,6 +303,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     final content = switch (section) {
       SettingsSection.appearance => _appearanceSection(context, compact),
+      SettingsSection.musicService => _musicServiceSection(context, compact),
       SettingsSection.playback => _playbackSection(context, compact),
     };
     if (!compact) return content;
@@ -353,6 +366,48 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   ];
 
+  List<Widget> _musicServiceSection(BuildContext context, bool compact) => [
+    Text(
+      'Music service',
+      key: const ValueKey('settings-music-service-section'),
+      style: Theme.of(context).textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
+    ),
+    const SizedBox(height: MusicSpacing.itemGap),
+    Text(
+      'Choose the service used for browsing, search, recommendations, and your account library.',
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    ),
+    const SizedBox(height: MusicSpacing.itemGap),
+    RadioGroup<AppMusicProvider>(
+      groupValue: widget.settings.musicProvider,
+      onChanged: (provider) {
+        if (_saving || provider == null) return;
+        unawaited(_save(widget.settings.copyWith(musicProvider: provider)));
+      },
+      child: IgnorePointer(
+        ignoring: _saving,
+        child: Column(
+          children: const [
+            RadioListTile<AppMusicProvider>(
+              key: ValueKey('settings-provider-qq-music'),
+              value: AppMusicProvider.qqMusic,
+              title: Text('QQ Music'),
+              subtitle: Text('First-class service and default'),
+            ),
+            RadioListTile<AppMusicProvider>(
+              key: ValueKey('settings-provider-netease'),
+              value: AppMusicProvider.netEaseCloudMusic,
+              title: Text('NetEase Cloud Music'),
+              subtitle: Text('Built-in service with capability-aware features'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ];
+
   List<Widget> _playbackSection(BuildContext context, bool compact) => [
     Text(
       compact ? 'Audio quality' : 'Playback quality',
@@ -362,7 +417,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
     const SizedBox(height: MusicSpacing.itemGap),
     Text(
-      'This preference is used the next time a Track resolves a playable QQ Music source.',
+      'Preferred quality when supported by the current music service. The player always reports the actual quality used.',
       style: Theme.of(context).textTheme.bodyMedium
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),

@@ -8,6 +8,7 @@ import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 Future<void> showTrackCommentsSurface({
@@ -160,17 +161,21 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
       key: ValueKey('track-comments-loading'),
       label: 'Loading comments',
     ),
-    TrackCommentStage.empty => const MusicContentStatePanel(
-      key: ValueKey('track-comments-empty'),
+    TrackCommentStage.empty => MusicContentStatePanel(
+      key: const ValueKey('track-comments-empty'),
       icon: Icons.mode_comment_outlined,
       title: 'No comments yet',
-      detail: 'QQ Music did not return comments for this Track.',
+      detail:
+          '${builtInProviderDisplayName(widget.track.providerId)} did not return comments for this Track.',
     ),
     TrackCommentStage.error => MusicContentStatePanel(
       key: const ValueKey('track-comments-error'),
       icon: Icons.cloud_off_rounded,
       title: 'Couldn’t load comments',
-      detail: _failureCopy(_controller.failure),
+      detail: _failureCopy(
+        _controller.failure,
+        builtInProviderDisplayName(widget.track.providerId),
+      ),
       action: _controller.canRetry
           ? FilledButton.tonal(
               key: const ValueKey('track-comments-retry'),
@@ -190,6 +195,7 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
       canRetryMore: _controller.canRetryMore,
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
+      providerDisplayName: builtInProviderDisplayName(widget.track.providerId),
     ),
   };
 }
@@ -204,6 +210,7 @@ class _CommentList extends StatelessWidget {
     required this.canRetryMore,
     required this.onLoadMore,
     required this.onRetryMore,
+    required this.providerDisplayName,
     super.key,
   });
 
@@ -215,6 +222,7 @@ class _CommentList extends StatelessWidget {
   final bool canRetryMore;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +251,7 @@ class _CommentList extends StatelessWidget {
         canRetry: canRetryMore,
         onLoadMore: onLoadMore,
         onRetry: onRetryMore,
+        providerDisplayName: providerDisplayName,
       ),
     );
     return ListView(
@@ -357,6 +366,7 @@ class _CommentFooter extends StatelessWidget {
     required this.canRetry,
     required this.onLoadMore,
     required this.onRetry,
+    required this.providerDisplayName,
   });
 
   final bool isLoading;
@@ -365,6 +375,7 @@ class _CommentFooter extends StatelessWidget {
   final bool canRetry;
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -388,7 +399,7 @@ class _CommentFooter extends StatelessWidget {
           child: Column(
             children: [
               Text(
-                'Couldn’t load more comments. ${_failureCopy(failure)}',
+                'Couldn’t load more comments. ${_failureCopy(failure, providerDisplayName)}',
                 textAlign: TextAlign.center,
               ),
               if (canRetry) ...[
@@ -428,16 +439,17 @@ String _commentTime(int unixSeconds) {
       '${two(value.hour)}:${two(value.minute)}';
 }
 
-String _failureCopy(TrackCommentFailure? failure) => switch (failure) {
-  TrackCommentFailure.network => 'Check your connection and try again.',
-  TrackCommentFailure.serviceUnavailable =>
-    'QQ Music comments are temporarily unavailable.',
-  TrackCommentFailure.invalidResponse =>
-    'QQ Music returned comment data this version cannot read.',
-  TrackCommentFailure.coreUnavailable =>
-    'The native comment service is unavailable in this build.',
-  TrackCommentFailure.alreadyRunning =>
-    'Another comment request is still finishing. Try again.',
-  TrackCommentFailure.cancelled => 'The comment request was cancelled.',
-  null => 'Try again.',
-};
+String _failureCopy(TrackCommentFailure? failure, String providerDisplayName) =>
+    switch (failure) {
+      TrackCommentFailure.network => 'Check your connection and try again.',
+      TrackCommentFailure.serviceUnavailable =>
+        '$providerDisplayName comments are temporarily unavailable.',
+      TrackCommentFailure.invalidResponse =>
+        '$providerDisplayName returned comment data this version cannot read.',
+      TrackCommentFailure.coreUnavailable =>
+        'The native comment service is unavailable in this build.',
+      TrackCommentFailure.alreadyRunning =>
+        'Another comment request is still finishing. Try again.',
+      TrackCommentFailure.cancelled => 'The comment request was cancelled.',
+      null => 'Try again.',
+    };
