@@ -1,5 +1,270 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+
+typedef MusicTrackRowContentBuilder = Widget Function(
+  BuildContext context,
+  bool active,
+  bool hovered,
+);
+
+enum MusicTrackAction { play, addToQueue, openAlbum, openArtist }
+
+Future<void> openMusicTrackArtists({
+  required BuildContext context,
+  required List<ArtistSummary> artists,
+  required ValueChanged<ArtistSummary>? onSelected,
+  String title = 'Choose an Artist',
+  String detail = 'This Track credits more than one Artist.',
+  String cancelLabel = 'Cancel',
+  String itemKeyPrefix = 'music-track-artist',
+}) async {
+  if (onSelected == null || artists.isEmpty) return;
+  if (artists.length == 1) {
+    onSelected(artists.single);
+    return;
+  }
+  final compact = MediaQuery.sizeOf(context).width < 600;
+  final selected = compact
+      ? await showModalBottomSheet<ArtistSummary>(
+          context: context,
+          showDragHandle: true,
+          builder: (context) => _MusicTrackArtistSelection(
+            artists: artists,
+            compact: true,
+            title: title,
+            detail: detail,
+            itemKeyPrefix: itemKeyPrefix,
+          ),
+        )
+      : await showDialog<ArtistSummary>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(title),
+            content: _MusicTrackArtistSelection(
+              artists: artists,
+              compact: false,
+              title: title,
+              detail: detail,
+              itemKeyPrefix: itemKeyPrefix,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(cancelLabel),
+              ),
+            ],
+          ),
+        );
+  if (selected != null) onSelected(selected);
+}
+
+class _MusicTrackArtistSelection extends StatelessWidget {
+  const _MusicTrackArtistSelection({
+    required this.artists,
+    required this.compact,
+    required this.title,
+    required this.detail,
+    required this.itemKeyPrefix,
+  });
+
+  final List<ArtistSummary> artists;
+  final bool compact;
+  final String title;
+  final String detail;
+  final String itemKeyPrefix;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = ListView(
+      shrinkWrap: compact,
+      padding: EdgeInsets.fromLTRB(8, compact ? 0 : 4, 8, compact ? 16 : 4),
+      children: [
+        if (compact) ListTile(title: Text(title), subtitle: Text(detail)),
+        for (var index = 0; index < artists.length; index++)
+          ListTile(
+            key: ValueKey('$itemKeyPrefix-$index'),
+            leading: const Icon(Icons.person_rounded),
+            title: Text(artists[index].name),
+            onTap: () => Navigator.pop(context, artists[index]),
+          ),
+      ],
+    );
+    return SafeArea(
+      top: !compact,
+      child: compact
+          ? ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
+              child: list,
+            )
+          : SizedBox(
+              width: 360,
+              height: (artists.length * 56.0).clamp(56.0, 336.0),
+              child: list,
+            ),
+    );
+  }
+}
+
+/// Shared interaction and visual surface for a dense music Track row.
+///
+/// Pages keep ownership of their data, paging and action menus. This widget
+/// owns the repeated row grammar: focus/hover state, current-Track treatment,
+/// keyboard context-menu shortcuts, pointer gestures and 56/64 dp density.
+class MusicTrackRowSurface extends StatefulWidget {
+  const MusicTrackRowSurface({
+    required this.itemKey,
+    required this.desktop,
+    required this.current,
+    required this.semanticLabel,
+    required this.onTap,
+    required this.contentBuilder,
+    this.onContextMenuRequested,
+    this.hovered,
+    this.onHoverChanged,
+    super.key,
+  }) : assert(
+         (hovered == null && onHoverChanged == null) ||
+             (hovered != null && onHoverChanged != null),
+         'External hover state requires both hovered and onHoverChanged.',
+       );
+
+  final Key itemKey;
+  final bool desktop;
+  final bool current;
+  final String semanticLabel;
+  final VoidCallback onTap;
+  final MusicTrackRowContentBuilder contentBuilder;
+  final ValueChanged<Offset?>? onContextMenuRequested;
+
+  /// Supply both fields when a list needs to clear hover on scroll.
+  final bool? hovered;
+  final ValueChanged<bool>? onHoverChanged;
+
+  @override
+  State<MusicTrackRowSurface> createState() => _MusicTrackRowSurfaceState();
+}
+
+class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
+  final FocusNode _focusNode = FocusNode();
+  bool _internalHovered = false;
+
+  bool get _hovered => widget.hovered ?? _internalHovered;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocusChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _handleHoverChanged(bool hovered) {
+    final callback = widget.onHoverChanged;
+    if (callback != null) {
+      callback(hovered);
+    } else if (_internalHovered != hovered) {
+      setState(() => _internalHovered = hovered);
+    }
+  }
+
+  void _showKeyboardMenu() {
+    final callback = widget.onContextMenuRequested;
+    if (callback == null) return;
+    if (!widget.desktop) {
+      callback(null);
+      return;
+    }
+    final box = context.findRenderObject();
+    if (box is! RenderBox) return;
+    callback(box.localToGlobal(box.size.center(Offset.zero)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final active = _hovered || _focusNode.hasFocus;
+    final background = widget.current
+        ? colors.surfaceContainerHigh
+        : active
+        ? colors.surfaceContainerLow
+        : Colors.transparent;
+    return CallbackShortcuts(
+      bindings: widget.onContextMenuRequested == null
+          ? const <ShortcutActivator, VoidCallback>{}
+          : <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.contextMenu):
+                  _showKeyboardMenu,
+              const SingleActivator(LogicalKeyboardKey.f10, shift: true):
+                  _showKeyboardMenu,
+            },
+      child: Semantics(
+        label: widget.semanticLabel,
+        container: true,
+        button: true,
+        selected: widget.current,
+        excludeSemantics: true,
+        onTap: widget.onTap,
+        onLongPress: !widget.desktop && widget.onContextMenuRequested != null
+            ? () => widget.onContextMenuRequested!(null)
+            : null,
+        child: MouseRegion(
+          onEnter: (_) => _handleHoverChanged(true),
+          onExit: (_) => _handleHoverChanged(false),
+          child: InkWell(
+            key: widget.itemKey,
+            focusNode: _focusNode,
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              _focusNode.requestFocus();
+              widget.onTap();
+            },
+            onLongPress:
+                !widget.desktop && widget.onContextMenuRequested != null
+                ? () => widget.onContextMenuRequested!(null)
+                : null,
+            onSecondaryTapDown:
+                widget.desktop && widget.onContextMenuRequested != null
+                ? (details) {
+                    _focusNode.requestFocus();
+                    widget.onContextMenuRequested!(details.globalPosition);
+                  }
+                : null,
+            child: Ink(
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: widget.desktop ? 56 : 64,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.desktop ? 12 : 8,
+                    vertical: widget.desktop ? 7 : 6,
+                  ),
+                  child: widget.contentBuilder(context, active, _hovered),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class MusicTrackTableHeader extends StatelessWidget {
   const MusicTrackTableHeader({
@@ -59,12 +324,20 @@ class MusicTrackRowContent extends StatelessWidget {
     required this.current,
     required this.active,
     required this.artistNames,
+    required this.onPlay,
     required this.onAddToQueue,
     required this.onMore,
+    this.onOpenAlbum,
+    this.onOpenArtist,
     this.showInlineQueueAction,
     this.addToQueueTooltip = 'Add to queue',
     this.moreTooltip = 'More actions',
+    this.playTooltip = 'Play from here',
+    this.albumTooltip = 'Open album',
+    this.artistTooltip = 'Open artist',
     this.title,
+    this.queueKey,
+    this.moreKey,
     super.key,
   });
 
@@ -74,12 +347,20 @@ class MusicTrackRowContent extends StatelessWidget {
   final bool current;
   final bool active;
   final String artistNames;
+  final VoidCallback onPlay;
   final VoidCallback onAddToQueue;
   final VoidCallback onMore;
+  final VoidCallback? onOpenAlbum;
+  final VoidCallback? onOpenArtist;
   final bool? showInlineQueueAction;
   final String addToQueueTooltip;
   final String moreTooltip;
+  final String playTooltip;
+  final String albumTooltip;
+  final String artistTooltip;
   final String? title;
+  final Key? queueKey;
+  final Key? moreKey;
 
   @override
   Widget build(BuildContext context) =>
@@ -95,10 +376,23 @@ class MusicTrackRowContent extends StatelessWidget {
             child: current
                 ? Icon(Icons.equalizer_rounded, size: 18, color: colors.primary)
                 : active
-                ? Icon(
-                    Icons.play_arrow_rounded,
-                    size: 19,
-                    color: colors.primary,
+                ? ExcludeFocus(
+                    child: IconButton(
+                      tooltip: playTooltip,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 32,
+                        height: 32,
+                      ),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      style: IconButton.styleFrom(
+                        foregroundColor: colors.primary,
+                        hoverColor: colors.primary.withValues(alpha: 0.12),
+                        focusColor: colors.primary.withValues(alpha: 0.12),
+                      ),
+                      onPressed: onPlay,
+                      icon: const Icon(Icons.play_arrow_rounded, size: 19),
+                    ),
                   )
                 : Text(
                     '$index',
@@ -128,21 +422,35 @@ class MusicTrackRowContent extends StatelessWidget {
                 ),
               ),
               if (showInlineQueueAction ?? active)
-                IconButton(
-                  tooltip: addToQueueTooltip,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: onAddToQueue,
-                  icon: const Icon(Icons.playlist_add_rounded, size: 19),
+                ExcludeFocus(
+                  child: IconButton(
+                    key: queueKey,
+                    tooltip: addToQueueTooltip,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onAddToQueue,
+                    icon: const Icon(Icons.playlist_add_rounded, size: 19),
+                  ),
                 ),
             ],
           ),
         ),
         const SizedBox(width: 16),
-        Expanded(flex: 2, child: MusicTrackMetadataText(artistNames)),
+        Expanded(
+          flex: 2,
+          child: MusicTrackMetadataAction(
+            value: artistNames,
+            tooltip: artistTooltip,
+            onPressed: onOpenArtist,
+          ),
+        ),
         const SizedBox(width: 16),
         Expanded(
           flex: 2,
-          child: MusicTrackMetadataText(track.albumTitle ?? '—'),
+          child: MusicTrackMetadataAction(
+            value: track.albumTitle ?? '—',
+            tooltip: albumTooltip,
+            onPressed: onOpenAlbum,
+          ),
         ),
         const SizedBox(width: 16),
         SizedBox(
@@ -195,29 +503,59 @@ class MusicTrackRowContent extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 3),
-            Text(
-              track.albumTitle == null
-                  ? artistNames
-                  : '$artistNames · ${track.albumTitle}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            Row(
+              children: [
+                Flexible(
+                  child: MusicTrackMetadataAction(
+                    value: artistNames,
+                    tooltip: artistTooltip,
+                    onPressed: onOpenArtist,
+                    compact: true,
+                  ),
+                ),
+                if (track.albumTitle != null) ...[
+                  Text(
+                    ' · ',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Flexible(
+                    child: MusicTrackMetadataAction(
+                      value: track.albumTitle!,
+                      tooltip: albumTooltip,
+                      onPressed: onOpenAlbum,
+                      compact: true,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
       ),
       const SizedBox(width: 8),
+      if (showInlineQueueAction ?? false)
+        ExcludeFocus(
+          child: IconButton(
+            key: queueKey,
+            tooltip: addToQueueTooltip,
+            onPressed: onAddToQueue,
+            icon: const Icon(Icons.playlist_add_rounded, size: 20),
+          ),
+        ),
       Text(
         formatTrackDuration(track.durationSeconds),
         style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
-      IconButton(
-        tooltip: moreTooltip,
-        onPressed: onMore,
-        icon: const Icon(Icons.more_horiz_rounded),
+      ExcludeFocus(
+        child: IconButton(
+          key: moreKey,
+          tooltip: moreTooltip,
+          onPressed: onMore,
+          icon: const Icon(Icons.more_horiz_rounded),
+        ),
       ),
     ],
   );
@@ -238,6 +576,68 @@ class MusicTrackMetadataText extends StatelessWidget {
     style: Theme.of(context).textTheme.bodySmall
         ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
   );
+}
+
+class MusicTrackMetadataAction extends StatelessWidget {
+  const MusicTrackMetadataAction({
+    required this.value,
+    required this.tooltip,
+    this.onPressed,
+    this.compact = false,
+    super.key,
+  });
+
+  final String value;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onPressed == null) return MusicTrackMetadataText(value);
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          fit: FlexFit.loose,
+          child: ExcludeFocus(
+            child: Tooltip(
+              message: tooltip,
+              child: Semantics(
+                button: true,
+                label: '$tooltip: $value',
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: onPressed,
+                    hoverColor: colors.primary.withValues(alpha: 0.10),
+                    focusColor: colors.primary.withValues(alpha: 0.12),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 3 : 6,
+                        vertical: compact ? 1 : 6,
+                      ),
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class MusicTrackArtwork extends StatelessWidget {

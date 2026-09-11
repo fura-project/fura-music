@@ -17,6 +17,7 @@ mod artist_albums;
 mod artist_search;
 mod comments;
 mod credential;
+mod credential_transfer;
 mod credential_verification;
 mod daily_recommendation;
 mod favorite_albums;
@@ -63,6 +64,10 @@ pub use credential::{
     Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
     CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,
     LocalCredentialValidity, LoginType,
+};
+pub use credential_transfer::{
+    CredentialTransferError, CredentialTransferImport, CredentialTransferPackage,
+    export_encrypted_credential_bundle, import_encrypted_credential_bundle,
 };
 pub use credential_verification::{CredentialVerificationError, QqMusicAccountSummary};
 pub use daily_recommendation::{
@@ -128,7 +133,8 @@ pub use rankings::{
     RankingField, RankingGroupField, RankingTrackField,
 };
 pub use recent_plays::{
-    QqMusicRecentPlay, QqMusicRecentPlaysError, QqMusicRecentPlaysPage, QqMusicRecentTrackSummary,
+    QqMusicRecentPlay, QqMusicRecentPlaysError, QqMusicRecentPlaysPage, QqMusicRecentPlaysSnapshot,
+    QqMusicRecentTrackSummary,
 };
 pub use recommendations::{
     QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRecommendedPlaylistsPage,

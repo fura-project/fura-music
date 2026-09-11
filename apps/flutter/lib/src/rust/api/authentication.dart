@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_desktop_quick_start_attempt`, `clear_start_attempt`, `desktop_quick_start_attempt_guard`, `failed_account_summary`, `failed_desktop_quick_start`, `failed_desktop_quick_update`, `failed_restore`, `failed_start`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_desktop_quick_failure`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_verification_failure`, `native_qq_music_provider`, `start_attempt_guard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_desktop_quick_start_attempt`, `clear_start_attempt`, `current_unix_seconds`, `desktop_quick_start_attempt_guard`, `failed_account_summary`, `failed_desktop_quick_start`, `failed_desktop_quick_update`, `failed_restore`, `failed_start`, `failed_transfer_export`, `failed_transfer_import`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_artifact_io_error`, `map_desktop_quick_failure`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_transfer_error`, `map_verification_failure`, `native_qq_music_provider`, `read_transfer_artifact`, `start_attempt_guard`, `write_private_new_file`, `write_transfer_artifacts`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveQqMusicDesktopQuickLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicDesktopQuickLoginStart();
@@ -72,6 +72,30 @@ QqMusicCredentialExport exportQqMusicCredentialForSecureStorage() => RustLib
     .instance
     .api
     .crateApiAuthenticationExportQqMusicCredentialForSecureStorage();
+
+/// Produces encrypted test material for the explicit cross-device Go/No-Go
+/// experiment. No production UI calls this API, and release builds always
+/// return `DisabledOutsideDebugBuild`.
+QqMusicCredentialTransferExport debugExportQqMusicCredentialTransfer({
+  required String encryptedBundlePath,
+  required String transferSecretPath,
+}) => RustLib.instance.api
+    .crateApiAuthenticationDebugExportQqMusicCredentialTransfer(
+      encryptedBundlePath: encryptedBundlePath,
+      transferSecretPath: transferSecretPath,
+    );
+
+/// Installs a decrypted transfer only as the existing pending-verification
+/// candidate. Callers must run `reserve_qq_music_credential_verification` and
+/// `verify_restored_qq_music_credential` before presenting an authenticated UI.
+QqMusicCredentialTransferImport debugImportQqMusicCredentialTransfer({
+  required String encryptedBundlePath,
+  required String transferSecretPath,
+}) => RustLib.instance.api
+    .crateApiAuthenticationDebugImportQqMusicCredentialTransfer(
+      encryptedBundlePath: encryptedBundlePath,
+      transferSecretPath: transferSecretPath,
+    );
 
 /// Imports an optional platform-vault document into Rust and returns only the
 /// safe next action. A present document is never considered authenticated
@@ -228,6 +252,68 @@ enum QqMusicCredentialRestoreState {
   signedOut,
   verificationRequired,
   locallyExpired,
+}
+
+/// Development-only encrypted transfer artifact result. Flutter receives no
+/// credential, ciphertext, or transfer-secret bytes.
+class QqMusicCredentialTransferExport {
+  final bool written;
+  final QqMusicCredentialTransferFailure? failure;
+
+  const QqMusicCredentialTransferExport({required this.written, this.failure});
+
+  @override
+  int get hashCode => written.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicCredentialTransferExport &&
+          runtimeType == other.runtimeType &&
+          written == other.written &&
+          failure == other.failure;
+}
+
+enum QqMusicCredentialTransferFailure {
+  disabledOutsideDebugBuild,
+  coreUnavailable,
+  noAuthenticatedCredential,
+  randomnessUnavailable,
+  serializationFailed,
+  encryptionFailed,
+  invalidBundle,
+  bundleTooLarge,
+  unsupportedVersion,
+  unsupportedProvider,
+  invalidTransferSecret,
+  pairingSessionMismatch,
+  invalidTimestamp,
+  notYetValid,
+  expired,
+  authenticationFailed,
+  invalidCredential,
+  alreadyConsumed,
+  artifactPathInvalid,
+  artifactAlreadyExists,
+  artifactIo,
+}
+
+class QqMusicCredentialTransferImport {
+  final QqMusicCredentialRestoreState? state;
+  final QqMusicCredentialTransferFailure? failure;
+
+  const QqMusicCredentialTransferImport({this.state, this.failure});
+
+  @override
+  int get hashCode => state.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicCredentialTransferImport &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          failure == other.failure;
 }
 
 class QqMusicCredentialVerification {

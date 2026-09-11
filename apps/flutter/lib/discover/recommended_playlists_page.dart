@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
-import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -16,6 +15,8 @@ import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
+import 'package:flutterustmusic/library/music_track_row.dart';
+import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -90,7 +91,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     _newAlbumController = NewAlbumController(widget.newAlbumGateway);
     _newSongController = NewSongController(widget.newSongGateway);
     _rankingController = RankingGroupController(widget.rankingGateway);
-    _radarController = RadarController(widget.radarGateway);
+    _radarController = RadarController(
+      widget.radarGateway,
+      initialPrefetchTarget: 10,
+      maxInitialPrefetchPages: 2,
+    );
     _tabController = TabController(
       length: _DiscoverType.values.length,
       vsync: this,
@@ -270,12 +275,12 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     ),
     RadarStage.content => _RadarCollection(
       key: const ValueKey('radar-content'),
+      controller: _radarController,
       tracks: _radarController.tracks,
       hasMore: _radarController.hasMore,
       isLoadingMore: _radarController.isLoadingMore,
       appendFailure: _radarController.appendFailure,
       canRetryMore: _radarController.canRetryMore,
-      onLoadMore: _radarController.loadMore,
       onRetryMore: _radarController.retryMore,
       onReload: () => unawaited(_radarController.load()),
       onSignInAgain: widget.onSignInAgain,
@@ -283,44 +288,40 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       onQueue: _queueRadar,
       onOpenAlbum: widget.onOpenTrackAlbum,
       onOpenArtist: widget.onOpenTrackArtist,
+      current: widget.queuePlaybackController.current,
       bottomPadding: bottomPadding,
     ),
   };
 
-  Widget _newAlbumBody(double bottomPadding) =>
-      switch (_newAlbumController.stage) {
-        NewAlbumStage.loading => _NewAlbumShell(
-          key: const ValueKey('new-albums-loading'),
-          region: _newAlbumController.region,
-          onRegionSelected: _newAlbumController.selectRegion,
-          child: const MusicLoadingPanel(label: 'Loading New Albums'),
+  Widget _newAlbumBody(double bottomPadding) => _NewAlbumShell(
+    key: const ValueKey('new-albums-shell'),
+    region: _newAlbumController.region,
+    onRegionSelected: _newAlbumController.selectRegion,
+    child: AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: switch (_newAlbumController.stage) {
+        NewAlbumStage.loading => const MusicLoadingPanel(
+          key: ValueKey('new-albums-loading'),
+          label: 'Loading New Albums',
         ),
-        NewAlbumStage.empty => _NewAlbumShell(
-          key: const ValueKey('new-albums-empty'),
-          region: _newAlbumController.region,
-          onRegionSelected: _newAlbumController.selectRegion,
-          child: const MusicContentStatePanel(
-            icon: Icons.album_outlined,
-            title: 'No new albums right now',
-            detail: 'QQ Music returned an empty page for this region.',
-          ),
+        NewAlbumStage.empty => const MusicContentStatePanel(
+          key: ValueKey('new-albums-empty'),
+          icon: Icons.album_outlined,
+          title: 'No new albums right now',
+          detail: 'QQ Music returned an empty page for this region.',
         ),
-        NewAlbumStage.error => _NewAlbumShell(
+        NewAlbumStage.error => MusicContentStatePanel(
           key: const ValueKey('new-albums-error'),
-          region: _newAlbumController.region,
-          onRegionSelected: _newAlbumController.selectRegion,
-          child: MusicContentStatePanel(
-            icon: Icons.cloud_off_rounded,
-            title: 'Couldn’t load new albums',
-            detail: newAlbumFailureCopy(_newAlbumController.failure),
-            liveRegion: true,
-            action: _newAlbumController.canRetry
-                ? FilledButton.tonal(
-                    onPressed: _newAlbumController.retry,
-                    child: const Text('Try again'),
-                  )
-                : null,
-          ),
+          icon: Icons.cloud_off_rounded,
+          title: 'Couldn’t load new albums',
+          detail: newAlbumFailureCopy(_newAlbumController.failure),
+          liveRegion: true,
+          action: _newAlbumController.canRetry
+              ? FilledButton.tonal(
+                  onPressed: _newAlbumController.retry,
+                  child: const Text('Try again'),
+                )
+              : null,
         ),
         NewAlbumStage.content => _NewAlbumCollection(
           key: const ValueKey('new-albums-content'),
@@ -329,61 +330,64 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
           hasMore: _newAlbumController.hasMore,
           isLoadingMore: _newAlbumController.isLoadingMore,
           appendFailure: _newAlbumController.appendFailure,
-          onRegionSelected: _newAlbumController.selectRegion,
           onLoadMore: _newAlbumController.loadMore,
           onRetryMore: _newAlbumController.retryMore,
           onSelected: (release) => widget.onOpenAlbum(release.album),
           bottomPadding: bottomPadding,
         ),
-      };
+      },
+    ),
+  );
 
-  Widget _newSongBody(double bottomPadding) =>
-      switch (_newSongController.stage) {
-        NewSongStage.loading => _NewSongShell(
-          key: const ValueKey('new-songs-loading'),
-          category: _newSongController.category,
-          onCategorySelected: _newSongController.selectCategory,
-          child: const MusicLoadingPanel(label: 'Loading New Songs'),
+  Widget _newSongBody(double bottomPadding) => _NewSongShell(
+    key: const ValueKey('new-songs-shell'),
+    category: _newSongController.category,
+    onCategorySelected: _newSongController.selectCategory,
+    onPlay:
+        _newSongController.stage == NewSongStage.content &&
+            _newSongController.tracks.isNotEmpty
+        ? () => _playNewSong(0)
+        : null,
+    child: AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: switch (_newSongController.stage) {
+        NewSongStage.loading => const MusicLoadingPanel(
+          key: ValueKey('new-songs-loading'),
+          label: 'Loading New Songs',
         ),
-        NewSongStage.empty => _NewSongShell(
-          key: const ValueKey('new-songs-empty'),
-          category: _newSongController.category,
-          onCategorySelected: _newSongController.selectCategory,
-          child: const MusicContentStatePanel(
-            icon: Icons.music_off_rounded,
-            title: 'No new songs right now',
-            detail: 'QQ Music returned no Tracks for this category.',
-          ),
+        NewSongStage.empty => const MusicContentStatePanel(
+          key: ValueKey('new-songs-empty'),
+          icon: Icons.music_off_rounded,
+          title: 'No new songs right now',
+          detail: 'QQ Music returned no Tracks for this category.',
         ),
-        NewSongStage.error => _NewSongShell(
+        NewSongStage.error => MusicContentStatePanel(
           key: const ValueKey('new-songs-error'),
-          category: _newSongController.category,
-          onCategorySelected: _newSongController.selectCategory,
-          child: MusicContentStatePanel(
-            icon: Icons.cloud_off_rounded,
-            title: 'Couldn’t load new songs',
-            detail: newSongFailureCopy(_newSongController.failure),
-            liveRegion: true,
-            action: _newSongController.canRetry
-                ? FilledButton.tonal(
-                    onPressed: _newSongController.retry,
-                    child: const Text('Try again'),
-                  )
-                : null,
-          ),
+          icon: Icons.cloud_off_rounded,
+          title: 'Couldn’t load new songs',
+          detail: newSongFailureCopy(_newSongController.failure),
+          liveRegion: true,
+          action: _newSongController.canRetry
+              ? FilledButton.tonal(
+                  onPressed: _newSongController.retry,
+                  child: const Text('Try again'),
+                )
+              : null,
         ),
         NewSongStage.content => _NewSongCollection(
           key: const ValueKey('new-songs-content'),
           category: _newSongController.category,
           tracks: _newSongController.tracks,
-          onCategorySelected: _newSongController.selectCategory,
           onPlay: _playNewSong,
           onQueue: _queueNewSong,
           onOpenAlbum: widget.onOpenTrackAlbum,
           onOpenArtist: widget.onOpenTrackArtist,
+          current: widget.queuePlaybackController.current,
           bottomPadding: bottomPadding,
         ),
-      };
+      },
+    ),
+  );
 
   Widget? _radarFailureAction(RadarFailure? failure) {
     if (_radarRequiresSignIn(failure)) {
@@ -520,64 +524,69 @@ class _DiscoverHeader extends StatelessWidget {
     final horizontal = desktop
         ? MusicSpacing.pageWide
         : MusicSpacing.pageCompact;
-    return AnimatedSwitcher(
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : MusicMotion.stateChange;
+    return TweenAnimationBuilder<double>(
       key: const ValueKey('discover-header-transition'),
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : MusicMotion.stateChange,
-      switchInCurve: Easing.emphasizedDecelerate,
-      switchOutCurve: Easing.emphasizedAccelerate,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SizeTransition(
-          sizeFactor: animation,
-          alignment: Alignment.topCenter,
-          child: child,
-        ),
-      ),
-      child: Material(
+      tween: Tween<double>(begin: collapsed ? 0 : 1, end: collapsed ? 0 : 1),
+      duration: duration,
+      curve: Curves.easeInOutCubic,
+      builder: (context, progress, _) => Padding(
         key: ValueKey(
           collapsed ? 'discover-collapsed-header' : 'discover-expanded-header',
         ),
-        color: Theme.of(context).colorScheme.surface,
-        elevation: collapsed ? 1 : 0,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            collapsed ? 2 : 16,
-            0,
-            collapsed ? 2 : 6,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!collapsed) ...[
-                Padding(
-                  padding: EdgeInsets.only(right: horizontal),
-                  child: Text(
-                    'Discover',
-                    key: const ValueKey('discover-heading'),
-                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.4,
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          2 + (14 * progress),
+          0,
+          2 + (4 * progress),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRect(
+              child: Align(
+                alignment: Alignment.topLeft,
+                heightFactor: progress,
+                child: Opacity(
+                  opacity: progress,
+                  child: Transform.translate(
+                    offset: Offset(0, -8 * (1 - progress)),
+                    child: Padding(
+                      padding: EdgeInsets.only(right: horizontal),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Discover',
+                            key: const ValueKey('discover-heading'),
+                            style: Theme.of(context).textTheme.headlineLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.4,
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Playlists, charts, Radar, and new releases from QQ Music',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: EdgeInsets.only(right: horizontal),
-                  child: Text(
-                    'Playlists, charts, Radar, and new releases from QQ Music',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-              ],
-              tabs,
-            ],
-          ),
+              ),
+            ),
+            tabs,
+          ],
         ),
       ),
     );
@@ -629,20 +638,39 @@ class _NewSongShell extends StatelessWidget {
   const _NewSongShell({
     required this.category,
     required this.onCategorySelected,
+    required this.onPlay,
     required this.child,
     super.key,
   });
 
   final NewSongCategory category;
   final ValueChanged<NewSongCategory> onCategorySelected;
+  final VoidCallback? onPlay;
   final Widget child;
 
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      _NewSongCategoryPicker(
-        category: category,
-        onSelected: onCategorySelected,
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: _NewSongCategoryPicker(
+                category: category,
+                onSelected: onCategorySelected,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+            const SizedBox(width: 16),
+            FilledButton.icon(
+              key: const ValueKey('new-songs-play-all'),
+              onPressed: onPlay,
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Play'),
+            ),
+          ],
+        ),
       ),
       Expanded(child: child),
     ],
@@ -653,68 +681,79 @@ class _NewSongCollection extends StatelessWidget {
   const _NewSongCollection({
     required this.category,
     required this.tracks,
-    required this.onCategorySelected,
     required this.onPlay,
     required this.onQueue,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.current,
     required this.bottomPadding,
     super.key,
   });
 
   final NewSongCategory category;
   final List<PlaylistTrackSummary> tracks;
-  final ValueChanged<NewSongCategory> onCategorySelected;
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final PlaylistTrackSummary? current;
   final double bottomPadding;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final desktop = constraints.maxWidth >= 760;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _NewSongCategoryPicker(
-            category: category,
-            onSelected: onCategorySelected,
+      final horizontal = desktop
+          ? MusicSpacing.pageWide
+          : MusicSpacing.pageCompact;
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: MusicSizes.contentMaxWidth,
           ),
-          Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1040),
-                child: ListView.builder(
-                  key: PageStorageKey<String>('new-song-list-${category.name}'),
-                  padding: EdgeInsets.fromLTRB(
-                    desktop ? 40 : 12,
-                    8,
-                    desktop ? 40 : 12,
-                    bottomPadding,
+          child: CustomScrollView(
+            key: PageStorageKey<String>('new-song-list-${category.name}'),
+            slivers: [
+              if (desktop)
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  sliver: const SliverToBoxAdapter(
+                    child: _DiscoverTrackTableHeader(
+                      key: ValueKey('new-song-table-header'),
+                    ),
                   ),
+                ),
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: horizontal),
+                sliver: SliverList.builder(
                   itemCount: tracks.length,
                   itemBuilder: (context, index) {
                     final track = tracks[index];
-                    return MusicTrackTile(
+                    return _DiscoverTrackRow(
+                      key: ValueKey(
+                        'new-song-track-state-${track.providerId}-${track.opaqueId}',
+                      ),
                       itemKey: ValueKey('new-song-track-$index'),
                       queueKey: ValueKey('new-song-queue-$index'),
-                      contextKey: ValueKey('new-song-context-$index'),
+                      moreKey: ValueKey('new-song-context-$index'),
+                      index: index + 1,
                       track: track,
-                      position: index + 1,
                       desktop: desktop,
+                      current: _sameTrack(current, track),
                       onPlay: () => onPlay(index),
-                      onQueue: () => onQueue(track),
-                      onOpenAlbum: onOpenAlbum,
+                      onAddToQueue: () => onQueue(track),
+                      onOpenAlbum: onOpenAlbum == null || track.album == null
+                          ? null
+                          : () => onOpenAlbum!(track.album!),
                       onOpenArtist: onOpenArtist,
                     );
                   },
                 ),
               ),
-            ),
+              SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+            ],
           ),
-        ],
+        ),
       );
     },
   );
@@ -724,29 +763,33 @@ class _NewSongCategoryPicker extends StatelessWidget {
   const _NewSongCategoryPicker({
     required this.category,
     required this.onSelected,
+    this.padding = const EdgeInsets.fromLTRB(20, 4, 20, 12),
   });
 
   final NewSongCategory category;
   final ValueChanged<NewSongCategory> onSelected;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const ValueKey('new-song-category-selector'),
     scrollDirection: Axis.horizontal,
-    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-    child: Row(
-      children: [
+    padding: padding,
+    child: SegmentedButton<NewSongCategory>(
+      segments: [
         for (final value in NewSongCategory.values)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
+          ButtonSegment(
+            value: value,
+            label: Text(
+              newSongCategoryLabel(value),
               key: ValueKey('new-song-category-${value.name}'),
-              label: Text(newSongCategoryLabel(value)),
-              selected: category == value,
-              onSelected: (_) => onSelected(value),
             ),
           ),
       ],
+      selected: {category},
+      selectedIcon: const Icon(Icons.check_rounded, size: 18),
+      style: _compactSegmentedButtonStyle(),
+      onSelectionChanged: (selection) => onSelected(selection.single),
     ),
   );
 }
@@ -779,7 +822,6 @@ class _NewAlbumCollection extends StatelessWidget {
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
-    required this.onRegionSelected,
     required this.onLoadMore,
     required this.onRetryMore,
     required this.onSelected,
@@ -792,7 +834,6 @@ class _NewAlbumCollection extends StatelessWidget {
   final bool hasMore;
   final bool isLoadingMore;
   final NewAlbumFailure? appendFailure;
-  final ValueChanged<NewAlbumRegion> onRegionSelected;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final ValueChanged<NewAlbumRelease> onSelected;
@@ -809,50 +850,48 @@ class _NewAlbumCollection extends StatelessWidget {
         onLoadMore: onLoadMore,
         onRetryMore: onRetryMore,
       );
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _NewAlbumRegionPicker(region: region, onSelected: onRegionSelected),
-          Expanded(
-            child: desktop
-                ? GridView.builder(
-                    key: PageStorageKey<String>(
-                      'new-album-grid-${region.name}',
-                    ),
-                    padding: EdgeInsets.fromLTRB(48, 8, 48, bottomPadding),
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 220,
-                          mainAxisExtent: 282,
-                          crossAxisSpacing: 24,
-                          mainAxisSpacing: 24,
-                        ),
-                    itemCount: releases.length + 1,
-                    itemBuilder: (context, index) => index == releases.length
-                        ? footer
-                        : _NewAlbumCard(
-                            key: ValueKey('new-album-$index'),
-                            release: releases[index],
-                            onTap: () => onSelected(releases[index]),
-                          ),
-                  )
-                : ListView.separated(
-                    key: PageStorageKey<String>(
-                      'new-album-list-${region.name}',
-                    ),
-                    padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
-                    itemCount: releases.length + 1,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) => index == releases.length
-                        ? footer
-                        : _NewAlbumTile(
-                            key: ValueKey('new-album-$index'),
-                            release: releases[index],
-                            onTap: () => onSelected(releases[index]),
-                          ),
-                  ),
+      final horizontal = desktop
+          ? MusicSpacing.pageWide
+          : MusicSpacing.pageCompact;
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: MusicSizes.contentMaxWidth,
           ),
-        ],
+          child: CustomScrollView(
+            key: PageStorageKey<String>('new-album-grid-${region.name}'),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: horizontal),
+                sliver: SliverGrid.builder(
+                  gridDelegate: desktop
+                      ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 180,
+                          mainAxisExtent: 228,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 20,
+                        )
+                      : const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisExtent: 226,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 16,
+                        ),
+                  itemCount: releases.length,
+                  itemBuilder: (context, index) => _NewAlbumCard(
+                    key: ValueKey('new-album-$index'),
+                    release: releases[index],
+                    onTap: () => onSelected(releases[index]),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.only(bottom: bottomPadding),
+                sliver: SliverToBoxAdapter(child: footer),
+              ),
+            ],
+          ),
+        ),
       );
     },
   );
@@ -863,62 +902,36 @@ class _NewAlbumRegionPicker extends StatelessWidget {
 
   final NewAlbumRegion region;
   final ValueChanged<NewAlbumRegion> onSelected;
-
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const ValueKey('new-album-region-selector'),
     scrollDirection: Axis.horizontal,
     padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-    child: Row(
-      children: [
+    child: SegmentedButton<NewAlbumRegion>(
+      segments: [
         for (final value in NewAlbumRegion.values)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
+          ButtonSegment(
+            value: value,
+            label: Text(
+              newAlbumRegionLabel(value),
               key: ValueKey('new-album-region-${value.name}'),
-              label: Text(newAlbumRegionLabel(value)),
-              selected: region == value,
-              onSelected: (_) => onSelected(value),
             ),
           ),
       ],
+      selected: {region},
+      selectedIcon: const Icon(Icons.check_rounded, size: 18),
+      style: _compactSegmentedButtonStyle(),
+      onSelectionChanged: (selection) => onSelected(selection.single),
     ),
   );
 }
 
-class _NewAlbumTile extends StatelessWidget {
-  const _NewAlbumTile({required this.release, required this.onTap, super.key});
-
-  final NewAlbumRelease release;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final details = _newAlbumDetails(release);
-    return Semantics(
-      button: true,
-      label: _newAlbumSemanticLabel(release),
-      excludeSemantics: true,
-      onTap: onTap,
-      child: ListTile(
-        minTileHeight: 82,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        leading: SizedBox.square(
-          dimension: 60,
-          child: _NewAlbumArtwork(uri: release.album.artworkUri),
-        ),
-        title: Text(
-          release.album.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: onTap,
-      ),
-    );
-  }
-}
+ButtonStyle _compactSegmentedButtonStyle() => SegmentedButton.styleFrom(
+  minimumSize: const Size(0, 40),
+  padding: const EdgeInsets.symmetric(horizontal: 10),
+  visualDensity: VisualDensity.compact,
+  animationDuration: const Duration(milliseconds: 200),
+);
 
 class _NewAlbumCard extends StatelessWidget {
   const _NewAlbumCard({required this.release, required this.onTap, super.key});
@@ -932,35 +945,43 @@ class _NewAlbumCard extends StatelessWidget {
     label: _newAlbumSemanticLabel(release),
     excludeSemantics: true,
     onTap: onTap,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _NewAlbumArtwork(uri: release.album.artworkUri)),
-            const SizedBox(height: 10),
-            Text(
-              release.album.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              _newAlbumDetails(release),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _NewAlbumArtwork(uri: release.album.artworkUri),
+              Positioned.fill(
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: onTap,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          release.album.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          _newAlbumDetails(release),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ],
     ),
   );
 }
@@ -982,7 +1003,7 @@ class _NewAlbumArtwork extends StatelessWidget {
       child: Icon(Icons.album_rounded, color: colors.onSecondaryContainer),
     );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(8),
       child: uri == null
           ? placeholder
           : Image.network(
@@ -1067,52 +1088,61 @@ class _RankingCollection extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final desktop = constraints.maxWidth >= 760;
-      return ListView(
-        key: const PageStorageKey<String>('ranking-groups'),
-        padding: EdgeInsets.fromLTRB(
-          desktop ? 48 : 16,
-          16,
-          desktop ? 48 : 16,
-          bottomPadding,
-        ),
-        children: [
-          for (final group in groups) ...[
-            Semantics(
-              header: true,
-              child: Text(
-                group.title,
-                style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
+      final horizontal = desktop
+          ? MusicSpacing.pageWide
+          : MusicSpacing.pageCompact;
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: MusicSizes.contentMaxWidth,
+          ),
+          child: ListView(
+            key: const PageStorageKey<String>('ranking-groups'),
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              12,
+              horizontal,
+              bottomPadding,
             ),
-            const SizedBox(height: 10),
-            if (desktop)
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
+            children: [
+              for (final group in groups) ...[
+                Semantics(
+                  header: true,
+                  child: Text(
+                    group.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (desktop)
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final ranking in group.rankings)
+                        SizedBox(
+                          width: 344,
+                          child: _RankingTile(
+                            ranking: ranking,
+                            onTap: () => onSelected(ranking),
+                          ),
+                        ),
+                    ],
+                  )
+                else
                   for (final ranking in group.rankings)
-                    SizedBox(
-                      width: 280,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
                       child: _RankingTile(
                         ranking: ranking,
                         onTap: () => onSelected(ranking),
                       ),
                     ),
-                ],
-              )
-            else
-              for (final ranking in group.rankings)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _RankingTile(
-                    ranking: ranking,
-                    onTap: () => onSelected(ranking),
-                  ),
-                ),
-            const SizedBox(height: 24),
-          ],
-        ],
+                const SizedBox(height: 28),
+              ],
+            ],
+          ),
+        ),
       );
     },
   );
@@ -1132,42 +1162,331 @@ class _RankingTile extends StatelessWidget {
     final semantic = details.isEmpty
         ? ranking.title
         : '${ranking.title}, ${details.join(', ')}';
-    return Semantics(
-      button: true,
-      label: semantic,
-      excludeSemantics: true,
-      onTap: onTap,
-      child: ListTile(
-        key: ValueKey('ranking-${ranking.opaqueId}'),
-        minTileHeight: 80,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        leading: SizedBox.square(
-          dimension: 60,
-          child: RankingArtwork(uri: ranking.artworkUri),
-        ),
-        title: Text(
-          ranking.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: details.isEmpty
-            ? const Text('Current ranking')
-            : Text(details.join(' · ')),
-        trailing: const Icon(Icons.chevron_right_rounded),
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: MusicRadii.content,
+      clipBehavior: Clip.antiAlias,
+      child: Semantics(
+        button: true,
+        label: semantic,
+        excludeSemantics: true,
         onTap: onTap,
+        child: InkWell(
+          key: ValueKey('ranking-${ranking.opaqueId}'),
+          onTap: onTap,
+          child: SizedBox(
+            height: 120,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 132,
+                  child: _RankingArtworkPane(
+                    uri: ranking.artworkUri,
+                    trackCount: ranking.trackCount,
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          ranking.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          ranking.period ?? 'Current ranking',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(right: 10),
+                  child: Icon(Icons.chevron_right_rounded),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _RadarCollection extends StatelessWidget {
+class _RankingArtworkPane extends StatelessWidget {
+  const _RankingArtworkPane({this.uri, this.trackCount});
+
+  final String? uri;
+  final int? trackCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RankingArtwork(uri: uri),
+        if (trackCount != null) ...[
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0.48, 1],
+                colors: [Colors.transparent, Color(0xB3000000)],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 10,
+            right: 10,
+            bottom: 9,
+            child: Text(
+              '$trackCount tracks',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium
+                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DiscoverTrackTableHeader extends StatelessWidget {
+  const _DiscoverTrackTableHeader({super.key});
+
+  @override
+  Widget build(BuildContext context) => const MusicTrackTableHeader(
+    titleLabel: 'Title',
+    artistLabel: 'Artist',
+    albumLabel: 'Album',
+    durationLabel: 'Duration',
+  );
+}
+
+class _DiscoverTrackRow extends StatelessWidget {
+  const _DiscoverTrackRow({
+    required this.itemKey,
+    required this.queueKey,
+    required this.moreKey,
+    required this.index,
+    required this.track,
+    required this.desktop,
+    required this.current,
+    required this.onPlay,
+    required this.onAddToQueue,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
+    super.key,
+  });
+
+  final Key itemKey;
+  final Key queueKey;
+  final Key moreKey;
+  final int index;
+  final PlaylistTrackSummary track;
+  final bool desktop;
+  final bool current;
+  final VoidCallback onPlay;
+  final VoidCallback onAddToQueue;
+  final VoidCallback? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
+
+  @override
+  Widget build(BuildContext context) {
+    final artists = track.artistNames.isEmpty
+        ? 'Unknown artist'
+        : track.artistNames.join(' / ');
+    return MusicTrackRowSurface(
+      itemKey: itemKey,
+      desktop: desktop,
+      current: current,
+      semanticLabel: '${track.title}, $artists',
+      onTap: onPlay,
+      onContextMenuRequested: (position) => unawaited(
+        position == null
+            ? _showCompactMenu(context)
+            : _showDesktopMenu(context, position),
+      ),
+      contentBuilder: (context, active, hovered) => MusicTrackRowContent(
+        index: index,
+        track: track,
+        desktop: desktop,
+        current: current,
+        active: active,
+        artistNames: artists,
+        showInlineQueueAction: hovered,
+        queueKey: queueKey,
+        moreKey: moreKey,
+        onPlay: onPlay,
+        onAddToQueue: onAddToQueue,
+        onOpenAlbum: onOpenAlbum,
+        onOpenArtist: onOpenArtist == null || track.artists.isEmpty
+            ? null
+            : () => _openArtist(context),
+        onMore: () => unawaited(
+          desktop ? _showDesktopMenuAtRow(context) : _showCompactMenu(context),
+        ),
+        addToQueueTooltip: 'Add to queue',
+        moreTooltip: 'More actions',
+      ),
+    );
+  }
+
+  Future<void> _showDesktopMenuAtRow(BuildContext context) async {
+    final box = context.findRenderObject();
+    if (box is! RenderBox) return;
+    await _showDesktopMenu(
+      context,
+      box.localToGlobal(box.size.center(Offset.zero)),
+    );
+  }
+
+  Future<void> _showDesktopMenu(BuildContext context, Offset position) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    final action = await showMenu<MusicTrackAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        overlay.size.width - position.dx,
+        overlay.size.height - position.dy,
+      ),
+      items: _menuItems(),
+    );
+    if (!context.mounted) return;
+    _runAction(context, action);
+  }
+
+  Future<void> _showCompactMenu(BuildContext context) async {
+    final action = await showModalBottomSheet<MusicTrackAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.play_arrow_rounded),
+              title: const Text('Play from here'),
+              onTap: () => Navigator.pop(context, MusicTrackAction.play),
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: const Text('Add to queue'),
+              onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
+            ),
+            if (onOpenAlbum != null)
+              ListTile(
+                key: const ValueKey('track-context-album'),
+                leading: const Icon(Icons.album_rounded),
+                title: const Text('Open album'),
+                onTap: () => Navigator.pop(context, MusicTrackAction.openAlbum),
+              ),
+            if (onOpenArtist != null)
+              ListTile(
+                key: const ValueKey('track-context-artist-0'),
+                leading: const Icon(Icons.person_rounded),
+                title: const Text('Open artist'),
+                onTap: () =>
+                    Navigator.pop(context, MusicTrackAction.openArtist),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    _runAction(context, action);
+  }
+
+  List<PopupMenuEntry<MusicTrackAction>> _menuItems() => [
+    const PopupMenuItem(
+      value: MusicTrackAction.play,
+      child: ListTile(
+        leading: Icon(Icons.play_arrow_rounded),
+        title: Text('Play from here'),
+      ),
+    ),
+    const PopupMenuItem(
+      value: MusicTrackAction.addToQueue,
+      child: ListTile(
+        leading: Icon(Icons.playlist_add_rounded),
+        title: Text('Add to queue'),
+      ),
+    ),
+    if (onOpenAlbum != null)
+      const PopupMenuItem(
+        value: MusicTrackAction.openAlbum,
+        child: ListTile(
+          leading: Icon(Icons.album_rounded),
+          title: Text('Open album'),
+        ),
+      ),
+    if (onOpenArtist != null)
+      const PopupMenuItem(
+        value: MusicTrackAction.openArtist,
+        child: ListTile(
+          leading: Icon(Icons.person_rounded),
+          title: Text('Open artist'),
+        ),
+      ),
+  ];
+
+  void _runAction(BuildContext context, MusicTrackAction? action) {
+    switch (action) {
+      case MusicTrackAction.play:
+        onPlay();
+      case MusicTrackAction.addToQueue:
+        onAddToQueue();
+      case MusicTrackAction.openAlbum:
+        onOpenAlbum?.call();
+      case MusicTrackAction.openArtist:
+        _openArtist(context);
+      case null:
+        return;
+    }
+  }
+
+  void _openArtist(BuildContext context) {
+    unawaited(
+      openMusicTrackArtists(
+        context: context,
+        artists: track.artists,
+        onSelected: onOpenArtist,
+        itemKeyPrefix: 'discover-track-artist',
+      ),
+    );
+  }
+}
+
+class _RadarCollection extends StatefulWidget {
   const _RadarCollection({
+    required this.controller,
     required this.tracks,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
     required this.canRetryMore,
-    required this.onLoadMore,
     required this.onRetryMore,
     required this.onReload,
     required this.onSignInAgain,
@@ -1175,16 +1494,17 @@ class _RadarCollection extends StatelessWidget {
     required this.onQueue,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.current,
     required this.bottomPadding,
     super.key,
   });
 
+  final RadarController controller;
   final List<PlaylistTrackSummary> tracks;
   final bool hasMore;
   final bool isLoadingMore;
   final RadarFailure? appendFailure;
   final bool canRetryMore;
-  final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final VoidCallback onReload;
   final VoidCallback onSignInAgain;
@@ -1192,52 +1512,161 @@ class _RadarCollection extends StatelessWidget {
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final PlaylistTrackSummary? current;
   final double bottomPadding;
+
+  @override
+  State<_RadarCollection> createState() => _RadarCollectionState();
+}
+
+class _RadarCollectionState extends State<_RadarCollection> {
+  final _prefetchPolicy = PlaylistPrefetchPolicy();
+
+  @override
+  void didUpdateWidget(_RadarCollection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.cancelPrefetch();
+      _prefetchPolicy.reset();
+    }
+  }
+
+  bool _handlePrefetch(ScrollNotification notification) {
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    if (notification is ScrollStartNotification ||
+        notification is ScrollEndNotification) {
+      _prefetchPolicy.reset();
+    }
+    final delta = switch (notification) {
+      ScrollUpdateNotification() => notification.scrollDelta ?? 0,
+      OverscrollNotification() => notification.overscroll,
+      _ => 0.0,
+    };
+    if (delta < 0) {
+      widget.controller.cancelPrefetch();
+      _prefetchPolicy.reset();
+    } else if (delta > 0) {
+      final metrics = notification.metrics;
+      widget.controller.prefetchTo(
+        _prefetchPolicy.targetTrackCount(
+          loadedCount: widget.tracks.length,
+          extentAfter: metrics.extentAfter,
+          contentExtent:
+              metrics.maxScrollExtent -
+              metrics.minScrollExtent +
+              metrics.viewportDimension,
+          scrollDelta: delta,
+          sampleTime: WidgetsBinding.instance.currentSystemFrameTimeStamp,
+          pageLatency: widget.controller.estimatedPageLatency,
+          pageSize: 10,
+        ),
+      );
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    widget.controller.cancelPrefetch();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final desktop = constraints.maxWidth >= 760;
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1040),
-          child: ListView.builder(
-            key: const PageStorageKey<String>('radar-tracks'),
-            padding: EdgeInsets.fromLTRB(
-              desktop ? 40 : 12,
-              8,
-              desktop ? 40 : 12,
-              bottomPadding,
+      final horizontal = desktop
+          ? MusicSpacing.pageWide
+          : MusicSpacing.pageCompact;
+      return NotificationListener<ScrollNotification>(
+        onNotification: _handlePrefetch,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: MusicSizes.contentMaxWidth,
             ),
-            itemCount: tracks.length + 1,
-            itemBuilder: (context, index) {
-              if (index == tracks.length) {
-                return _RadarFooter(
-                  hasMore: hasMore,
-                  isLoadingMore: isLoadingMore,
-                  appendFailure: appendFailure,
-                  canRetryMore: canRetryMore,
-                  onLoadMore: onLoadMore,
-                  onRetryMore: onRetryMore,
-                  onReload: onReload,
-                  onSignInAgain: onSignInAgain,
-                );
-              }
-              final trackIndex = index;
-              final track = tracks[trackIndex];
-              return MusicTrackTile(
-                itemKey: ValueKey('radar-track-$trackIndex'),
-                queueKey: ValueKey('radar-queue-$trackIndex'),
-                contextKey: ValueKey('radar-context-$trackIndex'),
-                track: track,
-                position: trackIndex + 1,
-                desktop: desktop,
-                onPlay: () => onPlay(trackIndex),
-                onQueue: () => onQueue(track),
-                onOpenAlbum: onOpenAlbum,
-                onOpenArtist: onOpenArtist,
-              );
-            },
+            child: CustomScrollView(
+              key: const PageStorageKey<String>('radar-tracks'),
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
+                  sliver: SliverToBoxAdapter(
+                    child: Row(
+                      children: [
+                        FilledButton.icon(
+                          key: const ValueKey('radar-play-all'),
+                          onPressed: widget.tracks.isEmpty
+                              ? null
+                              : () => widget.onPlay(0),
+                          icon: const Icon(Icons.play_arrow_rounded),
+                          label: const Text('Play'),
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton.filledTonal(
+                          key: const ValueKey('radar-refresh'),
+                          tooltip: 'Refresh Radar',
+                          onPressed: widget.onReload,
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (desktop)
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: horizontal),
+                    sliver: const SliverToBoxAdapter(
+                      child: _DiscoverTrackTableHeader(
+                        key: ValueKey('radar-table-header'),
+                      ),
+                    ),
+                  ),
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  sliver: SliverList.builder(
+                    itemCount: widget.tracks.length,
+                    itemBuilder: (context, index) {
+                      final track = widget.tracks[index];
+                      return _DiscoverTrackRow(
+                        key: ValueKey(
+                          'radar-track-state-${track.providerId}-${track.opaqueId}',
+                        ),
+                        itemKey: ValueKey('radar-track-$index'),
+                        queueKey: ValueKey('radar-queue-$index'),
+                        moreKey: ValueKey('radar-context-$index'),
+                        index: index + 1,
+                        track: track,
+                        desktop: desktop,
+                        current: _sameTrack(widget.current, track),
+                        onPlay: () => widget.onPlay(index),
+                        onAddToQueue: () => widget.onQueue(track),
+                        onOpenAlbum:
+                            widget.onOpenAlbum == null || track.album == null
+                            ? null
+                            : () => widget.onOpenAlbum!(track.album!),
+                        onOpenArtist: widget.onOpenArtist,
+                      );
+                    },
+                  ),
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.only(bottom: widget.bottomPadding),
+                  sliver: SliverToBoxAdapter(
+                    child: _RadarFooter(
+                      hasMore: widget.hasMore,
+                      isLoadingMore: widget.isLoadingMore,
+                      appendFailure: widget.appendFailure,
+                      canRetryMore: widget.canRetryMore,
+                      onRetryMore: widget.onRetryMore,
+                      onReload: widget.onReload,
+                      onSignInAgain: widget.onSignInAgain,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -1251,7 +1680,6 @@ class _RadarFooter extends StatelessWidget {
     required this.isLoadingMore,
     required this.appendFailure,
     required this.canRetryMore,
-    required this.onLoadMore,
     required this.onRetryMore,
     required this.onReload,
     required this.onSignInAgain,
@@ -1261,7 +1689,6 @@ class _RadarFooter extends StatelessWidget {
   final bool isLoadingMore;
   final RadarFailure? appendFailure;
   final bool canRetryMore;
-  final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final VoidCallback onReload;
   final VoidCallback onSignInAgain;
@@ -1300,10 +1727,12 @@ class _RadarFooter extends StatelessWidget {
                     ?.copyWith(color: Theme.of(context).colorScheme.error),
               )
             : hasMore
-            ? FilledButton.tonal(
-                key: const ValueKey('radar-load-more'),
-                onPressed: onLoadMore,
-                child: const Text('Load more'),
+            ? Text(
+                'Scroll to load more',
+                key: const ValueKey('radar-auto-load-more'),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               )
             : Text(
                 'End of Radar recommendations',
@@ -1360,14 +1789,14 @@ class _RecommendationCollection extends StatelessWidget {
             sliver: SliverGrid.builder(
               gridDelegate: desktop
                   ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 210,
-                      mainAxisExtent: 272,
-                      crossAxisSpacing: 20,
-                      mainAxisSpacing: 24,
+                      maxCrossAxisExtent: 180,
+                      mainAxisExtent: 228,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 20,
                     )
                   : const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      mainAxisExtent: 236,
+                      mainAxisExtent: 226,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 16,
                     ),
@@ -1400,52 +1829,50 @@ class _RecommendationGridItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-    margin: EdgeInsets.zero,
-    elevation: 0,
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    shape: const RoundedRectangleBorder(borderRadius: MusicRadii.content),
-    clipBehavior: Clip.antiAlias,
-    child: Semantics(
-      button: true,
-      label: _semanticLabel(playlist),
-      excludeSemantics: true,
-      onTap: onTap,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: _semanticLabel(playlist),
+    excludeSemantics: true,
+    onTap: onTap,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
-                child: SizedBox.expand(
-                  child: _RecommendationArtwork(uri: playlist.artworkUri),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                playlist.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700, height: 1.25),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                playlist.trackCount != null
-                    ? '${playlist.trackCount} tracks'
-                    : 'QQ Music playlist',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+              _RecommendationArtwork(uri: playlist.artworkUri),
+              Positioned.fill(
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: onTap,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          playlist.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          playlist.trackCount != null
+              ? '${playlist.trackCount} tracks'
+              : 'QQ Music playlist',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ],
     ),
   );
 }
@@ -1467,7 +1894,7 @@ class _RecommendationArtwork extends StatelessWidget {
       child: Icon(Icons.queue_music_rounded, color: colors.onPrimaryContainer),
     );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       child: uri == null
           ? placeholder
           : Image.network(
@@ -1528,6 +1955,11 @@ String _semanticLabel(RecommendedPlaylistSummary playlist) {
   final count = playlist.trackCount;
   return count == null ? playlist.title : '${playlist.title}, $count tracks';
 }
+
+bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
+    left != null &&
+    left.providerId == right.providerId &&
+    left.opaqueId == right.opaqueId;
 
 String _failureCopy(RecommendedPlaylistFailure? failure) => switch (failure) {
   RecommendedPlaylistFailure.network => 'Check your connection and try again.',

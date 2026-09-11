@@ -142,11 +142,7 @@ TrackCommentPageResult mapBridgeTrackCommentPage(
       result.total < 0 ||
       pageEnd > result.total ||
       (result.offset > 0 && result.hotComments.isNotEmpty) ||
-      (result.hasMore &&
-          (result.latestComments.isEmpty || pageEnd >= result.total)) ||
-      (!result.hasMore &&
-          result.latestComments.isNotEmpty &&
-          pageEnd < result.total)) {
+      (result.hasMore && pageEnd >= result.total)) {
     return const TrackCommentPageResult(
       failure: TrackCommentFailure.invalidResponse,
     );

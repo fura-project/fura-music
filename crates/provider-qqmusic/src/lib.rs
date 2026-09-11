@@ -37,8 +37,9 @@ use provider_api::{
     UserLibraryError, UserPlaylistsProvider,
 };
 use qqmusic_client::{
-    Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialVerificationError,
-    HttpTransport, QqDesktopQuickLoginError, QqDesktopQuickLoginSession, QqMusicAlbumDetailsError,
+    Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialTransferError,
+    CredentialTransferPackage, CredentialVerificationError, HttpTransport,
+    QqDesktopQuickLoginError, QqDesktopQuickLoginSession, QqMusicAlbumDetailsError,
     QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState, QqMusicAlbumSearchError,
     QqMusicAlbumSummary, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
     QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicAudioProfile, QqMusicClient,
@@ -50,13 +51,14 @@ use qqmusic_client::{
     QqMusicPersonalizedPlaylist, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
     QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
     QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
-    QqMusicRankingsError, QqMusicRecentPlaysError, QqMusicRecentTrackSummary,
-    QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError,
-    QqMusicSearchError, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
-    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError,
-    QrImageMediaType, QrLoginChannel, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
-    WechatQrLoginSession,
+    QqMusicRankingsError, QqMusicRecentPlaysError, QqMusicRecentPlaysPage,
+    QqMusicRecentPlaysSnapshot, QqMusicRecentTrackSummary, QqMusicRecommendedPlaylist,
+    QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError, QqMusicSearchError,
+    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
+    QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError, QrImageMediaType, QrLoginChannel,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    export_encrypted_credential_bundle, import_encrypted_credential_bundle,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -70,13 +72,57 @@ pub enum QqMusicCredentialRestoreState {
     LocallyExpired,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialTransferError {
+    NoAuthenticatedCredential,
+    AlreadyConsumed,
+    Transfer(CredentialTransferError),
+}
+
+impl std::fmt::Display for QqMusicCredentialTransferError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoAuthenticatedCredential => {
+                formatter.write_str("an authenticated QQ Music credential is required")
+            }
+            Self::AlreadyConsumed => {
+                formatter.write_str("credential transfer session was already consumed")
+            }
+            Self::Transfer(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for QqMusicCredentialTransferError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Transfer(error) => Some(error),
+            Self::NoAuthenticatedCredential | Self::AlreadyConsumed => None,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 enum QqMusicCredentialState {
     #[default]
     SignedOut,
     PendingVerification(Credential),
     LocallyExpired(Credential),
-    Authenticated(Credential),
+    Authenticated(Credential, RecentPlaysCache),
+}
+
+// The snapshot belongs to this exact authenticated state, so sign-out,
+// rejection and every credential replacement drop it together with the session.
+#[derive(Debug, Default)]
+struct RecentPlaysCache {
+    request: Option<Arc<()>>,
+    snapshot: Option<QqMusicRecentPlaysSnapshot>,
+}
+
+impl QqMusicCredentialState {
+    fn authenticated(credential: Credential) -> Self {
+        Self::Authenticated(credential, RecentPlaysCache::default())
+    }
 }
 
 #[derive(Debug)]
@@ -86,6 +132,7 @@ pub struct QqMusicProvider<T> {
     active_desktop_quick_login: Arc<Mutex<Option<Arc<AtomicBool>>>>,
     next_restore_verification: AtomicU32,
     active_restore_verification: Mutex<Option<u32>>,
+    consumed_credential_transfer_sessions: Mutex<HashSet<String>>,
 }
 
 /// QQ-owned immediate-playback source edge. It deliberately borrows the
@@ -105,6 +152,7 @@ impl<T> QqMusicProvider<T> {
             active_desktop_quick_login: Arc::new(Mutex::new(None)),
             next_restore_verification: AtomicU32::new(1),
             active_restore_verification: Mutex::new(None),
+            consumed_credential_transfer_sessions: Mutex::new(HashSet::new()),
         }
     }
 
@@ -122,13 +170,13 @@ impl<T> QqMusicProvider<T> {
     pub fn has_authenticated_credential(&self) -> bool {
         matches!(
             *credential_guard(&self.credential),
-            QqMusicCredentialState::Authenticated(_)
+            QqMusicCredentialState::Authenticated(_, _)
         )
     }
 
     fn authenticated_account_credential(&self) -> Result<Credential, AccountSummaryError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential, _) => Ok(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
@@ -145,7 +193,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(AccountSummaryError::Replaced);
@@ -159,7 +207,7 @@ impl<T> QqMusicProvider<T> {
 
     fn authenticated_credential(&self) -> Result<Credential, UserLibraryError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential, _) => Ok(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
@@ -176,7 +224,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(UserLibraryError::Replaced);
@@ -190,7 +238,7 @@ impl<T> QqMusicProvider<T> {
 
     fn media_credential(&self) -> Result<Option<Credential>, MediaResolutionError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(Some(credential.clone())),
+            QqMusicCredentialState::Authenticated(credential, _) => Ok(Some(credential.clone())),
             QqMusicCredentialState::SignedOut => Ok(None),
             QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
@@ -207,7 +255,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(MediaResolutionError::Replaced);
@@ -221,7 +269,7 @@ impl<T> QqMusicProvider<T> {
 
     fn lyrics_credential(&self) -> Option<Credential> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Some(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential, _) => Some(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => None,
@@ -243,7 +291,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(LyricsError::Replaced);
@@ -257,7 +305,7 @@ impl<T> QqMusicProvider<T> {
 
     fn authenticated_radar_credential(&self) -> Result<Credential, RadarRecommendationError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential, _) => Ok(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
@@ -274,7 +322,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(RadarRecommendationError::Replaced);
@@ -288,7 +336,7 @@ impl<T> QqMusicProvider<T> {
 
     fn authenticated_daily_credential(&self) -> Result<Credential, DailyRecommendationError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential, _) => Ok(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
@@ -305,7 +353,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(DailyRecommendationError::Replaced);
@@ -321,7 +369,7 @@ impl<T> QqMusicProvider<T> {
         &self,
     ) -> Result<Credential, PersonalizedPlaylistsError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential, _) => Ok(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
@@ -338,7 +386,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(PersonalizedPlaylistsError::Replaced);
@@ -354,7 +402,7 @@ impl<T> QqMusicProvider<T> {
         &self,
     ) -> Result<Credential, PersonalizedTracksError> {
         match &*credential_guard(&self.credential) {
-            QqMusicCredentialState::Authenticated(credential) => Ok(credential.clone()),
+            QqMusicCredentialState::Authenticated(credential, _) => Ok(credential.clone()),
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => {
@@ -371,7 +419,7 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = matches!(
             &*state,
-            QqMusicCredentialState::Authenticated(current) if current == candidate
+            QqMusicCredentialState::Authenticated(current, _) if current == candidate
         );
         if !still_current {
             return Err(PersonalizedTracksError::Replaced);
@@ -397,7 +445,7 @@ impl<T> QqMusicProvider<T> {
                 QqMusicCredentialRestoreState::LocallyExpired,
                 credential.clone(),
             )),
-            QqMusicCredentialState::SignedOut | QqMusicCredentialState::Authenticated(_) => None,
+            QqMusicCredentialState::SignedOut | QqMusicCredentialState::Authenticated(_, _) => None,
         }
     }
 
@@ -472,13 +520,77 @@ impl<T> QqMusicProvider<T> {
     ) -> Result<Option<Vec<u8>>, CredentialPersistenceError> {
         let credential = credential_guard(&self.credential);
         match &*credential {
-            QqMusicCredentialState::Authenticated(credential) => {
+            QqMusicCredentialState::Authenticated(credential, _) => {
                 credential.encode_for_secure_storage().map(Some)
             }
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
             | QqMusicCredentialState::LocallyExpired(_) => Ok(None),
         }
+    }
+
+    /// Creates a short-lived encrypted transfer package from the current
+    /// authenticated credential. This is a protocol experiment primitive, not
+    /// a product pairing flow.
+    ///
+    /// # Errors
+    ///
+    /// Requires an authenticated credential and maps crypto failures without
+    /// exposing account or key material.
+    pub fn encode_authenticated_credential_transfer(
+        &self,
+        issued_at_unix_seconds: u64,
+    ) -> Result<CredentialTransferPackage, QqMusicCredentialTransferError> {
+        let credential = credential_guard(&self.credential);
+        let QqMusicCredentialState::Authenticated(credential, _) = &*credential else {
+            return Err(QqMusicCredentialTransferError::NoAuthenticatedCredential);
+        };
+        export_encrypted_credential_bundle(credential, issued_at_unix_seconds)
+            .map_err(QqMusicCredentialTransferError::Transfer)
+    }
+
+    /// Imports a single-use encrypted transfer as an unauthenticated candidate.
+    /// The caller must reserve and complete the existing server-verification
+    /// flow before the provider exposes any authenticated capability.
+    ///
+    /// # Errors
+    ///
+    /// Malformed, expired, tampered, or replayed transfers leave the current
+    /// credential state unchanged.
+    pub fn restore_credential_from_transfer(
+        &self,
+        encrypted_bundle: &[u8],
+        transfer_secret: &[u8],
+        now_unix_seconds: u64,
+    ) -> Result<QqMusicCredentialRestoreState, QqMusicCredentialTransferError> {
+        let imported =
+            import_encrypted_credential_bundle(encrypted_bundle, transfer_secret, now_unix_seconds)
+                .map_err(QqMusicCredentialTransferError::Transfer)?;
+        let session_id = imported.session_id().to_owned();
+        let plan =
+            CredentialRestorePlan::from_loaded(Some(imported.into_credential()), now_unix_seconds);
+        let (state, result) = match plan {
+            CredentialRestorePlan::SignedOut => unreachable!("import always contains a credential"),
+            CredentialRestorePlan::VerifyWithServer(credential) => (
+                QqMusicCredentialState::PendingVerification(credential),
+                QqMusicCredentialRestoreState::VerificationRequired,
+            ),
+            CredentialRestorePlan::LocallyExpired(credential) => (
+                QqMusicCredentialState::LocallyExpired(credential),
+                QqMusicCredentialRestoreState::LocallyExpired,
+            ),
+        };
+
+        let mut consumed = self
+            .consumed_credential_transfer_sessions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !consumed.insert(session_id) {
+            return Err(QqMusicCredentialTransferError::AlreadyConsumed);
+        }
+        *credential_guard(&self.credential) = state;
+        *restore_verification_guard(&self.active_restore_verification) = None;
+        Ok(result)
     }
 
     /// Loads an optional versioned credential document and classifies the next
@@ -560,7 +672,7 @@ where
 
         match verification {
             Ok(_) => {
-                *state = QqMusicCredentialState::Authenticated(candidate);
+                *state = QqMusicCredentialState::authenticated(candidate);
                 Ok(())
             }
             Err(CredentialVerificationError::Rejected { .. }) => {
@@ -1365,37 +1477,52 @@ where
         offset: u32,
         size: u32,
     ) -> Result<PlaylistTracksPage, Self::Error> {
-        let candidate = self.authenticated_credential()?;
-        let response = self
-            .client()
-            .recent_plays_page(&candidate, offset, size)
-            .await;
-        self.finish_library_await(
-            &candidate,
-            matches!(response, Err(QqMusicRecentPlaysError::Rejected { .. })),
-        )?;
-        let page = response.as_ref().map_err(map_recent_plays_error)?;
-        if page.next_offset() < page.offset()
-            || page.next_offset() > page.total()
-            || (page.has_more() && page.next_offset() == page.offset())
-        {
+        if !(1..=100).contains(&size) {
             return Err(UserLibraryError::InvalidResponse);
         }
-        let tracks = page
-            .records()
-            .iter()
-            .map(|record| map_recent_track_summary(record.track()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| UserLibraryError::InvalidResponse)?;
-        Ok(PlaylistTracksPage::new_with_cursor_and_total_certainty(
-            page.offset(),
-            page.next_offset(),
-            page.total(),
-            page.total_is_exact(),
-            page.has_more(),
-            page.omitted_track_count(),
-            tracks,
-        ))
+        let (candidate, request) = {
+            let mut state = credential_guard(&self.credential);
+            let QqMusicCredentialState::Authenticated(credential, cache) = &mut *state else {
+                return Err(UserLibraryError::AuthenticationRequired);
+            };
+            // Every first page is an explicit fresh snapshot, including refresh.
+            // Later pages read the same immutable snapshot without another RPC.
+            if offset != 0
+                && let Some(snapshot) = &cache.snapshot
+            {
+                let page = snapshot
+                    .page(offset, size)
+                    .map_err(|error| map_recent_plays_error(&error))?;
+                return map_recent_plays_page(&page);
+            }
+            let request = Arc::new(());
+            cache.request = Some(Arc::clone(&request));
+            cache.snapshot = None;
+            (credential.clone(), request)
+        };
+        let response = self.client().recent_plays_snapshot(&candidate).await;
+        let mut state = credential_guard(&self.credential);
+        let QqMusicCredentialState::Authenticated(current, cache) = &mut *state else {
+            return Err(UserLibraryError::Replaced);
+        };
+        if *current != candidate
+            || !cache
+                .request
+                .as_ref()
+                .is_some_and(|active| Arc::ptr_eq(active, &request))
+        {
+            return Err(UserLibraryError::Replaced);
+        }
+        if matches!(response, Err(QqMusicRecentPlaysError::Rejected { .. })) {
+            *state = QqMusicCredentialState::SignedOut;
+            return Err(UserLibraryError::CredentialRejected);
+        }
+        let snapshot = response.map_err(|error| map_recent_plays_error(&error))?;
+        let page = snapshot
+            .page(offset, size)
+            .map_err(|error| map_recent_plays_error(&error))?;
+        cache.snapshot = Some(snapshot);
+        map_recent_plays_page(&page)
     }
 }
 
@@ -1715,9 +1842,6 @@ where
         let song_id = route.song_id.ok_or(CommentsError::InvalidResponse)?;
         let response = self.client().track_comments(song_id, offset, size).await;
         let page = response.as_ref().map_err(map_comments_error)?;
-        if page.has_more() && page.latest_comments().is_empty() {
-            return Err(CommentsError::InvalidResponse);
-        }
         let hot_comments = page
             .hot_comments()
             .iter()
@@ -1860,7 +1984,7 @@ where
         if !self.active.swap(false, Ordering::SeqCst) {
             return Err(DesktopQuickAuthenticationError::Replaced);
         }
-        *credential_guard(&self.credential) = QqMusicCredentialState::Authenticated(credential);
+        *credential_guard(&self.credential) = QqMusicCredentialState::authenticated(credential);
         Ok(())
     }
 }
@@ -2009,7 +2133,7 @@ where
             }
             WechatQrLoginProgress::Authenticated(credential) => {
                 *credential_guard(&self.credential) =
-                    QqMusicCredentialState::Authenticated(*credential);
+                    QqMusicCredentialState::authenticated(*credential);
                 Ok(QrAuthenticationProgress::Authenticated)
             }
             WechatQrLoginProgress::Expired => Ok(QrAuthenticationProgress::Expired),
@@ -2835,12 +2959,33 @@ fn map_playlist_detail_error<E>(error: &QqMusicPlaylistDetailError<E>) -> UserLi
     }
 }
 
+fn map_recent_plays_page(
+    page: &QqMusicRecentPlaysPage,
+) -> Result<PlaylistTracksPage, UserLibraryError> {
+    let tracks = page
+        .records()
+        .iter()
+        .map(|record| map_recent_track_summary(record.track()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|()| UserLibraryError::InvalidResponse)?;
+    Ok(PlaylistTracksPage::new_with_cursor_and_total_certainty(
+        page.offset(),
+        page.next_offset(),
+        page.total(),
+        page.total_is_exact(),
+        page.has_more(),
+        page.omitted_track_count(),
+        tracks,
+    ))
+}
+
 fn map_recent_plays_error<E>(error: &QqMusicRecentPlaysError<E>) -> UserLibraryError {
     match error {
         QqMusicRecentPlaysError::Transport(_) => UserLibraryError::Network,
         QqMusicRecentPlaysError::Rejected { .. } => UserLibraryError::CredentialRejected,
         QqMusicRecentPlaysError::HttpStatus(_)
         | QqMusicRecentPlaysError::RateLimited { .. }
+        | QqMusicRecentPlaysError::DataFailure { .. }
         | QqMusicRecentPlaysError::Upstream { .. } => UserLibraryError::ServiceUnavailable,
         QqMusicRecentPlaysError::InvalidPageSize { .. }
         | QqMusicRecentPlaysError::Serialize
@@ -2851,6 +2996,9 @@ fn map_recent_plays_error<E>(error: &QqMusicRecentPlaysError<E>) -> UserLibraryE
         | QqMusicRecentPlaysError::MissingResultCode
         | QqMusicRecentPlaysError::MissingData
         | QqMusicRecentPlaysError::MissingRecords
+        | QqMusicRecentPlaysError::MissingDataCode
+        | QqMusicRecentPlaysError::UnexpectedHistoryType
+        | QqMusicRecentPlaysError::ResponseTooLarge
         | QqMusicRecentPlaysError::InvalidPagination => UserLibraryError::InvalidResponse,
     }
 }
@@ -3615,7 +3763,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use super::{QqMusicCredentialRestoreState, QqMusicProvider};
+    use super::{QqMusicCredentialRestoreState, QqMusicCredentialTransferError, QqMusicProvider};
     use music_domain::{
         AlbumId, ArtistId, AudioFormat, AudioQuality, NewAlbumRegion, NewSongCategory, PlaylistId,
         PlaylistOwnership, PlaylistPurpose, ProviderId, RankingId, TrackId,
@@ -4365,6 +4513,42 @@ mod tests {
         let debug = format!("{page:?} {:?}", page.latest_comments()[0]);
         assert!(!debug.contains("Synthetic latest"));
         assert!(!debug.contains("92001"));
+    }
+
+    #[tokio::test]
+    async fn comment_pages_preserve_cursor_when_all_raw_rows_are_unavailable() {
+        let unavailable_rows = (0..20)
+            .map(|index| {
+                json!({
+                    "commentid": 93_000 + index,
+                    "nick": "Unavailable author",
+                    "rootcommentcontent": "   ",
+                    "praisenum": 0,
+                    "time": 1_700_000_100 + index
+                })
+            })
+            .collect::<Vec<_>>();
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "comment": {
+                "commenttotal": 1,
+                "commentlist": unavailable_rows
+            }
+        }))));
+
+        let page = provider
+            .track_comments(
+                qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                0,
+                20,
+            )
+            .await
+            .expect("provider preserves an omitted raw page");
+
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.total(), 21);
+        assert!(page.has_more());
+        assert!(page.latest_comments().is_empty());
     }
 
     #[tokio::test]
@@ -5872,7 +6056,7 @@ mod tests {
                 Some(format!("encrypted-{music_id}")),
             ));
         *super::credential_guard(&provider.credential) =
-            super::QqMusicCredentialState::Authenticated(credential);
+            super::QqMusicCredentialState::authenticated(credential);
     }
 
     fn favorite_page_response(playlists: &Value, total: u32, has_more: bool) -> HttpResponse {
@@ -5992,7 +6176,7 @@ mod tests {
                 "code": 0,
                 "data": {
                     "retcode": 0,
-                    "sip": ["http://audio.example.test/"],
+                    "sip": ["http://aqqmusic.tc.qq.com/"],
                     "expiration": 86400,
                     "refreshTime": 1800,
                     "cacheTime": 86400
@@ -6202,7 +6386,7 @@ mod tests {
         let credential = Credential::new("123456", "W_X_private-key", LoginType::WECHAT)
             .expect("fixture credential without encrypted UIN");
         *super::credential_guard(&provider.credential) =
-            super::QqMusicCredentialState::Authenticated(credential);
+            super::QqMusicCredentialState::authenticated(credential);
         assert_eq!(
             provider.user_playlists().await,
             Err(UserLibraryError::InvalidResponse)
@@ -6574,62 +6758,216 @@ mod tests {
         assert!(public_body["comm"].get("authst").is_none());
     }
 
-    #[tokio::test]
-    async fn recent_history_maps_mid_only_identity_and_clears_only_rejection() {
-        let provider =
-            QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([json!({
-                "code": 0,
-                "req_0": {
-                    "code": 0,
-                    "data": {
-                        "vecPlayRecord": [{
-                            "unPlayTime": 1_700_000_000_u64,
-                            "stSongInfo": {
-                                "mid": "recentTrackMid",
-                                "name": "Synthetic recent track",
-                                "interval": 203,
-                                "singer": [{"name": "Recent artist"}],
-                                "album": {"mid": "recentAlbumMid", "name": "Recent album"}
-                            }
-                        }]
-                    }
-                }
-            })])));
-        set_authenticated(&provider, "123456");
+    fn recent_response(mids: &[&str]) -> Value {
+        json!({"code":0,"req_0":{"code":0,"data":{"code":0,"type":2,
+            "updateTime":1_700_000_000_u64,"data":{"songList":mids.iter().map(|mid| json!({
+                "lastTime":1_700_000_000_u64,"track":{"mid":mid,"name":"Synthetic recent track",
+                    "interval":203,"singer":[{"name":"Recent artist"}],
+                    "album":{"mid":"recentAlbumMid","name":"Recent album"}}
+            })).collect::<Vec<_>>()}}}})
+    }
 
+    #[tokio::test]
+    async fn recent_history_maps_exact_identity_and_rejects_expired_credentials() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
+            recent_response(&["recentTrackMid"]),
+            json!({"code":0,"req_0":{"code":1000}}),
+        ])));
+        set_authenticated(&provider, "123456");
         let page = provider
-            .recent_tracks_page(200, 100)
+            .recent_tracks_page(0, 100)
             .await
             .expect("recent history");
-
-        assert_eq!(page.offset(), 200);
-        assert_eq!(page.next_offset(), 201);
-        assert_eq!(page.total(), 201);
-        assert!(!page.total_is_exact());
+        assert_eq!((page.offset(), page.next_offset(), page.total()), (0, 1, 1));
+        assert!(page.total_is_exact());
         assert!(!page.has_more());
-        assert_eq!(page.tracks().len(), 1);
         let track = &page.tracks()[0];
         assert_eq!(track.id().opaque(), "track:-:-:recentTrackMid:-");
-        assert_eq!(track.title(), "Synthetic recent track");
+        assert_eq!(track.id().provider(), &super::qq_music_provider_id());
         assert_eq!(track.artist_names(), ["Recent artist"]);
         assert_eq!(track.album_title(), Some("Recent album"));
         assert_eq!(track.duration_seconds(), Some(203));
         assert!(provider.has_authenticated_credential());
-        let request = &provider.client().transport().requests()[0];
-        let body: Value = serde_json::from_slice(request.body_bytes().expect("request body"))
-            .expect("request JSON");
-        assert_eq!(body["req_0"]["param"]["begin"], 200);
-        assert_eq!(body["req_0"]["param"]["num"], 100);
-
-        let rejected = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
-            json!({"code": 0, "req_0": {"code": 1000, "data": {}}}),
-        ])));
-        set_authenticated(&rejected, "123456");
         assert_eq!(
-            rejected.recent_tracks_page(0, 100).await,
+            provider.recent_tracks_page(0, 100).await,
             Err(UserLibraryError::CredentialRejected)
         );
-        assert!(!rejected.has_authenticated_credential());
+        assert!(!provider.has_authenticated_credential());
+        assert_eq!(
+            provider.recent_tracks_page(1, 100).await,
+            Err(UserLibraryError::AuthenticationRequired)
+        );
+        assert_eq!(provider.client().transport().requests().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn recent_history_500003_preserves_both_login_channels_without_retry() {
+        for login in [LoginType::QQ, LoginType::WECHAT] {
+            let provider =
+                QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
+                    json!({"code":0,"req_0":{"code":500_003}}),
+                ])));
+            let credential = Credential::new("123456", "synthetic-key", login).expect("credential");
+            *super::credential_guard(&provider.credential) =
+                super::QqMusicCredentialState::authenticated(credential);
+            assert_eq!(
+                provider.recent_tracks_page(0, 100).await,
+                Err(UserLibraryError::ServiceUnavailable)
+            );
+            assert!(provider.has_authenticated_credential());
+            assert_eq!(provider.client().transport().requests().len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn recent_history_uses_one_snapshot_until_refresh_and_drops_it_on_sign_out() {
+        let mids: Vec<_> = (0..205).map(|i| format!("mid{i:03}")).collect();
+        let refs: Vec<_> = mids.iter().map(String::as_str).collect();
+        let provider = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
+            recent_response(&refs),
+            recent_response(&["refreshMid"]),
+            recent_response(&["afterLoginMid"]),
+        ])));
+        set_authenticated(&provider, "123456");
+        for (offset, count) in [(0, 100), (100, 100), (200, 5)] {
+            let page = provider
+                .recent_tracks_page(offset, 100)
+                .await
+                .expect("page");
+            assert_eq!(page.total(), 205);
+            assert_eq!(page.tracks().len(), count);
+        }
+        assert_eq!(provider.client().transport().requests().len(), 1);
+        let refreshed = provider.recent_tracks_page(0, 100).await.expect("refresh");
+        assert_eq!(refreshed.total(), 1);
+        assert_eq!(
+            refreshed.tracks()[0].id().opaque(),
+            "track:-:-:refreshMid:-"
+        );
+        provider.sign_out();
+        assert_eq!(
+            provider.recent_tracks_page(0, 100).await,
+            Err(UserLibraryError::AuthenticationRequired)
+        );
+        set_authenticated(&provider, "123456");
+        let after_login = provider
+            .recent_tracks_page(0, 100)
+            .await
+            .expect("fresh session");
+        assert_eq!(
+            after_login.tracks()[0].id().opaque(),
+            "track:-:-:afterLoginMid:-"
+        );
+        assert_eq!(provider.client().transport().requests().len(), 3);
+    }
+
+    struct GatedRecentTransport {
+        first_response: Value,
+        started: Notify,
+        release: Notify,
+        calls: AtomicUsize,
+    }
+
+    impl HttpTransport for GatedRecentTransport {
+        type Error = Infallible;
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            let response = if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                self.started.notify_one();
+                self.release.notified().await;
+                self.first_response.clone()
+            } else {
+                recent_response(&["freshOne", "freshTwo"])
+            };
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&response).expect("fixture"),
+            ))
+        }
+    }
+
+    fn gated_recent_provider(first_response: Value) -> Arc<QqMusicProvider<GatedRecentTransport>> {
+        let provider = Arc::new(QqMusicProvider::new(QqMusicClient::new(
+            GatedRecentTransport {
+                first_response,
+                started: Notify::new(),
+                release: Notify::new(),
+                calls: AtomicUsize::new(0),
+            },
+        )));
+        set_authenticated(&provider, "123456");
+        provider
+    }
+
+    #[tokio::test]
+    async fn recent_history_late_success_or_rejection_cannot_replace_a_new_refresh() {
+        for old in [
+            recent_response(&["obsolete"]),
+            json!({"code":0,"req_0":{"code":1000}}),
+        ] {
+            let provider = gated_recent_provider(old);
+            let task_provider = Arc::clone(&provider);
+            let task = tokio::spawn(async move { task_provider.recent_tracks_page(0, 1).await });
+            provider.client().transport().started.notified().await;
+            let first = provider
+                .recent_tracks_page(0, 1)
+                .await
+                .expect("new refresh");
+            assert_eq!(first.tracks()[0].id().opaque(), "track:-:-:freshOne:-");
+            provider.client().transport().release.notify_one();
+            assert_eq!(task.await.expect("task"), Err(UserLibraryError::Replaced));
+            let second = provider
+                .recent_tracks_page(1, 1)
+                .await
+                .expect("same new snapshot");
+            assert_eq!(second.tracks()[0].id().opaque(), "track:-:-:freshTwo:-");
+            assert!(provider.has_authenticated_credential());
+            assert_eq!(
+                provider.client().transport().calls.load(Ordering::SeqCst),
+                2
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn recent_history_same_credential_relogin_still_replaces_inflight_request() {
+        let provider = gated_recent_provider(recent_response(&["obsolete"]));
+        let task_provider = Arc::clone(&provider);
+        let task = tokio::spawn(async move { task_provider.recent_tracks_page(0, 1).await });
+        provider.client().transport().started.notified().await;
+        provider.sign_out();
+        set_authenticated(&provider, "123456");
+        provider.client().transport().release.notify_one();
+        assert_eq!(task.await.expect("task"), Err(UserLibraryError::Replaced));
+        let page = provider
+            .recent_tracks_page(0, 1)
+            .await
+            .expect("new session");
+        assert_eq!(page.tracks()[0].id().opaque(), "track:-:-:freshOne:-");
+    }
+
+    #[tokio::test]
+    async fn recent_history_cancelled_load_does_not_block_a_new_refresh() {
+        let provider = gated_recent_provider(recent_response(&["obsolete"]));
+        let task_provider = Arc::clone(&provider);
+        let task = tokio::spawn(async move { task_provider.recent_tracks_page(0, 1).await });
+        provider.client().transport().started.notified().await;
+        task.abort();
+        assert!(task.await.expect_err("cancelled").is_cancelled());
+        let page = provider.recent_tracks_page(0, 1).await.expect("new load");
+        assert_eq!(page.tracks()[0].id().opaque(), "track:-:-:freshOne:-");
+    }
+
+    #[tokio::test]
+    async fn recent_history_invalid_bounds_send_no_request() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([])));
+        set_authenticated(&provider, "123456");
+        for size in [0, 101, u32::MAX] {
+            assert_eq!(
+                provider.recent_tracks_page(0, size).await,
+                Err(UserLibraryError::InvalidResponse)
+            );
+        }
+        assert!(provider.client().transport().requests().is_empty());
     }
 
     #[tokio::test]
@@ -7315,7 +7653,7 @@ mod tests {
         assert_eq!(source.valid_for_seconds(), 7_200);
         assert_eq!(
             source.uri(),
-            "http://audio.example.test/M500fixtureFileMid1.mp3?vkey=private-source"
+            "https://aqqmusic.tc.qq.com/M500fixtureFileMid1.mp3?vkey=private-source"
         );
         assert!(!format!("{source:?}").contains("private-source"));
 
@@ -8115,6 +8453,106 @@ mod tests {
         );
         assert!(!rejected.has_authenticated_credential());
         assert!(rejected.restored_credential().is_none());
+    }
+
+    #[tokio::test]
+    async fn transferred_credential_is_single_use_and_requires_server_verification() {
+        let source = QqMusicProvider::new(QqMusicClient::new(()));
+        set_authenticated(&source, "123456");
+        let package = source
+            .encode_authenticated_credential_transfer(10_000)
+            .expect("authenticated source can export");
+
+        let destination = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(0)));
+        assert_eq!(
+            destination
+                .restore_credential_from_transfer(
+                    package.encrypted_bundle(),
+                    package.transfer_secret(),
+                    10_020,
+                )
+                .expect("valid transfer"),
+            QqMusicCredentialRestoreState::VerificationRequired,
+        );
+        assert!(!destination.has_authenticated_credential());
+        assert_eq!(
+            destination.restore_credential_from_transfer(
+                package.encrypted_bundle(),
+                package.transfer_secret(),
+                10_021,
+            ),
+            Err(QqMusicCredentialTransferError::AlreadyConsumed),
+        );
+
+        let attempt_id = destination
+            .reserve_restored_credential_verification()
+            .expect("candidate can be verified");
+        destination
+            .verify_restored_credential(attempt_id)
+            .await
+            .expect("server accepts candidate");
+        assert!(destination.has_authenticated_credential());
+        assert!(
+            destination
+                .encode_authenticated_credential()
+                .expect("verified transfer can be committed to the vault")
+                .is_some()
+        );
+        assert!(source.has_authenticated_credential());
+        destination.sign_out();
+        assert!(!destination.has_authenticated_credential());
+        assert!(destination.restored_credential().is_none());
+        assert!(
+            destination
+                .encode_authenticated_credential()
+                .expect("signed-out provider has no vault material")
+                .is_none()
+        );
+
+        let rejected_package = source
+            .encode_authenticated_credential_transfer(10_100)
+            .expect("source remains authenticated");
+        let rejected = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(1000)));
+        rejected
+            .restore_credential_from_transfer(
+                rejected_package.encrypted_bundle(),
+                rejected_package.transfer_secret(),
+                10_120,
+            )
+            .expect("valid transfer candidate");
+        let rejected_attempt = rejected
+            .reserve_restored_credential_verification()
+            .expect("candidate can be verified");
+        assert_eq!(
+            rejected.verify_restored_credential(rejected_attempt).await,
+            Err(provider_api::AuthenticationError::Rejected),
+        );
+        assert!(!rejected.has_authenticated_credential());
+        assert!(rejected.restored_credential().is_none());
+    }
+
+    #[test]
+    fn rejected_transfer_does_not_replace_existing_candidate() {
+        let source = QqMusicProvider::new(QqMusicClient::new(()));
+        set_authenticated(&source, "123456");
+        let package = source
+            .encode_authenticated_credential_transfer(10_000)
+            .expect("authenticated source can export");
+        let destination = QqMusicProvider::new(QqMusicClient::new(()));
+        restore_candidate(&destination);
+
+        let mut tampered = package.encrypted_bundle().to_vec();
+        let index = tampered.len() - 2;
+        tampered[index] ^= 1;
+        assert!(
+            destination
+                .restore_credential_from_transfer(&tampered, package.transfer_secret(), 10_020,)
+                .is_err()
+        );
+        assert!(matches!(
+            &*super::credential_guard(&destination.credential),
+            super::QqMusicCredentialState::PendingVerification(_)
+        ));
     }
 
     #[tokio::test]

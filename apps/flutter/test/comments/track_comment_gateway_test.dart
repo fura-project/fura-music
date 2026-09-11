@@ -48,6 +48,42 @@ void main() {
     }
   });
 
+  test('accepts a terminal page whose unavailable raw rows were omitted', () {
+    final result = mapBridgeTrackCommentPage(
+      bridge.QqMusicTrackCommentPageLoad(
+        offset: 20,
+        total: 28,
+        hasMore: false,
+        hotComments: const [],
+        latestComments: [
+          _bridgeComment('visible', 'Visible author', 'Visible content'),
+        ],
+      ),
+    );
+
+    expect(result.failure, isNull);
+    expect(result.total, 28);
+    expect(result.latestComments.single.opaqueId, 'comment:visible');
+  });
+
+  test('keeps a full omitted raw page reachable through its cursor bound', () {
+    final result = mapBridgeTrackCommentPage(
+      const bridge.QqMusicTrackCommentPageLoad(
+        offset: 20,
+        total: 41,
+        hasMore: true,
+        hotComments: [],
+        latestComments: [],
+      ),
+    );
+
+    expect(result.failure, isNull);
+    expect(result.offset, 20);
+    expect(result.total, 41);
+    expect(result.hasMore, isTrue);
+    expect(result.latestComments, isEmpty);
+  });
+
   test('rejects conflicting malformed and impossible page envelopes', () {
     final valid = _bridgeComment('one', 'Author', 'Content');
     final malformed = [

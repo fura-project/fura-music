@@ -40,6 +40,9 @@ async fn resolves_one_public_catalog_track_without_account() {
             Ok(source) => {
                 assert_eq!(source.profile(), QqMusicAudioProfile::StandardMp3);
                 assert!(source.valid_for_seconds() > 0);
+                let source_uri = url::Url::parse(source.uri())
+                    .expect("QQ Music returned a structurally valid media URI");
+                assert_eq!(source_uri.scheme(), "https");
                 found_source = true;
                 break;
             }

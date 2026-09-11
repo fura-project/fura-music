@@ -48,6 +48,21 @@ void main() {
     expect(restore.state, QqMusicCredentialRestoreState.signedOut);
     expect(restore.failure, isNull);
     expect(qqMusicHasAuthenticatedCredential(), isFalse);
+    final transferExport = debugExportQqMusicCredentialTransfer(
+      encryptedBundlePath: '/not-used-without-an-account.bundle',
+      transferSecretPath: '/not-used-without-an-account.secret',
+    );
+    expect(transferExport.written, isFalse);
+    expect(
+      transferExport.failure,
+      QqMusicCredentialTransferFailure.noAuthenticatedCredential,
+    );
+    final transferImport = debugImportQqMusicCredentialTransfer(
+      encryptedBundlePath: '/missing-transfer.bundle',
+      transferSecretPath: '/missing-transfer.secret',
+    );
+    expect(transferImport.state, isNull);
+    expect(transferImport.failure, QqMusicCredentialTransferFailure.artifactIo);
     final unusedStart = reserveQqMusicWechatQrLoginStart();
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
     final unusedQrStart = reserveQqMusicQrLoginStart();

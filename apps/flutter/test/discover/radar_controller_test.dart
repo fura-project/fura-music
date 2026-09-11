@@ -73,6 +73,89 @@ void main() {
     },
   );
 
+  test('Discover-style preload fills a sparse first Radar page', () async {
+    final moreTracks = List.generate(
+      9,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:prefetch-$index',
+        title: 'Prefetched Radar Track $index',
+        artistNames: const ['Radar artist'],
+      ),
+    );
+    final gateway = _ScriptedGateway([
+      const _ImmediateOperation(
+        RadarTrackPageResult(page: 1, hasMore: true, tracks: [first]),
+      ),
+      _ImmediateOperation(RadarTrackPageResult(page: 2, tracks: moreTracks)),
+    ]);
+    final controller = RadarController(
+      gateway,
+      initialPrefetchTarget: 10,
+      maxInitialPrefetchPages: 2,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+
+    expect(controller.stage, RadarStage.content);
+    expect(controller.tracks, hasLength(10));
+    expect(controller.hasMore, isFalse);
+    expect(gateway.pages, [1, 2]);
+  });
+
+  test('default Radar controller leaves sparse first page untouched', () async {
+    final gateway = _ScriptedGateway([
+      const _ImmediateOperation(
+        RadarTrackPageResult(page: 1, hasMore: true, tracks: [first]),
+      ),
+    ]);
+    final controller = RadarController(gateway);
+    addTearDown(controller.dispose);
+
+    await controller.load();
+
+    expect(controller.tracks, [first]);
+    expect(controller.hasMore, isTrue);
+    expect(gateway.pages, [1]);
+  });
+
+  test(
+    'viewport prefetch stays serial and budgets at most two pages',
+    () async {
+      List<PlaylistTrackSummary> page(int number) => List.generate(
+        10,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'track:page-$number-$index',
+          title: 'Radar $number-$index',
+          artistNames: const ['Radar artist'],
+        ),
+      );
+      final gateway = _ScriptedGateway([
+        _ImmediateOperation(
+          RadarTrackPageResult(page: 1, hasMore: true, tracks: page(1)),
+        ),
+        _ImmediateOperation(
+          RadarTrackPageResult(page: 2, hasMore: true, tracks: page(2)),
+        ),
+        _ImmediateOperation(
+          RadarTrackPageResult(page: 3, hasMore: true, tracks: page(3)),
+        ),
+      ]);
+      final controller = RadarController(gateway);
+      addTearDown(controller.dispose);
+
+      await controller.load();
+      controller.prefetchTo(1000);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.tracks, hasLength(30));
+      expect(gateway.pages, [1, 2, 3]);
+      expect(controller.hasMore, isTrue);
+    },
+  );
+
   test('retains content and exact page after append failure', () async {
     final gateway = _ScriptedGateway([
       const _ImmediateOperation(

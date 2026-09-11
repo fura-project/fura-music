@@ -7,12 +7,12 @@ class MusicLoadingPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Semantics(
-      container: true,
-      label: label,
-      child: ExcludeSemantics(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Semantics(
+        container: true,
+        label: label,
+        child: ExcludeSemantics(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -54,11 +54,11 @@ class MusicContentStatePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Semantics(
-      container: true,
-      liveRegion: liveRegion,
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Semantics(
+        container: true,
+        liveRegion: liveRegion,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -11,6 +11,8 @@ const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const MAX_MEDIA_RESPONSE_BYTES: usize = 256 * 1024;
 const MEDIA_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const PREFERRED_CDN_HOST: &str = "dl.stream.qqmusic.qq.com";
+const LEGACY_CDN_HOST: &str = "aqqmusic.tc.qq.com";
+const STREAM_CDN_ROOT: &str = "stream.qqmusic.qq.com";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaProtocolPhase {
@@ -749,23 +751,41 @@ fn positive_seconds(value: Option<i64>) -> Option<u32> {
 }
 
 fn parse_cdn_bases(raw_bases: Vec<String>) -> Option<Vec<Url>> {
-    if raw_bases.is_empty() {
+    let bases = raw_bases
+        .into_iter()
+        .filter_map(|raw| normalize_cdn_base(&raw))
+        .fold(Vec::new(), |mut bases, base| {
+            if !bases.contains(&base) {
+                bases.push(base);
+            }
+            bases
+        });
+    (!bases.is_empty()).then_some(bases)
+}
+
+fn normalize_cdn_base(raw: &str) -> Option<Url> {
+    let mut base = Url::parse(raw).ok()?;
+    let host = base.host_str()?;
+    let trusted_host = host == LEGACY_CDN_HOST
+        || host == STREAM_CDN_ROOT
+        || host
+            .strip_suffix(STREAM_CDN_ROOT)
+            .is_some_and(|prefix| prefix.ends_with('.') && prefix.len() > 1);
+    let valid = matches!(base.scheme(), "http" | "https")
+        && trusted_host
+        && base.username().is_empty()
+        && base.password().is_none()
+        && base.port().is_none()
+        && base.query().is_none()
+        && base.fragment().is_none()
+        && base.path().ends_with('/');
+    if !valid {
         return None;
     }
-    raw_bases
-        .into_iter()
-        .map(|raw| {
-            let base = Url::parse(&raw).ok()?;
-            let valid = matches!(base.scheme(), "http" | "https")
-                && base.has_host()
-                && base.username().is_empty()
-                && base.password().is_none()
-                && base.query().is_none()
-                && base.fragment().is_none()
-                && base.path().ends_with('/');
-            valid.then_some(base)
-        })
-        .collect()
+    if base.scheme() == "http" {
+        base.set_scheme("https").ok()?;
+    }
+    Some(base)
 }
 
 fn join_source_path(bases: &[Url], path: &str, expected_filename: &str) -> Option<String> {
@@ -1124,7 +1144,7 @@ mod tests {
 
     use super::{
         MAX_MEDIA_RESPONSE_BYTES, MEDIA_REQUEST_TIMEOUT, MediaProtocolPhase, MediaResponseField,
-        QqMusicAudioProfile, QqMusicCdnDispatch, QqMusicMediaError,
+        QqMusicAudioProfile, QqMusicCdnDispatch, QqMusicMediaError, parse_cdn_bases,
     };
     use crate::{Credential, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient};
 
@@ -1176,6 +1196,41 @@ mod tests {
         })
     }
 
+    #[test]
+    fn canonicalizes_trusted_cdn_bases_to_unique_https_origins() {
+        let bases = parse_cdn_bases(vec![
+            "http://aqqmusic.tc.qq.com/".to_owned(),
+            "http://ws6.stream.qqmusic.qq.com/".to_owned(),
+            "https://dl.stream.qqmusic.qq.com/media/".to_owned(),
+            "http://ws6.stream.qqmusic.qq.com/".to_owned(),
+        ])
+        .expect("trusted CDN bases");
+
+        assert_eq!(bases.len(), 3);
+        assert_eq!(bases[0].as_str(), "https://aqqmusic.tc.qq.com/");
+        assert_eq!(bases[1].as_str(), "https://ws6.stream.qqmusic.qq.com/");
+        assert_eq!(bases[2].as_str(), "https://dl.stream.qqmusic.qq.com/media/");
+    }
+
+    #[test]
+    fn skips_untrusted_or_structurally_unsafe_cdn_bases() {
+        let bases = parse_cdn_bases(vec![
+            "https://stream.qqmusic.qq.com.evil.test/".to_owned(),
+            "https://evilstream.qqmusic.qq.com/".to_owned(),
+            "https://user@ws.stream.qqmusic.qq.com/".to_owned(),
+            "https://ws.stream.qqmusic.qq.com:8443/".to_owned(),
+            "https://ws.stream.qqmusic.qq.com/?source=unexpected".to_owned(),
+            "https://ws.stream.qqmusic.qq.com/#fragment".to_owned(),
+            "ftp://ws.stream.qqmusic.qq.com/".to_owned(),
+            "https://sjy6.stream.qqmusic.qq.com/".to_owned(),
+        ])
+        .expect("one trusted CDN base");
+
+        assert_eq!(bases.len(), 1);
+        assert_eq!(bases[0].as_str(), "https://sjy6.stream.qqmusic.qq.com/");
+        assert!(parse_cdn_bases(vec!["https://untrusted.example/".to_owned()]).is_none());
+    }
+
     #[tokio::test]
     async fn resolves_standard_mp3_with_bounded_redacted_requests() {
         let transport = FakeTransport::new([
@@ -1202,7 +1257,7 @@ mod tests {
         assert_eq!(source.valid_for_seconds(), 7_200);
         assert_eq!(
             source.uri(),
-            "http://dl.stream.qqmusic.qq.com/M500fixtureFileMid1.mp3?vkey=fixture-secret-vkey"
+            "https://dl.stream.qqmusic.qq.com/M500fixtureFileMid1.mp3?vkey=fixture-secret-vkey"
         );
         assert!(!format!("{source:?}").contains("fixture-secret"));
         assert!(!format!("{dispatch:?}").contains("qqmusic.qq.com"));
@@ -1349,7 +1404,7 @@ mod tests {
         assert_eq!(source.profile(), QqMusicAudioProfile::HighMp3);
         assert_eq!(
             source.uri(),
-            "http://audio.example.test/M800fixtureFileMid1.mp3?vkey=fixture-secret-vkey"
+            "https://aqqmusic.tc.qq.com/M800fixtureFileMid1.mp3?vkey=fixture-secret-vkey"
         );
         let request = &client.transport().requests()[0];
         let body: Value =
@@ -1380,7 +1435,7 @@ mod tests {
         assert_eq!(source.profile(), QqMusicAudioProfile::LowM4a);
         assert_eq!(
             source.uri(),
-            "http://audio.example.test/C200fixtureFileMid1.m4a?vkey=fixture-secret-vkey"
+            "https://aqqmusic.tc.qq.com/C200fixtureFileMid1.m4a?vkey=fixture-secret-vkey"
         );
         let request = &client.transport().requests()[0];
         let body: Value =
@@ -1440,7 +1495,7 @@ mod tests {
             .expect("fallback source");
         assert_eq!(
             source.uri(),
-            "http://audio.example.test/M500fixtureMid1fixtureMid1.mp3?vkey=fixture-secret-vkey"
+            "https://aqqmusic.tc.qq.com/M500fixtureMid1fixtureMid1.mp3?vkey=fixture-secret-vkey"
         );
 
         let request = &client.transport().requests()[0];
@@ -1656,7 +1711,7 @@ mod tests {
 
     fn valid_dispatch() -> QqMusicCdnDispatch {
         QqMusicCdnDispatch {
-            bases: vec!["http://audio.example.test/".parse().expect("CDN base")],
+            bases: vec!["https://aqqmusic.tc.qq.com/".parse().expect("CDN base")],
             expiration_seconds: 86_400,
             refresh_after_seconds: 1_800,
             cache_for_seconds: 86_400,

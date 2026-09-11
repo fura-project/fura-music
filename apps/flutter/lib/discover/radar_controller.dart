@@ -7,9 +7,16 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 enum RadarStage { loading, content, empty, error }
 
 class RadarController extends ChangeNotifier {
-  RadarController(this._gateway);
+  RadarController(
+    this._gateway, {
+    this.initialPrefetchTarget = 0,
+    this.maxInitialPrefetchPages = 1,
+  }) : assert(initialPrefetchTarget >= 0),
+       assert(maxInitialPrefetchPages >= 0);
 
   final RadarGateway _gateway;
+  final int initialPrefetchTarget;
+  final int maxInitialPrefetchPages;
 
   RadarStage _stage = RadarStage.loading;
   List<PlaylistTrackSummary> _tracks = const [];
@@ -18,6 +25,11 @@ class RadarController extends ChangeNotifier {
   int _nextPage = 1;
   bool _hasMore = false;
   bool _isLoadingMore = false;
+  bool _manualPageRequested = false;
+  int _prefetchTarget = 0;
+  int _prefetchPages = 0;
+  Duration _estimatedPageLatency = const Duration(milliseconds: 350);
+  Completer<void>? _appendPump;
   RadarTrackPageLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
@@ -28,6 +40,7 @@ class RadarController extends ChangeNotifier {
   RadarFailure? get appendFailure => _appendFailure;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
+  Duration get estimatedPageLatency => _estimatedPageLatency;
   bool get canRetry => _stage == RadarStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
       _stage == RadarStage.content && _hasMore && !_isLoadingMore;
@@ -41,6 +54,9 @@ class RadarController extends ChangeNotifier {
   Future<void> _loadFirstPage() async {
     final generation = ++_generation;
     _operation?.cancel();
+    _appendPump = null;
+    _manualPageRequested = false;
+    cancelPrefetch();
     _tracks = const [];
     _failure = null;
     _appendFailure = null;
@@ -63,11 +79,13 @@ class RadarController extends ChangeNotifier {
     }
     _operation = operation;
 
+    final latency = Stopwatch()..start();
     final result = await operation.run();
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
     if (_validPage(result, expectedPage: 1)) {
+      _recordPageLatency(latency.elapsed);
       _tracks = List.unmodifiable(result.tracks);
       _nextPage = 2;
       _hasMore = result.hasMore;
@@ -77,24 +95,114 @@ class RadarController extends ChangeNotifier {
       _stage = RadarStage.error;
     }
     _notify();
+
+    if (_stage == RadarStage.content &&
+        _tracks.length < initialPrefetchTarget &&
+        _hasMore) {
+      await _prefetchInitialPages(generation);
+    }
+  }
+
+  Future<void> _prefetchInitialPages(int generation) async {
+    var loadedPages = 0;
+    while (_isCurrent(generation) &&
+        _stage == RadarStage.content &&
+        _tracks.length < initialPrefetchTarget &&
+        _hasMore &&
+        loadedPages < maxInitialPrefetchPages) {
+      loadedPages += 1;
+      if (!await _loadNextPage(generation)) return;
+    }
   }
 
   Future<void> loadMore() async {
-    if (!canLoadMore && !canRetryMore) return;
-    final generation = _generation;
+    if (_disposed) return;
+    _manualPageRequested = true;
+    await _ensureAppendPump();
+  }
+
+  /// Adds viewport-local demand without draining the station. One scroll event
+  /// can budget at most two Radar pages; all demand shares the same serial pump.
+  void prefetchTo(int trackCount) {
+    if (_disposed ||
+        _stage != RadarStage.content ||
+        !_hasMore ||
+        _appendFailure != null) {
+      return;
+    }
+    const expectedPageSize = 10;
+    _prefetchTarget = trackCount.clamp(
+      0,
+      _tracks.length + expectedPageSize * 2,
+    );
+    final missing = (_prefetchTarget - _tracks.length).clamp(
+      0,
+      expectedPageSize * 2,
+    );
+    _prefetchPages =
+        ((missing + expectedPageSize - 1) ~/ expectedPageSize) -
+        (_isLoadingMore ? 1 : 0);
+    if (_prefetchPages < 0) _prefetchPages = 0;
+    if (_wantsAppend) unawaited(_ensureAppendPump());
+  }
+
+  void cancelPrefetch() {
+    _prefetchTarget = 0;
+    _prefetchPages = 0;
+  }
+
+  bool get _wantsAppend =>
+      _manualPageRequested ||
+      (_prefetchPages > 0 && _tracks.length < _prefetchTarget);
+
+  Future<void> _ensureAppendPump() {
+    if (_appendPump case final pump?) return pump.future;
+    final pump = Completer<void>();
+    _appendPump = pump;
+    unawaited(_runAppendPump(pump));
+    return pump.future;
+  }
+
+  Future<void> _runAppendPump(Completer<void> pump) async {
+    try {
+      while (!_disposed && _wantsAppend) {
+        final manual = _manualPageRequested;
+        _manualPageRequested = false;
+        if (!canLoadMore && !canRetryMore) break;
+        if (!await _loadNextPage(_generation)) break;
+        if (!manual && _prefetchPages > 0) --_prefetchPages;
+      }
+    } finally {
+      if (identical(_appendPump, pump)) _appendPump = null;
+      if (!pump.isCompleted) pump.complete();
+    }
+  }
+
+  Future<bool> _loadNextPage(int generation) async {
     final expectedPage = _nextPage;
-    final operation = _gateway.beginLoad(page: expectedPage);
+    late final RadarTrackPageLoadOperation operation;
+    try {
+      operation = _gateway.beginLoad(page: expectedPage);
+    } on Object {
+      if (_isCurrent(generation)) {
+        _appendFailure = RadarFailure.coreUnavailable;
+        _notify();
+      }
+      return false;
+    }
     _operation = operation;
     _isLoadingMore = true;
     _appendFailure = null;
     _notify();
 
+    final latency = Stopwatch()..start();
     final result = await operation.run();
     if (identical(_operation, operation)) _operation = null;
-    if (!_isCurrent(generation)) return;
+    if (!_isCurrent(generation)) return false;
     _isLoadingMore = false;
 
     if (_validPage(result, expectedPage: expectedPage)) {
+      _recordPageLatency(latency.elapsed);
       final seen = _tracks
           .map((track) => '${track.providerId}\u0000${track.opaqueId}')
           .toSet();
@@ -108,6 +216,7 @@ class RadarController extends ChangeNotifier {
       _appendFailure = result.failure ?? RadarFailure.invalidResponse;
     }
     _notify();
+    return _appendFailure == null;
   }
 
   void retry() {
@@ -116,6 +225,13 @@ class RadarController extends ChangeNotifier {
 
   void retryMore() {
     if (canRetryMore) unawaited(loadMore());
+  }
+
+  void _recordPageLatency(Duration sample) {
+    final micros = sample.inMicroseconds.clamp(1000, 30000000);
+    _estimatedPageLatency = Duration(
+      microseconds: (_estimatedPageLatency.inMicroseconds * 3 + micros) ~/ 4,
+    );
   }
 
   bool _validPage(RadarTrackPageResult result, {required int expectedPage}) =>
@@ -140,6 +256,8 @@ class RadarController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     ++_generation;
+    _manualPageRequested = false;
+    cancelPrefetch();
     _operation?.cancel();
     _operation = null;
     super.dispose();

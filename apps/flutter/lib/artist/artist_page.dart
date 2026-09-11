@@ -9,7 +9,7 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
-import 'package:flutterustmusic/catalog/music_track_tile.dart';
+import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -24,6 +24,7 @@ class ArtistPage extends StatefulWidget {
     this.albumGateway,
     this.onOpenAlbum,
     this.backTooltip = 'Back',
+    this.embedded = false,
     super.key,
   });
 
@@ -35,6 +36,7 @@ class ArtistPage extends StatefulWidget {
   final ArtistAlbumGateway? albumGateway;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final String backTooltip;
+  final bool embedded;
 
   @override
   State<ArtistPage> createState() => _ArtistPageState();
@@ -68,17 +70,8 @@ class _ArtistPageState extends State<ArtistPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: IconButton(
-        key: const ValueKey('artist-back'),
-        tooltip: widget.backTooltip,
-        onPressed: widget.onBack,
-        icon: const Icon(Icons.arrow_back_rounded),
-      ),
-      title: const Text('Artist'),
-    ),
-    body: SafeArea(
+  Widget build(BuildContext context) {
+    final body = SafeArea(
       child: AnimatedBuilder(
         animation: _controllers,
         builder: (context, _) => LayoutBuilder(
@@ -132,12 +125,57 @@ class _ArtistPageState extends State<ArtistPage> {
           },
         ),
       ),
-    ),
-    bottomNavigationBar: NowPlayingBar(
-      controller: widget.queuePlaybackController,
-      onSignInAgain: widget.onSignInAgain,
-    ),
-  );
+    );
+    if (widget.embedded) {
+      return Material(
+        key: const ValueKey('embedded-artist-detail'),
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Column(
+          children: [
+            SizedBox(
+              height: kToolbarHeight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    IconButton(
+                      key: const ValueKey('artist-back'),
+                      tooltip: widget.backTooltip,
+                      onPressed: widget.onBack,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Artist',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          key: const ValueKey('artist-back'),
+          tooltip: widget.backTooltip,
+          onPressed: widget.onBack,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: const Text('Artist'),
+      ),
+      body: body,
+      bottomNavigationBar: NowPlayingBar(
+        controller: widget.queuePlaybackController,
+        onSignInAgain: widget.onSignInAgain,
+      ),
+    );
+  }
 
   int? get _visibleTotal => switch (_section) {
     _ArtistSection.tracks =>
@@ -192,6 +230,7 @@ class _ArtistPageState extends State<ArtistPage> {
       onPlay: _play,
       onQueue: _queue,
       onOpenAlbum: widget.onOpenAlbum,
+      current: widget.queuePlaybackController.current,
       desktop: desktop,
     ),
   };
@@ -506,7 +545,7 @@ class _ArtistAlbumFooter extends StatelessWidget {
   );
 }
 
-class _ArtistTracks extends StatelessWidget {
+class _ArtistTracks extends StatefulWidget {
   const _ArtistTracks({
     required this.tracks,
     required this.hasMore,
@@ -517,6 +556,7 @@ class _ArtistTracks extends StatelessWidget {
     required this.onPlay,
     required this.onQueue,
     required this.onOpenAlbum,
+    required this.current,
     required this.desktop,
     super.key,
   });
@@ -530,47 +570,164 @@ class _ArtistTracks extends StatelessWidget {
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final PlaylistTrackSummary? current;
   final bool desktop;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 1040),
-      child: ListView.builder(
-        key: const PageStorageKey('artist-tracks'),
-        padding: EdgeInsets.fromLTRB(
-          desktop ? 40 : 12,
-          0,
-          desktop ? 40 : 12,
-          24,
+  State<_ArtistTracks> createState() => _ArtistTracksState();
+}
+
+class _ArtistTracksState extends State<_ArtistTracks> {
+  (String, String)? _hoveredTrack;
+
+  void _setHovered(PlaylistTrackSummary track, bool hovered) {
+    final identity = (track.providerId, track.opaqueId);
+    if (hovered && _hoveredTrack != identity) {
+      setState(() => _hoveredTrack = identity);
+    } else if (!hovered && _hoveredTrack == identity) {
+      setState(() => _hoveredTrack = null);
+    }
+  }
+
+  bool _handleScroll(ScrollNotification notification) {
+    if (_hoveredTrack != null && notification is ScrollUpdateNotification) {
+      setState(() => _hoveredTrack = null);
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = widget.desktop ? 24.0 : 10.0;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1180),
+        child: Column(
+          children: [
+            if (widget.desktop)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontal),
+                child: const MusicTrackTableHeader(
+                  key: ValueKey('artist-track-table-header'),
+                  titleLabel: 'Title',
+                  artistLabel: 'Artist',
+                  albumLabel: 'Album',
+                  durationLabel: 'Duration',
+                ),
+              ),
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _handleScroll,
+                child: ListView.separated(
+                  key: const PageStorageKey('artist-tracks'),
+                  padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
+                  itemCount: widget.tracks.length + 1,
+                  separatorBuilder: (_, _) => const SizedBox(height: 1),
+                  itemBuilder: (context, index) {
+                    if (index == widget.tracks.length) {
+                      return _ArtistFooter(
+                        hasMore: widget.hasMore,
+                        isLoadingMore: widget.isLoadingMore,
+                        appendFailure: widget.appendFailure,
+                        onLoadMore: widget.onLoadMore,
+                        onRetryMore: widget.onRetryMore,
+                      );
+                    }
+                    final track = widget.tracks[index];
+                    final identity = (track.providerId, track.opaqueId);
+                    final selected =
+                        widget.current?.providerId == track.providerId &&
+                        widget.current?.opaqueId == track.opaqueId;
+                    final artists = track.artistNames.isEmpty
+                        ? 'Unknown artist'
+                        : track.artistNames.join(' / ');
+                    final canOpenAlbum =
+                        widget.onOpenAlbum != null && track.album != null;
+                    return MusicTrackRowSurface(
+                      key: ValueKey(
+                        'artist-track-state-${track.providerId}-${track.opaqueId}',
+                      ),
+                      itemKey: ValueKey('artist-track-$index'),
+                      desktop: widget.desktop,
+                      current: selected,
+                      hovered: _hoveredTrack == identity,
+                      onHoverChanged: (hovered) => _setHovered(track, hovered),
+                      semanticLabel: '${track.title}, $artists',
+                      onTap: () => widget.onPlay(index),
+                      onContextMenuRequested: (_) =>
+                          unawaited(_showActions(track, index)),
+                      contentBuilder: (context, active, hovered) =>
+                          MusicTrackRowContent(
+                            index: index + 1,
+                            track: track,
+                            desktop: widget.desktop,
+                            current: selected,
+                            active: active,
+                            artistNames: artists,
+                            onPlay: () => widget.onPlay(index),
+                            onAddToQueue: () => widget.onQueue(track),
+                            onOpenAlbum: canOpenAlbum
+                                ? () => widget.onOpenAlbum!(track.album!)
+                                : null,
+                            onMore: () => unawaited(_showActions(track, index)),
+                            showInlineQueueAction: hovered,
+                            queueKey: ValueKey('artist-queue-$index'),
+                            moreKey: ValueKey('artist-context-$index'),
+                          ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
-        itemCount: tracks.length + 1,
-        itemBuilder: (context, index) {
-          if (index == tracks.length) {
-            return _ArtistFooter(
-              hasMore: hasMore,
-              isLoadingMore: isLoadingMore,
-              appendFailure: appendFailure,
-              onLoadMore: onLoadMore,
-              onRetryMore: onRetryMore,
-            );
-          }
-          final track = tracks[index];
-          return MusicTrackTile(
-            itemKey: ValueKey('artist-track-$index'),
-            queueKey: ValueKey('artist-queue-$index'),
-            contextKey: ValueKey('artist-context-$index'),
-            track: track,
-            position: index + 1,
-            desktop: desktop,
-            onPlay: () => onPlay(index),
-            onQueue: () => onQueue(track),
-            onOpenAlbum: onOpenAlbum,
-          );
-        },
       ),
-    ),
-  );
+    );
+  }
+
+  Future<void> _showActions(PlaylistTrackSummary track, int index) async {
+    final canOpenAlbum = widget.onOpenAlbum != null && track.album != null;
+    final action = await showModalBottomSheet<MusicTrackAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.play_arrow_rounded),
+              title: const Text('Play from here'),
+              onTap: () => Navigator.pop(context, MusicTrackAction.play),
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: const Text('Add to queue'),
+              onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
+            ),
+            if (canOpenAlbum)
+              ListTile(
+                leading: const Icon(Icons.album_rounded),
+                title: const Text('Open album'),
+                onTap: () => Navigator.pop(context, MusicTrackAction.openAlbum),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    switch (action) {
+      case MusicTrackAction.play:
+        widget.onPlay(index);
+      case MusicTrackAction.addToQueue:
+        widget.onQueue(track);
+      case MusicTrackAction.openAlbum:
+        widget.onOpenAlbum!(track.album!);
+      case MusicTrackAction.openArtist:
+      case null:
+        return;
+    }
+  }
 }
 
 class _ArtistFooter extends StatelessWidget {

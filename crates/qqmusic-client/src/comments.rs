@@ -327,8 +327,15 @@ struct RawComment {
     commentid: Option<FlexibleCommentId>,
     nick: Option<String>,
     rootcommentcontent: Option<String>,
+    middlecommentcontent: Option<Vec<RawSubComment>>,
     praisenum: Option<FlexibleUnsigned>,
     time: Option<FlexibleUnsigned>,
+}
+
+#[derive(Deserialize)]
+struct RawSubComment {
+    subcommentid: Option<FlexibleCommentId>,
+    subcommentcontent: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -386,7 +393,7 @@ fn map_response<E>(
     let latest_group = envelope
         .comment
         .ok_or(QqMusicTrackCommentsError::MissingLatestComments)?;
-    let total = latest_group
+    let reported_total = latest_group
         .commenttotal
         .as_ref()
         .and_then(FlexibleUnsigned::to_u64)
@@ -425,19 +432,8 @@ fn map_response<E>(
         .into_iter()
         .flatten()
         .collect();
-    let returned_end = offset
-        .checked_add(raw_latest_count)
-        .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
-    if returned_end > total {
-        return Err(QqMusicTrackCommentsError::InvalidPagination);
-    }
-    let next_page_offset = offset
-        .checked_add(requested_size)
-        .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
-    let has_more = raw_latest_count != 0 && next_page_offset < total;
-    if raw_latest_count != 0 && !has_more && returned_end != total {
-        return Err(QqMusicTrackCommentsError::InvalidPagination);
-    }
+    let (total, has_more) =
+        normalize_pagination(reported_total, offset, requested_size, raw_latest_count)?;
     Ok(QqMusicTrackCommentsPage {
         offset,
         total,
@@ -445,6 +441,38 @@ fn map_response<E>(
         hot_comments,
         latest_comments,
     })
+}
+
+fn normalize_pagination<E>(
+    reported_total: u32,
+    offset: u32,
+    requested_size: u32,
+    raw_count: u32,
+) -> Result<(u32, bool), QqMusicTrackCommentsError<E>> {
+    let returned_end = offset
+        .checked_add(raw_count)
+        .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
+    let next_page_offset = offset
+        .checked_add(requested_size)
+        .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
+
+    if returned_end <= reported_total {
+        let has_more = raw_count != 0 && next_page_offset < reported_total;
+        return Ok((reported_total, has_more));
+    }
+
+    // The legacy endpoint is observed returning a stale commenttotal while
+    // still returning valid rows. A full page proves that another page may be
+    // reachable, but a short page is the only bounded terminal signal this
+    // stateless page-number contract exposes.
+    if raw_count == requested_size {
+        let lower_bound_total = next_page_offset
+            .checked_add(1)
+            .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
+        Ok((lower_bound_total, true))
+    } else {
+        Ok((returned_end, false))
+    }
 }
 
 fn map_comment<E>(
@@ -457,24 +485,35 @@ fn map_comment<E>(
         index,
         field,
     };
-    let content = raw
-        .rootcommentcontent
-        .ok_or_else(|| invalid(CommentField::Content))?;
-    if content.trim().is_empty() {
-        return match section {
-            CommentSection::Latest => Ok(None),
-            CommentSection::Hot => Err(invalid(CommentField::Content)),
-        };
-    }
-    if content.len() > MAX_CONTENT_BYTES {
-        return Err(invalid(CommentField::Content));
-    }
     let comment_id = raw
         .commentid
         .and_then(FlexibleCommentId::into_string)
         .ok_or_else(|| invalid(CommentField::Id))?;
-    let author_display_name = bounded_text(raw.nick, MAX_AUTHOR_BYTES)
-        .ok_or_else(|| invalid(CommentField::AuthorDisplayName))?;
+    let nested_content = raw.middlecommentcontent.and_then(|comments| {
+        comments.into_iter().find_map(|comment| {
+            let subcomment_id = comment.subcommentid?.into_string()?;
+            (subcomment_id == comment_id).then_some(comment.subcommentcontent)
+        })
+    });
+    let content = match nested_content {
+        Some(content) => content,
+        None => raw.rootcommentcontent,
+    };
+    let Some(content) = content.filter(|value| !value.trim().is_empty()) else {
+        return Ok(None);
+    };
+    if content.len() > MAX_CONTENT_BYTES {
+        return Err(invalid(CommentField::Content));
+    }
+    let Some(author_display_name) = raw.nick else {
+        return Ok(None);
+    };
+    if author_display_name.trim().is_empty() {
+        return Ok(None);
+    }
+    if author_display_name.len() > MAX_AUTHOR_BYTES {
+        return Err(invalid(CommentField::AuthorDisplayName));
+    }
     let published_at_unix_seconds = raw
         .time
         .as_ref()
@@ -493,10 +532,6 @@ fn map_comment<E>(
         published_at_unix_seconds,
         praise_count,
     }))
-}
-
-fn bounded_text(value: Option<String>, max_bytes: usize) -> Option<String> {
-    value.filter(|value| !value.trim().is_empty() && value.len() <= max_bytes)
 }
 
 #[cfg(test)]
@@ -689,7 +724,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn does_not_extend_blank_deleted_row_tolerance_to_hot_comments() {
+    async fn omits_unavailable_hot_rows_without_discarding_latest_comments() {
         let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
             "code": 0,
             "subcode": 0,
@@ -703,23 +738,167 @@ mod tests {
                 )]
             },
             "comment": {
-                "commenttotal": 0,
-                "commentlist": []
+                "commenttotal": 1,
+                "commentlist": [comment(
+                    &json!(92003),
+                    "Latest author",
+                    "Latest content",
+                    &json!(1_700_000_004),
+                    &json!(1)
+                )]
             }
         })));
 
-        let error = client
+        let page = client
             .track_comments(41001, 0, 20)
             .await
-            .expect_err("blank hot comment remains invalid");
-        assert!(matches!(
-            error,
-            QqMusicTrackCommentsError::InvalidComment {
-                section: CommentSection::Hot,
-                index: 0,
-                field: CommentField::Content,
+            .expect("unavailable hot row is optional");
+        assert!(page.hot_comments().is_empty());
+        assert_eq!(page.latest_comments().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn maps_matching_nested_reply_content_instead_of_parent_content() {
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "code": 0,
+            "subcode": 0,
+            "comment": {
+                "commenttotal": 1,
+                "commentlist": [{
+                    "commentid": "reply:92001",
+                    "nick": "Reply author",
+                    "rootcommentcontent": "Parent content must not be selected",
+                    "middlecommentcontent": [{
+                        "subcommentid": "reply:92001",
+                        "subcommentcontent": "Actual reply content"
+                    }, {
+                        "subcommentid": "different:92002",
+                        "subcommentcontent": "Different reply content"
+                    }],
+                    "time": 1_700_000_002,
+                    "praisenum": 7
+                }]
             }
-        ));
+        })));
+
+        let page = client
+            .track_comments(41001, 0, 20)
+            .await
+            .expect("nested reply page");
+        assert_eq!(page.latest_comments().len(), 1);
+        assert_eq!(page.latest_comments()[0].content(), "Actual reply content");
+    }
+
+    #[tokio::test]
+    async fn omits_rows_without_displayable_content_or_author() {
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "code": 0,
+            "subcode": 0,
+            "comment": {
+                "commenttotal": 3,
+                "commentlist": [{
+                    "commentid": 92001,
+                    "nick": "Reply author",
+                    "middlecommentcontent": [{
+                        "subcommentid": 92001
+                    }],
+                    "time": 1_700_000_002,
+                    "praisenum": 7
+                }, comment(
+                    &json!(92002),
+                    "   ",
+                    "Unavailable author",
+                    &json!(1_700_000_003),
+                    &json!(0)
+                ), comment(
+                    &json!(92003),
+                    "Visible author",
+                    "Visible content",
+                    &json!(1_700_000_004),
+                    &json!(1)
+                )]
+            }
+        })));
+
+        let page = client
+            .track_comments(41001, 0, 20)
+            .await
+            .expect("unavailable rows do not invalidate the page");
+        assert_eq!(page.total(), 3);
+        assert_eq!(page.latest_comments().len(), 1);
+        assert_eq!(page.latest_comments()[0].comment_id(), "92003");
+    }
+
+    #[tokio::test]
+    async fn normalizes_stale_legacy_totals_without_losing_page_reachability() {
+        let full_page = (0..20)
+            .map(|index| {
+                comment(
+                    &json!(92_000 + index),
+                    "Visible author",
+                    "Visible content",
+                    &json!(1_700_000_000 + index),
+                    &json!(0),
+                )
+            })
+            .collect::<Vec<_>>();
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "comment": {
+                "commenttotal": 1,
+                "commentlist": full_page
+            }
+        })));
+
+        let page = client
+            .track_comments(41001, 0, 20)
+            .await
+            .expect("full page with stale total");
+        assert_eq!(page.total(), 21);
+        assert!(page.has_more());
+
+        let unavailable_full_page = (0..20)
+            .map(|index| {
+                comment(
+                    &json!(93_000 + index),
+                    "Unavailable author",
+                    "   ",
+                    &json!(1_700_000_100 + index),
+                    &json!(0),
+                )
+            })
+            .collect::<Vec<_>>();
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "comment": {
+                "commenttotal": 1,
+                "commentlist": unavailable_full_page
+            }
+        })));
+        let page = client
+            .track_comments(41001, 0, 20)
+            .await
+            .expect("fully unavailable raw page");
+        assert!(page.latest_comments().is_empty());
+        assert_eq!(page.total(), 21);
+        assert!(page.has_more());
+
+        let terminal = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "comment": {
+                "commenttotal": 1,
+                "commentlist": [comment(
+                    &json!(93001),
+                    "Visible author",
+                    "Visible content",
+                    &json!(1_700_000_100),
+                    &json!(0)
+                )]
+            }
+        })));
+        let page = terminal
+            .track_comments(41001, 20, 20)
+            .await
+            .expect("short page with stale total");
+        assert_eq!(page.total(), 21);
+        assert!(!page.has_more());
     }
 
     #[tokio::test]

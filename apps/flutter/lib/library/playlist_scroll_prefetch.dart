@@ -21,6 +21,7 @@ class PlaylistPrefetchPolicy {
     required double scrollDelta,
     required Duration sampleTime,
     required Duration pageLatency,
+    int pageSize = PagedTracksController.pageSize,
   }) {
     if (scrollDelta <= 0 || loadedCount == 0 || contentExtent <= 0) {
       reset();
@@ -41,9 +42,10 @@ class PlaylistPrefetchPolicy {
       loadedCount,
     );
     final horizon = pageLatency.inMicroseconds / 1000000 + 0.5;
+    final minimumLookahead = math.max(1, pageSize ~/ 2).toInt();
     final lookahead = (_velocity * horizon / rowExtent).ceil().clamp(
-      PagedTracksController.pageSize ~/ 2,
-      PagedTracksController.pageSize * 2,
+      minimumLookahead,
+      pageSize * 2,
     );
     return visibleEnd + lookahead;
   }

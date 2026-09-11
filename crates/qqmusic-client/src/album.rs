@@ -274,8 +274,10 @@ impl<'a> AlbumTracksRequest<'a> {
                 method: "GetAlbumSongList",
                 param: AlbumTracksParam {
                     album_mid,
+                    album_id: 0,
                     offset,
                     size,
+                    order: 2,
                 },
             },
         }
@@ -309,10 +311,13 @@ struct AlbumTracksRpc<'a> {
 struct AlbumTracksParam<'a> {
     #[serde(rename = "albumMid")]
     album_mid: &'a str,
+    #[serde(rename = "albumID")]
+    album_id: u8,
     #[serde(rename = "begin")]
     offset: u32,
     #[serde(rename = "num")]
     size: u32,
+    order: u8,
 }
 
 #[derive(Deserialize)]
@@ -603,8 +608,10 @@ mod tests {
         );
         assert_eq!(body["albumSongs"]["method"], "GetAlbumSongList");
         assert_eq!(body["albumSongs"]["param"]["albumMid"], "fixtureAlbumMid");
+        assert_eq!(body["albumSongs"]["param"]["albumID"], 0);
         assert_eq!(body["albumSongs"]["param"]["begin"], 30);
         assert_eq!(body["albumSongs"]["param"]["num"], 5);
+        assert_eq!(body["albumSongs"]["param"]["order"], 2);
         let debug = format!("{page:?} {:?}", requests[0]);
         assert!(!debug.contains("fixtureAlbumMid"));
         assert!(!debug.contains("Synthetic Track"));

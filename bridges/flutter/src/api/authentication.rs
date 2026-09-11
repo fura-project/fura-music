@@ -1,4 +1,7 @@
 use std::fmt;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Write};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{LazyLock, Mutex as StdMutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -11,10 +14,13 @@ use provider_api::{
 };
 use provider_qqmusic::{
     QqMusicCredentialRestoreState as ProviderCredentialRestoreState,
+    QqMusicCredentialTransferError as ProviderCredentialTransferError,
     QqMusicDesktopQuickAuthenticationSession, QqMusicProvider, QqMusicQrAuthenticationCancellation,
     QqMusicQrAuthenticationSession,
 };
-use qqmusic_client::{CredentialPersistenceError, QqMusicClient, ReqwestTransport};
+use qqmusic_client::{
+    CredentialPersistenceError, CredentialTransferError, QqMusicClient, ReqwestTransport,
+};
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
@@ -30,6 +36,8 @@ static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|
 static NEXT_START_ATTEMPT: AtomicU32 = AtomicU32::new(1);
 static ACTIVE_START_ATTEMPT: StdMutex<Option<u32>> = StdMutex::new(None);
 static ACTIVE_DESKTOP_QUICK_START_ATTEMPT: StdMutex<Option<u32>> = StdMutex::new(None);
+const MAX_TRANSFER_BUNDLE_FILE_BYTES: u64 = 32 * 1024;
+const MAX_TRANSFER_SECRET_FILE_BYTES: u64 = 1024;
 
 pub(crate) fn native_qq_music_provider() -> Result<&'static NativeProvider, ()> {
     QQ_MUSIC_PROVIDER.as_ref().map_err(|_| ())
@@ -182,6 +190,54 @@ pub enum QqMusicCredentialExportFailure {
 pub struct QqMusicCredentialExport {
     pub secret_bytes: Option<Vec<u8>>,
     pub failure: Option<QqMusicCredentialExportFailure>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicCredentialTransferFailure {
+    DisabledOutsideDebugBuild,
+    CoreUnavailable,
+    NoAuthenticatedCredential,
+    RandomnessUnavailable,
+    SerializationFailed,
+    EncryptionFailed,
+    InvalidBundle,
+    BundleTooLarge,
+    UnsupportedVersion,
+    UnsupportedProvider,
+    InvalidTransferSecret,
+    PairingSessionMismatch,
+    InvalidTimestamp,
+    NotYetValid,
+    Expired,
+    AuthenticationFailed,
+    InvalidCredential,
+    AlreadyConsumed,
+    ArtifactPathInvalid,
+    ArtifactAlreadyExists,
+    ArtifactIo,
+}
+
+/// Development-only encrypted transfer artifact result. Flutter receives no
+/// credential, ciphertext, or transfer-secret bytes.
+pub struct QqMusicCredentialTransferExport {
+    pub written: bool,
+    pub failure: Option<QqMusicCredentialTransferFailure>,
+}
+
+impl fmt::Debug for QqMusicCredentialTransferExport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicCredentialTransferExport")
+            .field("written", &self.written)
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct QqMusicCredentialTransferImport {
+    pub state: Option<QqMusicCredentialRestoreState>,
+    pub failure: Option<QqMusicCredentialTransferFailure>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -671,6 +727,88 @@ pub fn export_qq_music_credential_for_secure_storage() -> QqMusicCredentialExpor
     }
 }
 
+/// Produces encrypted test material for the explicit cross-device Go/No-Go
+/// experiment. No production UI calls this API, and release builds always
+/// return `DisabledOutsideDebugBuild`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn debug_export_qq_music_credential_transfer(
+    encrypted_bundle_path: String,
+    transfer_secret_path: String,
+) -> QqMusicCredentialTransferExport {
+    if !cfg!(debug_assertions) {
+        return failed_transfer_export(QqMusicCredentialTransferFailure::DisabledOutsideDebugBuild);
+    }
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_transfer_export(QqMusicCredentialTransferFailure::CoreUnavailable);
+    };
+    let Ok(now_unix_seconds) = current_unix_seconds() else {
+        return failed_transfer_export(QqMusicCredentialTransferFailure::CoreUnavailable);
+    };
+
+    match provider.encode_authenticated_credential_transfer(now_unix_seconds) {
+        Ok(package) => {
+            let (encrypted_bundle, transfer_secret) = package.into_parts();
+            match write_transfer_artifacts(
+                &encrypted_bundle_path,
+                &encrypted_bundle,
+                &transfer_secret_path,
+                &transfer_secret,
+            ) {
+                Ok(()) => QqMusicCredentialTransferExport {
+                    written: true,
+                    failure: None,
+                },
+                Err(failure) => failed_transfer_export(failure),
+            }
+        }
+        Err(error) => failed_transfer_export(map_transfer_error(error)),
+    }
+}
+
+/// Installs a decrypted transfer only as the existing pending-verification
+/// candidate. Callers must run `reserve_qq_music_credential_verification` and
+/// `verify_restored_qq_music_credential` before presenting an authenticated UI.
+#[flutter_rust_bridge::frb(sync)]
+pub fn debug_import_qq_music_credential_transfer(
+    encrypted_bundle_path: String,
+    transfer_secret_path: String,
+) -> QqMusicCredentialTransferImport {
+    if !cfg!(debug_assertions) {
+        return failed_transfer_import(QqMusicCredentialTransferFailure::DisabledOutsideDebugBuild);
+    }
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_transfer_import(QqMusicCredentialTransferFailure::CoreUnavailable);
+    };
+    let Ok(now_unix_seconds) = current_unix_seconds() else {
+        return failed_transfer_import(QqMusicCredentialTransferFailure::CoreUnavailable);
+    };
+
+    let encrypted_bundle =
+        match read_transfer_artifact(&encrypted_bundle_path, MAX_TRANSFER_BUNDLE_FILE_BYTES) {
+            Ok(bytes) => bytes,
+            Err(failure) => return failed_transfer_import(failure),
+        };
+    let mut transfer_secret =
+        match read_transfer_artifact(&transfer_secret_path, MAX_TRANSFER_SECRET_FILE_BYTES) {
+            Ok(bytes) => bytes,
+            Err(failure) => return failed_transfer_import(failure),
+        };
+
+    let result = provider.restore_credential_from_transfer(
+        &encrypted_bundle,
+        &transfer_secret,
+        now_unix_seconds,
+    );
+    transfer_secret.fill(0);
+    match result {
+        Ok(state) => QqMusicCredentialTransferImport {
+            state: Some(map_restore_state(state)),
+            failure: None,
+        },
+        Err(error) => failed_transfer_import(map_transfer_error(error)),
+    }
+}
+
 /// Imports an optional platform-vault document into Rust and returns only the
 /// safe next action. A present document is never considered authenticated
 /// until a later QQ Music server-verification step succeeds.
@@ -752,6 +890,108 @@ const fn failed_restore(failure: QqMusicCredentialRestoreFailure) -> QqMusicCred
     QqMusicCredentialRestore {
         state: None,
         failure: Some(failure),
+    }
+}
+
+const fn failed_transfer_export(
+    failure: QqMusicCredentialTransferFailure,
+) -> QqMusicCredentialTransferExport {
+    QqMusicCredentialTransferExport {
+        written: false,
+        failure: Some(failure),
+    }
+}
+
+const fn failed_transfer_import(
+    failure: QqMusicCredentialTransferFailure,
+) -> QqMusicCredentialTransferImport {
+    QqMusicCredentialTransferImport {
+        state: None,
+        failure: Some(failure),
+    }
+}
+
+fn current_unix_seconds() -> Result<u64, ()> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .map_err(|_| ())
+}
+
+fn write_transfer_artifacts(
+    encrypted_bundle_path: &str,
+    encrypted_bundle: &[u8],
+    transfer_secret_path: &str,
+    transfer_secret: &[u8],
+) -> Result<(), QqMusicCredentialTransferFailure> {
+    if encrypted_bundle_path.trim().is_empty()
+        || transfer_secret_path.trim().is_empty()
+        || Path::new(encrypted_bundle_path) == Path::new(transfer_secret_path)
+    {
+        return Err(QqMusicCredentialTransferFailure::ArtifactPathInvalid);
+    }
+
+    write_private_new_file(Path::new(encrypted_bundle_path), encrypted_bundle)?;
+    if let Err(error) = write_private_new_file(Path::new(transfer_secret_path), transfer_secret) {
+        let _ = fs::remove_file(encrypted_bundle_path);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn write_private_new_file(
+    path: &Path,
+    bytes: &[u8],
+) -> Result<(), QqMusicCredentialTransferFailure> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(map_artifact_io_error)?;
+    if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(map_artifact_io_error(error));
+    }
+    Ok(())
+}
+
+fn read_transfer_artifact(
+    path: &str,
+    maximum_bytes: u64,
+) -> Result<Vec<u8>, QqMusicCredentialTransferFailure> {
+    if path.trim().is_empty() {
+        return Err(QqMusicCredentialTransferFailure::ArtifactPathInvalid);
+    }
+    let path = Path::new(path);
+    let metadata =
+        fs::symlink_metadata(path).map_err(|_| QqMusicCredentialTransferFailure::ArtifactIo)?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > maximum_bytes
+    {
+        return Err(QqMusicCredentialTransferFailure::ArtifactPathInvalid);
+    }
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    File::open(path)
+        .map_err(|_| QqMusicCredentialTransferFailure::ArtifactIo)?
+        .take(maximum_bytes + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| QqMusicCredentialTransferFailure::ArtifactIo)?;
+    if bytes.len() as u64 > maximum_bytes {
+        return Err(QqMusicCredentialTransferFailure::ArtifactPathInvalid);
+    }
+    Ok(bytes)
+}
+
+fn map_artifact_io_error(error: io::Error) -> QqMusicCredentialTransferFailure {
+    if error.kind() == io::ErrorKind::AlreadyExists {
+        QqMusicCredentialTransferFailure::ArtifactAlreadyExists
+    } else {
+        QqMusicCredentialTransferFailure::ArtifactIo
     }
 }
 
@@ -913,6 +1153,59 @@ const fn map_persistence_error(
     }
 }
 
+const fn map_transfer_error(
+    error: ProviderCredentialTransferError,
+) -> QqMusicCredentialTransferFailure {
+    match error {
+        ProviderCredentialTransferError::NoAuthenticatedCredential => {
+            QqMusicCredentialTransferFailure::NoAuthenticatedCredential
+        }
+        ProviderCredentialTransferError::AlreadyConsumed => {
+            QqMusicCredentialTransferFailure::AlreadyConsumed
+        }
+        ProviderCredentialTransferError::Transfer(error) => match error {
+            CredentialTransferError::RandomnessUnavailable => {
+                QqMusicCredentialTransferFailure::RandomnessUnavailable
+            }
+            CredentialTransferError::SerializationFailed => {
+                QqMusicCredentialTransferFailure::SerializationFailed
+            }
+            CredentialTransferError::EncryptionFailed => {
+                QqMusicCredentialTransferFailure::EncryptionFailed
+            }
+            CredentialTransferError::InvalidBundle => {
+                QqMusicCredentialTransferFailure::InvalidBundle
+            }
+            CredentialTransferError::BundleTooLarge => {
+                QqMusicCredentialTransferFailure::BundleTooLarge
+            }
+            CredentialTransferError::UnsupportedVersion => {
+                QqMusicCredentialTransferFailure::UnsupportedVersion
+            }
+            CredentialTransferError::UnsupportedProvider => {
+                QqMusicCredentialTransferFailure::UnsupportedProvider
+            }
+            CredentialTransferError::InvalidSecret => {
+                QqMusicCredentialTransferFailure::InvalidTransferSecret
+            }
+            CredentialTransferError::PairingSessionMismatch => {
+                QqMusicCredentialTransferFailure::PairingSessionMismatch
+            }
+            CredentialTransferError::InvalidTimestamp => {
+                QqMusicCredentialTransferFailure::InvalidTimestamp
+            }
+            CredentialTransferError::NotYetValid => QqMusicCredentialTransferFailure::NotYetValid,
+            CredentialTransferError::Expired => QqMusicCredentialTransferFailure::Expired,
+            CredentialTransferError::AuthenticationFailed => {
+                QqMusicCredentialTransferFailure::AuthenticationFailed
+            }
+            CredentialTransferError::Credential(_) => {
+                QqMusicCredentialTransferFailure::InvalidCredential
+            }
+        },
+    }
+}
+
 const fn map_verification_failure(
     error: AuthenticationError,
 ) -> QqMusicCredentialVerificationFailure {
@@ -943,15 +1236,17 @@ const fn map_verification_failure(
 mod tests {
     use super::{
         QqMusicAccountSummary, QqMusicAccountSummaryFailure, QqMusicCredentialExport,
-        QqMusicCredentialRestoreFailure, QqMusicCredentialVerificationFailure,
+        QqMusicCredentialRestoreFailure, QqMusicCredentialTransferExport,
+        QqMusicCredentialTransferFailure, QqMusicCredentialVerificationFailure,
         QqMusicDesktopQuickLoginAccount, QqMusicDesktopQuickLoginFailure, QqMusicQrChallenge,
         QqMusicQrImageFormat, QqMusicQrLoginFailure, begin_qq_music_account_summary_load,
         clear_start_attempt, failed_start, map_account_summary_failure, map_desktop_quick_failure,
-        map_error, map_persistence_error, map_verification_failure,
-        reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
+        map_error, map_persistence_error, map_transfer_error, map_verification_failure,
+        reserve_qq_music_wechat_qr_login_start, start_attempt_guard, write_transfer_artifacts,
     };
     use provider_api::{AccountSummaryError, AuthenticationError, DesktopQuickAuthenticationError};
-    use qqmusic_client::{CredentialPersistenceError, InvalidCredential};
+    use provider_qqmusic::QqMusicCredentialTransferError as ProviderCredentialTransferError;
+    use qqmusic_client::{CredentialPersistenceError, CredentialTransferError, InvalidCredential};
 
     #[test]
     fn bridge_failure_mapping_is_typed_and_complete() {
@@ -1016,6 +1311,91 @@ mod tests {
         let debug = format!("{export:?}");
         assert!(debug.contains("17"));
         assert!(!debug.contains("private"));
+    }
+
+    #[test]
+    fn credential_transfer_bridge_is_typed_and_redacts_both_artifacts() {
+        let export = QqMusicCredentialTransferExport {
+            written: true,
+            failure: None,
+        };
+        let debug = format!("{export:?}");
+
+        assert!(debug.contains("written: true"));
+        assert!(!debug.contains("private"));
+        assert_eq!(
+            map_transfer_error(ProviderCredentialTransferError::AlreadyConsumed),
+            QqMusicCredentialTransferFailure::AlreadyConsumed,
+        );
+        assert_eq!(
+            map_transfer_error(ProviderCredentialTransferError::Transfer(
+                CredentialTransferError::AuthenticationFailed,
+            )),
+            QqMusicCredentialTransferFailure::AuthenticationFailed,
+        );
+    }
+
+    #[test]
+    fn credential_transfer_artifacts_are_private_new_files() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let directory = std::env::temp_dir()
+            .join(format!("fura-transfer-test-{}-{nonce}", std::process::id(),));
+        std::fs::create_dir(&directory).expect("temporary directory");
+        let bundle = directory.join("credential.bundle");
+        let secret = directory.join("credential.secret");
+        write_transfer_artifacts(
+            bundle.to_str().expect("UTF-8 path"),
+            b"encrypted-fixture",
+            secret.to_str().expect("UTF-8 path"),
+            b"secret-fixture",
+        )
+        .expect("write artifacts");
+
+        assert_eq!(
+            std::fs::read(&bundle).expect("bundle"),
+            b"encrypted-fixture"
+        );
+        assert_eq!(std::fs::read(&secret).expect("secret"), b"secret-fixture");
+        assert_eq!(
+            write_transfer_artifacts(
+                bundle.to_str().expect("UTF-8 path"),
+                b"replacement",
+                secret.to_str().expect("UTF-8 path"),
+                b"replacement",
+            ),
+            Err(QqMusicCredentialTransferFailure::ArtifactAlreadyExists),
+        );
+        assert_eq!(
+            std::fs::read(&bundle).expect("unchanged bundle"),
+            b"encrypted-fixture"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&bundle)
+                    .expect("bundle metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600,
+            );
+            assert_eq!(
+                std::fs::metadata(&secret)
+                    .expect("secret metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600,
+            );
+        }
+
+        std::fs::remove_file(bundle).expect("remove bundle");
+        std::fs::remove_file(secret).expect("remove secret");
+        std::fs::remove_dir(directory).expect("remove directory");
     }
 
     #[test]

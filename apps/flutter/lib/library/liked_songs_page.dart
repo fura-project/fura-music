@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
-import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
@@ -596,6 +595,7 @@ class _LikedSongsHeader extends StatelessWidget {
             if (selectedSection == _LikedCollectionSection.songs) ...[
               const SizedBox(width: 8),
               _PlayAllButton(onPressed: onPlayAll, compact: true),
+              const SizedBox(width: 8),
               _RefreshButton(
                 refreshing: isRefreshing,
                 onPressed: onRefresh,
@@ -634,6 +634,7 @@ class _LikedSongsHeader extends StatelessWidget {
               Expanded(child: _tabs()),
               if (selectedSection == _LikedCollectionSection.songs) ...[
                 _PlayAllButton(onPressed: onPlayAll, compact: true),
+                const SizedBox(width: 8),
                 _RefreshButton(
                   refreshing: isRefreshing,
                   onPressed: onRefresh,
@@ -1024,6 +1025,7 @@ class _RefreshButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => compact
       ? IconButton.filledTonal(
+          key: const ValueKey('liked-songs-refresh-compact'),
           tooltip: refreshing ? '正在刷新' : '刷新喜欢的歌曲',
           onPressed: onPressed,
           icon: const Icon(Icons.refresh_rounded),
@@ -1209,10 +1211,7 @@ class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
                   onOpenAlbum: widget.onOpenAlbum == null || track.album == null
                       ? null
                       : () => widget.onOpenAlbum!(track.album!),
-                  onOpenArtist:
-                      widget.onOpenArtist == null || track.artists.length != 1
-                      ? null
-                      : () => widget.onOpenArtist!(track.artists.single),
+                  onOpenArtist: widget.onOpenArtist,
                 );
               },
             ),
@@ -1260,95 +1259,43 @@ class _LikedTrackRow extends StatefulWidget {
   final VoidCallback onPlay;
   final VoidCallback onAddToQueue;
   final VoidCallback? onOpenAlbum;
-  final VoidCallback? onOpenArtist;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   State<_LikedTrackRow> createState() => _LikedTrackRowState();
 }
 
 class _LikedTrackRowState extends State<_LikedTrackRow> {
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode.addListener(_handleFocus);
-  }
-
-  @override
-  void dispose() {
-    _focusNode
-      ..removeListener(_handleFocus)
-      ..dispose();
-    super.dispose();
-  }
-
-  void _handleFocus() {
-    if (mounted) setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final artists = widget.track.artistNames.isEmpty
         ? '未知歌手'
         : widget.track.artistNames.join(' / ');
-    final active = widget.hovered || _focusNode.hasFocus;
-    final background = widget.current
-        ? theme.colorScheme.surfaceContainerHigh
-        : active
-        ? theme.colorScheme.surfaceContainerLow
-        : Colors.transparent;
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.contextMenu): () =>
-            _showKeyboardMenu(context),
-        const SingleActivator(LogicalKeyboardKey.f10, shift: true): () =>
-            _showKeyboardMenu(context),
-      },
-      child: Semantics(
-        label: '${widget.track.title}, $artists',
-        button: true,
-        selected: widget.current,
-        onTap: widget.onPlay,
-        excludeSemantics: true,
-        child: MouseRegion(
-          onEnter: (_) => widget.onHoverChanged(true),
-          onExit: (_) => widget.onHoverChanged(false),
-          child: InkWell(
-            key: ValueKey('liked-track-row-${widget.index}'),
-            focusNode: _focusNode,
-            borderRadius: BorderRadius.circular(10),
-            onTap: widget.onPlay,
-            onLongPress: widget.desktop
-                ? null
-                : () => unawaited(_showCompactMenu(context)),
-            onSecondaryTapDown: widget.desktop
-                ? (details) => unawaited(
-                    _showDesktopMenu(context, details.globalPosition),
-                  )
-                : null,
-            child: Container(
-              constraints: BoxConstraints(minHeight: widget.desktop ? 56 : 64),
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.desktop ? 12 : 8,
-                vertical: widget.desktop ? 7 : 6,
-              ),
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: widget.desktop
-                  ? _desktopContent(context, artists, active)
-                  : _compactContent(context, artists),
-            ),
-          ),
-        ),
+    return MusicTrackRowSurface(
+      itemKey: ValueKey('liked-track-row-${widget.index}'),
+      desktop: widget.desktop,
+      current: widget.current,
+      hovered: widget.hovered,
+      onHoverChanged: widget.onHoverChanged,
+      semanticLabel: '${widget.track.title}, $artists',
+      onTap: widget.onPlay,
+      onContextMenuRequested: (position) => unawaited(
+        position == null
+            ? _showCompactMenu(context)
+            : _showDesktopMenu(context, position),
       ),
+      contentBuilder: (context, active, hovered) => widget.desktop
+          ? _desktopContent(context, artists, active, hovered)
+          : _compactContent(context, artists),
     );
   }
 
-  Widget _desktopContent(BuildContext context, String artists, bool active) {
+  Widget _desktopContent(
+    BuildContext context,
+    String artists,
+    bool active,
+    bool hovered,
+  ) {
     return MusicTrackRowContent(
       index: widget.index,
       track: widget.track,
@@ -1356,10 +1303,19 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
       current: widget.current,
       active: active,
       artistNames: artists,
+      onPlay: widget.onPlay,
       onAddToQueue: widget.onAddToQueue,
-      onMore: () => _showKeyboardMenu(context),
+      onOpenAlbum: widget.onOpenAlbum,
+      onOpenArtist: widget.onOpenArtist == null || widget.track.artists.isEmpty
+          ? null
+          : _openArtist,
+      onMore: () => unawaited(_showDesktopMenuAtRow(context)),
+      showInlineQueueAction: hovered,
       addToQueueTooltip: '添加到队列',
       moreTooltip: '更多操作',
+      playTooltip: '从这里播放',
+      albumTooltip: '打开专辑',
+      artistTooltip: widget.track.artists.length > 1 ? '选择歌手' : '打开歌手',
     );
   }
 
@@ -1371,29 +1327,31 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
         current: widget.current,
         active: false,
         artistNames: artists,
+        onPlay: widget.onPlay,
         onAddToQueue: widget.onAddToQueue,
+        onOpenAlbum: widget.onOpenAlbum,
+        onOpenArtist:
+            widget.onOpenArtist == null || widget.track.artists.isEmpty
+            ? null
+            : _openArtist,
         onMore: () => unawaited(_showCompactMenu(context)),
         addToQueueTooltip: '添加到队列',
         moreTooltip: '更多操作',
+        playTooltip: '从这里播放',
+        albumTooltip: '打开专辑',
+        artistTooltip: widget.track.artists.length > 1 ? '选择歌手' : '打开歌手',
       );
 
-  void _showKeyboardMenu(BuildContext context) {
-    if (!widget.desktop) {
-      unawaited(_showCompactMenu(context));
-      return;
-    }
+  Future<void> _showDesktopMenuAtRow(BuildContext context) async {
     final box = context.findRenderObject();
     if (box is! RenderBox) return;
-    unawaited(
-      _showDesktopMenu(
-        context,
-        box.localToGlobal(box.size.center(Offset.zero)),
-      ),
+    await _showDesktopMenu(
+      context,
+      box.localToGlobal(box.size.center(Offset.zero)),
     );
   }
 
   Future<void> _showDesktopMenu(BuildContext context, Offset position) async {
-    _focusNode.requestFocus();
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
     final action = await showMenu<_LikedTrackAction>(
@@ -1492,10 +1450,24 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
       case _LikedTrackAction.openAlbum:
         widget.onOpenAlbum?.call();
       case _LikedTrackAction.openArtist:
-        widget.onOpenArtist?.call();
+        _openArtist();
       case null:
         return;
     }
+  }
+
+  void _openArtist() {
+    unawaited(
+      openMusicTrackArtists(
+        context: context,
+        artists: widget.track.artists,
+        onSelected: widget.onOpenArtist,
+        title: '选择歌手',
+        detail: '这首歌曲包含多个歌手，请选择要打开的歌手。',
+        cancelLabel: '取消',
+        itemKeyPrefix: 'liked-track-artist',
+      ),
+    );
   }
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
@@ -476,7 +477,7 @@ class _AuthenticationDialogState extends State<_AuthenticationDialog> {
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: widget.controller.supportsDesktopQuickLogin ? 560 : 440,
+          maxWidth: widget.controller.supportsDesktopQuickLogin ? 720 : 440,
           maxHeight: 720,
         ),
         child: SingleChildScrollView(
@@ -778,6 +779,33 @@ class _AuthenticationContent extends StatelessWidget {
     final image = controller.qrImageBytes;
     final scanned = controller.stage == LoginStage.scannedAwaitingConfirmation;
     final reconnecting = controller.stage == LoginStage.reconnecting;
+    final qrTitle = scanned
+        ? 'Confirm on your phone'
+        : reconnecting
+        ? 'Reconnecting…'
+        : controller.qrChannel == LoginQrChannel.qq
+        ? 'Scan with QQ'
+        : 'Scan with WeChat';
+    final qrDetail = scanned
+        ? controller.qrChannel == LoginQrChannel.qq
+              ? 'The code was scanned. Approve the sign-in in QQ.'
+              : 'The code was scanned. Approve the sign-in in WeChat.'
+        : reconnecting
+        ? 'Your code is still active. We’ll retry the connection.'
+        : controller.qrChannel == LoginQrChannel.qq
+        ? 'Open QQ, choose Scan, then point your camera here.'
+        : 'Open WeChat, choose Scan, then point your camera here.';
+    final qrMethod = _QrAuthenticationMethod(
+      image: image,
+      semanticLabel: controller.qrChannel == LoginQrChannel.qq
+          ? 'QQ sign-in QR code'
+          : 'WeChat sign-in QR code',
+      title: qrTitle,
+      detail: qrDetail,
+    );
+    final showQuickLogin =
+        controller.supportsDesktopQuickLogin &&
+        controller.qrChannel == LoginQrChannel.qq;
 
     return Column(
       key: const ValueKey('login-active'),
@@ -811,59 +839,40 @@ class _AuthenticationContent extends StatelessWidget {
           ),
           const SizedBox(height: 24),
         ],
-        if (image != null)
-          Semantics(
-            label: controller.qrChannel == LoginQrChannel.qq
-                ? 'QQ sign-in QR code'
-                : 'WeChat sign-in QR code',
-            image: true,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: ColoredBox(
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Image.memory(
-                    image,
-                    width: 220,
-                    height: 220,
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
-                    errorBuilder: (_, _, _) => const SizedBox.square(
-                      dimension: 220,
-                      child: Icon(Icons.broken_image_outlined, size: 48),
+        if (showQuickLogin)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final quickMethod = _AuthenticationMethodSection(
+                key: const ValueKey('desktop-quick-login-method'),
+                icon: Icons.desktop_windows_outlined,
+                title: 'Quick login',
+                detail: 'Use an account already signed in to desktop QQ.',
+                child: _DesktopQuickLoginChoices(controller: controller),
+              );
+              if (constraints.maxWidth < 540) {
+                return Column(
+                  children: [quickMethod, const SizedBox(height: 28), qrMethod],
+                );
+              }
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: quickMethod),
+                    const SizedBox(width: 20),
+                    VerticalDivider(
+                      width: 1,
+                      color: Theme.of(context).colorScheme.outlineVariant,
                     ),
-                  ),
+                    const SizedBox(width: 20),
+                    Expanded(child: qrMethod),
+                  ],
                 ),
-              ),
-            ),
-          ),
-        if (controller.supportsDesktopQuickLogin &&
-            controller.qrChannel == LoginQrChannel.qq) ...[
-          const SizedBox(height: 20),
-          _DesktopQuickLoginChoices(controller: controller),
-        ],
-        const SizedBox(height: 24),
-        _announcedAuthenticationMessage(
-          context,
-          scanned
-              ? 'Confirm on your phone'
-              : reconnecting
-              ? 'Reconnecting…'
-              : controller.qrChannel == LoginQrChannel.qq
-              ? 'Scan with QQ'
-              : 'Scan with WeChat',
-          scanned
-              ? controller.qrChannel == LoginQrChannel.qq
-                    ? 'The code was scanned. Approve the sign-in in QQ.'
-                    : 'The code was scanned. Approve the sign-in in WeChat.'
-              : reconnecting
-              ? 'Your code is still active. We’ll retry the connection.'
-              : controller.qrChannel == LoginQrChannel.qq
-              ? 'Open QQ, choose Scan, then point your camera here.'
-              : 'Open WeChat, choose Scan, then point your camera here.',
-          spacing: 8,
-        ),
+              );
+            },
+          )
+        else
+          qrMethod,
         const SizedBox(height: 24),
         Wrap(
           alignment: WrapAlignment.center,
@@ -1024,6 +1033,124 @@ class _AuthenticationContent extends StatelessWidget {
   }
 }
 
+class _AuthenticationMethodSection extends StatelessWidget {
+  const _AuthenticationMethodSection({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.child,
+    this.announce = false,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final Widget child;
+  final bool announce;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final heading = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: theme.textTheme.titleMedium),
+              const SizedBox(height: 6),
+              Text(
+                detail,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (announce)
+          Semantics(
+            container: true,
+            liveRegion: true,
+            label: '$title. $detail',
+            excludeSemantics: true,
+            child: heading,
+          )
+        else
+          heading,
+        const SizedBox(height: 16),
+        child,
+      ],
+    );
+  }
+}
+
+class _QrAuthenticationMethod extends StatelessWidget {
+  const _QrAuthenticationMethod({
+    required this.image,
+    required this.semanticLabel,
+    required this.title,
+    required this.detail,
+  });
+
+  final Uint8List? image;
+  final String semanticLabel;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) => _AuthenticationMethodSection(
+    key: const ValueKey('qr-login-method'),
+    icon: Icons.qr_code_2_rounded,
+    title: title,
+    detail: detail,
+    announce: true,
+    child: Center(
+      child: image == null
+          ? const SizedBox.square(
+              dimension: 40,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            )
+          : Semantics(
+              label: semanticLabel,
+              image: true,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: ColoredBox(
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.memory(
+                      image!,
+                      width: 220,
+                      height: 220,
+                      fit: BoxFit.contain,
+                      gaplessPlayback: true,
+                      errorBuilder: (_, _, _) => const SizedBox.square(
+                        dimension: 220,
+                        child: Icon(Icons.broken_image_outlined, size: 48),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    ),
+  );
+}
+
 class _DesktopQuickLoginChoices extends StatelessWidget {
   const _DesktopQuickLoginChoices({required this.controller});
 
@@ -1063,14 +1190,6 @@ class _DesktopQuickLoginChoices extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Quick login', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(
-          'Select an account already signed in to desktop QQ.',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 12),
         Center(
           child: Wrap(
             alignment: WrapAlignment.center,

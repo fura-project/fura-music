@@ -12,6 +12,16 @@ import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 void main() {
+  test('keeps the Android media session resumable while paused', () {
+    expect(projectAudioServiceConfig.androidStopForegroundOnPause, isFalse);
+    expect(projectAudioServiceConfig.androidResumeOnClick, isTrue);
+    expect(
+      projectAudioServiceConfig.androidNotificationIcon,
+      'drawable/ic_stat_fura_music',
+    );
+    expect(projectAudioServiceConfig.androidShowNotificationBadge, isFalse);
+  });
+
   test(
     'publishes provider-neutral queue metadata and playback state',
     () async {

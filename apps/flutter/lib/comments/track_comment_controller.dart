@@ -76,7 +76,8 @@ class TrackCommentController extends ChangeNotifier {
       _total = result.total;
       _nextOffset = result.hasMore ? pageSize : result.latestComments.length;
       _hasMore = result.hasMore;
-      _stage = _hotComments.isEmpty && _latestComments.isEmpty
+      _stage =
+          _hotComments.isEmpty && _latestComments.isEmpty && !result.hasMore
           ? TrackCommentStage.empty
           : TrackCommentStage.content;
     } else {
@@ -142,9 +143,7 @@ class TrackCommentController extends ChangeNotifier {
         result.offset == expectedOffset &&
         result.total >= pageEnd &&
         (firstPage || result.hotComments.isEmpty) &&
-        (result.hasMore
-            ? result.latestComments.isNotEmpty && pageEnd < result.total
-            : result.latestComments.isEmpty || pageEnd == result.total);
+        (!result.hasMore || pageEnd < result.total);
   }
 
   bool _isRetryable(TrackCommentFailure? failure) =>

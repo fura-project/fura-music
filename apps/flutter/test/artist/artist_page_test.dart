@@ -63,7 +63,9 @@ void main() {
     expect(find.text('Synthetic track'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const ValueKey('artist-queue-0')));
+    await tester.tap(find.byKey(const ValueKey('artist-context-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add to queue'));
     await tester.pumpAndSettle();
     expect(queue.pushedTracks, [track]);
     expect(find.text('Added to queue'), findsOneWidget);

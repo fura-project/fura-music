@@ -77,7 +77,9 @@ void main() {
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('album-queue-0')));
+    await tester.tap(find.byKey(const ValueKey('album-context-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add to queue'));
     await tester.pumpAndSettle();
     expect(queue.pushedTracks, [track]);
     expect(find.text('Added to queue'), findsOneWidget);

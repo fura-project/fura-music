@@ -136,6 +136,58 @@ void main() {
     await load;
     expect(controller.latestComments, isEmpty);
   });
+
+  test(
+    'accepts a terminal page after unavailable raw rows are omitted',
+    () async {
+      final gateway = _ScriptedGateway([
+        _PendingOperation.completed(
+          TrackCommentPageResult(
+            total: 3,
+            latestComments: [_comment('visible')],
+          ),
+        ),
+      ]);
+      final controller = TrackCommentController(gateway, _track);
+
+      await controller.load();
+
+      expect(controller.stage, TrackCommentStage.content);
+      expect(controller.total, 3);
+      expect(controller.hasMore, isFalse);
+      expect(controller.latestComments.single.opaqueId, 'comment:visible');
+      controller.dispose();
+    },
+  );
+
+  test(
+    'advances past a full page whose raw rows are all unavailable',
+    () async {
+      final gateway = _ScriptedGateway([
+        _PendingOperation.completed(
+          const TrackCommentPageResult(total: 21, hasMore: true),
+        ),
+        _PendingOperation.completed(
+          TrackCommentPageResult(
+            offset: 20,
+            total: 21,
+            latestComments: [_comment('visible')],
+          ),
+        ),
+      ]);
+      final controller = TrackCommentController(gateway, _track);
+
+      await controller.load();
+      expect(controller.stage, TrackCommentStage.content);
+      expect(controller.canLoadMore, isTrue);
+
+      await controller.loadMore();
+      expect(gateway.requests, [(0, 20), (20, 20)]);
+      expect(controller.latestComments.single.opaqueId, 'comment:visible');
+      expect(controller.hasMore, isFalse);
+      controller.dispose();
+    },
+  );
 }
 
 const _track = PlaylistTrackSummary(

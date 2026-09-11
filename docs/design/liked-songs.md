@@ -39,6 +39,10 @@ Home remains deferred and unaccepted. This source record authorizes only the cur
 - Returning from a retained playlist detail preserves the selected Liked tab, grid scroll position, and focus. The Shell keeps a stable base wrapper so opening a compact detail no longer recreates the Liked page.
 - Reduced motion makes the expanded/collapsed header swap immediate. Automated 390 px and wide renders remain Human-review evidence rather than visual acceptance.
 
+### Collapsed action-spacing correction, 2026-09-09
+
+The maintainer's comparison identified that compact Play and Refresh targets visually touched in both the desktop one-row and mobile two-row collapsed headers. Their existing 48 dp Material targets and hierarchy remain unchanged; an explicit 8 dp gap now separates them at both breakpoints. Geometry regressions assert the rendered gap, and refreshed CJK-font review artifacts are `/tmp/flutterustmusic-liked-desktop-collapsed.png` and `/tmp/flutterustmusic-liked-mobile-collapsed.png`. This is a bounded spacing correction, not a redesign of the approved Liked composition; final visual judgment remains Human review.
+
 ## Incremental full-collection search revision
 
 **Evidence source:** Maintainer-operated 1,032-row Liked search and explicit follow-up on 2026-09-08.

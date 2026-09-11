@@ -36,6 +36,24 @@ void main() {
       expect(predict(PlaylistPrefetchPolicy(), delta: 1000), 260);
     });
 
+    test(
+      'smaller paged collections can reuse the policy without overfetching',
+      () {
+        final target = PlaylistPrefetchPolicy().targetTrackCount(
+          loadedCount: 20,
+          extentAfter: 200,
+          contentExtent: 20 * 56,
+          scrollDelta: 1000,
+          sampleTime: Duration.zero,
+          pageLatency: const Duration(milliseconds: 350),
+          pageSize: 10,
+        );
+
+        expect(target, lessThanOrEqualTo(40));
+        expect(target, greaterThan(20));
+      },
+    );
+
     test('the same speed prefetches earlier when page latency increases', () {
       final fastNetwork = predict(PlaylistPrefetchPolicy(), delta: 100);
       final slowNetwork = predict(

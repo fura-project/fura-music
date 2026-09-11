@@ -14,7 +14,9 @@ use crate::{
 };
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
-const MAX_RECENT_PLAYS_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+// Local resource ceilings, not claims about QQ's retention or server page size.
+const MAX_RECENT_PLAYS_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_RECENT_RECORDS: usize = 5_000;
 const RECENT_PLAYS_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_PAGE_SIZE: u32 = 100;
 
@@ -42,6 +44,12 @@ pub enum QqMusicRecentPlaysError<E> {
     },
     MissingData,
     MissingRecords,
+    MissingDataCode,
+    DataFailure {
+        code: i64,
+    },
+    UnexpectedHistoryType,
+    ResponseTooLarge,
     InvalidPagination,
 }
 
@@ -72,6 +80,13 @@ impl<E> fmt::Debug for QqMusicRecentPlaysError<E> {
                 .finish(),
             Self::MissingData => formatter.write_str("MissingData"),
             Self::MissingRecords => formatter.write_str("MissingRecords"),
+            Self::MissingDataCode => formatter.write_str("MissingDataCode"),
+            Self::DataFailure { code } => formatter
+                .debug_struct("DataFailure")
+                .field("code", code)
+                .finish(),
+            Self::UnexpectedHistoryType => formatter.write_str("UnexpectedHistoryType"),
+            Self::ResponseTooLarge => formatter.write_str("ResponseTooLarge"),
             Self::InvalidPagination => formatter.write_str("InvalidPagination"),
         }
     }
@@ -115,6 +130,16 @@ impl<E> fmt::Display for QqMusicRecentPlaysError<E> {
             ),
             Self::MissingData => formatter.write_str("recent-play data is missing"),
             Self::MissingRecords => formatter.write_str("recent-play record array is missing"),
+            Self::MissingDataCode => formatter.write_str("recent-play data has no result code"),
+            Self::DataFailure { code } => {
+                write!(formatter, "recent-play data failed with code {code}")
+            }
+            Self::UnexpectedHistoryType => {
+                formatter.write_str("recent-play data is not song history")
+            }
+            Self::ResponseTooLarge => {
+                formatter.write_str("recent-play snapshot exceeds local bounds")
+            }
             Self::InvalidPagination => {
                 formatter.write_str("recent-play pagination did not advance safely")
             }
@@ -300,27 +325,103 @@ impl fmt::Debug for QqMusicRecentPlaysPage {
     }
 }
 
+/// One bounded full song-history snapshot. The provider retains it only within
+/// the authenticated session and serves UI pages without repeated full reads.
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicRecentPlaysSnapshot {
+    // Keep omitted positions so page progress and omission counts remain exact.
+    records: Vec<Option<QqMusicRecentPlay>>,
+}
+
+impl fmt::Debug for QqMusicRecentPlaysSnapshot {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRecentPlaysSnapshot")
+            .field("record_count", &self.records.len())
+            .finish()
+    }
+}
+
+impl QqMusicRecentPlaysSnapshot {
+    /// Returns a local page from this immutable snapshot.
+    ///
+    /// # Errors
+    /// Rejects an invalid page size or an offset beyond the snapshot.
+    pub fn page(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> Result<QqMusicRecentPlaysPage, QqMusicRecentPlaysError<std::convert::Infallible>> {
+        if !(1..=MAX_PAGE_SIZE).contains(&size) {
+            return Err(QqMusicRecentPlaysError::InvalidPageSize { size });
+        }
+        let total = u32::try_from(self.records.len())
+            .map_err(|_| QqMusicRecentPlaysError::InvalidPagination)?;
+        if offset > total {
+            return Err(QqMusicRecentPlaysError::InvalidPagination);
+        }
+        let next_offset = offset.saturating_add(size).min(total);
+        let window = &self.records[offset as usize..next_offset as usize];
+        let records: Vec<_> = window.iter().flatten().cloned().collect();
+        let omitted_track_count = next_offset
+            - offset
+            - u32::try_from(records.len())
+                .map_err(|_| QqMusicRecentPlaysError::InvalidPagination)?;
+        Ok(QqMusicRecentPlaysPage {
+            offset,
+            next_offset,
+            total,
+            total_is_exact: true,
+            has_more: next_offset < total,
+            omitted_track_count,
+            records,
+        })
+    }
+}
+
 impl<T> QqMusicClient<T>
 where
     T: HttpTransport,
 {
-    /// Returns one bounded page of the authenticated account's QQ cloud
-    /// recent-play records using the evidenced `begin` / `num` contract.
+    /// Reads one full cloud song-history snapshot using the official Windows
+    /// `PlayRecentlyRead.GetPlayRecentlyInfo` request: type=2, updateTime=0.
+    /// This endpoint has no evidenced begin/num pagination. No delta merge or
+    /// automatic retry is performed. Bytes and record count have local ceilings.
     ///
     /// # Errors
-    ///
-    /// Returns a typed protocol error for invalid bounds, transport or response
-    /// failures, explicit credential rejection, and unsafe pagination.
-    pub async fn recent_plays_page(
+    /// Returns a typed protocol error for transport, bounds, rejection, service
+    /// and response-shape failures. Diagnostics are explicitly opt-in and redacted.
+    pub async fn recent_plays_snapshot(
         &self,
         credential: &Credential,
-        offset: u32,
-        size: u32,
-    ) -> Result<QqMusicRecentPlaysPage, QqMusicRecentPlaysError<T::Error>> {
-        if !(1..=MAX_PAGE_SIZE).contains(&size) {
-            return Err(QqMusicRecentPlaysError::InvalidPageSize { size });
+    ) -> Result<QqMusicRecentPlaysSnapshot, QqMusicRecentPlaysError<T::Error>> {
+        let diagnostics =
+            std::env::var("FURA_QQMUSIC_RECENT_PLAYS_DIAGNOSTICS").is_ok_and(|value| value == "1");
+        if diagnostics {
+            eprintln!(
+                "{}",
+                recent_plays_diagnostic(credential.login_type(), "request")
+            );
         }
-        let body = serde_json::to_vec(&RecentPlaysRequest::new(credential, offset, size))
+        let result = self.request_recent_plays_snapshot(credential).await;
+        if diagnostics {
+            let outcome = match &result {
+                Ok(_) => "success".to_owned(),
+                Err(error) => format!("{error:?}"),
+            };
+            eprintln!(
+                "{}",
+                recent_plays_diagnostic(credential.login_type(), &outcome)
+            );
+        }
+        result
+    }
+
+    async fn request_recent_plays_snapshot(
+        &self,
+        credential: &Credential,
+    ) -> Result<QqMusicRecentPlaysSnapshot, QqMusicRecentPlaysError<T::Error>> {
+        let body = serde_json::to_vec(&RecentPlaysRequest::new(credential))
             .map_err(|_| QqMusicRecentPlaysError::Serialize)?;
         let sign =
             recent_plays_request_sign(&body).map_err(|()| QqMusicRecentPlaysError::Signing)?;
@@ -341,20 +442,34 @@ where
         if !(200..300).contains(&response.status()) {
             return Err(QqMusicRecentPlaysError::HttpStatus(response.status()));
         }
+        if response.body().len() > MAX_RECENT_PLAYS_RESPONSE_BYTES {
+            return Err(QqMusicRecentPlaysError::ResponseTooLarge);
+        }
         let envelope: RecentPlaysResponse = serde_json::from_slice(response.body())
             .map_err(|_| QqMusicRecentPlaysError::InvalidJson)?;
-        map_response(envelope, offset, size)
+        map_response(envelope)
     }
+}
+
+fn recent_plays_diagnostic(login: crate::LoginType, outcome: &str) -> String {
+    let channel = match login {
+        crate::LoginType::WECHAT => "wechat",
+        crate::LoginType::QQ => "qq",
+        _ => "other",
+    };
+    format!(
+        "[qqmusic.recent_plays] route=PlayRecentlyRead channel={channel} type=2 updateTime=0 outcome={outcome}"
+    )
 }
 
 #[derive(Serialize)]
 struct RecentPlaysRequest<'a> {
     comm: RecentPlaysComm<'a>,
-    req_0: RecentPlaysRpc<'a>,
+    req_0: RecentPlaysRpc,
 }
 
 impl<'a> RecentPlaysRequest<'a> {
-    fn new(credential: &'a Credential, offset: u32, size: u32) -> Self {
+    fn new(credential: &'a Credential) -> Self {
         let csrf_token = credential_music_key_hash(credential.music_key());
         Self {
             comm: RecentPlaysComm {
@@ -375,12 +490,11 @@ impl<'a> RecentPlaysRequest<'a> {
                 legacy_csrf_token: csrf_token,
             },
             req_0: RecentPlaysRpc {
-                module: "music.musichallSong.RecentPlayList",
-                method: "GetRecentPlayList",
+                module: "music.musicasset.PlayRecentlyRead",
+                method: "GetPlayRecentlyInfo",
                 param: RecentPlaysParam {
-                    uin: credential.music_id(),
-                    offset,
-                    size,
+                    history_type: 2,
+                    update_time: 0,
                 },
             },
         }
@@ -418,19 +532,18 @@ struct RecentPlaysComm<'a> {
 }
 
 #[derive(Serialize)]
-struct RecentPlaysRpc<'a> {
+struct RecentPlaysRpc {
     module: &'static str,
     method: &'static str,
-    param: RecentPlaysParam<'a>,
+    param: RecentPlaysParam,
 }
 
 #[derive(Serialize)]
-struct RecentPlaysParam<'a> {
-    uin: &'a str,
-    #[serde(rename = "begin")]
-    offset: u32,
-    #[serde(rename = "num")]
-    size: u32,
+struct RecentPlaysParam {
+    #[serde(rename = "type")]
+    history_type: u32,
+    #[serde(rename = "updateTime")]
+    update_time: u32,
 }
 
 fn credential_music_key_hash(key: &str) -> u32 {
@@ -491,45 +604,28 @@ struct RecentPlaysResult {
 
 #[derive(Deserialize)]
 struct RecentPlaysData {
-    #[serde(rename = "vecPlayRecord")]
+    code: Option<i64>,
+    #[serde(rename = "type")]
+    history_type: Option<u32>,
+    data: Option<RecentPlaysPayload>,
+}
+
+#[derive(Deserialize)]
+struct RecentPlaysPayload {
+    #[serde(rename = "songList")]
     records: Option<Vec<RawRecentPlay>>,
-    #[serde(default, alias = "totalnum", alias = "total_num")]
-    total: Option<u32>,
-    #[serde(default, alias = "hasmore")]
-    has_more: Option<RawHasMore>,
 }
 
 #[derive(Deserialize)]
 struct RawRecentPlay {
-    #[serde(rename = "unPlayTime")]
+    #[serde(rename = "lastTime")]
     source_play_time: Option<u64>,
-    #[serde(rename = "stSongInfo")]
     track: Option<RawTrack>,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum RawHasMore {
-    Boolean(bool),
-    Number(i64),
-}
-
-impl RawHasMore {
-    const fn value(self) -> Option<bool> {
-        match self {
-            Self::Boolean(value) => Some(value),
-            Self::Number(0) => Some(false),
-            Self::Number(1) => Some(true),
-            Self::Number(_) => None,
-        }
-    }
 }
 
 fn map_response<E>(
     envelope: RecentPlaysResponse,
-    offset: u32,
-    size: u32,
-) -> Result<QqMusicRecentPlaysPage, QqMusicRecentPlaysError<E>> {
+) -> Result<QqMusicRecentPlaysSnapshot, QqMusicRecentPlaysError<E>> {
     let global_code = envelope
         .code
         .ok_or(QqMusicRecentPlaysError::MissingGlobalCode)?;
@@ -561,62 +657,41 @@ fn map_response<E>(
         });
     }
     let data = result.data.ok_or(QqMusicRecentPlaysError::MissingData)?;
+    let code = data.code.ok_or(QqMusicRecentPlaysError::MissingDataCode)?;
+    if is_musicu_rate_limited_code(code) {
+        return Err(QqMusicRecentPlaysError::RateLimited { code });
+    }
+    if is_credential_rejection_code(code) {
+        return Err(QqMusicRecentPlaysError::Rejected { code });
+    }
+    // The official Windows reader admits these exact data status values before
+    // checking the typed song-list payload. Do not infer permission semantics or
+    // treat a missing payload as an empty snapshot for any status.
+    if !matches!(code, 0 | -300 | -301) {
+        return Err(QqMusicRecentPlaysError::DataFailure { code });
+    }
+    if data.history_type != Some(2) {
+        return Err(QqMusicRecentPlaysError::UnexpectedHistoryType);
+    }
     let raw_records = data
+        .data
+        .ok_or(QqMusicRecentPlaysError::MissingData)?
         .records
         .ok_or(QqMusicRecentPlaysError::MissingRecords)?;
-    let raw_count =
-        u32::try_from(raw_records.len()).map_err(|_| QqMusicRecentPlaysError::InvalidPagination)?;
-    if raw_count > size {
-        return Err(QqMusicRecentPlaysError::InvalidPagination);
+    if raw_records.len() > MAX_RECENT_RECORDS {
+        return Err(QqMusicRecentPlaysError::ResponseTooLarge);
     }
-    let next_offset = offset
-        .checked_add(raw_count)
-        .ok_or(QqMusicRecentPlaysError::InvalidPagination)?;
-    let inferred_has_more = raw_count == size;
-    let has_more = match data.has_more {
-        Some(value) => value
-            .value()
-            .ok_or(QqMusicRecentPlaysError::InvalidPagination)?,
-        None => inferred_has_more,
-    };
-    let total_is_exact = data.total.is_some();
-    let total = data.total.unwrap_or_else(|| {
-        if has_more {
-            next_offset.saturating_add(1)
-        } else {
-            next_offset
-        }
-    });
-    if total < next_offset || (has_more && next_offset == offset) {
-        return Err(QqMusicRecentPlaysError::InvalidPagination);
-    }
-
-    let mut records = Vec::with_capacity(raw_records.len());
-    let mut omitted_track_count = 0_u32;
-    for (index, raw) in raw_records.into_iter().enumerate() {
-        let Some(track) = raw.track else {
-            omitted_track_count = omitted_track_count.saturating_add(1);
-            continue;
-        };
-        match map_recent_track(track, index) {
-            Ok(track) => records.push(QqMusicRecentPlay {
-                track,
+    let records = raw_records
+        .into_iter()
+        .enumerate()
+        .map(|(index, raw)| {
+            Some(QqMusicRecentPlay {
+                track: map_recent_track(raw.track?, index).ok()?,
                 source_play_time: raw.source_play_time,
-            }),
-            Err(_) => {
-                omitted_track_count = omitted_track_count.saturating_add(1);
-            }
-        }
-    }
-    Ok(QqMusicRecentPlaysPage {
-        offset,
-        next_offset,
-        total,
-        total_is_exact,
-        has_more,
-        omitted_track_count,
-        records,
-    })
+            })
+        })
+        .collect();
+    Ok(QqMusicRecentPlaysSnapshot { records })
 }
 
 fn map_recent_track(raw: RawTrack, index: usize) -> Result<QqMusicRecentTrackSummary, usize> {
@@ -706,135 +781,262 @@ mod tests {
         (QqMusicClient::new(transport), requests)
     }
 
-    fn track(id: u64, mid: &str) -> String {
-        format!(
-            r#"{{"unPlayTime":1700000000,"stSongInfo":{{"id":{id},"mid":"{mid}","name":"Fixture","type":0,"interval":123,"singer":[{{"id":9,"mid":"singerMid","name":"Singer"}}],"album":{{"id":7,"mid":"albumMid","name":"Album"}},"file":{{"media_mid":"{mid}"}}}}}}"#
-        )
+    fn track(id: u64, mid: &str) -> Value {
+        serde_json::json!({
+            "lastTime": 1_700_000_000_u64, "listenCnt": 1,
+            "track": {"id":id, "mid":mid, "name":"Fixture", "type":0, "interval":123,
+                "singer":[{"id":9,"mid":"singerMid","name":"Singer"}],
+                "album":{"id":7,"mid":"albumMid","name":"Album"},
+                "file":{"media_mid":mid}}
+        })
+    }
+
+    fn response(records: Vec<Value>) -> String {
+        let records = Value::Array(records);
+        serde_json::json!({"code":0,"req_0":{"code":0,"data":{
+            "code":0,"type":2,"updateTime":1_700_000_000_u64,
+            "data":{"songList":records}
+        }}})
+        .to_string()
     }
 
     #[tokio::test]
-    async fn constructs_authenticated_paged_request_and_maps_records() {
-        let response = format!(
-            r#"{{"code":0,"req_0":{{"code":0,"data":{{"vecPlayRecord":[{}],"total":205,"has_more":1}}}}}}"#,
-            track(41, "songMid01")
-        );
-        let (client, requests) = client(&response);
-
-        let page = client
-            .recent_plays_page(&credential(), 100, 100)
+    async fn official_snapshot_request_and_typed_track_mapping() {
+        let (client, requests) = client(&response(vec![track(41, "songMid01")]));
+        let snapshot = client
+            .recent_plays_snapshot(&credential())
             .await
-            .expect("page");
-
-        assert_eq!(page.offset(), 100);
-        assert_eq!(page.next_offset(), 101);
-        assert_eq!(page.total(), 205);
+            .expect("snapshot");
+        let page = snapshot.page(0, 100).expect("page");
+        assert_eq!((page.offset(), page.next_offset(), page.total()), (0, 1, 1));
         assert!(page.total_is_exact());
-        assert!(page.has_more());
-        assert_eq!(page.records().len(), 1);
+        assert!(!page.has_more());
         assert_eq!(page.records()[0].track().song_mid(), "songMid01");
+        assert_eq!(page.records()[0].track().track_id(), Some(41));
         assert_eq!(page.records()[0].source_play_time(), Some(1_700_000_000));
         let requests = requests.lock().expect("requests");
+        assert_eq!(requests.len(), 1);
         let request = &requests[0];
         assert_eq!(request.url(), "https://u.y.qq.com/cgi-bin/musicu.fcg");
+        // Independently calculated with Python hashlib/Base64 from this exact DTO.
         assert_eq!(
             request.query_pairs(),
             [(
                 "sign".to_owned(),
-                "zzc4e09d09jupdlt5wxxhuemvphmdacir6hgdf4f9900".to_owned(),
+                "zzcd47079fj60471zz573ke0vg8xb5ggoqc24768df08b".to_owned()
             )]
         );
-        assert!(
-            request
-                .headers()
-                .iter()
-                .any(|(name, value)| name == "Cookie" && value.contains("qqmusic_key=secret-key"))
-        );
         let body: Value =
-            serde_json::from_slice(request.body_bytes().expect("body")).expect("body");
+            serde_json::from_slice(request.body_bytes().expect("body")).expect("JSON");
         assert_eq!(body["comm"]["uin"], "123456");
-        assert_eq!(body["comm"]["g_tk_new_20200303"], 340_831_009);
         assert_eq!(body["comm"]["g_tk"], 340_831_009);
+        assert_eq!(body["comm"]["g_tk_new_20200303"], 340_831_009);
+        assert_eq!(body["req_0"]["module"], "music.musicasset.PlayRecentlyRead");
+        assert_eq!(body["req_0"]["method"], "GetPlayRecentlyInfo");
         assert_eq!(
-            body["req_0"]["module"],
-            "music.musichallSong.RecentPlayList"
+            body["req_0"]["param"],
+            serde_json::json!({"type":2,"updateTime":0})
         );
-        assert_eq!(body["req_0"]["method"], "GetRecentPlayList");
-        assert_eq!(body["req_0"]["param"]["uin"], "123456");
-        assert_eq!(body["req_0"]["param"]["begin"], 100);
-        assert_eq!(body["req_0"]["param"]["num"], 100);
         assert!(!format!("{request:?}").contains("secret-key"));
+        for private in ["songMid01", "Fixture", "1700000000"] {
+            assert!(!format!("{snapshot:?}").contains(private));
+        }
     }
 
     #[tokio::test]
-    async fn empty_page_is_a_success_not_an_unavailable_state() {
-        let (client, _) = client(r#"{"code":0,"req_0":{"code":0,"data":{"vecPlayRecord":[]}}}"#);
-        let page = client
-            .recent_plays_page(&credential(), 0, 100)
+    async fn both_channels_keep_their_own_cookie_and_login_identity() {
+        for login in [LoginType::QQ, LoginType::WECHAT] {
+            let (client, requests) = client(&response(vec![]));
+            let credential =
+                Credential::new("987654321", "synthetic-key", login).expect("credential");
+            let snapshot = client
+                .recent_plays_snapshot(&credential)
+                .await
+                .expect("valid empty");
+            let page = snapshot.page(0, 100).expect("empty page");
+            assert_eq!(page.total(), 0);
+            assert!(!page.has_more());
+            let requests = requests.lock().expect("requests");
+            assert_eq!(requests.len(), 1);
+            let body: Value =
+                serde_json::from_slice(requests[0].body_bytes().expect("body")).expect("JSON");
+            assert_eq!(body["comm"]["tmeLoginType"], login.value());
+            assert_eq!(body["comm"]["uin"], "987654321");
+            assert_eq!(body["comm"]["qq"], "987654321");
+            let cookie = &requests[0]
+                .headers()
+                .iter()
+                .find(|(name, _)| name == "Cookie")
+                .expect("cookie")
+                .1;
+            assert!(cookie.contains("qqmusic_key=synthetic-key"));
+            assert!(cookie.contains(&format!("tmeLoginType={};", login.value())));
+            assert_eq!(
+                cookie.contains("wxuin=987654321;"),
+                login == LoginType::WECHAT
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn snapshot_pages_are_exact_bounded_and_do_not_refetch() {
+        let records = (0..205)
+            .map(|i| track(i + 1, &format!("mid{i:03}")))
+            .collect();
+        let (client, requests) = client(&response(records));
+        let snapshot = client
+            .recent_plays_snapshot(&credential())
             .await
-            .expect("empty");
-        assert_eq!(page.total(), 0);
+            .expect("snapshot");
+        for (offset, next, count, more) in [
+            (0, 100, 100, true),
+            (100, 200, 100, true),
+            (200, 205, 5, false),
+        ] {
+            let page = snapshot.page(offset, 100).expect("page");
+            assert_eq!(page.next_offset(), next);
+            assert_eq!(page.total(), 205);
+            assert_eq!(page.records().len(), count);
+            assert_eq!(page.has_more(), more);
+            assert_eq!(
+                page.records()[0].track().song_mid(),
+                format!("mid{offset:03}")
+            );
+        }
+        assert!(snapshot.page(205, 100).expect("end").records().is_empty());
+        for (offset, size) in [(206, 100), (u32::MAX, 100), (0, 0), (0, 101)] {
+            assert!(snapshot.page(offset, size).is_err());
+        }
+        assert_eq!(requests.lock().expect("requests").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn omitted_rows_keep_page_progress_without_fabricating_identity() {
+        let (client, _) = client(&response(vec![
+            serde_json::json!({"lastTime":1,"track":{
+            "mid":"onlyMid","name":"Fixture","interval":123,"singer":[{"name":"Singer"}]}}),
+            serde_json::json!({"track":{"mid":"invalid"}}),
+        ]));
+        let snapshot = client
+            .recent_plays_snapshot(&credential())
+            .await
+            .expect("snapshot");
+        let page = snapshot.page(0, 1).expect("first");
+        assert_eq!(page.records()[0].track().track_id(), None);
+        assert_eq!(page.records()[0].track().song_type(), None);
+        let page = snapshot.page(1, 1).expect("omitted final row");
+        assert_eq!((page.next_offset(), page.omitted_track_count()), (2, 1));
         assert!(!page.has_more());
         assert!(page.records().is_empty());
     }
 
     #[tokio::test]
-    async fn full_page_without_total_exposes_a_safe_lower_bound_cursor() {
-        let records = (0..100)
-            .map(|index| track(index + 1, &format!("songMid{index:03}")))
-            .collect::<Vec<_>>()
-            .join(",");
-        let response =
-            format!(r#"{{"code":0,"req_0":{{"code":0,"data":{{"vecPlayRecord":[{records}]}}}}}}"#);
-        let (client, _) = client(&response);
-        let page = client
-            .recent_plays_page(&credential(), 200, 100)
-            .await
-            .expect("page");
-        assert_eq!(page.next_offset(), 300);
-        assert_eq!(page.total(), 301);
-        assert!(!page.total_is_exact());
-        assert!(page.has_more());
+    async fn all_result_layers_stop_on_failure_without_retry_or_empty_success() {
+        for (body, expected) in [
+            (r#"{"code":1000}"#, "Rejected(1000)"),
+            (r#"{"code":0,"req_0":{"code":1000}}"#, "Rejected(1000)"),
+            (
+                r#"{"code":0,"req_0":{"code":500003}}"#,
+                "Upstream { global_code: 0, result_code: Some(500003) }",
+            ),
+            (
+                r#"{"code":0,"req_0":{"code":0,"data":{"code":2001}}}"#,
+                "RateLimited(2001)",
+            ),
+            (
+                r#"{"code":0,"req_0":{"code":0,"data":{"code":500003}}}"#,
+                "DataFailure { code: 500003 }",
+            ),
+        ] {
+            let (client, requests) = client(body);
+            let error = client
+                .recent_plays_snapshot(&credential())
+                .await
+                .expect_err("failure");
+            assert_eq!(format!("{error:?}"), expected);
+            assert_eq!(requests.lock().expect("requests").len(), 1);
+        }
     }
 
     #[tokio::test]
-    async fn credential_rejection_is_not_disguised_as_empty_history() {
-        let (client, _) = client(r#"{"code":0,"req_0":{"code":1000,"data":{}}}"#);
-        assert!(matches!(
-            client.recent_plays_page(&credential(), 0, 100).await,
-            Err(QqMusicRecentPlaysError::Rejected { code: 1000 })
-        ));
+    async fn official_nonfatal_data_statuses_still_require_a_typed_snapshot() {
+        for code in [-300, -301] {
+            let mut body: Value =
+                serde_json::from_str(&response(vec![track(1, "midOne")])).expect("fixture");
+            body["req_0"]["data"]["code"] = code.into();
+            let (complete, _) = client(&body.to_string());
+            let snapshot = complete
+                .recent_plays_snapshot(&credential())
+                .await
+                .expect("official admitted status");
+            assert_eq!(snapshot.page(0, 100).expect("page").records().len(), 1);
+            body["req_0"]["data"]["data"] = serde_json::json!({});
+            let (missing, _) = client(&body.to_string());
+            assert!(matches!(
+                missing.recent_plays_snapshot(&credential()).await,
+                Err(QqMusicRecentPlaysError::MissingRecords)
+            ));
+        }
     }
 
     #[tokio::test]
-    async fn malformed_and_missing_shapes_remain_explicit() {
-        let (malformed, _) = client("not-json");
-        assert!(matches!(
-            malformed.recent_plays_page(&credential(), 0, 100).await,
-            Err(QqMusicRecentPlaysError::InvalidJson)
-        ));
-        let (missing, _) = client(r#"{"code":0,"req_0":{"code":0,"data":{}}}"#);
-        assert!(matches!(
-            missing.recent_plays_page(&credential(), 0, 100).await,
-            Err(QqMusicRecentPlaysError::MissingRecords)
-        ));
+    async fn old_or_malformed_shapes_cannot_be_accepted_as_empty_history() {
+        for (body, expected) in [
+            ("not-json", "InvalidJson([REDACTED])"),
+            (
+                r#"{"code":0,"req_0":{"code":0,"data":{"vecPlayRecord":[]}}}"#,
+                "MissingDataCode",
+            ),
+            (
+                r#"{"code":0,"req_0":{"code":0,"data":{"code":0,"type":1,"data":{"mvList":[]}}}}"#,
+                "UnexpectedHistoryType",
+            ),
+            (
+                r#"{"code":0,"req_0":{"code":0,"data":{"code":0,"type":2,"data":{}}}}"#,
+                "MissingRecords",
+            ),
+        ] {
+            let (client, _) = client(body);
+            assert_eq!(
+                format!(
+                    "{:?}",
+                    client
+                        .recent_plays_snapshot(&credential())
+                        .await
+                        .expect_err("malformed")
+                ),
+                expected
+            );
+        }
     }
 
     #[tokio::test]
-    async fn mid_only_identity_maps_without_fabricating_ids_and_invalid_rows_advance_cursor() {
-        let (client, _) = client(
-            r#"{"code":0,"req_0":{"code":0,"data":{"vecPlayRecord":[{"unPlayTime":1,"stSongInfo":{"mid":"onlyMid","name":"Fixture","interval":123,"singer":[{"name":"Singer"}],"album":{"name":"Album"}}},{"unPlayTime":2,"stSongInfo":{"mid":"missingDisplayFields"}}]}}}"#,
+    async fn oversized_snapshots_fail_instead_of_silently_truncating() {
+        let (too_many, _) = client(&response(vec![
+            serde_json::json!({});
+            super::MAX_RECENT_RECORDS + 1
+        ]));
+        assert!(matches!(
+            too_many.recent_plays_snapshot(&credential()).await,
+            Err(QqMusicRecentPlaysError::ResponseTooLarge)
+        ));
+        let (too_large, _) = client(&" ".repeat(super::MAX_RECENT_PLAYS_RESPONSE_BYTES + 1));
+        assert!(matches!(
+            too_large.recent_plays_snapshot(&credential()).await,
+            Err(QqMusicRecentPlaysError::ResponseTooLarge)
+        ));
+    }
+
+    #[test]
+    fn diagnostic_error_debug_redacts_secrets_and_marks_the_new_route() {
+        let transport = QqMusicRecentPlaysError::Transport(
+            "Cookie=secret; account=987654321; private response",
         );
-        let page = client
-            .recent_plays_page(&credential(), 0, 100)
-            .await
-            .expect("page");
-        assert_eq!(page.next_offset(), 2);
-        assert_eq!(page.omitted_track_count(), 1);
-        assert_eq!(page.records().len(), 1);
-        let track = page.records()[0].track();
-        assert_eq!(track.track_id(), None);
-        assert_eq!(track.song_type(), None);
-        assert_eq!(track.song_mid(), "onlyMid");
-        assert_eq!(track.title(), "Fixture");
+        let output = super::recent_plays_diagnostic(LoginType::QQ, &format!("{transport:?}"));
+        assert!(output.contains("route=PlayRecentlyRead channel=qq"));
+        assert!(output.contains("Transport([REDACTED])"));
+        for private in ["secret", "987654321", "private response", "Cookie"] {
+            assert!(!output.contains(private));
+        }
     }
 }

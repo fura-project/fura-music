@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
@@ -21,6 +21,7 @@ class PlaylistDetailPage extends StatefulWidget {
     required this.onSignInAgain,
     this.onOpenAlbum,
     this.onOpenArtist,
+    this.onHeaderCollapsedChanged,
     this.embedded = false,
     super.key,
   });
@@ -32,6 +33,7 @@ class PlaylistDetailPage extends StatefulWidget {
   final VoidCallback onSignInAgain;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final ValueChanged<bool>? onHeaderCollapsedChanged;
   final bool embedded;
 
   @override
@@ -87,51 +89,53 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     final body = SafeArea(
       child: AnimatedBuilder(
         animation: _pageListenable,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= 820;
-            return Column(
-              children: [
-                _PlaylistHeader(
-                  playlist: widget.playlist,
-                  trackCount:
-                      _controller.stage == PlaylistDetailStage.content ||
-                          _controller.stage == PlaylistDetailStage.empty
-                      ? _controller.total
-                      : widget.playlist.trackCount,
-                  desktop: desktop,
+        builder: (context, _) => MusicCollectionDetailLayout(
+          key: ValueKey('playlist-detail-layout-${widget.playlist.opaqueId}'),
+          onHeaderCollapsedChanged: widget.onHeaderCollapsedChanged,
+          headerBuilder: (context, desktop, progress) => _PlaylistHeader(
+            playlist: widget.playlist,
+            trackCount:
+                _controller.stage == PlaylistDetailStage.content ||
+                    _controller.stage == PlaylistDetailStage.empty
+                ? _controller.total
+                : widget.playlist.trackCount,
+            desktop: desktop,
+            collapseProgress: progress,
+            embedded: widget.embedded,
+            onBack: widget.onBack,
+            onRefresh: _controller.isLoading ? null : _controller.refresh,
+            refreshing: _controller.isRefreshing,
+          ),
+          bodyBuilder: (context, desktop) => Column(
+            children: [
+              if (_controller.isRefreshing)
+                const LinearProgressIndicator(
+                  key: ValueKey('playlist-detail-refresh-progress'),
                 ),
-                if (_controller.isRefreshing)
-                  const LinearProgressIndicator(
-                    key: ValueKey('playlist-detail-refresh-progress'),
-                  ),
-                if (_controller.refreshFailure case final failure?)
-                  LibraryRefreshFailureBanner(
-                    key: const ValueKey('playlist-detail-refresh-failure'),
-                    message: _refreshFailureCopy(failure),
-                    canRetry: _controller.canRetryRefresh,
-                    onRetry: _controller.retryRefresh,
-                    onDismiss: _controller.dismissRefreshFailure,
-                  ),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 240),
-                    child: _body(desktop),
-                  ),
+              if (_controller.refreshFailure case final failure?)
+                LibraryRefreshFailureBanner(
+                  key: const ValueKey('playlist-detail-refresh-failure'),
+                  message: _refreshFailureCopy(failure),
+                  canRetry: _controller.canRetryRefresh,
+                  onRetry: _controller.retryRefresh,
+                  onDismiss: _controller.dismissRefreshFailure,
                 ),
-              ],
-            );
-          },
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  child: _body(desktop),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
     if (widget.embedded) {
-      return Column(
+      return ColoredBox(
         key: const ValueKey('embedded-playlist-detail'),
-        children: [
-          SizedBox(height: kToolbarHeight, child: toolbar),
-          Expanded(child: body),
-        ],
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: body,
       );
     }
     return Scaffold(
@@ -219,69 +223,46 @@ class _PlaylistHeader extends StatelessWidget {
     required this.playlist,
     required this.trackCount,
     required this.desktop,
+    required this.collapseProgress,
+    required this.embedded,
+    required this.onBack,
+    required this.onRefresh,
+    required this.refreshing,
   });
 
   final UserPlaylistSummary playlist;
   final int? trackCount;
   final bool desktop;
+  final double collapseProgress;
+  final bool embedded;
+  final VoidCallback onBack;
+  final VoidCallback? onRefresh;
+  final bool refreshing;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final artworkSize = desktop ? 156.0 : 92.0;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        desktop ? 48 : 20,
-        desktop ? 24 : 12,
-        desktop ? 48 : 20,
-        desktop ? 28 : 18,
-      ),
-      child: Row(
-        children: [
-          SizedBox.square(
-            dimension: artworkSize,
-            child: _Artwork(uri: playlist.artworkUri, playlist: true),
-          ),
-          SizedBox(width: desktop ? 28 : 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'PLAYLIST',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  playlist.title,
-                  maxLines: desktop ? 3 : 2,
-                  overflow: TextOverflow.ellipsis,
-                  style:
-                      (desktop
-                              ? theme.textTheme.headlineLarge
-                              : theme.textTheme.titleLarge)
-                          ?.copyWith(fontWeight: FontWeight.w700, height: 1.08),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  trackCount == null
-                      ? 'QQ Music'
-                      : '$trackCount tracks · QQ Music',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MusicCollectionDetailHeader(
+    collapseProgress: collapseProgress,
+    desktop: desktop,
+    embedded: embedded,
+    artwork: _Artwork(uri: playlist.artworkUri, playlist: true),
+    eyebrow: 'PLAYLIST',
+    title: playlist.title,
+    titleKey: const ValueKey('playlist-detail-title'),
+    summary: trackCount == null ? 'QQ Music' : '$trackCount tracks · QQ Music',
+    onBack: onBack,
+    backKey: const ValueKey('playlist-detail-back'),
+    backTooltip: 'Back to playlists',
+    toolbarAction: IconButton(
+      tooltip: refreshing ? 'Refreshing playlist' : 'Refresh playlist',
+      onPressed: onRefresh,
+      icon: refreshing
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            )
+          : const Icon(Icons.refresh_rounded),
+    ),
+  );
 }
 
 class _TrackCollection extends StatefulWidget {
@@ -470,118 +451,48 @@ class _TrackRow extends StatefulWidget {
 }
 
 class _TrackRowState extends State<_TrackRow> {
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode.addListener(_handleFocus);
-  }
-
-  @override
-  void dispose() {
-    _focusNode
-      ..removeListener(_handleFocus)
-      ..dispose();
-    super.dispose();
-  }
-
-  void _handleFocus() {
-    if (mounted) setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final artists = widget.track.artistNames.isEmpty
         ? 'Unknown artist'
         : widget.track.artistNames.join(' · ');
     final title = widget.track.subtitle == null
         ? widget.track.title
         : '${widget.track.title} · ${widget.track.subtitle}';
-    final active = widget.hovered || _focusNode.hasFocus;
-    final background = widget.current
-        ? theme.colorScheme.surfaceContainerHigh
-        : active
-        ? theme.colorScheme.surfaceContainerLow
-        : Colors.transparent;
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.contextMenu): () =>
-            _showKeyboardActions(context),
-        const SingleActivator(LogicalKeyboardKey.f10, shift: true): () =>
-            _showKeyboardActions(context),
-      },
-      child: Semantics(
-        label: '$title, $artists',
-        container: true,
-        button: true,
-        selected: widget.current,
-        excludeSemantics: true,
-        onTap: widget.onTap,
-        onLongPress: widget.desktop
+    return MusicTrackRowSurface(
+      itemKey: ValueKey('playlist-track-row-${widget.index}'),
+      desktop: widget.desktop,
+      current: widget.current,
+      hovered: widget.hovered,
+      onHoverChanged: widget.onHoverChanged,
+      semanticLabel: '$title, $artists',
+      onTap: widget.onTap,
+      onContextMenuRequested: (position) => unawaited(
+        position == null
+            ? _showMobileActions(context)
+            : _showDesktopActions(context, position),
+      ),
+      contentBuilder: (context, active, hovered) => MusicTrackRowContent(
+        index: widget.index,
+        track: widget.track,
+        title: title,
+        desktop: widget.desktop,
+        current: widget.current,
+        active: active,
+        artistNames: artists,
+        onPlay: widget.onTap,
+        onAddToQueue: widget.onAddToQueue,
+        onOpenAlbum: widget.onOpenAlbum,
+        onOpenArtist:
+            widget.onOpenArtist == null || widget.track.artists.isEmpty
             ? null
-            : () => unawaited(_showMobileActions(context)),
-        child: MouseRegion(
-          onEnter: (_) => widget.onHoverChanged(true),
-          onExit: (_) => widget.onHoverChanged(false),
-          child: InkWell(
-            key: ValueKey('playlist-track-row-${widget.index}'),
-            focusNode: _focusNode,
-            borderRadius: BorderRadius.circular(10),
-            onTap: () {
-              _focusNode.requestFocus();
-              widget.onTap();
-            },
-            onSecondaryTapDown: widget.desktop
-                ? (details) {
-                    _focusNode.requestFocus();
-                    unawaited(
-                      _showDesktopActions(context, details.globalPosition),
-                    );
-                  }
-                : null,
-            onLongPress: widget.desktop
-                ? null
-                : () => unawaited(_showMobileActions(context)),
-            child: Container(
-              constraints: BoxConstraints(minHeight: widget.desktop ? 56 : 64),
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.desktop ? 12 : 8,
-                vertical: widget.desktop ? 7 : 6,
-              ),
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: MusicTrackRowContent(
-                index: widget.index,
-                track: widget.track,
-                title: title,
-                desktop: widget.desktop,
-                current: widget.current,
-                active: active,
-                artistNames: artists,
-                onAddToQueue: widget.onAddToQueue,
-                onMore: () => unawaited(_showMobileActions(context)),
-                showInlineQueueAction: widget.hovered,
-              ),
-            ),
-          ),
-        ),
+            : () => unawaited(_openArtist()),
+        onMore: () => unawaited(_showMobileActions(context)),
+        // Keep desktop Tab traversal row-to-row. The queue action appears on
+        // pointer hover, as before, rather than being inserted after focus.
+        showInlineQueueAction: hovered,
       ),
     );
-  }
-
-  void _showKeyboardActions(BuildContext context) {
-    if (!widget.desktop) {
-      unawaited(_showMobileActions(context));
-      return;
-    }
-    final box = context.findRenderObject();
-    if (box is! RenderBox) return;
-    final position = box.localToGlobal(box.size.center(Offset.zero));
-    unawaited(_showDesktopActions(context, position));
   }
 
   Future<void> _showDesktopActions(
@@ -697,82 +608,16 @@ class _TrackRowState extends State<_TrackRow> {
   }
 
   Future<void> _openArtist() async {
-    final onOpenArtist = widget.onOpenArtist;
-    final artists = widget.track.artists;
-    if (onOpenArtist == null || artists.isEmpty) return;
-    if (artists.length == 1) {
-      onOpenArtist(artists.single);
-      return;
-    }
-    final compact = MediaQuery.sizeOf(context).width < 600;
-    final selected = compact
-        ? await showModalBottomSheet<ArtistSummary>(
-            context: context,
-            showDragHandle: true,
-            builder: (context) =>
-                _ArtistSelection(artists: artists, compact: true),
-          )
-        : await showDialog<ArtistSummary>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Choose an Artist'),
-              content: _ArtistSelection(artists: artists, compact: false),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ],
-            ),
-          );
-    if (!mounted || selected == null) return;
-    onOpenArtist(selected);
+    await openMusicTrackArtists(
+      context: context,
+      artists: widget.track.artists,
+      onSelected: widget.onOpenArtist,
+      itemKeyPrefix: 'playlist-track-artist',
+    );
   }
 }
 
 enum _TrackAction { playFromHere, addToQueue, openAlbum, openArtist }
-
-class _ArtistSelection extends StatelessWidget {
-  const _ArtistSelection({required this.artists, required this.compact});
-
-  final List<ArtistSummary> artists;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final list = ListView(
-      shrinkWrap: compact,
-      padding: EdgeInsets.fromLTRB(8, compact ? 0 : 4, 8, compact ? 16 : 4),
-      children: [
-        if (compact)
-          const ListTile(
-            title: Text('Choose an Artist'),
-            subtitle: Text('This Track credits more than one Artist.'),
-          ),
-        for (var index = 0; index < artists.length; index++)
-          ListTile(
-            key: ValueKey('playlist-track-artist-$index'),
-            leading: const Icon(Icons.person_rounded),
-            title: Text(artists[index].name),
-            onTap: () => Navigator.pop(context, artists[index]),
-          ),
-      ],
-    );
-    return SafeArea(
-      top: !compact,
-      child: compact
-          ? ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
-              child: list,
-            )
-          : SizedBox(
-              width: 360,
-              height: (artists.length * 56.0).clamp(56.0, 336.0),
-              child: list,
-            ),
-    );
-  }
-}
 
 class _Artwork extends StatelessWidget {
   const _Artwork({this.uri, this.playlist = false});

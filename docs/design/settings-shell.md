@@ -57,3 +57,7 @@ At 390×844:
 4. Mobile Settings search returns only real matching categories and selecting a result opens its level-two page.
 5. No sign-in/sign-out action or unsupported Stitch category is exposed inside Settings.
 6. Exiting Settings restores the compact primary bottom navigation; the hierarchy remains usable at 360 px and becomes immediate when reduced motion is enabled.
+
+## Canvas correction, 2026-09-09
+
+The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.

@@ -321,7 +321,9 @@ void main() {
         album: album,
         artists: const [artist],
       );
-      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      // This fixture exposes independent Artist/Album hit targets. Activate
+      // the title portion when the test intends to play the row.
+      await tester.tap(find.text('First track'));
       await tester.pumpAndSettle();
 
       expect(

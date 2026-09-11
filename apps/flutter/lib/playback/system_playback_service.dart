@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -11,6 +13,8 @@ import 'package:flutterustmusic/playback/track_playback_controller.dart';
 /// Binds the operating-system media session to the app's existing playback
 /// owner. Implementations must never resolve media or maintain another queue.
 abstract interface class SystemPlaybackBinding {
+  bool get available;
+
   void attach(QueuePlaybackController controller);
 
   void detach(QueuePlaybackController controller);
@@ -18,6 +22,9 @@ abstract interface class SystemPlaybackBinding {
 
 class NoopSystemPlaybackBinding implements SystemPlaybackBinding {
   const NoopSystemPlaybackBinding();
+
+  @override
+  bool get available => false;
 
   @override
   void attach(QueuePlaybackController controller) {}
@@ -38,6 +45,9 @@ class AudioServiceSystemPlaybackBinding implements SystemPlaybackBinding {
   final StreamSubscription<void> _becomingNoisySubscription;
 
   @override
+  bool get available => true;
+
+  @override
   void attach(QueuePlaybackController controller) =>
       _handler.attach(controller);
 
@@ -52,6 +62,22 @@ class AudioServiceSystemPlaybackBinding implements SystemPlaybackBinding {
   }
 }
 
+/// One cross-platform media-session configuration. Android keeps the playback
+/// foreground service alive while paused so notification, lock-screen and
+/// headset resume do not need to start a new foreground service from the
+/// background on Android 12+.
+@visibleForTesting
+const projectAudioServiceConfig = AudioServiceConfig(
+  androidNotificationChannelId: 'dev.axiaobo.flutterustmusic.playback',
+  androidNotificationChannelName: 'fura music playback',
+  androidNotificationChannelDescription: 'Playback controls for fura music',
+  androidNotificationIcon: 'drawable/ic_stat_fura_music',
+  androidNotificationOngoing: false,
+  androidShowNotificationBadge: false,
+  androidResumeOnClick: true,
+  androidStopForegroundOnPause: false,
+);
+
 /// Initializes the native media session used by Android, iOS, macOS, Linux
 /// (MPRIS), and Windows (SMTC). Failure is deliberately non-fatal: foreground
 /// playback remains usable if a desktop session bus or platform service is not
@@ -62,12 +88,7 @@ Future<SystemPlaybackBinding> initializeSystemPlaybackBinding() async {
     registerProjectLinuxMprisAudioService();
     await AudioService.init(
       builder: () => handler,
-      config: const AudioServiceConfig(
-        androidNotificationChannelId: 'dev.axiaobo.flutterustmusic.playback',
-        androidNotificationChannelName: 'fura music playback',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: true,
-      ),
+      config: projectAudioServiceConfig,
     );
 
     final audioSession = await AudioSession.instance;
@@ -85,7 +106,14 @@ Future<SystemPlaybackBinding> initializeSystemPlaybackBinding() async {
       interruptionSubscription,
       becomingNoisySubscription,
     );
-  } on Object {
+  } on Object catch (error) {
+    developer.log(
+      'System media-session initialization failed; '
+      'phase=initialize platform=${defaultTargetPlatform.name} '
+      'errorType=${error.runtimeType}; foreground playback remains available.',
+      name: 'fura_music.system_playback',
+      level: 900,
+    );
     return const NoopSystemPlaybackBinding();
   }
 }
