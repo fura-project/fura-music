@@ -19,24 +19,29 @@ void main() {
     for (final theme in AppThemePreference.values) {
       for (final playbackQuality in AppPlaybackQualityPreference.values) {
         for (final musicProvider in AppMusicProvider.values) {
-          final storage = _MemoryDocumentStorage();
-          final store = AppSettingsStore(storage: storage);
-          final settings = AppSettings(
-            theme: theme,
-            playbackQuality: playbackQuality,
-            musicProvider: musicProvider,
-          );
+          for (final localePreference in AppLocalePreference.values) {
+            final storage = _MemoryDocumentStorage();
+            final store = AppSettingsStore(storage: storage);
+            final settings = AppSettings(
+              theme: theme,
+              playbackQuality: playbackQuality,
+              musicProvider: musicProvider,
+              localePreference: localePreference,
+            );
 
-          expect(await store.save(settings), AppSettingsWriteResult.saved);
-          final stored = jsonDecode(storage.document!) as Map<String, dynamic>;
-          expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
-          expect(stored['theme'], theme.name);
-          expect(stored['playbackQuality'], playbackQuality.name);
-          expect(stored['musicProvider'], musicProvider.name);
+            expect(await store.save(settings), AppSettingsWriteResult.saved);
+            final stored =
+                jsonDecode(storage.document!) as Map<String, dynamic>;
+            expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
+            expect(stored['theme'], theme.name);
+            expect(stored['playbackQuality'], playbackQuality.name);
+            expect(stored['musicProvider'], musicProvider.name);
+            expect(stored['localePreference'], localePreference.name);
 
-          final loaded = await store.load();
-          expect(loaded.state, AppSettingsLoadState.stored);
-          expect(loaded.settings, settings);
+            final loaded = await store.load();
+            expect(loaded.state, AppSettingsLoadState.stored);
+            expect(loaded.settings, settings);
+          }
         }
       }
     }
@@ -95,6 +100,7 @@ void main() {
         'theme': 'dark',
         'playbackQuality': 'lossless',
         'musicProvider': 'futureProvider',
+        'localePreference': 'english',
       }),
     );
 
@@ -107,9 +113,56 @@ void main() {
         theme: AppThemePreference.dark,
         playbackQuality: AppPlaybackQualityPreference.lossless,
         musicProvider: AppMusicProvider.qqMusic,
+        localePreference: AppLocalePreference.english,
       ),
     );
   });
+
+  test('migrates version 3 documents to follow the system language', () async {
+    final storage = _MemoryDocumentStorage(
+      document: jsonEncode(<String, Object>{
+        'schemaVersion': 3,
+        'theme': 'dark',
+        'playbackQuality': 'high',
+        'musicProvider': 'netEaseCloudMusic',
+      }),
+    );
+
+    final result = await AppSettingsStore(storage: storage).load();
+
+    expect(result.state, AppSettingsLoadState.migrated);
+    expect(
+      result.settings,
+      const AppSettings(
+        theme: AppThemePreference.dark,
+        playbackQuality: AppPlaybackQualityPreference.high,
+        musicProvider: AppMusicProvider.netEaseCloudMusic,
+        localePreference: AppLocalePreference.system,
+      ),
+    );
+  });
+
+  test(
+    'unknown locale safely falls back to system and requests migration',
+    () async {
+      final storage = _MemoryDocumentStorage(
+        document: jsonEncode(<String, Object>{
+          'schemaVersion': AppSettings.currentSchemaVersion,
+          'theme': 'light',
+          'playbackQuality': 'standard',
+          'musicProvider': 'qqMusic',
+          'localePreference': 'futureLocale',
+        }),
+      );
+
+      final result = await AppSettingsStore(storage: storage).load();
+
+      expect(result.state, AppSettingsLoadState.migrated);
+      expect(result.settings.localePreference, AppLocalePreference.system);
+      expect(result.settings.theme, AppThemePreference.light);
+      expect(result.settings.musicProvider, AppMusicProvider.qqMusic);
+    },
+  );
 
   test(
     'uses defaults without rewriting malformed or future documents',
@@ -122,7 +175,7 @@ void main() {
           AppSettingsLoadState.invalidDocument,
         ),
         (
-          jsonEncode(<String, Object>{'schemaVersion': 4, 'theme': 'dark'}),
+          jsonEncode(<String, Object>{'schemaVersion': 5, 'theme': 'dark'}),
           AppSettingsLoadState.unsupportedVersion,
         ),
         (

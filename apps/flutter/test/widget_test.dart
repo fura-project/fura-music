@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' show Clip, PointerDeviceKind, SemanticsAction, Size, Tristate;
+import 'dart:ui'
+    show Clip, Locale, PointerDeviceKind, SemanticsAction, Size, Tristate;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/gestures.dart' show PointerHoverEvent, kSecondaryButton;
@@ -94,6 +95,8 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
+import 'package:flutterustmusic/l10n/app_locale.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -106,6 +109,9 @@ import 'package:flutterustmusic/search/track_search_page.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
+
+final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
+final AppLocalizations _zh = lookupAppLocalizations(simplifiedChineseAppLocale);
 
 Future<void> _selectAdaptiveSection(
   WidgetTester tester, {
@@ -158,6 +164,13 @@ Future<void> _selectLibrarySection(WidgetTester tester, String section) async {
     }),
   );
   if (likedTab.evaluate().isNotEmpty) {
+    if (likedTab.hitTestable().evaluate().isEmpty) {
+      final tabScroll = find.descendant(
+        of: find.byKey(const ValueKey('liked-songs-tabs')),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(likedTab, 80, scrollable: tabScroll);
+    }
     await tester.tap(likedTab);
     if (section == 'albums') {
       await tester.pump();
@@ -216,17 +229,22 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('open-recent-plays')));
       await tester.pumpAndSettle();
       expect(find.text('Evening Shore'), findsOneWidget);
-      expect(find.text('歌曲（已知至少 1 首）'), findsOneWidget);
-      expect(find.text('已加载 1 首'), findsOneWidget);
+      expect(find.text(_en.recentSongsTabApproximate(1)), findsOneWidget);
+      expect(
+        find.text(
+          _en.recentProcessedStatus(_en.recentLoadedAction, '', '', 1, ''),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('recent-plays-refresh')));
       await tester.pumpAndSettle();
-      expect(find.text('刷新失败，仍显示上次读取的记录。'), findsOneWidget);
+      expect(find.text(_en.recentRefreshSnapshotFailure), findsOneWidget);
       expect(find.text('Evening Shore'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('recent-plays-refresh')));
       await tester.pumpAndSettle();
-      expect(find.text('请重新登录 QQ 音乐'), findsOneWidget);
+      expect(find.text(_en.recentSignInTitle), findsOneWidget);
       expect(find.text('Evening Shore'), findsNothing);
-      expect(find.text('歌曲 1'), findsNothing);
+      expect(find.text(_en.recentSongsTab(1)), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -254,8 +272,8 @@ void main() {
       for (final width in [1440.0, 900.0, 390.0]) {
         tester.view.physicalSize = Size(width, 844);
         await tester.pumpAndSettle();
-        expect(find.text('暂时无法读取跨设备播放记录'), findsOneWidget);
-        expect(find.text('还没有云端播放记录'), findsNothing);
+        expect(find.text(_en.recentUnavailableTitle), findsOneWidget);
+        expect(find.text(_en.recentEmptyTitle), findsNothing);
         expect(
           tester
               .widget<FilledButton>(
@@ -334,7 +352,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('open-recent-plays')));
       await tester.pumpAndSettle();
       expect(source.offsets, [0]);
-      expect(find.text('歌曲 250'), findsOneWidget);
+      expect(find.text(_en.recentSongsTab(250)), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('recent-plays-track-0')),
@@ -355,7 +373,7 @@ void main() {
         kind: PointerDeviceKind.mouse,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('加入播放队列'));
+      await tester.tap(find.text(_en.recentAddToQueue));
       await tester.pumpAndSettle();
       expect(queue.snapshot().snapshot!.tracks.last.title, 'Mercury');
       tester.view.physicalSize = const Size(390, 844);
@@ -505,7 +523,18 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('已搜索 250 / 250 首'), findsOneWidget);
+      expect(
+        find.text(
+          _en.recentProcessedStatus(
+            _en.recentSearchedAction,
+            '',
+            '',
+            250,
+            _en.recentTotalPart(250),
+          ),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('recent-plays-track-0')));
       await tester.pumpAndSettle();
       expect(queue.snapshot().snapshot?.current?.title, 'Hidden Horizon');
@@ -1219,10 +1248,11 @@ void main() {
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
     await _openLibrary(tester);
 
-    expect(find.text('暂时无法找到喜欢歌单'), findsOneWidget);
+    expect(find.text(_en.likedPlaylistUnavailableTitle), findsOneWidget);
     expect(find.text('Library'), findsNothing);
     expect(
-      Theme.of(tester.element(find.text('暂时无法找到喜欢歌单'))).brightness,
+      Theme.of(tester.element(find.text(_en.likedPlaylistUnavailableTitle)))
+          .brightness,
       Brightness.dark,
     );
     expect(tester.takeException(), isNull);
@@ -2332,7 +2362,7 @@ void main() {
       findsOneWidget,
     );
     await _openLibrary(tester);
-    expect(find.text('暂时无法找到喜欢歌单'), findsOneWidget);
+    expect(find.text(_en.likedPlaylistUnavailableTitle), findsOneWidget);
     expect(find.text('Library'), findsNothing);
   });
 
@@ -2565,7 +2595,7 @@ void main() {
                     .last
                 as NavigationDestination)
             .label,
-        '最近播放',
+        _en.navRecentPlays,
       );
       expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
       expect(
@@ -2713,7 +2743,7 @@ void main() {
         matching: find.byWidgetPredicate(
           (widget) =>
               widget is Semantics &&
-              widget.properties.label == 'Loading Recommended Playlists',
+              widget.properties.label == _en.discoverLoadingRecommendations,
         ),
       ),
       findsOneWidget,
@@ -3285,7 +3315,7 @@ void main() {
         control: 'discover-type-selector',
         item: 'discover-type-rankings',
       );
-      expect(find.text('50 tracks'), findsWidgets);
+      expect(find.text(_en.trackCount(50)), findsWidgets);
       await _selectAdaptiveSection(
         tester,
         control: 'discover-type-selector',
@@ -3797,7 +3827,7 @@ void main() {
           matching: find.byWidgetPredicate(
             (widget) =>
                 widget is Semantics &&
-                widget.properties.label == 'Loading Favorite Albums',
+                widget.properties.label == _en.favoriteAlbumsLoading,
           ),
         ),
         findsOneWidget,
@@ -3811,7 +3841,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(MusicContentStatePanel), findsOneWidget);
-      expect(find.text('No favorite albums yet'), findsOneWidget);
+      expect(find.text(_en.favoriteAlbumsEmptyTitle), findsOneWidget);
 
       expect(tester.takeException(), isNull);
     },
@@ -4148,7 +4178,7 @@ void main() {
       expect(queue.replacements.single.$1, [track]);
       expect(queue.replacements.single.$2, 0);
 
-      await tester.tap(find.byTooltip('Back to new albums'));
+      await tester.tap(find.byTooltip(_en.shellBackToNewAlbums));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('new-albums-content')), findsOneWidget);
       expect(find.text('Fresh Album'), findsOneWidget);
@@ -5276,7 +5306,7 @@ void main() {
     expect(albumTracks.requests, [(album, 0, 30), (nestedAlbum, 0, 30)]);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byTooltip('Back to Artist'));
+    await tester.tap(find.byTooltip(_en.shellBackToArtist));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('artist-albums-content')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -5489,7 +5519,7 @@ void main() {
     expect(find.text('Album track'), findsOneWidget);
     expect(albumTracks.requests, [(album, 0, 30)]);
 
-    await tester.tap(find.byTooltip('Back to Artist'));
+    await tester.tap(find.byTooltip(_en.shellBackToArtist));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('artist-albums-content')), findsOneWidget);
     expect(find.text('Artist album'), findsOneWidget);
@@ -5609,7 +5639,10 @@ void main() {
       findsNothing,
     );
     final playlistSemantics = tester.getSemantics(find.text('Narrow playlist'));
-    expect(playlistSemantics.label, 'Narrow playlist, 歌单');
+    expect(
+      playlistSemantics.label,
+      _en.likedPlaylistSemantics('Narrow playlist'),
+    );
     expect(
       playlistSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
       isTrue,
@@ -5912,7 +5945,7 @@ void main() {
     expect(find.textContaining('Synthetic track'), findsOneWidget);
     expect(find.textContaining('Artist one'), findsOneWidget);
     expect(find.text('4:05'), findsOneWidget);
-    expect(find.text('Showing 1 of 2 tracks'), findsOneWidget);
+    expect(find.text(_en.libraryShowingTracks(1, 2)), findsOneWidget);
     expect(find.text('Load more'), findsOneWidget);
     expect(detailGateway.requests.single.playlist.opaqueId, 'favorite:8001');
     expect(detailGateway.requests.single.offset, 0);
@@ -5946,7 +5979,7 @@ void main() {
     expect(find.text('Open artist'), findsOneWidget);
     await tester.tap(find.text('Open artist'));
     await tester.pumpAndSettle();
-    expect(find.text('Choose an Artist'), findsOneWidget);
+    expect(find.text(_en.albumChooseArtistTitle), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('playlist-track-artist-1')));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Back to playlist'), findsOneWidget);
@@ -5963,9 +5996,9 @@ void main() {
     expect(artistAlbumGateway.requests, hasLength(1));
     await tester.tap(find.byKey(const ValueKey('artist-album-0')));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Back to Artist'), findsOneWidget);
+    expect(find.byTooltip(_en.shellBackToArtist), findsOneWidget);
     expect(albumGateway.requests, hasLength(2));
-    await tester.tap(find.byTooltip('Back to Artist'));
+    await tester.tap(find.byTooltip(_en.shellBackToArtist));
     await tester.pumpAndSettle();
     expect(find.text('Artist context album'), findsOneWidget);
     final artistHandled = await tester.binding.handlePopRoute();
@@ -5995,7 +6028,7 @@ void main() {
     expect(find.text('Open artist'), findsOneWidget);
     await tester.tap(find.text('Open artist'));
     await tester.pumpAndSettle();
-    expect(find.text('Choose an Artist'), findsOneWidget);
+    expect(find.text(_en.albumChooseArtistTitle), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('playlist-track-artist-0')));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Back to playlist'), findsOneWidget);
@@ -6306,7 +6339,7 @@ void main() {
       isTrue,
     );
     semantics.dispose();
-    expect(find.textContaining('previous tracks'), findsOneWidget);
+    expect(find.text(_en.libraryRefreshPlaylistFailure), findsOneWidget);
     expect(find.text('Couldn’t reach QQ Music'), findsNothing);
     expect(tester.takeException(), isNull);
 
@@ -6356,7 +6389,7 @@ void main() {
     semantics.dispose();
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
-    expect(find.text('No playlists yet'), findsOneWidget);
+    expect(find.text(_en.libraryNoPlaylistsTitle), findsOneWidget);
   });
 
   testWidgets('transient detail failure does not discard the active session', (
@@ -6637,14 +6670,20 @@ void main() {
     await _openLibrary(tester);
 
     final search = find.byKey(const ValueKey('liked-songs-search'));
-    expect(tester.widget<TextField>(search).decoration?.hintText, '搜索整个歌单');
+    expect(
+      tester.widget<TextField>(search).decoration?.hintText,
+      _en.likedSearchEntirePlaylist,
+    );
     await tester.enterText(search, 'final page');
     await tester.pumpAndSettle();
 
     expect(find.text('Found on the final page'), findsOneWidget);
     expect(find.text('Already loaded'), findsNothing);
     expect(detail.requests.map((request) => request.offset), [0, 1]);
-    expect(find.text('已搜索全部 2 首 · 找到 1 首'), findsOneWidget);
+    expect(
+      find.text(_en.likedSearchCompleteStatus(_en.likedExactResults(1), 2)),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -6772,7 +6811,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nevada'), findsOneWidget);
-    expect(find.text('未找到完全匹配 · 显示 1 首可能结果'), findsOneWidget);
+    expect(
+      find.text(_en.likedApproximateOnlyStatus(_en.likedApproximateResults(1))),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -6847,7 +6889,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Nevada'), findsOneWidget);
-    expect(find.text('已找到 1 首可能结果 · 正在检查 2 / 3 首'), findsOneWidget);
+    expect(
+      find.text(_en.likedSearchingStatus(2, _en.likedApproximateResults(1), 3)),
+      findsOneWidget,
+    );
 
     await tester.pump(const Duration(milliseconds: 180));
     finalPage.complete(
@@ -6867,7 +6912,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nevada'), findsOneWidget);
-    expect(find.text('未找到完全匹配 · 显示 1 首可能结果'), findsOneWidget);
+    expect(
+      find.text(_en.likedApproximateOnlyStatus(_en.likedApproximateResults(1))),
+      findsOneWidget,
+    );
     expect(detail.requests.map((request) => request.offset), [0, 1, 2]);
     expect(tester.takeException(), isNull);
   });
@@ -6945,16 +6993,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('搜索暂时中断'), findsOneWidget);
+    expect(find.text(_en.likedSearchInterruptedTitle), findsOneWidget);
     expect(detail.requests.map((request) => request.offset), [0, 1, 1, 1]);
 
-    await tester.tap(find.text('继续搜索'));
+    await tester.tap(find.text(_en.likedContinueSearch));
     await tester.pumpAndSettle();
 
     expect(find.text('Found after retry'), findsOneWidget);
-    expect(find.text('搜索暂时中断'), findsNothing);
+    expect(find.text(_en.likedSearchInterruptedTitle), findsNothing);
     expect(detail.requests.map((request) => request.offset), [0, 1, 1, 1, 1]);
-    expect(find.text('已搜索全部 2 首 · 找到 1 首'), findsOneWidget);
+    expect(
+      find.text(_en.likedSearchCompleteStatus(_en.likedExactResults(1), 2)),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -7131,7 +7182,7 @@ void main() {
       }
       expect(find.byKey(const ValueKey('liked-songs-page')), findsOneWidget);
       expect(find.byKey(const ValueKey('liked-songs-title')), findsOneWidget);
-      expect(find.text('播放全部'), findsOneWidget);
+      expect(find.text(_en.likedPlayAll), findsOneWidget);
       expect(find.text('Mercury'), findsWidgets);
       expect(find.text('下载'), findsNothing);
       expect(find.text('批量操作'), findsNothing);
@@ -7196,7 +7247,7 @@ void main() {
       tracks.length,
       if (reviewDetail.requests.length == 3) tracks.length + 100,
     ]);
-    expect(find.text('歌曲 1029'), findsOneWidget);
+    expect(find.text(_en.likedSongsTab(1029)), findsOneWidget);
     expect(
       find.byKey(const ValueKey('liked-songs-collapsed-header')),
       findsOneWidget,
@@ -7252,8 +7303,14 @@ void main() {
       find.byKey(const ValueKey('liked-playlists-search')),
       findsOneWidget,
     );
-    expect(find.text('自创歌单 1'), findsOneWidget);
-    expect(find.text('收藏歌单 1'), findsOneWidget);
+    expect(
+      find.text(_en.likedPlaylistSectionCount(1, _en.likedCreatedPlaylists)),
+      findsOneWidget,
+    );
+    expect(
+      find.text(_en.likedPlaylistSectionCount(1, _en.likedSavedPlaylists)),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('liked-playlist-synthetic-playlist')),
       findsOneWidget,
@@ -7354,8 +7411,7 @@ void main() {
         ),
       );
     }
-    await tester.tap(find.byKey(const ValueKey('liked-tab-songs')));
-    await tester.pumpAndSettle();
+    await _selectLibrarySection(tester, 'liked-songs');
     final currentRowSemantics = tester
         .getSemantics(find.byKey(const ValueKey('liked-track-row-2')))
         .getSemanticsData();
@@ -7400,8 +7456,8 @@ void main() {
       kind: PointerDeviceKind.mouse,
     );
     await tester.pumpAndSettle();
-    expect(find.text('添加到队列'), findsOneWidget);
-    await tester.tap(find.text('添加到队列'));
+    expect(find.text(_en.commonAddToQueue), findsOneWidget);
+    await tester.tap(find.text(_en.commonAddToQueue));
     await tester.pumpAndSettle();
     expect(reviewQueue.pushed.single.title, 'Messy');
 
@@ -7497,13 +7553,12 @@ void main() {
         ),
       );
     }
-    await tester.tap(find.byKey(const ValueKey('liked-tab-songs')));
+    await _selectLibrarySection(tester, 'liked-songs');
+    await tester.tap(find.byTooltip(_en.commonMoreActions).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('更多操作').first);
-    await tester.pumpAndSettle();
-    expect(find.text('从这里播放'), findsOneWidget);
-    expect(find.text('添加到队列'), findsOneWidget);
-    await tester.tap(find.text('添加到队列'));
+    expect(find.text(_en.commonPlayFromHere), findsOneWidget);
+    expect(find.text(_en.commonAddToQueue), findsOneWidget);
+    await tester.tap(find.text(_en.commonAddToQueue));
     await tester.pumpAndSettle();
     expect(reviewQueue.pushed, hasLength(1));
 
@@ -8334,8 +8389,7 @@ void main() {
       );
       final netEase = _providerFixture(
         authenticationGateway: _ProviderWidgetGateway(
-          providerDisplayName: 'NetEase Cloud Music',
-          qrActionLabel: 'Scan with NetEase Cloud Music',
+          providerId: 'netease-cloud-music',
         ),
         capabilities: MusicProviderCapabilities.netEaseCloudMusic,
         providerId: 'netease-cloud-music',
@@ -8419,8 +8473,7 @@ void main() {
           providerDependencies: BuiltInProviderDependencies(
             qqMusic: _providerFixture(
               authenticationGateway: _ProviderWidgetGateway(
-                providerDisplayName: 'QQ Music',
-                qrActionLabel: 'Scan with QQ',
+                providerId: 'qq-music',
                 authenticated: true,
               ),
               capabilities: MusicProviderCapabilities.qqMusic,
@@ -8432,8 +8485,7 @@ void main() {
             ),
             netEase: _providerFixture(
               authenticationGateway: _ProviderWidgetGateway(
-                providerDisplayName: 'NetEase Cloud Music',
-                qrActionLabel: 'Scan with NetEase Cloud Music',
+                providerId: 'netease-cloud-music',
                 authenticated: true,
               ),
               capabilities: MusicProviderCapabilities.netEaseCloudMusic,
@@ -8560,8 +8612,7 @@ void main() {
           providerDependencies: BuiltInProviderDependencies(
             qqMusic: _providerFixture(
               authenticationGateway: _ProviderWidgetGateway(
-                providerDisplayName: 'QQ Music',
-                qrActionLabel: 'Scan with QQ',
+                providerId: 'qq-music',
               ),
               capabilities: MusicProviderCapabilities.qqMusic,
               providerId: 'qq-music',
@@ -8572,8 +8623,7 @@ void main() {
             ),
             netEase: _providerFixture(
               authenticationGateway: _ProviderWidgetGateway(
-                providerDisplayName: 'NetEase Cloud Music',
-                qrActionLabel: 'Scan with NetEase Cloud Music',
+                providerId: 'netease-cloud-music',
               ),
               capabilities: MusicProviderCapabilities.netEaseCloudMusic,
               providerId: 'netease-cloud-music',
@@ -8619,6 +8669,622 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'runtime locale switching preserves provider auth catalog queue and playback owners',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 960);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.localesTestValue = const [Locale('zh', 'CN')];
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+
+      const currentTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'locale-stable-track',
+        title: 'Upstream Track Stays Put',
+        artistNames: ['Upstream Artist'],
+        durationSeconds: 240,
+      );
+      final queue = _WidgetPlaybackQueueGateway()
+        ..replace(tracks: const [currentTrack], currentIndex: 0);
+      final playbackHost = createForegroundAppPlaybackHost(
+        playbackQueueGateway: queue,
+        mediaResolutionGateway: const _UnavailableMediaGateway(),
+        lyricGateway: const _WidgetLyricGateway(),
+        audioEngine: AudioplayersForegroundAudioEngine(),
+      );
+      final qqAuth = _ProviderWidgetGateway(
+        providerId: 'qq-music',
+        authenticated: true,
+      );
+      final recommendations = _WidgetRecommendedPlaylistGateway(
+        const RecommendedPlaylistPageResult(),
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: currentTrack)],
+        ),
+      );
+      final storage = _WidgetSettingsDocumentStorage();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _dualProviderBootstrap,
+          initialSettings: const AppSettings(
+            theme: AppThemePreference.light,
+            localePreference: AppLocalePreference.english,
+          ),
+          settingsStore: AppSettingsStore(storage: storage),
+          providerDependencies: BuiltInProviderDependencies(
+            qqMusic: _providerFixture(
+              authenticationGateway: qqAuth,
+              capabilities: MusicProviderCapabilities.qqMusic,
+              providerId: 'qq-music',
+              accountName: 'Locale Stable Account',
+              searchGateway: search,
+              recommendedPlaylistGateway: recommendations,
+              personalizedTracks: const [currentTrack],
+            ),
+            netEase: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerId: 'netease-cloud-music',
+                authenticated: true,
+              ),
+              capabilities: MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: 'netease-cloud-music',
+              accountName: 'Unused NetEase Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            ),
+          ),
+          playbackHost: playbackHost,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final controller = playbackHost.controller;
+      final initialTrack = controller.current;
+      final initialStage = controller.playback.stage;
+      expect(find.text(_en.navHome), findsOneWidget);
+      expect(find.text(_zh.navHome), findsNothing);
+      expect(find.text('Locale Stable Account'), findsOneWidget);
+      expect(find.text(currentTrack.title), findsWidgets);
+
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'locale stable',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text(currentTrack.title), findsWidgets);
+      final initialSearchRequests = List.of(search.requests);
+      final initialRecommendationRequests = List.of(recommendations.requests);
+      expect(initialSearchRequests, hasLength(1));
+
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-nav-language')));
+      await tester.pumpAndSettle();
+      expect(find.text(_en.settingsTitle), findsOneWidget);
+
+      await _changeLanguagePreference(
+        tester,
+        AppLocalePreference.simplifiedChinese,
+      );
+      expect(find.text(_zh.settingsTitle), findsWidgets);
+      expect(find.text(_zh.settingsLanguageLabel), findsWidgets);
+      tester.platformDispatcher.localesTestValue = const [Locale('en', 'US')];
+      await tester.pumpAndSettle();
+      expect(find.text(_zh.settingsTitle), findsWidgets);
+
+      await _changeLanguagePreference(tester, AppLocalePreference.english);
+      expect(find.text(_en.settingsTitle), findsWidgets);
+      tester.platformDispatcher.localesTestValue = const [Locale('zh', 'CN')];
+      await tester.pumpAndSettle();
+      expect(find.text(_en.settingsTitle), findsWidgets);
+
+      await _changeLanguagePreference(tester, AppLocalePreference.system);
+      expect(find.text(_zh.settingsTitle), findsWidgets);
+      tester.platformDispatcher.localesTestValue = const [Locale('en', 'US')];
+      await tester.pumpAndSettle();
+      expect(find.text(_en.settingsTitle), findsWidgets);
+
+      expect(playbackHost.controller, same(controller));
+      expect(controller.current, same(initialTrack));
+      expect(controller.playback.stage, initialStage);
+      expect(controller.tracks, const [currentTrack]);
+      expect(qqAuth.authenticated, isTrue);
+      expect(qqAuth.signOutCalls, 0);
+      expect(search.requests, initialSearchRequests);
+      expect(recommendations.requests, initialRecommendationRequests);
+
+      await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('Locale Stable Account'), findsOneWidget);
+      expect(find.text(currentTrack.title), findsWidgets);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
+            .controller
+            ?.text,
+        'locale stable',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'NetEase locale switching preserves auth loaded search queue and playback owners',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const currentTrack = PlaylistTrackSummary(
+        providerId: 'netease-cloud-music',
+        opaqueId: 'netease-locale-stable-track',
+        title: 'NetEase Upstream Track Stays Put',
+        artistNames: ['Upstream Artist'],
+        durationSeconds: 210,
+      );
+      final queue = _WidgetPlaybackQueueGateway()
+        ..replace(tracks: const [currentTrack], currentIndex: 0);
+      final playbackHost = createForegroundAppPlaybackHost(
+        playbackQueueGateway: queue,
+        mediaResolutionGateway: const _UnavailableMediaGateway(),
+        lyricGateway: const _WidgetLyricGateway(),
+        audioEngine: AudioplayersForegroundAudioEngine(),
+      );
+      final netEaseAuth = _ProviderWidgetGateway(
+        providerId: 'netease-cloud-music',
+        authenticated: true,
+      );
+      final recommendations = _WidgetRecommendedPlaylistGateway(
+        const RecommendedPlaylistPageResult(),
+      );
+      final search = _WidgetSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: currentTrack)],
+        ),
+      );
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _dualProviderBootstrap,
+          initialSettings: const AppSettings(
+            theme: AppThemePreference.light,
+            musicProvider: AppMusicProvider.netEaseCloudMusic,
+            localePreference: AppLocalePreference.english,
+          ),
+          settingsStore: AppSettingsStore(
+            storage: _WidgetSettingsDocumentStorage(),
+          ),
+          providerDependencies: BuiltInProviderDependencies(
+            qqMusic: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerId: 'qq-music',
+                authenticated: true,
+              ),
+              capabilities: MusicProviderCapabilities.qqMusic,
+              providerId: 'qq-music',
+              accountName: 'Unused QQ Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            ),
+            netEase: _providerFixture(
+              authenticationGateway: netEaseAuth,
+              capabilities: MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: 'netease-cloud-music',
+              accountName: 'NetEase Locale Stable Account',
+              searchGateway: search,
+              recommendedPlaylistGateway: recommendations,
+              personalizedTracks: const [currentTrack],
+              dailyTracks: const [currentTrack],
+            ),
+          ),
+          playbackHost: playbackHost,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final controller = playbackHost.controller;
+      final initialTrack = controller.current;
+      final initialStage = controller.playback.stage;
+      await tester.tap(find.byKey(const ValueKey('open-track-search')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('track-search-field')),
+        'netease locale stable',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text(currentTrack.title), findsWidgets);
+      final initialSearchRequests = List.of(search.requests);
+      final initialRecommendationRequests = List.of(recommendations.requests);
+
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-nav-language')));
+      await tester.pumpAndSettle();
+      await _changeLanguagePreference(
+        tester,
+        AppLocalePreference.simplifiedChinese,
+      );
+      expect(find.text(_zh.settingsTitle), findsWidgets);
+      await _changeLanguagePreference(tester, AppLocalePreference.english);
+      expect(find.text(_en.settingsTitle), findsWidgets);
+
+      expect(playbackHost.controller, same(controller));
+      expect(controller.current, same(initialTrack));
+      expect(controller.playback.stage, initialStage);
+      expect(controller.tracks, const [currentTrack]);
+      expect(netEaseAuth.authenticated, isTrue);
+      expect(netEaseAuth.signOutCalls, 0);
+      expect(search.requests, initialSearchRequests);
+      expect(recommendations.requests, initialRecommendationRequests);
+
+      await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('NetEase Locale Stable Account'), findsOneWidget);
+      expect(find.text(currentTrack.title), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final provider in AppMusicProvider.values) {
+    for (final localePreference in const [
+      AppLocalePreference.english,
+      AppLocalePreference.simplifiedChinese,
+    ]) {
+      final providerSlug = provider == AppMusicProvider.qqMusic
+          ? 'qq'
+          : 'netease';
+      final localeSlug = localePreference == AppLocalePreference.english
+          ? 'en'
+          : 'zh-hans';
+      testWidgets(
+        '$providerSlug $localeSlug localizes signed-in surfaces and signed-out authentication',
+        (tester) async {
+          const capture = bool.fromEnvironment('LOCALIZATION_VISUAL_REVIEW');
+          final semantics = tester.ensureSemantics();
+          tester.view.physicalSize = const Size(1100, 800);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await _loadRecentReviewFonts(tester, enabled: capture);
+
+          final l10n = localePreference == AppLocalePreference.english
+              ? _en
+              : _zh;
+          final providerId = provider == AppMusicProvider.qqMusic
+              ? 'qq-music'
+              : 'netease-cloud-music';
+          final providerName = provider == AppMusicProvider.qqMusic
+              ? l10n.providerQqMusic
+              : l10n.providerNeteaseCloudMusic;
+          final accountName = '$providerSlug Account Fixture';
+          final currentTrack = PlaylistTrackSummary(
+            providerId: providerId,
+            opaqueId: '$providerSlug-current-track',
+            title: '$providerSlug Upstream Track',
+            artistNames: const ['Upstream Artist'],
+            durationSeconds: 210,
+          );
+          final queue = _WidgetPlaybackQueueGateway()
+            ..replace(tracks: [currentTrack], currentIndex: 0);
+
+          MusicProviderDependencies signedInProvider(AppMusicProvider target) {
+            final isQq = target == AppMusicProvider.qqMusic;
+            final id = isQq ? 'qq-music' : 'netease-cloud-music';
+            return _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerId: id,
+                authenticated: true,
+              ),
+              capabilities: isQq
+                  ? MusicProviderCapabilities.qqMusic
+                  : MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: id,
+              accountName: target == provider
+                  ? accountName
+                  : 'Other Provider Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+              personalizedTracks: target == provider
+                  ? [currentTrack]
+                  : const [],
+            );
+          }
+
+          await tester.pumpWidget(
+            MusicApp(
+              key: ValueKey(
+                'locale-matrix-$providerSlug-$localeSlug-signed-in',
+              ),
+              bootstrap: _dualProviderBootstrap,
+              initialSettings: AppSettings(
+                theme: AppThemePreference.light,
+                musicProvider: provider,
+                localePreference: localePreference,
+              ),
+              providerDependencies: BuiltInProviderDependencies(
+                qqMusic: signedInProvider(AppMusicProvider.qqMusic),
+                netEase: signedInProvider(AppMusicProvider.netEaseCloudMusic),
+              ),
+              playbackQueueGateway: queue,
+              mediaResolutionGateway: const _UnavailableMediaGateway(),
+              lyricGateway: const _WidgetLyricGateway(),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text(l10n.navHome), findsOneWidget);
+          expect(find.text(accountName), findsOneWidget);
+          expect(find.text(currentTrack.title), findsWidgets);
+          final showQueue = find.byTooltip(l10n.playbackShowQueue);
+          expect(showQueue, findsOneWidget);
+          expect(
+            tester.getSemantics(showQueue).tooltip,
+            l10n.playbackShowQueue,
+          );
+          if (capture) {
+            await expectLater(
+              find.byType(MusicApp),
+              matchesGoldenFile(
+                Uri.file(
+                  '/tmp/fura-l10n-$providerSlug-$localeSlug-home-desktop.png',
+                ),
+              ),
+            );
+          }
+
+          await tester.tap(
+            find.byKey(const ValueKey('now-playing-open-expanded')),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('expanded-now-playing-page')),
+            findsOneWidget,
+          );
+          expect(find.text(l10n.nowPlayingTitle), findsOneWidget);
+          if (capture) {
+            await expectLater(
+              find.byType(MusicApp),
+              matchesGoldenFile(
+                Uri.file(
+                  '/tmp/fura-l10n-$providerSlug-$localeSlug-now-playing-desktop.png',
+                ),
+              ),
+            );
+          }
+          await tester.tap(
+            find.byKey(const ValueKey('expanded-now-playing-back')),
+          );
+          await tester.pumpAndSettle();
+
+          await tester.tap(showQueue);
+          await tester.pumpAndSettle();
+          expect(find.text(l10n.queueTitle), findsOneWidget);
+          final closeQueue = find.byTooltip(l10n.queueClose);
+          expect(tester.getSemantics(closeQueue).tooltip, l10n.queueClose);
+          await tester.tap(closeQueue);
+          await tester.pumpAndSettle();
+
+          await tester.tap(find.byKey(const ValueKey('open-track-search')));
+          await tester.pumpAndSettle();
+          expect(
+            find.text(l10n.searchFindTracksTitle(providerName)),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('track-search-field')),
+            findsOneWidget,
+          );
+          expect(find.bySemanticsLabel(l10n.searchSongHint), findsOneWidget);
+          if (capture &&
+              localePreference == AppLocalePreference.simplifiedChinese) {
+            await expectLater(
+              find.byType(MusicApp),
+              matchesGoldenFile(
+                Uri.file('/tmp/fura-l10n-$providerSlug-zh-hans-search.png'),
+              ),
+            );
+          }
+
+          await _openLibrary(tester);
+          expect(find.text(l10n.likedTitle), findsWidgets);
+          if (capture &&
+              localePreference == AppLocalePreference.simplifiedChinese) {
+            await expectLater(
+              find.byType(MusicApp),
+              matchesGoldenFile(
+                Uri.file('/tmp/fura-l10n-$providerSlug-zh-hans-library.png'),
+              ),
+            );
+          }
+
+          await tester.tap(find.byKey(const ValueKey('open-settings')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('settings-nav-language')));
+          await tester.pumpAndSettle();
+          expect(find.text(l10n.settingsTitle), findsWidgets);
+          final backToMusic = find.byTooltip(l10n.shellBackToMusic);
+          expect(backToMusic, findsOneWidget);
+          expect(
+            tester.getSemantics(backToMusic).tooltip,
+            l10n.shellBackToMusic,
+          );
+          if (capture) {
+            await expectLater(
+              find.byType(MusicApp),
+              matchesGoldenFile(
+                Uri.file(
+                  '/tmp/fura-l10n-$providerSlug-$localeSlug-settings-desktop.png',
+                ),
+              ),
+            );
+          }
+
+          tester.view.physicalSize = const Size(390, 844);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          if (capture && provider == AppMusicProvider.qqMusic) {
+            await expectLater(
+              find.byType(MusicApp),
+              matchesGoldenFile(
+                Uri.file('/tmp/fura-l10n-$localeSlug-settings-compact.png'),
+              ),
+            );
+          }
+
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpAndSettle();
+
+          MusicProviderDependencies signedOutProvider(AppMusicProvider target) {
+            final isQq = target == AppMusicProvider.qqMusic;
+            final id = isQq ? 'qq-music' : 'netease-cloud-music';
+            return _providerFixture(
+              authenticationGateway: isQq
+                  ? _WidgetGateway(_WaitingSession())
+                  : _ProviderWidgetGateway(providerId: id),
+              capabilities: isQq
+                  ? MusicProviderCapabilities.qqMusic
+                  : MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: id,
+              accountName: 'Signed-out fixture',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            );
+          }
+
+          await tester.pumpWidget(
+            MusicApp(
+              key: ValueKey(
+                'locale-matrix-$providerSlug-$localeSlug-signed-out',
+              ),
+              bootstrap: _dualProviderBootstrap,
+              initialSettings: AppSettings(
+                theme: AppThemePreference.light,
+                musicProvider: provider,
+                localePreference: localePreference,
+              ),
+              providerDependencies: BuiltInProviderDependencies(
+                qqMusic: signedOutProvider(AppMusicProvider.qqMusic),
+                netEase: signedOutProvider(AppMusicProvider.netEaseCloudMusic),
+              ),
+              mediaResolutionGateway: const _UnavailableMediaGateway(),
+              lyricGateway: const _WidgetLyricGateway(),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await _openSignInDialog(tester);
+          expect(find.text(l10n.authSignInTitle(providerName)), findsOneWidget);
+          await tester.tap(find.byKey(const ValueKey('start-qq-login-button')));
+          await tester.pumpAndSettle();
+          final qrMethod = find.byKey(const ValueKey('qr-login-method'));
+          expect(qrMethod, findsOneWidget);
+          await tester.ensureVisible(qrMethod);
+          await tester.pumpAndSettle();
+          final qrSemantics = provider == AppMusicProvider.qqMusic
+              ? l10n.authQqQrSemantics
+              : l10n.authProviderQrSemantics(providerName);
+          expect(find.bySemanticsLabel(qrSemantics), findsOneWidget);
+          if (capture &&
+              localePreference == AppLocalePreference.simplifiedChinese) {
+            await expectLater(
+              find.byType(MusicApp),
+              matchesGoldenFile(
+                Uri.file('/tmp/fura-l10n-$providerSlug-zh-hans-auth.png'),
+              ),
+            );
+          }
+          expect(tester.takeException(), isNull);
+          semantics.dispose();
+        },
+      );
+    }
+  }
+
+  for (final localePreference in const [
+    AppLocalePreference.english,
+    AppLocalePreference.simplifiedChinese,
+  ]) {
+    testWidgets(
+      '${localePreference.name} compact settings and auth tolerate large text',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final l10n = localePreference == AppLocalePreference.english
+            ? _en
+            : _zh;
+
+        await tester.pumpWidget(
+          MusicApp(
+            bootstrap: _bootstrap,
+            initialSettings: AppSettings(
+              theme: AppThemePreference.light,
+              localePreference: localePreference,
+            ),
+            authenticationGateway: _WidgetGateway(_WaitingSession()),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('open-settings')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('settings-compact-language')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('settings-language-selector')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        await tester.tap(find.byKey(const ValueKey('settings-back')));
+        await tester.pumpAndSettle();
+        expect(await tester.binding.handlePopRoute(), isTrue);
+        await tester.pumpAndSettle();
+        await _openSignInDialog(tester);
+        expect(
+          find.text(l10n.authSignInTitle(l10n.providerQqMusic)),
+          findsOneWidget,
+        );
+        expect(find.byTooltip(l10n.authCloseTooltip), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+}
+
+Future<void> _changeLanguagePreference(
+  WidgetTester tester,
+  AppLocalePreference preference,
+) async {
+  final selector = tester.widget<SegmentedButton<AppLocalePreference>>(
+    find.byKey(const ValueKey('settings-language-selector')),
+  );
+  selector.onSelectionChanged!({preference});
+  await tester.pumpAndSettle();
 }
 
 Future<void> _switchProviderFromDesktopSettings(
@@ -8947,16 +9613,12 @@ class _ProviderWidgetGateway
         QqMusicAuthenticationGateway,
         ProviderAuthenticationPresentation {
   _ProviderWidgetGateway({
-    required this.providerDisplayName,
-    required this.qrActionLabel,
+    required this.providerId,
     this.authenticated = false,
   });
 
   @override
-  final String providerDisplayName;
-
-  @override
-  final String qrActionLabel;
+  final String providerId;
 
   bool authenticated;
   int restoreCalls = 0;

@@ -154,6 +154,138 @@ void main() {
       controller.dispose();
     },
   );
+
+  test(
+    'locale changes apply optimistically, serialize, and roll back on failure',
+    () async {
+      final storage = _ControlledDocumentStorage();
+      final controller = AppSettingsController(
+        AppSettingsStore(storage: storage),
+        null,
+        initialSettings: AppSettings.defaults,
+      );
+
+      final english = controller.update(
+        AppSettings.defaults.copyWith(
+          localePreference: AppLocalePreference.english,
+        ),
+      );
+      final chinese = controller.update(
+        AppSettings.defaults.copyWith(
+          localePreference: AppLocalePreference.simplifiedChinese,
+        ),
+      );
+      expect(
+        controller.settings.localePreference,
+        AppLocalePreference.simplifiedChinese,
+      );
+
+      await _flushTasks();
+      storage.complete(0);
+      expect(await english, AppSettingsWriteResult.saved);
+      await _flushTasks();
+      storage.fail(1);
+      expect(await chinese, AppSettingsWriteResult.storageUnavailable);
+
+      expect(controller.settings.localePreference, AppLocalePreference.english);
+      expect(storage.writes.first, contains('"localePreference":"english"'));
+      expect(
+        storage.writes.last,
+        contains('"localePreference":"simplifiedChinese"'),
+      );
+      controller.dispose();
+    },
+  );
+
+  test(
+    'System to English to Chinese to System retains the final success',
+    () async {
+      final storage = _ControlledDocumentStorage();
+      final controller = AppSettingsController(
+        AppSettingsStore(storage: storage),
+        null,
+        initialSettings: AppSettings.defaults,
+      );
+
+      final english = controller.update(
+        AppSettings.defaults.copyWith(
+          localePreference: AppLocalePreference.english,
+        ),
+      );
+      final chinese = controller.update(
+        AppSettings.defaults.copyWith(
+          localePreference: AppLocalePreference.simplifiedChinese,
+        ),
+      );
+      final system = controller.update(AppSettings.defaults);
+
+      await _flushTasks();
+      storage.complete(0);
+      expect(await english, AppSettingsWriteResult.saved);
+      await _flushTasks();
+      storage.complete(1);
+      expect(await chinese, AppSettingsWriteResult.saved);
+      await _flushTasks();
+      storage.complete(2);
+      expect(await system, AppSettingsWriteResult.saved);
+
+      expect(controller.settings.localePreference, AppLocalePreference.system);
+      expect(storage.writes, hasLength(3));
+      expect(storage.writes.last, contains('"localePreference":"system"'));
+      controller.dispose();
+    },
+  );
+
+  test(
+    'rapid locale and provider writes keep one serialized final document',
+    () async {
+      final storage = _ControlledDocumentStorage();
+      final controller = AppSettingsController(
+        AppSettingsStore(storage: storage),
+        null,
+        initialSettings: AppSettings.defaults,
+      );
+
+      final chinese = controller.update(
+        AppSettings.defaults.copyWith(
+          localePreference: AppLocalePreference.simplifiedChinese,
+        ),
+      );
+      final netEaseEnglish = controller.update(
+        AppSettings.defaults.copyWith(
+          musicProvider: AppMusicProvider.netEaseCloudMusic,
+          localePreference: AppLocalePreference.english,
+          playbackQuality: AppPlaybackQualityPreference.high,
+        ),
+      );
+
+      await _flushTasks();
+      expect(storage.writes, hasLength(1));
+      storage.complete(0);
+      expect(await chinese, AppSettingsWriteResult.saved);
+      await _flushTasks();
+      expect(storage.writes, hasLength(2));
+      storage.complete(1);
+      expect(await netEaseEnglish, AppSettingsWriteResult.saved);
+
+      expect(
+        controller.settings,
+        const AppSettings(
+          theme: AppThemePreference.system,
+          musicProvider: AppMusicProvider.netEaseCloudMusic,
+          localePreference: AppLocalePreference.english,
+          playbackQuality: AppPlaybackQualityPreference.high,
+        ),
+      );
+      expect(
+        storage.writes.last,
+        contains('"musicProvider":"netEaseCloudMusic"'),
+      );
+      expect(storage.writes.last, contains('"localePreference":"english"'));
+      expect(storage.writes.last, contains('"playbackQuality":"high"'));
+      controller.dispose();
+    },
+  );
 }
 
 Future<void> _flushTasks() => Future<void>.delayed(Duration.zero);

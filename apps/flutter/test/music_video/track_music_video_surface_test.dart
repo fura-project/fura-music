@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_locale.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/music_video/track_music_video_engine.dart';
 import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
 import 'package:flutterustmusic/music_video/track_music_video_surface.dart';
@@ -11,6 +13,8 @@ import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
+
+final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
 
 void main() {
   testWidgets('compact surface keeps no-MV state and close reachable', (
@@ -41,7 +45,7 @@ void main() {
       find.byKey(const ValueKey('track-music-video-unavailable')),
       findsOneWidget,
     );
-    expect(find.text('No music video for this Track'), findsOneWidget);
+    expect(find.text(_en.musicVideoEmptyTitle), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.byKey(const ValueKey('track-music-video-close')));

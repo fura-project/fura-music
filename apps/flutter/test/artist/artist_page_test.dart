@@ -5,6 +5,8 @@ import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_locale.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -12,6 +14,8 @@ import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 import '../support/test_playback_queue_gateway.dart';
+
+final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
 
 void main() {
   testWidgets('Artist Tracks can be queued, played, and returned from', (
@@ -59,16 +63,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Synthetic artist'), findsWidgets);
-    expect(find.text('1 Track'), findsOneWidget);
+    expect(find.text(_en.artistTrackCount(1)), findsOneWidget);
     expect(find.text('Synthetic track'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.byKey(const ValueKey('artist-context-0')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Add to queue'));
+    await tester.tap(find.text(_en.commonAddToQueue));
     await tester.pumpAndSettle();
     expect(queue.pushedTracks, [track]);
-    expect(find.text('Added to queue'), findsOneWidget);
+    expect(find.text(_en.queueAddedMessage), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('artist-track-0')));
     await tester.pumpAndSettle();
@@ -131,11 +135,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(albumGateway.requests, isEmpty);
 
-    await tester.tap(find.text('Albums'));
+    await tester.tap(find.text(_en.artistAlbumsSection));
     await tester.pumpAndSettle();
     expect(albumGateway.requests, [(artist, 0, 30)]);
     expect(find.byType(SliverList), findsOneWidget);
-    expect(find.text('1 Album'), findsOneWidget);
+    expect(find.text(_en.artistAlbumCount(1)), findsOneWidget);
     expect(find.text('Synthetic album'), findsOneWidget);
 
     tester.view.physicalSize = const Size(1000, 700);
@@ -146,10 +150,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('artist-album-0')));
     expect(openedAlbum, album);
 
-    await tester.tap(find.text('Tracks'));
+    await tester.tap(find.text(_en.artistTracksSection));
     await tester.pumpAndSettle();
     expect(find.text('Preserved track'), findsOneWidget);
-    await tester.tap(find.text('Albums'));
+    await tester.tap(find.text(_en.artistAlbumsSection));
     await tester.pumpAndSettle();
     expect(albumGateway.requests, [(artist, 0, 30)]);
     expect(find.text('Synthetic album'), findsOneWidget);

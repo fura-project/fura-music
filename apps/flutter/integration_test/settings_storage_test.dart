@@ -28,6 +28,7 @@ void main() {
           const AppSettings(
             theme: AppThemePreference.dark,
             playbackQuality: AppPlaybackQualityPreference.high,
+            localePreference: AppLocalePreference.simplifiedChinese,
           ),
         ),
         AppSettingsWriteResult.saved,
@@ -39,6 +40,7 @@ void main() {
         const AppSettings(
           theme: AppThemePreference.dark,
           playbackQuality: AppPlaybackQualityPreference.high,
+          localePreference: AppLocalePreference.simplifiedChinese,
         ),
       );
       expect(await store.reset(), AppSettingsWriteResult.saved);

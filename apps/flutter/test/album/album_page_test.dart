@@ -5,6 +5,8 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_locale.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -12,6 +14,8 @@ import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 import '../support/test_playback_queue_gateway.dart';
+
+final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
 
 void main() {
   testWidgets('Album Tracks can be queued, played, and returned from', (
@@ -63,7 +67,7 @@ void main() {
     expect(find.text('Canonical album'), findsOneWidget);
     expect(find.text('Canonical artist'), findsOneWidget);
     expect(find.textContaining('2026-08-26'), findsOneWidget);
-    expect(find.text('1 Track'), findsOneWidget);
+    expect(find.text(_en.albumTrackCount(1)), findsOneWidget);
     expect(find.text('Synthetic track'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
@@ -74,15 +78,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('album-about')));
     await tester.pumpAndSettle();
     expect(find.text('Canonical description'), findsOneWidget);
-    await tester.tap(find.text('Close'));
+    await tester.tap(find.text(_en.commonClose));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('album-context-0')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Add to queue'));
+    await tester.tap(find.text(_en.commonAddToQueue));
     await tester.pumpAndSettle();
     expect(queue.pushedTracks, [track]);
-    expect(find.text('Added to queue'), findsOneWidget);
+    expect(find.text(_en.queueAddedMessage), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('album-track-0')));
     await tester.pumpAndSettle();
@@ -163,7 +167,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Still playable Track'), findsOneWidget);
-    expect(find.text('Album details are offline.'), findsOneWidget);
+    expect(find.text(_en.albumDetailsFailureNetwork), findsOneWidget);
     expect(find.byKey(const ValueKey('album-open-artist')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('album-details-retry')));
     await tester.pumpAndSettle();

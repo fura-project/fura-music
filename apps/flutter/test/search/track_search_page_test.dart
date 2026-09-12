@@ -6,6 +6,8 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_locale.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -17,6 +19,8 @@ import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
 
 import '../support/test_playback_queue_gateway.dart';
+
+final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
 
 Future<void> _selectSearchType(WidgetTester tester, String type) async {
   await tester.tap(find.byKey(const ValueKey('search-types')));
@@ -116,7 +120,8 @@ void main() {
         matching: find.byWidgetPredicate(
           (widget) =>
               widget is Semantics &&
-              widget.properties.label == 'Searching QQ Music Tracks',
+              widget.properties.label ==
+                  _en.searchLoadingTracks(_en.providerQqMusic),
         ),
       ),
       findsOneWidget,
@@ -127,7 +132,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('track-search-empty')), findsOneWidget);
-    expect(find.text('No tracks found'), findsOneWidget);
+    expect(find.text(_en.searchNoTracksTitle), findsOneWidget);
     expect(find.text('Edit search'), findsOneWidget);
     expect(find.byType(MusicContentStatePanel), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -232,7 +237,7 @@ void main() {
     expect(search.requests, [('search words', 1, 30)]);
     expect(find.text('Search result'), findsOneWidget);
     expect(find.text('Search artist · Search album'), findsOneWidget);
-    expect(find.text('1 result for “search words”'), findsOneWidget);
+    expect(find.text(_en.searchResultCount(1, 'search words')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
     await tester.pumpAndSettle();
