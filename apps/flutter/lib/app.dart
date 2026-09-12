@@ -79,8 +79,7 @@ class MusicApp extends StatefulWidget {
     TrackCommentGateway? trackCommentGateway,
     ForegroundAudioEngine? audioEngine,
     bool desktopQuickLoginEnabled = false,
-    SystemPlaybackBinding systemPlaybackBinding =
-        const NoopSystemPlaybackBinding(),
+    AppPlaybackHost? playbackHost,
     AppSettings initialSettings = AppSettings.defaults,
     AppSettingsStore? settingsStore,
     BuiltInProviderDependencies? providerDependencies,
@@ -194,6 +193,15 @@ class MusicApp extends StatefulWidget {
       desktopQuickLoginEnabled: desktopQuickLoginEnabled,
       initialCredentialRestore: initialCredentialRestore,
     );
+    final resolvedPlaybackHost =
+        playbackHost ??
+        createForegroundAppPlaybackHost(
+          playbackQueueGateway:
+              playbackQueueGateway ?? RustPlaybackQueueGateway(),
+          mediaResolutionGateway: mediaResolutionGateway,
+          lyricGateway: lyricGateway,
+          audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
+        );
     return MusicApp._(
       bootstrap: bootstrap,
       providerDependencies:
@@ -203,14 +211,9 @@ class MusicApp extends StatefulWidget {
             netEase: configuredProvider,
           ),
       playbackDependencies: AuthenticatedPlaybackDependencies(
-        mediaResolutionGateway: mediaResolutionGateway,
-        lyricGateway: lyricGateway,
-        playbackQueueGateway:
-            playbackQueueGateway ?? RustPlaybackQueueGateway(),
+        playbackHost: resolvedPlaybackHost,
         trackCommentGateway:
             trackCommentGateway ?? const RustTrackCommentGateway(),
-        audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
-        systemPlaybackBinding: systemPlaybackBinding,
       ),
       initialSettings: initialSettings,
       settingsStore: settingsStore,
@@ -267,6 +270,7 @@ class _MusicAppState extends State<MusicApp> {
 
   @override
   void dispose() {
+    unawaited(widget.playbackDependencies.playbackHost.dispose());
     _settingsController
       ..removeListener(_onSettingsChanged)
       ..dispose();

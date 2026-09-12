@@ -5,62 +5,102 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_controller.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
+import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
-/// Binds the operating-system media session to the app's existing playback
-/// owner. Implementations must never resolve media or maintain another queue.
-abstract interface class SystemPlaybackBinding {
-  bool get available;
+/// App-lifetime playback owner shared by Flutter UI and operating-system media
+/// controls. A page may observe [controller], but must never dispose or replace
+/// it. This keeps Android's AudioService lifecycle independent from navigation.
+abstract interface class AppPlaybackHost {
+  bool get systemControlsAvailable;
 
-  void attach(QueuePlaybackController controller);
+  QueuePlaybackController get controller;
 
-  void detach(QueuePlaybackController controller);
+  Future<void> dispose();
 }
 
-class NoopSystemPlaybackBinding implements SystemPlaybackBinding {
-  const NoopSystemPlaybackBinding();
+class ForegroundAppPlaybackHost implements AppPlaybackHost {
+  ForegroundAppPlaybackHost(this.controller);
 
   @override
-  bool get available => false;
+  final QueuePlaybackController controller;
+
+  bool _disposed = false;
 
   @override
-  void attach(QueuePlaybackController controller) {}
+  bool get systemControlsAvailable => false;
 
   @override
-  void detach(QueuePlaybackController controller) {}
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    controller.dispose();
+  }
 }
 
-class AudioServiceSystemPlaybackBinding implements SystemPlaybackBinding {
-  AudioServiceSystemPlaybackBinding._(
+class AudioServiceAppPlaybackHost implements AppPlaybackHost {
+  AudioServiceAppPlaybackHost._(
     this._handler,
     this._interruptionSubscription,
     this._becomingNoisySubscription,
   );
 
   final ProjectSystemAudioHandler _handler;
-  final StreamSubscription<AudioInterruptionEvent> _interruptionSubscription;
-  final StreamSubscription<void> _becomingNoisySubscription;
+  final StreamSubscription<AudioInterruptionEvent>? _interruptionSubscription;
+  final StreamSubscription<void>? _becomingNoisySubscription;
+  bool _disposed = false;
 
   @override
-  bool get available => true;
+  QueuePlaybackController get controller => _handler.controller;
 
   @override
-  void attach(QueuePlaybackController controller) =>
-      _handler.attach(controller);
+  bool get systemControlsAvailable => true;
 
   @override
-  void detach(QueuePlaybackController controller) =>
-      _handler.detach(controller);
-
   Future<void> dispose() async {
-    _handler.detachCurrent();
-    await _interruptionSubscription.cancel();
-    await _becomingNoisySubscription.cancel();
+    if (_disposed) return;
+    _disposed = true;
+    _handler.close();
+    await _interruptionSubscription?.cancel();
+    await _becomingNoisySubscription?.cancel();
+    controller.dispose();
   }
 }
+
+QueuePlaybackController createAppPlaybackController({
+  required PlaybackQueueGateway playbackQueueGateway,
+  required MediaResolutionGateway mediaResolutionGateway,
+  required LyricGateway lyricGateway,
+  required ForegroundAudioEngine audioEngine,
+}) => QueuePlaybackController(
+  playbackQueueGateway,
+  TrackPlaybackController(
+    mediaResolutionGateway,
+    ForegroundPlaybackController(audioEngine),
+  ),
+  lyrics: LyricController(lyricGateway),
+);
+
+AppPlaybackHost createForegroundAppPlaybackHost({
+  required PlaybackQueueGateway playbackQueueGateway,
+  required MediaResolutionGateway mediaResolutionGateway,
+  required LyricGateway lyricGateway,
+  required ForegroundAudioEngine audioEngine,
+}) => ForegroundAppPlaybackHost(
+  createAppPlaybackController(
+    playbackQueueGateway: playbackQueueGateway,
+    mediaResolutionGateway: mediaResolutionGateway,
+    lyricGateway: lyricGateway,
+    audioEngine: audioEngine,
+  ),
+);
 
 /// One cross-platform media-session configuration. Android keeps the playback
 /// foreground service alive while paused so notification, lock-screen and
@@ -78,151 +118,242 @@ const projectAudioServiceConfig = AudioServiceConfig(
   androidStopForegroundOnPause: false,
 );
 
-/// Initializes the native media session used by Android, iOS, macOS, Linux
-/// (MPRIS), and Windows (SMTC). Failure is deliberately non-fatal: foreground
-/// playback remains usable if a desktop session bus or platform service is not
-/// available.
-Future<SystemPlaybackBinding> initializeSystemPlaybackBinding() async {
-  final handler = ProjectSystemAudioHandler();
+/// Creates the single app-lifetime playback owner and gives that same owner to
+/// audio_service. Android's foreground service, MediaSession, notification and
+/// remote callbacks are plugin-owned; the project handler only maps those
+/// callbacks onto the Rust-backed queue and the selected audio engine.
+///
+/// A platform media-session failure is deliberately non-fatal: the returned
+/// foreground host still owns the exact same controller, so in-app playback
+/// remains available without creating a fallback player or queue.
+Future<AppPlaybackHost> initializeAppPlaybackHost({
+  required PlaybackQueueGateway playbackQueueGateway,
+  required MediaResolutionGateway mediaResolutionGateway,
+  required LyricGateway lyricGateway,
+  required ForegroundAudioEngine audioEngine,
+}) async {
+  final controller = createAppPlaybackController(
+    playbackQueueGateway: playbackQueueGateway,
+    mediaResolutionGateway: mediaResolutionGateway,
+    lyricGateway: lyricGateway,
+    audioEngine: audioEngine,
+  );
+  final handler = ProjectSystemAudioHandler(controller);
   try {
     registerProjectLinuxMprisAudioService();
     await AudioService.init(
       builder: () => handler,
       config: projectAudioServiceConfig,
     );
+  } on Object catch (error) {
+    handler.close(clearPlatformState: false);
+    developer.log(
+      'System media-session initialization failed; '
+      'phase=audio-service platform=${defaultTargetPlatform.name} '
+      'errorType=${error.runtimeType}; foreground playback remains available.',
+      name: 'fura_music.system_playback',
+      level: 1000,
+    );
+    return ForegroundAppPlaybackHost(controller);
+  }
 
+  StreamSubscription<AudioInterruptionEvent>? interruptionSubscription;
+  StreamSubscription<void>? becomingNoisySubscription;
+  try {
     final audioSession = await AudioSession.instance;
     await audioSession.configure(const AudioSessionConfiguration.music());
-    final interruptionSubscription = audioSession.interruptionEventStream
-        .listen((event) {
-          if (event.begin && event.type != AudioInterruptionType.duck) {
-            unawaited(handler.pause());
-          }
-        });
-    final becomingNoisySubscription = audioSession.becomingNoisyEventStream
-        .listen((_) => unawaited(handler.pause()));
-    return AudioServiceSystemPlaybackBinding._(
-      handler,
-      interruptionSubscription,
-      becomingNoisySubscription,
+    interruptionSubscription = audioSession.interruptionEventStream.listen((
+      event,
+    ) {
+      if (event.begin && event.type != AudioInterruptionType.duck) {
+        unawaited(handler.pause());
+      }
+    });
+    becomingNoisySubscription = audioSession.becomingNoisyEventStream.listen(
+      (_) => unawaited(handler.pause()),
     );
   } on Object catch (error) {
     developer.log(
-      'System media-session initialization failed; '
-      'phase=initialize platform=${defaultTargetPlatform.name} '
-      'errorType=${error.runtimeType}; foreground playback remains available.',
+      'Audio focus configuration failed; '
+      'platform=${defaultTargetPlatform.name} errorType=${error.runtimeType}; '
+      'the initialized system media session remains active.',
       name: 'fura_music.system_playback',
       level: 900,
     );
-    return const NoopSystemPlaybackBinding();
   }
+
+  developer.log(
+    'System media session ready; platform=${defaultTargetPlatform.name}.',
+    name: 'fura_music.system_playback',
+  );
+  return AudioServiceAppPlaybackHost._(
+    handler,
+    interruptionSubscription,
+    becomingNoisySubscription,
+  );
 }
 
-/// Thin audio_service adapter. The project queue and playback controllers stay
-/// authoritative; every system command delegates to them and every system
-/// state update is derived from their provider-neutral snapshot.
+/// The app-lifetime AudioHandler and playback owner. The Rust-backed queue stays
+/// authoritative, but it is permanently owned by this service-facing handler
+/// instead of being borrowed from a page's State object.
 class ProjectSystemAudioHandler extends BaseAudioHandler {
-  QueuePlaybackController? _controller;
-  String? _lastQueueSignature;
-  String? _lastItemSignature;
-  _PublishedPlayback? _lastPlayback;
-
-  void attach(QueuePlaybackController controller) {
-    if (identical(_controller, controller)) return;
-    detachCurrent();
-    _controller = controller;
+  ProjectSystemAudioHandler(this.controller) {
     controller.addListener(_synchronize);
     _synchronize(force: true);
   }
 
-  void detach(QueuePlaybackController controller) {
-    if (identical(_controller, controller)) detachCurrent();
-  }
+  final QueuePlaybackController controller;
+  String? _lastQueueSignature;
+  String? _lastItemSignature;
+  _PublishedPlayback? _lastPlayback;
+  bool _closed = false;
 
-  void detachCurrent() {
-    final controller = _controller;
-    if (controller != null) controller.removeListener(_synchronize);
-    _controller = null;
+  void close({bool clearPlatformState = true}) {
+    if (_closed) return;
+    _closed = true;
+    controller.removeListener(_synchronize);
     _lastQueueSignature = null;
     _lastItemSignature = null;
     _lastPlayback = null;
-    queue.add(const []);
-    mediaItem.add(null);
-    playbackState.add(
-      PlaybackState(processingState: AudioProcessingState.idle, playing: false),
-    );
+    if (clearPlatformState) {
+      queue.add(const []);
+      mediaItem.add(null);
+      playbackState.add(
+        PlaybackState(
+          processingState: AudioProcessingState.idle,
+          playing: false,
+        ),
+      );
+    }
   }
 
   @override
   Future<void> play() async {
-    final controller = _controller;
-    if (controller == null) return;
+    if (_closed) {
+      _logCommand('play', accepted: false, reason: 'host-closed');
+      return;
+    }
     final playback = controller.playback;
     if (playback.canResume) {
+      _logCommand('play', accepted: true, reason: 'resume');
       await playback.resume();
     } else if (playback.canActivate) {
+      _logCommand('play', accepted: true, reason: 'activate-current');
       await playback.activate();
+    } else {
+      _logCommand('play', accepted: false, reason: 'no-playable-current');
     }
   }
 
   @override
   Future<void> pause() async {
-    final playback = _controller?.playback;
-    if (playback?.canPause ?? false) await playback!.pause();
+    if (_closed) {
+      _logCommand('pause', accepted: false, reason: 'host-closed');
+      return;
+    }
+    final playback = controller.playback;
+    _logCommand(
+      'pause',
+      accepted: playback.canPause,
+      reason: playback.canPause ? 'playing' : 'not-playing',
+    );
+    if (playback.canPause) await playback.pause();
   }
 
   @override
   Future<void> stop() async {
-    final playback = _controller?.playback;
-    if (playback != null && _controller?.current != null) {
+    if (_closed) {
+      _logCommand('stop', accepted: false, reason: 'host-closed');
+      return;
+    }
+    final playback = controller.playback;
+    _logCommand(
+      'stop',
+      accepted: controller.current != null,
+      reason: controller.current == null ? 'empty-queue' : 'current-present',
+    );
+    if (controller.current != null) {
       await playback.stop();
     }
   }
 
   @override
   Future<void> seek(Duration position) async {
-    final playback = _controller?.playback;
-    if (playback?.canSeek ?? false) {
-      await playback!.seekToMs(position.inMilliseconds);
+    if (_closed) {
+      _logCommand('seek', accepted: false, reason: 'host-closed');
+      return;
+    }
+    final playback = controller.playback;
+    _logCommand(
+      'seek',
+      accepted: playback.canSeek,
+      reason: playback.canSeek ? 'seekable' : 'not-seekable',
+    );
+    if (playback.canSeek) {
+      await playback.seekToMs(position.inMilliseconds);
       _synchronize(force: true);
     }
   }
 
   @override
   Future<void> skipToNext() async {
-    final controller = _controller;
-    if (controller != null &&
+    final accepted =
+        !_closed &&
         !controller.playback.requiresAuthentication &&
-        controller.hasNext) {
+        controller.hasNext;
+    _logCommand(
+      'next',
+      accepted: accepted,
+      reason: _queueCommandReason(hasTarget: controller.hasNext),
+    );
+    if (accepted) {
       await controller.advance();
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    final controller = _controller;
-    if (controller != null &&
+    final accepted =
+        !_closed &&
         !controller.playback.requiresAuthentication &&
-        controller.hasPrevious) {
+        controller.hasPrevious;
+    _logCommand(
+      'previous',
+      accepted: accepted,
+      reason: _queueCommandReason(hasTarget: controller.hasPrevious),
+    );
+    if (accepted) {
       await controller.rewind();
     }
   }
 
   @override
   Future<void> skipToQueueItem(int index) async {
-    final controller = _controller;
-    if (controller != null &&
+    final accepted =
+        !_closed &&
         !controller.playback.requiresAuthentication &&
         index >= 0 &&
-        index < controller.tracks.length) {
+        index < controller.tracks.length;
+    _logCommand(
+      'queue-item',
+      accepted: accepted,
+      reason: _queueCommandReason(
+        hasTarget: index >= 0 && index < controller.tracks.length,
+      ),
+    );
+    if (accepted) {
       await controller.select(index);
     }
   }
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
-    final controller = _controller;
-    if (controller == null) return;
+    _logCommand(
+      'repeat',
+      accepted: !_closed,
+      reason: _closed ? 'host-closed' : 'active-host',
+    );
+    if (_closed) return;
     await controller.setRepeatMode(switch (repeatMode) {
       AudioServiceRepeatMode.one => PlaybackRepeatMode.one,
       AudioServiceRepeatMode.all ||
@@ -233,8 +364,12 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
-    final controller = _controller;
-    if (controller == null) return;
+    _logCommand(
+      'shuffle',
+      accepted: !_closed,
+      reason: _closed ? 'host-closed' : 'active-host',
+    );
+    if (_closed) return;
     await controller.setOrder(
       shuffleMode == AudioServiceShuffleMode.none
           ? PlaybackOrder.sequential
@@ -251,17 +386,51 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
       return super.customAction(name, extras);
     }
     final rawValue = extras?['value'];
-    if (rawValue is! num || !rawValue.isFinite) return null;
-    final controller = _controller;
-    if (controller == null) return null;
+    if (_closed || rawValue is! num || !rawValue.isFinite) return null;
     await controller.playback.setVolume(rawValue.toDouble().clamp(0, 1));
     _synchronize(force: true);
     return null;
   }
 
+  @override
+  Future<void> onTaskRemoved() async {
+    developer.log(
+      'Android task removed; playbackStage=${controller.playback.stage.name}.',
+      name: 'fura_music.system_playback',
+    );
+  }
+
+  @override
+  Future<void> onNotificationDeleted() async {
+    _logCommand(
+      'notification-deleted',
+      accepted: !_closed,
+      reason: _closed ? 'host-closed' : 'stop-playback',
+    );
+    await stop();
+  }
+
+  String _queueCommandReason({required bool hasTarget}) {
+    if (_closed) return 'host-closed';
+    if (controller.playback.requiresAuthentication) {
+      return 'authentication-required';
+    }
+    return hasTarget ? 'target-present' : 'target-unavailable';
+  }
+
+  void _logCommand(
+    String action, {
+    required bool accepted,
+    required String reason,
+  }) {
+    developer.log(
+      'System media command; action=$action accepted=$accepted reason=$reason.',
+      name: 'fura_music.system_playback',
+    );
+  }
+
   void _synchronize({bool force = false}) {
-    final controller = _controller;
-    if (controller == null) return;
+    if (_closed) return;
 
     final queueItems = <MediaItem>[
       for (var index = 0; index < controller.tracks.length; index += 1)

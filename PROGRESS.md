@@ -11,6 +11,34 @@ execution:
 
 # Current State
 
+- **2026-09-12 Android system-playback ownership correction:** maintainer
+  physical-device evidence showed that the prior registered Android media
+  components did not make notification/system controls operate playback. The
+  static registration checkpoint had missed a lifecycle defect: the actual
+  Queue, Track playback controller and audio engine were created by
+  `UserLibraryPage`, temporarily attached to `ProjectSystemAudioHandler`, and
+  detached/disposed with that page. One root `AppPlaybackHost` now constructs
+  and owns the Rust-backed Queue controller, media resolver, lyric controller
+  and `audioplayers` engine for the application lifetime; the same controller
+  is permanently held by the handler passed to `AudioService.init` before
+  credential restoration. Product pages only observe/command it. Platform
+  initialization failure preserves that exact controller as foreground-only
+  playback instead of creating a second owner. This keeps `audio_service`
+  responsible for Android Service/MediaSession/notification/media buttons and
+  keeps the project handler limited to provider-neutral state/command mapping;
+  no second playback plugin or Queue was added. A focused regression proves
+  system Pause/Play/Next still reach the same session after a page listener is
+  removed; all 528 Flutter tests, 237-file format, `dart analyze`, the Linux
+  real session-bus system-playback integration, and an ARM64 Release APK build
+  pass. The APK is 43,768,152 bytes, contains only `arm64-v8a`, retains the
+  media foreground service/receiver and required permissions, and passes 16 KB
+  zip alignment. ARM64 Release lint passes with 0 errors and the existing one
+  Gradle-version warning. The current host has no Android device, so notification,
+  lock-screen, headset, Activity/task removal and background-resume behavior
+  remain `HUMAN_REVIEW`; process-death Queue restoration remains out of scope.
+  Starting HEAD was `4c0cfad2ba7b694902ed0dc3b87fe36e8c8b96de`;
+  changes remain uncommitted and unpushed.
+
 - **2026-09-12 HD-025 built-in Provider UI integration machine checkpoint:**
   the existing Material 3 product surfaces now serve QQ Music and NetEase Cloud
   Music through one persisted, QQ-default Provider selection. Settings schema
@@ -62,7 +90,10 @@ execution:
   formal mobile pairing UI, LAN listener, naked credential QR or QQ Connect
   AppID impersonation was added. Real second-device restore and Android
   notification/lock-screen/headset controls remain explicit Human Go/No-Go
-  checks. Existing QQ recent-history read remains completed independently;
+  checks. A later physical-device failure exposed the page-owned playback
+  lifecycle defect; the 2026-09-12 ownership correction above supersedes this
+  checkpoint's static system-control inference. Existing QQ recent-history
+  read remains completed independently;
   recent-history write remains evidence-blocked. Final machine gates pass:
   235-file Dart format, `dart analyze`, all 513 Flutter tests, 528 passed / 20
   explicitly ignored Rust workspace/all-target tests, Rust format, strict Clippy, Linux Release,

@@ -97,6 +97,7 @@ import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
@@ -8801,15 +8802,23 @@ class _LoginProviderHarnessState extends State<_LoginProviderHarness> {
   AppMusicProvider _provider = AppMusicProvider.qqMusic;
   late final AuthenticatedPlaybackDependencies _playback =
       AuthenticatedPlaybackDependencies(
-        mediaResolutionGateway: const _UnavailableMediaGateway(),
-        lyricGateway: const _WidgetLyricGateway(),
-        playbackQueueGateway: _WidgetPlaybackQueueGateway(),
+        playbackHost: createForegroundAppPlaybackHost(
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+          playbackQueueGateway: _WidgetPlaybackQueueGateway(),
+          audioEngine: AudioplayersForegroundAudioEngine(),
+        ),
         trackCommentGateway: const RustTrackCommentGateway(),
-        audioEngine: AudioplayersForegroundAudioEngine(),
       );
 
   void select(AppMusicProvider provider) =>
       setState(() => _provider = provider);
+
+  @override
+  void dispose() {
+    unawaited(_playback.playbackHost.dispose());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

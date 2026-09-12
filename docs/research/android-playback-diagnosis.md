@@ -137,7 +137,7 @@ Android 官方文档明确说明：target API 28 及以上应用默认 `usesClea
 - 系统媒体会话初始化失败会写入固定、去敏的一次性诊断信息，同时继续保留前台播放，不把系统控制绑定失败升级为歌曲播放失败；
 - Android backup/data-transfer 规则明确排除应用数据，避免 QQ credential/session 随备份迁移；manifest 显式声明通知能力，但 media-session 播放不依赖用户授予普通通知权限。
 
-最新完整自动化结果：`cargo test --workspace --all-targets` 为 528 passed / 0 failed / 20 explicit live-Human ignored，Rust format 与 workspace/all-target strict Clippy 通过；Flutter 513 项测试全部通过；`dart analyze` 无问题；235 个 Dart 文件格式检查无改动；Linux Release 与 ARM64 Release APK 构建成功；Android Release lint 为 0 error、1 个版本提示 warning。真机远程媒体播放和系统媒体生命周期仍待 Human Review。
+本轮没有修改 Rust，其完整工作区基线沿用上轮 535 passed / 0 failed / 20 explicit live-Human ignored、Rust format 和 workspace/all-target strict Clippy 通过的结果，没有为本项改动重跑。本轮 Flutter 528 项测试全部通过；`dart analyze` 无问题；237 个 Dart 文件格式检查无改动；Linux system-playback real session-bus integration 与 ARM64 Release APK 构建成功。最新 APK 为 43,768,152 bytes，只含 `arm64-v8a`，并通过 16 KB zip alignment；本轮 Android Release lint 为 0 error、1 个已有的 Gradle 版本提示 warning。真机远程媒体播放和新的 app-lifetime 系统媒体生命周期仍待 Human Review。
 
 ### P0：在 QQ Provider 内规范化可信 CDN 为 HTTPS
 
@@ -304,27 +304,30 @@ flutter build apk --release --target-platform android-arm64
 
 ### C. 后台播放和系统媒体控制
 
-2026-09-11 的专项复核确认，这里不是“Android 端没加播放插件”：
+2026-09-11 的静态复核确认这里不是“Android 端没加播放插件”：
 
 - `pubspec.yaml` 已锁定 `audio_service 0.18.19`、`audio_session 0.2.4` 和 `audioplayers 6.8.1`；
 - Flutter 生成的 Android plugin registrant 已注册 `audio_service`、`audio_session` 与 `audioplayers_android`；
 - manifest 已具备唤醒锁、media-playback foreground-service 权限、`AudioService` 与 `MediaButtonReceiver`；
 - `MainActivity` 已继承 `AudioServiceActivity`；
-- `ProjectSystemAudioHandler` 已把系统 Play/Pause/Seek/Next/Previous/Shuffle/Repeat 委托给现有 `QueuePlaybackController`，没有制造第二个播放器或队列。
+- `ProjectSystemAudioHandler` 已声明系统 Play/Pause/Seek/Next/Previous/Shuffle/Repeat 到 `QueuePlaybackController` 的委托。
 
-因此增加 `just_audio_background` 或第二个媒体服务会引入双重播放状态所有权，不是正确修复。`audio_service` 本来就是为已有播放引擎提供后台服务、锁屏/通知控制和耳机键集成的适配层。[^audio-service]
+但后续物理 Android 操作推翻了“注册齐全就等于系统控制可用”这一过早结论：用户在实际系统播放面板中无法控制音乐。重新追踪生命周期发现，真正的 `QueuePlaybackController`、`TrackPlaybackController` 和音频引擎由 `UserLibraryPage` 的 `State` 创建、再临时 attach 给 handler，并随该页面 dispose 而 detach/dispose；`AudioService` 只是借用页面对象。这样 Activity、登录态或导航生命周期一变化，原生 MediaSession 仍可能存在，但已没有稳定的播放 owner 可供系统命令调用。这是 Dart 所有权错误，不是 manifest 缺项。
 
-本轮已对现有适配做了以下收口：
+因此增加 `just_audio_background` 或第二个媒体服务仍不是正确修复。`audio_service` 本来就负责 Android Service、MediaSession、通知、锁屏和耳机键；项目只需提供一个把现有 Rust Queue/Provider 路径接到插件回调的薄 handler。`just_audio_background` 面向单一 `just_audio` player 的简单场景，而本项目有 Rust positional Queue、动态媒体解析、歌词与多 Provider 生命周期，直接替换会同时迁移播放引擎并引入第二套状态真相。[^audio-service][^just-audio-background]
 
-1. 把 `androidStopForegroundOnPause` 改为 `false`，使暂停后的锁屏、通知或耳机键 Resume 不需在 Android 12+ 后台重新创建 foreground service；
-2. 保留 `androidResumeOnClick=true`，关闭与播放无关的 launcher badge，并换用专用单色 `drawable/ic_stat_fura_music` 作为 Android small icon，避免彩色 launcher icon 在系统通知中被错误蒙版；
-3. `SystemPlaybackBinding.available` 可以区分真正的系统媒体绑定和降级 Noop；
-4. 初始化失败日志只记录 phase/platform/exception type，不记录可能包含完整 URL 或账号材料的 exception message；
-5. 单元测锁定“暂停后 service 仍可 Resume”的配置，以及系统命令仍只进入现有 Queue/Playback owner。
+2026-09-12 已按插件推荐的 owner 方向收口：
+
+1. 新增 root-owned `AppPlaybackHost`，在 `main()` 中、账号凭证恢复之前一次性创建 Queue、播放控制器、歌词控制器和音频引擎；
+2. `ProjectSystemAudioHandler` 构造时永久持有这个唯一 controller，`AudioService.init` 接收同一个 handler；页面只能监听和调用，不能 attach/detach/dispose；
+3. `UserLibraryPage` 销毁只移除自己的 listener，登录、退出、Provider 切换或页面导航不再拆掉系统命令路径；应用根销毁才关闭 handler 与播放 owner；
+4. `AudioService.init` 失败时，保留同一个 controller 作为 foreground-only host，不另造播放器或 Queue；audio-focus 配置失败也不反向拆掉已经初始化的 MediaSession；
+5. 保留 `androidStopForegroundOnPause=false`、`androidResumeOnClick=true`、专用单色通知图标和去敏诊断；增加系统命令、task removal、通知删除的无凭证日志；
+6. 单元回归明确验证页面 listener detach 后系统 Pause/Play/Next 仍操作同一 session；Linux 实际 session-bus integration 继续验证同一 handler 能被平台侧发现和调用。
 
 Android 13+ 的系统媒体控件从 `MediaSession` 的 metadata 和 playback state 派生，而不是要求应用自己复制一套通知播放状态。[^android-media-controls] Media-session 通知也属于 Android 13 通知运行时权限的豁免类型；manifest 仍显式声明权限，但前台点播不应以普通通知授权为前置条件。[^android-notification]
 
-仍然需要一台物理 Android 设备完成最终验收：播放时通知和锁屏应显示正确歌曲/进度，系统 Pause/Resume/Seek/Next/Previous 应反向改变同一个 Fura 播放 session，暂停后锁屏恢复不应触发 `ForegroundServiceStartNotAllowedException`，拔出耳机应触发暂停。当前主机没有连接物理 Android，自动化不能将这一项写成“已实测通过”。
+这轮修复闭合的是已定位的 owner 生命周期缺陷，但仍然需要一台物理 Android 设备完成最终验收：播放时通知和锁屏应显示正确歌曲/进度，系统 Pause/Resume/Seek/Next/Previous 应反向改变同一个 Fura 播放 session；从 Library 切到 Search/Settings、退到后台、锁屏和移除 Activity 后控制仍应落在同一 session；暂停后锁屏恢复不应触发 `ForegroundServiceStartNotAllowedException`；拔出耳机应触发暂停。当前主机没有连接物理 Android，自动化不能将这一项写成“已实测通过”，也不证明进程被系统杀死后的 Queue 恢复（该能力仍未实现）。
 
 Android 官方对新应用推荐 Media3/ExoPlayer，而不是平台 MediaPlayer。[^android-mediaplayer] 但本次不建议为解决 HTTP 策略立刻迁移引擎：HTTPS 规范化更小、更准确。只有在修复后仍能稳定复现 redirect/range、特定 container、缓冲或后台生命周期问题时，才应在现有 `ForegroundAudioEngine` 接口后评估 Android 专用 Media3 实现。
 
@@ -376,14 +379,15 @@ APK 的主要体积来自 Flutter engine、libmpv、Rust Core 与 app snapshot�
 | 根因定位 | 高可信完成：HTTP 媒体源与 Android cleartext policy 冲突 |
 | 推荐修复设计 | 完成 |
 | 播放代码修复 | 完成：可信 QQ CDN 严格校验并统一输出 HTTPS |
-| 系统媒体适配修复 | 完成：复用现有 `audio_service`，稳定暂停后 Resume、专用单色通知图标与去敏降级诊断 |
+| 系统媒体适配修复 | 机器侧完成：改为 app-lifetime `AppPlaybackHost`，页面不再拥有/拆卸系统播放路径；暂停后 Resume、通知图标与去敏诊断保留 |
 | QQ/Provider 自动化回归 | 通过：完整 Rust workspace/all-target 测试、format 与 strict Clippy |
-| Flutter 自动化回归 | 通过：513 项测试，`dart analyze` 无问题，235 文件格式检查通过 |
-| 最新 ARM64 Release 构建 | 通过：43.0 MB、min 24、target 36、仅 arm64-v8a |
+| Flutter 自动化回归 | 通过：528 项测试，`dart analyze` 无问题，237 文件格式检查通过 |
+| 最新 ARM64 Release 构建 | 通过：43,768,152 bytes、min 24、target 36、仅 arm64-v8a |
 | APK 签名与对齐 | v2 签名和 16 KB zip alignment 通过；仍为开发 debug certificate |
 | Android Release lint | 通过：0 error、1 个 Gradle 版本提示 warning |
 | Android 真机播放验证 | 未执行：当前无已连接设备 |
-| 问题最终关闭 | 未完成，等待真机远程媒体进度与后台生命周期 Human Review |
+| Android 系统控件真机验证 | 未完成：旧实现已有失败报告；新 owner 路径等待重新安装本轮 APK 后 Human Review |
+| 问题最终关闭 | 未完成，等待真机远程媒体进度、系统控件反向操作与后台生命周期 Human Review |
 
 ## Sources
 
@@ -397,5 +401,6 @@ APK 的主要体积来自 Flutter engine、libmpv、Rust Core 与 app snapshot�
 [^android-notification]: Android Developers, [Notification runtime permission — media session exemption](https://developer.android.com/develop/ui/compose/notifications/notification-permission#exemptions). media-session notifications 属于权限行为变化的豁免。
 [^android-media-controls]: Android Developers, [Media controls](https://developer.android.com/media/implement/surfaces/mobile). Android 13+ 系统媒体控制基于 MediaSession 状态与 metadata 生成。
 [^audio-service]: pub.dev, [`audio_service` 0.18.19](https://pub.dev/packages/audio_service/versions/0.18.19). 为 Flutter 音频引擎提供后台、通知、锁屏、耳机键和媒体会话适配。
+[^just-audio-background]: pub.dev, [`just_audio_background`](https://pub.dev/packages/just_audio_background). 官方说明它适合单一 `AudioPlayer` 的简单场景，更复杂需求应直接使用 `audio_service`。
 [^android-page-size]: Android Developers, [Support 16 KB page sizes](https://developer.android.com/guide/practices/page-sizes). Native-code 应用的 16 KB page compatibility 要求与检查方法。
 [^android-signing]: Android Developers, [Sign your app](https://developer.android.com/studio/publish/app-signing). Debug certificate 只适合开发调试，不适合应用商店发布。

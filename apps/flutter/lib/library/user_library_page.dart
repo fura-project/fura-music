@@ -31,7 +31,6 @@ import 'package:flutterustmusic/library/recent_plays_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/navigation/authenticated_navigation_state.dart';
-import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_page.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
@@ -586,16 +585,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void initState() {
     super.initState();
     _initializeProviderControllers();
-    _queuePlaybackController = QueuePlaybackController(
-      _playback.playbackQueueGateway,
-      TrackPlaybackController(
-        _playback.mediaResolutionGateway,
-        ForegroundPlaybackController(_playback.audioEngine),
-      ),
-      lyrics: LyricController(_playback.lyricGateway),
-    );
+    _queuePlaybackController = _playback.playbackHost.controller;
     _expandedNowPlayingPalette = ArtworkColorSchemeCache();
-    _playback.systemPlaybackBinding.attach(_queuePlaybackController);
     _queuePlaybackController.addListener(_onQueuePlaybackChanged);
     _loadProviderRoot();
   }
@@ -747,8 +738,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void dispose() {
     _disposeProviderControllers();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
-    _playback.systemPlaybackBinding.detach(_queuePlaybackController);
-    _queuePlaybackController.dispose();
     _playlistReturnFocusNode.dispose();
     _searchReturnFocusNode.dispose();
     _recommendationsReturnFocusNode.dispose();

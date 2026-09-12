@@ -26,8 +26,10 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_quality.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
@@ -60,6 +62,34 @@ Future<void> main() async {
   final netEaseAuthenticationGateway = RustNeteaseAuthenticationGateway(
     credentialVault: netEaseCredentialVault,
   );
+  final rustMediaResolutionGateway = RustMediaResolutionGateway(
+    preferredQuality: settingsLoad.settings.playbackQuality.audioPreference,
+  );
+  final mediaResolutionGateway =
+      ProviderCredentialCleaningMediaResolutionGateway(
+        rustMediaResolutionGateway,
+        credentialVaults: {
+          AppMusicProvider.qqMusic.providerId: qqCredentialVault,
+          AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
+        },
+      );
+  final lyricGateway = RustLyricGateway(
+    credentialVaults: {
+      AppMusicProvider.qqMusic.providerId: qqCredentialVault,
+      AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
+    },
+  );
+  final playbackHost = await initializeAppPlaybackHost(
+    playbackQueueGateway: RustPlaybackQueueGateway(),
+    mediaResolutionGateway: mediaResolutionGateway,
+    lyricGateway: lyricGateway,
+    audioEngine: AudioplayersForegroundAudioEngine(),
+  );
+
+  // Keep AudioService initialization ahead of account restoration. Android can
+  // launch the shared Flutter engine from a media control while no Activity is
+  // attached, so the app-lifetime playback owner must exist before any
+  // potentially slow credential verification.
   var qqRestore = CredentialRestoreResult.signedOut;
   var netEaseRestore = CredentialRestoreResult.signedOut;
   switch (settingsLoad.settings.musicProvider) {
@@ -83,24 +113,6 @@ Future<void> main() async {
       initialCredentialRestore: netEaseRestore,
     ),
   );
-  final rustMediaResolutionGateway = RustMediaResolutionGateway(
-    preferredQuality: settingsLoad.settings.playbackQuality.audioPreference,
-  );
-  final mediaResolutionGateway =
-      ProviderCredentialCleaningMediaResolutionGateway(
-        rustMediaResolutionGateway,
-        credentialVaults: {
-          AppMusicProvider.qqMusic.providerId: qqCredentialVault,
-          AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
-        },
-      );
-  final lyricGateway = RustLyricGateway(
-    credentialVaults: {
-      AppMusicProvider.qqMusic.providerId: qqCredentialVault,
-      AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
-    },
-  );
-  final systemPlaybackBinding = await initializeSystemPlaybackBinding();
 
   runApp(
     MusicApp(
@@ -108,7 +120,7 @@ Future<void> main() async {
       providerDependencies: providerDependencies,
       mediaResolutionGateway: mediaResolutionGateway,
       lyricGateway: lyricGateway,
-      systemPlaybackBinding: systemPlaybackBinding,
+      playbackHost: playbackHost,
       initialSettings: settingsLoad.settings,
       settingsStore: settingsStore,
       onPlaybackQualityChanged: (preference) {

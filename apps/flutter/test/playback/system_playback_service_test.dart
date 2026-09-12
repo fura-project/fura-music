@@ -26,7 +26,7 @@ void main() {
     'publishes provider-neutral queue metadata and playback state',
     () async {
       final controller = _controller();
-      final handler = ProjectSystemAudioHandler()..attach(controller);
+      final handler = ProjectSystemAudioHandler(controller);
 
       await controller.replaceAndPlay(const [first, second], 0);
 
@@ -59,7 +59,7 @@ void main() {
         ]),
       );
 
-      handler.detach(controller);
+      handler.close();
       expect(handler.queue.value, isEmpty);
       expect(handler.mediaItem.value, isNull);
       expect(
@@ -76,7 +76,7 @@ void main() {
     () async {
       final audio = _FakeAudioEngine();
       final controller = _controller(audio: audio);
-      final handler = ProjectSystemAudioHandler()..attach(controller);
+      final handler = ProjectSystemAudioHandler(controller);
 
       await controller.replaceAndPlay(const [first, second], 0);
       await handler.pause();
@@ -112,10 +112,33 @@ void main() {
         AudioProcessingState.idle,
       );
 
-      handler.detach(controller);
+      handler.close();
       controller.dispose();
     },
   );
+
+  test('page listeners can detach without disabling system commands', () async {
+    final audio = _FakeAudioEngine();
+    final controller = _controller(audio: audio);
+    final handler = ProjectSystemAudioHandler(controller);
+    void pageListener() {}
+
+    controller.addListener(pageListener);
+    await controller.replaceAndPlay(const [first, second], 0);
+    controller.removeListener(pageListener);
+
+    await handler.pause();
+    await handler.play();
+    await handler.skipToNext();
+
+    expect(audio.sessions.first.pauseCalls, 1);
+    expect(audio.sessions.first.playCalls, 2);
+    expect(controller.current, same(second));
+    expect(handler.mediaItem.value?.title, 'Second track');
+
+    handler.close();
+    controller.dispose();
+  });
 }
 
 const first = PlaylistTrackSummary(

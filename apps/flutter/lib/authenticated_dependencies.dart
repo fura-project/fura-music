@@ -21,11 +21,7 @@ import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
-import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
-import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
-import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
-import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
@@ -196,18 +192,10 @@ class AuthenticatedDiscoveryDependencies {
 @immutable
 class AuthenticatedPlaybackDependencies {
   const AuthenticatedPlaybackDependencies({
-    required this.mediaResolutionGateway,
-    required this.lyricGateway,
-    required this.playbackQueueGateway,
+    required this.playbackHost,
     required this.trackCommentGateway,
-    required this.audioEngine,
-    this.systemPlaybackBinding = const NoopSystemPlaybackBinding(),
   });
 
-  final MediaResolutionGateway mediaResolutionGateway;
-  final LyricGateway lyricGateway;
-  final PlaybackQueueGateway playbackQueueGateway;
+  final AppPlaybackHost playbackHost;
   final TrackCommentGateway trackCommentGateway;
-  final ForegroundAudioEngine audioEngine;
-  final SystemPlaybackBinding systemPlaybackBinding;
 }
