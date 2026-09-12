@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -77,13 +79,13 @@ class PlaybackQueuePanel extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Queue',
+                            context.l10n.queueTitle,
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           Text(
-                            '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'}',
+                            context.l10n.queueTrackCount(tracks.length),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -101,10 +103,10 @@ class PlaybackQueuePanel extends StatelessWidget {
                             tracks.length,
                           ),
                         ),
-                        child: const Text('Clear'),
+                        child: Text(context.l10n.queueClear),
                       ),
                     IconButton(
-                      tooltip: 'Close queue',
+                      tooltip: context.l10n.queueClose,
                       onPressed: onClose,
                       icon: const Icon(Icons.close_rounded),
                     ),
@@ -115,7 +117,7 @@ class PlaybackQueuePanel extends StatelessWidget {
                 Semantics(
                   container: true,
                   liveRegion: true,
-                  label: _failureCopy(failure),
+                  label: _failureCopy(context.l10n, failure),
                   excludeSemantics: true,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -129,7 +131,7 @@ class PlaybackQueuePanel extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _failureCopy(failure),
+                            _failureCopy(context.l10n, failure),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.error,
                             ),
@@ -142,11 +144,11 @@ class PlaybackQueuePanel extends StatelessWidget {
               const Divider(height: 1),
               Expanded(
                 child: tracks.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Padding(
-                          padding: EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(24),
                           child: Text(
-                            'The queue is empty. Choose a track from a playlist.',
+                            context.l10n.queueEmpty,
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -202,7 +204,7 @@ class _QueueTrackTile extends StatelessWidget {
     final album = track.albumTitle?.trim();
     final metadata = [
       track.artistNames.isEmpty
-          ? 'Unknown artist'
+          ? context.l10n.trackUnknownArtist
           : track.artistNames.join(' · '),
       if (album != null && album.isNotEmpty) album,
       if (!desktop) duration,
@@ -277,7 +279,7 @@ class _QueueTrackTile extends StatelessWidget {
             ],
             IconButton(
               key: ValueKey('queue-remove-$index'),
-              tooltip: 'Remove from queue',
+              tooltip: context.l10n.queueRemove,
               onPressed: onRemove,
               icon: const Icon(Icons.close_rounded),
             ),
@@ -294,13 +296,13 @@ Future<void> _confirmAndClearQueue(
   int trackCount,
 ) async {
   final description = trackCount == 1
-      ? 'This will remove the queued track and stop playback.'
-      : 'This will remove all $trackCount tracks and stop playback.';
+      ? context.l10n.queueClearOneDetail
+      : context.l10n.queueClearManyDetail(trackCount);
   final confirmed = await showAdaptiveConfirmation(
     context,
-    title: 'Clear queue?',
+    title: context.l10n.queueClearTitle,
     message: description,
-    confirmLabel: 'Clear',
+    confirmLabel: context.l10n.queueClear,
     cancelKey: const ValueKey('queue-clear-cancel'),
     confirmKey: const ValueKey('queue-clear-confirm'),
     sheetKey: const ValueKey('queue-clear-confirmation-sheet'),
@@ -380,13 +382,10 @@ class _QueueArtworkPlaceholder extends StatelessWidget {
   }
 }
 
-String _failureCopy(PlaybackQueueFailure failure) => switch (failure) {
-  PlaybackQueueFailure.invalidTrack =>
-    'A queue entry could not be represented safely.',
-  PlaybackQueueFailure.invalidPosition =>
-    'That queue position is no longer available.',
-  PlaybackQueueFailure.coreUnavailable =>
-    'The music core could not update the queue.',
-  PlaybackQueueFailure.invalidResponse =>
-    'The music core returned an invalid queue state.',
-};
+String _failureCopy(AppLocalizations l10n, PlaybackQueueFailure failure) =>
+    switch (failure) {
+      PlaybackQueueFailure.invalidTrack => l10n.queueFailureInvalidTrack,
+      PlaybackQueueFailure.invalidPosition => l10n.queueFailureInvalidPosition,
+      PlaybackQueueFailure.coreUnavailable => l10n.queueFailureCore,
+      PlaybackQueueFailure.invalidResponse => l10n.queueFailureInvalidResponse,
+    };

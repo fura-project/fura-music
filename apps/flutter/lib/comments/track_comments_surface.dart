@@ -6,6 +6,8 @@ import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/comments/track_comment_controller.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
@@ -103,7 +105,7 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Comments',
+                    context.l10n.commentsTitle,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   Text(
@@ -136,7 +138,7 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
             ),
             IconButton(
               key: const ValueKey('track-comments-close'),
-              tooltip: 'Close comments',
+              tooltip: context.l10n.commentsClose,
               onPressed: widget.onClose,
               icon: const Icon(Icons.close_rounded),
             ),
@@ -157,30 +159,32 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
   );
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
-    TrackCommentStage.loading => const MusicLoadingPanel(
-      key: ValueKey('track-comments-loading'),
-      label: 'Loading comments',
+    TrackCommentStage.loading => MusicLoadingPanel(
+      key: const ValueKey('track-comments-loading'),
+      label: context.l10n.commentsLoading,
     ),
     TrackCommentStage.empty => MusicContentStatePanel(
       key: const ValueKey('track-comments-empty'),
       icon: Icons.mode_comment_outlined,
-      title: 'No comments yet',
-      detail:
-          '${builtInProviderDisplayName(widget.track.providerId)} did not return comments for this Track.',
+      title: context.l10n.commentsEmptyTitle,
+      detail: context.l10n.commentsEmptyDetail(
+        builtInProviderDisplayName(widget.track.providerId, context.l10n),
+      ),
     ),
     TrackCommentStage.error => MusicContentStatePanel(
       key: const ValueKey('track-comments-error'),
       icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load comments',
+      title: context.l10n.commentsFailureTitle,
       detail: _failureCopy(
+        context.l10n,
         _controller.failure,
-        builtInProviderDisplayName(widget.track.providerId),
+        builtInProviderDisplayName(widget.track.providerId, context.l10n),
       ),
       action: _controller.canRetry
           ? FilledButton.tonal(
               key: const ValueKey('track-comments-retry'),
               onPressed: _controller.retry,
-              child: const Text('Try again'),
+              child: Text(context.l10n.commonRetry),
             )
           : null,
       liveRegion: true,
@@ -195,7 +199,10 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
       canRetryMore: _controller.canRetryMore,
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
-      providerDisplayName: builtInProviderDisplayName(widget.track.providerId),
+      providerDisplayName: builtInProviderDisplayName(
+        widget.track.providerId,
+        context.l10n,
+      ),
     ),
   };
 }
@@ -228,7 +235,7 @@ class _CommentList extends StatelessWidget {
   Widget build(BuildContext context) {
     final children = <Widget>[];
     if (hotComments.isNotEmpty) {
-      children.add(const _SectionHeading(title: 'Hot comments'));
+      children.add(_SectionHeading(title: context.l10n.commentsHot));
       children.addAll(
         hotComments.map(
           (comment) => _CommentItem(comment: comment, section: 'hot'),
@@ -236,7 +243,7 @@ class _CommentList extends StatelessWidget {
       );
     }
     if (latestComments.isNotEmpty) {
-      children.add(const _SectionHeading(title: 'Newest'));
+      children.add(_SectionHeading(title: context.l10n.commentsNewest));
       children.addAll(
         latestComments.map(
           (comment) => _CommentItem(comment: comment, section: 'latest'),
@@ -292,7 +299,7 @@ class _CommentItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final authorInitial = comment.authorDisplayName.characters.first;
-    final time = _commentTime(comment.publishedAtUnixSeconds);
+    final time = _commentTime(context, comment.publishedAtUnixSeconds);
     return Semantics(
       container: true,
       child: Padding(
@@ -399,7 +406,9 @@ class _CommentFooter extends StatelessWidget {
           child: Column(
             children: [
               Text(
-                'Couldn’t load more comments. ${_failureCopy(failure, providerDisplayName)}',
+                context.l10n.commentsLoadMoreFailure(
+                  _failureCopy(context.l10n, failure, providerDisplayName),
+                ),
                 textAlign: TextAlign.center,
               ),
               if (canRetry) ...[
@@ -407,7 +416,7 @@ class _CommentFooter extends StatelessWidget {
                 TextButton(
                   key: const ValueKey('track-comments-retry-more'),
                   onPressed: onRetry,
-                  child: const Text('Try again'),
+                  child: Text(context.l10n.commonRetry),
                 ),
               ],
             ],
@@ -422,34 +431,37 @@ class _CommentFooter extends StatelessWidget {
         child: OutlinedButton(
           key: const ValueKey('track-comments-load-more'),
           onPressed: onLoadMore,
-          child: const Text('Load more'),
+          child: Text(context.l10n.commentsLoadMore),
         ),
       ),
     );
   }
 }
 
-String _commentTime(int unixSeconds) {
+String _commentTime(BuildContext context, int unixSeconds) {
   final value = DateTime.fromMillisecondsSinceEpoch(
     unixSeconds * 1000,
     isUtc: true,
   ).toLocal();
-  String two(int part) => part.toString().padLeft(2, '0');
-  return '${value.year}-${two(value.month)}-${two(value.day)} '
-      '${two(value.hour)}:${two(value.minute)}';
+  final localizations = MaterialLocalizations.of(context);
+  return '${localizations.formatMediumDate(value)} '
+      '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(value))}';
 }
 
-String _failureCopy(TrackCommentFailure? failure, String providerDisplayName) =>
-    switch (failure) {
-      TrackCommentFailure.network => 'Check your connection and try again.',
-      TrackCommentFailure.serviceUnavailable =>
-        '$providerDisplayName comments are temporarily unavailable.',
-      TrackCommentFailure.invalidResponse =>
-        '$providerDisplayName returned comment data this version cannot read.',
-      TrackCommentFailure.coreUnavailable =>
-        'The native comment service is unavailable in this build.',
-      TrackCommentFailure.alreadyRunning =>
-        'Another comment request is still finishing. Try again.',
-      TrackCommentFailure.cancelled => 'The comment request was cancelled.',
-      null => 'Try again.',
-    };
+String _failureCopy(
+  AppLocalizations l10n,
+  TrackCommentFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
+  TrackCommentFailure.network => l10n.commentsFailureNetwork,
+  TrackCommentFailure.serviceUnavailable => l10n.commentsFailureService(
+    providerDisplayName,
+  ),
+  TrackCommentFailure.invalidResponse => l10n.commentsFailureInvalid(
+    providerDisplayName,
+  ),
+  TrackCommentFailure.coreUnavailable => l10n.commentsFailureCore,
+  TrackCommentFailure.alreadyRunning => l10n.commentsFailureRunning,
+  TrackCommentFailure.cancelled => l10n.commentsFailureCancelled,
+  null => l10n.commonRetry,
+};

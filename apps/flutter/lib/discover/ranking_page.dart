@@ -8,6 +8,8 @@ import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
@@ -61,11 +63,11 @@ class _RankingPageState extends State<RankingPage> {
     final toolbar = AppBar(
       leading: IconButton(
         key: const ValueKey('ranking-back'),
-        tooltip: 'Back to rankings',
+        tooltip: context.l10n.rankingBackTooltip,
         onPressed: widget.onBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),
-      title: const Text('Ranking'),
+      title: Text(context.l10n.rankingTitle),
     );
     final body = SafeArea(
       child: AnimatedBuilder(
@@ -110,30 +112,35 @@ class _RankingPageState extends State<RankingPage> {
   }
 
   Widget _body(bool desktop) => switch (_controller.stage) {
-    RankingTrackStage.loading => const MusicLoadingPanel(
-      key: ValueKey('ranking-tracks-loading'),
-      label: 'Loading Ranking Tracks',
+    RankingTrackStage.loading => MusicLoadingPanel(
+      key: const ValueKey('ranking-tracks-loading'),
+      label: context.l10n.rankingLoadingTracks,
     ),
     RankingTrackStage.empty => MusicContentStatePanel(
       key: const ValueKey('ranking-tracks-empty'),
       icon: Icons.leaderboard_outlined,
-      title: 'This ranking has no available Tracks',
-      detail:
-          '${builtInProviderDisplayName(widget.ranking.providerId)} returned an empty current-ranking Track list.',
+      title: context.l10n.rankingEmptyTitle,
+      detail: context.l10n.rankingEmptyDetail(
+        builtInProviderDisplayName(widget.ranking.providerId, context.l10n),
+      ),
     ),
     RankingTrackStage.error => MusicContentStatePanel(
       key: const ValueKey('ranking-tracks-error'),
       icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load this ranking',
+      title: context.l10n.rankingFailureTitle,
       detail: rankingFailureCopy(
+        context.l10n,
         _controller.failure,
-        providerName: builtInProviderDisplayName(widget.ranking.providerId),
+        providerName: builtInProviderDisplayName(
+          widget.ranking.providerId,
+          context.l10n,
+        ),
       ),
       liveRegion: true,
       action: _controller.canRetry
           ? FilledButton.tonal(
               onPressed: _controller.retry,
-              child: const Text('Try again'),
+              child: Text(context.l10n.commonRetry),
             )
           : null,
     ),
@@ -168,8 +175,8 @@ class _RankingPageState extends State<RankingPage> {
       return;
     }
     final message = widget.queuePlaybackController.failure == null
-        ? 'Added to queue'
-        : 'Couldn’t update the queue';
+        ? context.l10n.queueAddedMessage
+        : context.l10n.queueUpdateFailureMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -201,17 +208,16 @@ class _RankingHeader extends StatelessWidget {
       desktop: desktop,
       embedded: embedded,
       artwork: RankingArtwork(uri: ranking.artworkUri),
-      eyebrow: 'QQ MUSIC RANKING',
+      eyebrow: context.l10n.rankingEyebrow,
       title: ranking.title,
       titleKey: const ValueKey('ranking-title'),
       summary: [
         ?ranking.period,
-        if (total case final count?)
-          '$count ${count == 1 ? 'Track' : 'Tracks'}',
+        if (total case final count?) context.l10n.trackCount(count),
       ].join(' · '),
       onBack: onBack,
       backKey: const ValueKey('ranking-back'),
-      backTooltip: 'Back to rankings',
+      backTooltip: context.l10n.rankingBackTooltip,
     );
   }
 }
@@ -282,12 +288,12 @@ class _RankingTracksState extends State<_RankingTracks> {
             if (widget.desktop)
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontal),
-                child: const MusicTrackTableHeader(
+                child: MusicTrackTableHeader(
                   key: ValueKey('ranking-track-table-header'),
-                  titleLabel: 'Title',
-                  artistLabel: 'Artist',
-                  albumLabel: 'Album',
-                  durationLabel: 'Duration',
+                  titleLabel: context.l10n.tableTitle,
+                  artistLabel: context.l10n.tableArtist,
+                  albumLabel: context.l10n.tableAlbum,
+                  durationLabel: context.l10n.tableDuration,
                 ),
               ),
             Expanded(
@@ -316,7 +322,7 @@ class _RankingTracksState extends State<_RankingTracks> {
                         widget.current?.providerId == track.providerId &&
                         widget.current?.opaqueId == track.opaqueId;
                     final artists = track.artistNames.isEmpty
-                        ? 'Unknown artist'
+                        ? context.l10n.trackUnknownArtist
                         : track.artistNames.join(' / ');
                     return MusicTrackRowSurface(
                       key: ValueKey(
@@ -327,7 +333,10 @@ class _RankingTracksState extends State<_RankingTracks> {
                       current: selected,
                       hovered: _hoveredTrack == identity,
                       onHoverChanged: (hovered) => _setHovered(track, hovered),
-                      semanticLabel: '${track.title}, $artists',
+                      semanticLabel: context.l10n.commonTrackSemantics(
+                        artists,
+                        track.title,
+                      ),
                       onTap: () => widget.onPlay(index),
                       onContextMenuRequested: (_) =>
                           unawaited(_showActions(track, index)),
@@ -356,8 +365,8 @@ class _RankingTracksState extends State<_RankingTracks> {
                             queueKey: ValueKey('ranking-queue-$index'),
                             moreKey: ValueKey('ranking-context-$index'),
                             artistTooltip: track.artists.length > 1
-                                ? 'Choose artist'
-                                : 'Open artist',
+                                ? context.l10n.commonChooseArtist
+                                : context.l10n.commonOpenArtist,
                           ),
                     );
                   },
@@ -382,25 +391,27 @@ class _RankingTracksState extends State<_RankingTracks> {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow_rounded),
-              title: const Text('Play from here'),
+              title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
-              title: const Text('Add to queue'),
+              title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
             ),
             if (canOpenAlbum)
               ListTile(
                 leading: const Icon(Icons.album_rounded),
-                title: const Text('Open album'),
+                title: Text(context.l10n.commonOpenAlbum),
                 onTap: () => Navigator.pop(context, MusicTrackAction.openAlbum),
               ),
             if (widget.onOpenArtist != null && track.artists.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.person_rounded),
                 title: Text(
-                  track.artists.length > 1 ? 'Choose artist' : 'Open artist',
+                  track.artists.length > 1
+                      ? context.l10n.commonChooseArtist
+                      : context.l10n.commonOpenArtist,
                 ),
                 onTap: () =>
                     Navigator.pop(context, MusicTrackAction.openArtist),
@@ -461,7 +472,7 @@ class _RankingFooter extends StatelessWidget {
     child: Column(
       children: [
         Text(
-          'Showing $shown of $total Tracks',
+          context.l10n.rankingShowingTracks(shown, total),
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
@@ -474,17 +485,17 @@ class _RankingFooter extends StatelessWidget {
         else if (appendFailure != null)
           FilledButton.tonal(
             onPressed: onRetryMore,
-            child: const Text('Try loading more again'),
+            child: Text(context.l10n.commonTryLoadingMoreAgain),
           )
         else if (hasMore)
           FilledButton.tonal(
             key: const ValueKey('ranking-load-more'),
             onPressed: onLoadMore,
-            child: const Text('Load more'),
+            child: Text(context.l10n.commonLoadMore),
           )
         else
           Text(
-            'End of current ranking',
+            context.l10n.rankingEnd,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -524,16 +535,15 @@ class RankingArtwork extends StatelessWidget {
 }
 
 String rankingFailureCopy(
+  AppLocalizations l10n,
   RankingFailure? failure, {
-  String providerName = 'QQ Music',
+  required String providerName,
 }) => switch (failure) {
-  RankingFailure.network => 'Check your connection and try again.',
-  RankingFailure.serviceUnavailable =>
-    '$providerName rankings are temporarily unavailable.',
-  RankingFailure.cancelled => 'The ranking request was cancelled.',
-  RankingFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
+  RankingFailure.network => l10n.commonNetworkFailure,
+  RankingFailure.serviceUnavailable => l10n.rankingServiceFailure(providerName),
+  RankingFailure.cancelled => l10n.rankingCancelled,
+  RankingFailure.coreUnavailable => l10n.commonCoreUnavailable,
   RankingFailure.invalidResponse ||
   RankingFailure.alreadyRunning ||
-  null => '$providerName returned an unexpected ranking response.',
+  null => l10n.rankingUnexpected(providerName),
 };

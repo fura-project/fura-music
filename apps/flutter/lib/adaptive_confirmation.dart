@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
 typedef ConfirmationWrapper = Widget Function(Widget child);
 
@@ -43,7 +44,7 @@ Future<bool> showAdaptiveConfirmation(
                           key: cancelKey,
                           onPressed: () =>
                               Navigator.of(routeContext).pop(false),
-                          child: const Text('Cancel'),
+                          child: Text(routeContext.l10n.commonCancel),
                         ),
                         const SizedBox(width: 8),
                         FilledButton(
@@ -73,7 +74,7 @@ Future<bool> showAdaptiveConfirmation(
               TextButton(
                 key: cancelKey,
                 onPressed: () => Navigator.of(routeContext).pop(false),
-                child: const Text('Cancel'),
+                child: Text(routeContext.l10n.commonCancel),
               ),
               FilledButton(
                 key: confirmKey,

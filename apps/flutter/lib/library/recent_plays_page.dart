@@ -9,6 +9,8 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
 import 'package:flutterustmusic/library/playlist_track_search_index.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 
 class RecentPlaysPage extends StatefulWidget {
@@ -191,6 +193,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           controller?.stage == PlaylistDetailStage.empty;
       return LayoutBuilder(
         builder: (context, constraints) {
+          final l10n = context.l10n;
           final desktop = constraints.maxWidth >= 820;
           final padding = desktop ? 28.0 : 16.0;
           final theme = Theme.of(context);
@@ -219,7 +222,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                       Semantics(
                         header: true,
                         child: Text(
-                          '最近播放',
+                          l10n.recentTitle,
                           style: theme.textTheme.headlineLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -239,8 +242,8 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                           Expanded(
                             child: Text(
                               controller == null
-                                  ? 'QQ 音乐云端记录尚未接通'
-                                  : 'QQ 音乐账号的播放记录 · 最近播放优先',
+                                  ? l10n.recentCloudNotConnectedShort
+                                  : l10n.recentCloudSubtitle,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -282,10 +285,11 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                 Padding(
                   padding: EdgeInsets.fromLTRB(padding, 8, padding, 12),
                   child: Text(
-                    '${_query.isEmpty ? '已加载' : '已搜索'} ${controller!.processedCount}'
-                    '${controller.totalIsExact ? ' / ${controller.total}' : ''} 首'
-                    '${result.approximateMatchCount > 0 ? ' · ${result.approximateMatchCount} 个近似匹配' : ''}'
-                    '${controller.omittedTrackCount > 0 ? ' · ${controller.omittedTrackCount} 首暂不可显示' : ''}',
+                    _processedStatus(
+                      l10n,
+                      controller!,
+                      result.approximateMatchCount,
+                    ),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -309,18 +313,17 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     required bool collapsed,
   }) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final countLabel = hasSnapshot
         ? controller!.totalIsExact
-              ? '歌曲 ${controller.total}'
-              : '歌曲（已知至少 ${controller.total} 首）'
-        : '歌曲';
+              ? l10n.recentSongsTab(controller.total)
+              : l10n.recentSongsTabApproximate(controller.total)
+        : l10n.recentSongsTabWithoutCount;
     final collapsedCountLabel = hasSnapshot && !controller!.totalIsExact
-        ? '歌曲 ${controller.total}+'
+        ? l10n.recentSongsTabApproximate(controller.total)
         : countLabel;
     final processedLabel = hasSnapshot
-        ? controller!.totalIsExact
-              ? '${_query.isEmpty ? '已加载' : '已搜索'} ${controller.processedCount} / ${controller.total} 首'
-              : '${_query.isEmpty ? '已加载' : '已搜索'} ${controller.processedCount} 首'
+        ? _processedStatus(l10n, controller!, 0)
         : null;
     final play = tracks.isEmpty
         ? null
@@ -400,10 +403,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
               padding: EdgeInsets.symmetric(horizontal: padding),
               child: Row(
                 children: [
-                  const Expanded(child: Text('刷新失败，仍显示上次读取的记录。')),
+                  Expanded(child: Text(l10n.recentRefreshSnapshotFailure)),
                   TextButton(
                     onPressed: controller!.retryRefresh,
-                    child: const Text('重试'),
+                    child: Text(l10n.commonRetry),
                   ),
                 ],
               ),
@@ -411,11 +414,11 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           if (desktop && hasSnapshot)
             Padding(
               padding: EdgeInsets.symmetric(horizontal: padding),
-              child: const MusicTrackTableHeader(
-                titleLabel: '歌曲',
-                artistLabel: '歌手',
-                albumLabel: '专辑',
-                durationLabel: '时长',
+              child: MusicTrackTableHeader(
+                titleLabel: l10n.tableTitle,
+                artistLabel: l10n.tableArtist,
+                albumLabel: l10n.tableAlbum,
+                durationLabel: l10n.tableDuration,
               ),
             ),
         ],
@@ -525,15 +528,16 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
       children: [
         Row(
           children: [
-            _collapsedTitle(context),
-            const SizedBox(width: 12),
-            Expanded(child: _recentSearch(enabled: hasSnapshot)),
+            Flexible(child: _collapsedTitle(context)),
+            const Spacer(),
             if (widget.collapsedHeaderActions case final actions?) ...[
               const SizedBox(width: 12),
               actions,
             ],
           ],
         ),
+        const SizedBox(height: 8),
+        _recentSearch(enabled: hasSnapshot),
         const SizedBox(height: 8),
         SizedBox(
           height: 48,
@@ -554,8 +558,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   Widget _collapsedTitle(BuildContext context) => Semantics(
     header: true,
     child: Text(
-      '最近播放',
+      context.l10n.recentTitle,
       key: const ValueKey('recent-plays-collapsed-title'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: Theme.of(context).textTheme.titleLarge
           ?.copyWith(fontWeight: FontWeight.w700),
     ),
@@ -588,48 +594,54 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   Widget _recentPlayButton({
     required VoidCallback? onPressed,
     bool compact = false,
-  }) => compact
-      ? IconButton.filled(
-          key: const ValueKey('recent-plays-play'),
-          tooltip: '播放最近播放',
-          onPressed: onPressed,
-          icon: const Icon(Icons.play_arrow_rounded),
-        )
-      : FilledButton.icon(
-          key: const ValueKey('recent-plays-play'),
-          onPressed: onPressed,
-          icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('播放'),
-        );
+  }) {
+    final l10n = context.l10n;
+    return compact
+        ? IconButton.filled(
+            key: const ValueKey('recent-plays-play'),
+            tooltip: l10n.recentPlayTooltip,
+            onPressed: onPressed,
+            icon: const Icon(Icons.play_arrow_rounded),
+          )
+        : FilledButton.icon(
+            key: const ValueKey('recent-plays-play'),
+            onPressed: onPressed,
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: Text(l10n.commonPlay),
+          );
+  }
 
   Widget _recentRefreshButton({
     required VoidCallback? onPressed,
     bool compact = false,
-  }) => compact
-      ? IconButton.filledTonal(
-          key: const ValueKey('recent-plays-refresh'),
-          tooltip: '刷新最近播放',
-          onPressed: onPressed,
-          icon: const Icon(Icons.sync_rounded),
-        )
-      : FilledButton.tonalIcon(
-          key: const ValueKey('recent-plays-refresh'),
-          onPressed: onPressed,
-          icon: const Icon(Icons.sync_rounded),
-          label: const Text('刷新'),
-        );
+  }) {
+    final l10n = context.l10n;
+    return compact
+        ? IconButton.filledTonal(
+            key: const ValueKey('recent-plays-refresh'),
+            tooltip: l10n.recentRefreshTooltip,
+            onPressed: onPressed,
+            icon: const Icon(Icons.sync_rounded),
+          )
+        : FilledButton.tonalIcon(
+            key: const ValueKey('recent-plays-refresh'),
+            onPressed: onPressed,
+            icon: const Icon(Icons.sync_rounded),
+            label: Text(l10n.commonRefresh),
+          );
+  }
 
   Widget _recentSearch({required bool enabled}) => TextField(
     key: const ValueKey('recent-plays-search'),
     controller: _search,
     enabled: enabled,
     decoration: InputDecoration(
-      hintText: '搜索最近播放',
+      hintText: context.l10n.recentSearchHint,
       prefixIcon: const Icon(Icons.search_rounded),
       suffixIcon: _query.isEmpty
           ? null
           : IconButton(
-              tooltip: '清除搜索',
+              tooltip: context.l10n.commonClearSearch,
               onPressed: _search.clear,
               icon: const Icon(Icons.close_rounded),
             ),
@@ -642,6 +654,22 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     ),
   );
 
+  String _processedStatus(
+    AppLocalizations l10n,
+    PagedTracksController controller,
+    int approximateMatchCount,
+  ) => l10n.recentProcessedStatus(
+    _query.isEmpty ? l10n.recentLoadedAction : l10n.recentSearchedAction,
+    approximateMatchCount > 0
+        ? l10n.recentApproximatePart(approximateMatchCount)
+        : '',
+    controller.omittedTrackCount > 0
+        ? l10n.recentOmittedPart(controller.omittedTrackCount)
+        : '',
+    controller.processedCount,
+    controller.totalIsExact ? l10n.recentTotalPart(controller.total) : '',
+  );
+
   Widget _body(
     PagedTracksController? controller,
     List<PlaylistTrackSummary> tracks,
@@ -650,19 +678,19 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   ) {
     if (controller == null) {
       return _messageSliver(
-        const _RecentMessage(
+        _RecentMessage(
           icon: Icons.cloud_off_outlined,
-          title: '暂时无法读取跨设备播放记录',
-          detail: '当前版本尚未接通 QQ 音乐的云端最近播放。\n接通后，你可以在这里查看同一账号的播放记录。',
+          title: context.l10n.recentUnavailableTitle,
+          detail: context.l10n.recentUnavailableDetail,
         ),
       );
     }
     switch (controller.stage) {
       case PlaylistDetailStage.loading:
         return _messageSliver(
-          const _RecentMessage(
+          _RecentMessage(
             icon: Icons.history_rounded,
-            title: '正在读取最近播放…',
+            title: context.l10n.recentLoadingTitle,
             loading: true,
           ),
         );
@@ -671,11 +699,11 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
         return _messageSliver(
           _RecentMessage(
             icon: Icons.login_rounded,
-            title: '请重新登录 QQ 音乐',
-            detail: '登录同一账号后再读取云端播放记录。',
+            title: context.l10n.recentSignInTitle,
+            detail: context.l10n.recentSignInDetail,
             action: FilledButton(
               onPressed: widget.onSignInAgain,
-              child: const Text('重新登录'),
+              child: Text(context.l10n.authSignInAgain),
             ),
           ),
         );
@@ -683,22 +711,22 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
         return _messageSliver(
           _RecentMessage(
             icon: Icons.cloud_off_outlined,
-            title: '暂时无法读取最近播放',
-            detail: '请稍后重试。',
+            title: context.l10n.recentUnavailableTemporaryTitle,
+            detail: context.l10n.recentTryLater,
             action: controller.canRetry
                 ? FilledButton.tonal(
                     onPressed: controller.retry,
-                    child: const Text('重试'),
+                    child: Text(context.l10n.commonRetry),
                   )
                 : null,
           ),
         );
       case PlaylistDetailStage.empty:
         return _messageSliver(
-          const _RecentMessage(
+          _RecentMessage(
             icon: Icons.history_rounded,
-            title: '还没有云端播放记录',
-            detail: '刷新可以重新读取 QQ 音乐返回的记录。',
+            title: context.l10n.recentEmptyTitle,
+            detail: context.l10n.recentEmptyDetail,
           ),
         );
       case PlaylistDetailStage.content:
@@ -714,7 +742,9 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                     children: [
                       if (tracks.isEmpty)
                         Text(
-                          controller.isLoadingAll ? '正在搜索整个播放记录…' : '未找到匹配的歌曲',
+                          controller.isLoadingAll
+                              ? context.l10n.recentSearchingAll
+                              : context.l10n.recentNoMatch,
                         ),
                       if (controller.isLoadingMore || controller.isLoadingAll)
                         const Padding(
@@ -722,19 +752,19 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                           child: LinearProgressIndicator(),
                         )
                       else if (controller.appendFailure != null) ...[
-                        const Text('后续记录加载失败，已加载的歌曲仍可播放。'),
+                        Text(context.l10n.recentAppendFailure),
                         TextButton(
                           onPressed: controller.canRetryMore
                               ? () => _query.isEmpty
                                     ? controller.retryMore()
                                     : unawaited(controller.loadAll())
                               : null,
-                          child: const Text('继续加载'),
+                          child: Text(context.l10n.recentContinueLoading),
                         ),
                       ] else if (controller.hasMore)
                         TextButton(
                           onPressed: controller.loadMore,
-                          child: const Text('加载更多'),
+                          child: Text(context.l10n.commonLoadMore),
                         ),
                     ],
                   ),
@@ -746,7 +776,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                   current?.providerId == track.providerId &&
                   current?.opaqueId == track.opaqueId;
               final artists = track.artistNames.isEmpty
-                  ? '未知歌手'
+                  ? context.l10n.trackUnknownArtist
                   : track.artistNames.join(' / ');
               return MusicTrackRowSurface(
                 key: ValueKey(
@@ -755,7 +785,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                 itemKey: ValueKey('recent-plays-track-$index'),
                 desktop: desktop,
                 current: selected,
-                semanticLabel: '${track.title}, $artists',
+                semanticLabel: context.l10n.commonTrackSemantics(
+                  artists,
+                  track.title,
+                ),
                 onTap: () =>
                     unawaited(widget.playback.replaceAndPlay(tracks, index)),
                 onContextMenuRequested: (_) =>
@@ -786,18 +819,20 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                                 context: context,
                                 artists: track.artists,
                                 onSelected: widget.onOpenArtist,
-                                title: '选择歌手',
-                                detail: '这首歌曲包含多个歌手，请选择要打开的歌手。',
-                                cancelLabel: '取消',
+                                title: context.l10n.trackChooseArtistTitle,
+                                detail: context.l10n.recentChooseArtistDetail,
+                                cancelLabel: context.l10n.commonCancel,
                                 itemKeyPrefix: 'recent-track-artist',
                               ),
                             ),
                       onMore: () => _showTrackActions(track),
-                      addToQueueTooltip: '加入播放队列',
-                      moreTooltip: '更多操作',
-                      playTooltip: '从这里播放',
-                      albumTooltip: '查看专辑',
-                      artistTooltip: track.artists.length > 1 ? '选择歌手' : '查看歌手',
+                      addToQueueTooltip: context.l10n.recentAddToQueue,
+                      moreTooltip: context.l10n.commonMoreActions,
+                      playTooltip: context.l10n.commonPlayFromHere,
+                      albumTooltip: context.l10n.commonOpenAlbum,
+                      artistTooltip: track.artists.length > 1
+                          ? context.l10n.commonChooseArtist
+                          : context.l10n.commonOpenArtist,
                     ),
               );
             },
@@ -824,7 +859,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
             ),
             ListTile(
               leading: const Icon(Icons.queue_music_rounded),
-              title: const Text('加入播放队列'),
+              title: Text(context.l10n.recentAddToQueue),
               onTap: () {
                 Navigator.pop(context);
                 unawaited(widget.playback.push(track));
@@ -833,7 +868,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
             if (track.album != null && widget.onOpenAlbum != null)
               ListTile(
                 leading: const Icon(Icons.album_outlined),
-                title: const Text('查看专辑'),
+                title: Text(context.l10n.commonOpenAlbum),
                 onTap: () {
                   Navigator.pop(context);
                   widget.onOpenAlbum!(track.album!);

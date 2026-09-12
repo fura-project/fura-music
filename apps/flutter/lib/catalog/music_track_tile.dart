@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
 class MusicTrackTile extends StatelessWidget {
   const MusicTrackTile({
@@ -33,7 +34,7 @@ class MusicTrackTile extends StatelessWidget {
     final theme = Theme.of(context);
     final duration = formatTrackDuration(track.durationSeconds);
     final artistCopy = track.artistNames.isEmpty
-        ? 'Unknown artist'
+        ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
     final metadata = [
       artistCopy,
@@ -111,7 +112,7 @@ class MusicTrackTile extends StatelessWidget {
           if (hasContext)
             PopupMenuButton<_TrackContextDestination>(
               key: contextKey,
-              tooltip: 'Browse context for ${track.title}',
+              tooltip: context.l10n.trackBrowseContextTooltip(track.title),
               onSelected: _openContext,
               itemBuilder: (context) => [
                 if (album != null)
@@ -120,7 +121,7 @@ class MusicTrackTile extends StatelessWidget {
                     value: _TrackContextDestination(album: album),
                     child: ListTile(
                       leading: const Icon(Icons.album_rounded),
-                      title: const Text('Open album'),
+                      title: Text(context.l10n.commonOpenAlbum),
                       subtitle: Text(
                         album.title,
                         maxLines: 1,
@@ -136,7 +137,7 @@ class MusicTrackTile extends StatelessWidget {
                     ),
                     child: ListTile(
                       leading: const Icon(Icons.person_rounded),
-                      title: const Text('Open artist'),
+                      title: Text(context.l10n.commonOpenArtist),
                       subtitle: Text(
                         contextArtists[index].name,
                         maxLines: 1,
@@ -149,7 +150,7 @@ class MusicTrackTile extends StatelessWidget {
             ),
           IconButton(
             key: queueKey,
-            tooltip: 'Add ${track.title} to queue',
+            tooltip: context.l10n.trackAddToQueueTooltip(track.title),
             onPressed: onQueue,
             icon: const Icon(Icons.playlist_add_rounded),
           ),
@@ -191,7 +192,7 @@ class _TrackArtwork extends StatelessWidget {
     );
     final artworkUri = track.artworkUri;
     return Semantics(
-      label: 'Artwork for ${track.title}',
+      label: context.l10n.trackArtworkSemantics(track.title),
       image: true,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),

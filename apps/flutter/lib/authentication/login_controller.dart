@@ -102,13 +102,9 @@ class LoginController extends ChangeNotifier {
       ? _desktopQuickStage
       : DesktopQuickLoginStage.disabled;
   int? get desktopQuickSelectionId => _desktopQuickSelectionId;
-  String get providerDisplayName =>
-      (_gateway is ProviderAuthenticationPresentation)
-      ? (_gateway as ProviderAuthenticationPresentation).providerDisplayName
-      : 'QQ Music';
-  String get qrActionLabel => (_gateway is ProviderAuthenticationPresentation)
-      ? (_gateway as ProviderAuthenticationPresentation).qrActionLabel
-      : 'Scan with QQ';
+  String get providerId => (_gateway is ProviderAuthenticationPresentation)
+      ? (_gateway as ProviderAuthenticationPresentation).providerId
+      : 'qq-music';
   bool get supportsMultipleQrMethods =>
       _gateway is MultiMethodQqMusicAuthenticationGateway ||
       _gateway is! ProviderAuthenticationPresentation;

@@ -18,6 +18,8 @@ import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -38,7 +40,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
     required this.onOpenRanking,
     required this.onOpenAlbum,
     required this.onSignInAgain,
-    this.providerDisplayName = 'QQ Music',
+    this.providerDisplayName,
     this.controller,
     this.onOpenTrackAlbum,
     this.onOpenTrackArtist,
@@ -62,7 +64,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
   final ValueChanged<RankingSummary> onOpenRanking;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onSignInAgain;
-  final String providerDisplayName;
+  final String? providerDisplayName;
   final RecommendedPlaylistController? controller;
   final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
   final ValueChanged<ArtistSummary>? onOpenTrackArtist;
@@ -142,6 +144,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final provider = widget.providerDisplayName ?? l10n.providerQqMusic;
     final body = SafeArea(
       child: AnimatedBuilder(
         animation: Listenable.merge([
@@ -166,8 +170,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
                   desktop: desktop,
                   collapsed: _headerCollapsed,
                   subtitle: widget.radarEnabled
-                      ? 'Playlists, charts, Radar, and new releases from ${widget.providerDisplayName}'
-                      : 'Playlists, charts, and new releases from ${widget.providerDisplayName}',
+                      ? l10n.discoverSubtitleWithRadar(provider)
+                      : l10n.discoverSubtitleWithoutRadar(provider),
                   tabs: _DiscoverTabs(
                     controller: _tabController,
                     types: _types,
@@ -200,11 +204,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       appBar: AppBar(
         leading: IconButton(
           key: const ValueKey('recommendations-back'),
-          tooltip: 'Back to your music',
+          tooltip: l10n.discoverBackTooltip,
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Discover'),
+        title: Text(l10n.discoverTitle),
       ),
       body: body,
       bottomNavigationBar: NowPlayingBar(
@@ -215,27 +219,28 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
   }
 
   Widget _playlistBody(double bottomPadding) => switch (_controller.stage) {
-    RecommendedPlaylistStage.loading => const MusicLoadingPanel(
-      key: ValueKey('recommendations-loading'),
-      label: 'Loading Recommended Playlists',
+    RecommendedPlaylistStage.loading => MusicLoadingPanel(
+      key: const ValueKey('recommendations-loading'),
+      label: context.l10n.discoverLoadingRecommendations,
     ),
     RecommendedPlaylistStage.empty => MusicContentStatePanel(
       key: ValueKey('recommendations-empty'),
       icon: Icons.explore_off_outlined,
-      title: 'No recommendations right now',
-      detail:
-          '${widget.providerDisplayName} returned an empty recommended-playlist page.',
+      title: context.l10n.discoverNoRecommendationsTitle,
+      detail: context.l10n.discoverNoRecommendationsDetail(
+        widget.providerDisplayName ?? context.l10n.providerQqMusic,
+      ),
     ),
     RecommendedPlaylistStage.error => MusicContentStatePanel(
       key: const ValueKey('recommendations-error'),
       icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load recommendations',
-      detail: _failureCopy(_controller.failure),
+      title: context.l10n.discoverRecommendationsFailureTitle,
+      detail: _failureCopy(context.l10n, _controller.failure),
       liveRegion: true,
       action: _controller.canRetry
           ? FilledButton.tonal(
               onPressed: _controller.retry,
-              child: const Text('Try again'),
+              child: Text(context.l10n.commonRetry),
             )
           : null,
     ),
@@ -256,24 +261,33 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       switch (_rankingController.stage) {
         RankingGroupStage.loading => MusicLoadingPanel(
           key: ValueKey('rankings-loading'),
-          label: 'Loading ${widget.providerDisplayName} Rankings',
+          label: context.l10n.discoverLoadingRankings(
+            widget.providerDisplayName ?? context.l10n.providerQqMusic,
+          ),
         ),
         RankingGroupStage.empty => MusicContentStatePanel(
           key: ValueKey('rankings-empty'),
           icon: Icons.leaderboard_outlined,
-          title: 'No rankings right now',
-          detail: '${widget.providerDisplayName} returned no current rankings.',
+          title: context.l10n.discoverNoRankingsTitle,
+          detail: context.l10n.discoverNoRankingsDetail(
+            widget.providerDisplayName ?? context.l10n.providerQqMusic,
+          ),
         ),
         RankingGroupStage.error => MusicContentStatePanel(
           key: const ValueKey('rankings-error'),
           icon: Icons.cloud_off_rounded,
-          title: 'Couldn’t load rankings',
-          detail: rankingFailureCopy(_rankingController.failure),
+          title: context.l10n.discoverRankingsFailureTitle,
+          detail: rankingFailureCopy(
+            context.l10n,
+            _rankingController.failure,
+            providerName:
+                widget.providerDisplayName ?? context.l10n.providerQqMusic,
+          ),
           liveRegion: true,
           action: _rankingController.canRetry
               ? FilledButton.tonal(
                   onPressed: _rankingController.retry,
-                  child: const Text('Try again'),
+                  child: Text(context.l10n.commonRetry),
                 )
               : null,
         ),
@@ -286,21 +300,21 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       };
 
   Widget _radarBody(double bottomPadding) => switch (_radarController.stage) {
-    RadarStage.loading => const MusicLoadingPanel(
-      key: ValueKey('radar-loading'),
-      label: 'Loading QQ Music Radar',
+    RadarStage.loading => MusicLoadingPanel(
+      key: const ValueKey('radar-loading'),
+      label: context.l10n.discoverLoadingRadar,
     ),
-    RadarStage.empty => const MusicContentStatePanel(
-      key: ValueKey('radar-empty'),
+    RadarStage.empty => MusicContentStatePanel(
+      key: const ValueKey('radar-empty'),
       icon: Icons.radar_rounded,
-      title: 'No Radar Tracks right now',
-      detail: 'QQ Music returned an empty Radar Track page.',
+      title: context.l10n.discoverNoRadarTitle,
+      detail: context.l10n.discoverNoRadarDetail,
     ),
     RadarStage.error => MusicContentStatePanel(
       key: const ValueKey('radar-error'),
       icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load Radar',
-      detail: radarFailureCopy(_radarController.failure),
+      title: context.l10n.discoverRadarFailureTitle,
+      detail: radarFailureCopy(context.l10n, _radarController.failure),
       liveRegion: true,
       action: _radarFailureAction(_radarController.failure),
     ),
@@ -332,26 +346,31 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     child: AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
       child: switch (_newAlbumController.stage) {
-        NewAlbumStage.loading => const MusicLoadingPanel(
-          key: ValueKey('new-albums-loading'),
-          label: 'Loading New Albums',
+        NewAlbumStage.loading => MusicLoadingPanel(
+          key: const ValueKey('new-albums-loading'),
+          label: context.l10n.discoverLoadingNewAlbums,
         ),
         NewAlbumStage.empty => MusicContentStatePanel(
           key: ValueKey('new-albums-empty'),
           icon: Icons.album_outlined,
-          title: 'No new albums right now',
-          detail: '${widget.providerDisplayName} returned no albums here.',
+          title: context.l10n.discoverNoNewAlbumsTitle,
+          detail: context.l10n.discoverNoNewAlbumsDetail(
+            widget.providerDisplayName ?? context.l10n.providerQqMusic,
+          ),
         ),
         NewAlbumStage.error => MusicContentStatePanel(
           key: const ValueKey('new-albums-error'),
           icon: Icons.cloud_off_rounded,
-          title: 'Couldn’t load new albums',
-          detail: newAlbumFailureCopy(_newAlbumController.failure),
+          title: context.l10n.discoverNewAlbumsFailureTitle,
+          detail: newAlbumFailureCopy(
+            context.l10n,
+            _newAlbumController.failure,
+          ),
           liveRegion: true,
           action: _newAlbumController.canRetry
               ? FilledButton.tonal(
                   onPressed: _newAlbumController.retry,
-                  child: const Text('Try again'),
+                  child: Text(context.l10n.commonRetry),
                 )
               : null,
         ),
@@ -384,26 +403,28 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     child: AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
       child: switch (_newSongController.stage) {
-        NewSongStage.loading => const MusicLoadingPanel(
-          key: ValueKey('new-songs-loading'),
-          label: 'Loading New Songs',
+        NewSongStage.loading => MusicLoadingPanel(
+          key: const ValueKey('new-songs-loading'),
+          label: context.l10n.discoverLoadingNewSongs,
         ),
         NewSongStage.empty => MusicContentStatePanel(
           key: ValueKey('new-songs-empty'),
           icon: Icons.music_off_rounded,
-          title: 'No new songs right now',
-          detail: '${widget.providerDisplayName} returned no Tracks here.',
+          title: context.l10n.discoverNoNewSongsTitle,
+          detail: context.l10n.discoverNoNewSongsDetail(
+            widget.providerDisplayName ?? context.l10n.providerQqMusic,
+          ),
         ),
         NewSongStage.error => MusicContentStatePanel(
           key: const ValueKey('new-songs-error'),
           icon: Icons.cloud_off_rounded,
-          title: 'Couldn’t load new songs',
-          detail: newSongFailureCopy(_newSongController.failure),
+          title: context.l10n.discoverNewSongsFailureTitle,
+          detail: newSongFailureCopy(context.l10n, _newSongController.failure),
           liveRegion: true,
           action: _newSongController.canRetry
               ? FilledButton.tonal(
                   onPressed: _newSongController.retry,
-                  child: const Text('Try again'),
+                  child: Text(context.l10n.commonRetry),
                 )
               : null,
         ),
@@ -426,19 +447,19 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     if (_radarRequiresSignIn(failure)) {
       return FilledButton.tonal(
         onPressed: widget.onSignInAgain,
-        child: const Text('Sign in again'),
+        child: Text(context.l10n.authSignInAgain),
       );
     }
     if (_radarController.canRetry) {
       return FilledButton.tonal(
         onPressed: _radarController.retry,
-        child: const Text('Try again'),
+        child: Text(context.l10n.commonRetry),
       );
     }
     if (failure == RadarFailure.replaced) {
       return FilledButton.tonal(
         onPressed: () => unawaited(_radarController.load()),
-        child: const Text('Reload Radar'),
+        child: Text(context.l10n.discoverReloadRadar),
       );
     }
     return null;
@@ -477,8 +498,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       return;
     }
     final message = widget.queuePlaybackController.failure == null
-        ? 'Added to queue'
-        : 'Couldn’t update the queue';
+        ? context.l10n.queueAddedMessage
+        : context.l10n.queueUpdateFailureMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -596,7 +617,7 @@ class _DiscoverHeader extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Discover',
+                            context.l10n.discoverTitle,
                             key: const ValueKey('discover-heading'),
                             style: Theme.of(context).textTheme.headlineLarge
                                 ?.copyWith(
@@ -665,11 +686,11 @@ class _DiscoverTabs extends StatelessWidget {
           }),
           height: 48,
           text: switch (type) {
-            _DiscoverType.playlists => 'Playlists',
-            _DiscoverType.rankings => 'Rankings',
-            _DiscoverType.radar => 'Radar',
-            _DiscoverType.newAlbums => 'New albums',
-            _DiscoverType.newSongs => 'New songs',
+            _DiscoverType.playlists => context.l10n.discoverPlaylistsTab,
+            _DiscoverType.rankings => context.l10n.discoverRankingsTab,
+            _DiscoverType.radar => context.l10n.discoverRadarTab,
+            _DiscoverType.newAlbums => context.l10n.discoverNewAlbumsTab,
+            _DiscoverType.newSongs => context.l10n.discoverNewSongsTab,
           },
         ),
     ],
@@ -712,7 +733,7 @@ class _NewSongShell extends StatelessWidget {
               key: const ValueKey('new-songs-play-all'),
               onPressed: onPlay,
               icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Play'),
+              label: Text(context.l10n.commonPlay),
             ),
           ],
         ),
@@ -828,7 +849,7 @@ class _NewSongCategoryPicker extends StatelessWidget {
           ButtonSegment(
             value: value,
             label: Text(
-              newSongCategoryLabel(value),
+              newSongCategoryLabel(context.l10n, value),
               key: ValueKey('new-song-category-${value.name}'),
             ),
           ),
@@ -971,7 +992,7 @@ class _NewAlbumRegionPicker extends StatelessWidget {
           ButtonSegment(
             value: value,
             label: Text(
-              newAlbumRegionLabel(value),
+              newAlbumRegionLabel(context.l10n, value),
               key: ValueKey('new-album-region-${value.name}'),
             ),
           ),
@@ -1000,7 +1021,7 @@ class _NewAlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: _newAlbumSemanticLabel(release),
+    label: _newAlbumSemanticLabel(context.l10n, release),
     excludeSemantics: true,
     onTap: onTap,
     child: Column(
@@ -1033,7 +1054,7 @@ class _NewAlbumCard extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(
-          _newAlbumDetails(release),
+          _newAlbumDetails(context.l10n, release),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall
@@ -1100,16 +1121,16 @@ class _NewAlbumFooter extends StatelessWidget {
           : appendFailure != null
           ? FilledButton.tonal(
               onPressed: onRetryMore,
-              child: const Text('Try loading more again'),
+              child: Text(context.l10n.commonTryLoadingMoreAgain),
             )
           : hasMore
           ? FilledButton.tonal(
               key: const ValueKey('new-albums-load-more'),
               onPressed: onLoadMore,
-              child: const Text('Load more'),
+              child: Text(context.l10n.commonLoadMore),
             )
           : Text(
-              'End of new albums',
+              context.l10n.discoverEndNewAlbums,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -1118,17 +1139,17 @@ class _NewAlbumFooter extends StatelessWidget {
   );
 }
 
-String _newAlbumDetails(NewAlbumRelease release) {
+String _newAlbumDetails(AppLocalizations l10n, NewAlbumRelease release) {
   final details = <String>[
     if (release.artists.isNotEmpty)
       release.artists.map((artist) => artist.name).join(' · '),
     ?release.releaseDate,
   ];
-  return details.isEmpty ? 'Album' : details.join(' · ');
+  return details.isEmpty ? l10n.discoverAlbumType : details.join(' · ');
 }
 
-String _newAlbumSemanticLabel(NewAlbumRelease release) =>
-    '${release.album.title}, ${_newAlbumDetails(release)}';
+String _newAlbumSemanticLabel(AppLocalizations l10n, NewAlbumRelease release) =>
+    '${release.album.title}, ${_newAlbumDetails(l10n, release)}';
 
 class _RankingCollection extends StatelessWidget {
   const _RankingCollection({
@@ -1216,7 +1237,9 @@ class _RankingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final details = <String>[];
     if (ranking.period case final period?) details.add(period);
-    if (ranking.trackCount case final count?) details.add('$count Tracks');
+    if (ranking.trackCount case final count?) {
+      details.add(context.l10n.trackCount(count));
+    }
     final semantic = details.isEmpty
         ? ranking.title
         : '${ranking.title}, ${details.join(', ')}';
@@ -1259,7 +1282,7 @@ class _RankingTile extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          ranking.period ?? 'Current ranking',
+                          ranking.period ?? context.l10n.discoverCurrentRanking,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
@@ -1314,7 +1337,7 @@ class _RankingArtworkPane extends StatelessWidget {
             right: 10,
             bottom: 9,
             child: Text(
-              '$trackCount tracks',
+              context.l10n.trackCount(trackCount!),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium
@@ -1331,11 +1354,11 @@ class _DiscoverTrackTableHeader extends StatelessWidget {
   const _DiscoverTrackTableHeader({super.key});
 
   @override
-  Widget build(BuildContext context) => const MusicTrackTableHeader(
-    titleLabel: 'Title',
-    artistLabel: 'Artist',
-    albumLabel: 'Album',
-    durationLabel: 'Duration',
+  Widget build(BuildContext context) => MusicTrackTableHeader(
+    titleLabel: context.l10n.tableTitle,
+    artistLabel: context.l10n.tableArtist,
+    albumLabel: context.l10n.tableAlbum,
+    durationLabel: context.l10n.tableDuration,
   );
 }
 
@@ -1370,13 +1393,13 @@ class _DiscoverTrackRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final artists = track.artistNames.isEmpty
-        ? 'Unknown artist'
+        ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' / ');
     return MusicTrackRowSurface(
       itemKey: itemKey,
       desktop: desktop,
       current: current,
-      semanticLabel: '${track.title}, $artists',
+      semanticLabel: context.l10n.commonTrackSemantics(artists, track.title),
       onTap: onPlay,
       onContextMenuRequested: (position) => unawaited(
         position == null
@@ -1402,8 +1425,8 @@ class _DiscoverTrackRow extends StatelessWidget {
         onMore: () => unawaited(
           desktop ? _showDesktopMenuAtRow(context) : _showCompactMenu(context),
         ),
-        addToQueueTooltip: 'Add to queue',
-        moreTooltip: 'More actions',
+        addToQueueTooltip: context.l10n.commonAddToQueue,
+        moreTooltip: context.l10n.commonMoreActions,
       ),
     );
   }
@@ -1428,7 +1451,7 @@ class _DiscoverTrackRow extends StatelessWidget {
         overlay.size.width - position.dx,
         overlay.size.height - position.dy,
       ),
-      items: _menuItems(),
+      items: _menuItems(context),
     );
     if (!context.mounted) return;
     _runAction(context, action);
@@ -1445,26 +1468,26 @@ class _DiscoverTrackRow extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow_rounded),
-              title: const Text('Play from here'),
+              title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
-              title: const Text('Add to queue'),
+              title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
             ),
             if (onOpenAlbum != null)
               ListTile(
                 key: const ValueKey('track-context-album'),
                 leading: const Icon(Icons.album_rounded),
-                title: const Text('Open album'),
+                title: Text(context.l10n.commonOpenAlbum),
                 onTap: () => Navigator.pop(context, MusicTrackAction.openAlbum),
               ),
             if (onOpenArtist != null)
               ListTile(
                 key: const ValueKey('track-context-artist-0'),
                 leading: const Icon(Icons.person_rounded),
-                title: const Text('Open artist'),
+                title: Text(context.l10n.commonOpenArtist),
                 onTap: () =>
                     Navigator.pop(context, MusicTrackAction.openArtist),
               ),
@@ -1477,35 +1500,35 @@ class _DiscoverTrackRow extends StatelessWidget {
     _runAction(context, action);
   }
 
-  List<PopupMenuEntry<MusicTrackAction>> _menuItems() => [
-    const PopupMenuItem(
+  List<PopupMenuEntry<MusicTrackAction>> _menuItems(BuildContext context) => [
+    PopupMenuItem(
       value: MusicTrackAction.play,
       child: ListTile(
-        leading: Icon(Icons.play_arrow_rounded),
-        title: Text('Play from here'),
+        leading: const Icon(Icons.play_arrow_rounded),
+        title: Text(context.l10n.commonPlayFromHere),
       ),
     ),
-    const PopupMenuItem(
+    PopupMenuItem(
       value: MusicTrackAction.addToQueue,
       child: ListTile(
-        leading: Icon(Icons.playlist_add_rounded),
-        title: Text('Add to queue'),
+        leading: const Icon(Icons.playlist_add_rounded),
+        title: Text(context.l10n.commonAddToQueue),
       ),
     ),
     if (onOpenAlbum != null)
-      const PopupMenuItem(
+      PopupMenuItem(
         value: MusicTrackAction.openAlbum,
         child: ListTile(
-          leading: Icon(Icons.album_rounded),
-          title: Text('Open album'),
+          leading: const Icon(Icons.album_rounded),
+          title: Text(context.l10n.commonOpenAlbum),
         ),
       ),
     if (onOpenArtist != null)
-      const PopupMenuItem(
+      PopupMenuItem(
         value: MusicTrackAction.openArtist,
         child: ListTile(
-          leading: Icon(Icons.person_rounded),
-          title: Text('Open artist'),
+          leading: const Icon(Icons.person_rounded),
+          title: Text(context.l10n.commonOpenArtist),
         ),
       ),
   ];
@@ -1659,12 +1682,12 @@ class _RadarCollectionState extends State<_RadarCollection> {
                               ? null
                               : () => widget.onPlay(0),
                           icon: const Icon(Icons.play_arrow_rounded),
-                          label: const Text('Play'),
+                          label: Text(context.l10n.commonPlay),
                         ),
                         const SizedBox(width: 10),
                         IconButton.filledTonal(
                           key: const ValueKey('radar-refresh'),
-                          tooltip: 'Refresh Radar',
+                          tooltip: context.l10n.discoverRefreshRadar,
                           onPressed: widget.onReload,
                           icon: const Icon(Icons.refresh_rounded),
                         ),
@@ -1765,35 +1788,35 @@ class _RadarFooter extends StatelessWidget {
             : _radarRequiresSignIn(failure)
             ? FilledButton.tonal(
                 onPressed: onSignInAgain,
-                child: const Text('Sign in again'),
+                child: Text(context.l10n.authSignInAgain),
               )
             : canRetryMore
             ? FilledButton.tonal(
                 onPressed: onRetryMore,
-                child: const Text('Try loading more again'),
+                child: Text(context.l10n.commonTryLoadingMoreAgain),
               )
             : failure == RadarFailure.replaced
             ? FilledButton.tonal(
                 onPressed: onReload,
-                child: const Text('Reload Radar'),
+                child: Text(context.l10n.discoverReloadRadar),
               )
             : failure != null
             ? Text(
-                radarFailureCopy(failure),
+                radarFailureCopy(context.l10n, failure),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium
                     ?.copyWith(color: Theme.of(context).colorScheme.error),
               )
             : hasMore
             ? Text(
-                'Scroll to load more',
+                context.l10n.commonScrollToLoadMore,
                 key: const ValueKey('radar-auto-load-more'),
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               )
             : Text(
-                'End of Radar recommendations',
+                context.l10n.discoverEndRadar,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -1889,7 +1912,7 @@ class _RecommendationGridItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: _semanticLabel(playlist),
+    label: _semanticLabel(context.l10n, playlist),
     excludeSemantics: true,
     onTap: onTap,
     child: Column(
@@ -1923,8 +1946,8 @@ class _RecommendationGridItem extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           playlist.trackCount != null
-              ? '${playlist.trackCount} tracks'
-              : 'Music service playlist',
+              ? context.l10n.trackCount(playlist.trackCount!)
+              : context.l10n.discoverMusicServicePlaylist,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall
@@ -1991,16 +2014,16 @@ class _RecommendationFooter extends StatelessWidget {
           : appendFailure != null
           ? FilledButton.tonal(
               onPressed: onRetryMore,
-              child: const Text('Try loading more again'),
+              child: Text(context.l10n.commonTryLoadingMoreAgain),
             )
           : hasMore
           ? FilledButton.tonal(
               key: const ValueKey('recommendations-load-more'),
               onPressed: onLoadMore,
-              child: const Text('Load more'),
+              child: Text(context.l10n.commonLoadMore),
             )
           : Text(
-              'End of recommendations',
+              context.l10n.discoverEndRecommendations,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -2009,9 +2032,14 @@ class _RecommendationFooter extends StatelessWidget {
   );
 }
 
-String _semanticLabel(RecommendedPlaylistSummary playlist) {
+String _semanticLabel(
+  AppLocalizations l10n,
+  RecommendedPlaylistSummary playlist,
+) {
   final count = playlist.trackCount;
-  return count == null ? playlist.title : '${playlist.title}, $count tracks';
+  return count == null
+      ? playlist.title
+      : '${playlist.title}, ${l10n.trackCount(count)}';
 }
 
 bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
@@ -2019,17 +2047,18 @@ bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
     left.providerId == right.providerId &&
     left.opaqueId == right.opaqueId;
 
-String _failureCopy(RecommendedPlaylistFailure? failure) => switch (failure) {
-  RecommendedPlaylistFailure.network => 'Check your connection and try again.',
+String _failureCopy(
+  AppLocalizations l10n,
+  RecommendedPlaylistFailure? failure,
+) => switch (failure) {
+  RecommendedPlaylistFailure.network => l10n.commonNetworkFailure,
   RecommendedPlaylistFailure.serviceUnavailable =>
-    'Recommendations are temporarily unavailable.',
-  RecommendedPlaylistFailure.cancelled =>
-    'The recommendation request was cancelled.',
-  RecommendedPlaylistFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
+    l10n.discoverRecommendationServiceFailure,
+  RecommendedPlaylistFailure.cancelled => l10n.discoverRecommendationCancelled,
+  RecommendedPlaylistFailure.coreUnavailable => l10n.commonCoreUnavailable,
   RecommendedPlaylistFailure.invalidResponse ||
   RecommendedPlaylistFailure.alreadyRunning ||
-  null => 'The music service returned an unexpected recommendation response.',
+  null => l10n.discoverRecommendationUnexpected,
 };
 
 bool _radarRequiresSignIn(RadarFailure? failure) =>
@@ -2037,64 +2066,61 @@ bool _radarRequiresSignIn(RadarFailure? failure) =>
     failure == RadarFailure.credentialRejected ||
     failure == RadarFailure.credentialRejectedStorageCleanupFailed;
 
-String radarFailureCopy(RadarFailure? failure) => switch (failure) {
-  RadarFailure.authenticationRequired =>
-    'Sign in to load QQ Music Radar Tracks.',
-  RadarFailure.credentialRejected =>
-    'Your QQ Music session expired. Sign in again to continue.',
-  RadarFailure.credentialRejectedStorageCleanupFailed =>
-    'Your QQ Music session expired, but its saved copy could not be removed. '
-        'Sign in again after checking secure storage.',
-  RadarFailure.network => 'Check your connection and try again.',
-  RadarFailure.serviceUnavailable =>
-    'QQ Music Radar is temporarily unavailable.',
-  RadarFailure.replaced =>
-    'The signed-in account changed while Radar was loading.',
-  RadarFailure.cancelled => 'The Radar request was cancelled.',
-  RadarFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  RadarFailure.invalidResponse ||
-  RadarFailure.alreadyRunning ||
-  null => 'QQ Music returned an unexpected Radar response.',
-};
+String radarFailureCopy(AppLocalizations l10n, RadarFailure? failure) =>
+    switch (failure) {
+      RadarFailure.authenticationRequired =>
+        l10n.discoverRadarAuthenticationRequired,
+      RadarFailure.credentialRejected => l10n.discoverRadarCredentialRejected,
+      RadarFailure.credentialRejectedStorageCleanupFailed =>
+        l10n.discoverRadarCredentialCleanupFailure,
+      RadarFailure.network => l10n.commonNetworkFailure,
+      RadarFailure.serviceUnavailable => l10n.discoverRadarServiceFailure,
+      RadarFailure.replaced => l10n.discoverRadarAccountChanged,
+      RadarFailure.cancelled => l10n.discoverRadarCancelled,
+      RadarFailure.coreUnavailable => l10n.commonCoreUnavailable,
+      RadarFailure.invalidResponse ||
+      RadarFailure.alreadyRunning ||
+      null => l10n.discoverRadarUnexpected,
+    };
 
-String newAlbumRegionLabel(NewAlbumRegion region) => switch (region) {
-  NewAlbumRegion.mainlandChina => 'Mainland China',
-  NewAlbumRegion.hongKongTaiwan => 'Hong Kong / Taiwan',
-  NewAlbumRegion.western => 'Western',
-  NewAlbumRegion.korea => 'Korea',
-  NewAlbumRegion.japan => 'Japan',
-  NewAlbumRegion.other => 'Other',
-};
+String newAlbumRegionLabel(AppLocalizations l10n, NewAlbumRegion region) =>
+    switch (region) {
+      NewAlbumRegion.mainlandChina => l10n.discoverRegionMainlandChina,
+      NewAlbumRegion.hongKongTaiwan => l10n.discoverRegionHongKongTaiwan,
+      NewAlbumRegion.western => l10n.discoverRegionWestern,
+      NewAlbumRegion.korea => l10n.discoverRegionKorea,
+      NewAlbumRegion.japan => l10n.discoverRegionJapan,
+      NewAlbumRegion.other => l10n.discoverRegionOther,
+    };
 
-String newAlbumFailureCopy(NewAlbumFailure? failure) => switch (failure) {
-  NewAlbumFailure.network => 'Check your connection and try again.',
-  NewAlbumFailure.serviceUnavailable =>
-    'New albums are temporarily unavailable.',
-  NewAlbumFailure.cancelled => 'The new-album request was cancelled.',
-  NewAlbumFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  NewAlbumFailure.invalidResponse ||
-  NewAlbumFailure.alreadyRunning ||
-  null => 'The music service returned an unexpected new-album response.',
-};
+String newAlbumFailureCopy(AppLocalizations l10n, NewAlbumFailure? failure) =>
+    switch (failure) {
+      NewAlbumFailure.network => l10n.commonNetworkFailure,
+      NewAlbumFailure.serviceUnavailable => l10n.discoverNewAlbumServiceFailure,
+      NewAlbumFailure.cancelled => l10n.discoverNewAlbumCancelled,
+      NewAlbumFailure.coreUnavailable => l10n.commonCoreUnavailable,
+      NewAlbumFailure.invalidResponse ||
+      NewAlbumFailure.alreadyRunning ||
+      null => l10n.discoverNewAlbumUnexpected,
+    };
 
-String newSongCategoryLabel(NewSongCategory category) => switch (category) {
-  NewSongCategory.latest => 'Latest',
-  NewSongCategory.mainlandChina => 'Mainland China',
-  NewSongCategory.hongKongTaiwan => 'Hong Kong / Taiwan',
-  NewSongCategory.western => 'Western',
-  NewSongCategory.korea => 'Korea',
-  NewSongCategory.japan => 'Japan',
-};
+String newSongCategoryLabel(AppLocalizations l10n, NewSongCategory category) =>
+    switch (category) {
+      NewSongCategory.latest => l10n.discoverCategoryLatest,
+      NewSongCategory.mainlandChina => l10n.discoverRegionMainlandChina,
+      NewSongCategory.hongKongTaiwan => l10n.discoverRegionHongKongTaiwan,
+      NewSongCategory.western => l10n.discoverRegionWestern,
+      NewSongCategory.korea => l10n.discoverRegionKorea,
+      NewSongCategory.japan => l10n.discoverRegionJapan,
+    };
 
-String newSongFailureCopy(NewSongFailure? failure) => switch (failure) {
-  NewSongFailure.network => 'Check your connection and try again.',
-  NewSongFailure.serviceUnavailable => 'New songs are temporarily unavailable.',
-  NewSongFailure.cancelled => 'The new-song request was cancelled.',
-  NewSongFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  NewSongFailure.invalidResponse ||
-  NewSongFailure.alreadyRunning ||
-  null => 'The music service returned an unexpected new-song response.',
-};
+String newSongFailureCopy(AppLocalizations l10n, NewSongFailure? failure) =>
+    switch (failure) {
+      NewSongFailure.network => l10n.commonNetworkFailure,
+      NewSongFailure.serviceUnavailable => l10n.discoverNewSongServiceFailure,
+      NewSongFailure.cancelled => l10n.discoverNewSongCancelled,
+      NewSongFailure.coreUnavailable => l10n.commonCoreUnavailable,
+      NewSongFailure.invalidResponse ||
+      NewSongFailure.alreadyRunning ||
+      null => l10n.discoverNewSongUnexpected,
+    };

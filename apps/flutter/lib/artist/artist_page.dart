@@ -11,6 +11,8 @@ import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
@@ -24,7 +26,7 @@ class ArtistPage extends StatefulWidget {
     required this.onSignInAgain,
     this.albumGateway,
     this.onOpenAlbum,
-    this.backTooltip = 'Back',
+    this.backTooltip,
     this.embedded = false,
     super.key,
   });
@@ -36,7 +38,7 @@ class ArtistPage extends StatefulWidget {
   final VoidCallback onSignInAgain;
   final ArtistAlbumGateway? albumGateway;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
-  final String backTooltip;
+  final String? backTooltip;
   final bool embedded;
 
   @override
@@ -72,6 +74,7 @@ class _ArtistPageState extends State<ArtistPage> {
 
   @override
   Widget build(BuildContext context) {
+    final backTooltip = widget.backTooltip ?? context.l10n.commonBack;
     final body = SafeArea(
       child: AnimatedBuilder(
         animation: _controllers,
@@ -83,9 +86,7 @@ class _ArtistPageState extends State<ArtistPage> {
                 _ArtistHeader(
                   artist: widget.artist,
                   total: _visibleTotal,
-                  totalLabel: _section == _ArtistSection.tracks
-                      ? 'Track'
-                      : 'Album',
+                  section: _section,
                   desktop: desktop,
                 ),
                 Padding(
@@ -97,16 +98,16 @@ class _ArtistPageState extends State<ArtistPage> {
                   ),
                   child: SegmentedButton<_ArtistSection>(
                     key: const ValueKey('artist-sections'),
-                    segments: const [
+                    segments: [
                       ButtonSegment(
                         value: _ArtistSection.tracks,
-                        icon: Icon(Icons.music_note_rounded),
-                        label: Text('Tracks'),
+                        icon: const Icon(Icons.music_note_rounded),
+                        label: Text(context.l10n.artistTracksSection),
                       ),
                       ButtonSegment(
                         value: _ArtistSection.albums,
-                        icon: Icon(Icons.album_rounded),
-                        label: Text('Albums'),
+                        icon: const Icon(Icons.album_rounded),
+                        label: Text(context.l10n.artistAlbumsSection),
                       ),
                     ],
                     selected: {_section},
@@ -141,13 +142,13 @@ class _ArtistPageState extends State<ArtistPage> {
                   children: [
                     IconButton(
                       key: const ValueKey('artist-back'),
-                      tooltip: widget.backTooltip,
+                      tooltip: backTooltip,
                       onPressed: widget.onBack,
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Artist',
+                      context.l10n.artistType,
                       style: Theme.of(context).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w600),
                     ),
@@ -164,11 +165,11 @@ class _ArtistPageState extends State<ArtistPage> {
       appBar: AppBar(
         leading: IconButton(
           key: const ValueKey('artist-back'),
-          tooltip: widget.backTooltip,
+          tooltip: backTooltip,
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Artist'),
+        title: Text(context.l10n.artistType),
       ),
       body: body,
       bottomNavigationBar: NowPlayingBar(
@@ -196,90 +197,96 @@ class _ArtistPageState extends State<ArtistPage> {
     }
   }
 
-  Widget _trackBody(bool desktop) => switch (_controller.stage) {
-    ArtistTrackStage.loading => const MusicLoadingPanel(
-      key: ValueKey('artist-loading'),
-      label: 'Loading Artist Tracks',
-    ),
-    ArtistTrackStage.empty => MusicContentStatePanel(
-      key: const ValueKey('artist-empty'),
-      icon: Icons.person_off_outlined,
-      title: 'This Artist has no available Tracks',
-      detail:
-          '${builtInProviderDisplayName(widget.artist.providerId)} returned an empty Artist Track list.',
-    ),
-    ArtistTrackStage.error => MusicContentStatePanel(
-      key: const ValueKey('artist-error'),
-      icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load this Artist',
-      detail: _failureCopy(
-        _controller.failure,
-        builtInProviderDisplayName(widget.artist.providerId),
+  Widget _trackBody(bool desktop) {
+    final l10n = context.l10n;
+    final providerName = builtInProviderDisplayName(
+      widget.artist.providerId,
+      l10n,
+    );
+    return switch (_controller.stage) {
+      ArtistTrackStage.loading => MusicLoadingPanel(
+        key: const ValueKey('artist-loading'),
+        label: l10n.artistLoadingTracks,
       ),
-      liveRegion: true,
-      action: _controller.canRetry
-          ? FilledButton.tonal(
-              onPressed: _controller.retry,
-              child: const Text('Try again'),
-            )
-          : null,
-    ),
-    ArtistTrackStage.content => _ArtistTracks(
-      key: const ValueKey('artist-content'),
-      tracks: _controller.tracks,
-      hasMore: _controller.hasMore,
-      isLoadingMore: _controller.isLoadingMore,
-      appendFailure: _controller.appendFailure,
-      onLoadMore: _controller.loadMore,
-      onRetryMore: _controller.retryMore,
-      onPlay: _play,
-      onQueue: _queue,
-      onOpenAlbum: widget.onOpenAlbum,
-      current: widget.queuePlaybackController.current,
-      desktop: desktop,
-    ),
-  };
+      ArtistTrackStage.empty => MusicContentStatePanel(
+        key: const ValueKey('artist-empty'),
+        icon: Icons.person_off_outlined,
+        title: l10n.artistEmptyTracksTitle,
+        detail: l10n.artistEmptyTracksDetail(providerName),
+      ),
+      ArtistTrackStage.error => MusicContentStatePanel(
+        key: const ValueKey('artist-error'),
+        icon: Icons.cloud_off_rounded,
+        title: l10n.artistFailureTitle,
+        detail: _failureCopy(l10n, _controller.failure, providerName),
+        liveRegion: true,
+        action: _controller.canRetry
+            ? FilledButton.tonal(
+                onPressed: _controller.retry,
+                child: Text(l10n.commonRetry),
+              )
+            : null,
+      ),
+      ArtistTrackStage.content => _ArtistTracks(
+        key: const ValueKey('artist-content'),
+        tracks: _controller.tracks,
+        hasMore: _controller.hasMore,
+        isLoadingMore: _controller.isLoadingMore,
+        appendFailure: _controller.appendFailure,
+        onLoadMore: _controller.loadMore,
+        onRetryMore: _controller.retryMore,
+        onPlay: _play,
+        onQueue: _queue,
+        onOpenAlbum: widget.onOpenAlbum,
+        current: widget.queuePlaybackController.current,
+        desktop: desktop,
+      ),
+    };
+  }
 
-  Widget _albumBody(bool desktop) => switch (_albumController.stage) {
-    ArtistAlbumStage.loading => const MusicLoadingPanel(
-      key: ValueKey('artist-albums-loading'),
-      label: 'Loading Artist Albums',
-    ),
-    ArtistAlbumStage.empty => MusicContentStatePanel(
-      key: const ValueKey('artist-albums-empty'),
-      icon: Icons.album_outlined,
-      title: 'This Artist has no available Albums',
-      detail:
-          '${builtInProviderDisplayName(widget.artist.providerId)} returned an empty Artist Album list.',
-    ),
-    ArtistAlbumStage.error => MusicContentStatePanel(
-      key: const ValueKey('artist-albums-error'),
-      icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load this Artist’s Albums',
-      detail: _albumFailureCopy(
-        _albumController.failure,
-        builtInProviderDisplayName(widget.artist.providerId),
+  Widget _albumBody(bool desktop) {
+    final l10n = context.l10n;
+    final providerName = builtInProviderDisplayName(
+      widget.artist.providerId,
+      l10n,
+    );
+    return switch (_albumController.stage) {
+      ArtistAlbumStage.loading => MusicLoadingPanel(
+        key: const ValueKey('artist-albums-loading'),
+        label: l10n.artistLoadingAlbums,
       ),
-      liveRegion: true,
-      action: _albumController.canRetry
-          ? FilledButton.tonal(
-              onPressed: _albumController.retry,
-              child: const Text('Try again'),
-            )
-          : null,
-    ),
-    ArtistAlbumStage.content => _ArtistAlbums(
-      key: const ValueKey('artist-albums-content'),
-      albums: _albumController.albums,
-      hasMore: _albumController.hasMore,
-      isLoadingMore: _albumController.isLoadingMore,
-      appendFailure: _albumController.appendFailure,
-      onLoadMore: _albumController.loadMore,
-      onRetryMore: _albumController.retryMore,
-      onOpen: widget.onOpenAlbum,
-      desktop: desktop,
-    ),
-  };
+      ArtistAlbumStage.empty => MusicContentStatePanel(
+        key: const ValueKey('artist-albums-empty'),
+        icon: Icons.album_outlined,
+        title: l10n.artistEmptyAlbumsTitle,
+        detail: l10n.artistEmptyAlbumsDetail(providerName),
+      ),
+      ArtistAlbumStage.error => MusicContentStatePanel(
+        key: const ValueKey('artist-albums-error'),
+        icon: Icons.cloud_off_rounded,
+        title: l10n.artistAlbumsFailureTitle,
+        detail: _albumFailureCopy(l10n, _albumController.failure, providerName),
+        liveRegion: true,
+        action: _albumController.canRetry
+            ? FilledButton.tonal(
+                onPressed: _albumController.retry,
+                child: Text(l10n.commonRetry),
+              )
+            : null,
+      ),
+      ArtistAlbumStage.content => _ArtistAlbums(
+        key: const ValueKey('artist-albums-content'),
+        albums: _albumController.albums,
+        hasMore: _albumController.hasMore,
+        isLoadingMore: _albumController.isLoadingMore,
+        appendFailure: _albumController.appendFailure,
+        onLoadMore: _albumController.loadMore,
+        onRetryMore: _albumController.retryMore,
+        onOpen: widget.onOpenAlbum,
+        desktop: desktop,
+      ),
+    };
+  }
 
   void _play(int index) {
     unawaited(
@@ -294,8 +301,8 @@ class _ArtistPageState extends State<ArtistPage> {
       return;
     }
     final message = widget.queuePlaybackController.failure == null
-        ? 'Added to queue'
-        : 'Couldn’t update the queue';
+        ? context.l10n.queueAddedMessage
+        : context.l10n.queueUpdateFailureMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -307,13 +314,13 @@ class _ArtistHeader extends StatelessWidget {
   const _ArtistHeader({
     required this.artist,
     required this.total,
-    required this.totalLabel,
+    required this.section,
     required this.desktop,
   });
 
   final ArtistSummary artist;
   final int? total;
-  final String totalLabel;
+  final _ArtistSection section;
   final bool desktop;
 
   @override
@@ -324,14 +331,18 @@ class _ArtistHeader extends StatelessWidget {
     );
     return MusicCatalogHeader(
       artwork: portrait,
-      eyebrow: 'ARTIST',
+      eyebrow: context.l10n.artistType,
       title: artist.name,
       titleKey: const ValueKey('artist-name'),
       desktop: desktop,
       children: [
         if (total case final count?) ...[
           const SizedBox(height: 8),
-          Text('$count ${count == 1 ? totalLabel : '${totalLabel}s'}'),
+          Text(
+            section == _ArtistSection.tracks
+                ? context.l10n.artistTrackCount(count)
+                : context.l10n.artistAlbumCount(count),
+          ),
         ],
       ],
     );
@@ -433,7 +444,7 @@ class _ArtistAlbumTile extends StatelessWidget {
       child: _ArtistAlbumArtwork(uri: album.artworkUri),
     ),
     title: Text(album.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-    subtitle: const Text('Album'),
+    subtitle: Text(context.l10n.albumType),
     trailing: const Icon(Icons.chevron_right_rounded),
     onTap: onOpen == null ? null : () => onOpen!(album),
   );
@@ -474,7 +485,7 @@ class _ArtistAlbumCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Album',
+            context.l10n.albumType,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -536,16 +547,16 @@ class _ArtistAlbumFooter extends StatelessWidget {
           ? FilledButton.tonal(
               key: const ValueKey('artist-albums-retry-more'),
               onPressed: onRetryMore,
-              child: const Text('Try loading more again'),
+              child: Text(context.l10n.commonTryLoadingMoreAgain),
             )
           : hasMore
           ? FilledButton.tonal(
               key: const ValueKey('artist-albums-load-more'),
               onPressed: onLoadMore,
-              child: const Text('Load more'),
+              child: Text(context.l10n.commonLoadMore),
             )
           : Text(
-              'End of Artist Albums',
+              context.l10n.artistEndAlbums,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -616,12 +627,12 @@ class _ArtistTracksState extends State<_ArtistTracks> {
             if (widget.desktop)
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontal),
-                child: const MusicTrackTableHeader(
-                  key: ValueKey('artist-track-table-header'),
-                  titleLabel: 'Title',
-                  artistLabel: 'Artist',
-                  albumLabel: 'Album',
-                  durationLabel: 'Duration',
+                child: MusicTrackTableHeader(
+                  key: const ValueKey('artist-track-table-header'),
+                  titleLabel: context.l10n.tableTitle,
+                  artistLabel: context.l10n.tableArtist,
+                  albumLabel: context.l10n.tableAlbum,
+                  durationLabel: context.l10n.tableDuration,
                 ),
               ),
             Expanded(
@@ -648,7 +659,7 @@ class _ArtistTracksState extends State<_ArtistTracks> {
                         widget.current?.providerId == track.providerId &&
                         widget.current?.opaqueId == track.opaqueId;
                     final artists = track.artistNames.isEmpty
-                        ? 'Unknown artist'
+                        ? context.l10n.trackUnknownArtist
                         : track.artistNames.join(' / ');
                     final canOpenAlbum =
                         widget.onOpenAlbum != null && track.album != null;
@@ -661,7 +672,10 @@ class _ArtistTracksState extends State<_ArtistTracks> {
                       current: selected,
                       hovered: _hoveredTrack == identity,
                       onHoverChanged: (hovered) => _setHovered(track, hovered),
-                      semanticLabel: '${track.title}, $artists',
+                      semanticLabel: context.l10n.commonTrackSemantics(
+                        artists,
+                        track.title,
+                      ),
                       onTap: () => widget.onPlay(index),
                       onContextMenuRequested: (_) =>
                           unawaited(_showActions(track, index)),
@@ -706,18 +720,18 @@ class _ArtistTracksState extends State<_ArtistTracks> {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow_rounded),
-              title: const Text('Play from here'),
+              title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
-              title: const Text('Add to queue'),
+              title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
             ),
             if (canOpenAlbum)
               ListTile(
                 leading: const Icon(Icons.album_rounded),
-                title: const Text('Open album'),
+                title: Text(context.l10n.commonOpenAlbum),
                 onTap: () => Navigator.pop(context, MusicTrackAction.openAlbum),
               ),
             const SizedBox(height: 8),
@@ -766,16 +780,16 @@ class _ArtistFooter extends StatelessWidget {
           : appendFailure != null
           ? FilledButton.tonal(
               onPressed: onRetryMore,
-              child: const Text('Try loading more again'),
+              child: Text(context.l10n.commonTryLoadingMoreAgain),
             )
           : hasMore
           ? FilledButton.tonal(
               key: const ValueKey('artist-load-more'),
               onPressed: onLoadMore,
-              child: const Text('Load more'),
+              child: Text(context.l10n.commonLoadMore),
             )
           : Text(
-              'End of Artist Tracks',
+              context.l10n.artistEndTracks,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -784,28 +798,34 @@ class _ArtistFooter extends StatelessWidget {
   );
 }
 
-String _failureCopy(ArtistTrackFailure? failure, String providerName) =>
-    switch (failure) {
-      ArtistTrackFailure.network => 'Check your connection and try again.',
-      ArtistTrackFailure.serviceUnavailable =>
-        '$providerName Artist browsing is temporarily unavailable.',
-      ArtistTrackFailure.cancelled => 'The Artist request was cancelled.',
-      ArtistTrackFailure.coreUnavailable =>
-        'The local music core is unavailable. Restart the app and try again.',
-      ArtistTrackFailure.invalidResponse ||
-      ArtistTrackFailure.alreadyRunning ||
-      null => '$providerName returned an unexpected Artist response.',
-    };
+String _failureCopy(
+  AppLocalizations l10n,
+  ArtistTrackFailure? failure,
+  String providerName,
+) => switch (failure) {
+  ArtistTrackFailure.network => l10n.albumFailureNetwork,
+  ArtistTrackFailure.serviceUnavailable => l10n.artistFailureService(
+    providerName,
+  ),
+  ArtistTrackFailure.cancelled => l10n.artistFailureCancelled,
+  ArtistTrackFailure.coreUnavailable => l10n.catalogFailureCore,
+  ArtistTrackFailure.invalidResponse ||
+  ArtistTrackFailure.alreadyRunning ||
+  null => l10n.artistFailureUnexpected(providerName),
+};
 
-String _albumFailureCopy(ArtistAlbumFailure? failure, String providerName) =>
-    switch (failure) {
-      ArtistAlbumFailure.network => 'Check your connection and try again.',
-      ArtistAlbumFailure.serviceUnavailable =>
-        '$providerName Artist Album browsing is temporarily unavailable.',
-      ArtistAlbumFailure.cancelled => 'The Artist Album request was cancelled.',
-      ArtistAlbumFailure.coreUnavailable =>
-        'The local music core is unavailable. Restart the app and try again.',
-      ArtistAlbumFailure.invalidResponse ||
-      ArtistAlbumFailure.alreadyRunning ||
-      null => '$providerName returned an unexpected Artist Album response.',
-    };
+String _albumFailureCopy(
+  AppLocalizations l10n,
+  ArtistAlbumFailure? failure,
+  String providerName,
+) => switch (failure) {
+  ArtistAlbumFailure.network => l10n.albumFailureNetwork,
+  ArtistAlbumFailure.serviceUnavailable => l10n.artistAlbumsFailureService(
+    providerName,
+  ),
+  ArtistAlbumFailure.cancelled => l10n.artistAlbumsFailureCancelled,
+  ArtistAlbumFailure.coreUnavailable => l10n.catalogFailureCore,
+  ArtistAlbumFailure.invalidResponse ||
+  ArtistAlbumFailure.alreadyRunning ||
+  null => l10n.artistAlbumsFailureUnexpected(providerName),
+};

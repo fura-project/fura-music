@@ -1,35 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/navigation/music_section_selector.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 enum LibrarySection { playlists, albums, artists, likedSongs }
-
-const _destinations = [
-  MusicSectionDestination(
-    value: LibrarySection.likedSongs,
-    icon: Icons.favorite_rounded,
-    label: '喜欢',
-    itemKey: ValueKey('library-section-liked-songs'),
-  ),
-  MusicSectionDestination(
-    value: LibrarySection.playlists,
-    icon: Icons.queue_music_rounded,
-    label: 'Playlists',
-    itemKey: ValueKey('library-section-playlists'),
-  ),
-  MusicSectionDestination(
-    value: LibrarySection.albums,
-    icon: Icons.album_rounded,
-    label: 'Albums',
-    itemKey: ValueKey('library-section-albums'),
-  ),
-  MusicSectionDestination(
-    value: LibrarySection.artists,
-    icon: Icons.person_rounded,
-    label: 'Artists',
-    itemKey: ValueKey('library-section-artists'),
-  ),
-];
 
 class LibrarySectionSelector extends StatelessWidget {
   const LibrarySectionSelector({
@@ -44,6 +18,33 @@ class LibrarySectionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final l10n = context.l10n;
+      final destinations = [
+        MusicSectionDestination(
+          value: LibrarySection.likedSongs,
+          icon: Icons.favorite_rounded,
+          label: l10n.libraryLikedSongs,
+          itemKey: const ValueKey('library-section-liked-songs'),
+        ),
+        MusicSectionDestination(
+          value: LibrarySection.playlists,
+          icon: Icons.queue_music_rounded,
+          label: l10n.libraryPlaylists,
+          itemKey: const ValueKey('library-section-playlists'),
+        ),
+        MusicSectionDestination(
+          value: LibrarySection.albums,
+          icon: Icons.album_rounded,
+          label: l10n.libraryAlbums,
+          itemKey: const ValueKey('library-section-albums'),
+        ),
+        MusicSectionDestination(
+          value: LibrarySection.artists,
+          icon: Icons.person_rounded,
+          label: l10n.libraryArtists,
+          itemKey: const ValueKey('library-section-artists'),
+        ),
+      ];
       final compact = constraints.maxWidth < 680;
       return Padding(
         padding: EdgeInsets.fromLTRB(
@@ -56,8 +57,8 @@ class LibrarySectionSelector extends StatelessWidget {
           alignment: AlignmentDirectional.centerStart,
           child: MusicSectionSelector<LibrarySection>(
             controlKey: const ValueKey('library-section-selector'),
-            label: 'Library',
-            destinations: _destinations,
+            label: l10n.librarySectionLabel,
+            destinations: destinations,
             selected: selected,
             compact: compact,
             onSelected: onSelected,

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/comments/track_comments_surface.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/lyrics/lyric_panel.dart';
 import 'package:flutterustmusic/music_video/track_music_video_engine.dart';
 import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
@@ -206,11 +207,11 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
           appBar: AppBar(
             leading: IconButton(
               key: const ValueKey('expanded-now-playing-back'),
-              tooltip: 'Back to previous page',
+              tooltip: context.l10n.nowPlayingBack,
               onPressed: widget.onBack,
               icon: const Icon(Icons.arrow_back_rounded),
             ),
-            title: const Text('Now playing'),
+            title: Text(context.l10n.nowPlayingTitle),
           ),
           body: _ExpandedNowPlayingBackdrop(
             key: const ValueKey('expanded-now-playing-palette-ready'),
@@ -556,7 +557,7 @@ class _ExpandedTrackHero extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final artists = track.artistNames.isEmpty
-        ? 'Unknown artist'
+        ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -606,7 +607,7 @@ class _ExpandedTrackHero extends StatelessWidget {
                         children: [
                           IconButton.filledTonal(
                             key: const ValueKey('expanded-now-playing-mv'),
-                            tooltip: 'Open music video',
+                            tooltip: context.l10n.nowPlayingOpenMusicVideo,
                             onPressed: onOpenMusicVideo,
                             icon: const Icon(Icons.music_video_outlined),
                           ),
@@ -615,7 +616,7 @@ class _ExpandedTrackHero extends StatelessWidget {
                             key: const ValueKey(
                               'expanded-now-playing-comments',
                             ),
-                            tooltip: 'Open comments',
+                            tooltip: context.l10n.nowPlayingOpenComments,
                             onPressed: onOpenComments,
                             icon: const Icon(Icons.mode_comment_outlined),
                           ),
@@ -684,7 +685,7 @@ class _ExpandedTrackHero extends StatelessWidget {
                       key: const ValueKey('expanded-now-playing-comments'),
                       onPressed: onOpenComments,
                       icon: const Icon(Icons.mode_comment_outlined),
-                      label: const Text('Comments'),
+                      label: Text(context.l10n.nowPlayingComments),
                     ),
                   ],
                 ),
@@ -795,7 +796,7 @@ class _ExpandedArtwork extends StatelessWidget {
       ),
       child: Semantics(
         image: true,
-        label: 'Artwork for ${track.title}',
+        label: context.l10n.playbackArtworkSemantics(track.title),
         child: SizedBox.square(
           key: const ValueKey('expanded-now-playing-artwork'),
           dimension: dimension,
@@ -841,19 +842,16 @@ class _ExpandedNowPlayingEmpty extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Nothing is playing',
+            context.l10n.nowPlayingEmptyTitle,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Choose a track from your library, Search, or Discover.',
-            textAlign: TextAlign.center,
-          ),
+          Text(context.l10n.nowPlayingEmptyDetail, textAlign: TextAlign.center),
           const SizedBox(height: 20),
           FilledButton.tonal(
             key: const ValueKey('expanded-now-playing-empty-back'),
             onPressed: onBack,
-            child: const Text('Back to music'),
+            child: Text(context.l10n.nowPlayingBackToMusic),
           ),
         ],
       ),
@@ -878,8 +876,8 @@ class _ExpandedLyricsUnavailable extends StatelessWidget {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Lyrics are unavailable in this playback session.',
+          Text(
+            context.l10n.nowPlayingLyricsUnavailable,
             textAlign: TextAlign.center,
           ),
         ],

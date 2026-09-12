@@ -12,6 +12,8 @@ import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
 import 'package:flutterustmusic/library/playlist_track_search_index.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
@@ -225,6 +227,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       animation: _pageListenable,
       builder: (context, _) => LayoutBuilder(
         builder: (context, constraints) {
+          final l10n = context.l10n;
           final desktop = constraints.maxWidth >= 820;
           final searchResult = _trackSearchResult;
           final tracks = searchResult.tracks;
@@ -267,6 +270,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                 LibraryRefreshFailureBanner(
                   key: const ValueKey('liked-songs-refresh-failure'),
                   message: _refreshFailureCopy(
+                    l10n,
                     controller!.refreshFailure!,
                     widget.providerDisplayName,
                   ),
@@ -323,17 +327,16 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                         child: _UnavailableLikedCollection(
                           key: const ValueKey('liked-programs-unavailable'),
                           icon: Icons.podcasts_rounded,
-                          title: '有声节目收藏尚未接入',
-                          detail:
-                              '当前 Core 没有经过验证的 ${widget.providerDisplayName} 有声节目收藏读取能力。',
+                          title: l10n.likedProgramsUnavailableTitle,
+                          detail: l10n.likedProgramsUnavailableDetail,
                         ),
                       ),
-                      const _RetainedLikedSection(
+                      _RetainedLikedSection(
                         child: _UnavailableLikedCollection(
-                          key: ValueKey('liked-videos-unavailable'),
+                          key: const ValueKey('liked-videos-unavailable'),
                           icon: Icons.video_library_outlined,
-                          title: '视频收藏尚未接入',
-                          detail: '歌曲关联 MV 不等同于账号的视频收藏，不会在这里混用。',
+                          title: l10n.likedVideosUnavailableTitle,
+                          detail: l10n.likedVideosUnavailableDetail,
                         ),
                       ),
                     ],
@@ -352,13 +355,14 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     List<PlaylistTrackSummary> tracks, {
     required int approximateMatchCount,
   }) {
+    final l10n = context.l10n;
     final controller = _controller;
     if (controller == null) {
       return _LikedSongsMessage(
         key: const ValueKey('liked-songs-unavailable'),
         icon: Icons.favorite_border_rounded,
-        title: '暂时无法找到喜欢歌单',
-        detail: '${widget.providerDisplayName} 未返回内建喜欢歌单；其他收藏仍可从上方标签进入。',
+        title: l10n.likedPlaylistUnavailableTitle,
+        detail: l10n.likedPlaylistUnavailableDetail(widget.providerDisplayName),
       );
     }
     return switch (controller.stage) {
@@ -366,8 +370,8 @@ class _LikedSongsPageState extends State<LikedSongsPage>
         key: const ValueKey('liked-songs-loading'),
         loading: true,
         icon: Icons.favorite_rounded,
-        title: '正在加载喜欢的歌曲…',
-        detail: '正在从 ${widget.providerDisplayName} 读取收藏。',
+        title: l10n.likedLoadingTitle,
+        detail: l10n.likedLoadingDetail(widget.providerDisplayName),
       ),
       PlaylistDetailStage.content when tracks.isEmpty => _searchEmpty(
         controller,
@@ -408,8 +412,8 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       PlaylistDetailStage.empty => _LikedSongsMessage(
         key: const ValueKey('liked-songs-empty'),
         icon: Icons.favorite_border_rounded,
-        title: '还没有喜欢的歌曲',
-        detail: '在 ${widget.providerDisplayName} 中喜欢的歌曲会显示在这里。',
+        title: l10n.likedEmptyTitle,
+        detail: l10n.likedEmptyDetail(widget.providerDisplayName),
       ),
       PlaylistDetailStage.error => _LikedSongsFailure(
         failure: controller.failure,
@@ -432,13 +436,14 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   }
 
   Widget _searchEmpty(PlaylistDetailController controller) {
+    final l10n = context.l10n;
     final stillSearching =
         controller.isLoadingAll ||
         (controller.hasMore && controller.appendFailure == null);
     final failure = controller.appendFailure;
     final omittedSuffix = controller.omittedTrackCount == 0
         ? ''
-        : '，其中 ${controller.omittedTrackCount} 首缺少可检索标识';
+        : l10n.likedOmittedSearchSuffix(controller.omittedTrackCount);
     return _LikedSongsMessage(
       key: const ValueKey('liked-songs-search-empty'),
       loading: stillSearching,
@@ -446,20 +451,26 @@ class _LikedSongsPageState extends State<LikedSongsPage>
           ? Icons.manage_search_rounded
           : Icons.search_off_rounded,
       title: stillSearching
-          ? '正在搜索整个歌单…'
+          ? l10n.likedSearchingAllTitle
           : failure == null
-          ? '未找到匹配的歌曲'
-          : '搜索暂时中断',
+          ? l10n.likedNoTrackMatchTitle
+          : l10n.likedSearchInterruptedTitle,
       detail: stillSearching
-          ? '已检查 ${controller.processedCount} / ${controller.total} 首，匹配结果会随加载实时更新。'
+          ? l10n.likedSearchProgress(
+              controller.processedCount,
+              controller.total,
+            )
           : failure == null
-          ? '已搜索全部 ${controller.total} 首歌曲$omittedSuffix，请尝试其他关键词。'
-          : '已检查 ${controller.processedCount} / ${controller.total} 首，可重试继续搜索剩余歌曲。',
+          ? l10n.likedSearchFinishedNoMatch(omittedSuffix, controller.total)
+          : l10n.likedSearchInterruptedDetail(
+              controller.processedCount,
+              controller.total,
+            ),
       action: failure == null
           ? null
           : FilledButton.tonal(
               onPressed: () => unawaited(controller.loadAll()),
-              child: const Text('继续搜索'),
+              child: Text(l10n.likedContinueSearch),
             ),
     );
   }
@@ -472,8 +483,8 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   void _addToQueue(PlaylistTrackSummary track) {
     final playbackStart = widget.queuePlaybackController.push(track);
     final message = widget.queuePlaybackController.failure == null
-        ? '已添加到播放队列'
-        : '无法更新播放队列';
+        ? context.l10n.likedQueueAdded
+        : context.l10n.queueUpdateFailureMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -659,7 +670,7 @@ class _LikedSongsHeader extends StatelessWidget {
   }
 
   Widget _title(BuildContext context, {required bool compact}) => Text(
-    '喜欢',
+    context.l10n.likedTitle,
     key: const ValueKey('liked-songs-title'),
     style: compact
         ? Theme.of(context).textTheme.titleLarge
@@ -719,11 +730,16 @@ class _LikedCategoryTabs extends StatelessWidget {
           key: ValueKey('liked-tab-${section.name}'),
           height: 44,
           text: switch (section) {
-            _LikedCollectionSection.songs => total == null ? '歌曲' : '歌曲 $total',
-            _LikedCollectionSection.playlists => '歌单 $playlistCount',
-            _LikedCollectionSection.albums => '专辑',
-            _LikedCollectionSection.programs => '有声节目',
-            _LikedCollectionSection.videos => '视频',
+            _LikedCollectionSection.songs =>
+              total == null
+                  ? context.l10n.likedSongsTabWithoutCount
+                  : context.l10n.likedSongsTab(total!),
+            _LikedCollectionSection.playlists => context.l10n.likedPlaylistsTab(
+              playlistCount,
+            ),
+            _LikedCollectionSection.albums => context.l10n.likedAlbumsTab,
+            _LikedCollectionSection.programs => context.l10n.likedProgramsTab,
+            _LikedCollectionSection.videos => context.l10n.likedVideosTab,
           },
         ),
     ],
@@ -769,10 +785,12 @@ class _LikedPlaylistsCollection extends StatelessWidget {
       return _UnavailableLikedCollection(
         key: const ValueKey('liked-playlists-empty'),
         icon: searching ? Icons.search_off_rounded : Icons.queue_music_rounded,
-        title: searching ? '未找到匹配的歌单' : '还没有其他歌单',
+        title: searching
+            ? context.l10n.likedNoPlaylistMatch
+            : context.l10n.likedNoOtherPlaylists,
         detail: searching
-            ? '请尝试其他关键词。'
-            : '你创建或收藏的 $providerDisplayName 歌单会显示在这里。',
+            ? context.l10n.likedTryAnotherKeyword
+            : context.l10n.likedPlaylistCollectionDetail(providerDisplayName),
       );
     }
     return LayoutBuilder(
@@ -788,21 +806,21 @@ class _LikedPlaylistsCollection extends StatelessWidget {
           slivers: [
             ..._playlistSection(
               context,
-              title: '自创歌单',
+              title: context.l10n.likedCreatedPlaylists,
               playlists: owned,
               columns: columns,
               horizontal: horizontal,
             ),
             ..._playlistSection(
               context,
-              title: '收藏歌单',
+              title: context.l10n.likedSavedPlaylists,
               playlists: saved,
               columns: columns,
               horizontal: horizontal,
             ),
             ..._playlistSection(
               context,
-              title: '其他歌单',
+              title: context.l10n.likedOtherPlaylists,
               playlists: unclassified,
               columns: columns,
               horizontal: horizontal,
@@ -827,7 +845,7 @@ class _LikedPlaylistsCollection extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 12),
         sliver: SliverToBoxAdapter(
           child: Text(
-            '$title ${playlists.length}',
+            context.l10n.likedPlaylistSectionCount(playlists.length, title),
             style: Theme.of(context).textTheme.titleLarge
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
@@ -884,7 +902,7 @@ class _LikedPlaylistCard extends StatelessWidget {
       ),
     );
     return Semantics(
-      label: '${playlist.title}, 歌单',
+      label: context.l10n.likedPlaylistSemantics(playlist.title),
       button: true,
       excludeSemantics: true,
       onTap: onTap,
@@ -921,7 +939,7 @@ class _LikedPlaylistCard extends StatelessWidget {
             if (playlist.trackCount case final count?) ...[
               const SizedBox(height: 3),
               Text(
-                '$count 首歌曲',
+                context.l10n.likedTrackCount(count),
                 maxLines: 1,
                 style: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(color: colors.onSurfaceVariant),
@@ -1013,7 +1031,7 @@ class _PlayAllButton extends StatelessWidget {
   Widget build(BuildContext context) => compact
       ? IconButton.filled(
           key: const ValueKey('liked-songs-play-all'),
-          tooltip: '播放全部',
+          tooltip: context.l10n.likedPlayAll,
           onPressed: onPressed,
           icon: const Icon(Icons.play_arrow_rounded),
         )
@@ -1021,7 +1039,7 @@ class _PlayAllButton extends StatelessWidget {
           key: const ValueKey('liked-songs-play-all'),
           onPressed: onPressed,
           icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('播放全部'),
+          label: Text(context.l10n.likedPlayAll),
         );
 }
 
@@ -1040,7 +1058,9 @@ class _RefreshButton extends StatelessWidget {
   Widget build(BuildContext context) => compact
       ? IconButton.filledTonal(
           key: const ValueKey('liked-songs-refresh-compact'),
-          tooltip: refreshing ? '正在刷新' : '刷新喜欢的歌曲',
+          tooltip: refreshing
+              ? context.l10n.likedRefreshing
+              : context.l10n.likedRefreshSongs,
           onPressed: onPressed,
           icon: const Icon(Icons.refresh_rounded),
         )
@@ -1048,7 +1068,11 @@ class _RefreshButton extends StatelessWidget {
           key: const ValueKey('liked-songs-refresh'),
           onPressed: onPressed,
           icon: const Icon(Icons.refresh_rounded),
-          label: Text(refreshing ? '正在刷新' : '刷新'),
+          label: Text(
+            refreshing
+                ? context.l10n.likedRefreshing
+                : context.l10n.commonRefresh,
+          ),
         );
 }
 
@@ -1068,11 +1092,13 @@ class _LikedCollectionSearch extends StatelessWidget {
         section == _LikedCollectionSection.playlists ||
         section == _LikedCollectionSection.albums;
     final hint = switch (section) {
-      _LikedCollectionSection.songs => '搜索整个歌单',
-      _LikedCollectionSection.playlists => '搜索歌单',
-      _LikedCollectionSection.albums => '搜索已加载专辑',
-      _LikedCollectionSection.programs => '有声节目收藏尚未接入',
-      _LikedCollectionSection.videos => '视频收藏尚未接入',
+      _LikedCollectionSection.songs => context.l10n.likedSearchEntirePlaylist,
+      _LikedCollectionSection.playlists => context.l10n.likedSearchPlaylists,
+      _LikedCollectionSection.albums => context.l10n.likedSearchLoadedAlbums,
+      _LikedCollectionSection.programs =>
+        context.l10n.likedProgramsSearchUnavailable,
+      _LikedCollectionSection.videos =>
+        context.l10n.likedVideosSearchUnavailable,
     };
     return TextField(
       key: ValueKey(
@@ -1091,7 +1117,7 @@ class _LikedCollectionSearch extends StatelessWidget {
           builder: (context, value, _) => value.text.isEmpty
               ? const SizedBox.shrink()
               : IconButton(
-                  tooltip: '清除搜索',
+                  tooltip: context.l10n.commonClearSearch,
                   onPressed: controller.clear,
                   icon: const Icon(Icons.close_rounded, size: 18),
                 ),
@@ -1240,12 +1266,12 @@ class _LikedTrackTableHeader extends StatelessWidget {
   const _LikedTrackTableHeader();
 
   @override
-  Widget build(BuildContext context) => const MusicTrackTableHeader(
-    key: ValueKey('liked-songs-table-header'),
-    titleLabel: '标题',
-    artistLabel: '歌手',
-    albumLabel: '专辑',
-    durationLabel: '时长',
+  Widget build(BuildContext context) => MusicTrackTableHeader(
+    key: const ValueKey('liked-songs-table-header'),
+    titleLabel: context.l10n.tableTitle,
+    artistLabel: context.l10n.tableArtist,
+    albumLabel: context.l10n.tableAlbum,
+    durationLabel: context.l10n.tableDuration,
   );
 }
 
@@ -1283,7 +1309,7 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
   @override
   Widget build(BuildContext context) {
     final artists = widget.track.artistNames.isEmpty
-        ? '未知歌手'
+        ? context.l10n.trackUnknownArtist
         : widget.track.artistNames.join(' / ');
     return MusicTrackRowSurface(
       itemKey: ValueKey('liked-track-row-${widget.index}'),
@@ -1291,7 +1317,10 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
       current: widget.current,
       hovered: widget.hovered,
       onHoverChanged: widget.onHoverChanged,
-      semanticLabel: '${widget.track.title}, $artists',
+      semanticLabel: context.l10n.commonTrackSemantics(
+        artists,
+        widget.track.title,
+      ),
       onTap: widget.onPlay,
       onContextMenuRequested: (position) => unawaited(
         position == null
@@ -1325,11 +1354,13 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
           : _openArtist,
       onMore: () => unawaited(_showDesktopMenuAtRow(context)),
       showInlineQueueAction: hovered,
-      addToQueueTooltip: '添加到队列',
-      moreTooltip: '更多操作',
-      playTooltip: '从这里播放',
-      albumTooltip: '打开专辑',
-      artistTooltip: widget.track.artists.length > 1 ? '选择歌手' : '打开歌手',
+      addToQueueTooltip: context.l10n.commonAddToQueue,
+      moreTooltip: context.l10n.commonMoreActions,
+      playTooltip: context.l10n.commonPlayFromHere,
+      albumTooltip: context.l10n.commonOpenAlbum,
+      artistTooltip: widget.track.artists.length > 1
+          ? context.l10n.commonChooseArtist
+          : context.l10n.commonOpenArtist,
     );
   }
 
@@ -1349,11 +1380,13 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
             ? null
             : _openArtist,
         onMore: () => unawaited(_showCompactMenu(context)),
-        addToQueueTooltip: '添加到队列',
-        moreTooltip: '更多操作',
-        playTooltip: '从这里播放',
-        albumTooltip: '打开专辑',
-        artistTooltip: widget.track.artists.length > 1 ? '选择歌手' : '打开歌手',
+        addToQueueTooltip: context.l10n.commonAddToQueue,
+        moreTooltip: context.l10n.commonMoreActions,
+        playTooltip: context.l10n.commonPlayFromHere,
+        albumTooltip: context.l10n.commonOpenAlbum,
+        artistTooltip: widget.track.artists.length > 1
+            ? context.l10n.commonChooseArtist
+            : context.l10n.commonOpenArtist,
       );
 
   Future<void> _showDesktopMenuAtRow(BuildContext context) async {
@@ -1392,25 +1425,25 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow_rounded),
-              title: const Text('从这里播放'),
+              title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, _LikedTrackAction.play),
             ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
-              title: const Text('添加到队列'),
+              title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, _LikedTrackAction.addToQueue),
             ),
             if (widget.onOpenAlbum != null)
               ListTile(
                 leading: const Icon(Icons.album_rounded),
-                title: const Text('打开专辑'),
+                title: Text(context.l10n.commonOpenAlbum),
                 onTap: () =>
                     Navigator.pop(context, _LikedTrackAction.openAlbum),
               ),
             if (widget.onOpenArtist != null)
               ListTile(
                 leading: const Icon(Icons.person_rounded),
-                title: const Text('打开歌手'),
+                title: Text(context.l10n.commonOpenArtist),
                 onTap: () =>
                     Navigator.pop(context, _LikedTrackAction.openArtist),
               ),
@@ -1423,34 +1456,34 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
   }
 
   List<PopupMenuEntry<_LikedTrackAction>> _menuItems() => [
-    const PopupMenuItem(
+    PopupMenuItem(
       value: _LikedTrackAction.play,
       child: ListTile(
         leading: Icon(Icons.play_arrow_rounded),
-        title: Text('从这里播放'),
+        title: Text(context.l10n.commonPlayFromHere),
       ),
     ),
-    const PopupMenuItem(
+    PopupMenuItem(
       value: _LikedTrackAction.addToQueue,
       child: ListTile(
         leading: Icon(Icons.playlist_add_rounded),
-        title: Text('添加到队列'),
+        title: Text(context.l10n.commonAddToQueue),
       ),
     ),
     if (widget.onOpenAlbum != null)
-      const PopupMenuItem(
+      PopupMenuItem(
         value: _LikedTrackAction.openAlbum,
         child: ListTile(
           leading: Icon(Icons.album_rounded),
-          title: Text('打开专辑'),
+          title: Text(context.l10n.commonOpenAlbum),
         ),
       ),
     if (widget.onOpenArtist != null)
-      const PopupMenuItem(
+      PopupMenuItem(
         value: _LikedTrackAction.openArtist,
         child: ListTile(
           leading: Icon(Icons.person_rounded),
-          title: Text('打开歌手'),
+          title: Text(context.l10n.commonOpenArtist),
         ),
       ),
   ];
@@ -1476,9 +1509,9 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
         context: context,
         artists: widget.track.artists,
         onSelected: widget.onOpenArtist,
-        title: '选择歌手',
-        detail: '这首歌曲包含多个歌手，请选择要打开的歌手。',
-        cancelLabel: '取消',
+        title: context.l10n.trackChooseArtistTitle,
+        detail: context.l10n.likedMultipleArtistsDetail,
+        cancelLabel: context.l10n.commonCancel,
         itemKeyPrefix: 'liked-track-artist',
       ),
     );
@@ -1524,14 +1557,14 @@ class _LikedTrackFooter extends StatelessWidget {
     child: Column(
       children: [
         Text(
-          _statusText(),
+          _statusText(context.l10n),
           style: Theme.of(context).textTheme.bodySmall
               ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         if (omittedTrackCount > 0) ...[
           const SizedBox(height: 4),
           Text(
-            '$omittedTrackCount 首歌曲缺少可用标识，已跳过且不影响后续加载',
+            context.l10n.likedOmittedTracksDetail(omittedTrackCount),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -1545,37 +1578,40 @@ class _LikedTrackFooter extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2.5),
           )
         else if (failure != null)
-          FilledButton.tonal(onPressed: onRetry, child: const Text('重试加载'))
+          FilledButton.tonal(
+            onPressed: onRetry,
+            child: Text(context.l10n.likedRetryLoad),
+          )
         else if (hasMore)
           FilledButton.tonal(
             key: const ValueKey('liked-songs-load-more'),
             onPressed: onLoadMore,
-            child: const Text('加载更多'),
+            child: Text(context.l10n.commonLoadMore),
           ),
       ],
     ),
   );
 
-  String _statusText() {
+  String _statusText(AppLocalizations l10n) {
     if (!searching) {
-      return '已读取 $processedCount / $total 首，可显示 $availableTrackCount 首';
+      return l10n.likedReadStatus(availableTrackCount, processedCount, total);
     }
     if (failure != null) {
-      return '搜索暂时中断 · 已检查 $processedCount / $total 首';
+      return l10n.likedSearchInterruptedStatus(processedCount, total);
     }
     final approximateOnly =
         matchCount > 0 && approximateMatchCount == matchCount;
     final resultSummary = approximateMatchCount == 0
-        ? '$matchCount 首'
+        ? l10n.likedExactResults(matchCount)
         : approximateOnly
-        ? '$matchCount 首可能结果'
-        : '$matchCount 首（含 $approximateMatchCount 首可能结果）';
+        ? l10n.likedApproximateResults(matchCount)
+        : l10n.likedMixedResults(approximateMatchCount, matchCount);
     if (loadingAll || hasMore) {
-      return '已找到 $resultSummary · 正在检查 $processedCount / $total 首';
+      return l10n.likedSearchingStatus(processedCount, resultSummary, total);
     }
     return approximateOnly
-        ? '未找到完全匹配 · 显示 $resultSummary'
-        : '已搜索全部 $total 首 · 找到 $resultSummary';
+        ? l10n.likedApproximateOnlyStatus(resultSummary)
+        : l10n.likedSearchCompleteStatus(resultSummary, total);
   }
 }
 
@@ -1598,7 +1634,7 @@ class _LikedSongsFailure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final copy = _failureCopy(failure, providerDisplayName);
+    final copy = _failureCopy(context.l10n, failure, providerDisplayName);
     return _LikedSongsMessage(
       key: const ValueKey('liked-songs-error'),
       icon: showSignInAgain
@@ -1607,9 +1643,15 @@ class _LikedSongsFailure extends StatelessWidget {
       title: copy.$1,
       detail: copy.$2,
       action: showSignInAgain
-          ? FilledButton(onPressed: onSignInAgain, child: const Text('重新登录'))
+          ? FilledButton(
+              onPressed: onSignInAgain,
+              child: Text(context.l10n.authSignInAgain),
+            )
           : canRetry
-          ? FilledButton.tonal(onPressed: onRetry, child: const Text('重试'))
+          ? FilledButton.tonal(
+              onPressed: onRetry,
+              child: Text(context.l10n.commonRetry),
+            )
           : null,
     );
   }
@@ -1633,14 +1675,14 @@ class _LikedSongsMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: '$title. $detail',
+    label: context.l10n.commonAnnouncement(detail, title),
     liveRegion: loading || action != null,
     excludeSemantics: true,
     child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.all(MusicSpacing.panel),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(MusicSpacing.panel),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1681,34 +1723,49 @@ bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>
     left.opaqueId == right.opaqueId;
 
 (String, String) _failureCopy(
+  AppLocalizations l10n,
   UserLibraryFailure? failure,
   String providerDisplayName,
 ) => switch (failure) {
-  UserLibraryFailure.network => ('网络不可用', '请检查网络后重试。'),
+  UserLibraryFailure.network => (
+    l10n.likedFailureNetworkTitle,
+    l10n.likedFailureNetworkDetail,
+  ),
   UserLibraryFailure.serviceUnavailable => (
-    '$providerDisplayName 暂时无法加载',
-    '你的会话状态保持不变，稍后重试即可。',
+    l10n.likedFailureServiceTitle(providerDisplayName),
+    l10n.likedFailureServiceDetail,
   ),
   UserLibraryFailure.credentialRejected ||
   UserLibraryFailure.credentialRejectedStorageCleanupFailed => (
-    '登录已失效',
-    '请重新登录后加载喜欢的歌曲。',
+    l10n.likedFailureSignedOutTitle,
+    l10n.likedFailureSignedOutDetail,
   ),
   UserLibraryFailure.authenticationRequired ||
   UserLibraryFailure.replaced ||
-  UserLibraryFailure.cancelled => ('需要登录', '请登录 $providerDisplayName 后继续。'),
-  UserLibraryFailure.invalidResponse => ('无法安全读取喜欢的歌曲', '请重试；当前结果未被部分显示。'),
-  UserLibraryFailure.coreUnavailable ||
-  UserLibraryFailure.alreadyRunning => ('无法加载喜欢的歌曲', '请重试，或重启应用后再试。'),
-  null => ('无法加载喜欢的歌曲', '请重试。'),
+  UserLibraryFailure.cancelled => (
+    l10n.likedFailureAuthenticationTitle,
+    l10n.likedFailureAuthenticationDetail(providerDisplayName),
+  ),
+  UserLibraryFailure.invalidResponse => (
+    l10n.likedFailureInvalidTitle,
+    l10n.likedFailureInvalidDetail,
+  ),
+  UserLibraryFailure.coreUnavailable || UserLibraryFailure.alreadyRunning => (
+    l10n.likedFailureCoreTitle,
+    l10n.likedFailureCoreDetail,
+  ),
+  null => (l10n.likedFailureCoreTitle, l10n.likedFailureGenericDetail),
 };
 
 String _refreshFailureCopy(
+  AppLocalizations l10n,
   UserLibraryFailure failure,
   String providerDisplayName,
 ) => switch (failure) {
-  UserLibraryFailure.network => '刷新失败：请检查网络。',
-  UserLibraryFailure.serviceUnavailable => '$providerDisplayName 暂时无法刷新。',
-  UserLibraryFailure.invalidResponse => '无法安全读取刷新结果。',
-  _ => '刷新失败，仍保留上一次结果。',
+  UserLibraryFailure.network => l10n.likedRefreshNetworkFailure,
+  UserLibraryFailure.serviceUnavailable => l10n.likedRefreshServiceFailure(
+    providerDisplayName,
+  ),
+  UserLibraryFailure.invalidResponse => l10n.likedRefreshInvalidResponse,
+  _ => l10n.likedRefreshFailure,
 };

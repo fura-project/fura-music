@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
 typedef MusicTrackRowContentBuilder = Widget Function(
   BuildContext context,
@@ -15,12 +16,15 @@ Future<void> openMusicTrackArtists({
   required BuildContext context,
   required List<ArtistSummary> artists,
   required ValueChanged<ArtistSummary>? onSelected,
-  String title = 'Choose an Artist',
-  String detail = 'This Track credits more than one Artist.',
-  String cancelLabel = 'Cancel',
+  String? title,
+  String? detail,
+  String? cancelLabel,
   String itemKeyPrefix = 'music-track-artist',
 }) async {
   if (onSelected == null || artists.isEmpty) return;
+  final resolvedTitle = title ?? context.l10n.trackChooseArtistTitle;
+  final resolvedDetail = detail ?? context.l10n.trackMultipleArtistsDetail;
+  final resolvedCancelLabel = cancelLabel ?? context.l10n.commonCancel;
   if (artists.length == 1) {
     onSelected(artists.single);
     return;
@@ -33,26 +37,26 @@ Future<void> openMusicTrackArtists({
           builder: (context) => _MusicTrackArtistSelection(
             artists: artists,
             compact: true,
-            title: title,
-            detail: detail,
+            title: resolvedTitle,
+            detail: resolvedDetail,
             itemKeyPrefix: itemKeyPrefix,
           ),
         )
       : await showDialog<ArtistSummary>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(title),
+            title: Text(resolvedTitle),
             content: _MusicTrackArtistSelection(
               artists: artists,
               compact: false,
-              title: title,
-              detail: detail,
+              title: resolvedTitle,
+              detail: resolvedDetail,
               itemKeyPrefix: itemKeyPrefix,
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text(cancelLabel),
+                child: Text(resolvedCancelLabel),
               ),
             ],
           ),
@@ -330,11 +334,11 @@ class MusicTrackRowContent extends StatelessWidget {
     this.onOpenAlbum,
     this.onOpenArtist,
     this.showInlineQueueAction,
-    this.addToQueueTooltip = 'Add to queue',
-    this.moreTooltip = 'More actions',
-    this.playTooltip = 'Play from here',
-    this.albumTooltip = 'Open album',
-    this.artistTooltip = 'Open artist',
+    this.addToQueueTooltip,
+    this.moreTooltip,
+    this.playTooltip,
+    this.albumTooltip,
+    this.artistTooltip,
     this.title,
     this.queueKey,
     this.moreKey,
@@ -353,11 +357,11 @@ class MusicTrackRowContent extends StatelessWidget {
   final VoidCallback? onOpenAlbum;
   final VoidCallback? onOpenArtist;
   final bool? showInlineQueueAction;
-  final String addToQueueTooltip;
-  final String moreTooltip;
-  final String playTooltip;
-  final String albumTooltip;
-  final String artistTooltip;
+  final String? addToQueueTooltip;
+  final String? moreTooltip;
+  final String? playTooltip;
+  final String? albumTooltip;
+  final String? artistTooltip;
   final String? title;
   final Key? queueKey;
   final Key? moreKey;
@@ -368,6 +372,12 @@ class MusicTrackRowContent extends StatelessWidget {
 
   Widget _desktopContent(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final resolvedPlayTooltip = playTooltip ?? context.l10n.commonPlayFromHere;
+    final resolvedQueueTooltip =
+        addToQueueTooltip ?? context.l10n.commonAddToQueue;
+    final resolvedArtistTooltip =
+        artistTooltip ?? context.l10n.commonOpenArtist;
+    final resolvedAlbumTooltip = albumTooltip ?? context.l10n.commonOpenAlbum;
     return Row(
       children: [
         SizedBox(
@@ -378,7 +388,7 @@ class MusicTrackRowContent extends StatelessWidget {
                 : active
                 ? ExcludeFocus(
                     child: IconButton(
-                      tooltip: playTooltip,
+                      tooltip: resolvedPlayTooltip,
                       constraints: const BoxConstraints.tightFor(
                         width: 32,
                         height: 32,
@@ -425,7 +435,7 @@ class MusicTrackRowContent extends StatelessWidget {
                 ExcludeFocus(
                   child: IconButton(
                     key: queueKey,
-                    tooltip: addToQueueTooltip,
+                    tooltip: resolvedQueueTooltip,
                     visualDensity: VisualDensity.compact,
                     onPressed: onAddToQueue,
                     icon: const Icon(Icons.playlist_add_rounded, size: 19),
@@ -439,7 +449,7 @@ class MusicTrackRowContent extends StatelessWidget {
           flex: 2,
           child: MusicTrackMetadataAction(
             value: artistNames,
-            tooltip: artistTooltip,
+            tooltip: resolvedArtistTooltip,
             onPressed: onOpenArtist,
           ),
         ),
@@ -448,7 +458,7 @@ class MusicTrackRowContent extends StatelessWidget {
           flex: 2,
           child: MusicTrackMetadataAction(
             value: track.albumTitle ?? '—',
-            tooltip: albumTooltip,
+            tooltip: resolvedAlbumTooltip,
             onPressed: onOpenAlbum,
           ),
         ),
@@ -508,7 +518,7 @@ class MusicTrackRowContent extends StatelessWidget {
                 Flexible(
                   child: MusicTrackMetadataAction(
                     value: artistNames,
-                    tooltip: artistTooltip,
+                    tooltip: artistTooltip ?? context.l10n.commonOpenArtist,
                     onPressed: onOpenArtist,
                     compact: true,
                   ),
@@ -523,7 +533,7 @@ class MusicTrackRowContent extends StatelessWidget {
                   Flexible(
                     child: MusicTrackMetadataAction(
                       value: track.albumTitle!,
-                      tooltip: albumTooltip,
+                      tooltip: albumTooltip ?? context.l10n.commonOpenAlbum,
                       onPressed: onOpenAlbum,
                       compact: true,
                     ),
@@ -539,7 +549,7 @@ class MusicTrackRowContent extends StatelessWidget {
         ExcludeFocus(
           child: IconButton(
             key: queueKey,
-            tooltip: addToQueueTooltip,
+            tooltip: addToQueueTooltip ?? context.l10n.commonAddToQueue,
             onPressed: onAddToQueue,
             icon: const Icon(Icons.playlist_add_rounded, size: 20),
           ),
@@ -552,7 +562,7 @@ class MusicTrackRowContent extends StatelessWidget {
       ExcludeFocus(
         child: IconButton(
           key: moreKey,
-          tooltip: moreTooltip,
+          tooltip: moreTooltip ?? context.l10n.commonMoreActions,
           onPressed: onMore,
           icon: const Icon(Icons.more_horiz_rounded),
         ),
@@ -606,7 +616,7 @@ class MusicTrackMetadataAction extends StatelessWidget {
               message: tooltip,
               child: Semantics(
                 button: true,
-                label: '$tooltip: $value',
+                label: context.l10n.metadataActionSemantics(tooltip, value),
                 child: Material(
                   type: MaterialType.transparency,
                   child: InkWell(

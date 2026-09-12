@@ -9,6 +9,8 @@ import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
@@ -64,11 +66,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final toolbar = AppBar(
       key: const ValueKey('playlist-detail-toolbar'),
       leading: IconButton(
         key: const ValueKey('playlist-detail-back'),
-        tooltip: 'Back to playlists',
+        tooltip: l10n.libraryBackToPlaylists,
         onPressed: widget.onBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),
@@ -78,8 +81,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           animation: _controller,
           builder: (context, _) => IconButton(
             tooltip: _controller.isRefreshing
-                ? 'Refreshing playlist'
-                : 'Refresh playlist',
+                ? l10n.libraryRefreshingPlaylist
+                : l10n.libraryRefreshPlaylist,
             onPressed: _controller.isLoading ? null : _controller.refresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -116,10 +119,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               if (_controller.refreshFailure case final failure?)
                 LibraryRefreshFailureBanner(
                   key: const ValueKey('playlist-detail-refresh-failure'),
-                  message: _refreshFailureCopy(
-                    failure,
-                    builtInProviderDisplayName(widget.playlist.providerId),
-                  ),
+                  message: _refreshFailureCopy(l10n, failure),
                   canRetry: _controller.canRetryRefresh,
                   onRetry: _controller.retryRefresh,
                   onDismiss: _controller.dismissRefreshFailure,
@@ -152,62 +152,68 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
   }
 
-  Widget _body(bool desktop) => switch (_controller.stage) {
-    PlaylistDetailStage.loading => const Center(
-      key: ValueKey('playlist-detail-loading'),
-      child: CircularProgressIndicator(),
-    ),
-    PlaylistDetailStage.content => PlaylistScrollPrefetch(
-      key: const ValueKey('playlist-detail-content'),
-      controller: _controller,
-      child: _TrackCollection(
-        tracks: _controller.tracks,
-        total: _controller.total,
-        hasMore: _controller.hasMore,
-        isLoadingMore: _controller.isLoadingMore,
-        appendFailure: _controller.appendFailure,
-        onLoadMore: _controller.loadMore,
-        onRetryMore: _controller.retryMore,
-        onTrackSelected: (index) => unawaited(
-          widget.queuePlaybackController.replaceAndPlay(
-            _controller.tracks,
-            index,
-          ),
-        ),
-        onTrackQueued: _addToQueue,
-        onOpenAlbum: widget.onOpenAlbum,
-        onOpenArtist: widget.onOpenArtist,
-        desktop: desktop,
-        current: widget.queuePlaybackController.current,
+  Widget _body(bool desktop) {
+    final l10n = context.l10n;
+    final providerName = builtInProviderDisplayName(
+      widget.playlist.providerId,
+      l10n,
+    );
+    return switch (_controller.stage) {
+      PlaylistDetailStage.loading => const Center(
+        key: ValueKey('playlist-detail-loading'),
+        child: CircularProgressIndicator(),
       ),
-    ),
-    PlaylistDetailStage.empty => _DetailMessage(
-      key: const ValueKey('playlist-detail-empty'),
-      icon: Icons.music_off_outlined,
-      title: 'This playlist is empty',
-      detail:
-          'Tracks added in ${builtInProviderDisplayName(widget.playlist.providerId)} will appear here.',
-    ),
-    PlaylistDetailStage.error => _DetailFailure(
-      key: const ValueKey('playlist-detail-error'),
-      failure: _controller.failure,
-      canRetry: _controller.canRetry,
-      showSignInAgain: false,
-      onRetry: _controller.retry,
-      onSignInAgain: widget.onSignInAgain,
-      providerName: builtInProviderDisplayName(widget.playlist.providerId),
-    ),
-    PlaylistDetailStage.authenticationRequired ||
-    PlaylistDetailStage.credentialRejected => _DetailFailure(
-      key: const ValueKey('playlist-detail-authentication-error'),
-      failure: _controller.failure,
-      canRetry: false,
-      showSignInAgain: true,
-      onRetry: _controller.retry,
-      onSignInAgain: widget.onSignInAgain,
-      providerName: builtInProviderDisplayName(widget.playlist.providerId),
-    ),
-  };
+      PlaylistDetailStage.content => PlaylistScrollPrefetch(
+        key: const ValueKey('playlist-detail-content'),
+        controller: _controller,
+        child: _TrackCollection(
+          tracks: _controller.tracks,
+          total: _controller.total,
+          hasMore: _controller.hasMore,
+          isLoadingMore: _controller.isLoadingMore,
+          appendFailure: _controller.appendFailure,
+          onLoadMore: _controller.loadMore,
+          onRetryMore: _controller.retryMore,
+          onTrackSelected: (index) => unawaited(
+            widget.queuePlaybackController.replaceAndPlay(
+              _controller.tracks,
+              index,
+            ),
+          ),
+          onTrackQueued: _addToQueue,
+          onOpenAlbum: widget.onOpenAlbum,
+          onOpenArtist: widget.onOpenArtist,
+          desktop: desktop,
+          current: widget.queuePlaybackController.current,
+        ),
+      ),
+      PlaylistDetailStage.empty => _DetailMessage(
+        key: const ValueKey('playlist-detail-empty'),
+        icon: Icons.music_off_outlined,
+        title: l10n.libraryPlaylistEmptyTitle,
+        detail: l10n.libraryPlaylistEmptyDetail(providerName),
+      ),
+      PlaylistDetailStage.error => _DetailFailure(
+        key: const ValueKey('playlist-detail-error'),
+        failure: _controller.failure,
+        canRetry: _controller.canRetry,
+        showSignInAgain: false,
+        onRetry: _controller.retry,
+        onSignInAgain: widget.onSignInAgain,
+        providerName: providerName,
+      ),
+      PlaylistDetailStage.authenticationRequired ||
+      PlaylistDetailStage.credentialRejected => _DetailFailure(
+        key: const ValueKey('playlist-detail-authentication-error'),
+        failure: _controller.failure,
+        canRetry: false,
+        showSignInAgain: true,
+        onRetry: _controller.retry,
+        onSignInAgain: widget.onSignInAgain,
+        providerName: providerName,
+      ),
+    };
+  }
 
   void _addToQueue(PlaylistTrackSummary track) {
     final playbackStart = widget.queuePlaybackController.push(track);
@@ -216,8 +222,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       return;
     }
     final message = widget.queuePlaybackController.failure == null
-        ? 'Added to queue'
-        : 'Couldn’t update the queue';
+        ? context.l10n.queueAddedMessage
+        : context.l10n.queueUpdateFailureMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -247,31 +253,37 @@ class _PlaylistHeader extends StatelessWidget {
   final bool refreshing;
 
   @override
-  Widget build(BuildContext context) => MusicCollectionDetailHeader(
-    collapseProgress: collapseProgress,
-    desktop: desktop,
-    embedded: embedded,
-    artwork: _Artwork(uri: playlist.artworkUri, playlist: true),
-    eyebrow: 'PLAYLIST',
-    title: playlist.title,
-    titleKey: const ValueKey('playlist-detail-title'),
-    summary: trackCount == null
-        ? builtInProviderDisplayName(playlist.providerId)
-        : '$trackCount tracks · ${builtInProviderDisplayName(playlist.providerId)}',
-    onBack: onBack,
-    backKey: const ValueKey('playlist-detail-back'),
-    backTooltip: 'Back to playlists',
-    toolbarAction: IconButton(
-      tooltip: refreshing ? 'Refreshing playlist' : 'Refresh playlist',
-      onPressed: onRefresh,
-      icon: refreshing
-          ? const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
-            )
-          : const Icon(Icons.refresh_rounded),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final providerName = builtInProviderDisplayName(playlist.providerId, l10n);
+    return MusicCollectionDetailHeader(
+      collapseProgress: collapseProgress,
+      desktop: desktop,
+      embedded: embedded,
+      artwork: _Artwork(uri: playlist.artworkUri, playlist: true),
+      eyebrow: l10n.libraryPlaylistType,
+      title: playlist.title,
+      titleKey: const ValueKey('playlist-detail-title'),
+      summary: trackCount == null
+          ? providerName
+          : l10n.libraryPlaylistCountSummary(trackCount!, providerName),
+      onBack: onBack,
+      backKey: const ValueKey('playlist-detail-back'),
+      backTooltip: l10n.libraryBackToPlaylists,
+      toolbarAction: IconButton(
+        tooltip: refreshing
+            ? l10n.libraryRefreshingPlaylist
+            : l10n.libraryRefreshPlaylist,
+        onPressed: onRefresh,
+        icon: refreshing
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              )
+            : const Icon(Icons.refresh_rounded),
+      ),
+    );
+  }
 }
 
 class _TrackCollection extends StatefulWidget {
@@ -336,12 +348,12 @@ class _TrackCollectionState extends State<_TrackCollection> {
         if (widget.desktop)
           Padding(
             padding: EdgeInsets.symmetric(horizontal: horizontal),
-            child: const MusicTrackTableHeader(
+            child: MusicTrackTableHeader(
               key: ValueKey('playlist-detail-table-header'),
-              titleLabel: 'Title',
-              artistLabel: 'Artist',
-              albumLabel: 'Album',
-              durationLabel: 'Duration',
+              titleLabel: context.l10n.tableTitle,
+              artistLabel: context.l10n.tableArtist,
+              albumLabel: context.l10n.tableAlbum,
+              durationLabel: context.l10n.tableDuration,
             ),
           ),
         Expanded(
@@ -359,7 +371,10 @@ class _TrackCollectionState extends State<_TrackCollection> {
                     child: Column(
                       children: [
                         Text(
-                          'Showing ${widget.tracks.length} of ${widget.total} tracks',
+                          context.l10n.libraryShowingTracks(
+                            widget.tracks.length,
+                            widget.total,
+                          ),
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
@@ -377,18 +392,18 @@ class _TrackCollectionState extends State<_TrackCollection> {
                         else if (widget.appendFailure != null)
                           FilledButton.tonal(
                             onPressed: widget.onRetryMore,
-                            child: const Text('Try loading more again'),
+                            child: Text(context.l10n.commonTryLoadingMoreAgain),
                           )
                         else if (widget.hasMore)
                           FilledButton.tonal(
                             onPressed: widget.onLoadMore,
-                            child: const Text('Load more'),
+                            child: Text(context.l10n.commonLoadMore),
                           ),
                         if (!widget.hasMore &&
                             !widget.isLoadingMore &&
                             widget.appendFailure == null)
                           Text(
-                            'End of playlist',
+                            context.l10n.libraryEndPlaylist,
                             style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(
                                   color: Theme.of(context)
@@ -463,7 +478,7 @@ class _TrackRowState extends State<_TrackRow> {
   @override
   Widget build(BuildContext context) {
     final artists = widget.track.artistNames.isEmpty
-        ? 'Unknown artist'
+        ? context.l10n.trackUnknownArtist
         : widget.track.artistNames.join(' · ');
     final title = widget.track.subtitle == null
         ? widget.track.title
@@ -474,7 +489,7 @@ class _TrackRowState extends State<_TrackRow> {
       current: widget.current,
       hovered: widget.hovered,
       onHoverChanged: widget.onHoverChanged,
-      semanticLabel: '$title, $artists',
+      semanticLabel: context.l10n.commonTrackSemantics(artists, title),
       onTap: widget.onTap,
       onContextMenuRequested: (position) => unawaited(
         position == null
@@ -519,36 +534,36 @@ class _TrackRowState extends State<_TrackRow> {
         overlay.size.height - globalPosition.dy,
       ),
       items: [
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _TrackAction.playFromHere,
           child: ListTile(
             leading: Icon(Icons.play_arrow_rounded),
-            title: Text('Play from here'),
+            title: Text(context.l10n.commonPlayFromHere),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _TrackAction.addToQueue,
           child: ListTile(
             leading: Icon(Icons.playlist_add_rounded),
-            title: Text('Add to queue'),
+            title: Text(context.l10n.commonAddToQueue),
           ),
         ),
         if (widget.onOpenAlbum != null)
-          const PopupMenuItem(
+          PopupMenuItem(
             key: ValueKey('playlist-track-open-album-action'),
             value: _TrackAction.openAlbum,
             child: ListTile(
               leading: Icon(Icons.album_rounded),
-              title: Text('Open album'),
+              title: Text(context.l10n.commonOpenAlbum),
             ),
           ),
         if (widget.onOpenArtist != null && widget.track.artists.isNotEmpty)
-          const PopupMenuItem(
+          PopupMenuItem(
             key: ValueKey('playlist-track-open-artist-action'),
             value: _TrackAction.openArtist,
             child: ListTile(
               leading: Icon(Icons.person_rounded),
-              title: Text('Open artist'),
+              title: Text(context.l10n.commonOpenArtist),
             ),
           ),
       ],
@@ -567,26 +582,26 @@ class _TrackRowState extends State<_TrackRow> {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow_rounded),
-              title: const Text('Play from here'),
+              title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, _TrackAction.playFromHere),
             ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
-              title: const Text('Add to queue'),
+              title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, _TrackAction.addToQueue),
             ),
             if (widget.onOpenAlbum != null)
               ListTile(
                 key: const ValueKey('playlist-track-open-album-action'),
                 leading: const Icon(Icons.album_rounded),
-                title: const Text('Open album'),
+                title: Text(context.l10n.commonOpenAlbum),
                 onTap: () => Navigator.pop(context, _TrackAction.openAlbum),
               ),
             if (widget.onOpenArtist != null && widget.track.artists.isNotEmpty)
               ListTile(
                 key: const ValueKey('playlist-track-open-artist-action'),
                 leading: const Icon(Icons.person_rounded),
-                title: const Text('Open artist'),
+                title: Text(context.l10n.commonOpenArtist),
                 onTap: () => Navigator.pop(context, _TrackAction.openArtist),
               ),
             const SizedBox(height: 8),
@@ -680,7 +695,7 @@ class _DetailFailure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (title, detail) = _failureCopy(failure, providerName);
+    final (title, detail) = _failureCopy(context.l10n, failure, providerName);
     return _DetailMessage(
       icon: failure == UserLibraryFailure.credentialRejected
           ? Icons.lock_reset_rounded
@@ -692,12 +707,12 @@ class _DetailFailure extends StatelessWidget {
         if (canRetry)
           FilledButton.tonal(
             onPressed: onRetry,
-            child: const Text('Try again'),
+            child: Text(context.l10n.commonRetry),
           ),
         if (showSignInAgain)
           TextButton(
             onPressed: onSignInAgain,
-            child: const Text('Sign in again'),
+            child: Text(context.l10n.authSignInAgain),
           ),
       ],
     );
@@ -742,7 +757,7 @@ class _DetailMessage extends StatelessWidget {
               Semantics(
                 container: true,
                 liveRegion: true,
-                label: '$title. $detail',
+                label: context.l10n.commonAnnouncement(detail, title),
                 excludeSemantics: true,
                 child: message,
               )
@@ -760,61 +775,46 @@ class _DetailMessage extends StatelessWidget {
 }
 
 (String, String) _failureCopy(
+  AppLocalizations l10n,
   UserLibraryFailure? failure,
   String providerName,
 ) => switch (failure) {
   UserLibraryFailure.network => (
-    'Couldn’t reach $providerName',
-    'Your session is still active. Check your connection and try again.',
+    l10n.libraryFailureReachTitle(providerName),
+    l10n.libraryFailureReachDetail,
   ),
   UserLibraryFailure.serviceUnavailable => (
-    '$providerName is unavailable',
-    'The playlist could not be loaded right now. Your session was kept.',
+    l10n.libraryFailureUnavailableTitle(providerName),
+    l10n.libraryFailureUnavailableDetail,
   ),
   UserLibraryFailure.invalidResponse => (
-    'Couldn’t read this playlist',
-    '$providerName returned data this build could not safely present.',
+    l10n.libraryFailureReadTitle,
+    l10n.libraryFailureReadDetail(providerName),
   ),
   UserLibraryFailure.credentialRejected => (
-    'Your saved session was rejected',
-    '$providerName no longer accepts it, so the stored session was removed.',
+    l10n.libraryFailureRejectedTitle,
+    l10n.libraryFailureRejectedDetail(providerName),
   ),
   UserLibraryFailure.credentialRejectedStorageCleanupFailed => (
-    'Your saved session was rejected',
-    '$providerName rejected it, but secure storage could not remove it.',
+    l10n.libraryFailureRejectedTitle,
+    l10n.libraryFailureRejectedCleanupDetail(providerName),
   ),
   UserLibraryFailure.authenticationRequired ||
   UserLibraryFailure.replaced ||
   UserLibraryFailure.cancelled => (
-    'Sign in to open this playlist',
-    'The account state changed before the request finished.',
+    l10n.libraryFailureSignInTitle,
+    l10n.libraryFailureAccountChangedDetail,
   ),
   UserLibraryFailure.coreUnavailable => (
-    'The music core is unavailable',
-    'This playlist could not be loaded safely.',
+    l10n.libraryFailureCoreTitle,
+    l10n.libraryFailureCoreDetail,
   ),
   UserLibraryFailure.alreadyRunning => (
-    'A playlist request is already running',
-    'Wait for it to finish, then try again.',
+    l10n.libraryFailureRunningTitle,
+    l10n.libraryFailureRunningDetail,
   ),
-  null => ('Couldn’t load this playlist', 'Try again or sign in again.'),
+  null => (l10n.libraryFailureGenericTitle, l10n.libraryFailureGenericDetail),
 };
 
-String _refreshFailureCopy(
-  UserLibraryFailure failure,
-  String providerName,
-) => switch (failure) {
-  UserLibraryFailure.network =>
-    'Couldn’t refresh this playlist. Check your connection; the previous '
-        'tracks are still shown.',
-  UserLibraryFailure.serviceUnavailable =>
-    '$providerName couldn’t refresh this playlist. The previous tracks are still '
-        'shown.',
-  UserLibraryFailure.invalidResponse =>
-    '$providerName returned an incomplete refresh. The previous complete tracks '
-        'are still shown.',
-  UserLibraryFailure.coreUnavailable =>
-    'The music core couldn’t refresh this playlist. The previous tracks are '
-        'still shown.',
-  _ => 'Couldn’t refresh this playlist. The previous tracks are still shown.',
-};
+String _refreshFailureCopy(AppLocalizations l10n, UserLibraryFailure failure) =>
+    l10n.libraryRefreshPlaylistFailure;

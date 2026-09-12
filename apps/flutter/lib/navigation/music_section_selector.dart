@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
 class MusicSectionDestination<T> {
   const MusicSectionDestination({
@@ -56,7 +57,7 @@ class MusicSectionSelector<T> extends StatelessWidget {
           onPressed: () =>
               controller.isOpen ? controller.close() : controller.open(),
           icon: Icon(current.icon),
-          label: Text('$label: ${current.label}'),
+          label: Text(context.l10n.commonSelectedValue(label, current.label)),
         ),
       );
     }

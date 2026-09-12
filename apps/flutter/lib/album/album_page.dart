@@ -10,6 +10,8 @@ import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
@@ -25,7 +27,7 @@ class AlbumPage extends StatefulWidget {
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
     this.embedded = false,
-    this.backTooltip = 'Back to search results',
+    this.backTooltip,
     super.key,
   });
 
@@ -38,7 +40,7 @@ class AlbumPage extends StatefulWidget {
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
   final bool embedded;
-  final String backTooltip;
+  final String? backTooltip;
 
   @override
   State<AlbumPage> createState() => _AlbumPageState();
@@ -69,14 +71,16 @@ class _AlbumPageState extends State<AlbumPage> {
 
   @override
   Widget build(BuildContext context) {
+    final backTooltip =
+        widget.backTooltip ?? context.l10n.shellBackToSearchResults;
     final toolbar = AppBar(
       leading: IconButton(
         key: const ValueKey('album-back'),
-        tooltip: widget.backTooltip,
+        tooltip: backTooltip,
         onPressed: widget.onBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),
-      title: const Text('Album'),
+      title: Text(context.l10n.albumType),
     );
     final body = SafeArea(
       child: AnimatedBuilder(
@@ -100,7 +104,7 @@ class _AlbumPageState extends State<AlbumPage> {
             collapseProgress: progress,
             embedded: widget.embedded,
             onBack: widget.onBack,
-            backTooltip: widget.backTooltip,
+            backTooltip: backTooltip,
           ),
           bodyBuilder: (context, desktop) => AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -126,49 +130,52 @@ class _AlbumPageState extends State<AlbumPage> {
     );
   }
 
-  Widget _body(bool desktop) => switch (_controller.stage) {
-    AlbumTrackStage.loading => const MusicLoadingPanel(
-      key: ValueKey('album-loading'),
-      label: 'Loading Album Tracks',
-    ),
-    AlbumTrackStage.empty => MusicContentStatePanel(
-      key: const ValueKey('album-empty'),
-      icon: Icons.album_outlined,
-      title: 'This Album has no available Tracks',
-      detail:
-          '${builtInProviderDisplayName(widget.album.providerId)} returned an empty Album Track list.',
-    ),
-    AlbumTrackStage.error => MusicContentStatePanel(
-      key: const ValueKey('album-error'),
-      icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load this Album',
-      detail: _failureCopy(
-        _controller.failure,
-        builtInProviderDisplayName(widget.album.providerId),
+  Widget _body(bool desktop) {
+    final l10n = context.l10n;
+    final providerName = builtInProviderDisplayName(
+      widget.album.providerId,
+      l10n,
+    );
+    return switch (_controller.stage) {
+      AlbumTrackStage.loading => MusicLoadingPanel(
+        key: const ValueKey('album-loading'),
+        label: l10n.albumLoadingTracks,
       ),
-      liveRegion: true,
-      action: _controller.canRetry
-          ? FilledButton.tonal(
-              onPressed: _controller.retry,
-              child: const Text('Try again'),
-            )
-          : null,
-    ),
-    AlbumTrackStage.content => _AlbumTracks(
-      key: const ValueKey('album-content'),
-      tracks: _controller.tracks,
-      hasMore: _controller.hasMore,
-      isLoadingMore: _controller.isLoadingMore,
-      appendFailure: _controller.appendFailure,
-      onLoadMore: _controller.loadMore,
-      onRetryMore: _controller.retryMore,
-      onPlay: _play,
-      onQueue: _queue,
-      onOpenArtist: widget.onOpenArtist,
-      current: widget.queuePlaybackController.current,
-      desktop: desktop,
-    ),
-  };
+      AlbumTrackStage.empty => MusicContentStatePanel(
+        key: const ValueKey('album-empty'),
+        icon: Icons.album_outlined,
+        title: l10n.albumEmptyTitle,
+        detail: l10n.albumEmptyDetail(providerName),
+      ),
+      AlbumTrackStage.error => MusicContentStatePanel(
+        key: const ValueKey('album-error'),
+        icon: Icons.cloud_off_rounded,
+        title: l10n.albumFailureTitle,
+        detail: _failureCopy(l10n, _controller.failure, providerName),
+        liveRegion: true,
+        action: _controller.canRetry
+            ? FilledButton.tonal(
+                onPressed: _controller.retry,
+                child: Text(l10n.commonRetry),
+              )
+            : null,
+      ),
+      AlbumTrackStage.content => _AlbumTracks(
+        key: const ValueKey('album-content'),
+        tracks: _controller.tracks,
+        hasMore: _controller.hasMore,
+        isLoadingMore: _controller.isLoadingMore,
+        appendFailure: _controller.appendFailure,
+        onLoadMore: _controller.loadMore,
+        onRetryMore: _controller.retryMore,
+        onPlay: _play,
+        onQueue: _queue,
+        onOpenArtist: widget.onOpenArtist,
+        current: widget.queuePlaybackController.current,
+        desktop: desktop,
+      ),
+    };
+  }
 
   void _play(int index) {
     unawaited(
@@ -183,8 +190,8 @@ class _AlbumPageState extends State<AlbumPage> {
       return;
     }
     final message = widget.queuePlaybackController.failure == null
-        ? 'Added to queue'
-        : 'Couldn’t update the queue';
+        ? context.l10n.queueAddedMessage
+        : context.l10n.queueUpdateFailureMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -208,7 +215,7 @@ class _AlbumPageState extends State<AlbumPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'About $title',
+                      context.l10n.albumAboutTitle(title),
                       style: Theme.of(context).textTheme.titleLarge
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
@@ -221,7 +228,7 @@ class _AlbumPageState extends State<AlbumPage> {
                     const SizedBox(height: 12),
                     FilledButton.tonal(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Close'),
+                      child: Text(context.l10n.commonClose),
                     ),
                   ],
                 ),
@@ -236,7 +243,7 @@ class _AlbumPageState extends State<AlbumPage> {
       showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('About $title'),
+          title: Text(context.l10n.albumAboutTitle(title)),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(child: SelectableText(description)),
@@ -244,7 +251,7 @@ class _AlbumPageState extends State<AlbumPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              child: Text(context.l10n.commonClose),
             ),
           ],
         ),
@@ -270,12 +277,12 @@ class _AlbumPageState extends State<AlbumPage> {
         : await showDialog<ArtistSummary>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('Choose an Artist'),
+              title: Text(context.l10n.albumChooseArtistTitle),
               content: _AlbumArtistSelection(artists: artists, compact: false),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(context.l10n.commonCancel),
                 ),
               ],
             ),
@@ -333,14 +340,16 @@ class _AlbumHeader extends StatelessWidget {
       if (metadata.isNotEmpty) metadata.join(' · '),
     ];
     final summary = total != null
-        ? '$total ${total == 1 ? 'Track' : 'Tracks'}'
-        : '${builtInProviderDisplayName(album.providerId)} Album';
+        ? context.l10n.albumTrackCount(total!)
+        : context.l10n.albumProviderSummary(
+            builtInProviderDisplayName(album.providerId, context.l10n),
+          );
     return MusicCollectionDetailHeader(
       collapseProgress: collapseProgress,
       desktop: desktop,
       embedded: embedded,
       artwork: _AlbumArtwork(uri: album.artworkUri),
-      eyebrow: 'ALBUM',
+      eyebrow: context.l10n.albumType,
       title: album.title,
       titleKey: const ValueKey('album-title'),
       summary: summary,
@@ -402,7 +411,7 @@ class _AlbumHeader extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               visualDensity: VisualDensity.compact,
             ),
-            label: const Text('About this Album'),
+            label: Text(context.l10n.albumAboutAction),
           ),
         ],
         if (detailsStage == AlbumDetailsStage.loading) ...[
@@ -423,7 +432,7 @@ class _AlbumHeader extends StatelessWidget {
               spacing: 8,
               children: [
                 Text(
-                  _detailsFailureCopy(detailsFailure),
+                  _detailsFailureCopy(context.l10n, detailsFailure),
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: Theme.of(context).colorScheme.error),
                 ),
@@ -431,7 +440,7 @@ class _AlbumHeader extends StatelessWidget {
                   TextButton(
                     key: const ValueKey('album-details-retry'),
                     onPressed: onRetryDetails,
-                    child: const Text('Retry details'),
+                    child: Text(context.l10n.albumRetryDetails),
                   ),
               ],
             ),
@@ -455,9 +464,9 @@ class _AlbumArtistSelection extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(8, compact ? 0 : 4, 8, compact ? 16 : 4),
       children: [
         if (compact)
-          const ListTile(
-            title: Text('Choose an Artist'),
-            subtitle: Text('This Album credits more than one Artist.'),
+          ListTile(
+            title: Text(context.l10n.albumChooseArtistTitle),
+            subtitle: Text(context.l10n.albumMultipleArtistsDetail),
           ),
         for (var index = 0; index < artists.length; index++)
           ListTile(
@@ -546,12 +555,12 @@ class _AlbumTracksState extends State<_AlbumTracks> {
             if (widget.desktop)
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontal),
-                child: const MusicTrackTableHeader(
-                  key: ValueKey('album-track-table-header'),
-                  titleLabel: 'Title',
-                  artistLabel: 'Artist',
-                  albumLabel: 'Album',
-                  durationLabel: 'Duration',
+                child: MusicTrackTableHeader(
+                  key: const ValueKey('album-track-table-header'),
+                  titleLabel: context.l10n.tableTitle,
+                  artistLabel: context.l10n.tableArtist,
+                  albumLabel: context.l10n.tableAlbum,
+                  durationLabel: context.l10n.tableDuration,
                 ),
               ),
             Expanded(
@@ -578,7 +587,7 @@ class _AlbumTracksState extends State<_AlbumTracks> {
                         widget.current?.providerId == track.providerId &&
                         widget.current?.opaqueId == track.opaqueId;
                     final artists = track.artistNames.isEmpty
-                        ? 'Unknown artist'
+                        ? context.l10n.trackUnknownArtist
                         : track.artistNames.join(' / ');
                     return MusicTrackRowSurface(
                       key: ValueKey(
@@ -589,7 +598,10 @@ class _AlbumTracksState extends State<_AlbumTracks> {
                       current: selected,
                       hovered: _hoveredTrack == identity,
                       onHoverChanged: (hovered) => _setHovered(track, hovered),
-                      semanticLabel: '${track.title}, $artists',
+                      semanticLabel: context.l10n.commonTrackSemantics(
+                        artists,
+                        track.title,
+                      ),
                       onTap: () => widget.onPlay(index),
                       onContextMenuRequested: (_) =>
                           unawaited(_showActions(track, index)),
@@ -613,8 +625,8 @@ class _AlbumTracksState extends State<_AlbumTracks> {
                             queueKey: ValueKey('album-queue-$index'),
                             moreKey: ValueKey('album-context-$index'),
                             artistTooltip: track.artists.length > 1
-                                ? 'Choose artist'
-                                : 'Open artist',
+                                ? context.l10n.commonChooseArtist
+                                : context.l10n.commonOpenArtist,
                           ),
                     );
                   },
@@ -638,19 +650,21 @@ class _AlbumTracksState extends State<_AlbumTracks> {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow_rounded),
-              title: const Text('Play from here'),
+              title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
-              title: const Text('Add to queue'),
+              title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
             ),
             if (widget.onOpenArtist != null && track.artists.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.person_rounded),
                 title: Text(
-                  track.artists.length > 1 ? 'Choose artist' : 'Open artist',
+                  track.artists.length > 1
+                      ? context.l10n.commonChooseArtist
+                      : context.l10n.commonOpenArtist,
                 ),
                 onTap: () =>
                     Navigator.pop(context, MusicTrackAction.openArtist),
@@ -741,16 +755,16 @@ class _AlbumFooter extends StatelessWidget {
           : appendFailure != null
           ? FilledButton.tonal(
               onPressed: onRetryMore,
-              child: const Text('Try loading more again'),
+              child: Text(context.l10n.commonTryLoadingMoreAgain),
             )
           : hasMore
           ? FilledButton.tonal(
               key: const ValueKey('album-load-more'),
               onPressed: onLoadMore,
-              child: const Text('Load more'),
+              child: Text(context.l10n.commonLoadMore),
             )
           : Text(
-              'End of Album',
+              context.l10n.albumEnd,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -759,26 +773,31 @@ class _AlbumFooter extends StatelessWidget {
   );
 }
 
-String _failureCopy(AlbumTrackFailure? failure, String providerName) =>
-    switch (failure) {
-      AlbumTrackFailure.network => 'Check your connection and try again.',
-      AlbumTrackFailure.serviceUnavailable =>
-        '$providerName Album browsing is temporarily unavailable.',
-      AlbumTrackFailure.cancelled => 'The Album request was cancelled.',
-      AlbumTrackFailure.coreUnavailable =>
-        'The local music core is unavailable. Restart the app and try again.',
-      AlbumTrackFailure.invalidResponse ||
-      AlbumTrackFailure.alreadyRunning ||
-      null => '$providerName returned an unexpected Album response.',
-    };
+String _failureCopy(
+  AppLocalizations l10n,
+  AlbumTrackFailure? failure,
+  String providerName,
+) => switch (failure) {
+  AlbumTrackFailure.network => l10n.albumFailureNetwork,
+  AlbumTrackFailure.serviceUnavailable => l10n.albumFailureService(
+    providerName,
+  ),
+  AlbumTrackFailure.cancelled => l10n.albumFailureCancelled,
+  AlbumTrackFailure.coreUnavailable => l10n.catalogFailureCore,
+  AlbumTrackFailure.invalidResponse ||
+  AlbumTrackFailure.alreadyRunning ||
+  null => l10n.albumFailureUnexpected(providerName),
+};
 
-String _detailsFailureCopy(AlbumDetailsFailure? failure) => switch (failure) {
-  AlbumDetailsFailure.network => 'Album details are offline.',
-  AlbumDetailsFailure.serviceUnavailable =>
-    'Album details are temporarily unavailable.',
-  AlbumDetailsFailure.cancelled => 'Album detail loading was cancelled.',
-  AlbumDetailsFailure.coreUnavailable => 'Album details could not start.',
+String _detailsFailureCopy(
+  AppLocalizations l10n,
+  AlbumDetailsFailure? failure,
+) => switch (failure) {
+  AlbumDetailsFailure.network => l10n.albumDetailsFailureNetwork,
+  AlbumDetailsFailure.serviceUnavailable => l10n.albumDetailsFailureService,
+  AlbumDetailsFailure.cancelled => l10n.albumDetailsFailureCancelled,
+  AlbumDetailsFailure.coreUnavailable => l10n.albumDetailsFailureCore,
   AlbumDetailsFailure.invalidResponse ||
   AlbumDetailsFailure.alreadyRunning ||
-  null => 'Album details could not be read.',
+  null => l10n.albumDetailsFailureGeneric,
 };

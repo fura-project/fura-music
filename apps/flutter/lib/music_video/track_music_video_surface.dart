@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/music_video/track_music_video_controller.dart';
 import 'package:flutterustmusic/music_video/track_music_video_engine.dart';
 import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
@@ -117,7 +119,7 @@ class _TrackMusicVideoPanelState extends State<TrackMusicVideoPanel> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Music video',
+                    context.l10n.musicVideoTitle,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   Text(
@@ -134,7 +136,7 @@ class _TrackMusicVideoPanelState extends State<TrackMusicVideoPanel> {
             ),
             IconButton(
               key: const ValueKey('track-music-video-close'),
-              tooltip: 'Close music video',
+              tooltip: context.l10n.musicVideoClose,
               onPressed: widget.onClose,
               icon: const Icon(Icons.close_rounded),
             ),
@@ -155,41 +157,43 @@ class _TrackMusicVideoPanelState extends State<TrackMusicVideoPanel> {
   );
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
-    TrackMusicVideoStage.loading => const MusicLoadingPanel(
-      key: ValueKey('track-music-video-loading'),
-      label: 'Loading music video',
+    TrackMusicVideoStage.loading => MusicLoadingPanel(
+      key: const ValueKey('track-music-video-loading'),
+      label: context.l10n.musicVideoLoading,
     ),
     TrackMusicVideoStage.unavailable => MusicContentStatePanel(
       key: const ValueKey('track-music-video-unavailable'),
       icon: Icons.music_video_outlined,
-      title: 'No music video for this Track',
-      detail:
-          '${builtInProviderDisplayName(widget.track.providerId)} did not associate an MV with this Track.',
+      title: context.l10n.musicVideoEmptyTitle,
+      detail: context.l10n.musicVideoEmptyDetail(
+        builtInProviderDisplayName(widget.track.providerId, context.l10n),
+      ),
     ),
     TrackMusicVideoStage.error => MusicContentStatePanel(
       key: const ValueKey('track-music-video-error'),
       icon: Icons.video_file_outlined,
       title: _controller.failure == TrackMusicVideoFailure.sourceUnavailable
-          ? 'Music video unavailable'
-          : 'Couldn’t play music video',
+          ? context.l10n.musicVideoUnavailableTitle
+          : context.l10n.musicVideoFailureTitle,
       detail: _failureCopy(
+        context.l10n,
         _controller.failure,
-        builtInProviderDisplayName(widget.track.providerId),
+        builtInProviderDisplayName(widget.track.providerId, context.l10n),
       ),
       action: _controller.canRetry
           ? FilledButton.tonal(
               key: const ValueKey('track-music-video-retry'),
               onPressed: _controller.retry,
-              child: const Text('Try again'),
+              child: Text(context.l10n.commonRetry),
             )
           : null,
       liveRegion: true,
     ),
-    TrackMusicVideoStage.interrupted => const MusicContentStatePanel(
-      key: ValueKey('track-music-video-interrupted'),
+    TrackMusicVideoStage.interrupted => MusicContentStatePanel(
+      key: const ValueKey('track-music-video-interrupted'),
       icon: Icons.stop_circle_outlined,
-      title: 'Music video stopped',
-      detail: 'Music playback or the current Queue Track changed.',
+      title: context.l10n.musicVideoStoppedTitle,
+      detail: context.l10n.musicVideoStoppedDetail,
       liveRegion: true,
     ),
     TrackMusicVideoStage.playing ||
@@ -274,12 +278,14 @@ class _TrackMusicVideoControls extends StatelessWidget {
     final playing = controller.stage == TrackMusicVideoStage.playing;
     return Semantics(
       container: true,
-      label: 'Music video playback controls',
+      label: context.l10n.musicVideoControlsSemantics,
       child: Row(
         children: [
           IconButton.filled(
             key: const ValueKey('track-music-video-play-pause'),
-            tooltip: playing ? 'Pause music video' : 'Play music video',
+            tooltip: playing
+                ? context.l10n.musicVideoPause
+                : context.l10n.musicVideoPlay,
             onPressed: controller.canTogglePlayback
                 ? () => unawaited(controller.togglePlayback())
                 : null,
@@ -305,8 +311,10 @@ class _TrackMusicVideoControls extends StatelessWidget {
                     )
                   : null,
               semanticFormatterCallback: (value) =>
-                  '${_formatDuration(Duration(milliseconds: value.round()))} '
-                  'of ${_formatDuration(duration)}',
+                  context.l10n.playbackProgressSemantics(
+                    _formatDuration(duration),
+                    _formatDuration(Duration(milliseconds: value.round())),
+                  ),
             ),
           ),
           Text(
@@ -328,20 +336,23 @@ String _formatDuration(Duration value) {
 }
 
 String _failureCopy(
+  AppLocalizations l10n,
   TrackMusicVideoFailure? failure,
   String providerDisplayName,
 ) => switch (failure) {
-  TrackMusicVideoFailure.sourceUnavailable =>
-    '$providerDisplayName did not provide a supported playable MV source.',
-  TrackMusicVideoFailure.network =>
-    'The MV request could not reach $providerDisplayName. Check your connection.',
-  TrackMusicVideoFailure.serviceUnavailable =>
-    '$providerDisplayName could not serve this MV right now.',
-  TrackMusicVideoFailure.invalidResponse =>
-    '$providerDisplayName returned MV data the app could not safely use.',
-  TrackMusicVideoFailure.cancelled => 'The MV request was cancelled.',
-  TrackMusicVideoFailure.alreadyRunning =>
-    'Another MV request is already running. Try again shortly.',
-  TrackMusicVideoFailure.coreUnavailable ||
-  null => 'The MV player could not start this video.',
+  TrackMusicVideoFailure.sourceUnavailable => l10n.musicVideoFailureSource(
+    providerDisplayName,
+  ),
+  TrackMusicVideoFailure.network => l10n.musicVideoFailureNetwork(
+    providerDisplayName,
+  ),
+  TrackMusicVideoFailure.serviceUnavailable => l10n.musicVideoFailureService(
+    providerDisplayName,
+  ),
+  TrackMusicVideoFailure.invalidResponse => l10n.musicVideoFailureInvalid(
+    providerDisplayName,
+  ),
+  TrackMusicVideoFailure.cancelled => l10n.musicVideoFailureCancelled,
+  TrackMusicVideoFailure.alreadyRunning => l10n.musicVideoFailureRunning,
+  TrackMusicVideoFailure.coreUnavailable || null => l10n.musicVideoFailureCore,
 };

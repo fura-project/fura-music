@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 
 Future<void> showLyrics(
@@ -112,7 +114,7 @@ class LyricPanel extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Lyrics',
+                            context.l10n.lyricsTitle,
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -132,7 +134,7 @@ class LyricPanel extends StatelessWidget {
                     ),
                     if (showCloseButton)
                       IconButton(
-                        tooltip: 'Close lyrics',
+                        tooltip: context.l10n.lyricsClose,
                         onPressed: onClose,
                         icon: const Icon(Icons.close_rounded),
                       ),
@@ -140,7 +142,7 @@ class LyricPanel extends StatelessWidget {
                 ),
               ),
               if (!immersive) const Divider(height: 1),
-              Expanded(child: _body(canSeek?.call() ?? false)),
+              Expanded(child: _body(context, canSeek?.call() ?? false)),
             ],
           ),
         );
@@ -148,75 +150,98 @@ class LyricPanel extends StatelessWidget {
     );
   }
 
-  Widget _body(bool seekEnabled) => switch (controller.stage) {
-    LyricStage.idle => const _LyricMessage(
-      key: ValueKey('lyrics-idle'),
-      icon: Icons.lyrics_outlined,
-      title: 'Start a track to see its lyrics',
-      detail: 'Synchronized lyrics will follow the current queue track.',
-    ),
-    LyricStage.loading => const _LyricLoading(key: ValueKey('lyrics-loading')),
-    LyricStage.content => _LyricContent(
-      key: const ValueKey('lyrics-content'),
-      controller: controller,
-      onSeek: seekEnabled ? onSeek : null,
-      immersive: immersive,
-    ),
-    LyricStage.unavailable => _LyricMessage(
-      key: const ValueKey('lyrics-unavailable'),
-      icon: Icons.lyrics_outlined,
-      title: 'No synchronized lyrics',
-      detail:
-          '${builtInProviderDisplayName(controller.track?.providerId ?? '')} did not provide lyrics for this track.',
-      announce: true,
-    ),
-    LyricStage.error => _LyricMessage(
-      key: const ValueKey('lyrics-error'),
-      icon: Icons.cloud_off_rounded,
-      title: _errorTitle(
-        controller.failure,
-        builtInProviderDisplayName(controller.track?.providerId ?? ''),
-      ),
-      detail: _errorDetail(
-        controller.failure,
-        builtInProviderDisplayName(controller.track?.providerId ?? ''),
-      ),
-      announce: true,
-      action: controller.canRetry
-          ? FilledButton.tonal(
-              key: const ValueKey('lyrics-retry'),
-              onPressed: controller.retry,
-              child: const Text('Try again'),
-            )
-          : null,
-    ),
-    LyricStage.authenticationRequired => _LyricMessage(
-      key: const ValueKey('lyrics-authentication-required'),
-      icon: Icons.lock_outline_rounded,
-      title: 'Sign in to load lyrics',
-      detail:
-          'Your current session cannot request ${builtInProviderDisplayName(controller.track?.providerId ?? '')} lyrics.',
-      announce: true,
-      action: TextButton(
-        key: const ValueKey('lyrics-sign-in-again'),
-        onPressed: onSignInAgain,
-        child: const Text('Sign in again'),
-      ),
-    ),
-    LyricStage.credentialRejected => _LyricMessage(
-      key: const ValueKey('lyrics-credential-rejected'),
-      icon: Icons.lock_reset_rounded,
-      title:
-          '${builtInProviderDisplayName(controller.track?.providerId ?? '')} session rejected',
-      detail: 'Sign in again before requesting lyrics.',
-      announce: true,
-      action: TextButton(
-        key: const ValueKey('lyrics-sign-in-again'),
-        onPressed: onSignInAgain,
-        child: const Text('Sign in again'),
-      ),
-    ),
-  };
+  Widget _body(BuildContext context, bool seekEnabled) =>
+      switch (controller.stage) {
+        LyricStage.idle => _LyricMessage(
+          key: const ValueKey('lyrics-idle'),
+          icon: Icons.lyrics_outlined,
+          title: context.l10n.lyricsIdleTitle,
+          detail: context.l10n.lyricsIdleDetail,
+        ),
+        LyricStage.loading => const _LyricLoading(
+          key: ValueKey('lyrics-loading'),
+        ),
+        LyricStage.content => _LyricContent(
+          key: const ValueKey('lyrics-content'),
+          controller: controller,
+          onSeek: seekEnabled ? onSeek : null,
+          immersive: immersive,
+        ),
+        LyricStage.unavailable => _LyricMessage(
+          key: const ValueKey('lyrics-unavailable'),
+          icon: Icons.lyrics_outlined,
+          title: context.l10n.lyricsUnavailableTitle,
+          detail: context.l10n.lyricsUnavailableDetail(
+            builtInProviderDisplayName(
+              controller.track?.providerId ?? '',
+              context.l10n,
+            ),
+          ),
+          announce: true,
+        ),
+        LyricStage.error => _LyricMessage(
+          key: const ValueKey('lyrics-error'),
+          icon: Icons.cloud_off_rounded,
+          title: _errorTitle(
+            context.l10n,
+            controller.failure,
+            builtInProviderDisplayName(
+              controller.track?.providerId ?? '',
+              context.l10n,
+            ),
+          ),
+          detail: _errorDetail(
+            context.l10n,
+            controller.failure,
+            builtInProviderDisplayName(
+              controller.track?.providerId ?? '',
+              context.l10n,
+            ),
+          ),
+          announce: true,
+          action: controller.canRetry
+              ? FilledButton.tonal(
+                  key: const ValueKey('lyrics-retry'),
+                  onPressed: controller.retry,
+                  child: Text(context.l10n.commonRetry),
+                )
+              : null,
+        ),
+        LyricStage.authenticationRequired => _LyricMessage(
+          key: const ValueKey('lyrics-authentication-required'),
+          icon: Icons.lock_outline_rounded,
+          title: context.l10n.lyricsSignInTitle,
+          detail: context.l10n.lyricsSignInDetail(
+            builtInProviderDisplayName(
+              controller.track?.providerId ?? '',
+              context.l10n,
+            ),
+          ),
+          announce: true,
+          action: TextButton(
+            key: const ValueKey('lyrics-sign-in-again'),
+            onPressed: onSignInAgain,
+            child: Text(context.l10n.authSignInAgain),
+          ),
+        ),
+        LyricStage.credentialRejected => _LyricMessage(
+          key: const ValueKey('lyrics-credential-rejected'),
+          icon: Icons.lock_reset_rounded,
+          title: context.l10n.lyricsSessionRejectedTitle(
+            builtInProviderDisplayName(
+              controller.track?.providerId ?? '',
+              context.l10n,
+            ),
+          ),
+          detail: context.l10n.lyricsSessionRejectedDetail,
+          announce: true,
+          action: TextButton(
+            key: const ValueKey('lyrics-sign-in-again'),
+            onPressed: onSignInAgain,
+            child: Text(context.l10n.authSignInAgain),
+          ),
+        ),
+      };
 }
 
 class _LyricContent extends StatefulWidget {
@@ -304,7 +329,7 @@ class _LyricContentState extends State<_LyricContent> {
                 key: const ValueKey('lyrics-resume-following'),
                 onPressed: _resumeFollowing,
                 icon: const Icon(Icons.my_location_rounded),
-                label: const Text('Follow current line'),
+                label: Text(context.l10n.lyricsFollowCurrent),
               ),
             ),
           ),
@@ -543,7 +568,7 @@ class _TimedSegment extends StatelessWidget {
           );
     return Semantics(
       label: segment.text,
-      value: '${(progress * 100).round()}% complete',
+      value: context.l10n.lyricsSegmentProgress((progress * 100).round()),
       excludeSemantics: true,
       child: painted,
     );
@@ -564,7 +589,7 @@ class _LyricLoading extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         Text(
-          'Loading synchronized lyrics…',
+          context.l10n.lyricsLoading,
           style: Theme.of(context).textTheme.titleMedium,
         ),
       ],
@@ -626,7 +651,7 @@ class _LyricMessage extends StatelessWidget {
                 Semantics(
                   container: true,
                   liveRegion: true,
-                  label: '$title. $detail',
+                  label: context.l10n.lyricsAnnouncement(detail, title),
                   excludeSemantics: true,
                   child: copy,
                 )
@@ -650,26 +675,26 @@ double _progress(TimedLyricSegment segment, int positionMs) {
   return (positionMs - segment.startMs) / segment.durationMs;
 }
 
-String _errorTitle(LyricFailure? failure, String providerDisplayName) =>
-    switch (failure) {
-      LyricFailure.network => 'Couldn’t reach $providerDisplayName',
-      LyricFailure.serviceUnavailable => 'Lyrics are unavailable right now',
-      LyricFailure.alreadyRunning => 'Another lyric request is still running',
-      _ => 'Couldn’t load synchronized lyrics',
-    };
-
-String _errorDetail(
+String _errorTitle(
+  AppLocalizations l10n,
   LyricFailure? failure,
   String providerDisplayName,
 ) => switch (failure) {
-  LyricFailure.network =>
-    'Your session is unchanged. Check your connection and try again.',
-  LyricFailure.serviceUnavailable =>
-    'Your session is unchanged. Try requesting this track again later.',
-  LyricFailure.alreadyRunning =>
-    'Wait for the current request to finish before trying again.',
-  LyricFailure.cancelled || LyricFailure.replaced =>
-    'The lyric request was replaced before it completed.',
-  _ =>
-    '$providerDisplayName returned lyrics this build could not safely present.',
+  LyricFailure.network => l10n.lyricsFailureNetworkTitle(providerDisplayName),
+  LyricFailure.serviceUnavailable => l10n.lyricsFailureServiceTitle,
+  LyricFailure.alreadyRunning => l10n.lyricsFailureRunningTitle,
+  _ => l10n.lyricsFailureGenericTitle,
+};
+
+String _errorDetail(
+  AppLocalizations l10n,
+  LyricFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
+  LyricFailure.network => l10n.lyricsFailureNetworkDetail,
+  LyricFailure.serviceUnavailable => l10n.lyricsFailureServiceDetail,
+  LyricFailure.alreadyRunning => l10n.lyricsFailureRunningDetail,
+  LyricFailure.cancelled ||
+  LyricFailure.replaced => l10n.lyricsFailureReplacedDetail,
+  _ => l10n.lyricsFailureInvalidDetail(providerDisplayName),
 };

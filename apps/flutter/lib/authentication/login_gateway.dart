@@ -176,8 +176,7 @@ abstract interface class QqMusicAuthenticationGateway {
 }
 
 abstract interface class ProviderAuthenticationPresentation {
-  String get providerDisplayName;
-  String get qrActionLabel;
+  String get providerId;
 }
 
 abstract interface class MultiMethodQqMusicAuthenticationGateway {
@@ -224,10 +223,7 @@ class RustQqMusicAuthenticationGateway
   final CredentialSignOutCore _credentialSignOutCore;
 
   @override
-  String get providerDisplayName => 'QQ Music';
-
-  @override
-  String get qrActionLabel => 'Scan with QQ';
+  String get providerId => 'qq-music';
 
   @override
   bool get hasAuthenticatedCredential =>
@@ -325,10 +321,7 @@ class RustNeteaseAuthenticationGateway
   final CredentialVault _credentialVault;
 
   @override
-  String get providerDisplayName => 'NetEase Cloud Music';
-
-  @override
-  String get qrActionLabel => 'Scan with NetEase Cloud Music';
+  String get providerId => 'netease-cloud-music';
 
   @override
   bool get hasAuthenticatedCredential =>

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/lyrics/lyric_panel.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -218,7 +220,7 @@ class _CompactNowPlayingBar extends StatelessWidget {
             Expanded(
               child: _TrackInfo(
                 track: track,
-                status: _statusCopy(controller),
+                status: _statusCopy(context.l10n, controller),
                 error: error,
               ),
             ),
@@ -226,12 +228,12 @@ class _CompactNowPlayingBar extends StatelessWidget {
               TextButton(
                 key: const ValueKey('now-playing-sign-in-again'),
                 onPressed: onSignInAgain,
-                child: const Text('Sign in'),
+                child: Text(context.l10n.playbackSignIn),
               )
             else
               IconButton.filled(
                 key: const ValueKey('now-playing-primary-action'),
-                tooltip: _primaryTooltip(playback.stage),
+                tooltip: _primaryTooltip(context.l10n, playback.stage),
                 onPressed: playback.canActivate
                     ? () => unawaited(playback.activate())
                     : null,
@@ -270,13 +272,13 @@ class _CompactNowPlayingBar extends StatelessWidget {
           child: onOpenExpanded == null
               ? row
               : Tooltip(
-                  message: 'Open now playing',
+                  message: context.l10n.playbackOpenNowPlaying,
                   child: Semantics(
                     key: const ValueKey('now-playing-open-expanded'),
                     button: true,
                     container: true,
                     explicitChildNodes: true,
-                    label: 'Open now playing for ${track.title}',
+                    label: context.l10n.playbackOpenNowPlayingFor(track.title),
                     onTap: onOpenExpanded,
                     child: InkWell(
                       onTap: onOpenExpanded,
@@ -323,7 +325,7 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
         Expanded(
           child: _TrackInfo(
             track: track,
-            status: _statusCopy(controller),
+            status: _statusCopy(context.l10n, controller),
             error: error,
           ),
         ),
@@ -334,13 +336,13 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
     final interactiveTrackIdentity = onOpenExpanded == null
         ? trackIdentity
         : Tooltip(
-            message: 'Open now playing',
+            message: context.l10n.playbackOpenNowPlaying,
             child: Semantics(
               key: const ValueKey('now-playing-open-expanded'),
               button: true,
               container: true,
               explicitChildNodes: true,
-              label: 'Open now playing for ${track.title}',
+              label: context.l10n.playbackOpenNowPlayingFor(track.title),
               onTap: onOpenExpanded,
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
@@ -367,6 +369,7 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: _transportControls(
+                    context,
                     controller,
                     authenticationFailure,
                     onSignInAgain,
@@ -432,7 +435,7 @@ class _ExpandedPlaybackControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final playback = controller.playback;
-    final status = _statusCopy(controller);
+    final status = _statusCopy(context.l10n, controller);
     final error =
         controller.failure != null ||
         playback.stage == TrackPlaybackStage.resolutionError ||
@@ -470,6 +473,7 @@ class _ExpandedPlaybackControls extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final transport = _transportControls(
+                    context,
                     controller,
                     authenticationFailure,
                     onSignInAgain,
@@ -564,7 +568,8 @@ class _PlaybackQualityButtonState extends State<_PlaybackQualityButton> {
 
   @override
   Widget build(BuildContext context) {
-    final tooltip = playbackQualityTooltip(
+    final tooltip = localizedPlaybackQualityTooltip(
+      context.l10n,
       widget.preference,
       widget.actualQuality,
     );
@@ -584,7 +589,7 @@ class _PlaybackQualityButtonState extends State<_PlaybackQualityButton> {
               key: ValueKey('now-playing-quality-${preference.name}'),
               value: preference,
               checked: preference == widget.preference,
-              child: Text(preference.menuLabel),
+              child: Text(preference.localizedMenuLabel(context.l10n)),
             ),
         ],
         child: SizedBox.square(
@@ -610,6 +615,7 @@ class _PlaybackQualityButtonState extends State<_PlaybackQualityButton> {
 }
 
 List<Widget> _transportControls(
+  BuildContext context,
   QueuePlaybackController controller,
   bool authenticationFailure,
   VoidCallback onSignInAgain, {
@@ -621,12 +627,12 @@ List<Widget> _transportControls(
       ? TextButton(
           key: const ValueKey('now-playing-sign-in-again'),
           onPressed: onSignInAgain,
-          child: const Text('Sign in'),
+          child: Text(context.l10n.playbackSignIn),
         )
       : prominentPrimary
       ? IconButton.filled(
           key: const ValueKey('now-playing-primary-action'),
-          tooltip: _primaryTooltip(playback.stage),
+          tooltip: _primaryTooltip(context.l10n, playback.stage),
           onPressed: playback.canActivate
               ? () => unawaited(playback.activate())
               : null,
@@ -640,7 +646,7 @@ List<Widget> _transportControls(
         )
       : IconButton(
           key: const ValueKey('now-playing-primary-action'),
-          tooltip: _primaryTooltip(playback.stage),
+          tooltip: _primaryTooltip(context.l10n, playback.stage),
           onPressed: playback.canActivate
               ? () => unawaited(playback.activate())
               : null,
@@ -650,7 +656,7 @@ List<Widget> _transportControls(
     _ShuffleButton(controller: controller),
     IconButton(
       key: const ValueKey('now-playing-previous'),
-      tooltip: 'Previous',
+      tooltip: context.l10n.playbackPrevious,
       onPressed: !authenticationFailure && controller.hasPrevious
           ? () => unawaited(controller.rewind())
           : null,
@@ -659,7 +665,7 @@ List<Widget> _transportControls(
     primaryAction,
     IconButton(
       key: const ValueKey('now-playing-next'),
-      tooltip: 'Next',
+      tooltip: context.l10n.playbackNext,
       onPressed: !authenticationFailure && controller.hasNext
           ? () => unawaited(controller.advance())
           : null,
@@ -669,7 +675,7 @@ List<Widget> _transportControls(
     if (_canStop(playback.stage))
       IconButton(
         key: const ValueKey('now-playing-stop'),
-        tooltip: 'Stop',
+        tooltip: context.l10n.playbackStop,
         onPressed: () => unawaited(playback.stop()),
         icon: const Icon(Icons.stop_rounded),
       ),
@@ -685,8 +691,8 @@ class _ShuffleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = controller.order == PlaybackOrder.shuffle;
     final label = enabled
-        ? 'Shuffle on. Turn off shuffle'
-        : 'Shuffle off. Turn on shuffle';
+        ? context.l10n.playbackShuffleOn
+        : context.l10n.playbackShuffleOff;
     return Semantics(
       button: true,
       toggled: enabled,
@@ -713,9 +719,9 @@ class _RepeatButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final mode = controller.repeatMode;
     final label = switch (mode) {
-      PlaybackRepeatMode.off => 'Repeat off. Set repeat all',
-      PlaybackRepeatMode.all => 'Repeat all. Set repeat one',
-      PlaybackRepeatMode.one => 'Repeat one. Turn off repeat',
+      PlaybackRepeatMode.off => context.l10n.playbackRepeatOff,
+      PlaybackRepeatMode.all => context.l10n.playbackRepeatAll,
+      PlaybackRepeatMode.one => context.l10n.playbackRepeatOne,
     };
     return Semantics(
       button: true,
@@ -744,7 +750,9 @@ String? nowPlayingCatalogContextLabel(
 ) {
   if (NowPlayingCatalogNavigation.maybeOf(context) == null) return null;
   final actions = _catalogActions(track);
-  return actions.isEmpty ? null : _catalogActionLabel(track, actions);
+  return actions.isEmpty
+      ? null
+      : _catalogActionLabel(context.l10n, track, actions);
 }
 
 Future<void> openNowPlayingCatalogContext({
@@ -782,7 +790,7 @@ Future<void> openNowPlayingCatalogContext({
           builder: (context) => PlaybackShortcuts(
             controller: controller,
             child: AlertDialog(
-              title: const Text('Browse current Track'),
+              title: Text(context.l10n.playbackBrowseCurrentTrack),
               content: _NowPlayingCatalogSelection(
                 actions: actions,
                 compact: false,
@@ -790,7 +798,7 @@ Future<void> openNowPlayingCatalogContext({
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(context.l10n.commonCancel),
                 ),
               ],
             ),
@@ -866,18 +874,19 @@ List<_NowPlayingCatalogAction> _catalogActions(PlaylistTrackSummary track) {
 }
 
 String _catalogActionLabel(
+  AppLocalizations l10n,
   PlaylistTrackSummary track,
   List<_NowPlayingCatalogAction> actions,
 ) {
   if (actions.length == 1) {
     return actions.single.album == null
-        ? 'Open credited Artist for ${track.title}'
-        : 'Open Album for ${track.title}';
+        ? l10n.playbackOpenCreditedArtist(track.title)
+        : l10n.playbackOpenAlbum(track.title);
   }
   final hasAlbum = actions.any((action) => action.album != null);
   return hasAlbum
-      ? 'Browse Album and credited Artists for ${track.title}'
-      : 'Choose a credited Artist for ${track.title}';
+      ? l10n.playbackBrowseAlbumArtists(track.title)
+      : l10n.playbackChooseCreditedArtist(track.title);
 }
 
 class _NowPlayingCatalogAction {
@@ -910,7 +919,9 @@ class _NowPlayingCatalogSelection extends StatelessWidget {
           final action = actions[index];
           final album = action.album;
           final title = album?.title ?? action.artist!.name;
-          final kind = album == null ? 'Artist' : 'Album';
+          final kind = album == null
+              ? context.l10n.artistType
+              : context.l10n.albumType;
           return ListTile(
             key: ValueKey(
               album == null
@@ -997,8 +1008,10 @@ class _PlaybackProgressState extends State<_PlaybackProgress> {
               value: position,
               max: durationMs.toDouble(),
               semanticFormatterCallback: (value) =>
-                  '${_playbackTime(value.round())} of '
-                  '${_playbackTime(durationMs)}',
+                  context.l10n.playbackProgressSemantics(
+                    _playbackTime(durationMs),
+                    _playbackTime(value.round()),
+                  ),
               onChangeStart: widget.controller.canSeek
                   ? (value) => setState(() => _previewMs = value)
                   : null,
@@ -1061,8 +1074,9 @@ class _TrackInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final artist = track.artistNames.isEmpty
-        ? 'Unknown artist'
+        ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
+    final semantics = context.l10n.playbackTrackStatusSemantics(artist, status);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1073,10 +1087,10 @@ class _TrackInfo extends StatelessWidget {
         Semantics(
           container: true,
           liveRegion: true,
-          label: '$artist · $status',
+          label: semantics,
           excludeSemantics: true,
           child: Text(
-            '$artist · $status',
+            semantics,
             key: const ValueKey('now-playing-status'),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -1108,7 +1122,7 @@ class _QueueButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('now-playing-show-queue'),
-    tooltip: 'Show queue',
+    tooltip: context.l10n.playbackShowQueue,
     onPressed: () => unawaited(showPlaybackQueue(context, controller)),
     icon: const Icon(Icons.queue_music_rounded),
   );
@@ -1122,7 +1136,7 @@ class _VolumeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('now-playing-volume'),
-    tooltip: 'Volume',
+    tooltip: context.l10n.playbackVolume,
     onPressed: () => unawaited(_showVolumeControl(context, controller)),
     icon: Icon(
       controller.playback.volume == 0
@@ -1158,7 +1172,7 @@ Future<void> _showVolumeControl(
   await showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Volume'),
+      title: Text(context.l10n.playbackVolume),
       content: PlaybackShortcuts(
         controller: controller,
         child: SizedBox(
@@ -1205,7 +1219,7 @@ class _VolumePanelState extends State<_VolumePanel> {
                   key: const ValueKey('volume-slider'),
                   value: value,
                   semanticFormatterCallback: (value) =>
-                      '${(value * 100).round()} percent',
+                      context.l10n.playbackVolumePercent((value * 100).round()),
                   onChangeStart: (value) => setState(() => _preview = value),
                   onChanged: (value) => setState(() => _preview = value),
                   onChangeEnd: _commit,
@@ -1248,7 +1262,7 @@ class _LyricsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('now-playing-show-lyrics'),
-    tooltip: 'Show lyrics',
+    tooltip: context.l10n.playbackShowLyrics,
     onPressed: () => showLyrics(
       context,
       controller.lyrics!,
@@ -1332,7 +1346,7 @@ class _NowPlayingArtwork extends StatelessWidget {
     return Semantics(
       container: true,
       image: true,
-      label: 'Artwork for ${track.title}',
+      label: context.l10n.playbackArtworkSemantics(track.title),
       child: artwork,
     );
   }
@@ -1370,13 +1384,14 @@ bool _canStop(TrackPlaybackStage stage) => switch (stage) {
   _ => false,
 };
 
-String _primaryTooltip(TrackPlaybackStage stage) => switch (stage) {
-  TrackPlaybackStage.playing => 'Pause',
-  TrackPlaybackStage.paused => 'Resume',
-  TrackPlaybackStage.resolutionError ||
-  TrackPlaybackStage.engineError => 'Try again',
-  _ => 'Play',
-};
+String _primaryTooltip(AppLocalizations l10n, TrackPlaybackStage stage) =>
+    switch (stage) {
+      TrackPlaybackStage.playing => l10n.playbackPause,
+      TrackPlaybackStage.paused => l10n.playbackResume,
+      TrackPlaybackStage.resolutionError ||
+      TrackPlaybackStage.engineError => l10n.playbackRetry,
+      _ => l10n.commonPlay,
+    };
 
 IconData _primaryIcon(TrackPlaybackStage stage) => switch (stage) {
   TrackPlaybackStage.playing => Icons.pause_rounded,
@@ -1385,62 +1400,65 @@ IconData _primaryIcon(TrackPlaybackStage stage) => switch (stage) {
   _ => Icons.play_arrow_rounded,
 };
 
-String _statusCopy(QueuePlaybackController controller) {
+String _statusCopy(AppLocalizations l10n, QueuePlaybackController controller) {
   final queueFailure = controller.failure;
-  if (queueFailure != null) return _queueFailureCopy(queueFailure);
+  if (queueFailure != null) return _queueFailureCopy(l10n, queueFailure);
   final playback = controller.playback;
   final providerDisplayName = builtInProviderDisplayName(
     controller.currentTrackListenable.value?.providerId ?? '',
+    l10n,
   );
   return switch (playback.stage) {
-    TrackPlaybackStage.idle => 'Ready to play',
-    TrackPlaybackStage.resolving => 'Finding a playable source…',
-    TrackPlaybackStage.loading => 'Loading audio…',
-    TrackPlaybackStage.playing => 'Playing',
-    TrackPlaybackStage.paused => 'Paused',
-    TrackPlaybackStage.stopped => 'Stopped',
-    TrackPlaybackStage.completed => 'Finished',
+    TrackPlaybackStage.idle => l10n.playbackReady,
+    TrackPlaybackStage.resolving => l10n.playbackFindingSource,
+    TrackPlaybackStage.loading => l10n.playbackLoadingAudio,
+    TrackPlaybackStage.playing => l10n.playbackPlaying,
+    TrackPlaybackStage.paused => l10n.playbackPaused,
+    TrackPlaybackStage.stopped => l10n.playbackStopped,
+    TrackPlaybackStage.completed => l10n.playbackFinished,
     TrackPlaybackStage.resolutionError => _resolutionFailureCopy(
+      l10n,
       playback.resolutionFailure,
       providerDisplayName,
     ),
-    TrackPlaybackStage.engineError => 'Playback failed. Try this track again.',
+    TrackPlaybackStage.engineError => l10n.playbackEngineFailure,
   };
 }
 
-String _queueFailureCopy(PlaybackQueueFailure failure) => switch (failure) {
-  PlaybackQueueFailure.invalidTrack => 'A queue track was invalid.',
-  PlaybackQueueFailure.invalidPosition =>
-    'That queue position is no longer available.',
-  PlaybackQueueFailure.coreUnavailable =>
-    'The music core could not update the queue.',
-  PlaybackQueueFailure.invalidResponse =>
-    'The music core returned an invalid queue state.',
-};
+String _queueFailureCopy(AppLocalizations l10n, PlaybackQueueFailure failure) =>
+    switch (failure) {
+      PlaybackQueueFailure.invalidTrack => l10n.playbackQueueInvalidTrack,
+      PlaybackQueueFailure.invalidPosition => l10n.queueFailureInvalidPosition,
+      PlaybackQueueFailure.coreUnavailable => l10n.queueFailureCore,
+      PlaybackQueueFailure.invalidResponse => l10n.queueFailureInvalidResponse,
+    };
 
 String _resolutionFailureCopy(
+  AppLocalizations l10n,
   MediaResolutionFailure? failure,
   String providerDisplayName,
 ) => switch (failure) {
   MediaResolutionFailure.authenticationRequired ||
   MediaResolutionFailure.replaced ||
-  MediaResolutionFailure.cancelled =>
-    'Sign in to try account-authorized playback.',
-  MediaResolutionFailure.credentialRejected =>
-    'Your $providerDisplayName session was rejected and removed.',
+  MediaResolutionFailure.cancelled => l10n.playbackAuthRequired,
+  MediaResolutionFailure.credentialRejected => l10n.playbackCredentialRejected(
+    providerDisplayName,
+  ),
   MediaResolutionFailure.credentialRejectedStorageCleanupFailed =>
-    'Your session was rejected, but secure storage could not remove it.',
-  MediaResolutionFailure.unavailable =>
-    '$providerDisplayName did not provide a playable source.',
-  MediaResolutionFailure.network =>
-    'Couldn’t reach $providerDisplayName. Try again.',
-  MediaResolutionFailure.serviceUnavailable =>
-    '$providerDisplayName playback is unavailable right now.',
-  MediaResolutionFailure.invalidResponse =>
-    '$providerDisplayName returned a source this build could not safely play.',
-  MediaResolutionFailure.coreUnavailable =>
-    'The music core could not resolve this track.',
-  MediaResolutionFailure.alreadyRunning =>
-    'Another media request is still running.',
-  null => 'This track could not be resolved.',
+    l10n.playbackCredentialCleanupFailure,
+  MediaResolutionFailure.unavailable => l10n.playbackSourceUnavailable(
+    providerDisplayName,
+  ),
+  MediaResolutionFailure.network => l10n.playbackNetworkFailure(
+    providerDisplayName,
+  ),
+  MediaResolutionFailure.serviceUnavailable => l10n.playbackServiceUnavailable(
+    providerDisplayName,
+  ),
+  MediaResolutionFailure.invalidResponse => l10n.playbackInvalidResponse(
+    providerDisplayName,
+  ),
+  MediaResolutionFailure.coreUnavailable => l10n.playbackCoreUnavailable,
+  MediaResolutionFailure.alreadyRunning => l10n.playbackRequestRunning,
+  null => l10n.playbackResolutionFailure,
 };

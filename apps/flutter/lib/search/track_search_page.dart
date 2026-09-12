@@ -7,6 +7,8 @@ import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/navigation/music_section_selector.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -28,7 +30,7 @@ class TrackSearchPage extends StatefulWidget {
     required this.onOpenArtist,
     required this.onOpenPlaylist,
     required this.onSignInAgain,
-    this.providerDisplayName = 'QQ Music',
+    this.providerDisplayName,
     this.artistGateway,
     this.albumGateway,
     this.playlistGateway,
@@ -43,7 +45,7 @@ class TrackSearchPage extends StatefulWidget {
   final ValueChanged<ArtistSummary> onOpenArtist;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final VoidCallback onSignInAgain;
-  final String providerDisplayName;
+  final String? providerDisplayName;
   final ArtistSearchGateway? artistGateway;
   final AlbumSearchGateway? albumGateway;
   final PlaylistSearchGateway? playlistGateway;
@@ -113,6 +115,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final body = SafeArea(
       child: AnimatedBuilder(
         animation: _controllers,
@@ -127,10 +130,10 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                   desktop: desktop,
                   loading: _isLoading,
                   hintText: switch (_searchType) {
-                    _SearchType.tracks => 'Song, Artist, or Album name',
-                    _SearchType.artists => 'Artist name',
-                    _SearchType.albums => 'Album name',
-                    _SearchType.playlists => 'Playlist name',
+                    _SearchType.tracks => l10n.searchSongHint,
+                    _SearchType.artists => l10n.searchArtistHint,
+                    _SearchType.albums => l10n.searchAlbumHint,
+                    _SearchType.playlists => l10n.searchPlaylistHint,
                   },
                   onSubmitted: _submit,
                   onClear: _clear,
@@ -146,31 +149,31 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                     alignment: Alignment.centerLeft,
                     child: MusicSectionSelector<_SearchType>(
                       controlKey: const ValueKey('search-types'),
-                      label: 'Search type',
-                      destinations: const [
+                      label: l10n.searchTypeLabel,
+                      destinations: [
                         MusicSectionDestination(
                           value: _SearchType.tracks,
                           icon: Icons.music_note_rounded,
-                          label: 'Tracks',
-                          itemKey: ValueKey('search-type-tracks'),
+                          label: l10n.searchTracksType,
+                          itemKey: const ValueKey('search-type-tracks'),
                         ),
                         MusicSectionDestination(
                           value: _SearchType.artists,
                           icon: Icons.person_rounded,
-                          label: 'Artists',
-                          itemKey: ValueKey('search-type-artists'),
+                          label: l10n.searchArtistsType,
+                          itemKey: const ValueKey('search-type-artists'),
                         ),
                         MusicSectionDestination(
                           value: _SearchType.albums,
                           icon: Icons.album_rounded,
-                          label: 'Albums',
-                          itemKey: ValueKey('search-type-albums'),
+                          label: l10n.searchAlbumsType,
+                          itemKey: const ValueKey('search-type-albums'),
                         ),
                         MusicSectionDestination(
                           value: _SearchType.playlists,
                           icon: Icons.queue_music_rounded,
-                          label: 'Playlists',
-                          itemKey: ValueKey('search-type-playlists'),
+                          label: l10n.searchPlaylistsType,
+                          itemKey: const ValueKey('search-type-playlists'),
                         ),
                       ],
                       selected: _searchType,
@@ -183,10 +186,10 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
                     child: switch (_searchType) {
-                      _SearchType.tracks => _trackBody(desktop),
-                      _SearchType.artists => _artistBody(desktop),
-                      _SearchType.albums => _albumBody(desktop),
-                      _SearchType.playlists => _playlistBody(desktop),
+                      _SearchType.tracks => _trackBody(context, desktop),
+                      _SearchType.artists => _artistBody(context, desktop),
+                      _SearchType.albums => _albumBody(context, desktop),
+                      _SearchType.playlists => _playlistBody(context, desktop),
                     },
                   ),
                 ),
@@ -201,11 +204,11 @@ class TrackSearchPageState extends State<TrackSearchPage> {
       appBar: AppBar(
         leading: IconButton(
           key: const ValueKey('track-search-back'),
-          tooltip: 'Back to your music',
+          tooltip: l10n.searchBackTooltip,
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: Text('Search ${widget.providerDisplayName}'),
+        title: Text(l10n.searchProviderTitle(_providerName(l10n))),
       ),
       body: body,
       bottomNavigationBar: NowPlayingBar(
@@ -223,162 +226,177 @@ class TrackSearchPageState extends State<TrackSearchPage> {
       _playlistController.stage == PlaylistSearchStage.loading,
   };
 
-  Widget _trackBody(bool desktop) => switch (_controller.stage) {
-    TrackSearchStage.idle => MusicContentStatePanel(
-      key: ValueKey('track-search-idle'),
-      icon: Icons.search_rounded,
-      title: 'Find Tracks on ${widget.providerDisplayName}',
-      detail: 'Search by song, Artist, or Album name.',
-    ),
-    TrackSearchStage.loading => MusicLoadingPanel(
-      key: ValueKey('track-search-loading'),
-      label: 'Searching ${widget.providerDisplayName} Tracks',
-    ),
-    TrackSearchStage.empty => MusicContentStatePanel(
-      key: const ValueKey('track-search-empty'),
-      icon: Icons.search_off_rounded,
-      title: 'No tracks found',
-      detail: 'Try a different spelling or a broader search.',
-      action: TextButton(
-        onPressed: _focusQuery,
-        child: const Text('Edit search'),
-      ),
-    ),
-    TrackSearchStage.error => _searchFailure(
-      key: const ValueKey('track-search-error'),
-      detail: _trackFailureCopy(_controller.failure),
-      canRetry: _controller.canRetry,
-      onRetry: _controller.retry,
-      onEdit: _focusQuery,
-    ),
-    TrackSearchStage.content => _SearchResults(
-      key: const ValueKey('track-search-content'),
-      query: _controller.query,
-      items: _controller.items,
-      total: _controller.total,
-      hasMore: _controller.hasMore,
-      isLoadingMore: _controller.isLoadingMore,
-      appendFailure: _controller.appendFailure,
-      onLoadMore: _controller.loadMore,
-      onRetryMore: _controller.retryMore,
-      onPlay: _play,
-      onQueue: _queue,
-      onOpenAlbum: widget.onOpenAlbum,
-      onOpenArtist: widget.onOpenArtist,
-      desktop: desktop,
-    ),
-  };
+  String _providerName(AppLocalizations l10n) =>
+      widget.providerDisplayName ?? l10n.providerQqMusic;
 
-  Widget _artistBody(bool desktop) => switch (_artistController.stage) {
-    ArtistSearchStage.idle => MusicContentStatePanel(
-      key: ValueKey('artist-search-idle'),
-      icon: Icons.person_search_rounded,
-      title: 'Find Artists on ${widget.providerDisplayName}',
-      detail: 'Search by an Artist or group name.',
-    ),
-    ArtistSearchStage.loading => MusicLoadingPanel(
-      key: ValueKey('artist-search-loading'),
-      label: 'Searching ${widget.providerDisplayName} Artists',
-    ),
-    ArtistSearchStage.empty => MusicContentStatePanel(
-      key: const ValueKey('artist-search-empty'),
-      icon: Icons.person_off_outlined,
-      title: 'No Artists found',
-      detail: 'Try a different spelling or a broader search.',
-      action: TextButton(
-        onPressed: _focusQuery,
-        child: const Text('Edit search'),
-      ),
-    ),
-    ArtistSearchStage.error => _searchFailure(
-      key: const ValueKey('artist-search-error'),
-      detail: _artistFailureCopy(_artistController.failure),
-      canRetry: _artistController.canRetry,
-      onRetry: _artistController.retry,
-      onEdit: _focusQuery,
-    ),
-    ArtistSearchStage.content => _ArtistSearchResults(
-      key: const ValueKey('artist-search-content'),
-      query: _artistController.query,
-      artists: _artistController.artists,
-      total: _artistController.total,
-      hasMore: _artistController.hasMore,
-      isLoadingMore: _artistController.isLoadingMore,
-      appendFailure: _artistController.appendFailure != null,
-      onLoadMore: _artistController.loadMore,
-      onRetryMore: _artistController.retryMore,
-      onOpenArtist: widget.onOpenArtist,
-      desktop: desktop,
-    ),
-  };
+  Widget _trackBody(BuildContext context, bool desktop) =>
+      switch (_controller.stage) {
+        TrackSearchStage.idle => MusicContentStatePanel(
+          key: ValueKey('track-search-idle'),
+          icon: Icons.search_rounded,
+          title: context.l10n.searchFindTracksTitle(
+            _providerName(context.l10n),
+          ),
+          detail: context.l10n.searchTrackPrompt,
+        ),
+        TrackSearchStage.loading => MusicLoadingPanel(
+          key: ValueKey('track-search-loading'),
+          label: context.l10n.searchLoadingTracks(_providerName(context.l10n)),
+        ),
+        TrackSearchStage.empty => MusicContentStatePanel(
+          key: const ValueKey('track-search-empty'),
+          icon: Icons.search_off_rounded,
+          title: context.l10n.searchNoTracksTitle,
+          detail: context.l10n.searchNoResultsDetail,
+          action: TextButton(
+            onPressed: _focusQuery,
+            child: Text(context.l10n.searchEditAction),
+          ),
+        ),
+        TrackSearchStage.error => _searchFailure(
+          key: const ValueKey('track-search-error'),
+          detail: _trackFailureCopy(_controller.failure, context.l10n),
+          canRetry: _controller.canRetry,
+          onRetry: _controller.retry,
+          onEdit: _focusQuery,
+        ),
+        TrackSearchStage.content => _SearchResults(
+          key: const ValueKey('track-search-content'),
+          query: _controller.query,
+          items: _controller.items,
+          total: _controller.total,
+          hasMore: _controller.hasMore,
+          isLoadingMore: _controller.isLoadingMore,
+          appendFailure: _controller.appendFailure,
+          onLoadMore: _controller.loadMore,
+          onRetryMore: _controller.retryMore,
+          onPlay: _play,
+          onQueue: _queue,
+          onOpenAlbum: widget.onOpenAlbum,
+          onOpenArtist: widget.onOpenArtist,
+          desktop: desktop,
+        ),
+      };
 
-  Widget _albumBody(bool desktop) => switch (_albumController.stage) {
-    AlbumSearchStage.idle => MusicContentStatePanel(
-      key: ValueKey('album-search-idle'),
-      icon: Icons.album_rounded,
-      title: 'Find Albums on ${widget.providerDisplayName}',
-      detail: 'Search by an Album name.',
-    ),
-    AlbumSearchStage.loading => MusicLoadingPanel(
-      key: ValueKey('album-search-loading'),
-      label: 'Searching ${widget.providerDisplayName} Albums',
-    ),
-    AlbumSearchStage.empty => MusicContentStatePanel(
-      key: const ValueKey('album-search-empty'),
-      icon: Icons.album_outlined,
-      title: 'No Albums found',
-      detail: 'Try a different spelling or a broader search.',
-      action: TextButton(
-        onPressed: _focusQuery,
-        child: const Text('Edit search'),
-      ),
-    ),
-    AlbumSearchStage.error => _searchFailure(
-      key: const ValueKey('album-search-error'),
-      detail: _albumFailureCopy(_albumController.failure),
-      canRetry: _albumController.canRetry,
-      onRetry: _albumController.retry,
-      onEdit: _focusQuery,
-    ),
-    AlbumSearchStage.content => _AlbumSearchResults(
-      key: const ValueKey('album-search-content'),
-      query: _albumController.query,
-      albums: _albumController.albums,
-      total: _albumController.total,
-      hasMore: _albumController.hasMore,
-      isLoadingMore: _albumController.isLoadingMore,
-      appendFailure: _albumController.appendFailure != null,
-      onLoadMore: _albumController.loadMore,
-      onRetryMore: _albumController.retryMore,
-      onOpenAlbum: widget.onOpenAlbum,
-      desktop: desktop,
-    ),
-  };
+  Widget _artistBody(BuildContext context, bool desktop) =>
+      switch (_artistController.stage) {
+        ArtistSearchStage.idle => MusicContentStatePanel(
+          key: ValueKey('artist-search-idle'),
+          icon: Icons.person_search_rounded,
+          title: context.l10n.searchFindArtistsTitle(
+            _providerName(context.l10n),
+          ),
+          detail: context.l10n.searchArtistPrompt,
+        ),
+        ArtistSearchStage.loading => MusicLoadingPanel(
+          key: ValueKey('artist-search-loading'),
+          label: context.l10n.searchLoadingArtists(_providerName(context.l10n)),
+        ),
+        ArtistSearchStage.empty => MusicContentStatePanel(
+          key: const ValueKey('artist-search-empty'),
+          icon: Icons.person_off_outlined,
+          title: context.l10n.searchNoArtistsTitle,
+          detail: context.l10n.searchNoResultsDetail,
+          action: TextButton(
+            onPressed: _focusQuery,
+            child: Text(context.l10n.searchEditAction),
+          ),
+        ),
+        ArtistSearchStage.error => _searchFailure(
+          key: const ValueKey('artist-search-error'),
+          detail: _artistFailureCopy(_artistController.failure, context.l10n),
+          canRetry: _artistController.canRetry,
+          onRetry: _artistController.retry,
+          onEdit: _focusQuery,
+        ),
+        ArtistSearchStage.content => _ArtistSearchResults(
+          key: const ValueKey('artist-search-content'),
+          query: _artistController.query,
+          artists: _artistController.artists,
+          total: _artistController.total,
+          hasMore: _artistController.hasMore,
+          isLoadingMore: _artistController.isLoadingMore,
+          appendFailure: _artistController.appendFailure != null,
+          onLoadMore: _artistController.loadMore,
+          onRetryMore: _artistController.retryMore,
+          onOpenArtist: widget.onOpenArtist,
+          desktop: desktop,
+        ),
+      };
 
-  Widget _playlistBody(bool desktop) => switch (_playlistController.stage) {
+  Widget _albumBody(BuildContext context, bool desktop) =>
+      switch (_albumController.stage) {
+        AlbumSearchStage.idle => MusicContentStatePanel(
+          key: ValueKey('album-search-idle'),
+          icon: Icons.album_rounded,
+          title: context.l10n.searchFindAlbumsTitle(
+            _providerName(context.l10n),
+          ),
+          detail: context.l10n.searchAlbumPrompt,
+        ),
+        AlbumSearchStage.loading => MusicLoadingPanel(
+          key: ValueKey('album-search-loading'),
+          label: context.l10n.searchLoadingAlbums(_providerName(context.l10n)),
+        ),
+        AlbumSearchStage.empty => MusicContentStatePanel(
+          key: const ValueKey('album-search-empty'),
+          icon: Icons.album_outlined,
+          title: context.l10n.searchNoAlbumsTitle,
+          detail: context.l10n.searchNoResultsDetail,
+          action: TextButton(
+            onPressed: _focusQuery,
+            child: Text(context.l10n.searchEditAction),
+          ),
+        ),
+        AlbumSearchStage.error => _searchFailure(
+          key: const ValueKey('album-search-error'),
+          detail: _albumFailureCopy(_albumController.failure, context.l10n),
+          canRetry: _albumController.canRetry,
+          onRetry: _albumController.retry,
+          onEdit: _focusQuery,
+        ),
+        AlbumSearchStage.content => _AlbumSearchResults(
+          key: const ValueKey('album-search-content'),
+          query: _albumController.query,
+          albums: _albumController.albums,
+          total: _albumController.total,
+          hasMore: _albumController.hasMore,
+          isLoadingMore: _albumController.isLoadingMore,
+          appendFailure: _albumController.appendFailure != null,
+          onLoadMore: _albumController.loadMore,
+          onRetryMore: _albumController.retryMore,
+          onOpenAlbum: widget.onOpenAlbum,
+          desktop: desktop,
+        ),
+      };
+
+  Widget _playlistBody(
+    BuildContext context,
+    bool desktop,
+  ) => switch (_playlistController.stage) {
     PlaylistSearchStage.idle => MusicContentStatePanel(
       key: ValueKey('playlist-search-idle'),
       icon: Icons.queue_music_rounded,
-      title: 'Find Playlists on ${widget.providerDisplayName}',
-      detail: 'Search by a public Playlist name.',
+      title: context.l10n.searchFindPlaylistsTitle(_providerName(context.l10n)),
+      detail: context.l10n.searchPlaylistPrompt,
     ),
     PlaylistSearchStage.loading => MusicLoadingPanel(
       key: ValueKey('playlist-search-loading'),
-      label: 'Searching ${widget.providerDisplayName} Playlists',
+      label: context.l10n.searchLoadingPlaylists(_providerName(context.l10n)),
     ),
     PlaylistSearchStage.empty => MusicContentStatePanel(
       key: const ValueKey('playlist-search-empty'),
       icon: Icons.playlist_remove_rounded,
-      title: 'No Playlists found',
-      detail: 'Try a different spelling or a broader search.',
+      title: context.l10n.searchNoPlaylistsTitle,
+      detail: context.l10n.searchNoResultsDetail,
       action: TextButton(
         onPressed: _focusQuery,
-        child: const Text('Edit search'),
+        child: Text(context.l10n.searchEditAction),
       ),
     ),
     PlaylistSearchStage.error => _searchFailure(
       key: const ValueKey('playlist-search-error'),
-      detail: _playlistFailureCopy(_playlistController.failure),
+      detail: _playlistFailureCopy(_playlistController.failure, context.l10n),
       canRetry: _playlistController.canRetry,
       onRetry: _playlistController.retry,
       onEdit: _focusQuery,
@@ -407,7 +425,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   }) => MusicContentStatePanel(
     key: key,
     icon: Icons.cloud_off_rounded,
-    title: 'Couldn’t search ${widget.providerDisplayName}',
+    title: context.l10n.searchFailureTitle(_providerName(context.l10n)),
     detail: detail,
     liveRegion: true,
     action: Wrap(
@@ -417,9 +435,12 @@ class TrackSearchPageState extends State<TrackSearchPage> {
         if (canRetry)
           FilledButton.tonal(
             onPressed: onRetry,
-            child: const Text('Try again'),
+            child: Text(context.l10n.commonRetry),
           ),
-        TextButton(onPressed: onEdit, child: const Text('Edit search')),
+        TextButton(
+          onPressed: onEdit,
+          child: Text(context.l10n.searchEditAction),
+        ),
       ],
     ),
   );
@@ -509,8 +530,8 @@ class TrackSearchPageState extends State<TrackSearchPage> {
       return;
     }
     final message = widget.queuePlaybackController.failure == null
-        ? 'Added to queue'
-        : 'Couldn’t update the queue';
+        ? context.l10n.queueAddedMessage
+        : context.l10n.queueUpdateFailureMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -563,7 +584,7 @@ class _SearchField extends StatelessWidget {
               suffixIcon: value.text.isEmpty
                   ? null
                   : IconButton(
-                      tooltip: 'Clear search',
+                      tooltip: context.l10n.commonClearSearch,
                       onPressed: onClear,
                       icon: const Icon(Icons.close_rounded),
                     ),
@@ -632,7 +653,7 @@ class _SearchResults extends StatelessWidget {
               child: Semantics(
                 header: true,
                 child: Text(
-                  '$total ${total == 1 ? 'result' : 'results'} for “$query”',
+                  context.l10n.searchResultCount(total, query),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium
@@ -717,7 +738,7 @@ class _ArtistSearchResults extends StatelessWidget {
               child: Semantics(
                 header: true,
                 child: Text(
-                  '$total ${total == 1 ? 'Artist' : 'Artists'} for “$query”',
+                  context.l10n.searchArtistResultCount(total, query),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium
@@ -754,7 +775,7 @@ class _ArtistSearchResults extends StatelessWidget {
               style: Theme.of(context).textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
-            subtitle: const Text('Artist'),
+            subtitle: Text(context.l10n.searchArtistResultType),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => onOpenArtist(artist),
           );
@@ -810,7 +831,7 @@ class _AlbumSearchResults extends StatelessWidget {
               child: Semantics(
                 header: true,
                 child: Text(
-                  '$total ${total == 1 ? 'Album' : 'Albums'} for “$query”',
+                  context.l10n.searchAlbumResultCount(total, query),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium
@@ -847,7 +868,7 @@ class _AlbumSearchResults extends StatelessWidget {
               style: Theme.of(context).textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
-            subtitle: const Text('Album'),
+            subtitle: Text(context.l10n.searchAlbumResultType),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => onOpenAlbum(album),
           );
@@ -903,7 +924,7 @@ class _PlaylistSearchResults extends StatelessWidget {
               child: Semantics(
                 header: true,
                 child: Text(
-                  '$total ${total == 1 ? 'Playlist' : 'Playlists'} for “$query”',
+                  context.l10n.searchPlaylistResultCount(total, query),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium
@@ -941,8 +962,8 @@ class _PlaylistSearchResults extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
             subtitle: playlist.trackCount == null
-                ? const Text('Playlist')
-                : Text('${playlist.trackCount} Tracks'),
+                ? Text(context.l10n.searchPlaylistResultType)
+                : Text(context.l10n.trackCount(playlist.trackCount!)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => onOpenPlaylist(playlist),
           );
@@ -1011,7 +1032,7 @@ class _SearchTrackRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final artistCopy = track.artistNames.isEmpty
-        ? 'Unknown artist'
+        ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
     final detail = [artistCopy, ?track.albumTitle].join(' · ');
     return Semantics(
@@ -1042,7 +1063,7 @@ class _SearchTrackRow extends StatelessWidget {
             if (artists.isNotEmpty)
               PopupMenuButton<ArtistSummary>(
                 key: ValueKey('track-search-artist-$index'),
-                tooltip: 'Browse credited Artists',
+                tooltip: context.l10n.searchBrowseCreditedArtists,
                 onSelected: onOpenArtist,
                 itemBuilder: (context) => [
                   for (
@@ -1061,13 +1082,13 @@ class _SearchTrackRow extends StatelessWidget {
             if (album != null)
               IconButton(
                 key: ValueKey('track-search-album-$index'),
-                tooltip: 'Open ${album!.title}',
+                tooltip: context.l10n.searchOpenNamedAlbum(album!.title),
                 onPressed: onOpenAlbum,
                 icon: const Icon(Icons.album_rounded),
               ),
             IconButton(
               key: ValueKey('track-search-queue-$index'),
-              tooltip: 'Add ${track.title} to queue',
+              tooltip: context.l10n.trackAddToQueueTooltip(track.title),
               onPressed: onQueue,
               icon: const Icon(Icons.playlist_add_rounded),
             ),
@@ -1134,16 +1155,16 @@ class _SearchFooter extends StatelessWidget {
           : appendFailure
           ? FilledButton.tonal(
               onPressed: onRetryMore,
-              child: const Text('Try loading more again'),
+              child: Text(context.l10n.commonTryLoadingMoreAgain),
             )
           : hasMore
           ? FilledButton.tonal(
               key: const ValueKey('track-search-load-more'),
               onPressed: onLoadMore,
-              child: const Text('Load more'),
+              child: Text(context.l10n.commonLoadMore),
             )
           : Text(
-              'End of results',
+              context.l10n.searchEndOfResults,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -1152,50 +1173,46 @@ class _SearchFooter extends StatelessWidget {
   );
 }
 
-String _trackFailureCopy(SearchFailure? failure) => switch (failure) {
-  SearchFailure.network => 'Check your connection and try again.',
-  SearchFailure.serviceUnavailable =>
-    'This music service’s search is temporarily unavailable.',
-  SearchFailure.cancelled => 'The search was cancelled.',
-  SearchFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  SearchFailure.invalidResponse ||
-  SearchFailure.alreadyRunning ||
-  null => 'The music service returned an unexpected search response.',
-};
+String _trackFailureCopy(SearchFailure? failure, AppLocalizations l10n) =>
+    switch (failure) {
+      SearchFailure.network => l10n.searchNetworkFailure,
+      SearchFailure.serviceUnavailable => l10n.searchServiceUnavailable,
+      SearchFailure.cancelled => l10n.searchCancelled,
+      SearchFailure.coreUnavailable => l10n.searchCoreUnavailable,
+      SearchFailure.invalidResponse ||
+      SearchFailure.alreadyRunning ||
+      null => l10n.searchUnexpectedResponse,
+    };
 
-String _artistFailureCopy(SearchFailure? failure) => switch (failure) {
-  SearchFailure.network => 'Check your connection and try again.',
-  SearchFailure.serviceUnavailable =>
-    'Artist search is temporarily unavailable.',
-  SearchFailure.cancelled => 'The Artist search was cancelled.',
-  SearchFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  SearchFailure.invalidResponse ||
-  SearchFailure.alreadyRunning ||
-  null => 'The music service returned an unexpected Artist search response.',
-};
+String _artistFailureCopy(SearchFailure? failure, AppLocalizations l10n) =>
+    switch (failure) {
+      SearchFailure.network => l10n.searchNetworkFailure,
+      SearchFailure.serviceUnavailable => l10n.searchArtistServiceUnavailable,
+      SearchFailure.cancelled => l10n.searchArtistCancelled,
+      SearchFailure.coreUnavailable => l10n.searchCoreUnavailable,
+      SearchFailure.invalidResponse ||
+      SearchFailure.alreadyRunning ||
+      null => l10n.searchArtistUnexpectedResponse,
+    };
 
-String _albumFailureCopy(SearchFailure? failure) => switch (failure) {
-  SearchFailure.network => 'Check your connection and try again.',
-  SearchFailure.serviceUnavailable =>
-    'Album search is temporarily unavailable.',
-  SearchFailure.cancelled => 'The Album search was cancelled.',
-  SearchFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  SearchFailure.invalidResponse ||
-  SearchFailure.alreadyRunning ||
-  null => 'The music service returned an unexpected Album search response.',
-};
+String _albumFailureCopy(SearchFailure? failure, AppLocalizations l10n) =>
+    switch (failure) {
+      SearchFailure.network => l10n.searchNetworkFailure,
+      SearchFailure.serviceUnavailable => l10n.searchAlbumServiceUnavailable,
+      SearchFailure.cancelled => l10n.searchAlbumCancelled,
+      SearchFailure.coreUnavailable => l10n.searchCoreUnavailable,
+      SearchFailure.invalidResponse ||
+      SearchFailure.alreadyRunning ||
+      null => l10n.searchAlbumUnexpectedResponse,
+    };
 
-String _playlistFailureCopy(SearchFailure? failure) => switch (failure) {
-  SearchFailure.network => 'Check your connection and try again.',
-  SearchFailure.serviceUnavailable =>
-    'Playlist search is temporarily unavailable.',
-  SearchFailure.cancelled => 'The Playlist search was cancelled.',
-  SearchFailure.coreUnavailable =>
-    'The local music core is unavailable. Restart the app and try again.',
-  SearchFailure.invalidResponse ||
-  SearchFailure.alreadyRunning ||
-  null => 'The music service returned an unexpected Playlist search response.',
-};
+String _playlistFailureCopy(SearchFailure? failure, AppLocalizations l10n) =>
+    switch (failure) {
+      SearchFailure.network => l10n.searchNetworkFailure,
+      SearchFailure.serviceUnavailable => l10n.searchPlaylistServiceUnavailable,
+      SearchFailure.cancelled => l10n.searchPlaylistCancelled,
+      SearchFailure.coreUnavailable => l10n.searchCoreUnavailable,
+      SearchFailure.invalidResponse ||
+      SearchFailure.alreadyRunning ||
+      null => l10n.searchPlaylistUnexpectedResponse,
+    };

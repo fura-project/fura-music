@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/l10n/app_locale.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
@@ -35,6 +38,7 @@ import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
@@ -283,7 +287,11 @@ class _MusicAppState extends State<MusicApp> {
     final provider = widget.providerDependencies.select(settings.musicProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'fura music',
+      onGenerateTitle: (context) => context.l10n.appTitle,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: materialLocaleForPreference(settings.localePreference),
+      localeListResolutionCallback: resolveSupportedAppLocale,
       theme: MusicMaterialTheme.light(),
       darkTheme: MusicMaterialTheme.dark(),
       themeMode: settings.theme.materialThemeMode,
@@ -538,7 +546,7 @@ class _AuthenticationDialogState extends State<_AuthenticationDialog> {
                 child: IconButton(
                   key: const ValueKey('close-authentication-dialog'),
                   onPressed: widget.onClose,
-                  tooltip: 'Close sign in',
+                  tooltip: context.l10n.authCloseTooltip,
                   icon: const Icon(Icons.close_rounded),
                 ),
               ),
@@ -590,6 +598,14 @@ class _AuthenticationContent extends StatelessWidget {
 
   final LoginController controller;
 
+  String _providerName(BuildContext context) =>
+      builtInProviderDisplayName(controller.providerId, context.l10n);
+
+  String _qrActionLabel(BuildContext context) =>
+      controller.providerId == 'qq-music'
+      ? context.l10n.authScanWithQq
+      : context.l10n.authScanWithProvider(_providerName(context));
+
   @override
   Widget build(BuildContext context) {
     final stage = controller.stage;
@@ -625,14 +641,14 @@ class _AuthenticationContent extends StatelessWidget {
       const _PanelIcon(icon: Icons.qr_code_2_rounded),
       const SizedBox(height: 24),
       Text(
-        'Sign in to ${controller.providerDisplayName}',
+        context.l10n.authSignInTitle(_providerName(context)),
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 12),
       Text(
         controller.supportsMultipleQrMethods
-            ? 'Authorize with QQ or WeChat QR. Passwords are never collected.'
-            : 'Use the official ${controller.providerDisplayName} app to scan this code. Passwords are never collected.',
+            ? context.l10n.authIntroductionMultiple
+            : context.l10n.authIntroductionSingle(_providerName(context)),
         style: _supportingStyle(context),
       ),
       const SizedBox(height: 28),
@@ -644,7 +660,7 @@ class _AuthenticationContent extends StatelessWidget {
             ? () => controller.startQr(LoginQrChannel.qq)
             : controller.start,
         icon: const Icon(Icons.qr_code_2_rounded),
-        label: Text(controller.qrActionLabel),
+        label: Text(_qrActionLabel(context)),
       ),
       if (controller.supportsMultipleQrMethods) ...[
         const SizedBox(height: 10),
@@ -652,7 +668,7 @@ class _AuthenticationContent extends StatelessWidget {
           key: const ValueKey('start-wechat-login-button'),
           onPressed: () => controller.startQr(LoginQrChannel.wechat),
           icon: const Icon(Icons.qr_code_scanner_rounded),
-          label: const Text('Scan with WeChat'),
+          label: Text(context.l10n.authScanWithWechat),
         ),
       ],
     ],
@@ -668,20 +684,23 @@ class _AuthenticationContent extends StatelessWidget {
       ),
       const SizedBox(height: 24),
       Text(
-        'Creating a secure code…',
+        context.l10n.authCreatingCodeTitle,
         style: Theme.of(context).textTheme.titleLarge,
       ),
       const SizedBox(height: 10),
       Text(
         !controller.supportsMultipleQrMethods
-            ? 'Connecting directly to ${controller.providerDisplayName}.'
+            ? context.l10n.authConnectingProvider(_providerName(context))
             : controller.qrChannel == LoginQrChannel.qq
-            ? 'Connecting directly to QQ authorization.'
-            : 'Connecting directly to WeChat and QQ Music.',
+            ? context.l10n.authConnectingQq
+            : context.l10n.authConnectingWechat,
         style: _supportingStyle(context),
       ),
       const SizedBox(height: 20),
-      OutlinedButton(onPressed: controller.cancel, child: const Text('Cancel')),
+      OutlinedButton(
+        onPressed: controller.cancel,
+        child: Text(context.l10n.commonCancel),
+      ),
     ],
   );
 
@@ -700,15 +719,19 @@ class _AuthenticationContent extends StatelessWidget {
           const _PanelIcon(icon: Icons.verified_user_outlined),
         const SizedBox(height: 24),
         Text(
-          verifying ? 'Checking your saved session…' : 'Saved session found',
+          verifying
+              ? context.l10n.authCheckingSavedSession
+              : context.l10n.authSavedSessionFound,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 10),
         Text(
           verifying
-              ? 'Confirming it directly with ${controller.providerDisplayName} before restoring access.'
-              : 'It passed local checks but still needs ${controller.providerDisplayName} verification.',
+              ? context.l10n.authConfirmingSavedSession(_providerName(context))
+              : context.l10n.authSavedSessionNeedsVerification(
+                  _providerName(context),
+                ),
           textAlign: TextAlign.center,
           style: _supportingStyle(context),
         ),
@@ -716,7 +739,7 @@ class _AuthenticationContent extends StatelessWidget {
         TextButton.icon(
           onPressed: controller.cancel,
           icon: const Icon(Icons.qr_code_2_rounded),
-          label: const Text('Choose a sign-in method'),
+          label: Text(context.l10n.authChooseMethod),
         ),
       ],
     );
@@ -724,41 +747,41 @@ class _AuthenticationContent extends StatelessWidget {
 
   Widget _restoreTerminal(BuildContext context) {
     final result = controller.credentialRestoreResult;
+    final l10n = context.l10n;
+    final providerName = _providerName(context);
     final (title, detail) = switch (controller.stage) {
       LoginStage.signOutStorageCleanupFailed => (
-        'Signed out, but saved session remains',
-        'The active ${controller.providerDisplayName} session was cleared, but secure storage could not '
-            'remove its saved copy. It may appear again after restart.',
+        l10n.authSignedOutStorageTitle,
+        l10n.authSignedOutStorageDetail(providerName),
       ),
       LoginStage.credentialRejected ||
       LoginStage.verificationError => _verificationTerminalCopy(
         controller.credentialVerificationResult,
-        controller.providerDisplayName,
+        providerName,
+        l10n,
       ),
       _ => switch (result) {
         CredentialRestoreResult.locallyExpired => (
-          'Saved session expired',
-          '${controller.providerDisplayName}’s advertised lifetime has ended. Sign in again to continue.',
+          l10n.authSavedSessionExpiredTitle,
+          l10n.authSavedSessionExpiredDetail(providerName),
         ),
         CredentialRestoreResult.unsupportedStoredCredential => (
-          'Saved session is from another version',
-          'This build left it unchanged instead of guessing. You can replace it '
-              'by signing in again.',
+          l10n.authSavedSessionOtherVersionTitle,
+          l10n.authSavedSessionOtherVersionDetail,
         ),
         CredentialRestoreResult.storageUnavailable => (
-          'Secure storage is unavailable',
-          'You can sign in for this run, but the session may not survive restart.',
+          l10n.authStorageUnavailableTitle,
+          l10n.authStorageUnavailableDetail,
         ),
         CredentialRestoreResult.coreUnavailable => (
-          'The music core is unavailable',
-          'The stored session could not be checked safely. Try again after restart.',
+          l10n.authCoreUnavailableTitle,
+          l10n.authRestoreCoreUnavailableDetail,
         ),
         CredentialRestoreResult.invalidStoredCredential ||
         CredentialRestoreResult.signedOut ||
         CredentialRestoreResult.verificationRequired => (
-          'Saved session could not be read',
-          'It was left unchanged instead of being treated as a valid login. '
-              'You can replace it by signing in again.',
+          l10n.authSavedSessionUnreadableTitle,
+          l10n.authSavedSessionUnreadableDetail,
         ),
       },
     };
@@ -779,19 +802,19 @@ class _AuthenticationContent extends StatelessWidget {
                 : null,
             child: Text(
               controller.isSigningOut
-                  ? 'Removing saved session…'
-                  : 'Try removing it again',
+                  ? l10n.authRemovingSavedSession
+                  : l10n.authRemoveSavedSessionAgain,
             ),
           )
         else if (controller.canRetryCredentialVerification)
           FilledButton.tonal(
             onPressed: controller.retryCredentialVerification,
-            child: const Text('Try verification again'),
+            child: Text(l10n.authTryVerificationAgain),
           ),
         TextButton.icon(
           onPressed: controller.start,
           icon: const Icon(Icons.qr_code_2_rounded),
-          label: const Text('Sign in again'),
+          label: Text(l10n.authSignInAgain),
         ),
       ],
     );
@@ -800,39 +823,36 @@ class _AuthenticationContent extends StatelessWidget {
   (String, String) _verificationTerminalCopy(
     CredentialVerificationResult? result,
     String providerName,
+    AppLocalizations l10n,
   ) => switch (result) {
     CredentialVerificationResult.rejected => (
-      'Saved session was rejected',
-      '$providerName no longer accepts it, so the stored session was removed.',
+      l10n.authSavedSessionRejectedTitle,
+      l10n.authSavedSessionRejectedDetail(providerName),
     ),
     CredentialVerificationResult.rejectedStorageCleanupFailed => (
-      'Saved session was rejected',
-      '$providerName no longer accepts it, but secure storage could not remove it. '
-          'It may appear again after restart.',
+      l10n.authSavedSessionRejectedTitle,
+      l10n.authSavedSessionRejectedCleanupDetail(providerName),
     ),
     CredentialVerificationResult.network => (
-      'Couldn’t reach $providerName',
-      'The saved session is still available. Check your connection and try again.',
+      l10n.authCouldNotReachProviderTitle(providerName),
+      l10n.authSavedSessionNetworkDetail,
     ),
     CredentialVerificationResult.serviceUnavailable => (
-      '$providerName is unavailable',
-      'The saved session was kept unchanged. Try verification again later.',
+      l10n.authProviderUnavailableTitle(providerName),
+      l10n.authSavedSessionServiceDetail,
     ),
     CredentialVerificationResult.invalidResponse => (
-      '$providerName changed its response',
-      'The saved session was kept instead of being treated as signed out.',
+      l10n.authProviderChangedResponseTitle(providerName),
+      l10n.authSavedSessionInvalidResponseDetail,
     ),
     CredentialVerificationResult.coreUnavailable => (
-      'The music core is unavailable',
-      'The saved session could not be verified safely. Try again after restart.',
+      l10n.authCoreUnavailableTitle,
+      l10n.authSavedSessionVerifyCoreDetail,
     ),
     CredentialVerificationResult.noRestoredCredential ||
     CredentialVerificationResult.replaced ||
     CredentialVerificationResult.authenticated ||
-    null => (
-      'Saved session is no longer current',
-      'Sign in again to continue.',
-    ),
+    null => (l10n.authSavedSessionNotCurrentTitle, l10n.authSignInAgainDetail),
   };
 
   Widget _active(BuildContext context) {
@@ -840,34 +860,34 @@ class _AuthenticationContent extends StatelessWidget {
     final scanned = controller.stage == LoginStage.scannedAwaitingConfirmation;
     final reconnecting = controller.stage == LoginStage.reconnecting;
     final qrTitle = scanned
-        ? 'Confirm on your phone'
+        ? context.l10n.authConfirmPhoneTitle
         : reconnecting
-        ? 'Reconnecting…'
+        ? context.l10n.authReconnectingTitle
         : !controller.supportsMultipleQrMethods
-        ? controller.qrActionLabel
+        ? _qrActionLabel(context)
         : controller.qrChannel == LoginQrChannel.qq
-        ? 'Scan with QQ'
-        : 'Scan with WeChat';
+        ? context.l10n.authScanWithQq
+        : context.l10n.authScanWithWechat;
     final qrDetail = scanned
         ? !controller.supportsMultipleQrMethods
-              ? 'The code was scanned. Approve the sign-in in the official app.'
+              ? context.l10n.authCodeScannedProviderDetail
               : controller.qrChannel == LoginQrChannel.qq
-              ? 'The code was scanned. Approve the sign-in in QQ.'
-              : 'The code was scanned. Approve the sign-in in WeChat.'
+              ? context.l10n.authCodeScannedQqDetail
+              : context.l10n.authCodeScannedWechatDetail
         : reconnecting
-        ? 'Your code is still active. We’ll retry the connection.'
+        ? context.l10n.authReconnectingDetail
         : !controller.supportsMultipleQrMethods
-        ? 'Open ${controller.providerDisplayName}, choose Scan, then point your camera here.'
+        ? context.l10n.authOpenProviderScanDetail(_providerName(context))
         : controller.qrChannel == LoginQrChannel.qq
-        ? 'Open QQ, choose Scan, then point your camera here.'
-        : 'Open WeChat, choose Scan, then point your camera here.';
+        ? context.l10n.authOpenQqScanDetail
+        : context.l10n.authOpenWechatScanDetail;
     final qrMethod = _QrAuthenticationMethod(
       image: image,
       semanticLabel: !controller.supportsMultipleQrMethods
-          ? '${controller.providerDisplayName} sign-in QR code'
+          ? context.l10n.authProviderQrSemantics(_providerName(context))
           : controller.qrChannel == LoginQrChannel.qq
-          ? 'QQ sign-in QR code'
-          : 'WeChat sign-in QR code',
+          ? context.l10n.authQqQrSemantics
+          : context.l10n.authWechatQrSemantics,
       title: qrTitle,
       detail: qrDetail,
     );
@@ -882,16 +902,16 @@ class _AuthenticationContent extends StatelessWidget {
         if (controller.supportsDesktopQuickLogin) ...[
           SegmentedButton<LoginQrChannel>(
             key: const ValueKey('desktop-login-channel-selector'),
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: LoginQrChannel.qq,
-                icon: Icon(Icons.person_rounded),
-                label: Text('QQ login'),
+                icon: const Icon(Icons.person_rounded),
+                label: Text(context.l10n.authQqLogin),
               ),
               ButtonSegment(
                 value: LoginQrChannel.wechat,
-                icon: Icon(Icons.qr_code_scanner_rounded),
-                label: Text('WeChat login'),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: Text(context.l10n.authWechatLogin),
               ),
             ],
             selected: {controller.qrChannel},
@@ -913,8 +933,8 @@ class _AuthenticationContent extends StatelessWidget {
               final quickMethod = _AuthenticationMethodSection(
                 key: const ValueKey('desktop-quick-login-method'),
                 icon: Icons.desktop_windows_outlined,
-                title: 'Quick login',
-                detail: 'Use an account already signed in to desktop QQ.',
+                title: context.l10n.authQuickLoginTitle,
+                detail: context.l10n.authQuickLoginDetail,
                 child: _DesktopQuickLoginChoices(controller: controller),
               );
               if (constraints.maxWidth < 540) {
@@ -948,11 +968,11 @@ class _AuthenticationContent extends StatelessWidget {
           children: [
             OutlinedButton(
               onPressed: controller.cancel,
-              child: const Text('Cancel'),
+              child: Text(context.l10n.commonCancel),
             ),
             TextButton(
               onPressed: () => controller.startQr(controller.qrChannel),
-              child: const Text('New code'),
+              child: Text(context.l10n.authNewCode),
             ),
           ],
         ),
@@ -962,23 +982,24 @@ class _AuthenticationContent extends StatelessWidget {
 
   Widget _authenticated(BuildContext context) {
     final saveState = controller.credentialSaveState;
+    final l10n = context.l10n;
+    final providerName = _providerName(context);
     final (icon, detail) = switch (saveState) {
       CredentialSaveState.saving => (
         Icons.lock_clock_outlined,
-        '${controller.providerDisplayName} accepted this session. Saving it to platform secure storage…',
+        l10n.authSavingSessionDetail(providerName),
       ),
       CredentialSaveState.saved => (
         Icons.lock_rounded,
-        'This session is stored securely and ready for this run.',
+        l10n.authSavedSessionReadyDetail,
       ),
       CredentialSaveState.failed => (
         Icons.warning_amber_rounded,
-        'You’re signed in for this session, but secure storage was unavailable. '
-            'You’ll need to sign in again after restart.',
+        l10n.authSessionOnlyDetail,
       ),
       CredentialSaveState.none => (
         Icons.check_rounded,
-        '${controller.providerDisplayName} accepted this session. Secure storage has not been confirmed.',
+        l10n.authStorageNotConfirmedDetail(providerName),
       ),
     };
 
@@ -989,7 +1010,7 @@ class _AuthenticationContent extends StatelessWidget {
         _PanelIcon(icon: icon),
         const SizedBox(height: 24),
         Text(
-          'You’re signed in',
+          l10n.authSignedInTitle,
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: 10),
@@ -1006,7 +1027,8 @@ class _AuthenticationContent extends StatelessWidget {
     final (title, detail) = _terminalCopy(
       controller.stage,
       controller.failure,
-      controller.providerDisplayName,
+      _providerName(context),
+      context.l10n,
     );
 
     return Column(
@@ -1020,11 +1042,11 @@ class _AuthenticationContent extends StatelessWidget {
         if (controller.canRetry)
           FilledButton.tonal(
             onPressed: controller.retry,
-            child: const Text('Try again'),
+            child: Text(context.l10n.commonRetry),
           ),
         TextButton(
           onPressed: controller.cancel,
-          child: const Text('Choose a sign-in method'),
+          child: Text(context.l10n.authChooseMethod),
         ),
       ],
     );
@@ -1038,7 +1060,7 @@ class _AuthenticationContent extends StatelessWidget {
   }) => Semantics(
     container: true,
     liveRegion: true,
-    label: '$title. $detail',
+    label: context.l10n.authAnnouncementSemantics(detail, title),
     excludeSemantics: true,
     child: Column(
       mainAxisSize: MainAxisSize.min,
@@ -1070,41 +1092,33 @@ class _AuthenticationContent extends StatelessWidget {
     LoginStage stage,
     LoginFailure? failure,
     String providerName,
+    AppLocalizations l10n,
   ) {
     if (stage == LoginStage.expired || stage == LoginStage.timedOut) {
-      return (
-        'This code expired',
-        'Create a fresh code to continue signing in.',
-      );
+      return (l10n.authCodeExpiredTitle, l10n.authCodeExpiredDetail);
     }
     if (stage == LoginStage.refused) {
-      return (
-        'Sign-in wasn’t approved',
-        'Nothing changed on your account. You can try again.',
-      );
+      return (l10n.authNotApprovedTitle, l10n.authNotApprovedDetail);
     }
 
     return switch (failure) {
       LoginFailure.serviceUnavailable => (
-        '$providerName is unavailable',
-        'The service did not accept this request. Try again in a moment.',
+        l10n.authProviderUnavailableTitle(providerName),
+        l10n.authServiceRejectedDetail,
       ),
       LoginFailure.rejected => (
-        'Sign-in was rejected',
-        'The authorization was not accepted. Choose a method and try again.',
+        l10n.authRejectedTitle,
+        l10n.authRejectedDetail,
       ),
       LoginFailure.tooManyNetworkFailures => (
-        'Connection keeps dropping',
-        'Check your network, then create a fresh code.',
+        l10n.authNetworkFailuresTitle,
+        l10n.authNetworkFailuresDetail,
       ),
       LoginFailure.invalidResponse => (
-        '$providerName changed its response',
-        'This client stopped safely instead of guessing. Try a new code later.',
+        l10n.authProviderChangedResponseTitle(providerName),
+        l10n.authInvalidResponseDetail,
       ),
-      _ => (
-        'Couldn’t continue sign-in',
-        'Try this session again or create a new code.',
-      ),
+      _ => (l10n.authCouldNotContinueTitle, l10n.authCouldNotContinueDetail),
     };
   }
 }
@@ -1160,7 +1174,7 @@ class _AuthenticationMethodSection extends StatelessWidget {
           Semantics(
             container: true,
             liveRegion: true,
-            label: '$title. $detail',
+            label: context.l10n.authAnnouncementSemantics(detail, title),
             excludeSemantics: true,
             child: heading,
           )
@@ -1236,16 +1250,16 @@ class _DesktopQuickLoginChoices extends StatelessWidget {
   Widget build(BuildContext context) {
     final stage = controller.desktopQuickStage;
     if (stage == DesktopQuickLoginStage.loading) {
-      return const Row(
+      return Row(
         key: ValueKey('desktop-quick-login-loading'),
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox.square(
+          const SizedBox.square(
             dimension: 18,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
-          SizedBox(width: 12),
-          Flexible(child: Text('Checking desktop QQ…')),
+          const SizedBox(width: 12),
+          Flexible(child: Text(context.l10n.authCheckingDesktopQq)),
         ],
       );
     }
@@ -1331,7 +1345,10 @@ class _DesktopQuickLoginChoices extends StatelessWidget {
         if (stage == DesktopQuickLoginStage.error) ...[
           const SizedBox(height: 10),
           Text(
-            _desktopQuickFailureCopy(controller.desktopQuickFailure),
+            _desktopQuickFailureCopy(
+              controller.desktopQuickFailure,
+              context.l10n,
+            ),
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: Theme.of(context).colorScheme.error),
           ),
@@ -1362,41 +1379,37 @@ class _DesktopQuickLoginUnavailable extends StatelessWidget {
       Expanded(
         child: Text(
           failure == DesktopQuickLoginFailure.clientUnavailable
-              ? 'Open and sign in to desktop QQ to use quick login.'
+              ? context.l10n.authOpenDesktopQqDetail
               : failure == null
-              ? 'No signed-in desktop QQ account was found.'
-              : _desktopQuickFailureCopy(failure),
+              ? context.l10n.authNoDesktopAccount
+              : _desktopQuickFailureCopy(failure, context.l10n),
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ),
-      TextButton(onPressed: onRetry, child: const Text('Retry')),
+      TextButton(onPressed: onRetry, child: Text(context.l10n.commonRetry)),
     ],
   );
 }
 
-String _desktopQuickFailureCopy(DesktopQuickLoginFailure? failure) =>
-    switch (failure) {
-      DesktopQuickLoginFailure.clientUnavailable =>
-        'Desktop QQ is not available. Open QQ and try again.',
-      DesktopQuickLoginFailure.network =>
-        'Desktop QQ authorization could not reach QQ Music.',
-      DesktopQuickLoginFailure.serviceUnavailable =>
-        'QQ authorization is temporarily unavailable.',
-      DesktopQuickLoginFailure.rejected =>
-        'Desktop QQ did not approve this authorization.',
-      DesktopQuickLoginFailure.invalidSelection ||
-      DesktopQuickLoginFailure.invalidResponse =>
-        'Desktop QQ returned a response this build could not verify.',
-      DesktopQuickLoginFailure.cancelled ||
-      DesktopQuickLoginFailure.replaced ||
-      DesktopQuickLoginFailure.sessionFinished =>
-        'This quick-login attempt is no longer active. Retry discovery.',
-      DesktopQuickLoginFailure.alreadyRunning =>
-        'Desktop QQ authorization is already in progress.',
-      DesktopQuickLoginFailure.coreUnavailable =>
-        'The music core could not start desktop QQ authorization.',
-      null => 'Desktop QQ quick login is unavailable.',
-    };
+String _desktopQuickFailureCopy(
+  DesktopQuickLoginFailure? failure,
+  AppLocalizations l10n,
+) => switch (failure) {
+  DesktopQuickLoginFailure.clientUnavailable =>
+    l10n.authDesktopClientUnavailable,
+  DesktopQuickLoginFailure.network => l10n.authDesktopNetworkFailure,
+  DesktopQuickLoginFailure.serviceUnavailable =>
+    l10n.authDesktopServiceUnavailable,
+  DesktopQuickLoginFailure.rejected => l10n.authDesktopRejected,
+  DesktopQuickLoginFailure.invalidSelection ||
+  DesktopQuickLoginFailure.invalidResponse => l10n.authDesktopInvalidResponse,
+  DesktopQuickLoginFailure.cancelled ||
+  DesktopQuickLoginFailure.replaced ||
+  DesktopQuickLoginFailure.sessionFinished => l10n.authDesktopAttemptInactive,
+  DesktopQuickLoginFailure.alreadyRunning => l10n.authDesktopAlreadyRunning,
+  DesktopQuickLoginFailure.coreUnavailable => l10n.authDesktopCoreUnavailable,
+  null => l10n.authDesktopUnavailable,
+};
 
 class _PanelIcon extends StatelessWidget {
   const _PanelIcon({required this.icon});

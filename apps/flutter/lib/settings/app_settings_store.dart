@@ -102,6 +102,7 @@ class AppSettingsStore {
     }
     if (version != 1 &&
         version != 2 &&
+        version != 3 &&
         version != AppSettings.currentSchemaVersion) {
       return const AppSettingsLoadResult(
         settings: AppSettings.defaults,
@@ -140,17 +141,28 @@ class AppSettingsStore {
     }
 
     final providerName = decoded['musicProvider'];
-    final musicProvider = version < AppSettings.currentSchemaVersion
+    final musicProvider = version < 3
         ? AppMusicProvider.qqMusic
         : AppMusicProvider.values
                   .where((candidate) => candidate.name == providerName)
                   .firstOrNull ??
               AppMusicProvider.qqMusic;
+    final localeName = decoded['localePreference'];
+    final localePreference = version < AppSettings.currentSchemaVersion
+        ? AppLocalePreference.system
+        : AppLocalePreference.values
+                  .where((candidate) => candidate.name == localeName)
+                  .firstOrNull ??
+              AppLocalePreference.system;
     final migrated =
         version < AppSettings.currentSchemaVersion ||
-        (version == AppSettings.currentSchemaVersion &&
+        (version >= 3 &&
             !AppMusicProvider.values.any(
               (candidate) => candidate.name == providerName,
+            )) ||
+        (version == AppSettings.currentSchemaVersion &&
+            !AppLocalePreference.values.any(
+              (candidate) => candidate.name == localeName,
             ));
 
     return AppSettingsLoadResult(
@@ -158,6 +170,7 @@ class AppSettingsStore {
         theme: theme,
         playbackQuality: playbackQuality,
         musicProvider: musicProvider,
+        localePreference: localePreference,
       ),
       state: migrated
           ? AppSettingsLoadState.migrated
@@ -172,6 +185,7 @@ class AppSettingsStore {
           'theme': settings.theme.name,
           'playbackQuality': settings.playbackQuality.name,
           'musicProvider': settings.musicProvider.name,
+          'localePreference': settings.localePreference.name,
         });
         try {
           await _storage.write(document);

@@ -1,73 +1,93 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutterustmusic/playback/playback_quality.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
-enum SettingsSection { appearance, musicService, playback }
+enum SettingsSection { appearance, musicService, language, playback }
 
 extension SettingsSectionPresentation on SettingsSection {
-  String get label => switch (this) {
-    SettingsSection.appearance => 'Appearance',
-    SettingsSection.musicService => 'Music service',
-    SettingsSection.playback => 'Playback',
+  String label(AppLocalizations l10n) => switch (this) {
+    SettingsSection.appearance => l10n.settingsAppearanceLabel,
+    SettingsSection.musicService => l10n.settingsMusicServiceLabel,
+    SettingsSection.language => l10n.settingsLanguageLabel,
+    SettingsSection.playback => l10n.settingsPlaybackLabel,
   };
 
   IconData get icon => switch (this) {
     SettingsSection.appearance => Icons.palette_outlined,
     SettingsSection.musicService => Icons.library_music_outlined,
+    SettingsSection.language => Icons.language_rounded,
     SettingsSection.playback => Icons.headphones_outlined,
   };
 
-  String get description => switch (this) {
-    SettingsSection.appearance => 'Theme mode and system appearance',
-    SettingsSection.musicService => 'Catalog and account source',
-    SettingsSection.playback => 'Preferred streaming quality',
+  String description(AppLocalizations l10n) => switch (this) {
+    SettingsSection.appearance => l10n.settingsAppearanceDescription,
+    SettingsSection.musicService => l10n.settingsMusicServiceDescription,
+    SettingsSection.language => l10n.settingsLanguageDescription,
+    SettingsSection.playback => l10n.settingsPlaybackDescription,
   };
 
-  String summary(AppSettings settings) => switch (this) {
+  String summary(AppSettings settings, AppLocalizations l10n) => switch (this) {
     SettingsSection.appearance => switch (settings.theme) {
-      AppThemePreference.system => 'Following the system theme',
-      AppThemePreference.light => 'Light theme',
-      AppThemePreference.dark => 'Dark theme',
+      AppThemePreference.system => l10n.settingsAppearanceSummarySystem,
+      AppThemePreference.light => l10n.settingsAppearanceSummaryLight,
+      AppThemePreference.dark => l10n.settingsAppearanceSummaryDark,
     },
-    SettingsSection.musicService => settings.musicProvider.displayName,
-    SettingsSection.playback => settings.playbackQuality.settingsSummary,
+    SettingsSection.musicService => _providerLabel(
+      settings.musicProvider,
+      l10n,
+    ),
+    SettingsSection.language => switch (settings.localePreference) {
+      AppLocalePreference.system => l10n.settingsLanguageSummarySystem,
+      AppLocalePreference.english => l10n.settingsLanguageSummaryEnglish,
+      AppLocalePreference.simplifiedChinese =>
+        l10n.settingsLanguageSummarySimplifiedChinese,
+    },
+    SettingsSection.playback => _qualitySummary(settings.playbackQuality, l10n),
   };
 
-  bool matches(String normalizedQuery) {
+  bool matches(
+    String normalizedQuery,
+    AppSettings settings,
+    AppLocalizations l10n,
+  ) {
     if (normalizedQuery.isEmpty) return true;
-    final terms = switch (this) {
-      SettingsSection.appearance => const [
-        'appearance',
-        'theme',
-        'system',
-        'light',
-        'dark',
-        'color',
-      ],
-      SettingsSection.musicService => const [
-        'provider',
-        'music service',
-        'source',
-        'qq music',
-        'netease',
-        '网易云',
-      ],
-      SettingsSection.playback => const [
-        'playback',
-        'quality',
-        'audio',
-        'standard',
-        'high',
-        'music source',
-      ],
+    final keywords = switch (this) {
+      SettingsSection.appearance => l10n.settingsAppearanceSearchKeywords,
+      SettingsSection.musicService => l10n.settingsMusicServiceSearchKeywords,
+      SettingsSection.language => l10n.settingsLanguageSearchKeywords,
+      SettingsSection.playback => l10n.settingsPlaybackSearchKeywords,
     };
-    return terms.any((term) => term.contains(normalizedQuery));
+    final searchable = <String>[
+      label(l10n),
+      description(l10n),
+      summary(settings, l10n),
+      ...keywords.split('|'),
+    ];
+    return searchable.any(
+      (term) => term.toLowerCase().contains(normalizedQuery),
+    );
   }
 }
+
+String _providerLabel(AppMusicProvider provider, AppLocalizations l10n) =>
+    switch (provider) {
+      AppMusicProvider.qqMusic => l10n.providerQqMusic,
+      AppMusicProvider.netEaseCloudMusic => l10n.providerNeteaseCloudMusic,
+    };
+
+String _qualitySummary(
+  AppPlaybackQualityPreference quality,
+  AppLocalizations l10n,
+) => switch (quality) {
+  AppPlaybackQualityPreference.standard => l10n.playbackQualitySummaryStandard,
+  AppPlaybackQualityPreference.high => l10n.playbackQualitySummaryHigh,
+  AppPlaybackQualityPreference.lossless => l10n.playbackQualitySummaryLossless,
+};
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -113,9 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Couldn’t save settings on this device.'),
-          ),
+          SnackBar(content: Text(context.l10n.settingsSaveFailure)),
         );
     }
   }
@@ -123,7 +141,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _showCompactSearch() async {
     final section = await showSearch<SettingsSection?>(
       context: context,
-      delegate: _SettingsSearchDelegate(widget.settings),
+      delegate: _SettingsSearchDelegate(widget.settings, context.l10n),
     );
     if (!mounted || section == null) return;
     widget.onCompactSectionSelected(section);
@@ -131,11 +149,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final normalizedQuery = widget.searchQuery.trim().toLowerCase();
     final sections = normalizedQuery.isEmpty
         ? [widget.selectedSection]
         : SettingsSection.values
-              .where((section) => section.matches(normalizedQuery))
+              .where(
+                (section) =>
+                    section.matches(normalizedQuery, widget.settings, l10n),
+              )
               .toList(growable: false);
     final compactDetail = widget.compactHierarchy && widget.compactSectionOpen;
     final toolbar = AppBar(
@@ -143,7 +165,7 @@ class _SettingsPageState extends State<SettingsPage> {
       centerTitle: widget.compactHierarchy,
       leading: IconButton(
         key: const ValueKey('settings-back'),
-        tooltip: 'Back',
+        tooltip: l10n.settingsBackTooltip,
         onPressed: widget.onBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),
@@ -152,7 +174,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ? Duration.zero
             : MusicMotion.stateChange,
         child: Text(
-          compactDetail ? widget.selectedSection.label : 'Settings',
+          compactDetail
+              ? widget.selectedSection.label(l10n)
+              : l10n.settingsTitle,
           key: ValueKey(
             compactDetail
                 ? 'settings-compact-title-${widget.selectedSection.name}'
@@ -164,7 +188,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (widget.compactHierarchy && !compactDetail)
           IconButton(
             key: const ValueKey('settings-compact-search'),
-            tooltip: 'Search settings',
+            tooltip: l10n.settingsSearchLabel,
             onPressed: () => unawaited(_showCompactSearch()),
             icon: const Icon(Icons.search_rounded),
           ),
@@ -207,15 +231,18 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 if (normalizedQuery.isNotEmpty) ...[
                   Text(
-                    'Search results',
+                    l10n.settingsSearchResultsTitle,
                     style: Theme.of(context).textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: MusicSpacing.itemGap),
                   Text(
                     sections.isEmpty
-                        ? 'No settings match “${widget.searchQuery.trim()}”.'
-                        : '${sections.length} ${sections.length == 1 ? 'section' : 'sections'} match “${widget.searchQuery.trim()}”.',
+                        ? l10n.settingsSearchNoMatch(widget.searchQuery.trim())
+                        : l10n.settingsSearchMatchSummary(
+                            sections.length,
+                            widget.searchQuery.trim(),
+                          ),
                     key: ValueKey(
                       sections.isEmpty
                           ? 'settings-search-empty'
@@ -304,6 +331,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final content = switch (section) {
       SettingsSection.appearance => _appearanceSection(context, compact),
       SettingsSection.musicService => _musicServiceSection(context, compact),
+      SettingsSection.language => _languageSection(context, compact),
       SettingsSection.playback => _playbackSection(context, compact),
     };
     if (!compact) return content;
@@ -325,14 +353,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
   List<Widget> _appearanceSection(BuildContext context, bool compact) => [
     Text(
-      compact ? 'Theme mode' : 'Appearance',
+      compact
+          ? context.l10n.settingsAppearanceCompactLabel
+          : context.l10n.settingsAppearanceLabel,
       key: const ValueKey('settings-appearance-section'),
       style: Theme.of(context).textTheme.titleLarge
           ?.copyWith(fontWeight: FontWeight.w700),
     ),
     const SizedBox(height: MusicSpacing.itemGap),
     Text(
-      'Choose how fura music follows your system appearance.',
+      context.l10n.settingsAppearanceBody,
       style: Theme.of(context).textTheme.bodyMedium
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
@@ -340,21 +370,21 @@ class _SettingsPageState extends State<SettingsPage> {
     SegmentedButton<AppThemePreference>(
       key: const ValueKey('settings-theme-selector'),
       showSelectedIcon: false,
-      segments: const [
+      segments: [
         ButtonSegment(
           value: AppThemePreference.system,
-          icon: Icon(Icons.brightness_auto_rounded),
-          label: Text('System'),
+          icon: const Icon(Icons.brightness_auto_rounded),
+          label: Text(context.l10n.settingsThemeSystem),
         ),
         ButtonSegment(
           value: AppThemePreference.light,
-          icon: Icon(Icons.light_mode_outlined),
-          label: Text('Light'),
+          icon: const Icon(Icons.light_mode_outlined),
+          label: Text(context.l10n.settingsThemeLight),
         ),
         ButtonSegment(
           value: AppThemePreference.dark,
-          icon: Icon(Icons.dark_mode_outlined),
-          label: Text('Dark'),
+          icon: const Icon(Icons.dark_mode_outlined),
+          label: Text(context.l10n.settingsThemeDark),
         ),
       ],
       selected: {widget.settings.theme},
@@ -368,14 +398,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
   List<Widget> _musicServiceSection(BuildContext context, bool compact) => [
     Text(
-      'Music service',
+      context.l10n.settingsMusicServiceLabel,
       key: const ValueKey('settings-music-service-section'),
       style: Theme.of(context).textTheme.titleLarge
           ?.copyWith(fontWeight: FontWeight.w700),
     ),
     const SizedBox(height: MusicSpacing.itemGap),
     Text(
-      'Choose the service used for browsing, search, recommendations, and your account library.',
+      context.l10n.settingsMusicServiceBody,
       style: Theme.of(context).textTheme.bodyMedium
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
@@ -389,18 +419,18 @@ class _SettingsPageState extends State<SettingsPage> {
       child: IgnorePointer(
         ignoring: _saving,
         child: Column(
-          children: const [
+          children: [
             RadioListTile<AppMusicProvider>(
-              key: ValueKey('settings-provider-qq-music'),
+              key: const ValueKey('settings-provider-qq-music'),
               value: AppMusicProvider.qqMusic,
-              title: Text('QQ Music'),
-              subtitle: Text('First-class service and default'),
+              title: Text(context.l10n.providerQqMusic),
+              subtitle: Text(context.l10n.providerQqMusicSettingsDescription),
             ),
             RadioListTile<AppMusicProvider>(
-              key: ValueKey('settings-provider-netease'),
+              key: const ValueKey('settings-provider-netease'),
               value: AppMusicProvider.netEaseCloudMusic,
-              title: Text('NetEase Cloud Music'),
-              subtitle: Text('Built-in service with capability-aware features'),
+              title: Text(context.l10n.providerNeteaseCloudMusic),
+              subtitle: Text(context.l10n.providerNeteaseSettingsDescription),
             ),
           ],
         ),
@@ -408,16 +438,63 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   ];
 
+  List<Widget> _languageSection(BuildContext context, bool compact) => [
+    Text(
+      context.l10n.settingsLanguageLabel,
+      key: const ValueKey('settings-language-section'),
+      style: Theme.of(context).textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
+    ),
+    const SizedBox(height: MusicSpacing.itemGap),
+    Text(
+      context.l10n.settingsLanguageBody,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    ),
+    const SizedBox(height: MusicSpacing.contentGap),
+    SegmentedButton<AppLocalePreference>(
+      key: const ValueKey('settings-language-selector'),
+      showSelectedIcon: false,
+      segments: [
+        ButtonSegment(
+          value: AppLocalePreference.system,
+          icon: const Icon(Icons.language_rounded),
+          label: Text(context.l10n.settingsLanguageFollowSystem),
+        ),
+        ButtonSegment(
+          value: AppLocalePreference.english,
+          icon: const Icon(Icons.translate_rounded),
+          label: Text(context.l10n.settingsLanguageEnglish),
+        ),
+        ButtonSegment(
+          value: AppLocalePreference.simplifiedChinese,
+          icon: const Icon(Icons.translate_rounded),
+          label: Text(context.l10n.settingsLanguageSimplifiedChinese),
+        ),
+      ],
+      selected: {widget.settings.localePreference},
+      onSelectionChanged: _saving
+          ? null
+          : (selection) => unawaited(
+              _save(
+                widget.settings.copyWith(localePreference: selection.single),
+              ),
+            ),
+    ),
+  ];
+
   List<Widget> _playbackSection(BuildContext context, bool compact) => [
     Text(
-      compact ? 'Audio quality' : 'Playback quality',
+      compact
+          ? context.l10n.settingsPlaybackCompactLabel
+          : context.l10n.settingsPlaybackSectionLabel,
       key: const ValueKey('settings-playback-section'),
       style: Theme.of(context).textTheme.titleLarge
           ?.copyWith(fontWeight: FontWeight.w700),
     ),
     const SizedBox(height: MusicSpacing.itemGap),
     Text(
-      'Preferred quality when supported by the current music service. The player always reports the actual quality used.',
+      context.l10n.settingsPlaybackBody,
       style: Theme.of(context).textTheme.bodyMedium
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
@@ -425,21 +502,21 @@ class _SettingsPageState extends State<SettingsPage> {
     SegmentedButton<AppPlaybackQualityPreference>(
       key: const ValueKey('settings-quality-selector'),
       showSelectedIcon: false,
-      segments: const [
+      segments: [
         ButtonSegment(
           value: AppPlaybackQualityPreference.standard,
-          icon: Icon(Icons.music_note_rounded),
-          label: Text('Standard'),
+          icon: const Icon(Icons.music_note_rounded),
+          label: Text(context.l10n.playbackQualityStandard),
         ),
         ButtonSegment(
           value: AppPlaybackQualityPreference.high,
-          icon: Icon(Icons.high_quality_rounded),
-          label: Text('HQ'),
+          icon: const Icon(Icons.high_quality_rounded),
+          label: Text(context.l10n.playbackQualityHigh),
         ),
         ButtonSegment(
           value: AppPlaybackQualityPreference.lossless,
-          icon: Icon(Icons.graphic_eq_rounded),
-          label: Text('SQ'),
+          icon: const Icon(Icons.graphic_eq_rounded),
+          label: Text(context.l10n.playbackQualityLossless),
         ),
       ],
       selected: {widget.settings.playbackQuality},
@@ -466,6 +543,7 @@ class _CompactSettingsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = Theme.of(context).colorScheme;
     return SafeArea(
       child: ListView(
@@ -475,7 +553,7 @@ class _CompactSettingsMenu extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
             child: Text(
-              'Choose a settings category',
+              l10n.settingsChooseCategory,
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: colors.onSurfaceVariant),
             ),
@@ -502,7 +580,10 @@ class _CompactSettingsMenu extends StatelessWidget {
                       'settings-compact-${SettingsSection.values[index].name}',
                     ),
                     section: SettingsSection.values[index],
-                    summary: SettingsSection.values[index].summary(settings),
+                    summary: SettingsSection.values[index].summary(
+                      settings,
+                      l10n,
+                    ),
                     onTap: () => onSelected(SettingsSection.values[index]),
                   ),
                 ],
@@ -530,9 +611,14 @@ class _CompactSettingsMenuTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
     return Semantics(
       button: true,
-      label: '${section.label}. ${section.description}. $summary',
+      label: l10n.settingsCategorySemantics(
+        section.label(l10n),
+        section.description(l10n),
+        summary,
+      ),
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -554,7 +640,7 @@ class _CompactSettingsMenuTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      section.label,
+                      section.label(l10n),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 2),
@@ -579,17 +665,18 @@ class _CompactSettingsMenuTile extends StatelessWidget {
 }
 
 class _SettingsSearchDelegate extends SearchDelegate<SettingsSection?> {
-  _SettingsSearchDelegate(this.settings)
-    : super(searchFieldLabel: 'Search settings');
+  _SettingsSearchDelegate(this.settings, this.l10n)
+    : super(searchFieldLabel: l10n.settingsSearchLabel);
 
   final AppSettings settings;
+  final AppLocalizations l10n;
 
   @override
   List<Widget> buildActions(BuildContext context) => [
     if (query.isNotEmpty)
       IconButton(
         key: const ValueKey('settings-compact-search-clear'),
-        tooltip: 'Clear search',
+        tooltip: l10n.commonClearSearch,
         onPressed: () => query = '',
         icon: const Icon(Icons.close_rounded),
       ),
@@ -598,7 +685,7 @@ class _SettingsSearchDelegate extends SearchDelegate<SettingsSection?> {
   @override
   Widget buildLeading(BuildContext context) => IconButton(
     key: const ValueKey('settings-compact-search-back'),
-    tooltip: 'Back to settings',
+    tooltip: l10n.settingsBackToSettingsTooltip,
     onPressed: () => close(context, null),
     icon: const Icon(Icons.arrow_back_rounded),
   );
@@ -612,7 +699,7 @@ class _SettingsSearchDelegate extends SearchDelegate<SettingsSection?> {
   Widget _buildMatches(BuildContext context) {
     final normalizedQuery = query.trim().toLowerCase();
     final sections = SettingsSection.values
-        .where((section) => section.matches(normalizedQuery))
+        .where((section) => section.matches(normalizedQuery, settings, l10n))
         .toList(growable: false);
     if (sections.isEmpty) {
       return Center(
@@ -620,7 +707,7 @@ class _SettingsSearchDelegate extends SearchDelegate<SettingsSection?> {
         child: Padding(
           padding: const EdgeInsets.all(MusicSpacing.page),
           child: Text(
-            'No settings match “${query.trim()}”.',
+            l10n.settingsSearchNoMatch(query.trim()),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -643,7 +730,7 @@ class _SettingsSearchDelegate extends SearchDelegate<SettingsSection?> {
           child: _CompactSettingsMenuTile(
             key: ValueKey('settings-compact-search-result-${section.name}'),
             section: section,
-            summary: section.summary(settings),
+            summary: section.summary(settings, l10n),
             onTap: () => close(context, section),
           ),
         );

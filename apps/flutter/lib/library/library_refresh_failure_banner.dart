@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
 class LibraryRefreshFailureBanner extends StatelessWidget {
   const LibraryRefreshFailureBanner({
@@ -26,11 +27,11 @@ class LibraryRefreshFailureBanner extends StatelessWidget {
           TextButton(
             key: const ValueKey('library-refresh-retry'),
             onPressed: onRetry,
-            child: const Text('Try again'),
+            child: Text(context.l10n.commonRetry),
           ),
         IconButton(
           key: const ValueKey('library-refresh-dismiss'),
-          tooltip: 'Dismiss refresh message',
+          tooltip: context.l10n.libraryRefreshDismissTooltip,
           onPressed: onDismiss,
           icon: const Icon(Icons.close_rounded),
         ),

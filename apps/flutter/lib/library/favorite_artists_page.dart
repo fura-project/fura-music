@@ -7,6 +7,8 @@ import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/favorite_artist_controller.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -65,19 +67,24 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
             children: [
               LibraryCollectionHeader(
                 key: const ValueKey('library-artists-header'),
-                title: 'Your favorite artists',
+                title: context.l10n.favoriteArtistsTitle,
                 subtitle: switch (_controller.stage) {
-                  FavoriteArtistStage.content || FavoriteArtistStage.empty =>
-                    '${_controller.total} saved on ${widget.providerDisplayName}',
-                  _ => 'Saved on ${widget.providerDisplayName}',
+                  FavoriteArtistStage.content ||
+                  FavoriteArtistStage.empty => context.l10n.favoriteSavedCount(
+                    _controller.total,
+                    widget.providerDisplayName,
+                  ),
+                  _ => context.l10n.favoriteSavedProvider(
+                    widget.providerDisplayName,
+                  ),
                 },
                 refreshKey: widget.embedded
                     ? const ValueKey('favorite-artists-refresh')
                     : null,
                 refreshTooltip: widget.embedded
                     ? _controller.isLoading
-                          ? 'Refreshing favorite artists'
-                          : 'Refresh favorite artists'
+                          ? context.l10n.favoriteArtistsRefreshing
+                          : context.l10n.favoriteArtistsRefresh
                     : null,
                 onRefresh: widget.embedded && !_controller.isLoading
                     ? _controller.load
@@ -93,18 +100,18 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          tooltip: 'Back to playlists',
+          tooltip: context.l10n.libraryBackToPlaylists,
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Favorite artists'),
+        title: Text(context.l10n.favoriteArtistsTitle),
         actions: [
           AnimatedBuilder(
             animation: _controller,
             builder: (context, _) => IconButton(
               tooltip: _controller.isLoading
-                  ? 'Refreshing favorite artists'
-                  : 'Refresh favorite artists',
+                  ? context.l10n.favoriteArtistsRefreshing
+                  : context.l10n.favoriteArtistsRefresh,
               onPressed: _controller.isLoading ? null : _controller.load,
               icon: const Icon(Icons.refresh_rounded),
             ),
@@ -121,16 +128,17 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
   }
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
-    FavoriteArtistStage.loading => const MusicLoadingPanel(
-      key: ValueKey('favorite-artists-loading'),
-      label: 'Loading Favorite Artists',
+    FavoriteArtistStage.loading => MusicLoadingPanel(
+      key: const ValueKey('favorite-artists-loading'),
+      label: context.l10n.favoriteArtistsLoading,
     ),
     FavoriteArtistStage.empty => MusicContentStatePanel(
       key: const ValueKey('favorite-artists-empty'),
       icon: Icons.person_outline_rounded,
-      title: 'No favorite artists yet',
-      detail:
-          'Artists you follow in ${widget.providerDisplayName} will appear here.',
+      title: context.l10n.favoriteArtistsEmptyTitle,
+      detail: context.l10n.favoriteArtistsEmptyDetail(
+        widget.providerDisplayName,
+      ),
     ),
     FavoriteArtistStage.content => _ArtistCollection(
       key: const ValueKey('favorite-artists-content'),
@@ -142,19 +150,21 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
       onOpenArtist: widget.onOpenArtist,
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
+      providerDisplayName: widget.providerDisplayName,
     ),
     FavoriteArtistStage.error => MusicContentStatePanel(
       key: const ValueKey('favorite-artists-error'),
       icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load favorite artists',
+      title: context.l10n.favoriteArtistsFailureTitle,
       detail: _failureCopy(
+        context.l10n,
         _controller.failure,
-        providerDisplayName: widget.providerDisplayName,
+        widget.providerDisplayName,
       ),
       action: _controller.canRetry
           ? FilledButton.tonal(
               onPressed: _controller.retry,
-              child: const Text('Try again'),
+              child: Text(context.l10n.commonRetry),
             )
           : null,
       liveRegion: true,
@@ -162,26 +172,32 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
     FavoriteArtistStage.authenticationRequired => MusicContentStatePanel(
       key: const ValueKey('favorite-artists-authentication-required'),
       icon: Icons.lock_outline_rounded,
-      title: 'Sign in to see favorite artists',
-      detail: 'Sign in again to load your favorite artists.',
+      title: context.l10n.favoriteArtistsSignInTitle,
+      detail: context.l10n.favoriteArtistsSignInDetail,
       action: TextButton(
         onPressed: widget.onSignInAgain,
-        child: const Text('Sign in again'),
+        child: Text(context.l10n.authSignInAgain),
       ),
       liveRegion: true,
     ),
     FavoriteArtistStage.credentialRejected => MusicContentStatePanel(
       key: const ValueKey('favorite-artists-credential-rejected'),
       icon: Icons.lock_reset_rounded,
-      title: '${widget.providerDisplayName} session rejected',
+      title: context.l10n.favoriteSessionRejectedTitle(
+        widget.providerDisplayName,
+      ),
       detail:
           _controller.failure ==
               FavoriteArtistFailure.credentialRejectedStorageCleanupFailed
-          ? '${widget.providerDisplayName} rejected this session, and its saved copy could not be removed.'
-          : '${widget.providerDisplayName} no longer accepts this saved session.',
+          ? context.l10n.favoriteSessionRejectedCleanupDetail(
+              widget.providerDisplayName,
+            )
+          : context.l10n.favoriteSessionRejectedDetail(
+              widget.providerDisplayName,
+            ),
       action: TextButton(
         onPressed: widget.onSignInAgain,
-        child: const Text('Sign in again'),
+        child: Text(context.l10n.authSignInAgain),
       ),
       liveRegion: true,
     ),
@@ -198,6 +214,7 @@ class _ArtistCollection extends StatelessWidget {
     required this.onOpenArtist,
     required this.onLoadMore,
     required this.onRetryMore,
+    required this.providerDisplayName,
     super.key,
   });
 
@@ -209,6 +226,7 @@ class _ArtistCollection extends StatelessWidget {
   final ValueChanged<ArtistSummary> onOpenArtist;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -222,6 +240,7 @@ class _ArtistCollection extends StatelessWidget {
           canRetry: canRetryMore,
           onLoadMore: onLoadMore,
           onRetry: onRetryMore,
+          providerDisplayName: providerDisplayName,
         );
         return Padding(
           padding: EdgeInsets.fromLTRB(
@@ -279,7 +298,7 @@ class _ArtistGridItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: '${artist.name}, Artist',
+    label: context.l10n.favoriteArtistSemantics(artist.name),
     button: true,
     excludeSemantics: true,
     onTap: onTap,
@@ -318,7 +337,7 @@ class _ArtistListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: '${artist.name}, Artist',
+    label: context.l10n.favoriteArtistSemantics(artist.name),
     button: true,
     excludeSemantics: true,
     onTap: onTap,
@@ -360,6 +379,7 @@ class _CollectionFooter extends StatelessWidget {
     required this.canRetry,
     required this.onLoadMore,
     required this.onRetry,
+    required this.providerDisplayName,
   });
 
   final bool isLoading;
@@ -368,6 +388,7 @@ class _CollectionFooter extends StatelessWidget {
   final bool canRetry;
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -386,9 +407,12 @@ class _CollectionFooter extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_failureCopy(failure)),
+              Text(_failureCopy(context.l10n, failure, providerDisplayName)),
               if (canRetry)
-                TextButton(onPressed: onRetry, child: const Text('Try again')),
+                TextButton(
+                  onPressed: onRetry,
+                  child: Text(context.l10n.commonRetry),
+                ),
             ],
           ),
         ),
@@ -401,7 +425,7 @@ class _CollectionFooter extends StatelessWidget {
           child: OutlinedButton(
             key: const ValueKey('favorite-artists-load-more'),
             onPressed: onLoadMore,
-            child: const Text('Load more'),
+            child: Text(context.l10n.commonLoadMore),
           ),
         ),
       );
@@ -411,24 +435,25 @@ class _CollectionFooter extends StatelessWidget {
 }
 
 String _failureCopy(
-  FavoriteArtistFailure? failure, {
-  String providerDisplayName = 'QQ Music',
-}) => switch (failure) {
-  FavoriteArtistFailure.network =>
-    'Couldn’t reach $providerDisplayName. Check the connection and try again.',
+  AppLocalizations l10n,
+  FavoriteArtistFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
+  FavoriteArtistFailure.network => l10n.favoriteFailureNetwork(
+    providerDisplayName,
+  ),
   FavoriteArtistFailure.serviceUnavailable =>
-    '$providerDisplayName could not load favorite artists right now.',
-  FavoriteArtistFailure.invalidResponse =>
-    '$providerDisplayName returned an unreadable favorite-Artist page.',
-  FavoriteArtistFailure.coreUnavailable =>
-    'The music core is unavailable. Try again.',
-  FavoriteArtistFailure.alreadyRunning =>
-    'A favorite-Artist request is already running.',
+    l10n.favoriteArtistsFailureService(providerDisplayName),
+  FavoriteArtistFailure.invalidResponse => l10n.favoriteArtistsFailureInvalid(
+    providerDisplayName,
+  ),
+  FavoriteArtistFailure.coreUnavailable => l10n.favoriteFailureCore,
+  FavoriteArtistFailure.alreadyRunning => l10n.favoriteArtistsFailureRunning,
   FavoriteArtistFailure.authenticationRequired ||
   FavoriteArtistFailure.replaced ||
-  FavoriteArtistFailure.cancelled => 'Sign in again to continue.',
+  FavoriteArtistFailure.cancelled => l10n.favoriteFailureSignIn,
   FavoriteArtistFailure.credentialRejected ||
   FavoriteArtistFailure.credentialRejectedStorageCleanupFailed =>
-    '$providerDisplayName no longer accepts this saved session.',
-  null => 'Couldn’t load favorite artists.',
+    l10n.favoriteSessionRejectedDetail(providerDisplayName),
+  null => l10n.favoriteArtistsFailureTitle,
 };

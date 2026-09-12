@@ -6,6 +6,8 @@ import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -69,19 +71,24 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
               if (widget.showHeader)
                 LibraryCollectionHeader(
                   key: const ValueKey('library-albums-header'),
-                  title: 'Your favorite albums',
+                  title: context.l10n.favoriteAlbumsTitle,
                   subtitle: switch (_controller.stage) {
-                    FavoriteAlbumStage.content || FavoriteAlbumStage.empty =>
-                      '${_controller.total} saved on ${widget.providerDisplayName}',
-                    _ => 'Saved on ${widget.providerDisplayName}',
+                    FavoriteAlbumStage.content ||
+                    FavoriteAlbumStage.empty => context.l10n.favoriteSavedCount(
+                      _controller.total,
+                      widget.providerDisplayName,
+                    ),
+                    _ => context.l10n.favoriteSavedProvider(
+                      widget.providerDisplayName,
+                    ),
                   },
                   refreshKey: widget.embedded
                       ? const ValueKey('favorite-albums-refresh')
                       : null,
                   refreshTooltip: widget.embedded
                       ? _controller.isLoading
-                            ? 'Refreshing favorite albums'
-                            : 'Refresh favorite albums'
+                            ? context.l10n.favoriteAlbumsRefreshing
+                            : context.l10n.favoriteAlbumsRefresh
                       : null,
                   onRefresh: widget.embedded && !_controller.isLoading
                       ? _controller.load
@@ -97,18 +104,18 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          tooltip: 'Back to playlists',
+          tooltip: context.l10n.libraryBackToPlaylists,
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Favorite albums'),
+        title: Text(context.l10n.favoriteAlbumsTitle),
         actions: [
           AnimatedBuilder(
             animation: _controller,
             builder: (context, _) => IconButton(
               tooltip: _controller.isLoading
-                  ? 'Refreshing favorite albums'
-                  : 'Refresh favorite albums',
+                  ? context.l10n.favoriteAlbumsRefreshing
+                  : context.l10n.favoriteAlbumsRefresh,
               onPressed: _controller.isLoading ? null : _controller.load,
               icon: const Icon(Icons.refresh_rounded),
             ),
@@ -133,24 +140,25 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
   }
 
   Widget _body(BuildContext context) => switch (_controller.stage) {
-    FavoriteAlbumStage.loading => const MusicLoadingPanel(
-      key: ValueKey('favorite-albums-loading'),
-      label: 'Loading Favorite Albums',
+    FavoriteAlbumStage.loading => MusicLoadingPanel(
+      key: const ValueKey('favorite-albums-loading'),
+      label: context.l10n.favoriteAlbumsLoading,
     ),
     FavoriteAlbumStage.empty => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-empty'),
       icon: Icons.album_outlined,
-      title: 'No favorite albums yet',
-      detail:
-          'Albums you save in ${widget.providerDisplayName} will appear here.',
+      title: context.l10n.favoriteAlbumsEmptyTitle,
+      detail: context.l10n.favoriteAlbumsEmptyDetail(
+        widget.providerDisplayName,
+      ),
     ),
     FavoriteAlbumStage.content
         when _visibleAlbums.isEmpty && widget.filterQuery.trim().isNotEmpty =>
-      const MusicContentStatePanel(
-        key: ValueKey('favorite-albums-search-empty'),
+      MusicContentStatePanel(
+        key: const ValueKey('favorite-albums-search-empty'),
         icon: Icons.search_off_rounded,
-        title: '未找到匹配的专辑',
-        detail: '请尝试其他关键词，搜索范围为已加载的收藏专辑。',
+        title: context.l10n.favoriteAlbumsSearchEmptyTitle,
+        detail: context.l10n.favoriteAlbumsSearchEmptyDetail,
       ),
     FavoriteAlbumStage.content => _AlbumCollection(
       key: const ValueKey('favorite-albums-content'),
@@ -162,19 +170,21 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       onOpenAlbum: widget.onOpenAlbum,
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
+      providerDisplayName: widget.providerDisplayName,
     ),
     FavoriteAlbumStage.error => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-error'),
       icon: Icons.cloud_off_rounded,
-      title: 'Couldn’t load favorite albums',
+      title: context.l10n.favoriteAlbumsFailureTitle,
       detail: _failureCopy(
+        context.l10n,
         _controller.failure,
-        providerDisplayName: widget.providerDisplayName,
+        widget.providerDisplayName,
       ),
       action: _controller.canRetry
           ? FilledButton.tonal(
               onPressed: _controller.retry,
-              child: const Text('Try again'),
+              child: Text(context.l10n.commonRetry),
             )
           : null,
       liveRegion: true,
@@ -182,26 +192,32 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
     FavoriteAlbumStage.authenticationRequired => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-authentication-required'),
       icon: Icons.lock_outline_rounded,
-      title: 'Sign in to see favorite albums',
-      detail: 'Sign in again to load your favorite albums.',
+      title: context.l10n.favoriteAlbumsSignInTitle,
+      detail: context.l10n.favoriteAlbumsSignInDetail,
       action: TextButton(
         onPressed: widget.onSignInAgain,
-        child: const Text('Sign in again'),
+        child: Text(context.l10n.authSignInAgain),
       ),
       liveRegion: true,
     ),
     FavoriteAlbumStage.credentialRejected => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-credential-rejected'),
       icon: Icons.lock_reset_rounded,
-      title: '${widget.providerDisplayName} session rejected',
+      title: context.l10n.favoriteSessionRejectedTitle(
+        widget.providerDisplayName,
+      ),
       detail:
           _controller.failure ==
               FavoriteAlbumFailure.credentialRejectedStorageCleanupFailed
-          ? '${widget.providerDisplayName} rejected this session, and its saved copy could not be removed.'
-          : '${widget.providerDisplayName} no longer accepts this saved session.',
+          ? context.l10n.favoriteSessionRejectedCleanupDetail(
+              widget.providerDisplayName,
+            )
+          : context.l10n.favoriteSessionRejectedDetail(
+              widget.providerDisplayName,
+            ),
       action: TextButton(
         onPressed: widget.onSignInAgain,
-        child: const Text('Sign in again'),
+        child: Text(context.l10n.authSignInAgain),
       ),
       liveRegion: true,
     ),
@@ -218,6 +234,7 @@ class _AlbumCollection extends StatelessWidget {
     required this.onOpenAlbum,
     required this.onLoadMore,
     required this.onRetryMore,
+    required this.providerDisplayName,
     super.key,
   });
 
@@ -229,6 +246,7 @@ class _AlbumCollection extends StatelessWidget {
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +260,7 @@ class _AlbumCollection extends StatelessWidget {
           canRetry: canRetryMore,
           onLoadMore: onLoadMore,
           onRetry: onRetryMore,
+          providerDisplayName: providerDisplayName,
         );
         return Padding(
           padding: EdgeInsets.fromLTRB(
@@ -294,7 +313,7 @@ class _AlbumGridItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Semantics(
-      label: '${album.title}, Album',
+      label: context.l10n.favoriteAlbumSemantics(album.title),
       button: true,
       excludeSemantics: true,
       onTap: onTap,
@@ -333,7 +352,7 @@ class _AlbumListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Semantics(
-      label: '${album.title}, Album',
+      label: context.l10n.favoriteAlbumSemantics(album.title),
       button: true,
       excludeSemantics: true,
       onTap: onTap,
@@ -409,6 +428,7 @@ class _CollectionFooter extends StatelessWidget {
     required this.canRetry,
     required this.onLoadMore,
     required this.onRetry,
+    required this.providerDisplayName,
   });
 
   final bool isLoading;
@@ -417,6 +437,7 @@ class _CollectionFooter extends StatelessWidget {
   final bool canRetry;
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
+  final String providerDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -435,9 +456,12 @@ class _CollectionFooter extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_failureCopy(failure)),
+              Text(_failureCopy(context.l10n, failure, providerDisplayName)),
               if (canRetry)
-                TextButton(onPressed: onRetry, child: const Text('Try again')),
+                TextButton(
+                  onPressed: onRetry,
+                  child: Text(context.l10n.commonRetry),
+                ),
             ],
           ),
         ),
@@ -450,7 +474,7 @@ class _CollectionFooter extends StatelessWidget {
           child: OutlinedButton(
             key: const ValueKey('favorite-albums-load-more'),
             onPressed: onLoadMore,
-            child: const Text('Load more'),
+            child: Text(context.l10n.commonLoadMore),
           ),
         ),
       );
@@ -460,24 +484,26 @@ class _CollectionFooter extends StatelessWidget {
 }
 
 String _failureCopy(
-  FavoriteAlbumFailure? failure, {
-  String providerDisplayName = 'QQ Music',
-}) => switch (failure) {
-  FavoriteAlbumFailure.network =>
-    'Couldn’t reach $providerDisplayName. Check the connection and try again.',
-  FavoriteAlbumFailure.serviceUnavailable =>
-    '$providerDisplayName could not load favorite albums right now.',
-  FavoriteAlbumFailure.invalidResponse =>
-    '$providerDisplayName returned an unreadable favorite-album page.',
-  FavoriteAlbumFailure.coreUnavailable =>
-    'The music core is unavailable. Try again.',
-  FavoriteAlbumFailure.alreadyRunning =>
-    'A favorite-album request is already running.',
+  AppLocalizations l10n,
+  FavoriteAlbumFailure? failure,
+  String providerDisplayName,
+) => switch (failure) {
+  FavoriteAlbumFailure.network => l10n.favoriteFailureNetwork(
+    providerDisplayName,
+  ),
+  FavoriteAlbumFailure.serviceUnavailable => l10n.favoriteAlbumsFailureService(
+    providerDisplayName,
+  ),
+  FavoriteAlbumFailure.invalidResponse => l10n.favoriteAlbumsFailureInvalid(
+    providerDisplayName,
+  ),
+  FavoriteAlbumFailure.coreUnavailable => l10n.favoriteFailureCore,
+  FavoriteAlbumFailure.alreadyRunning => l10n.favoriteAlbumsFailureRunning,
   FavoriteAlbumFailure.authenticationRequired ||
   FavoriteAlbumFailure.replaced ||
-  FavoriteAlbumFailure.cancelled => 'Sign in again to continue.',
+  FavoriteAlbumFailure.cancelled => l10n.favoriteFailureSignIn,
   FavoriteAlbumFailure.credentialRejected ||
   FavoriteAlbumFailure.credentialRejectedStorageCleanupFailed =>
-    '$providerDisplayName no longer accepts this saved session.',
-  null => 'Couldn’t load favorite albums.',
+    l10n.favoriteSessionRejectedDetail(providerDisplayName),
+  null => l10n.favoriteAlbumsFailureTitle,
 };

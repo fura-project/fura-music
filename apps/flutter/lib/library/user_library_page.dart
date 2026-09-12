@@ -19,6 +19,8 @@ import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/home/home_controller.dart';
 import 'package:flutterustmusic/home/home_page.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/favorite_artists_page.dart';
 import 'package:flutterustmusic/library/library_section_selector.dart';
@@ -38,6 +40,7 @@ import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
@@ -581,6 +584,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
 
+  String get _providerDisplayName => builtInProviderDisplayName(
+    widget.settings.musicProvider.providerId,
+    context.l10n,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -965,11 +973,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   };
 
   String _artistBackTooltip(ArtistRouteOrigin origin) => switch (origin) {
-    ArtistRouteOrigin.search => 'Back',
-    ArtistRouteOrigin.favoriteArtists => 'Back to favorite artists',
-    ArtistRouteOrigin.trackContext => 'Back to playlist',
-    ArtistRouteOrigin.album => 'Back to Album',
-    ArtistRouteOrigin.nowPlaying => 'Back to previous page',
+    ArtistRouteOrigin.search => context.l10n.commonBack,
+    ArtistRouteOrigin.favoriteArtists =>
+      context.l10n.shellBackToFavoriteArtists,
+    ArtistRouteOrigin.trackContext => context.l10n.shellBackToPlaylist,
+    ArtistRouteOrigin.album => context.l10n.shellBackToAlbum,
+    ArtistRouteOrigin.nowPlaying => context.l10n.shellBackToPreviousPage,
   };
 
   String _albumRouteKey(AlbumLocalRoute route) => switch (route.origin) {
@@ -989,16 +998,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   };
 
   String _albumBackTooltip(AlbumRouteOrigin origin) => switch (origin) {
-    AlbumRouteOrigin.search => 'Back to search results',
+    AlbumRouteOrigin.search => context.l10n.shellBackToSearchResults,
     AlbumRouteOrigin.searchArtist ||
     AlbumRouteOrigin.favoriteArtist ||
     AlbumRouteOrigin.trackContextArtist ||
     AlbumRouteOrigin.albumArtist ||
-    AlbumRouteOrigin.nowPlayingArtist => 'Back to Artist',
-    AlbumRouteOrigin.discover => 'Back to new albums',
-    AlbumRouteOrigin.favoriteAlbums => 'Back to favorite albums',
-    AlbumRouteOrigin.trackContext => 'Back to playlist',
-    AlbumRouteOrigin.nowPlaying => 'Back to previous page',
+    AlbumRouteOrigin.nowPlayingArtist => context.l10n.shellBackToArtist,
+    AlbumRouteOrigin.discover => context.l10n.shellBackToNewAlbums,
+    AlbumRouteOrigin.favoriteAlbums => context.l10n.shellBackToFavoriteAlbums,
+    AlbumRouteOrigin.trackContext => context.l10n.shellBackToPlaylist,
+    AlbumRouteOrigin.nowPlaying => context.l10n.shellBackToPreviousPage,
   };
 
   bool _albumCanOpenArtist(AlbumRouteOrigin origin) =>
@@ -1219,9 +1228,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (!mounted) return;
     if (result != AppSettingsWriteResult.saved) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Couldn’t save playback quality. Nothing changed.'),
-        ),
+        SnackBar(content: Text(context.l10n.libraryQualitySaveFailure)),
       );
       return;
     }
@@ -1230,7 +1237,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (!mounted) return;
     final actual = _queuePlaybackController.playback.resolvedQuality;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(preference.selectionMessage(actual))),
+      SnackBar(
+        content: Text(
+          preference.localizedSelectionMessage(context.l10n, actual),
+        ),
+      ),
     );
   }
 
@@ -1493,16 +1504,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             animation: _controller,
             builder: (context, _) => LibraryCollectionHeader(
               key: const ValueKey('library-playlists-header'),
-              title: 'Your playlists',
+              title: context.l10n.libraryYourPlaylists,
               subtitle: switch (_controller.stage) {
                 UserLibraryStage.content || UserLibraryStage.empty =>
-                  '${_controller.playlists.length} saved on ${widget.settings.musicProvider.displayName}',
-                _ => 'Saved on ${widget.settings.musicProvider.displayName}',
+                  context.l10n.libraryPlaylistsSavedCount(
+                    _controller.playlists.length,
+                    _providerDisplayName,
+                  ),
+                _ => context.l10n.libraryPlaylistsSavedProvider(
+                  _providerDisplayName,
+                ),
               },
               refreshKey: const ValueKey('user-playlists-refresh'),
               refreshTooltip: _controller.isRefreshing
-                  ? 'Refreshing playlists'
-                  : 'Refresh playlists',
+                  ? context.l10n.libraryRefreshingPlaylists
+                  : context.l10n.libraryRefreshPlaylists,
               onRefresh: _controller.isLoading ? null : _controller.refresh,
             ),
           ),
@@ -1520,8 +1536,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   onOpenAlbum: _openFavoriteAlbum,
                   onSignInAgain: widget.onSignInAgain,
                   embedded: true,
-                  providerDisplayName:
-                      widget.settings.musicProvider.displayName,
+                  providerDisplayName: _providerDisplayName,
                 )
               else
                 const SizedBox.shrink(),
@@ -1534,8 +1549,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   onOpenArtist: _openFavoriteArtist,
                   onSignInAgain: widget.onSignInAgain,
                   embedded: true,
-                  providerDisplayName:
-                      widget.settings.musicProvider.displayName,
+                  providerDisplayName: _providerDisplayName,
                 )
               else
                 const SizedBox.shrink(),
@@ -1577,7 +1591,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         onSignInAgain: widget.onSignInAgain,
         onHeaderCollapsedChanged: _updateLikedHeaderCollapsed,
         collapsedHeaderActions: collapsedHeaderActions,
-        providerDisplayName: widget.settings.musicProvider.displayName,
+        providerDisplayName: _providerDisplayName,
       ),
     };
   }
@@ -1692,7 +1706,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             personalFmEnabled: widget.capabilities.personalFm,
             queuePlaybackController: _queuePlaybackController,
             authenticated: widget.authenticated,
-            providerDisplayName: widget.settings.musicProvider.displayName,
+            providerDisplayName: _providerDisplayName,
             active:
                 destination == AuthenticatedPrimaryDestination.home &&
                 embeddedShellRoute == null &&
@@ -1735,7 +1749,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 onOpenTrackAlbum: _openTrackContextAlbum,
                 onOpenTrackArtist: _openTrackContextArtist,
                 onSignInAgain: widget.onSignInAgain,
-                providerDisplayName: widget.settings.musicProvider.displayName,
+                providerDisplayName: _providerDisplayName,
                 onHeaderCollapsedChanged: _updateDiscoverHeaderCollapsed,
                 embedded: true,
               ),
@@ -1757,7 +1771,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               onOpenArtist: _openArtist,
               onOpenPlaylist: _openSearchPlaylist,
               onSignInAgain: widget.onSignInAgain,
-              providerDisplayName: widget.settings.musicProvider.displayName,
+              providerDisplayName: _providerDisplayName,
               embedded: true,
             )
           else
@@ -1821,7 +1835,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         leading: collectionDetailOpen && _collectionDetailHeaderCollapsed
             ? IconButton(
                 key: const ValueKey('collection-detail-shell-back'),
-                tooltip: 'Back',
+                tooltip: context.l10n.commonBack,
                 onPressed: _returnFromTopRoute,
                 icon: const Icon(Icons.arrow_back_rounded),
               )
@@ -1846,12 +1860,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           child: settingsOpen
               ? _PrimaryShellTitle(
                   key: const ValueKey('settings-shell-top-bar'),
-                  title: 'Settings',
+                  title: context.l10n.settingsTitle,
                   compact: compactActions,
                   showTitle: false,
                   showSearchShortcut: wide,
                   searchKey: const ValueKey('settings-search'),
-                  searchHint: 'Search settings',
+                  searchHint: context.l10n.settingsSearchLabel,
                   searchController: _settingsSearchController,
                   onSearchChanged: _updateSettingsSearch,
                   onSearchSubmitted: _updateSettingsSearch,
@@ -1862,12 +1876,18 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   title:
                       collectionDetailTitle ??
                       switch (destination) {
-                        AuthenticatedPrimaryDestination.home => 'Home',
-                        AuthenticatedPrimaryDestination.discover => 'Discover',
+                        AuthenticatedPrimaryDestination.home =>
+                          context.l10n.navHome,
+                        AuthenticatedPrimaryDestination.discover =>
+                          context.l10n.navDiscover,
                         AuthenticatedPrimaryDestination.search =>
-                          'Search ${widget.settings.musicProvider.displayName}',
-                        AuthenticatedPrimaryDestination.library => '喜欢',
-                        AuthenticatedPrimaryDestination.recentPlays => '最近播放',
+                          context.l10n.shellSearchProvider(
+                            _providerDisplayName,
+                          ),
+                        AuthenticatedPrimaryDestination.library =>
+                          context.l10n.navLiked,
+                        AuthenticatedPrimaryDestination.recentPlays =>
+                          context.l10n.navRecentPlays,
                       },
                   compact: compactActions,
                   showTitle: catalogDetailOpen
@@ -1884,8 +1904,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                       extendedSidebar &&
                       destination != AuthenticatedPrimaryDestination.search,
                   searchKey: const ValueKey('top-search-shortcut'),
-                  searchHint:
-                      'Search ${widget.settings.musicProvider.displayName}',
+                  searchHint: context.l10n.shellSearchProvider(
+                    _providerDisplayName,
+                  ),
                   searchController: _topSearchController,
                   onSearchChanged: null,
                   onSearchSubmitted: _submitTopSearch,
@@ -1940,7 +1961,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           homeController: _homeController,
           libraryController: _controller,
           authenticated: widget.authenticated,
-          providerDisplayName: widget.settings.musicProvider.displayName,
+          providerDisplayName: _providerDisplayName,
           supportsRecentHistory: widget.capabilities.recentHistory,
           recommendationsFocusNode: _recommendationsReturnFocusNode,
           searchFocusNode: _searchReturnFocusNode,
@@ -1989,8 +2010,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                         minExtendedWidth: MusicSizes.desktopSidebar,
                         leading: _MusicSidebarBrand(
                           expanded: false,
-                          providerDisplayName:
-                              widget.settings.musicProvider.displayName,
+                          providerDisplayName: _providerDisplayName,
                         ),
                         onDestinationSelected: _selectPrimaryDestinationByIndex,
                         destinations: _navigationRailDestinations(),
@@ -2024,7 +2044,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                               child: const Icon(Icons.settings_outlined),
                             ),
                             selectedIcon: const Icon(Icons.settings_rounded),
-                            label: const Text('Settings'),
+                            label: Text(context.l10n.settingsTitle),
                           ),
                         ],
                       ),
@@ -2166,13 +2186,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   List<NavigationRailDestination> _navigationRailDestinations() => [
-    const NavigationRailDestination(
-      icon: Icon(
+    NavigationRailDestination(
+      icon: const Icon(
         Icons.home_outlined,
         key: ValueKey('primary-home-destination'),
       ),
-      selectedIcon: Icon(Icons.home_rounded),
-      label: Text('Home'),
+      selectedIcon: const Icon(Icons.home_rounded),
+      label: Text(context.l10n.navHome),
     ),
     NavigationRailDestination(
       icon: _destinationFocusIcon(
@@ -2181,7 +2201,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         destination: AuthenticatedPrimaryDestination.discover,
         icon: Icons.explore_outlined,
       ),
-      label: const Text('Discover'),
+      label: Text(context.l10n.navDiscover),
     ),
     NavigationRailDestination(
       icon: _destinationFocusIcon(
@@ -2190,32 +2210,35 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         destination: AuthenticatedPrimaryDestination.search,
         icon: Icons.search_rounded,
       ),
-      label: const Text('Search'),
+      label: Text(context.l10n.navSearch),
     ),
     if (widget.authenticated)
-      const NavigationRailDestination(
-        icon: Icon(
+      NavigationRailDestination(
+        icon: const Icon(
           Icons.favorite_border_rounded,
           key: ValueKey('primary-library-destination'),
         ),
-        selectedIcon: Icon(Icons.favorite_rounded),
-        label: Text('喜欢'),
+        selectedIcon: const Icon(Icons.favorite_rounded),
+        label: Text(context.l10n.navLiked),
       ),
     if (widget.authenticated && widget.capabilities.recentHistory)
-      const NavigationRailDestination(
-        icon: Icon(Icons.history_rounded, key: ValueKey('open-recent-plays')),
-        label: Text('最近播放'),
+      NavigationRailDestination(
+        icon: const Icon(
+          Icons.history_rounded,
+          key: ValueKey('open-recent-plays'),
+        ),
+        label: Text(context.l10n.navRecentPlays),
       ),
   ];
 
   List<NavigationDestination> _navigationBarDestinations() => [
-    const NavigationDestination(
-      icon: Icon(
+    NavigationDestination(
+      icon: const Icon(
         Icons.home_outlined,
         key: ValueKey('primary-home-destination'),
       ),
-      selectedIcon: Icon(Icons.home_rounded),
-      label: 'Home',
+      selectedIcon: const Icon(Icons.home_rounded),
+      label: context.l10n.navHome,
     ),
     NavigationDestination(
       icon: _destinationFocusIcon(
@@ -2224,7 +2247,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         destination: AuthenticatedPrimaryDestination.discover,
         icon: Icons.explore_outlined,
       ),
-      label: 'Discover',
+      label: context.l10n.navDiscover,
     ),
     NavigationDestination(
       icon: _destinationFocusIcon(
@@ -2233,21 +2256,24 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         destination: AuthenticatedPrimaryDestination.search,
         icon: Icons.search_rounded,
       ),
-      label: 'Search',
+      label: context.l10n.navSearch,
     ),
     if (widget.authenticated)
-      const NavigationDestination(
-        icon: Icon(
+      NavigationDestination(
+        icon: const Icon(
           Icons.favorite_border_rounded,
           key: ValueKey('primary-library-destination'),
         ),
-        selectedIcon: Icon(Icons.favorite_rounded),
-        label: '喜欢',
+        selectedIcon: const Icon(Icons.favorite_rounded),
+        label: context.l10n.navLiked,
       ),
     if (widget.authenticated && widget.capabilities.recentHistory)
-      const NavigationDestination(
-        icon: Icon(Icons.history_rounded, key: ValueKey('open-recent-plays')),
-        label: '最近播放',
+      NavigationDestination(
+        icon: const Icon(
+          Icons.history_rounded,
+          key: ValueKey('open-recent-plays'),
+        ),
+        label: context.l10n.navRecentPlays,
       ),
   ];
 
@@ -2280,7 +2306,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (showSettings)
       IconButton(
         key: const ValueKey('open-settings'),
-        tooltip: 'Settings',
+        tooltip: context.l10n.settingsTitle,
         isSelected: settingsSelected,
         onPressed: _openSettings,
         icon: const Icon(Icons.settings_outlined),
@@ -2290,8 +2316,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       IconButton(
         key: ValueKey(widget.authenticated ? 'sign-out' : 'sign-in'),
         tooltip: widget.authenticated
-            ? 'Sign out'
-            : 'Sign in to ${widget.settings.musicProvider.displayName}',
+            ? context.l10n.shellSignOut
+            : context.l10n.shellSignInToProvider(_providerDisplayName),
         onPressed: widget.authenticated
             ? (_signingOut ? null : _confirmSignOut)
             : widget.onRequestSignIn,
@@ -2316,8 +2342,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             LibraryRefreshFailureBanner(
               key: const ValueKey('user-library-refresh-failure'),
               message: _refreshFailureCopy(
+                context.l10n,
                 failure,
-                widget.settings.musicProvider.displayName,
+                _providerDisplayName,
               ),
               canRetry: _controller.canRetryRefresh,
               onRetry: _controller.retryRefresh,
@@ -2344,15 +2371,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       LibrarySection.artists => Icons.person_outline_rounded,
       LibrarySection.likedSongs => Icons.favorite_border_rounded,
     },
-    title: 'Sign in to see your music',
-    detail:
-        'Your ${widget.settings.musicProvider.displayName} playlists, liked songs, albums, and artists will appear here.',
+    title: context.l10n.librarySignInTitle,
+    detail: context.l10n.librarySignInDetail(_providerDisplayName),
     actions: [
       FilledButton.icon(
         key: const ValueKey('signed-out-library-sign-in'),
         onPressed: widget.onRequestSignIn,
         icon: const Icon(Icons.login_rounded),
-        label: const Text('Sign in'),
+        label: Text(context.l10n.shellSignIn),
       ),
     ],
   );
@@ -2360,11 +2386,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   Future<void> _confirmSignOut() async {
     final confirmed = await showAdaptiveConfirmation(
       context,
-      title: 'Sign out on this device?',
-      message:
-          'This will stop playback and remove the saved ${widget.settings.musicProvider.displayName} session '
-          'from this device.',
-      confirmLabel: 'Sign out',
+      title: context.l10n.librarySignOutConfirmTitle,
+      message: context.l10n.librarySignOutConfirmDetail(_providerDisplayName),
+      confirmLabel: context.l10n.shellSignOut,
       cancelKey: const ValueKey('sign-out-cancel'),
       confirmKey: const ValueKey('sign-out-confirm'),
       sheetKey: const ValueKey('sign-out-confirmation-sheet'),
@@ -2382,9 +2406,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     setState(() => _signingOut = false);
     if (result == CredentialSignOutResult.coreUnavailable) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Couldn’t sign out. Your local session is unchanged.'),
-        ),
+        SnackBar(content: Text(context.l10n.librarySignOutFailure)),
       );
     }
   }
@@ -2402,7 +2424,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     ),
     UserLibraryStage.empty => _LibraryEmpty(
       key: const ValueKey('user-library-empty'),
-      providerDisplayName: widget.settings.musicProvider.displayName,
+      providerDisplayName: _providerDisplayName,
     ),
     UserLibraryStage.error => _LibraryFailure(
       key: const ValueKey('user-library-error'),
@@ -2411,7 +2433,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       showSignInAgain: false,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
-      providerDisplayName: widget.settings.musicProvider.displayName,
+      providerDisplayName: _providerDisplayName,
     ),
     UserLibraryStage.authenticationRequired ||
     UserLibraryStage.credentialRejected => _LibraryFailure(
@@ -2421,7 +2443,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       showSignInAgain: true,
       onRetry: _controller.retry,
       onSignInAgain: widget.onSignInAgain,
-      providerDisplayName: widget.settings.musicProvider.displayName,
+      providerDisplayName: _providerDisplayName,
     ),
   };
 }
@@ -2454,14 +2476,14 @@ class _DesktopSettingsSidebar extends StatelessWidget {
                   children: [
                     IconButton(
                       key: const ValueKey('settings-sidebar-back'),
-                      tooltip: 'Back to music',
+                      tooltip: context.l10n.shellBackToMusic,
                       onPressed: onBack,
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Settings',
+                        context.l10n.settingsTitle,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -2475,14 +2497,14 @@ class _DesktopSettingsSidebar extends StatelessWidget {
                 key: const ValueKey('settings-sidebar-options'),
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
                 children: [
-                  const _SidebarSectionLabel('SETTINGS'),
+                  _SidebarSectionLabel(context.l10n.navSettingsSection),
                   for (final section in SettingsSection.values)
                     _SidebarDestinationTile(
                       key: ValueKey('settings-nav-${section.name}'),
                       selected: selectedSection == section,
                       icon: section.icon,
                       selectedIcon: section.icon,
-                      label: section.label,
+                      label: section.label(context.l10n),
                       onTap: () => onSectionSelected(section),
                     ),
                 ],
@@ -2516,7 +2538,7 @@ class _SettingsNavigationRail extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 16),
       child: IconButton(
         key: const ValueKey('settings-rail-back'),
-        tooltip: 'Back to music',
+        tooltip: context.l10n.shellBackToMusic,
         onPressed: onBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),
@@ -2531,7 +2553,7 @@ class _SettingsNavigationRail extends StatelessWidget {
             key: ValueKey('settings-nav-${section.name}'),
           ),
           selectedIcon: Icon(section.icon),
-          label: Text(section.label),
+          label: Text(section.label(context.l10n)),
         ),
     ],
   );
@@ -2607,14 +2629,14 @@ class _DesktopMusicSidebar extends StatelessWidget {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
                   children: [
-                    const _SidebarSectionLabel('ONLINE MUSIC'),
+                    _SidebarSectionLabel(context.l10n.navOnlineMusicSection),
                     _SidebarDestinationTile(
                       key: const ValueKey('primary-home-destination'),
                       selected:
                           destination == AuthenticatedPrimaryDestination.home,
                       icon: Icons.home_outlined,
                       selectedIcon: Icons.home_rounded,
-                      label: 'Home',
+                      label: context.l10n.navHome,
                       onTap: () => onDestinationSelected(
                         AuthenticatedPrimaryDestination.home,
                       ),
@@ -2626,7 +2648,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
                           AuthenticatedPrimaryDestination.discover,
                       icon: Icons.explore_outlined,
                       selectedIcon: Icons.explore_rounded,
-                      label: 'Discover',
+                      label: context.l10n.navDiscover,
                       focusNode: recommendationsFocusNode,
                       onTap: () => onDestinationSelected(
                         AuthenticatedPrimaryDestination.discover,
@@ -2638,7 +2660,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
                           destination == AuthenticatedPrimaryDestination.search,
                       icon: Icons.search_rounded,
                       selectedIcon: Icons.search_rounded,
-                      label: 'Search',
+                      label: context.l10n.navSearch,
                       focusNode: searchFocusNode,
                       onTap: () => onDestinationSelected(
                         AuthenticatedPrimaryDestination.search,
@@ -2646,7 +2668,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
                     ),
                     if (authenticated) ...[
                       const SizedBox(height: MusicSpacing.contentGap),
-                      const _SidebarSectionLabel('MY MUSIC'),
+                      _SidebarSectionLabel(context.l10n.navMyMusicSection),
                       _SidebarDestinationTile(
                         key: const ValueKey('open-liked-songs'),
                         selected:
@@ -2656,7 +2678,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
                             activePlaylist == null,
                         icon: Icons.favorite_border_rounded,
                         selectedIcon: Icons.favorite_rounded,
-                        label: '喜欢',
+                        label: context.l10n.navLiked,
                         onTap: onOpenLikedSongs,
                       ),
                       if (supportsRecentHistory)
@@ -2667,7 +2689,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
                               AuthenticatedPrimaryDestination.recentPlays,
                           icon: Icons.history_rounded,
                           selectedIcon: Icons.history_rounded,
-                          label: '最近播放',
+                          label: context.l10n.navRecentPlays,
                           onTap: () => onDestinationSelected(
                             AuthenticatedPrimaryDestination.recentPlays,
                           ),
@@ -2675,7 +2697,9 @@ class _DesktopMusicSidebar extends StatelessWidget {
                       if (libraryController.stage == UserLibraryStage.content &&
                           libraryController.playlists.isNotEmpty) ...[
                         const SizedBox(height: MusicSpacing.contentGap),
-                        const _SidebarSectionLabel('YOUR PLAYLISTS'),
+                        _SidebarSectionLabel(
+                          context.l10n.navYourPlaylistsSection,
+                        ),
                         for (final playlist
                             in libraryController.playlists.where(
                               (playlist) => !playlist.isLikedSongs,
@@ -2728,7 +2752,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
                 selected: settingsSelected,
                 icon: Icons.settings_outlined,
                 selectedIcon: Icons.settings_rounded,
-                label: 'Settings',
+                label: context.l10n.settingsTitle,
                 focusNode: settingsFocusNode,
                 onTap: onOpenSettings,
               ),
@@ -2769,7 +2793,9 @@ class _SidebarIdentity extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       child: Tooltip(
-        message: authenticated ? 'Sign out' : 'Sign in to $providerDisplayName',
+        message: authenticated
+            ? context.l10n.shellSignOut
+            : context.l10n.shellSignInToProvider(providerDisplayName),
         child: InkWell(
           key: const ValueKey('sidebar-account'),
           onTap: action,
@@ -2804,8 +2830,12 @@ class _SidebarIdentity extends StatelessWidget {
                       Text(
                         authenticated
                             ? displayName ??
-                                  'Loading $providerDisplayName account…'
-                            : 'Sign in to $providerDisplayName',
+                                  context.l10n.shellLoadingProviderAccount(
+                                    providerDisplayName,
+                                  )
+                            : context.l10n.shellSignInToProvider(
+                                providerDisplayName,
+                              ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall
@@ -2924,7 +2954,7 @@ class _MusicSidebarBrand extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         Text(
-                          '$providerDisplayName client',
+                          context.l10n.shellProviderClient(providerDisplayName),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.labelMedium
@@ -3181,8 +3211,19 @@ class _DesktopPlaylistList extends StatelessWidget {
           child: Row(
             children: [
               const SizedBox(width: 64),
-              Expanded(child: Text('Playlist', style: mutedStyle)),
-              SizedBox(width: 104, child: Text('Tracks', style: mutedStyle)),
+              Expanded(
+                child: Text(
+                  context.l10n.libraryPlaylistType,
+                  style: mutedStyle,
+                ),
+              ),
+              SizedBox(
+                width: 104,
+                child: Text(
+                  context.l10n.libraryTrackCountColumn,
+                  style: mutedStyle,
+                ),
+              ),
               const SizedBox(width: 40),
             ],
           ),
@@ -3227,7 +3268,7 @@ class _PlaylistListItem extends StatelessWidget {
     final theme = Theme.of(context);
     final count = playlist.trackCount;
     return Semantics(
-      label: _semanticLabel(playlist),
+      label: _semanticLabel(context.l10n, playlist),
       button: true,
       excludeSemantics: true,
       onTap: onTap,
@@ -3259,7 +3300,7 @@ class _PlaylistListItem extends StatelessWidget {
                     if (!desktop && count != null) ...[
                       const SizedBox(height: 4),
                       Text(
-                        '$count tracks',
+                        context.l10n.libraryPlaylistCount(count),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -3272,7 +3313,7 @@ class _PlaylistListItem extends StatelessWidget {
                 width: desktop ? 104 : 0,
                 child: desktop && count != null
                     ? Text(
-                        '$count tracks',
+                        context.l10n.libraryPlaylistCount(count),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -3354,7 +3395,7 @@ class _LibraryLoading extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Text(
-          'Loading your playlists…',
+          context.l10n.libraryLoadingPlaylists,
           style: Theme.of(context).textTheme.titleMedium,
         ),
       ],
@@ -3370,9 +3411,8 @@ class _LibraryEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _CenteredLibraryMessage(
     icon: Icons.library_music_outlined,
-    title: 'No playlists yet',
-    detail:
-        'Playlists you create or save in $providerDisplayName will appear here.',
+    title: context.l10n.libraryNoPlaylistsTitle,
+    detail: context.l10n.libraryNoPlaylistsDetail(providerDisplayName),
     actions: const [],
   );
 }
@@ -3397,7 +3437,11 @@ class _LibraryFailure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (title, detail) = _failureCopy(failure, providerDisplayName);
+    final (title, detail) = _failureCopy(
+      context.l10n,
+      failure,
+      providerDisplayName,
+    );
     return _CenteredLibraryMessage(
       icon:
           failure == UserLibraryFailure.credentialRejected ||
@@ -3412,12 +3456,12 @@ class _LibraryFailure extends StatelessWidget {
         if (canRetry)
           FilledButton.tonal(
             onPressed: onRetry,
-            child: const Text('Try again'),
+            child: Text(context.l10n.commonRetry),
           ),
         if (showSignInAgain)
           TextButton(
             onPressed: onSignInAgain,
-            child: const Text('Sign in again'),
+            child: Text(context.l10n.authSignInAgain),
           ),
       ],
     );
@@ -3488,7 +3532,7 @@ class _CenteredLibraryMessage extends StatelessWidget {
                 Semantics(
                   container: true,
                   liveRegion: true,
-                  label: '$title. $detail',
+                  label: context.l10n.commonAnnouncement(detail, title),
                   excludeSemantics: true,
                   child: message,
                 )
@@ -3511,70 +3555,59 @@ class _CenteredLibraryMessage extends StatelessWidget {
 }
 
 (String, String) _failureCopy(
+  AppLocalizations l10n,
   UserLibraryFailure? failure,
   String providerDisplayName,
 ) => switch (failure) {
   UserLibraryFailure.network => (
-    'Couldn’t reach $providerDisplayName',
-    'Your session is still active. Check your connection and try again.',
+    l10n.libraryFailureReachTitle(providerDisplayName),
+    l10n.libraryFailureReachCollectionDetail,
   ),
   UserLibraryFailure.serviceUnavailable => (
-    '$providerDisplayName is unavailable',
-    'Your session was kept unchanged. Try loading your playlists again later.',
+    l10n.libraryFailureUnavailableTitle(providerDisplayName),
+    l10n.libraryFailureServiceCollectionDetail,
   ),
   UserLibraryFailure.invalidResponse => (
-    'Couldn’t read the complete library',
-    '$providerDisplayName returned a collection this build could not safely finish. '
-        'No partial list is shown.',
+    l10n.libraryFailureCompleteTitle,
+    l10n.libraryFailureCompleteDetail(providerDisplayName),
   ),
   UserLibraryFailure.credentialRejected => (
-    'Your saved session was rejected',
-    '$providerDisplayName no longer accepts it, so the stored session was removed.',
+    l10n.libraryFailureRejectedTitle,
+    l10n.libraryFailureRejectedDetail(providerDisplayName),
   ),
   UserLibraryFailure.credentialRejectedStorageCleanupFailed => (
-    'Your saved session was rejected',
-    '$providerDisplayName no longer accepts it, but secure storage could not remove it.',
+    l10n.libraryFailureRejectedTitle,
+    l10n.authSavedSessionRejectedCleanupDetail(providerDisplayName),
   ),
   UserLibraryFailure.authenticationRequired ||
   UserLibraryFailure.replaced ||
   UserLibraryFailure.cancelled => (
-    'Sign in to load your playlists',
-    'The account state changed before this library request finished.',
+    l10n.libraryFailureSignInPlaylistsTitle,
+    l10n.libraryFailureRequestChangedDetail,
   ),
   UserLibraryFailure.coreUnavailable => (
-    'The music core is unavailable',
-    'Your library could not be loaded safely. Try again after restarting.',
+    l10n.libraryFailureCoreTitle,
+    l10n.libraryFailureCoreCollectionDetail,
   ),
   UserLibraryFailure.alreadyRunning => (
-    'A library request is already running',
-    'Wait for it to finish, then try again.',
+    l10n.libraryFailureRunningCollectionTitle,
+    l10n.libraryFailureRunningDetail,
   ),
   null => (
-    'Couldn’t load your playlists',
-    'Try again or sign in with a fresh $providerDisplayName session.',
+    l10n.libraryFailureGenericCollectionTitle,
+    l10n.libraryFailureGenericCollectionDetail(providerDisplayName),
   ),
 };
 
 String _refreshFailureCopy(
+  AppLocalizations l10n,
   UserLibraryFailure failure,
   String providerDisplayName,
-) => switch (failure) {
-  UserLibraryFailure.network =>
-    'Couldn’t refresh playlists. Check your connection; the previous results '
-        'are still shown.',
-  UserLibraryFailure.serviceUnavailable =>
-    '$providerDisplayName couldn’t refresh playlists. The previous results are still '
-        'shown.',
-  UserLibraryFailure.invalidResponse =>
-    '$providerDisplayName returned an incomplete refresh. The previous complete results '
-        'are still shown.',
-  UserLibraryFailure.coreUnavailable =>
-    'The music core couldn’t refresh playlists. The previous results are '
-        'still shown.',
-  _ => 'Couldn’t refresh playlists. The previous results are still shown.',
-};
+) => l10n.libraryRefreshFailure;
 
-String _semanticLabel(UserPlaylistSummary playlist) {
+String _semanticLabel(AppLocalizations l10n, UserPlaylistSummary playlist) {
   final count = playlist.trackCount;
-  return count == null ? playlist.title : '${playlist.title}, $count tracks';
+  return count == null
+      ? playlist.title
+      : '${playlist.title}, ${l10n.libraryPlaylistCount(count)}';
 }

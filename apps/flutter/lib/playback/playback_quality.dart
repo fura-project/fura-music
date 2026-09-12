@@ -1,3 +1,4 @@
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 
@@ -16,22 +17,16 @@ extension AppPlaybackQualityBehavior on AppPlaybackQualityPreference {
     AppPlaybackQualityPreference.lossless => 'SQ',
   };
 
-  String get displayLabel => switch (this) {
-    AppPlaybackQualityPreference.standard => 'Standard',
-    AppPlaybackQualityPreference.high => 'HQ',
-    AppPlaybackQualityPreference.lossless => 'SQ',
+  String localizedDisplayLabel(AppLocalizations l10n) => switch (this) {
+    AppPlaybackQualityPreference.standard => l10n.playbackQualityStandard,
+    AppPlaybackQualityPreference.high => l10n.playbackQualityHigh,
+    AppPlaybackQualityPreference.lossless => l10n.playbackQualityLossless,
   };
 
-  String get menuLabel => switch (this) {
-    AppPlaybackQualityPreference.standard => 'Standard · MP3 128 kbps',
-    AppPlaybackQualityPreference.high => 'HQ · MP3 320 kbps',
-    AppPlaybackQualityPreference.lossless => 'SQ · FLAC lossless',
-  };
-
-  String get settingsSummary => switch (this) {
-    AppPlaybackQualityPreference.standard => 'Standard quality',
-    AppPlaybackQualityPreference.high => 'High quality',
-    AppPlaybackQualityPreference.lossless => 'SQ lossless quality',
+  String localizedMenuLabel(AppLocalizations l10n) => switch (this) {
+    AppPlaybackQualityPreference.standard => l10n.playbackQualityMenuStandard,
+    AppPlaybackQualityPreference.high => l10n.playbackQualityMenuHigh,
+    AppPlaybackQualityPreference.lossless => l10n.playbackQualityMenuLossless,
   };
 
   bool matches(PlaybackAudioQuality? actual) => switch (this) {
@@ -42,31 +37,41 @@ extension AppPlaybackQualityBehavior on AppPlaybackQualityPreference {
       actual == PlaybackAudioQuality.lossless,
   };
 
-  String selectionMessage(PlaybackAudioQuality? actual) {
-    if (actual == null) {
-      return '$displayLabel selected. It applies when the next Track starts.';
-    }
-    if (matches(actual)) return 'Playing ${actual.displayLabel} quality.';
-    return '$displayLabel is unavailable for this Track. '
-        'Playing ${actual.displayLabel} instead.';
+  String localizedSelectionMessage(
+    AppLocalizations l10n,
+    PlaybackAudioQuality? actual,
+  ) {
+    final preferred = localizedDisplayLabel(l10n);
+    if (actual == null) return l10n.playbackQualitySelectedNext(preferred);
+    final actualLabel = actual.localizedDisplayLabel(l10n);
+    if (matches(actual)) return l10n.playbackQualityPlaying(actualLabel);
+    return l10n.playbackQualityFallback(actualLabel, preferred);
   }
 }
 
 extension PlaybackAudioQualityPresentation on PlaybackAudioQuality {
-  String get displayLabel => switch (this) {
-    PlaybackAudioQuality.low => 'Low',
-    PlaybackAudioQuality.standard => 'Standard',
-    PlaybackAudioQuality.high => 'HQ',
-    PlaybackAudioQuality.lossless => 'SQ',
+  String localizedDisplayLabel(AppLocalizations l10n) => switch (this) {
+    PlaybackAudioQuality.low => l10n.playbackActualLow,
+    PlaybackAudioQuality.standard => l10n.playbackQualityStandard,
+    PlaybackAudioQuality.high => l10n.playbackQualityHigh,
+    PlaybackAudioQuality.lossless => l10n.playbackQualityLossless,
   };
 }
 
-String playbackQualityTooltip(
+String localizedPlaybackQualityTooltip(
+  AppLocalizations l10n,
   AppPlaybackQualityPreference preference,
   PlaybackAudioQuality? actual,
 ) {
-  if (actual == null) return 'Playback quality: ${preference.shortLabel}';
-  final fallback = preference.matches(actual) ? '' : ' fallback';
-  return 'Playback quality: ${preference.shortLabel}. '
-      'Current source: ${actual.displayLabel}$fallback';
+  if (actual == null) {
+    return l10n.playbackQualityTooltipPreferred(preference.shortLabel);
+  }
+  final fallback = preference.matches(actual)
+      ? ''
+      : l10n.playbackQualityFallbackSuffix;
+  return l10n.playbackQualityTooltipCurrent(
+    actual.localizedDisplayLabel(l10n),
+    fallback,
+    preference.shortLabel,
+  );
 }
