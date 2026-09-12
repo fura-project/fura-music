@@ -276,3 +276,28 @@ plugins, a sidecar, credential extraction, stored-account automation, real
 account writes, or access-control bypass. NetEase real-account and visual/runtime
 acceptance remain Human evidence. Logical commits stay local; no push is
 authorized.
+
+## HD-026 — First-party Flutter localization
+
+**Status:** Accepted by explicit Human instruction on 2026-09-12.
+
+**Decision:** Localize every Fura-authored user-visible Flutter string through
+Flutter's official `gen_l10n` toolchain. English and Simplified Chinese are the
+first supported languages. Settings owns one persisted `system`, `english`, or
+`simplifiedChinese` preference, defaults existing installations to `system`,
+and applies changes live without replacing Provider sessions, retained catalog
+controllers, the Queue, current Track, or the app-lifetime playback host.
+Provider-owned content and protocol values remain unchanged.
+
+**Consequences:** Settings schema version 4 adds `localePreference`; versions
+1–3 migrate to `system`, and an unknown version-4 locale value falls back to
+`system` while retaining every other valid setting. Generic Chinese, `zh-Hans`,
+`zh-CN`, and `zh-SG` resolve to Simplified Chinese. Traditional Chinese regions
+and scripts currently fall back to English because no reviewed Traditional
+Chinese catalog exists. Rust, generated Bridge protocol values, upstream song,
+Artist, Album, Playlist, comment and lyric content, codec/quality abbreviations,
+identifiers, logs, URLs, and native pre-`runApp` AudioService strings are outside
+translation scope. Native startup strings remain a documented follow-up rather
+than risking Android media-service initialization. Human acceptance is required
+for Chinese wording and final visual rhythm; machine checks cannot self-accept
+either.

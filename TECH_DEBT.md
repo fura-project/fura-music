@@ -178,4 +178,41 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Trigger condition:** Reassess after a Human large-account latency observation, a service response above the derived caps, or reliable evidence of a true server-side paging operation.
 
+## TD-012 — Native startup media strings are not locale-aware
+
+**Status:** Open
+
+**Problem:** Flutter presentation now resolves English and Simplified Chinese at
+runtime, but the app-lifetime `AudioServiceConfig` is created before `runApp`.
+Its Android notification channel name, description, and media-error message
+therefore remain stable English strings. Platform secure-storage item labels are
+also configured before a Flutter localization context exists. Native window
+titles and application labels intentionally keep the untranslated `fura music`
+brand.
+
+**Why accepted:** Moving locale selection ahead of playback-service startup
+would couple presentation settings to the system-media owner and could recreate
+the Android lifecycle defect fixed by the app-scoped playback host. The current
+strings do not alter playback, account, Queue, or Provider behavior, and release
+identity localization has not been authorized.
+
+**Impact:** First-party Flutter UI follows the selected language, while Android
+system settings may continue to show an English playback-channel description.
+The product name remains consistent across native shells.
+
+**Risk:** A user may see mixed-language copy outside Flutter. A future attempt
+to localize it could accidentally initialize a second AudioService handler or
+replace the active playback owner during a language change.
+
+**Suggested solution:** When native metadata localization is authorized, resolve
+the persisted effective locale once before the single AudioService
+initialization and load the corresponding generated catalog without a
+`BuildContext`. Keep one handler for the full app lifetime; changing language
+must not recreate it. Use platform-native resource catalogs only where release
+identity requirements justify them.
+
+**Trigger condition:** Reassess before localized release metadata is required,
+when notification-channel copy becomes a product acceptance criterion, or when
+the playback plugin exposes a safe in-place localized metadata update.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

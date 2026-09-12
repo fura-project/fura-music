@@ -1,15 +1,36 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: MIXED
+  work_domain: UI
   state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
-  active_workstream: BUILT_IN_PROVIDER_UI_INTEGRATION
-  current_task: HD_025_HUMAN_ACCEPTANCE
-  next_action: HUMAN_NETEASE_ACCOUNT_AND_VISUAL_RUNTIME_REVIEW
+  active_workstream: FIRST_PARTY_FLUTTER_LOCALIZATION
+  current_task: HD_026_HUMAN_ACCEPTANCE
+  next_action: HUMAN_LOCALIZATION_COPY_AND_VISUAL_REVIEW
 ---
 
 # Current State
+
+- **2026-09-12 HD-026 localization machine checkpoint:** official Flutter
+  `gen_l10n` now owns an 843-message English template and matching Simplified
+  Chinese candidate catalog. Settings schema v4 persists Follow system,
+  English or Simplified Chinese; versions 1–3 and unknown locale values migrate
+  safely to Follow system without discarding other settings. Locale changes
+  preserve the selected Provider, authentication, loaded catalog/search state,
+  Queue, current Track, playback stage and app-lifetime playback host. The
+  first-party Flutter surfaces, failures, dialogs, snackbars, tooltips,
+  accessibility labels and announcements use semantic ARB keys, while
+  Provider-owned content and protocol values remain untranslated. QQ/NetEase ×
+  English/Chinese desktop, compact, authentication, Settings, Search, Library,
+  Home and expanded Now Playing candidates were rendered with a real CJK font
+  and inspected for overflow; they remain review artifacts, not Human
+  acceptance. Final gates pass: `flutter gen-l10n`, formatting of 246 Dart
+  files, `dart analyze`, all 552 Flutter tests, the native Settings persistence
+  integration test, Linux Release and Android ARM64 Release (44.4 MB APK).
+  Native pre-`runApp` AudioService/window strings remain TD-012. Starting HEAD
+  was `ca6d33ce3ead07ad6f16f099ce1ad9bbeb6d0964`; all changes remain local and
+  unpushed. Simplified Chinese wording, visual rhythm and physical-device
+  behavior remain `HUMAN_REVIEW`; no Human acceptance is claimed.
 
 - **2026-09-12 Android system-playback ownership correction:** maintainer
   physical-device evidence showed that the prior registered Android media
@@ -37,7 +58,8 @@ execution:
   lock-screen, headset, Activity/task removal and background-resume behavior
   remain `HUMAN_REVIEW`; process-death Queue restoration remains out of scope.
   Starting HEAD was `4c0cfad2ba7b694902ed0dc3b87fe36e8c8b96de`;
-  changes remain uncommitted and unpushed.
+  the focused correction is retained in local commit `ca6d33c` and remains
+  unpushed.
 
 - **2026-09-12 HD-025 built-in Provider UI integration machine checkpoint:**
   the existing Material 3 product surfaces now serve QQ Music and NetEase Cloud

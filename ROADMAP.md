@@ -2,6 +2,35 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Machine-complete Review Workstream — First-party Flutter localization (HD-026)
+
+**Goal:** provide a coherent English and Simplified Chinese product UI with a
+persisted system-following default and live language switching.
+
+**Bounded exit criteria:** official `gen_l10n` configuration; Settings schema
+v4 migration and rollback; explicit locale resolution; all Fura-authored Flutter
+copy, accessibility labels and typed failure presentation moved into semantic
+ARB keys; state-preserving runtime switching; English/Chinese and QQ/NetEase
+widget coverage; hardcoded-literal audit; representative desktop/compact review
+frames; Flutter format, analysis, tests, Linux Release and Android ARM64 Release.
+
+**Boundaries:** no Rust localization, raw JSON bridge, localization service,
+state/navigation framework, font bundle, Provider-content translation, native
+startup restructuring, account automation, real-account write, redesign, or
+push. Existing HD-025 NetEase account/visual acceptance and Android system-media
+physical-device checks remain independent Human evidence.
+
+**2026-09-12 machine checkpoint:** all bounded implementation exit criteria are
+complete. The generated catalogs contain 843 matching messages; schema-v4
+migration, locale resolution, serialized Settings writes, localized Settings
+search and state-preserving live switching are covered directly. Formatting of
+246 Dart files, `dart analyze`, all 552 Flutter tests, native Settings storage,
+Linux Release and Android ARM64 Release pass. QQ/NetEase × English/Chinese
+review frames have no observed overflow and remain Human review candidates.
+The workstream now waits only for Human Simplified Chinese copy, visual rhythm
+and representative physical-device acceptance; it contains no remaining
+autonomous Flutter localization implementation item.
+
 ## Machine-complete Review Workstream — Existing UI integration for built-in Providers (HD-025)
 
 **Goal:** expose the completed QQ Music and NetEase Cloud Music Core through

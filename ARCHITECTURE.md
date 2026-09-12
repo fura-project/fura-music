@@ -21,6 +21,15 @@ Rust application/core API
 
 There is no runtime HTTP sidecar between Flutter and the Rust core.
 
+HD-026 keeps localization entirely in Flutter presentation. Official
+`gen_l10n` catalogs supply English and Simplified Chinese copy, while Settings
+schema v4 persists a `system`, `english`, or `simplifiedChinese` preference.
+`MaterialApp` resolves system locales explicitly and rebuilds only presentation
+when that preference changes; app-lifetime Provider dependency bundles,
+credential owners, the Queue/current Track, and the playback host retain their
+identities. Domain and Provider values remain semantic or upstream-owned rather
+than carrying translated strings across the typed Bridge.
+
 HD-023 authorizes exactly two built-in Providers. `BuiltInProvider` has deterministic QQ/NetEase choices, and `BuiltInMediaSources` dispatches the coordinator to exactly the owning resolver. HD-025 exposes those two fixed choices through one persisted Flutter catalog/account selection while retaining QQ Music as the default. No independent registry, runtime discovery, cross-provider matching, or fallback exists. Bootstrap returns a presentation-safe two-Provider inventory; Flutter selects one small concrete dependency bundle for Home, Discover, Search, Library and authentication. Queue playback, lyrics, comments, MV and related reads continue to dispatch from the owning entity's exact `ProviderId`, not from the current Settings selection. NetEase HTTPS initialization is lazy on its exact media route, so initialization failure cannot disable QQ playback. `RankingTracksPage` carries an optional raw continuation offset and omitted-row count, allowing Core to advance through unavailable NetEase ranking entries without confusing usable row count with upstream positions.
 
 ## Dependency direction
