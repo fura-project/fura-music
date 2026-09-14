@@ -169,7 +169,7 @@ jobs:
       - name: Install Linux build and runtime dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libgtk-3-dev libsecret-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good libmpv-dev
+          sudo apt-get install --yes --no-install-recommends libgtk-3-dev libsecret-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good libmpv-dev
 
       - name: Report Linux build toolchain
         run: |

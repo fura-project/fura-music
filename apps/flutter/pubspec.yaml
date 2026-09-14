@@ -49,6 +49,9 @@ dependencies:
   media_kit_video: 2.0.1
   shared_preferences: 2.5.5
   url_launcher: 6.3.2
+  # HD-027: exact pin while the cross-platform official-login candidate is
+  # still subject to the Linux WebKitGTK runtime gate.
+  webview_all: 1.4.1
 
 dev_dependencies:
   flutter_test:
