@@ -145,22 +145,25 @@ The signed-in account-summary capability reuses the same bounded `GetLoginUserIn
 
 Authentication presentation keeps asynchronous status/error information separate from controls. The signed-out Shell opens one adaptive dialog offering QQ QR or WeChat QR without collecting a password. Active QR waiting, scanned-awaiting-confirmation, reconnecting, saved-session, and terminal copy expose only their title and explanation as one semantic live region; the QR image, cancel, retry, cleanup, and method-selection controls remain independent semantic nodes. This is presentation behavior only and does not change credential classification, polling, retry authority, or protocol state.
 
-HD-027 adds one bounded NetEase official-Web candidate behind the existing
-`OfficialWebAuthenticationGateway`. `PlatformNeteaseOfficialWebLoginBroker`
-owns a short-lived `webview_all` session and exposes only its visible Widget
-and coarse presentation stage; no `BuildContext` enters the gateway. The full-
-screen Material login surface can therefore mount and detach the native view
-without replacing the app-lifetime Queue/playback owner. Exact HTTPS
-`music.163.com` is the only current top-level Web origin. Native Cookie access
-selects only `MUSIC_U` and optional `__csrf`, constructs bounded mutable bytes,
-then closes and clears WebView data. Those bytes still enter the existing Rust
-pending-candidate staging and Account Summary verification path; they never
-authenticate or enter the NetEase-only vault directly. Cancel, route close,
-Provider replacement, disposal and sign-out invalidate generations and
-suppress late Cookie/verification results. Direct QR, its external official
-confirmation handoff, SMS and QQ authentication remain independent rollback
-paths. Linux promotion remains Human-gated because the package still uses
-WebKitGTK; see `docs/research/netease-webview-all-trial.md`.
+HD-029 replaces the rejected Linux WebKitGTK official-login default behind the
+existing `OfficialWebAuthenticationGateway`. Linux launches a validated,
+already-installed Chromium-family browser with a fresh Fura-owned `0700`
+profile and loopback-only ephemeral CDP. Rust reads browser-level
+`Storage.getCookies`, selects only exact-domain `MUSIC_U` and optional
+`__csrf`, closes the browser, deletes the profile, stages the pending Provider
+candidate and performs normal Account Summary verification. Raw browser Cookie
+values never cross into Dart or logs. The full-screen Material presentation
+exposes only a system-browser waiting state and coarse outcome; no
+`BuildContext` or native browser view enters the gateway. One Rust async gate
+serializes attempts, while cancel, route close, Provider replacement, disposal
+and sign-out invalidate generations; sign-out waits for profile cleanup.
+Transient verification retains the existing pending candidate for explicit
+retry, while rejection or cleanup failure saves nothing. Linux never falls
+back to WebKitGTK when a validated browser is unavailable. Non-Linux platforms
+retain the HD-027 broker pending their own evidence. Direct QR, its external
+official confirmation handoff, SMS, QQ authentication, and app-lifetime
+Queue/playback ownership remain independent. See
+`docs/research/netease-linux-system-chromium-login.md`.
 
 Explicit sign-out is local and ordered across the same boundary; it does not invent a remote QQ Music account-logout protocol. `QQMusicProvider` cancels the current QR generation, clears restoration-verification authority, and replaces authenticated, pending, or expired credential state with signed out under the existing lock order. Late verification or Provider work therefore resolves as replaced instead of reviving the session. The synchronous Bridge reports only whether Core performed that transition. Dart deletes the one serialized platform-vault entry only after Core succeeds: Core failure retains both current login and vault, while vault failure leaves Core signed out, reports that restart may restore the saved copy, and offers cleanup retry. `LoginController` owns one in-flight sign-out Future, so repeated activation cannot duplicate Core/vault work; retry presentation stays visible and disabled while that operation runs, and an unexpected gateway exception is reduced to the same Core-unavailable state. The authenticated page confirms the action and stops foreground playback while vault deletion is pending.
 

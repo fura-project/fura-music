@@ -372,3 +372,31 @@ not excluded. The stop rule made the Cookie phase `NOT_RUN`; no helper or
 production Tauri dependency was created. The WebKitGTK Linux embedded-login
 line remains rejected, and any non-WebKit helper/backend is a new Human
 decision. No push is authorized.
+
+## HD-029 — Isolated Linux system-Chromium NetEase official login
+
+**Status:** Accepted by explicit Human instruction on 2026-09-14; machine
+candidate complete, real-account acceptance pending.
+
+**Decision:** Linux may use an already-installed native Chromium-family browser
+for official NetEase login only through a Fura-owned, attempt-scoped `0700`
+profile and localhost-only ephemeral CDP. Discovery accepts a root-owned
+executable under `/usr` or `/opt` in fixed Chrome/Chromium priority order. Fura
+must never inspect/reuse a default profile, Cookie database, existing browser
+session, extension, WebKit/CEF runtime, automation driver, TLS/sandbox bypass,
+or risk-control workaround. Only exact-domain `MUSIC_U` and optional `__csrf`
+may enter the Rust Provider pending-candidate path; raw values may not cross
+into Dart or logs.
+
+**Observed consequence:** The repository-external probe passed synthetic
+HttpOnly Cookie capture and fresh-profile isolation, official-page no-login
+smoke, and 20/20 sequential launch/CDP/official-target/clean-close/profile-
+delete cycles with zero force, crash, or leftover process. The Linux production
+candidate therefore replaces the rejected WebKitGTK default behind the
+existing official-Web gateway. Direct/external QR and SMS remain available.
+Cleanup precedes staging; transient Provider verification retains the pending
+candidate for explicit retry, while rejection and cleanup failure save nothing.
+The Agent did not perform a real login, so the result remains `HUMAN_REVIEW`,
+not accepted account capability. See
+[the HD-029 evidence](docs/research/netease-linux-system-chromium-login.md).
+No push is authorized.

@@ -2,14 +2,38 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: AWAITING_HUMAN_DECISION
+  state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
-  active_workstream: NETEASE_LINUX_EMBEDDED_LOGIN_DECISION
-  current_task: NETEASE_TAURI_WEBKIT_COMPARISON_COMPLETE
-  next_action: HUMAN_CHOOSE_NON_WEBKIT_LINUX_ROUTE_OR_NO_EMBEDDED_LOGIN
+  active_workstream: NETEASE_LINUX_SYSTEM_CHROMIUM_LOGIN
+  current_task: NETEASE_SYSTEM_CHROMIUM_MACHINE_CANDIDATE_COMPLETE
+  next_action: HUMAN_VERIFY_REAL_LOGIN_RESTORE_AND_CLEANUP
 ---
 
 # Current State
+
+- **2026-09-14 HD-029 isolated system-Chromium candidate:** the explicitly
+  authorized repository-external Rust probe selected the root-owned native
+  `google-chrome 152.0.7977.82-1`, used only fresh `0700` profiles and
+  loopback-only ephemeral CDP, and passed synthetic HttpOnly Cookie capture,
+  fresh-profile isolation, an official-page no-login smoke, and 20/20 complete
+  launch/CDP/official-target/clean-close/profile-delete cycles with zero force,
+  crash, or leftover process. Production Linux now routes the existing
+  official-Web action through the same Rust-owned architecture and never falls
+  back to rejected WebKitGTK. `Storage.getCookies` retains only exact-domain
+  `MUSIC_U` and optional `__csrf`; raw values never enter Dart or logs and are
+  overwritten after Provider staging. Browser/profile cleanup completes before
+  staging; the existing account endpoint verifies the pending candidate;
+  transient failures retain it for explicit retry, while rejection/cleanup
+  failure saves nothing. The Linux UI truthfully waits for a separate private
+  system-browser window. Direct/external QR, SMS, QQ, vault, Queue and playback
+  ownership are unchanged. Pinned FRB 2.13.0 generation, both locked Rust
+  workspace modes (554 passed / 23 explicit live-or-Human ignores), strict
+  Clippy, Dart analysis, 589 Flutter tests, and Linux Release plus ELF closure
+  pass. The Release bundle grew by 888,997 bytes (1.9542%) without bundling a
+  browser engine. No real login/account action was performed, so
+  final acceptance remains `HUMAN_REVIEW`. See
+  [the HD-029 evidence](docs/research/netease-linux-system-chromium-login.md).
+  No push.
 
 - **2026-09-14 HD-028 isolated Tauri/Wry comparison complete:** a repository-
   external Tauri 2.11.5 / Wry 0.55.1 probe used the same Wayland session,

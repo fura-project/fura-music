@@ -2,6 +2,35 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Human Review Workstream — isolated Linux system-Chromium login (HD-029)
+
+**Goal:** replace the evidence-rejected Linux WebKitGTK official-login route
+with an already-installed system Chromium-family browser while keeping every
+credential and lifecycle boundary explicit.
+
+**Machine checkpoint, 2026-09-14:** the repository-external Rust prerequisite
+passed synthetic HttpOnly Cookie/fresh-profile isolation, exact official-page
+no-login smoke, and 20/20 fresh-profile lifecycle cycles without force, crash,
+or residue. Production Linux now launches the official page with a Fura-owned
+`0700` profile and loopback-only ephemeral CDP, captures only exact-domain
+`MUSIC_U`/optional `__csrf` inside Rust through `Storage.getCookies`, deletes
+the browser/profile before staging, and uses the existing pending-candidate,
+account-verification and vault path. Linux does not fall back to WebKitGTK when
+the validated browser is unavailable. Direct/external QR and SMS remain peer
+routes.
+
+**Next gate:** Human manually completes one real login, confirms the intended
+account and clean-process restore, then cancels a second attempt and confirms
+the isolated window/profile/process are gone. This is the only remaining gate
+for this candidate; it cannot be replaced by synthetic tests or Agent account
+automation.
+
+**Boundaries:** no default browser profile/session access, Cookie database,
+extension, bundled browser, WebKit/CEF helper, driver/automation framework,
+password/SMS/CAPTCHA automation, TLS/sandbox/risk-control bypass, QQ refactor,
+new vault, sidecar, player/Queue change, or push. Details are in
+[the HD-029 evidence](docs/research/netease-linux-system-chromium-login.md).
+
 ## Completed Diagnostic — isolated Tauri/Wry WebKitGTK comparison (HD-028)
 
 **Goal:** determine whether the fatal Linux official-login failure requires

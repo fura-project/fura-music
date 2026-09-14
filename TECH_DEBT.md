@@ -217,7 +217,8 @@ the playback plugin exposes a safe in-place localized metadata update.
 
 ## TD-013 — NetEase official login inherits Linux WebKitGTK risk
 
-**Status:** Open; Linux candidate rejected
+**Status:** Resolved for the Linux login route by HD-029; cross-platform plugin
+packaging and non-Linux WebView evidence remain open
 
 **Problem:** HD-027's pinned `webview_all 1.4.1` candidate provides a common
 visible WebView, native HttpOnly Cookie access and deterministic session close,
@@ -237,10 +238,12 @@ page finish. The candidate is therefore evidence-rejected rather than accepted
 for production, and switching Flutter WebView wrappers cannot address the
 measured fatal path.
 
-**Impact:** Linux packages again require WebKitGTK 4.1 development/runtime
-libraries, and the official login route can increase binary/runtime dependency
-surface even though playback, Provider and credential ownership remain
-unchanged.
+**Impact:** The rejected WebKitGTK runtime is no longer selected for Linux
+official login. The `webview_all` dependency remains for non-Linux platforms,
+whose runtime acceptance is independent; its current cross-platform package
+may still retain WebKitGTK build/runtime dependencies in Linux artifacts even
+though Fura does not create that session there. Linux now adds target-scoped
+CDP/process dependencies but no bundled browser runtime.
 
 **Risk:** Flutter's default transport produces a blank page and continuous
 DMA-BUF import failures. Tauri default did render and complete 12 strict cycles,
@@ -250,14 +253,17 @@ and Tauri hosts. Real security-verification pages, long-lived sessions, another
 compositor or another GPU/driver add more unknowns. Shipping either observed
 WebKit path would expose users to a broken login or process loss.
 
-**Suggested solution:** Keep external QR as the supported Linux rollback and
-make a Human decision between a CEF/non-WebKit backend and no embedded Linux
-login. Do not spend another bounded experiment on a third WebKitGTK wrapper.
-Retest WebKitGTK only after a relevant WebKitGTK/NVIDIA-driver change; do not
+**Suggested solution:** Implemented by HD-029 as a Fura-owned disposable
+profile in the installed system Chromium-family browser, with loopback-only
+ephemeral CDP, exact Cookie minimization, Rust verification, and required
+cleanup. Keep external QR as rollback. Do not restore WebKitGTK on Linux or
 stack renderer flags on the current build.
 
-**Trigger condition:** Reassess after a relevant WebKitGTK/NVIDIA package
-upgrade, a separately accepted non-WebKit decision, or before a Linux release
-claims embedded official Web login support.
+**Trigger condition:** Reopen the Linux portion if Human login/cancel/restore
+acceptance fails, browser/CDP policy changes, cleanup leaves an owned profile,
+or a supported Linux package lacks an acceptable native Chrome/Chromium binary.
+Reassess non-Linux WebView behavior separately before claiming those platforms;
+remove the unused Linux plugin edge only when Flutter dependency packaging can
+do so without deleting the retained non-Linux route.
 
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.
