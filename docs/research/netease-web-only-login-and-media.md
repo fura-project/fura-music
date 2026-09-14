@@ -69,3 +69,28 @@ current tree and successfully starts at least one ordinary entitled Track. A
 null source, trial-only source, regional/copyright restriction, or individual
 account entitlement remains a valid per-Track stop and must not be described as
 an all-catalog playback fix.
+
+## 2026-09-15 Android transport addendum
+
+The authenticated request compatibility above was necessary but did not cover
+the transport policy of its returned CDN URL. A separate opt-in, anonymous and
+strictly bounded observation found that the current media response used plain
+HTTP on the exact host `m701.music.126.net`, format `M4a`, with a 1200-second
+TTL. HTTP and HTTPS Range requests to the same path/query both returned status
+206, 4096 bytes and an MP4 `ftyp` signature. Neither variant required an extra
+header.
+
+The NetEase client now normalizes only strict first-party media hosts matching
+`m` plus 1–4 ASCII digits under `.music.126.net` from HTTP to HTTPS. It preserves
+the complete path/query, retains existing HTTPS responses and rejects
+userinfo, explicit ports, fragments, foreign schemes, other NetEase labels and
+lookalike suffixes. This is a Provider-private rule; it does not reuse QQ's CDN
+allowlist, enable global Android cleartext traffic, add a proxy, download the
+media through Flutter, or substitute another source.
+
+After the change, the same bounded observation reports an HTTPS source while
+the HTTP/HTTPS A/B still returns equivalent media bytes. Unit tests retain the
+existing authenticated-media, response-code, item-code, trial/null-source,
+format, quality and short-TTL compatibility paths. Real-account playback on a
+physical Android device remains the independent Human gate described by the
+[runtime checklist](android-system-playback-runtime-checklist.md).

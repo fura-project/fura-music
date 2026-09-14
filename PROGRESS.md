@@ -1,15 +1,51 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: UI
+  work_domain: MIXED
   state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
-  active_workstream: RESPONSIVE_SHELL_AND_COLLECTION_HEADERS
-  current_task: LARGE_SHELL_SETTINGS_AND_ARTIST_COLLAPSE_MACHINE_FIX_COMPLETE
-  next_action: HUMAN_REVIEW_LARGE_SCREEN_MOTION_AND_COLLECTION_COLLAPSE
+  active_workstream: ANDROID_SYSTEM_AND_NETEASE_PLAYBACK
+  current_task: HD_030_MACHINE_FIX_COMPLETE
+  next_action: HUMAN_ANDROID_RUNTIME_MATRIX
 ---
 
 # Current State
+
+- **2026-09-15 HD-030 Android system and NetEase playback machine pass:** the
+  two failures were diagnosed independently while retaining one root
+  `AppPlaybackHost`, one Rust positional Queue, one
+  `QueuePlaybackController`, one handler and the existing audioplayers engine.
+  `ANDROID_SYSTEM_PLAYBACK` source audit found that
+  `audioplayers_android 5.3.0` independently requested
+  `AUDIOFOCUS_GAIN`, while `audio_session 0.2.4` was configured but never
+  explicitly activated. The player context now disables plugin-owned focus;
+  `audio_session` is activated before play and released on pause, stop,
+  completion, failure and disposal. `audio_service 0.18.19` still owns the
+  Android Service, MediaSession, notification, wake lock and media-button
+  callbacks, with a tested initialization success/failure seam and secret-safe
+  initialization/state/command/engine diagnostics. For
+  `NETEASE_ANDROID_MEDIA_PLAYBACK`, a bounded anonymous observation found an
+  upstream HTTP source at exact host `m701.music.126.net`, M4A format and
+  1200-second TTL; same-path HTTP/HTTPS 4 KiB Range requests both returned 206
+  and an MP4 signature without extra headers. The NetEase Rust boundary now
+  upgrades only strict `m` + 1–4 digits + `.music.126.net` HTTP hosts to HTTPS,
+  preserves path/query, and rejects user-info, ports, fragments, foreign
+  schemes/labels and lookalikes. The post-fix live observation reports HTTPS
+  with the same equivalent A/B result. Rust format, 560 tests with 26 explicit
+  live-or-Human tests ignored, strict
+  workspace/all-target Clippy, Dart formatting of 253 files, direct Dart
+  analysis, all 601 Flutter tests, the Linux real-session system-playback
+  integration and Linux Release build, plus Android ARM64 Debug/Release and
+  Release lint pass. The Release
+  APK is 45,033,904 bytes, min 24/target 36, v2 signed with the development
+  Debug certificate, contains only `arm64-v8a` including
+  `librust_lib_flutterustmusic.so`, and passes 16 KB ZIP/ELF alignment checks.
+  Lint reports 0 errors and the existing Gradle-version warning. No Android
+  device is attached, so notification, lock screen, media buttons,
+  focus/interruption, background/task lifecycle and real-account NetEase audio
+  progress remain the explicit
+  [Human runtime matrix](docs/research/android-system-playback-runtime-checklist.md).
+  Build caches were retained; no new technical debt was opened. No push.
 
 - **2026-09-14 responsive Shell, Settings motion and Artist collapse:** the
   large-screen top bar is now one persistent Shell-owned surface across Home

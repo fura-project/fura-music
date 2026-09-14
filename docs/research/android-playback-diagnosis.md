@@ -18,6 +18,57 @@
 
 本轮已在 Rust QQ Music client 内落地该修复：可信 CDN base 会先通过严格 host/URL 结构校验，再统一规范化为 HTTPS；Flutter 与 Android manifest 均未放开明文流量。仓库当前没有连接 Android 设备，因此最终真机确认仍属于 Human Review；在真机观察到 QQ 远程媒体播放进度大于 0 之前，不应把问题标记为完全解决。
 
+## 2026-09-15 补充诊断：系统播放焦点与网易云 Android 媒体
+
+HD-030 将两个现象作为独立故障分支处理，没有用网易云修复代替系统
+播放修复，也没有用系统通知出现代替真实音频进度。
+
+### A. Android 系统播放生命周期
+
+再次核对锁定依赖源码后，root-owned `AppPlaybackHost`、唯一 Queue、
+`ProjectSystemAudioHandler`、manifest Service/Receiver 和原生 MediaSession
+生命周期仍然成立。`audio_service` 0.18.19 会在 handler 发布 playing
+状态时激活 MediaSession、进入 media foreground service 并持有 wake lock；
+通知、锁屏和媒体键再通过同一 handler 回到 `QueuePlaybackController`。
+
+新发现的实际冲突位于音频焦点：`audioplayers_android` 5.3.0 默认用
+`AUDIOFOCUS_GAIN` 自己请求焦点，而 Fura 又把焦点/中断策略交给
+`audio_session` 0.2.4；同时旧代码只执行
+`AudioSession.configure(music)`，没有在播放前显式 `setActive(true)`。
+这会使解码播放器与系统会话拥有不一致的焦点生命周期。
+
+修复保持原 owner 不变：加载源之前把 `audioplayers` Android context 的
+focus 设置为 `none`，播放前由 `audio_session` 显式激活，暂停、停止、完成、
+失败和 dispose 时释放。没有增加 `just_audio_background`、第二个播放器、
+第二个 Queue、第二个 handler 或自制 Android Service。初始化、配置、状态
+发布、系统命令和引擎阶段增加了去敏诊断；`AudioService.init` 也增加了
+可注入的成功/失败测试缝，失败仍只降级为包住同一 controller 的前台播放。
+
+### B. 网易云 Android 媒体传输
+
+一次显式开启、匿名、严格限量的在线探测得到以下粗粒度结果：
+
+- 当前媒体 API 返回 `http`、精确 host `m701.music.126.net`、格式 `M4a`、
+  TTL 1200 秒；
+- 对同一个 path/query 分别用 HTTP 和 HTTPS 发
+  `Range: bytes=0-4095`，两者均为 206、4096 bytes、MP4 `ftyp` 签名；
+- 两个变体都不需要额外 Referer/User-Agent/Cookie header；API 的
+  `Content-Type` 为 `audio/mpeg`，但签名与既有 M4A 映射一致。
+
+因此 Android 的确定性阻塞是网易云把短期音频地址以明文 HTTP 返回，
+不是当前样本缺少 header，也不是应该全局放开 cleartext。修复位于网易云
+Rust 私有边界：只有形如 `m` + 1–4 个 ASCII 数字 +
+`.music.126.net` 的精确自有 CDN host 可以从 HTTP 原位升级为 HTTPS；
+path/query 完整保留，userinfo、显式端口、fragment、伪装后缀、其它 label
+和其它 scheme 均拒绝。已是 HTTPS 的合法响应继续原样保留。QQ 的 host
+规则未复用，也没有 source substitution、代理或媒体预下载。
+
+修复后的同一在线测试输出 HTTPS，HTTP/HTTPS A/B 仍均取得相同的 206
+和媒体签名。该结果证明 transport 规范化成立，不证明用户账号下每首歌曲
+都有播放权益。真实登录、实际音频进度和系统控件反向操作仍必须按
+[Android runtime checklist](android-system-playback-runtime-checklist.md)
+由 Human 在物理设备上验收。
+
 ## 证据强度与调查边界
 
 | 结论 | 强度 | 依据 |
@@ -379,14 +430,15 @@ APK 的主要体积来自 Flutter engine、libmpv、Rust Core 与 app snapshot�
 | 根因定位 | 高可信完成：HTTP 媒体源与 Android cleartext policy 冲突 |
 | 推荐修复设计 | 完成 |
 | 播放代码修复 | 完成：可信 QQ CDN 严格校验并统一输出 HTTPS |
-| 系统媒体适配修复 | 机器侧完成：改为 app-lifetime `AppPlaybackHost`，页面不再拥有/拆卸系统播放路径；暂停后 Resume、通知图标与去敏诊断保留 |
-| QQ/Provider 自动化回归 | 通过：完整 Rust workspace/all-target 测试、format 与 strict Clippy |
-| Flutter 自动化回归 | 通过：528 项测试，`dart analyze` 无问题，237 文件格式检查通过 |
-| 最新 ARM64 Release 构建 | 通过：43,768,152 bytes、min 24、target 36、仅 arm64-v8a |
-| APK 签名与对齐 | v2 签名和 16 KB zip alignment 通过；仍为开发 debug certificate |
+| 系统媒体适配修复 | 机器侧完成：app-lifetime owner 保持不变；`audio_session` 成为唯一焦点 owner，`audioplayers` 不再重复请求焦点；AudioService 初始化/状态/命令与引擎阶段有去敏诊断和成功/失败回归 |
+| 网易云 Android transport 修复 | 机器侧完成：严格自有 CDN HTTP→HTTPS 规范化；同 URL 的 HTTP/HTTPS Range A/B 均为 206、4096 bytes、MP4 签名；无额外 header |
+| Rust 自动化回归 | 通过：560 项、0 失败，26 个显式 live/Human 测试保持 ignored；workspace/all-target format 与 strict Clippy 通过 |
+| Flutter 自动化回归 | 通过：601 项测试，`dart analyze` 无问题，253 文件格式检查通过；Linux real-session system-playback integration 通过 |
+| 最新 ARM64 Debug/Release 构建 | 均通过；Release 45,033,904 bytes、min 24、target 36、仅 arm64-v8a，含 `librust_lib_flutterustmusic.so` |
+| APK 签名与对齐 | v2 签名；16 KB ZIP alignment 及全部 native ELF LOAD alignment 通过；仍为开发 Debug certificate |
 | Android Release lint | 通过：0 error、1 个 Gradle 版本提示 warning |
-| Android 真机播放验证 | 未执行：当前无已连接设备 |
-| Android 系统控件真机验证 | 未完成：旧实现已有失败报告；新 owner 路径等待重新安装本轮 APK 后 Human Review |
+| Android 真机播放验证 | 未执行：当前无已连接设备；QQ 与网易云真实媒体进度均不可由构建结果替代 |
+| Android 系统控件真机验证 | 未完成：旧实现已有失败报告；焦点单 owner 修复等待重新安装本轮 APK 后按 checklist Human Review |
 | 问题最终关闭 | 未完成，等待真机远程媒体进度、系统控件反向操作与后台生命周期 Human Review |
 
 ## Sources

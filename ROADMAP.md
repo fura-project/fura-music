@@ -2,6 +2,38 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Human Review Workstream — Android system and NetEase playback (HD-030)
+
+**Goal:** finish the machine-side diagnosis and minimum repair for two
+independent Android branches, while preserving the single root-owned Queue and
+playback controller path.
+
+**Machine checkpoint, 2026-09-15:** `ANDROID_SYSTEM_PLAYBACK` retained the
+existing `audio_service` 0.18.19 Android Service/MediaSession implementation
+and root `AppPlaybackHost`. Locked plugin-source audit found that
+`audioplayers_android` independently requested `AUDIOFOCUS_GAIN` while
+`audio_session` was configured but never explicitly activated. The engine now
+disables plugin-owned focus before source load and activates/releases the
+single `audio_session` with playback lifecycle. Initialization, state,
+commands, resolution and engine phases have secret-safe diagnostics and a
+tested AudioService success/failure seam.
+
+`NETEASE_ANDROID_MEDIA_PLAYBACK` independently observed an upstream HTTP
+source at exact first-party host `m701.music.126.net`, M4A format and 1200-second
+TTL. Same-path HTTP/HTTPS 4 KiB Range probes both returned 206 and an MP4
+signature with no extra headers. The NetEase Rust client now upgrades only the
+strict `m` + 1–4 digits + `.music.126.net` HTTP form to HTTPS while preserving
+path/query and rejecting ports, user-info, fragments, foreign labels/schemes
+and lookalikes. No global cleartext, proxy, source substitution, second player,
+Queue, handler or engine migration was introduced.
+
+**Next gate:** both branches remain `HUMAN_REVIEW`. A physical Android device
+must show advancing NetEase playback and then verify notification, lock-screen,
+media buttons, focus/interruption, becoming-noisy and background/task behavior
+through the same session. Use the
+[runtime checklist](docs/research/android-system-playback-runtime-checklist.md);
+build or desktop evidence cannot close this gate.
+
 ## Human Review Workstream — isolated Linux system-Chromium login (HD-029)
 
 **Goal:** replace the evidence-rejected Linux WebKitGTK official-login route

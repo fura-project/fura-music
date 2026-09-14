@@ -400,3 +400,29 @@ The Agent did not perform a real login, so the result remains `HUMAN_REVIEW`,
 not accepted account capability. See
 [the HD-029 evidence](docs/research/netease-linux-system-chromium-login.md).
 No push is authorized.
+
+## HD-030 — Android physical system-playback diagnosis and completion
+
+**Status:** Accepted by explicit Human instruction on 2026-09-14.
+
+**Decision:** Complete the Android system-playback root-cause diagnosis,
+necessary minimal repair, secret-safe diagnostics and reproducible adb/physical
+acceptance flow. Observe the separate `ANDROID_SYSTEM_PLAYBACK` and
+`NETEASE_ANDROID_MEDIA_PLAYBACK` branches in the same device pass, but do not
+assume they share a cause. Rust remains the only positional Queue truth;
+`AppPlaybackHost` remains the only playback owner; `audio_service` owns Android
+MediaSession, foreground media notification and system callbacks;
+`audio_session` owns focus, interruptions and becoming-noisy policy; the
+existing `ForegroundAudioEngine` only decodes and outputs sound.
+
+**Consequences:** The machine pass may audit the exactly locked plugin/native
+sources, add an AudioService initialization success/failure seam, correct
+conflicting focus ownership, and normalize an evidenced strict first-party
+NetEase media CDN from HTTP to HTTPS while preserving path/query. It may not
+replace the engine with `just_audio`, MediaKit or ExoPlayer; add another
+`AudioPlayer`, Queue, handler or custom MediaSession framework; enable global
+cleartext; add a proxy/source substitution; persist Queue state across process
+death; add background download/autoplay; automate a real account; or change
+product task/background semantics. Android notification, lock-screen,
+media-button, focus/interruption, background lifecycle and real NetEase audio
+progress remain `HUMAN_REVIEW` until recorded on a physical device.
