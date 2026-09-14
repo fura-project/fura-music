@@ -584,6 +584,33 @@ void main() {
     expect(gateway.signOutCalls, 2);
   });
 
+  test(
+    'sign out keeps a failed browser cleanup explicit and retryable',
+    () async {
+      final gateway = _FakeGateway.immediate(
+        _successfulStart(_FakeLoginSession()),
+        authenticated: true,
+        signOutResults: [
+          CredentialSignOutResult.browserCleanupFailed,
+          CredentialSignOutResult.signedOut,
+        ],
+      );
+      final controller = LoginController(gateway);
+
+      expect(
+        await controller.signOut(),
+        CredentialSignOutResult.browserCleanupFailed,
+      );
+      expect(controller.stage, LoginStage.signOutBrowserCleanupFailed);
+      expect(controller.canRetrySignOut, isTrue);
+
+      expect(await controller.signOut(), CredentialSignOutResult.signedOut);
+      expect(controller.stage, LoginStage.idle);
+      expect(controller.canRetrySignOut, isFalse);
+      expect(gateway.signOutCalls, 2);
+    },
+  );
+
   test('core sign-out failure keeps the authenticated surface', () async {
     final gateway = _FakeGateway.immediate(
       _successfulStart(_FakeLoginSession()),

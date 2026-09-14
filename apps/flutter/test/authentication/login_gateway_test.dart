@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 
 void main() {
   test('imports vault bytes once and zeroes the mutable buffer', () async {
@@ -177,6 +179,81 @@ void main() {
     );
     expect(vault.deleteCalls, 1);
   });
+
+  test('NetEase sign out clears browser state before core and vault', () async {
+    final events = <String>[];
+    final vault = _FakeVault(events: events);
+    final broker = _FakeOfficialWebBroker(events: events);
+    final gateway = RustNeteaseAuthenticationGateway(
+      credentialVault: vault,
+      officialWebLoginBroker: broker,
+      credentialSignOutCore: () {
+        events.add('core');
+        return true;
+      },
+    );
+
+    expect(await gateway.signOut(), CredentialSignOutResult.signedOut);
+    expect(events, ['browser', 'core', 'vault']);
+    expect(broker.cancelCalls, 1);
+    expect(broker.clearCalls, 1);
+    expect(vault.deleteCalls, 1);
+  });
+
+  test('NetEase sign out reports website cleanup independently', () async {
+    final vault = _FakeVault();
+    final broker = _FakeOfficialWebBroker(clearResult: false);
+    final gateway = RustNeteaseAuthenticationGateway(
+      credentialVault: vault,
+      officialWebLoginBroker: broker,
+      credentialSignOutCore: () => true,
+    );
+
+    expect(
+      await gateway.signOut(),
+      CredentialSignOutResult.browserCleanupFailed,
+    );
+    expect(vault.deleteCalls, 1);
+  });
+}
+
+class _FakeOfficialWebBroker extends ChangeNotifier
+    implements OfficialWebLoginBroker {
+  _FakeOfficialWebBroker({this.clearResult = true, this.events});
+
+  final bool clearResult;
+  final List<String>? events;
+  int cancelCalls = 0;
+  int clearCalls = 0;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Listenable get presentationListenable => this;
+
+  @override
+  OfficialWebLoginPresentationStage get presentationStage =>
+      OfficialWebLoginPresentationStage.idle;
+
+  @override
+  Widget? get activeView => null;
+
+  @override
+  Future<Uint8List?> authenticate() async => null;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<bool> clearWebsiteData() async {
+    clearCalls += 1;
+    events?.add('browser');
+    return clearResult;
+  }
 }
 
 class _FakeVault implements CredentialVault {

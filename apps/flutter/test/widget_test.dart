@@ -5,7 +5,8 @@ import 'dart:typed_data';
 import 'dart:ui'
     show Clip, Locale, PointerDeviceKind, SemanticsAction, Size, Tristate;
 
-import 'package:flutter/foundation.dart' show ValueKey;
+import 'package:flutter/foundation.dart'
+    show ChangeNotifier, Listenable, ValueKey;
 import 'package:flutter/gestures.dart' show PointerHoverEvent, kSecondaryButton;
 import 'package:flutter/material.dart'
     show
@@ -69,6 +70,7 @@ import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -8762,6 +8764,118 @@ void main() {
   );
 
   testWidgets(
+    'NetEase official website login uses a visible full-size owned surface',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = _OfficialWebProviderWidgetGateway(
+        providerId: 'netease-cloud-music',
+      );
+      const playingTrack = PlaylistTrackSummary(
+        providerId: 'netease-cloud-music',
+        opaqueId: 'official-web-playback',
+        title: 'Playback survives official login',
+        artistNames: ['Fixture artist'],
+        durationSeconds: 180,
+      );
+      final queue = _WidgetPlaybackQueueGateway()
+        ..replace(tracks: const [playingTrack], currentIndex: 0);
+      final audioSession = _WidgetAudioSession();
+      final media = _SuccessfulWidgetMediaGateway();
+      final playbackHost = createForegroundAppPlaybackHost(
+        playbackQueueGateway: queue,
+        mediaResolutionGateway: media,
+        lyricGateway: const _WidgetLyricGateway(),
+        audioEngine: _WidgetAudioEngine(audioSession),
+      );
+      addTearDown(playbackHost.dispose);
+      final playbackOwner = playbackHost.controller;
+      await playbackOwner.playback.playTrack(playingTrack);
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _dualProviderBootstrap,
+          initialSettings: const AppSettings(
+            theme: AppThemePreference.light,
+            localePreference: AppLocalePreference.english,
+            musicProvider: AppMusicProvider.netEaseCloudMusic,
+          ),
+          providerDependencies: BuiltInProviderDependencies(
+            qqMusic: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerId: 'qq-music',
+              ),
+              capabilities: MusicProviderCapabilities.qqMusic,
+              providerId: 'qq-music',
+              accountName: 'QQ Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            ),
+            netEase: _providerFixture(
+              authenticationGateway: gateway,
+              capabilities: MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: 'netease-cloud-music',
+              accountName: 'NetEase Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            ),
+          ),
+          mediaResolutionGateway: media,
+          lyricGateway: const _WidgetLyricGateway(),
+          playbackHost: playbackHost,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(playbackOwner.playback.stage, TrackPlaybackStage.playing);
+
+      await _openSignInDialog(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('start-official-web-login-button')),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('official-web-login-surface')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('fake-official-webview')),
+        findsOneWidget,
+      );
+      expect(find.text('music.163.com'), findsOneWidget);
+      expect(
+        find.text(
+          'Complete sign-in on the official page. Fura will verify the '
+          'resulting session before saving it.',
+        ),
+        findsOneWidget,
+      );
+      expect(gateway.operation, isNotNull);
+      expect(playbackHost.controller, same(playbackOwner));
+      expect(playbackOwner.current, same(playingTrack));
+      expect(playbackOwner.playback.stage, TrackPlaybackStage.playing);
+      expect(audioSession.stopCalls, 0);
+
+      await tester.tap(
+        find.byKey(const ValueKey('close-authentication-dialog')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
+      expect(gateway.operation!.cancelCalls, 1);
+      expect(playbackHost.controller, same(playbackOwner));
+      expect(playbackOwner.current, same(playingTrack));
+      expect(playbackOwner.playback.stage, TrackPlaybackStage.playing);
+      expect(audioSession.stopCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'runtime locale switching preserves provider auth catalog queue and playback owners',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 960);
@@ -9795,6 +9909,73 @@ class _SmsProviderWidgetGateway extends _ProviderWidgetGateway
   }
 }
 
+class _OfficialWebProviderWidgetGateway extends _ProviderWidgetGateway
+    implements
+        OfficialWebAuthenticationGateway,
+        OfficialWebAuthenticationPresentation {
+  _OfficialWebProviderWidgetGateway({required super.providerId});
+
+  final ChangeNotifier _presentation = ChangeNotifier();
+  OfficialWebLoginPresentationStage _stage =
+      OfficialWebLoginPresentationStage.idle;
+  Widget? _view;
+  _PendingWidgetOfficialWebOperation? operation;
+
+  @override
+  bool get supportsOfficialWebLogin => true;
+
+  @override
+  Listenable get officialWebPresentationListenable => _presentation;
+
+  @override
+  OfficialWebLoginPresentationStage get officialWebPresentationStage => _stage;
+
+  @override
+  Widget? get officialWebLoginView => _view;
+
+  @override
+  OfficialWebAuthenticationOperation beginOfficialWebLogin() {
+    _stage = OfficialWebLoginPresentationStage.waitingForSignIn;
+    _view = const SizedBox(key: ValueKey('fake-official-webview'));
+    _presentation.notifyListeners();
+    return operation = _PendingWidgetOfficialWebOperation(this);
+  }
+
+  void cancelPresentation() {
+    _stage = OfficialWebLoginPresentationStage.idle;
+    _view = null;
+    _presentation.notifyListeners();
+  }
+}
+
+class _PendingWidgetOfficialWebOperation
+    implements OfficialWebAuthenticationOperation {
+  _PendingWidgetOfficialWebOperation(this.gateway);
+
+  final _OfficialWebProviderWidgetGateway gateway;
+  final Completer<OfficialWebAuthenticationOutcome> _result =
+      Completer<OfficialWebAuthenticationOutcome>();
+  int cancelCalls = 0;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    gateway.cancelPresentation();
+    if (!_result.isCompleted) {
+      _result.complete(
+        const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.cancelled,
+        ),
+      );
+    }
+    return true;
+  }
+
+  @override
+  Future<OfficialWebAuthenticationOutcome> run() => _result.future;
+}
+
 class _ImmediateWidgetSmsCodeRequest implements SmsCodeRequestOperation {
   const _ImmediateWidgetSmsCodeRequest(this.outcome);
 
@@ -10597,6 +10778,86 @@ class _UnavailableMediaOperation implements MediaResolutionOperation {
   @override
   Future<MediaResolutionResult> run() async =>
       const MediaResolutionResult(failure: MediaResolutionFailure.unavailable);
+}
+
+class _SuccessfulWidgetMediaGateway implements MediaResolutionGateway {
+  @override
+  MediaResolutionOperation beginResolution({
+    required String providerId,
+    required String opaqueTrackId,
+  }) => const _SuccessfulWidgetMediaOperation();
+}
+
+class _SuccessfulWidgetMediaOperation implements MediaResolutionOperation {
+  const _SuccessfulWidgetMediaOperation();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<MediaResolutionResult> run() async => MediaResolutionResult(
+    source: ResolvedPlaybackSource(
+      uri: Uri.parse('https://audio.example.test/fixture.mp3'),
+      format: PlaybackAudioFormat.mp3,
+      quality: PlaybackAudioQuality.standard,
+      validForSeconds: 300,
+    ),
+  );
+}
+
+class _WidgetAudioEngine implements ForegroundAudioEngine {
+  const _WidgetAudioEngine(this.session);
+
+  final ForegroundAudioSession session;
+
+  @override
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async => session;
+}
+
+class _WidgetAudioSession implements ForegroundAudioSession {
+  final StreamController<ForegroundAudioState> _states =
+      StreamController<ForegroundAudioState>.broadcast();
+  final StreamController<ForegroundAudioFailure> _failures =
+      StreamController<ForegroundAudioFailure>.broadcast();
+  final StreamController<int> _positions = StreamController<int>.broadcast();
+  int stopCalls = 0;
+
+  @override
+  Stream<ForegroundAudioState> get states => _states.stream;
+
+  @override
+  Stream<ForegroundAudioFailure> get failures => _failures.stream;
+
+  @override
+  Stream<int> get positionMs => _positions.stream;
+
+  @override
+  Future<void> play() async => _states.add(ForegroundAudioState.playing);
+
+  @override
+  Future<void> pause() async => _states.add(ForegroundAudioState.paused);
+
+  @override
+  Future<void> seekToMs(int positionMs) async => _positions.add(positionMs);
+
+  @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
+  Future<void> stop() async {
+    stopCalls += 1;
+    _states.add(ForegroundAudioState.stopped);
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _states.close();
+    await _failures.close();
+    await _positions.close();
+  }
 }
 
 class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
