@@ -57,21 +57,19 @@ were removed after the observation.
 | Arm | Product route | DMA-BUF EGL-import diagnostics | Visual result | Resize / close |
 |---|---|---:|---|---|
 | Default | actual Fura official login | 228 in the full run; 12 and 233 in independent resize runs | Fura toolbar visible, embedded official content blank | Fura remained responsive; no stale overlay after close |
-| `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` only | same route and host | 0 in full and resized runs | complete official `music.163.com` page and QR rendered | 1280 x 720 and 900 x 600 mapped correctly; interaction and close showed no tearing, offset or stale overlay |
+| `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` only | same route and host | 0 in full and resized runs | complete official `music.163.com` page and QR initially rendered | 1280 x 720 and 900 x 600 initially mapped correctly; the later strict soak crashed |
 
-There was no native crash or Flutter device disconnect in either bounded A/B
-arm, but the repeated default diagnostic and blank page are independently a
-release-blocking renderer failure. Because the one-variable SHM arm removed the
-diagnostic and restored visible content, the fallback
-`WEBKIT_DISABLE_COMPOSITING_MODE=1` experiment was not run; stacking flags
-would make the causal result ambiguous.
+There was no native crash or Flutter device disconnect in the short A/B arms,
+but the repeated default diagnostic and blank page are independently a release-
+blocking renderer failure. The initial SHM visual result was strong enough to
+start the required strict soak, not to establish production acceptance.
 
-The accepted production correction is deliberately narrow. Before GTK/WebKit
-initialization, the Linux runner sets
-`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` only when the environment does not already
-contain that name. An explicit value such as `0` is preserved. This affects the
-WebKitGTK process transport, not Flutter's Impeller selection, `media_kit`, the
-audio engine or another operating system.
+A provisional production correction set
+`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` before GTK/WebKit initialization only when
+the environment did not already contain that name. It was Linux-only and did
+not select Flutter's Impeller renderer, `media_kit` or the audio engine. The
+strict soak below rejected the candidate, so this runner change was removed;
+the final runner matches the starting baseline.
 
 The inspected screenshots and raw logs are ephemeral local evidence under
 `/tmp/fura-webview-renderer-evidence`; they include a short-lived provider QR
@@ -117,6 +115,34 @@ result above. It is consistent with an incomplete or throttled remote
 navigation, and does not weaken the deterministic local lifecycle result or
 replace the independent real-page render A/B.
 
+### Strict actual-official-page soak
+
+The qualifying soak used the actual Fura login surface and waited for an
+official-page `page_finished` event before counting each cycle. It periodically
+resized the native window between 1280 x 720 and 900 x 600, closed the Fura
+dialog, waited for the Flutter page to return, and never performed account
+login.
+
+- cycles 1 through 16 completed open/load/resize/close;
+- cycle 17 reached `page_finished` but did not reach the close marker;
+- DMA-BUF import error count: 0;
+- page-finished timeout count: 0;
+- native crash count: 1;
+- Flutter device disconnect count: 1;
+- successful close markers before the crash: 16;
+- the cycle-1 and cycle-10 login/close screenshots were captured; the process
+  failed before cycle 25, so no later screenshot is claimed;
+- `coredumpctl` records `WebKitWebProcess` PID 286762 terminated by SIGSEGV on
+  its `SkiaGPUWorker` thread, with the top frames in
+  `libnvidia-eglcore.so.610.57.04` and `libEGL_nvidia.so.0`.
+
+This is the task's explicit Case C. `WEBKIT_DISABLE_COMPOSITING_MODE=1` was not
+tested, because doing so after a FORCE_SHM native crash would continue stacking
+WebKit workarounds contrary to the stop rule. The result is
+`webview_all` Linux not production-ready on this measured host, with the next
+technical route gated on a Human choice between CEF/non-WebKit and no embedded
+Linux login.
+
 The official-page probe performed no login. Rendering evidence is not account
 acceptance, CAPTCHA compatibility, restart persistence or long-duration Linux
 stability evidence.
@@ -146,7 +172,8 @@ produced the following bounded evidence:
   and its log contains zero DMA-BUF-import errors or disconnects;
 - Linux Release built successfully. `ldd` resolves the candidate plugin,
   WebKitGTK 4.1, JavaScriptCoreGTK, the Rust library and all other dependencies
-  with no `not found` entry;
+  with no `not found` entry. The runner was rebuilt after removing the rejected
+  SHM default;
 - the Android ARM64 Debug APK built successfully and contains only ARM64 native
   libraries among those inspected, including the requested Rust library;
 - no public Rust Bridge API changed, so pinned FRB generation was not needed.
@@ -256,7 +283,9 @@ owner isolation. Existing Rust browser-credential staging tests remain the
 authoritative proof that observing a browser candidate does not authenticate an
 account.
 
-The Agent did not log into a real NetEase account. Human acceptance checklist:
+The Agent did not log into a real NetEase account. This checklist is retained
+for any future approved embedded engine, but is not currently runnable as a
+promotion gate for the rejected Linux WebKit candidate:
 
 1. Rebuild the exact candidate and select NetEase.
 2. Start official Web login and confirm the visible origin is
@@ -272,8 +301,7 @@ The Agent did not log into a real NetEase account. Human acceptance checklist:
 The Human must not share `MUSIC_U`, a password, an SMS code, a browser cookie
 database or DevTools output, and must not install a MITM certificate.
 
-Promotion requires the Human evidence above. A WebProcess crash, Flutter
-disconnect, exit hang, overlay corruption, pointer interception, unreadable
-HttpOnly cookie or incomplete website-data cleanup with the measured SHM
-default stops promotion. The preserved external QR-confirmation baseline
-remains the rollback path.
+The observed WebProcess crash and Flutter disconnect stop promotion now. The
+preserved external QR-confirmation baseline remains the supported rollback
+path. Further embedded-Linux work requires `HUMAN_DECISION`, not another
+renderer environment experiment.

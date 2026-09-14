@@ -25,25 +25,22 @@ their identities; relevant Rust/Flutter analysis, tests and Linux/Android
 builds pass. Real login, restart restore and repeated interactive stability are
 Human evidence.
 
-**2026-09-14 corrected machine checkpoint:** Human evidence invalidated the
+**2026-09-14 rejected Linux candidate checkpoint:** Human evidence invalidated the
 initial default-renderer confidence. The failure was reproduced in the visible
 product route as a blank official page with repeated DMA-BUF EGL-import errors.
-A one-variable A/B selected `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`: the same
-route rendered correctly at full and reduced size, interaction/close remained
-clean, and the deterministic suite passed native HttpOnly Cookie cleanup,
-exactly 50 complete create/load/JavaScript-scroll/resize/close cycles and an
-account-free official-page completed-document check with zero DMA-BUF errors,
-crashes or disconnects. The Linux runner applies the measured SHM transport
-only when the user has not supplied an explicit value. No autonomous
-implementation item remains inside HD-027. Promotion still requires the
-documented Human real-account, security-page, authenticated-read, playback,
-restart, repeated-open/close, sign-out-isolation and visual checks.
+A one-variable A/B found that `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` removed the
+DMA-BUF diagnostics and restored initial full/resized rendering. The local
+deterministic 50-cycle suite passed, but the required actual-official-page soak
+crashed `WebKitWebProcess` after cycle 17 reached `page_finished`, producing a
+Flutter device disconnect. The core dump locates SIGSEGV on `SkiaGPUWorker`
+inside NVIDIA EGL. The SHM production default was therefore removed and no
+second renderer flag was tested. The WebKitGTK Linux candidate is rejected;
+the next route requires a Human decision between a CEF/non-WebKit backend and
+no embedded Linux login.
 
 **Boundaries:** Linux remains WebKitGTK 4.1 and prior EGL/DMA-BUF/GStreamer
-evidence remains authoritative. The explicit follow-up Human instruction
-authorizes only the measured, Linux-runner SHM default and requires preservation
-of an externally supplied value. No second renderer flag, forced software/X11
-backend, higher OS minimum, password/SMS/CAPTCHA automation, TLS bypass,
+evidence remains authoritative. No renderer flag, forced software/X11 backend,
+higher OS minimum, password/SMS/CAPTCHA automation, TLS bypass,
 risk-control emulation, second credential owner/vault/player/Queue, auth
 framework, sidecar or push is authorized. The external-QR baseline remains the
 rollback path.

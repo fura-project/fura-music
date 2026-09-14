@@ -337,9 +337,9 @@ rollback path. No push is authorized by this decision.
 **2026-09-14 follow-up decision:** After Human evidence reproduced the blank
 page and DMA-BUF EGL-import failure, the maintainer explicitly authorized an
 exact default-versus-SHM A/B and a bounded production correction if the SHM
-path passed. Fura may therefore set
-`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` in the Linux runner only when the process
-environment has not already defined it. This does not authorize stacking
-`WEBKIT_DISABLE_COMPOSITING_MODE`, forcing software/X11 rendering, changing
-another platform, automating a login/security step, accepting a real account,
-or pushing commits.
+path passed. The short A/B and deterministic local suite passed, but the
+required actual-official-page soak crashed `WebKitWebProcess` after the 17th
+completed page load. Under the explicitly supplied Case C rule, the SHM
+production candidate is rejected and removed; no compositing-disable,
+software/X11 or other renderer workaround may be stacked. Choosing a CEF/non-
+WebKit Linux backend or no embedded Linux login is a new `HUMAN_DECISION`.
