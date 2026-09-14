@@ -474,6 +474,8 @@ enum QqMusicQrLoginFailure {
   timedOut,
   tooManyNetworkFailures,
   advanceAlreadyInProgress,
+  securityVerificationRequired,
+  secondaryVerificationRequired,
 }
 
 class QqMusicQrLoginStart {

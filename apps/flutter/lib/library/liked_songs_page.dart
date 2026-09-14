@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -922,8 +923,14 @@ class _LikedPlaylistCard extends StatelessWidget {
                       ? artwork
                       : Image.network(
                           playlist.artworkUri!,
+                          headers: musicArtworkRequestHeaders(
+                            playlist.artworkUri!,
+                          ),
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => artwork,
+                          errorBuilder: musicArtworkErrorBuilder(
+                            playlist.artworkUri!,
+                            artwork,
+                          ),
                         ),
                 ),
               ),

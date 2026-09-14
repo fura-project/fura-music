@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/l10n/app_locale.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
@@ -610,6 +610,12 @@ class _AuthenticationContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final stage = controller.stage;
     if (stage == LoginStage.idle) {
+      if (controller.showingSmsLogin) {
+        return _SmsAuthenticationMethod(
+          key: const ValueKey('sms-login-method'),
+          controller: controller,
+        );
+      }
       return _idle(context);
     }
     if (stage == LoginStage.verificationRequired ||
@@ -624,6 +630,12 @@ class _AuthenticationContent extends StatelessWidget {
       return _restoreTerminal(context);
     }
     if (stage == LoginStage.starting) return _starting(context);
+    if (stage == LoginStage.officialWebLogin) {
+      return _officialWebLogin(context);
+    }
+    if (stage == LoginStage.officialWebError) {
+      return _officialWebError(context);
+    }
     if (stage == LoginStage.authenticated) return _authenticated(context);
     if (stage == LoginStage.waitingForScan ||
         stage == LoginStage.scannedAwaitingConfirmation ||
@@ -669,6 +681,24 @@ class _AuthenticationContent extends StatelessWidget {
           onPressed: () => controller.startQr(LoginQrChannel.wechat),
           icon: const Icon(Icons.qr_code_scanner_rounded),
           label: Text(context.l10n.authScanWithWechat),
+        ),
+      ],
+      if (controller.supportsSmsLogin) ...[
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          key: const ValueKey('show-sms-login-button'),
+          onPressed: controller.showSmsLogin,
+          icon: const Icon(Icons.sms_outlined),
+          label: Text(context.l10n.authUsePhoneCode),
+        ),
+      ],
+      if (controller.supportsOfficialWebLogin) ...[
+        const SizedBox(height: 10),
+        TextButton.icon(
+          key: const ValueKey('start-official-web-login-button'),
+          onPressed: controller.startOfficialWebLogin,
+          icon: const Icon(Icons.open_in_browser_rounded),
+          label: Text(context.l10n.authUseOfficialWebsite),
         ),
       ],
     ],
@@ -740,6 +770,81 @@ class _AuthenticationContent extends StatelessWidget {
           onPressed: controller.cancel,
           icon: const Icon(Icons.qr_code_2_rounded),
           label: Text(context.l10n.authChooseMethod),
+        ),
+      ],
+    );
+  }
+
+  Widget _officialWebLogin(BuildContext context) => Column(
+    key: const ValueKey('official-web-login-active'),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const SizedBox.square(
+        dimension: 42,
+        child: CircularProgressIndicator(strokeWidth: 3),
+      ),
+      const SizedBox(height: 24),
+      Text(
+        context.l10n.authOfficialWebTitle,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 10),
+      Text(
+        context.l10n.authOfficialWebDetail,
+        textAlign: TextAlign.center,
+        style: _supportingStyle(context),
+      ),
+      const SizedBox(height: 20),
+      OutlinedButton(
+        onPressed: controller.cancel,
+        child: Text(context.l10n.commonCancel),
+      ),
+    ],
+  );
+
+  Widget _officialWebError(BuildContext context) {
+    final detail = switch (controller.officialWebFailure) {
+      OfficialWebAuthenticationFailure.unavailable =>
+        context.l10n.authOfficialWebUnavailable,
+      OfficialWebAuthenticationFailure.rejected =>
+        context.l10n.authOfficialWebRejected,
+      OfficialWebAuthenticationFailure.network =>
+        context.l10n.authOfficialWebNetwork,
+      OfficialWebAuthenticationFailure.serviceUnavailable =>
+        context.l10n.authOfficialWebServiceUnavailable,
+      OfficialWebAuthenticationFailure.invalidCredential ||
+      OfficialWebAuthenticationFailure.invalidResponse =>
+        context.l10n.authOfficialWebInvalidCredential,
+      OfficialWebAuthenticationFailure.alreadyRunning =>
+        context.l10n.authOfficialWebAlreadyRunning,
+      OfficialWebAuthenticationFailure.cancelled ||
+      OfficialWebAuthenticationFailure.replaced ||
+      OfficialWebAuthenticationFailure.coreUnavailable ||
+      null => context.l10n.authOfficialWebFailed,
+    };
+    return Column(
+      key: const ValueKey('official-web-login-error'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _PanelIcon(icon: Icons.error_outline_rounded),
+        const SizedBox(height: 24),
+        _announcedAuthenticationMessage(
+          context,
+          context.l10n.authOfficialWebErrorTitle,
+          detail,
+        ),
+        const SizedBox(height: 24),
+        FilledButton.tonalIcon(
+          onPressed: controller.canRetryOfficialWebVerification
+              ? controller.retryOfficialWebVerification
+              : controller.startOfficialWebLogin,
+          icon: const Icon(Icons.open_in_browser_rounded),
+          label: Text(context.l10n.commonRetry),
+        ),
+        TextButton(
+          onPressed: controller.cancel,
+          child: Text(context.l10n.authChooseMethod),
         ),
       ],
     );
@@ -961,6 +1066,37 @@ class _AuthenticationContent extends StatelessWidget {
           )
         else
           qrMethod,
+        if (controller.canOpenQrExternally ||
+            controller.openingQrExternally ||
+            controller.externalQrLaunchFailed) ...[
+          const SizedBox(height: 20),
+          FilledButton.tonalIcon(
+            key: const ValueKey('open-netease-qr-externally'),
+            onPressed: controller.canOpenQrExternally
+                ? () => unawaited(controller.openQrChallengeExternally())
+                : null,
+            icon: controller.openingQrExternally
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.open_in_new_rounded),
+            label: Text(
+              controller.openingQrExternally
+                  ? context.l10n.authOpeningQrExternally
+                  : context.l10n.authOpenQrExternally,
+            ),
+          ),
+          if (controller.externalQrLaunchFailed) ...[
+            const SizedBox(height: 8),
+            Text(
+              context.l10n.authOpenQrExternallyFailed,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
         const SizedBox(height: 24),
         Wrap(
           alignment: WrapAlignment.center,
@@ -1044,6 +1180,16 @@ class _AuthenticationContent extends StatelessWidget {
             onPressed: controller.retry,
             child: Text(context.l10n.commonRetry),
           ),
+        if (controller.supportsOfficialWebLogin &&
+            (controller.failure == LoginFailure.securityVerificationRequired ||
+                controller.failure ==
+                    LoginFailure.secondaryVerificationRequired))
+          FilledButton.tonalIcon(
+            key: const ValueKey('continue-official-web-login-button'),
+            onPressed: controller.startOfficialWebLogin,
+            icon: const Icon(Icons.open_in_browser_rounded),
+            label: Text(context.l10n.authUseOfficialWebsite),
+          ),
         TextButton(
           onPressed: controller.cancel,
           child: Text(context.l10n.authChooseMethod),
@@ -1102,6 +1248,14 @@ class _AuthenticationContent extends StatelessWidget {
     }
 
     return switch (failure) {
+      LoginFailure.securityVerificationRequired => (
+        l10n.authSecurityVerificationTitle(providerName),
+        l10n.authSecurityVerificationDetail,
+      ),
+      LoginFailure.secondaryVerificationRequired => (
+        l10n.authSecondaryVerificationTitle(providerName),
+        l10n.authSecondaryVerificationDetail,
+      ),
       LoginFailure.serviceUnavailable => (
         l10n.authProviderUnavailableTitle(providerName),
         l10n.authServiceRejectedDetail,
@@ -1183,6 +1337,386 @@ class _AuthenticationMethodSection extends StatelessWidget {
         const SizedBox(height: 16),
         child,
       ],
+    );
+  }
+}
+
+class _SmsAuthenticationMethod extends StatefulWidget {
+  const _SmsAuthenticationMethod({required this.controller, super.key});
+
+  final LoginController controller;
+
+  @override
+  State<_SmsAuthenticationMethod> createState() =>
+      _SmsAuthenticationMethodState();
+}
+
+class _SmsAuthenticationMethodState extends State<_SmsAuthenticationMethod> {
+  static final RegExp _digits = RegExp(r'^\d+$');
+
+  final TextEditingController _countryCode = TextEditingController(text: '86');
+  final TextEditingController _phone = TextEditingController();
+  final TextEditingController _code = TextEditingController();
+  Timer? _cooldownTimer;
+  int _cooldownSeconds = 0;
+  bool _showPhoneValidation = false;
+  bool _showCodeValidation = false;
+  bool _lastCodeRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _countryCode.addListener(_inputChanged);
+    _phone.addListener(_inputChanged);
+    _code.addListener(_inputChanged);
+    widget.controller.addListener(_controllerChanged);
+    _lastCodeRequested = widget.controller.smsCodeRequested;
+  }
+
+  @override
+  void didUpdateWidget(_SmsAuthenticationMethod oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.controller, widget.controller)) return;
+    oldWidget.controller.removeListener(_controllerChanged);
+    widget.controller.addListener(_controllerChanged);
+    _lastCodeRequested = widget.controller.smsCodeRequested;
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_controllerChanged);
+    _cooldownTimer?.cancel();
+    _countryCode.dispose();
+    _phone.dispose();
+    _code.dispose();
+    super.dispose();
+  }
+
+  bool get _validCountryCode {
+    final value = _countryCode.text;
+    return value.length <= 4 && value.isNotEmpty && _digits.hasMatch(value);
+  }
+
+  bool get _validPhone {
+    final value = _phone.text;
+    return value.length >= 5 && value.length <= 15 && _digits.hasMatch(value);
+  }
+
+  bool get _validCode {
+    final value = _code.text;
+    return value.length >= 4 && value.length <= 8 && _digits.hasMatch(value);
+  }
+
+  bool get _busy =>
+      widget.controller.smsStage == SmsLoginStage.sendingCode ||
+      widget.controller.smsStage == SmsLoginStage.authenticating;
+
+  void _inputChanged() {
+    if (!mounted) return;
+    setState(() {
+      if (_validCountryCode && _validPhone) _showPhoneValidation = false;
+      if (_validCode) _showCodeValidation = false;
+    });
+  }
+
+  void _controllerChanged() {
+    final codeRequested = widget.controller.smsCodeRequested;
+    if (codeRequested && !_lastCodeRequested) _startCooldown();
+    _lastCodeRequested = codeRequested;
+    if (mounted) setState(() {});
+  }
+
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    _cooldownSeconds = 60;
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _cooldownSeconds -= 1;
+        if (_cooldownSeconds <= 0) timer.cancel();
+      });
+    });
+  }
+
+  void _requestCode() {
+    if (_busy || _cooldownSeconds > 0) return;
+    setState(() => _showPhoneValidation = true);
+    if (!_validCountryCode || !_validPhone) return;
+    unawaited(
+      widget.controller.requestSmsCode(
+        countryCode: _countryCode.text,
+        phone: _phone.text,
+      ),
+    );
+  }
+
+  void _signIn() {
+    if (_busy || !widget.controller.smsCodeRequested) return;
+    setState(() => _showCodeValidation = true);
+    if (!_validCode) return;
+    unawaited(widget.controller.authenticateSmsCode(_code.text));
+  }
+
+  String? _failureText(
+    BuildContext context,
+  ) => switch (widget.controller.smsFailure) {
+    SmsAuthenticationFailure.invalidInput => context.l10n.authSmsInvalidInput,
+    SmsAuthenticationFailure.codeRejected => context.l10n.authSmsCodeRejected,
+    SmsAuthenticationFailure.rateLimited => context.l10n.authSmsRateLimited,
+    SmsAuthenticationFailure.securityVerificationRequired =>
+      context.l10n.authSmsSecurityVerification,
+    SmsAuthenticationFailure.secondaryVerificationRequired =>
+      context.l10n.authSmsSecondaryVerification,
+    SmsAuthenticationFailure.network => context.l10n.authSmsNetworkFailure,
+    SmsAuthenticationFailure.serviceUnavailable =>
+      context.l10n.authSmsServiceUnavailable,
+    SmsAuthenticationFailure.invalidResponse =>
+      context.l10n.authSmsInvalidResponse,
+    SmsAuthenticationFailure.alreadyRunning =>
+      context.l10n.authSmsAlreadyRunning,
+    SmsAuthenticationFailure.replaced => context.l10n.authSmsAttemptReplaced,
+    SmsAuthenticationFailure.coreUnavailable =>
+      context.l10n.authSmsCoreUnavailable,
+    null => null,
+  };
+
+  Widget _phoneFields(BuildContext context) {
+    final countryCode = TextField(
+      key: const ValueKey('sms-country-code-field'),
+      controller: _countryCode,
+      enabled: !_busy,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(4),
+      ],
+      decoration: InputDecoration(
+        labelText: context.l10n.authCountryCode,
+        prefixText: '+',
+      ),
+    );
+    final phone = TextField(
+      key: const ValueKey('sms-phone-field'),
+      controller: _phone,
+      enabled: !_busy,
+      keyboardType: TextInputType.phone,
+      autofillHints: const [AutofillHints.telephoneNumber],
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(15),
+      ],
+      decoration: InputDecoration(labelText: context.l10n.authPhoneNumber),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: constraints.maxWidth.clamp(0, 180).toDouble(),
+                  child: countryCode,
+                ),
+              ),
+              const SizedBox(height: 12),
+              phone,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 120, child: countryCode),
+            const SizedBox(width: 12),
+            Expanded(child: phone),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _actions(
+    BuildContext context, {
+    required bool sending,
+    required bool authenticating,
+  }) {
+    final qr = TextButton.icon(
+      key: const ValueKey('show-qr-login-button'),
+      onPressed: _busy ? null : widget.controller.showQrLogin,
+      icon: const Icon(Icons.qr_code_2_rounded),
+      label: Text(context.l10n.authUseQrCode),
+    );
+    final officialWeb = TextButton.icon(
+      key: const ValueKey('sms-official-web-login-button'),
+      onPressed: _busy || !widget.controller.supportsOfficialWebLogin
+          ? null
+          : widget.controller.startOfficialWebLogin,
+      icon: const Icon(Icons.open_in_browser_rounded),
+      label: Text(context.l10n.authUseOfficialWebsite),
+    );
+    final request = OutlinedButton(
+      key: const ValueKey('request-sms-code-button'),
+      onPressed: _busy || _cooldownSeconds > 0 ? null : _requestCode,
+      child: Text(
+        sending
+            ? context.l10n.authSendingCode
+            : _cooldownSeconds > 0
+            ? context.l10n.authResendCodeIn(_cooldownSeconds)
+            : widget.controller.smsCodeRequested
+            ? context.l10n.authResendCode
+            : context.l10n.authSendCode,
+      ),
+    );
+    final submit = FilledButton(
+      key: const ValueKey('submit-sms-login-button'),
+      onPressed: _busy || !widget.controller.smsCodeRequested || !_validCode
+          ? null
+          : _signIn,
+      child: Text(
+        authenticating
+            ? context.l10n.authCheckingSmsCode
+            : context.l10n.authSmsSignIn,
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              request,
+              const SizedBox(height: 8),
+              submit,
+              const SizedBox(height: 4),
+              if (widget.controller.supportsOfficialWebLogin) officialWeb,
+              if (widget.controller.supportsOfficialWebLogin)
+                const SizedBox(height: 4),
+              qr,
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            qr,
+            if (widget.controller.supportsOfficialWebLogin) officialWeb,
+            request,
+            submit,
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final sending = widget.controller.smsStage == SmsLoginStage.sendingCode;
+    final authenticating =
+        widget.controller.smsStage == SmsLoginStage.authenticating;
+    final failure = _failureText(context);
+    final phoneValidation =
+        _showPhoneValidation && (!_validCountryCode || !_validPhone);
+    final codeValidation = _showCodeValidation && !_validCode;
+
+    return _AuthenticationMethodSection(
+      icon: Icons.sms_outlined,
+      title: context.l10n.authPhoneCodeTitle,
+      detail: context.l10n.authPhoneCodeDetail,
+      child: AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _phoneFields(context),
+            if (phoneValidation) ...[
+              const SizedBox(height: 6),
+              Text(
+                context.l10n.authSmsInvalidInput,
+                style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('sms-code-field'),
+              controller: _code,
+              enabled: widget.controller.smsCodeRequested && !authenticating,
+              keyboardType: TextInputType.number,
+              autofillHints: const [AutofillHints.oneTimeCode],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(8),
+              ],
+              onSubmitted: (_) => _signIn(),
+              decoration: InputDecoration(
+                labelText: context.l10n.authSmsCode,
+                errorText: codeValidation
+                    ? context.l10n.authSmsInvalidInput
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (widget.controller.smsCodeRequested && failure == null)
+              Text(
+                context.l10n.authCodeSent,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.primary,
+                ),
+              ),
+            if (failure != null)
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  failure,
+                  key: const ValueKey('sms-authentication-error'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.error,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest,
+                borderRadius: MusicRadii.content,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 18,
+                      color: colors.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        context.l10n.authSmsRiskWarning,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _actions(context, sending: sending, authenticating: authenticating),
+          ],
+        ),
+      ),
     );
   }
 }

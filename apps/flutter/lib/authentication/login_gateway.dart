@@ -1,6 +1,6 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
 import 'package:flutterustmusic/src/rust/api/netease_authentication.dart'
     as netease_bridge;
@@ -31,6 +31,8 @@ enum LoginFailure {
   timedOut,
   tooManyNetworkFailures,
   advanceAlreadyInProgress,
+  securityVerificationRequired,
+  secondaryVerificationRequired,
 }
 
 enum DesktopQuickLoginFailure {
@@ -45,6 +47,50 @@ enum DesktopQuickLoginFailure {
   replaced,
   sessionFinished,
   alreadyRunning,
+}
+
+enum SmsAuthenticationFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  invalidInput,
+  codeRejected,
+  rateLimited,
+  securityVerificationRequired,
+  secondaryVerificationRequired,
+  replaced,
+  alreadyRunning,
+}
+
+class SmsAuthenticationOutcome {
+  const SmsAuthenticationOutcome({required this.success, this.failure});
+
+  final bool success;
+  final SmsAuthenticationFailure? failure;
+}
+
+enum OfficialWebAuthenticationFailure {
+  unavailable,
+  cancelled,
+  alreadyRunning,
+  invalidCredential,
+  rejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  coreUnavailable,
+}
+
+class OfficialWebAuthenticationOutcome {
+  const OfficialWebAuthenticationOutcome({
+    required this.authenticated,
+    this.failure,
+  });
+
+  final bool authenticated;
+  final OfficialWebAuthenticationFailure? failure;
 }
 
 enum CredentialPersistenceResult {
@@ -91,10 +137,15 @@ typedef CredentialVerificationOperationFactory =
 typedef CredentialSignOutCore = bool Function();
 
 class LoginChallenge {
-  const LoginChallenge({required this.imageFormat, required this.imageBytes});
+  const LoginChallenge({
+    required this.imageFormat,
+    required this.imageBytes,
+    this.externalConfirmationUri,
+  });
 
   final LoginImageFormat imageFormat;
   final Uint8List imageBytes;
+  final Uri? externalConfirmationUri;
 }
 
 class LoginUpdate {
@@ -179,12 +230,53 @@ abstract interface class ProviderAuthenticationPresentation {
   String get providerId;
 }
 
+/// Optional pacing for providers whose QR status endpoint returns immediately.
+///
+/// Providers that use a long-polling endpoint do not need to implement this.
+abstract interface class QrLoginPollingPolicy {
+  Duration get minimumQrPollInterval;
+}
+
 abstract interface class MultiMethodQqMusicAuthenticationGateway {
   LoginStartOperation beginQrStart(LoginQrChannel channel);
 }
 
 abstract interface class DesktopQuickQqMusicAuthenticationGateway {
   DesktopQuickLoginStartOperation beginDesktopQuickLoginStart();
+}
+
+/// Optional phone-code authentication exposed only by providers that own a
+/// complete request/login session.
+abstract interface class SmsAuthenticationGateway {
+  SmsCodeRequestOperation beginSmsCodeRequest({
+    required String countryCode,
+    required String phone,
+  });
+  SmsLoginOperation beginSmsLogin({required String code});
+  bool cancelSmsAuthentication();
+}
+
+/// Optional handoff to the provider's own interactive website. The provider
+/// credential is still verified by the same Rust account endpoint before this
+/// operation reports authentication.
+abstract interface class OfficialWebAuthenticationGateway {
+  bool get supportsOfficialWebLogin;
+  OfficialWebAuthenticationOperation beginOfficialWebLogin();
+}
+
+abstract interface class OfficialWebAuthenticationOperation {
+  Future<OfficialWebAuthenticationOutcome> run();
+  bool cancel();
+}
+
+abstract interface class SmsCodeRequestOperation {
+  Future<SmsAuthenticationOutcome> run();
+  bool cancel();
+}
+
+abstract interface class SmsLoginOperation {
+  Future<SmsAuthenticationOutcome> run();
+  bool cancel();
 }
 
 abstract interface class LoginStartOperation {
@@ -309,19 +401,30 @@ class RustQqMusicAuthenticationGateway
 class RustNeteaseAuthenticationGateway
     implements
         QqMusicAuthenticationGateway,
-        ProviderAuthenticationPresentation {
-  RustNeteaseAuthenticationGateway({CredentialVault? credentialVault})
-    : _credentialVault = SerializedCredentialVault(
-        credentialVault ??
-            PlatformCredentialVault(
-              credentialKey: PlatformCredentialVault.netEaseCredentialKey,
-            ),
-      );
+        ProviderAuthenticationPresentation,
+        QrLoginPollingPolicy,
+        SmsAuthenticationGateway,
+        OfficialWebAuthenticationGateway {
+  RustNeteaseAuthenticationGateway({
+    CredentialVault? credentialVault,
+    OfficialWebLoginBroker? officialWebLoginBroker,
+  }) : _credentialVault = SerializedCredentialVault(
+         credentialVault ??
+             PlatformCredentialVault(
+               credentialKey: PlatformCredentialVault.netEaseCredentialKey,
+             ),
+       ),
+       _officialWebLoginBroker =
+           officialWebLoginBroker ?? PlatformNeteaseOfficialWebLoginBroker();
 
   final CredentialVault _credentialVault;
+  final OfficialWebLoginBroker _officialWebLoginBroker;
 
   @override
   String get providerId => 'netease-cloud-music';
+
+  @override
+  Duration get minimumQrPollInterval => const Duration(seconds: 2);
 
   @override
   bool get hasAuthenticatedCredential =>
@@ -331,6 +434,40 @@ class RustNeteaseAuthenticationGateway
   LoginStartOperation beginStart() => _RustNeteaseLoginStartOperation(
     netease_bridge.reserveNeteaseQrLoginStart(),
   );
+
+  @override
+  SmsCodeRequestOperation beginSmsCodeRequest({
+    required String countryCode,
+    required String phone,
+  }) => _RustNeteaseSmsCodeRequestOperation(
+    netease_bridge.reserveNeteaseSmsCodeRequest(),
+    countryCode,
+    phone,
+  );
+
+  @override
+  SmsLoginOperation beginSmsLogin({required String code}) {
+    final attemptId = netease_bridge.reserveNeteaseSmsLogin();
+    return attemptId == null
+        ? const _ImmediateSmsLoginOperation(
+            SmsAuthenticationOutcome(
+              success: false,
+              failure: SmsAuthenticationFailure.alreadyRunning,
+            ),
+          )
+        : _RustNeteaseSmsLoginOperation(attemptId, code);
+  }
+
+  @override
+  bool cancelSmsAuthentication() =>
+      netease_bridge.cancelNeteaseSmsAuthentication();
+
+  @override
+  bool get supportsOfficialWebLogin => _officialWebLoginBroker.isSupported;
+
+  @override
+  OfficialWebAuthenticationOperation beginOfficialWebLogin() =>
+      _RustNeteaseOfficialWebAuthenticationOperation(_officialWebLoginBroker);
 
   @override
   CredentialVerificationOperation beginCredentialVerification() =>
@@ -392,6 +529,260 @@ class RustNeteaseAuthenticationGateway
     }
   }
 }
+
+class _RustNeteaseOfficialWebAuthenticationOperation
+    implements OfficialWebAuthenticationOperation {
+  _RustNeteaseOfficialWebAuthenticationOperation(this._broker);
+
+  final OfficialWebLoginBroker _broker;
+  CredentialVerificationOperation? _verification;
+  bool _cancelled = false;
+
+  @override
+  bool cancel() {
+    if (_cancelled) return false;
+    _cancelled = true;
+    final browserCancelled = _broker.cancel();
+    final verificationCancelled = _verification?.cancel() ?? false;
+    return browserCancelled || verificationCancelled;
+  }
+
+  @override
+  Future<OfficialWebAuthenticationOutcome> run() async {
+    Uint8List? secretBytes;
+    try {
+      secretBytes = await _broker.authenticate();
+    } on OfficialWebLoginException catch (error) {
+      return OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: switch (error.failure) {
+          OfficialWebLoginFailure.unavailable =>
+            OfficialWebAuthenticationFailure.unavailable,
+          OfficialWebLoginFailure.alreadyRunning =>
+            OfficialWebAuthenticationFailure.alreadyRunning,
+          OfficialWebLoginFailure.failed =>
+            OfficialWebAuthenticationFailure.coreUnavailable,
+        },
+      );
+    } on Object {
+      return const OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: OfficialWebAuthenticationFailure.coreUnavailable,
+      );
+    }
+    if (_cancelled || secretBytes == null) {
+      secretBytes?.fillRange(0, secretBytes.length, 0);
+      return const OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: OfficialWebAuthenticationFailure.cancelled,
+      );
+    }
+
+    CredentialRestoreResult staged;
+    try {
+      staged = _stageNeteaseOfficialWebCredentialInRust(secretBytes);
+    } on Object {
+      staged = CredentialRestoreResult.coreUnavailable;
+    } finally {
+      secretBytes.fillRange(0, secretBytes.length, 0);
+    }
+    debugPrint(
+      'FURA_DIAGNOSTIC netease_web phase=stage outcome=${staged.name}',
+    );
+    if (_cancelled) {
+      return const OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: OfficialWebAuthenticationFailure.cancelled,
+      );
+    }
+    if (staged != CredentialRestoreResult.verificationRequired) {
+      return OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: staged == CredentialRestoreResult.coreUnavailable
+            ? OfficialWebAuthenticationFailure.coreUnavailable
+            : OfficialWebAuthenticationFailure.invalidCredential,
+      );
+    }
+
+    final verification = _reserveRustNeteaseCredentialVerification();
+    _verification = verification;
+    final result = await verification.run();
+    debugPrint(
+      'FURA_DIAGNOSTIC netease_web phase=verify outcome=${result.name}',
+    );
+    if (identical(_verification, verification)) _verification = null;
+    if (_cancelled) {
+      return const OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: OfficialWebAuthenticationFailure.cancelled,
+      );
+    }
+    return switch (result) {
+      CredentialVerificationResult.authenticated =>
+        const OfficialWebAuthenticationOutcome(authenticated: true),
+      CredentialVerificationResult.rejected ||
+      CredentialVerificationResult.rejectedStorageCleanupFailed =>
+        const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.rejected,
+        ),
+      CredentialVerificationResult.network =>
+        const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.network,
+        ),
+      CredentialVerificationResult.serviceUnavailable =>
+        const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.serviceUnavailable,
+        ),
+      CredentialVerificationResult.invalidResponse =>
+        const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.invalidResponse,
+        ),
+      CredentialVerificationResult.replaced =>
+        const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.replaced,
+        ),
+      CredentialVerificationResult.noRestoredCredential ||
+      CredentialVerificationResult.coreUnavailable =>
+        const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.coreUnavailable,
+        ),
+    };
+  }
+}
+
+class _RustNeteaseSmsCodeRequestOperation implements SmsCodeRequestOperation {
+  const _RustNeteaseSmsCodeRequestOperation(
+    this._attemptId,
+    this._countryCode,
+    this._phone,
+  );
+
+  final int _attemptId;
+  final String _countryCode;
+  final String _phone;
+
+  @override
+  bool cancel() =>
+      netease_bridge.cancelNeteaseSmsCodeRequest(attemptId: _attemptId);
+
+  @override
+  Future<SmsAuthenticationOutcome> run() async {
+    try {
+      final outcome = _mapNeteaseSmsOutcome(
+        await netease_bridge.requestNeteaseSmsCode(
+          attemptId: _attemptId,
+          countryCode: _countryCode,
+          phone: _phone,
+        ),
+      );
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_sms phase=send '
+        'outcome=${outcome.success ? 'success' : 'failure'} '
+        'failure=${outcome.failure?.name ?? 'none'}',
+      );
+      return outcome;
+    } on Object catch (error) {
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_sms phase=send outcome=exception '
+        'error=${error.runtimeType}',
+      );
+      return const SmsAuthenticationOutcome(
+        success: false,
+        failure: SmsAuthenticationFailure.coreUnavailable,
+      );
+    }
+  }
+}
+
+class _RustNeteaseSmsLoginOperation implements SmsLoginOperation {
+  const _RustNeteaseSmsLoginOperation(this._attemptId, this._code);
+
+  final int _attemptId;
+  final String _code;
+
+  @override
+  bool cancel() => netease_bridge.cancelNeteaseSmsLogin(attemptId: _attemptId);
+
+  @override
+  Future<SmsAuthenticationOutcome> run() async {
+    try {
+      final outcome = _mapNeteaseSmsOutcome(
+        await netease_bridge.authenticateNeteaseSmsCode(
+          attemptId: _attemptId,
+          code: _code,
+        ),
+      );
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_sms phase=login '
+        'outcome=${outcome.success ? 'success' : 'failure'} '
+        'failure=${outcome.failure?.name ?? 'none'}',
+      );
+      return outcome;
+    } on Object catch (error) {
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_sms phase=login outcome=exception '
+        'error=${error.runtimeType}',
+      );
+      return const SmsAuthenticationOutcome(
+        success: false,
+        failure: SmsAuthenticationFailure.coreUnavailable,
+      );
+    }
+  }
+}
+
+class _ImmediateSmsLoginOperation implements SmsLoginOperation {
+  const _ImmediateSmsLoginOperation(this._outcome);
+
+  final SmsAuthenticationOutcome _outcome;
+
+  @override
+  bool cancel() => false;
+
+  @override
+  Future<SmsAuthenticationOutcome> run() async => _outcome;
+}
+
+SmsAuthenticationOutcome _mapNeteaseSmsOutcome(
+  netease_bridge.NeteaseSmsAuthenticationOutcome outcome,
+) => SmsAuthenticationOutcome(
+  success: outcome.success,
+  failure: switch (outcome.failure) {
+    netease_bridge.NeteaseSmsAuthenticationFailure.coreUnavailable =>
+      SmsAuthenticationFailure.coreUnavailable,
+    netease_bridge.NeteaseSmsAuthenticationFailure.network =>
+      SmsAuthenticationFailure.network,
+    netease_bridge.NeteaseSmsAuthenticationFailure.serviceUnavailable =>
+      SmsAuthenticationFailure.serviceUnavailable,
+    netease_bridge.NeteaseSmsAuthenticationFailure.invalidResponse =>
+      SmsAuthenticationFailure.invalidResponse,
+    netease_bridge.NeteaseSmsAuthenticationFailure.invalidInput =>
+      SmsAuthenticationFailure.invalidInput,
+    netease_bridge.NeteaseSmsAuthenticationFailure.codeRejected =>
+      SmsAuthenticationFailure.codeRejected,
+    netease_bridge.NeteaseSmsAuthenticationFailure.rateLimited =>
+      SmsAuthenticationFailure.rateLimited,
+    netease_bridge
+        .NeteaseSmsAuthenticationFailure
+        .securityVerificationRequired =>
+      SmsAuthenticationFailure.securityVerificationRequired,
+    netease_bridge
+        .NeteaseSmsAuthenticationFailure
+        .secondaryVerificationRequired =>
+      SmsAuthenticationFailure.secondaryVerificationRequired,
+    netease_bridge.NeteaseSmsAuthenticationFailure.replaced =>
+      SmsAuthenticationFailure.replaced,
+    netease_bridge.NeteaseSmsAuthenticationFailure.alreadyRunning =>
+      SmsAuthenticationFailure.alreadyRunning,
+    null => null,
+  },
+);
 
 CredentialVerificationOperation _reserveRustCredentialVerification() {
   final attemptId = bridge.reserveQqMusicCredentialVerification();
@@ -519,6 +910,34 @@ CredentialRestoreResult _restoreNeteaseCredentialInRust(
   Uint8List? secretBytes,
 ) {
   final outcome = netease_bridge.restoreNeteaseCredentialFromSecureStorage(
+    secretBytes: secretBytes,
+  );
+  final state = outcome.state;
+  if (state != null) {
+    return switch (state) {
+      bridge.QqMusicCredentialRestoreState.signedOut =>
+        CredentialRestoreResult.signedOut,
+      bridge.QqMusicCredentialRestoreState.verificationRequired =>
+        CredentialRestoreResult.verificationRequired,
+      bridge.QqMusicCredentialRestoreState.locallyExpired =>
+        CredentialRestoreResult.locallyExpired,
+    };
+  }
+  return switch (outcome.failure) {
+    bridge.QqMusicCredentialRestoreFailure.invalidDocument ||
+    bridge.QqMusicCredentialRestoreFailure.invalidCredential =>
+      CredentialRestoreResult.invalidStoredCredential,
+    bridge.QqMusicCredentialRestoreFailure.unsupportedVersion =>
+      CredentialRestoreResult.unsupportedStoredCredential,
+    bridge.QqMusicCredentialRestoreFailure.coreUnavailable ||
+    null => CredentialRestoreResult.coreUnavailable,
+  };
+}
+
+CredentialRestoreResult _stageNeteaseOfficialWebCredentialInRust(
+  Uint8List secretBytes,
+) {
+  final outcome = netease_bridge.stageNeteaseOfficialWebCredential(
     secretBytes: secretBytes,
   );
   final state = outcome.state;
@@ -716,12 +1135,18 @@ class _RustNeteaseLoginStartOperation implements LoginStartOperation {
       final challenge = outcome.challenge;
       final failure = outcome.failure;
       if (session == null || challenge == null) {
-        return LoginStart(
-          failure: failure == null
-              ? LoginFailure.invalidResponse
-              : _mapFailure(failure),
+        final mappedFailure = failure == null
+            ? LoginFailure.invalidResponse
+            : _mapFailure(failure);
+        debugPrint(
+          'FURA_DIAGNOSTIC netease_qr phase=start '
+          'outcome=failure failure=${mappedFailure.name}',
         );
+        return LoginStart(failure: mappedFailure);
       }
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_qr phase=start outcome=challenge_ready',
+      );
       return LoginStart(
         session: _RustNeteaseLoginSession(session),
         challenge: LoginChallenge(
@@ -730,13 +1155,61 @@ class _RustNeteaseLoginStartOperation implements LoginStartOperation {
             bridge.QqMusicQrImageFormat.jpeg => LoginImageFormat.jpeg,
           },
           imageBytes: challenge.imageBytes,
+          externalConfirmationUri: _parseNeteaseConfirmationUri(
+            outcome.externalConfirmationUrl,
+          ),
         ),
       );
-    } on Object {
+    } on Object catch (error) {
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_qr phase=start outcome=exception '
+        'error=${error.runtimeType}',
+      );
       return const LoginStart(failure: LoginFailure.coreUnavailable);
     }
   }
 }
+
+Uri? _parseNeteaseConfirmationUri(String? value) {
+  if (value == null || value.length > 1024) return null;
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host != 'music.163.com' ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasPort ||
+      uri.path != '/st/platform/scanlogin' ||
+      uri.fragment.isNotEmpty) {
+    return null;
+  }
+  const allowedKeys = <String>{
+    'codekey',
+    'chainId',
+    'hdw_device',
+    'hdw_appid',
+    'hitExp',
+  };
+  if (uri.queryParametersAll.keys.toSet().difference(allowedKeys).isNotEmpty ||
+      allowedKeys.difference(uri.queryParametersAll.keys.toSet()).isNotEmpty ||
+      uri.queryParametersAll.values.any((values) => values.length != 1)) {
+    return null;
+  }
+  final query = uri.queryParameters;
+  if (!_isSafeNeteaseQrToken(query['codekey']) ||
+      !_isSafeNeteaseQrToken(query['chainId']) ||
+      query['hdw_device'] != 'web' ||
+      query['hdw_appid'] != 'web' ||
+      query['hitExp'] != '1') {
+    return null;
+  }
+  return uri;
+}
+
+bool _isSafeNeteaseQrToken(String? value) =>
+    value != null &&
+    value.isNotEmpty &&
+    value.length <= 256 &&
+    RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(value);
 
 class _RustNeteaseLoginSession implements LoginSession {
   const _RustNeteaseLoginSession(this._inner);
@@ -751,12 +1224,31 @@ class _RustNeteaseLoginSession implements LoginSession {
 
   @override
   Future<LoginUpdate> advance() async {
-    final update = await _inner.advance();
-    return LoginUpdate(
-      progress: update.state == null ? null : _mapProgress(update.state!),
-      failure: update.failure == null ? null : _mapFailure(update.failure!),
-      sessionActive: update.sessionActive,
-    );
+    try {
+      final update = await _inner.advance();
+      final progress = update.state == null
+          ? null
+          : _mapProgress(update.state!);
+      final failure = update.failure == null
+          ? null
+          : _mapFailure(update.failure!);
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_qr phase=poll '
+        'progress=${progress?.name ?? 'none'} '
+        'failure=${failure?.name ?? 'none'} active=${update.sessionActive}',
+      );
+      return LoginUpdate(
+        progress: progress,
+        failure: failure,
+        sessionActive: update.sessionActive,
+      );
+    } on Object catch (error) {
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_qr phase=poll outcome=exception '
+        'error=${error.runtimeType}',
+      );
+      rethrow;
+    }
   }
 }
 
@@ -853,4 +1345,8 @@ LoginFailure _mapFailure(
     LoginFailure.tooManyNetworkFailures,
   bridge.QqMusicQrLoginFailure.advanceAlreadyInProgress =>
     LoginFailure.advanceAlreadyInProgress,
+  bridge.QqMusicQrLoginFailure.securityVerificationRequired =>
+    LoginFailure.securityVerificationRequired,
+  bridge.QqMusicQrLoginFailure.secondaryVerificationRequired =>
+    LoginFailure.secondaryVerificationRequired,
 };

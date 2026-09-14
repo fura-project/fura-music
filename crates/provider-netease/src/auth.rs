@@ -3,13 +3,15 @@ use music_domain::{
     AccountSummary, PlaylistId, PlaylistOwnership, PlaylistPurpose, PlaylistSummary,
     PlaylistTracksPage, TrackSummary,
 };
-use netease_client::{Credential, Error, NeteaseClient, QrKey, QrPoll, Transport};
+use netease_client::{
+    Credential, Error, NeteaseClient, QrKey, QrPoll, SmsLoginChallenge, Transport,
+};
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AuthenticationError, DailyRecommendationError,
     DailyTracksProvider, OwnedPlaylistsProvider, PersonalizedTracksError,
     PersonalizedTracksProvider, QrAuthenticationChallenge, QrAuthenticationChannel,
     QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-    UserLibraryError, UserPlaylistsProvider,
+    SmsAuthenticationError, SmsAuthenticationProvider, UserLibraryError, UserPlaylistsProvider,
 };
 use std::{
     future::Future,
@@ -26,6 +28,7 @@ struct State {
     generation: u64,
     active: Option<(Credential, u64)>,
     pending: Option<Credential>,
+    sms: Option<SmsLoginChallenge>,
     liked_playlist: Option<u64>,
 }
 pub(super) struct AuthOwner {
@@ -85,6 +88,7 @@ impl AuthOwner {
         state.active = None;
         state.liked_playlist = None;
         state.pending = Some(credential);
+        state.sms = None;
         Ok(())
     }
     pub(super) async fn run<R>(
@@ -105,6 +109,7 @@ impl AuthOwner {
             s.active = None;
             s.liked_playlist = None;
             s.pending = None;
+            s.sms = None;
             self.bump(&mut s);
         }
         result.map_err(Failure::Client)
@@ -115,6 +120,7 @@ impl AuthOwner {
             return Err(Failure::Replaced);
         }
         s.pending = None;
+        s.sms = None;
         s.active = Some((credential, user));
         s.liked_playlist = None;
         self.bump(&mut s);
@@ -141,11 +147,45 @@ fn auth_error(f: Failure) -> AuthenticationError {
         Failure::Client(e) => match e {
             Error::TemporaryNetworkFailure => AuthenticationError::Network,
             Error::CredentialRejected => AuthenticationError::Rejected,
+            Error::SecurityVerificationRequired => {
+                AuthenticationError::SecurityVerificationRequired
+            }
+            Error::SecondaryVerificationRequired => {
+                AuthenticationError::SecondaryVerificationRequired
+            }
             Error::ResponseShapeMismatch | Error::ResponseBound | Error::InputBound => {
                 AuthenticationError::InvalidResponse
             }
             _ => AuthenticationError::ServiceUnavailable,
         },
+    }
+}
+
+fn sms_error(failure: Failure) -> SmsAuthenticationError {
+    match failure {
+        Failure::Replaced => SmsAuthenticationError::Replaced,
+        Failure::Client(error) => match error {
+            Error::TemporaryNetworkFailure => SmsAuthenticationError::Network,
+            Error::InputBound => SmsAuthenticationError::InvalidInput,
+            Error::VerificationRejected => SmsAuthenticationError::CodeRejected,
+            Error::RateLimited => SmsAuthenticationError::RateLimited,
+            Error::SecurityVerificationRequired => {
+                SmsAuthenticationError::SecurityVerificationRequired
+            }
+            Error::SecondaryVerificationRequired => {
+                SmsAuthenticationError::SecondaryVerificationRequired
+            }
+            Error::ResponseShapeMismatch | Error::ResponseBound => {
+                SmsAuthenticationError::InvalidResponse
+            }
+            _ => SmsAuthenticationError::ServiceUnavailable,
+        },
+    }
+}
+
+fn sms_debug(message: std::fmt::Arguments<'_>) {
+    if std::env::var_os("FURA_NETEASE_SMS_DEBUG").is_some() {
+        eprintln!("FURA_DIAGNOSTIC netease_sms_core {message}");
     }
 }
 pub(super) fn library_error(f: Failure) -> UserLibraryError {
@@ -169,6 +209,24 @@ impl<T: Transport> NeteaseProvider<T> {
         s.active = None;
         s.liked_playlist = None;
         s.pending = Some(credential);
+        s.sms = None;
+        Ok(())
+    }
+    /// Stages the minimal Cookie header returned by an official `NetEase` web
+    /// login. Authentication is not established until the normal account
+    /// verification path succeeds.
+    ///
+    /// # Errors
+    /// Rejects malformed, oversized or conflicting browser Cookie data.
+    pub fn import_browser_credential(&self, bytes: &[u8]) -> Result<(), AccountSummaryError> {
+        let credential = Credential::from_browser_cookie_header(bytes)
+            .map_err(|error| account_error(error.into()))?;
+        let mut state = self.auth.lock();
+        self.auth.bump(&mut state);
+        state.active = None;
+        state.liked_playlist = None;
+        state.pending = Some(credential);
+        state.sms = None;
         Ok(())
     }
     /// # Errors
@@ -241,6 +299,110 @@ impl<T: Transport> AccountSummaryProvider for NeteaseProvider<T> {
             .map_err(|_| AccountSummaryError::InvalidResponse)
     }
 }
+
+impl<T: Transport> SmsAuthenticationProvider for NeteaseProvider<T> {
+    type Error = SmsAuthenticationError;
+
+    async fn request_sms_code(
+        &self,
+        country_code: String,
+        phone: String,
+    ) -> Result<(), Self::Error> {
+        let generation = {
+            let mut state = self.auth.lock();
+            self.auth.bump(&mut state);
+            state.active = None;
+            state.pending = None;
+            state.sms = None;
+            state.liked_playlist = None;
+            state.generation
+        };
+        let challenge = self
+            .auth
+            .run(generation, self.client.send_sms_code(&country_code, &phone))
+            .await
+            .map_err(sms_error)?;
+        let mut state = self.auth.lock();
+        if state.generation != generation {
+            return Err(SmsAuthenticationError::Replaced);
+        }
+        state.sms = Some(challenge);
+        Ok(())
+    }
+
+    async fn authenticate_sms_code(&self, code: String) -> Result<(), Self::Error> {
+        let (generation, pending, challenge) = {
+            let state = self.auth.lock();
+            (state.generation, state.pending.clone(), state.sms.clone())
+        };
+        if let Some(credential) = pending {
+            let account = match self
+                .auth
+                .run(generation, self.client.account(&credential))
+                .await
+            {
+                Ok(account) => {
+                    sms_debug(format_args!(
+                        "phase=account_verification source=retained outcome=success"
+                    ));
+                    account
+                }
+                Err(failure) => {
+                    sms_debug(format_args!(
+                        "phase=account_verification source=retained outcome=failure failure={failure:?}"
+                    ));
+                    return Err(sms_error(failure));
+                }
+            };
+            return self
+                .auth
+                .install(generation, credential, account.id)
+                .map_err(sms_error);
+        }
+        let challenge = challenge.ok_or(SmsAuthenticationError::InvalidInput)?;
+        let credential = self
+            .auth
+            .run(
+                generation,
+                self.client.login_with_sms_code(&challenge, &code),
+            )
+            .await
+            .map_err(sms_error)?;
+        sms_debug(format_args!("phase=login outcome=credential_candidate"));
+        self.auth
+            .retain_pending(generation, credential.clone())
+            .map_err(sms_error)?;
+        let account = match self
+            .auth
+            .run(generation, self.client.account(&credential))
+            .await
+        {
+            Ok(account) => {
+                sms_debug(format_args!(
+                    "phase=account_verification source=new outcome=success"
+                ));
+                account
+            }
+            Err(failure) => {
+                sms_debug(format_args!(
+                    "phase=account_verification source=new outcome=failure failure={failure:?}"
+                ));
+                return Err(sms_error(failure));
+            }
+        };
+        self.auth
+            .install(generation, credential, account.id)
+            .map_err(sms_error)
+    }
+
+    fn cancel_sms_authentication(&self) -> bool {
+        let mut state = self.auth.lock();
+        let had_challenge = state.sms.take().is_some();
+        let had_pending_credential = state.pending.take().is_some();
+        self.auth.bump(&mut state);
+        had_challenge || had_pending_credential
+    }
+}
 /// One opaque, generation-bound QR attempt. Drop/cancel never confirms an account.
 pub struct NeteaseQrSession<T> {
     client: Arc<NeteaseClient<T>>,
@@ -248,6 +410,7 @@ pub struct NeteaseQrSession<T> {
     generation: u64,
     key: QrKey,
     image: Vec<u8>,
+    external_confirmation_url: String,
     deadline: tokio::time::Instant,
     finished: bool,
     active: Arc<AtomicBool>,
@@ -270,6 +433,7 @@ impl<T: Transport> QrAuthenticationProvider for NeteaseProvider<T> {
             s.active = None;
             s.liked_playlist = None;
             s.pending = None;
+            s.sms = None;
             s.generation
         };
         let key =
@@ -278,12 +442,16 @@ impl<T: Transport> QrAuthenticationProvider for NeteaseProvider<T> {
                 .map_err(|_| AuthenticationError::TimedOut)?
                 .map_err(auth_error)?;
         let image = key.image_png().map_err(|e| auth_error(e.into()))?;
+        let external_confirmation_url = key
+            .external_confirmation_url()
+            .map_err(|e| auth_error(e.into()))?;
         Ok(NeteaseQrSession {
             client: self.client.clone(),
             auth: self.auth.clone(),
             generation,
             key,
             image,
+            external_confirmation_url,
             deadline,
             finished: false,
             active: Arc::new(AtomicBool::new(true)),
@@ -298,6 +466,7 @@ impl<T: Transport> QrAuthenticationProvider for NeteaseProvider<T> {
         s.active = None;
         s.liked_playlist = None;
         s.pending = None;
+        s.sms = None;
         self.auth.bump(&mut s);
     }
 }
@@ -330,6 +499,14 @@ impl<T> NeteaseQrSession<T> {
             active: self.active.clone(),
         }
     }
+
+    /// The official short-lived confirmation URL encoded in this session's QR.
+    /// Callers must treat it as a secret and must not include it in diagnostics.
+    #[must_use]
+    pub fn external_confirmation_url(&self) -> &str {
+        &self.external_confirmation_url
+    }
+
     fn finish(&mut self) {
         self.finished = true;
         self.active.store(false, Ordering::SeqCst);
@@ -373,7 +550,7 @@ impl<T: Transport> QrAuthenticationSession for NeteaseQrSession<T> {
         let result = tokio::time::timeout_at(
             self.deadline,
             self.auth
-                .run(self.generation, self.client.qr_poll(&self.key)),
+                .run(self.generation, self.client.qr_poll(&mut self.key)),
         )
         .await;
         let poll = match result {
@@ -404,17 +581,47 @@ impl<T: Transport> QrAuthenticationSession for NeteaseQrSession<T> {
                 Ok(QrAuthenticationProgress::Expired)
             }
             QrPoll::Confirmed(c) => {
+                if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+                    eprintln!(
+                        "FURA_DIAGNOSTIC netease_qr_core phase=confirmation outcome=credential_candidate"
+                    );
+                }
                 self.auth
                     .retain_pending(self.generation, c.clone())
                     .map_err(auth_error)?;
                 self.finish();
-                let a = tokio::time::timeout_at(
+                let account = tokio::time::timeout_at(
                     self.deadline,
                     self.auth.run(self.generation, self.client.account(&c)),
                 )
-                .await
-                .map_err(|_| AuthenticationError::TimedOut)?
-                .map_err(auth_error)?;
+                .await;
+                let a = match account {
+                    Err(_) => {
+                        if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+                            eprintln!(
+                                "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=failure failure=TimedOut"
+                            );
+                        }
+                        return Err(AuthenticationError::TimedOut);
+                    }
+                    Ok(Err(failure)) => {
+                        let failure = auth_error(failure);
+                        if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+                            eprintln!(
+                                "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=failure failure={failure:?}"
+                            );
+                        }
+                        return Err(failure);
+                    }
+                    Ok(Ok(account)) => {
+                        if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+                            eprintln!(
+                                "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=success"
+                            );
+                        }
+                        account
+                    }
+                };
                 self.auth
                     .install(self.generation, c, a.id)
                     .map_err(auth_error)?;

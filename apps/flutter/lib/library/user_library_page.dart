@@ -9,6 +9,7 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -1715,9 +1716,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               AuthenticatedPrimaryDestination.discover,
             ),
             onOpenLibrary: _openLikedSongs,
-            onAccountAction: widget.authenticated
-                ? _confirmSignOut
-                : widget.onRequestSignIn,
             onOpenRecommendation: _openHomeRecommendation,
             lastOpenedRecommendation: _lastOpenedHomeRecommendation,
             recommendationReturnFocusNode: _homeRecommendationReturnFocusNode,
@@ -1978,7 +1976,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           },
         ),
       );
-      final detailUsesOwnToolbar = settingsOpen && !wide;
+      final settingsUsesOwnToolbar = settingsOpen && !wide;
+      final compactCatalogUsesOwnToolbar = compactActions && catalogDetailOpen;
       return Scaffold(
         key: const ValueKey('authenticated-primary-shell'),
         body: Row(
@@ -2065,11 +2064,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               child: Scaffold(
                 key: const ValueKey('authenticated-content-shell'),
                 appBar:
-                    detailUsesOwnToolbar ||
+                    settingsUsesOwnToolbar ||
+                        compactCatalogUsesOwnToolbar ||
                         likedHeaderOwnsTopBar ||
-                        recentHeaderOwnsTopBar ||
-                        (compactActions &&
-                            destination == AuthenticatedPrimaryDestination.home)
+                        recentHeaderOwnsTopBar
                     ? null
                     : mainAppBar,
                 body: _CompactPlayerOverlay(
@@ -2097,7 +2095,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                     },
                     base: Padding(
                       padding: EdgeInsets.only(
-                        top: detailUsesOwnToolbar ? kToolbarHeight : 0,
+                        top: settingsUsesOwnToolbar ? kToolbarHeight : 0,
                       ),
                       child: mainBody,
                     ),
@@ -2811,8 +2809,12 @@ class _SidebarIdentity extends StatelessWidget {
                         ? brandFallback
                         : Image.network(
                             avatarUri!,
+                            headers: musicArtworkRequestHeaders(avatarUri!),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => brandFallback,
+                            errorBuilder: musicArtworkErrorBuilder(
+                              avatarUri!,
+                              brandFallback,
+                            ),
                           ),
                   ),
                 ),
@@ -3003,51 +3005,52 @@ class _PrimaryShellTitle extends StatelessWidget {
     final transitionDuration = disableAnimations
         ? Duration.zero
         : MusicMotion.stateChange;
-    final titleTransition = AnimatedSize(
+    final titleContent = AnimatedSwitcher(
       key: const ValueKey('shell-top-bar-title-transition'),
       duration: transitionDuration,
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.centerLeft,
-      clipBehavior: Clip.none,
-      child: AnimatedSwitcher(
-        duration: transitionDuration,
-        switchInCurve: Curves.easeInOutCubic,
-        switchOutCurve: Curves.easeInOutCubic,
-        layoutBuilder: (currentChild, previousChildren) => Stack(
-          alignment: Alignment.centerLeft,
-          clipBehavior: Clip.none,
-          children: [...previousChildren, ?currentChild],
-        ),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(-0.08, 0),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
-          ),
-        ),
-        child: showTitle
-            ? Semantics(
-                key: const ValueKey('shell-top-bar-title-visible'),
-                header: true,
-                child: Text(
-                  title,
-                  key: ValueKey('shell-top-bar-title-$title'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              )
-            : const SizedBox.shrink(
-                key: ValueKey('shell-top-bar-title-hidden'),
-              ),
+      switchInCurve: Curves.easeInOutCubic,
+      switchOutCurve: Curves.easeInOutCubic,
+      layoutBuilder: (currentChild, previousChildren) => Stack(
+        alignment: Alignment.centerLeft,
+        clipBehavior: Clip.none,
+        children: [...previousChildren, ?currentChild],
       ),
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(-0.08, 0),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
+        ),
+      ),
+      child: showTitle
+          ? Semantics(
+              key: const ValueKey('shell-top-bar-title-visible'),
+              header: true,
+              child: Text(
+                title,
+                key: ValueKey('shell-top-bar-title-$title'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            )
+          : const SizedBox.shrink(key: ValueKey('shell-top-bar-title-hidden')),
     );
+    final titleTransition = disableAnimations
+        ? titleContent
+        : AnimatedSize(
+            duration: transitionDuration,
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.centerLeft,
+            clipBehavior: Clip.none,
+            child: titleContent,
+          );
     if (!showSearchShortcut) return titleTransition;
     return Row(
       children: [
@@ -3347,10 +3350,14 @@ class _PlaylistArtwork extends StatelessWidget {
           ? const _ArtworkPlaceholder()
           : Image.network(
               uri,
+              headers: musicArtworkRequestHeaders(uri),
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
-              errorBuilder: (_, _, _) => const _ArtworkPlaceholder(),
+              errorBuilder: musicArtworkErrorBuilder(
+                uri,
+                const _ArtworkPlaceholder(),
+              ),
             ),
     );
   }

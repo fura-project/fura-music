@@ -8,8 +8,8 @@ import 'authentication.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_attempt`, `failed_export`, `failed_restore`, `failed_start`, `failed_verification`, `lock_attempt`, `map_auth_error`, `map_progress`, `next_attempt`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_attempt`, `failed_export`, `failed_restore`, `failed_sms`, `failed_start`, `failed_verification`, `lock_attempt`, `map_auth_error`, `map_progress`, `map_sms_error`, `next_attempt`, `successful_sms`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
 int reserveNeteaseQrLoginStart() => RustLib.instance.api
     .crateApiNeteaseAuthenticationReserveNeteaseQrLoginStart();
@@ -27,6 +27,47 @@ bool cancelNeteaseQrLoginStart({required int attemptId}) =>
 bool neteaseHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiNeteaseAuthenticationNeteaseHasAuthenticatedCredential();
 
+int reserveNeteaseSmsCodeRequest() => RustLib.instance.api
+    .crateApiNeteaseAuthenticationReserveNeteaseSmsCodeRequest();
+
+Future<NeteaseSmsAuthenticationOutcome> requestNeteaseSmsCode({
+  required int attemptId,
+  required String countryCode,
+  required String phone,
+}) => RustLib.instance.api.crateApiNeteaseAuthenticationRequestNeteaseSmsCode(
+  attemptId: attemptId,
+  countryCode: countryCode,
+  phone: phone,
+);
+
+bool cancelNeteaseSmsCodeRequest({required int attemptId}) => RustLib
+    .instance
+    .api
+    .crateApiNeteaseAuthenticationCancelNeteaseSmsCodeRequest(
+      attemptId: attemptId,
+    );
+
+int? reserveNeteaseSmsLogin() =>
+    RustLib.instance.api.crateApiNeteaseAuthenticationReserveNeteaseSmsLogin();
+
+Future<NeteaseSmsAuthenticationOutcome> authenticateNeteaseSmsCode({
+  required int attemptId,
+  required String code,
+}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationAuthenticateNeteaseSmsCode(
+      attemptId: attemptId,
+      code: code,
+    );
+
+bool cancelNeteaseSmsLogin({required int attemptId}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationCancelNeteaseSmsLogin(attemptId: attemptId);
+
+/// Cancels the provider-owned phone-code session after a completed code
+/// request. At that point no bridge attempt remains active, but the provider
+/// still retains the short-lived challenge needed to authenticate the code.
+bool cancelNeteaseSmsAuthentication() => RustLib.instance.api
+    .crateApiNeteaseAuthenticationCancelNeteaseSmsAuthentication();
+
 QqMusicCredentialExport exportNeteaseCredentialForSecureStorage() => RustLib
     .instance
     .api
@@ -36,6 +77,16 @@ QqMusicCredentialRestore restoreNeteaseCredentialFromSecureStorage({
   Uint8List? secretBytes,
 }) => RustLib.instance.api
     .crateApiNeteaseAuthenticationRestoreNeteaseCredentialFromSecureStorage(
+      secretBytes: secretBytes,
+    );
+
+/// Stages the minimal Cookie header returned by an official `NetEase` web login.
+/// The caller must run the normal credential verification before treating the
+/// account as authenticated. Secret bytes are overwritten before returning.
+QqMusicCredentialRestore stageNeteaseOfficialWebCredential({
+  required List<int> secretBytes,
+}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationStageNeteaseOfficialWebCredential(
       secretBytes: secretBytes,
     );
 
@@ -71,12 +122,22 @@ abstract class NeteaseQrLoginSessionHandle implements RustOpaqueInterface {
 class NeteaseQrLoginStart {
   final NeteaseQrLoginSessionHandle? session;
   final QqMusicQrChallenge? challenge;
+  final String? externalConfirmationUrl;
   final QqMusicQrLoginFailure? failure;
 
-  const NeteaseQrLoginStart({this.session, this.challenge, this.failure});
+  const NeteaseQrLoginStart({
+    this.session,
+    this.challenge,
+    this.externalConfirmationUrl,
+    this.failure,
+  });
 
   @override
-  int get hashCode => session.hashCode ^ challenge.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      session.hashCode ^
+      challenge.hashCode ^
+      externalConfirmationUrl.hashCode ^
+      failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -85,5 +146,38 @@ class NeteaseQrLoginStart {
           runtimeType == other.runtimeType &&
           session == other.session &&
           challenge == other.challenge &&
+          externalConfirmationUrl == other.externalConfirmationUrl &&
+          failure == other.failure;
+}
+
+enum NeteaseSmsAuthenticationFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  invalidInput,
+  codeRejected,
+  rateLimited,
+  securityVerificationRequired,
+  secondaryVerificationRequired,
+  replaced,
+  alreadyRunning,
+}
+
+class NeteaseSmsAuthenticationOutcome {
+  final bool success;
+  final NeteaseSmsAuthenticationFailure? failure;
+
+  const NeteaseSmsAuthenticationOutcome({required this.success, this.failure});
+
+  @override
+  int get hashCode => success.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NeteaseSmsAuthenticationOutcome &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
           failure == other.failure;
 }

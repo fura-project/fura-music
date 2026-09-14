@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
@@ -780,9 +781,15 @@ Future<void> openNowPlayingCatalogContext({
       ? await showModalBottomSheet<_NowPlayingCatalogAction>(
           context: context,
           showDragHandle: true,
-          builder: (context) => PlaybackShortcuts(
-            controller: controller,
-            child: _NowPlayingCatalogSelection(actions: actions, compact: true),
+          builder: (context) => SafeArea(
+            top: false,
+            child: PlaybackShortcuts(
+              controller: controller,
+              child: _NowPlayingCatalogSelection(
+                actions: actions,
+                compact: true,
+              ),
+            ),
           ),
         )
       : await showDialog<_NowPlayingCatalogAction>(
@@ -1309,6 +1316,7 @@ class _NowPlayingArtwork extends StatelessWidget {
                 ? const _NowPlayingArtworkPlaceholder()
                 : Image.network(
                     artworkUri,
+                    headers: musicArtworkRequestHeaders(artworkUri),
                     fit: BoxFit.cover,
                     excludeFromSemantics: true,
                     gaplessPlayback: true,
@@ -1316,8 +1324,10 @@ class _NowPlayingArtwork extends StatelessWidget {
                         progress == null
                         ? child
                         : const _NowPlayingArtworkPlaceholder(),
-                    errorBuilder: (context, error, stackTrace) =>
-                        const _NowPlayingArtworkPlaceholder(),
+                    errorBuilder: musicArtworkErrorBuilder(
+                      artworkUri,
+                      const _NowPlayingArtworkPlaceholder(),
+                    ),
                   ),
             if (busy || error)
               ColoredBox(

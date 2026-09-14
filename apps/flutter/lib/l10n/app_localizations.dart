@@ -693,6 +693,24 @@ abstract class AppLocalizations {
   /// **'New code'**
   String get authNewCode;
 
+  /// No description provided for @authOpenQrExternally.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in system browser or NetEase app'**
+  String get authOpenQrExternally;
+
+  /// No description provided for @authOpeningQrExternally.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening confirmation page…'**
+  String get authOpeningQrExternally;
+
+  /// No description provided for @authOpenQrExternallyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The system could not open this confirmation page. Scan the QR code on another device.'**
+  String get authOpenQrExternallyFailed;
+
   /// No description provided for @authSignedInTitle.
   ///
   /// In en, this message translates to:
@@ -746,6 +764,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing changed on your account. You can try again.'**
   String get authNotApprovedDetail;
+
+  /// QR sign-in title when the provider requires an unsupported additional verification.
+  ///
+  /// In en, this message translates to:
+  /// **'{provider} requires an additional security check'**
+  String authSecurityVerificationTitle(Object provider);
+
+  /// No description provided for @authSecurityVerificationDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'This QR sign-in triggered the provider’s security verification. Fura will not bypass it; create a fresh code and try again later.'**
+  String get authSecurityVerificationDetail;
+
+  /// Sign-in title when the provider requires an interactive second verification.
+  ///
+  /// In en, this message translates to:
+  /// **'{provider} requires a second verification step'**
+  String authSecondaryVerificationTitle(Object provider);
+
+  /// No description provided for @authSecondaryVerificationDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue on the official NetEase website to complete the provider-controlled verification.'**
+  String get authSecondaryVerificationDetail;
 
   /// No description provided for @authServiceRejectedDetail.
   ///
@@ -872,6 +914,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Desktop QQ quick login is unavailable.'**
   String get authDesktopUnavailable;
+
+  /// No description provided for @authUsePhoneCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Use phone code'**
+  String get authUsePhoneCode;
+
+  /// No description provided for @authUseQrCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Use QR code'**
+  String get authUseQrCode;
+
+  /// No description provided for @authUseOfficialWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue on NetEase website'**
+  String get authUseOfficialWebsite;
+
+  /// No description provided for @authOfficialWebTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete sign-in with NetEase'**
+  String get authOfficialWebTitle;
+
+  /// No description provided for @authOfficialWebDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the official login window. Fura will import only the resulting session and verify it before saving.'**
+  String get authOfficialWebDetail;
+
+  /// No description provided for @authOfficialWebErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Official NetEase sign-in did not finish'**
+  String get authOfficialWebErrorTitle;
+
+  /// No description provided for @authOfficialWebUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The official login window is not available on this device.'**
+  String get authOfficialWebUnavailable;
+
+  /// No description provided for @authOfficialWebRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase did not accept the completed website session.'**
+  String get authOfficialWebRejected;
+
+  /// No description provided for @authOfficialWebNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'The completed website session could not be verified because the connection failed.'**
+  String get authOfficialWebNetwork;
+
+  /// No description provided for @authOfficialWebServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase accepted the website interaction but its account verification service is unavailable.'**
+  String get authOfficialWebServiceUnavailable;
+
+  /// No description provided for @authOfficialWebInvalidCredential.
+  ///
+  /// In en, this message translates to:
+  /// **'The official window did not return a session Fura can validate.'**
+  String get authOfficialWebInvalidCredential;
+
+  /// No description provided for @authOfficialWebAlreadyRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'An official NetEase login window is already open.'**
+  String get authOfficialWebAlreadyRunning;
+
+  /// No description provided for @authOfficialWebFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The official login window could not complete safely. No session was saved.'**
+  String get authOfficialWebFailed;
+
+  /// No description provided for @authPhoneCodeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with a phone code'**
+  String get authPhoneCodeTitle;
+
+  /// No description provided for @authPhoneCodeDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a one-time code for the phone number linked to NetEase Cloud Music.'**
+  String get authPhoneCodeDetail;
+
+  /// No description provided for @authCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Country code'**
+  String get authCountryCode;
+
+  /// No description provided for @authPhoneNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number'**
+  String get authPhoneNumber;
+
+  /// No description provided for @authSmsCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get authSmsCode;
+
+  /// No description provided for @authSendCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send code'**
+  String get authSendCode;
+
+  /// No description provided for @authResendCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend code'**
+  String get authResendCode;
+
+  /// Countdown before another SMS code can be requested.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend in {seconds}s'**
+  String authResendCodeIn(int seconds);
+
+  /// No description provided for @authCodeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Code sent. Check your messages.'**
+  String get authCodeSent;
+
+  /// No description provided for @authSmsSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get authSmsSignIn;
+
+  /// No description provided for @authSendingCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending code…'**
+  String get authSendingCode;
+
+  /// No description provided for @authCheckingSmsCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking code…'**
+  String get authCheckingSmsCode;
+
+  /// No description provided for @authSmsRiskWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase may still require an additional security check. Fura will stop and report it instead of bypassing the check.'**
+  String get authSmsRiskWarning;
+
+  /// No description provided for @authSmsInvalidInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid country code, phone number, and verification code using digits only.'**
+  String get authSmsInvalidInput;
+
+  /// No description provided for @authSmsCodeRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'That verification code was not accepted. Check it and try again.'**
+  String get authSmsCodeRejected;
+
+  /// No description provided for @authSmsRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests were made. Wait before requesting another code.'**
+  String get authSmsRateLimited;
+
+  /// No description provided for @authSmsSecurityVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase requires an additional security check for this phone login. Fura cannot bypass it.'**
+  String get authSmsSecurityVerification;
+
+  /// No description provided for @authSmsSecondaryVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase requires an interactive second verification. Continue on the official website to finish sign-in.'**
+  String get authSmsSecondaryVerification;
+
+  /// No description provided for @authSmsNetworkFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t reach NetEase. Check your connection and try again.'**
+  String get authSmsNetworkFailure;
+
+  /// No description provided for @authSmsServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase phone login is temporarily unavailable. Try again later or use QR sign-in.'**
+  String get authSmsServiceUnavailable;
+
+  /// No description provided for @authSmsInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase returned a response this version could not verify. No login was installed.'**
+  String get authSmsInvalidResponse;
+
+  /// No description provided for @authSmsAlreadyRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'A phone login request is already in progress.'**
+  String get authSmsAlreadyRunning;
+
+  /// No description provided for @authSmsAttemptReplaced.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone login is no longer current. Request a new code.'**
+  String get authSmsAttemptReplaced;
+
+  /// No description provided for @authSmsCoreUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The music core could not continue phone login.'**
+  String get authSmsCoreUnavailable;
 
   /// No description provided for @searchSongHint.
   ///

@@ -38,6 +38,7 @@ import 'package:flutter/material.dart'
         Opacity,
         PageStorageKey,
         PinnedHeaderSliver,
+        SafeArea,
         Scaffold,
         Scrollable,
         ScrollableState,
@@ -732,7 +733,6 @@ void main() {
                 now: () => now,
                 onOpenDiscover: () {},
                 onOpenLibrary: () {},
-                onAccountAction: () {},
                 onOpenRecommendation: (_) {},
               ),
             ),
@@ -2276,6 +2276,14 @@ void main() {
     }
 
     await pumpFixture(const Size(390, 844));
+    expect(find.text(_en.homeRecommendTab), findsNothing);
+    expect(find.text(_en.homeMusicTab), findsNothing);
+    expect(find.text(_en.homeAudiobooksTab), findsNothing);
+    expect(find.text(_en.homePodcastsTab), findsNothing);
+    expect(
+      find.byKey(const ValueKey('shell-top-bar-title-Home')),
+      findsOneWidget,
+    );
     expect(
       tester.getSize(find.byKey(const ValueKey('home-library-playlist-0'))),
       const Size.square(136),
@@ -2605,7 +2613,11 @@ void main() {
       expect(find.byKey(const ValueKey('home-library-shelf')), findsOneWidget);
       expect(find.text('Compact Home playlist'), findsWidgets);
       expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
-      expect(find.byType(AppBar), findsNothing);
+      expect(find.byType(AppBar), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('shell-top-bar-title-Home')),
+        findsOneWidget,
+      );
       expect(tester.getSize(find.byType(NavigationBar)).height, 72);
       expect(
         tester
@@ -4548,6 +4560,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('now-playing-catalog-selection')),
+        findsOneWidget,
+      );
+      expect(
+        find.ancestor(
+          of: find.byKey(const ValueKey('now-playing-catalog-selection')),
+          matching: find.byType(SafeArea),
+        ),
         findsOneWidget,
       );
       expect(
@@ -7588,6 +7607,7 @@ void main() {
       const captureReviewImages = bool.fromEnvironment(
         'SIDEBAR_SETTINGS_VISUAL_REVIEW',
       );
+      await _loadRecentReviewFonts(tester, enabled: captureReviewImages);
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -7682,6 +7702,13 @@ void main() {
       expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsNothing);
       expect(
         find.byKey(const ValueKey('embedded-settings-page')),
+        findsOneWidget,
+      );
+      expect(
+        find.ancestor(
+          of: find.byKey(const ValueKey('settings-toolbar')),
+          matching: find.byType(SafeArea),
+        ),
         findsOneWidget,
       );
       if (captureReviewImages) {
@@ -8586,11 +8613,12 @@ void main() {
   );
 
   testWidgets(
-    'signed-out NetEase keeps public shell and exposes only NetEase QR',
+    'signed-out NetEase keeps public shell and exposes QR and phone code',
     (tester) async {
       const captureReviewImages = bool.fromEnvironment(
         'BUILT_IN_PROVIDER_VISUAL_REVIEW',
       );
+      await _loadRecentReviewFonts(tester, enabled: captureReviewImages);
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -8622,7 +8650,7 @@ void main() {
               ),
             ),
             netEase: _providerFixture(
-              authenticationGateway: _ProviderWidgetGateway(
+              authenticationGateway: _SmsProviderWidgetGateway(
                 providerId: 'netease-cloud-music',
               ),
               capabilities: MusicProviderCapabilities.netEaseCloudMusic,
@@ -8666,6 +8694,69 @@ void main() {
       expect(find.text('Scan with QQ'), findsNothing);
       expect(find.text('Scan with WeChat'), findsNothing);
       expect(find.text('Quick login'), findsNothing);
+      expect(find.text('Use phone code'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('start-official-web-login-button')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('start-qq-login-button')));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('open-netease-qr-externally')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('show-sms-login-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Sign in with a phone code'), findsOneWidget);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-netease-sms-login-compact.png'),
+          ),
+        );
+      }
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('sms-code-field')))
+            .enabled,
+        isFalse,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('sms-phone-field')),
+        '00000000000',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('request-sms-code-button')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('request-sms-code-button')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Code sent. Check your messages.'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('sms-code-field')))
+            .enabled,
+        isTrue,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('sms-code-field')),
+        '000000',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('submit-sms-login-button')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('submit-sms-login-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -9639,6 +9730,13 @@ class _ProviderWidgetGateway
             'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
           ),
         ),
+        externalConfirmationUri: providerId == 'netease-cloud-music'
+            ? Uri.parse(
+                'https://music.163.com/st/platform/scanlogin?'
+                'codekey=synthetic-key&chainId=synthetic-chain&'
+                'hdw_device=web&hdw_appid=web&hitExp=1',
+              )
+            : null,
       ),
     ),
   );
@@ -9665,6 +9763,60 @@ class _ProviderWidgetGateway
     authenticated = false;
     return CredentialSignOutResult.signedOut;
   }
+}
+
+class _SmsProviderWidgetGateway extends _ProviderWidgetGateway
+    implements SmsAuthenticationGateway {
+  _SmsProviderWidgetGateway({required super.providerId});
+
+  final List<(String, String)> phoneRequests = [];
+  final List<String> codes = [];
+
+  @override
+  bool cancelSmsAuthentication() => true;
+
+  @override
+  SmsCodeRequestOperation beginSmsCodeRequest({
+    required String countryCode,
+    required String phone,
+  }) {
+    phoneRequests.add((countryCode, phone));
+    return const _ImmediateWidgetSmsCodeRequest(
+      SmsAuthenticationOutcome(success: true),
+    );
+  }
+
+  @override
+  SmsLoginOperation beginSmsLogin({required String code}) {
+    codes.add(code);
+    return const _ImmediateWidgetSmsLogin(
+      SmsAuthenticationOutcome(success: true),
+    );
+  }
+}
+
+class _ImmediateWidgetSmsCodeRequest implements SmsCodeRequestOperation {
+  const _ImmediateWidgetSmsCodeRequest(this.outcome);
+
+  final SmsAuthenticationOutcome outcome;
+
+  @override
+  bool cancel() => false;
+
+  @override
+  Future<SmsAuthenticationOutcome> run() async => outcome;
+}
+
+class _ImmediateWidgetSmsLogin implements SmsLoginOperation {
+  const _ImmediateWidgetSmsLogin(this.outcome);
+
+  final SmsAuthenticationOutcome outcome;
+
+  @override
+  bool cancel() => false;
+
+  @override
+  Future<SmsAuthenticationOutcome> run() async => outcome;
 }
 
 class _WidgetDesktopQuickLoginStartOperation

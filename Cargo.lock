@@ -1115,6 +1115,7 @@ dependencies = [
  "aes",
  "base64",
  "cbc",
+ "flate2",
  "getrandom 0.4.3",
  "md-5",
  "num-bigint",

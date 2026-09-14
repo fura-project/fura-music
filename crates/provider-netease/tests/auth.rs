@@ -11,6 +11,7 @@ use tokio::sync::Notify;
 enum Reply {
     Json(Value),
     Confirmed,
+    SmsConfirmed,
     Failure(Error),
     Blocked(Arc<Notify>, Arc<Notify>, Value),
 }
@@ -23,8 +24,15 @@ impl Transport for Fake {
     async fn send(&self, r: Request) -> Result<Response, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if let Some(cookie) = r.cookie() {
-            assert!(cookie.contains("synthetic"));
-            self.auth_calls.fetch_add(1, Ordering::SeqCst);
+            if cookie.contains("synthetic") {
+                self.auth_calls.fetch_add(1, Ordering::SeqCst);
+            } else if r.url().contains("interface3.music.163.com/eapi/") {
+                assert!(cookie.contains("deviceId="));
+                assert!(cookie.contains("requestId="));
+            } else {
+                assert!(cookie.contains("JSESSIONID-WYYY="));
+                assert!(cookie.contains("NMTID="));
+            }
         }
         let reply = self
             .replies
@@ -43,6 +51,10 @@ impl Transport for Fake {
                 ];
                 json!({"code":803})
             }
+            Reply::SmsConfirmed => json!({
+                "code":200,
+                "cookie":"MUSIC_U=synthetic-session; __csrf=synthetic-csrf",
+            }),
             Reply::Blocked(start, release, v) => {
                 start.notify_one();
                 release.notified().await;
@@ -171,6 +183,152 @@ fn credential_documents_reject_foreign_versions_injections_and_oversize() {
     }
     assert!(Credential::import(&vec![b'x'; 8193]).is_err());
 }
+
+#[tokio::test]
+async fn official_browser_cookie_is_only_staged_until_account_verification() {
+    let (provider, calls, authenticated_calls) = provider(vec![Reply::Json(account())]);
+    provider
+        .import_browser_credential(
+            b"MUSIC_U=synthetic-session; __csrf=synthetic-csrf; ignored=value",
+        )
+        .unwrap();
+    assert!(!provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_none());
+
+    provider.verify_restored_credential().await.unwrap();
+    assert!(provider.has_authenticated_credential());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 1);
+
+    provider.sign_out();
+    assert!(
+        provider
+            .import_browser_credential(b"MUSIC_U=one; MUSIC_U=conflict; __csrf=synthetic-csrf",)
+            .is_err()
+    );
+    assert!(!provider.has_authenticated_credential());
+}
+
+#[tokio::test]
+async fn sms_code_login_is_one_provider_owned_session_and_persists_only_after_account_check() {
+    let (provider, calls, authenticated_calls) = provider(vec![
+        Reply::Json(json!({"code":200})),
+        Reply::Json(json!({"code":502})),
+        Reply::SmsConfirmed,
+        Reply::Json(account()),
+    ]);
+
+    provider
+        .request_sms_code("86".into(), "00000000000".into())
+        .await
+        .unwrap();
+    assert!(!provider.has_authenticated_credential());
+    assert_eq!(
+        provider.authenticate_sms_code("0000".into()).await,
+        Err(SmsAuthenticationError::CodeRejected)
+    );
+    assert!(!provider.has_authenticated_credential());
+
+    provider
+        .authenticate_sms_code("123456".into())
+        .await
+        .unwrap();
+    assert!(provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_some());
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn sms_account_check_network_failure_retries_the_pending_credential() {
+    let (provider, calls, authenticated_calls) = provider(vec![
+        Reply::Json(json!({"code":200})),
+        Reply::SmsConfirmed,
+        Reply::Failure(Error::TemporaryNetworkFailure),
+        Reply::Json(account()),
+    ]);
+
+    provider
+        .request_sms_code("86".into(), "00000000000".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        provider.authenticate_sms_code("000000".into()).await,
+        Err(SmsAuthenticationError::Network)
+    );
+    assert!(!provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_none());
+
+    provider
+        .authenticate_sms_code("000000".into())
+        .await
+        .unwrap();
+    assert!(provider.has_authenticated_credential());
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn cancelling_sms_after_account_failure_discards_the_pending_credential() {
+    let (provider, calls, _) = provider(vec![
+        Reply::Json(json!({"code":200})),
+        Reply::SmsConfirmed,
+        Reply::Failure(Error::TemporaryNetworkFailure),
+    ]);
+
+    provider
+        .request_sms_code("86".into(), "00000000000".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        provider.authenticate_sms_code("000000".into()).await,
+        Err(SmsAuthenticationError::Network)
+    );
+
+    assert!(provider.cancel_sms_authentication());
+    assert_eq!(
+        provider.authenticate_sms_code("000000".into()).await,
+        Err(SmsAuthenticationError::InvalidInput)
+    );
+    assert!(!provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_none());
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
+async fn sms_security_verification_and_cancel_never_install_a_credential() {
+    let (security_provider, calls, _) = provider(vec![Reply::Json(json!({"code":8821}))]);
+    assert_eq!(
+        security_provider
+            .request_sms_code("86".into(), "00000000000".into())
+            .await,
+        Err(SmsAuthenticationError::SecurityVerificationRequired)
+    );
+    assert!(!security_provider.has_authenticated_credential());
+    assert!(!security_provider.cancel_sms_authentication());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    let (secondary_provider, calls, _) = provider(vec![Reply::Json(json!({"code":8830}))]);
+    assert_eq!(
+        secondary_provider
+            .request_sms_code("86".into(), "00000000000".into())
+            .await,
+        Err(SmsAuthenticationError::SecondaryVerificationRequired)
+    );
+    assert!(!secondary_provider.has_authenticated_credential());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    let (provider, _, _) = provider(vec![Reply::Json(json!({"code":200}))]);
+    provider
+        .request_sms_code("86".into(), "00000000000".into())
+        .await
+        .unwrap();
+    assert!(provider.cancel_sms_authentication());
+    assert_eq!(
+        provider.authenticate_sms_code("123456".into()).await,
+        Err(SmsAuthenticationError::InvalidInput)
+    );
+}
 #[tokio::test]
 async fn qr_wait_scan_confirm_and_account_validation_are_one_generation() {
     let (p, c, a) = provider(vec![
@@ -190,6 +348,9 @@ async fn qr_wait_scan_confirm_and_account_validation_are_one_generation() {
             .starts_with(b"\x89PNG\r\n\x1a\n")
     );
     assert!(!format!("{:?}", qr.challenge()).contains("synthetic"));
+    let confirmation_url = qr.external_confirmation_url();
+    assert!(confirmation_url.starts_with("https://music.163.com/st/platform/scanlogin?"));
+    assert!(confirmation_url.contains("codekey=synthetic-qr-key"));
     assert_eq!(
         qr.advance().await.unwrap(),
         QrAuthenticationProgress::WaitingForScan
@@ -550,6 +711,10 @@ async fn qr_terminal_states_and_retry_budget_never_install_a_credential() {
         (
             vec![key(), Reply::Json(json!({"code":9876}))],
             Err(AuthenticationError::ServiceUnavailable),
+        ),
+        (
+            vec![key(), Reply::Json(json!({"code":8821}))],
+            Err(AuthenticationError::SecurityVerificationRequired),
         ),
     ] {
         let (p, _, _) = provider(replies);

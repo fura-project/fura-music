@@ -1,15 +1,177 @@
 ---
 execution:
-  mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: UI
+  mode: HUMAN_GATED_REGRESSION
+  work_domain: MIXED
   state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
-  active_workstream: FIRST_PARTY_FLUTTER_LOCALIZATION
-  current_task: HD_026_HUMAN_ACCEPTANCE
-  next_action: HUMAN_LOCALIZATION_COPY_AND_VISUAL_REVIEW
+  active_workstream: NETEASE_QR_AND_ARTWORK_RUNTIME_REGRESSION
+  current_task: NETEASE_EXTERNAL_QR_CONFIRMATION_HANDOFF_CANDIDATE
+  next_action: HUMAN_REBUILD_TEST_NETEASE_EXTERNAL_QR_HANDOFF_AND_RESTART
 ---
 
 # Current State
+
+- **2026-09-14 NetEase external QR-confirmation handoff checkpoint:** Human
+  Linux runtime evidence rejects the previous embedded-WebKit candidate: the
+  Web process repeatedly failed EGL/DMABuf and GStreamer range creation before
+  Flutter lost the device connection. The Android private WebView Activity,
+  Linux `desktop_webview_window` path and CI WebKitGTK dependencies are removed.
+  Opening the generic NetEase login page in a system browser is deliberately
+  not presented as authentication because Fura has neither access to the
+  browser cookie jar nor a provider-issued OAuth redirect back into the app.
+  Instead, each active Rust QR session now exposes the exact short-lived
+  official `music.163.com/st/platform/scanlogin` URL already encoded in its QR.
+  Flutter strictly validates its host, route, five query fields and token
+  bounds, then can hand it to the system browser or NetEase app through pinned
+  `url_launcher 6.3.2`; the original Rust session remains active and continues
+  polling for 803. The URL/key never enters diagnostics. Cancellation/provider
+  replacement clears the handoff, and a late launcher result cannot revive it.
+  Direct QR and mobile-EAPI SMS compatibility paths remain intact. Pinned FRB
+  2.13.0 generation, full Rust workspace/all-target tests, strict workspace
+  Clippy, Rust and 244-file Dart format, direct `dart analyze`, all 574 Flutter
+  tests, Linux Release and Android ARM64 Debug builds pass. (`flutter analyze`
+  itself currently exits before diagnostics because this SDK's analysis-server
+  process reads a truncated LSP initialization payload; direct analysis is
+  clean.) Actual external-app routing, provider confirmation, account
+  verification and restart persistence remain `HUMAN_REVIEW`. This checkpoint
+  is included in the current local commit and has not been pushed.
+
+- **2026-09-12 NetEase 8821 diagnosis and phone-code candidate:** two Human
+  rebuilt-Linux attempts reached QR 801 waiting and 802 scanned/awaiting
+  confirmation, then terminated with typed 8821 security verification. This
+  proves QR generation, polling and scan recognition worked and that the
+  terminal failure precedes credential/account/vault installation. Current
+  upstream evidence identifies the next step as an 易盾 behavioral CAPTCHA
+  producing `secureCaptcha`; Fura does not embed, solve or bypass it. As an
+  independent login choice, the shared Provider authentication lifecycle now
+  exposes a mobile-EAPI phone-code candidate with one device context across
+  send and login, strict encrypted-response decoding, typed rejection,
+  rate-limit and 8821 outcomes, explicit cancellation and generation-based
+  stale-result suppression. Phone and code remain widget-local and never enter
+  diagnostics or storage. A returned session stays pending until Account
+  Summary verification succeeds; a transient account-check failure retries the
+  retained candidate instead of resubmitting the code. Rust request/lifecycle
+  tests, pinned FRB 2.13.0 generation, Dart analysis, all 567 Flutter tests,
+  the complete Rust workspace/all-target gate, strict Clippy, Linux Release and
+  Android ARM64 debug build pass. Closing the form after a completed send now explicitly clears the
+  Provider-owned challenge even though no bridge operation remains active. No
+  real SMS was sent and no real credential was used. Rebuilt-application SMS
+  delivery, login and secure-storage behavior remain `HUMAN_REVIEW`. Changes
+  remain uncommitted and unpushed.
+
+- **2026-09-12 NetEase Linux QR/artwork root-cause correction:** Human release-
+  runtime diagnostics supersede the previous candidate acceptance. The two
+  public NetEase artwork hosts failed with real HTTP 403 because Flutter
+  `NetworkImage` appended the supplied browser User-Agent to Dart's existing
+  default User-Agent; the CDN rejected the combined value. Fura now installs
+  one browser-compatible Dart `HttpClient.userAgent` and sends only the
+  host-scoped NetEase Referer per image. A bounded current-public-artwork probe
+  returns HTTP 200 with the corrected policy; rebuilt Flutter rendering remains
+  `HUMAN_REVIEW`. The old EAPI type-3 QR route is preserved as historical
+  evidence: Human logs proved 801 and 802, but confirmation ended in a coarse
+  service failure. The current Human-gated candidate uses the evidenced Web
+  type-1 key/poll flow, a securely random browser cookie context shared with
+  one scan-login `chainId`, and accepts the 803 credential from both response
+  Set-Cookie and its bounded body-cookie field. Code 8821 is now an explicit
+  typed security-verification terminal state through Client, Provider, Bridge
+  and Flutter; Fura neither hides it as downtime nor bypasses it. An opt-in,
+  content-free Core diagnostic now distinguishes QR envelope codes from the
+  803-following account-verification phase without logging keys, cookies,
+  identities or bodies. Offline
+  request/response/lifecycle tests, pinned FRB 2.13.0 generation, the anonymous
+  two-request challenge/801 probe and the artwork HTTP probe pass. The complete
+  Rust workspace/all-target test gate and strict Clippy pass; 241 Dart files
+  pass format, `dart analyze` reports no issues, all 562 Flutter tests pass and
+  Linux Release builds. Full 803, account correlation, credential persistence
+  and visible artwork are still `HUMAN_REVIEW`. Changes remain uncommitted and
+  unpushed.
+
+- **2026-09-12 QQ literal-quote QRC compatibility correction:** the two newly
+  reported public Tracks (`As It Was` by Harry Styles, 167 seconds, and `whoa
+  (mind in awe)` by XXXTentacion, 157 seconds) both completed Search, lyric
+  request and cloud-QRC decryption, then failed at the same strict XML
+  attribute stage. Content-free diagnostics proved that QQ placed respectively
+  two and four literal double quotes inside the `LyricContent="..."` attribute;
+  `quick-xml` consequently interpreted lyric text as another attribute and
+  returned `ExpectedEq`. The Client retains strict XML as its primary path and
+  adds one bounded QQ pseudo-XML recovery: it requires the exact single-track
+  `Lyric_1 LyricType="1" LyricContent="` marker, literal inner quotes, expected
+  closing hierarchy, and a fully valid XML skeleton after removing only the
+  content payload. Wrong lyric types, arbitrary malformed XML and trailing
+  markup remain rejected. The exact anonymous four-request live regression now
+  parses 68 and 25 original lines without printing or retaining lyric text,
+  ciphertext, Track identity or account material. Thirteen focused lyric tests,
+  all 538 Rust offline tests, strict QQ Client/Provider/Bridge Clippy, 248-file
+  Dart format, `dart analyze`, all 560 Flutter tests and Linux Release pass.
+  Workspace-wide strict Clippy remains blocked by two pre-existing lints in the
+  concurrently modified NetEase auth test module; no unrelated NetEase code was
+  changed for this correction. Visible lyric rendering for both Tracks in the
+  rebuilt application remains `HUMAN_REVIEW`. Changes remain uncommitted and
+  unpushed.
+
+- **2026-09-12 NetEase Android Human-regression checkpoint:** Human physical-
+  device evidence supersedes the earlier machine-only QR/artwork conclusion:
+  NetEase QR login and artwork are not yet accepted as working end to end. A
+  protocol audit found that the desktop QR `type=3` flow was incorrectly sent
+  through WEAPI; both key creation and status polling now use the matching PC
+  EAPI channel. An offline request-shape test locks both EAPI endpoints, and the
+  bounded two-request anonymous live probe still reaches a valid local PNG plus
+  the 801 waiting state. Post-scan 802, confirmation 803, credential validation
+  and persistence remain `HUMAN_REVIEW`. Separately, the legacy search endpoint
+  was observed returning a Track without Album artwork, while EAPI Cloud Search
+  returned it in the same bounded query; production search now uses Cloud
+  Search. Every Flutter network-artwork surface retains the host-scoped NetEase
+  CDN Referer/User-Agent policy, including expanded-player palette extraction,
+  and now emits only redacted host/scheme/status/error-class diagnostics while
+  preserving its existing placeholder. A rebuilt Android ARM64 Release APK has
+  SHA-256 `0e74acd28f17915335d0f8ba78d4a8c23deabc4dc9cc2ac9dab0591a8e8fcddc`.
+  Machine gates pass: 17 NetEase client tests, 48 NetEase Provider tests, 4
+  Bridge NetEase tests, both bounded anonymous live probes, 560 Flutter tests,
+  241-file Dart format, `dart analyze`, diff whitespace validation and Android
+  ARM64 Release. No Agent-operated account authorization was attempted; install,
+  scan/approve and physical-device artwork rendering remain `HUMAN_REVIEW`.
+  Changes remain uncommitted and unpushed.
+
+- **2026-09-12 mobile navigation and safe-area correction:** compact Home no
+  longer presents the unimplemented Recommend/Music/Audiobooks/Podcasts strip;
+  the existing Shell now owns one visible Home title and the existing Settings
+  and account actions. Playlist, Album and Ranking keep their local Back and
+  optional Refresh toolbar reachable while the shared collection artwork and
+  metadata continue their scroll-driven collapse; the Shell no longer competes
+  with that toolbar below 520 px. Compact rows across Liked, Playlists, Recent
+  Plays, Radar, New songs, Albums, Rankings and Artists render Artist/Album as
+  non-interactive metadata, leaving catalog navigation to each row's More
+  menu, while desktop independent targets remain unchanged. Embedded Settings
+  and Artist toolbars plus the Now Playing Album/Artist chooser now honor
+  system safe areas. Reduced-motion Shell title changes bypass `AnimatedSize`,
+  avoiding the zero-duration self-layout mutation exposed by the newly visible
+  compact Home AppBar. Focused interaction/layout tests and all 558 Flutter
+  tests pass; 268 Dart files are formatted, `dart analyze` passes, and Android
+  ARM64 plus Linux Release builds succeed. Readable 390 x 844 Home,
+  collapsed-Playlist and Settings review frames were rendered and inspected;
+  physical Android status/navigation-bar behavior remains `HUMAN_REVIEW`.
+  Changes remain uncommitted and unpushed.
+
+- **2026-09-12 NetEase QR/artwork regression correction:** the reported blank
+  NetEase artwork was reproduced at the HTTP boundary: a current public
+  `p*.music.126.net` image returns HTTP 403 to Dart's default user agent and
+  HTTP 200 image data with NetEase's public Referer plus a browser user agent.
+  One centralized, host-scoped artwork policy now supplies those public headers
+  to every visible Flutter artwork path and to expanded-player color extraction;
+  QQ and unrelated hosts keep their prior request behavior. The QR key, local
+  PNG and first anonymous 801 waiting-state poll all pass against the current
+  two-request live protocol. The production failure was a separate pacing bug:
+  Flutter immediately repeated NetEase's non-long-poll status request without
+  an interval, allowing the service to reject the session. NetEase now declares
+  a two-second minimum poll interval while QQ retains its existing behavior;
+  cancellation/replacement still suppress delayed work. Machine gates pass:
+  64 focused NetEase Rust tests, 2 focused Bridge tests, the two-request live QR
+  probe, 248-file Dart format, `dart analyze`, all 556 Flutter tests and Linux
+  Release. `flutter analyze` itself currently exits in this SDK before analysis
+  with a truncated LSP initialization JSON; direct `dart analyze` passes with no
+  issues. End-to-end QR scan/approval, credential persistence and account reads
+  remain `HUMAN_REVIEW`; no account authorization was performed by the Agent.
+  Changes remain uncommitted and unpushed.
 
 - **2026-09-12 HD-026 localization machine checkpoint:** official Flutter
   `gen_l10n` now owns an 843-message English template and matching Simplified

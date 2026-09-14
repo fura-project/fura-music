@@ -127,6 +127,7 @@ class MusicCollectionDetailHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = collapseProgress.clamp(0.0, 1.0);
     final expanded = 1 - progress;
+    final persistentCompactToolbar = MediaQuery.sizeOf(context).width < 520;
     final horizontal = desktop
         ? MusicSpacing.pageWide
         : MusicSpacing.pageCompact;
@@ -146,10 +147,11 @@ class MusicCollectionDetailHeader extends StatelessWidget {
           ClipRect(
             child: Align(
               alignment: Alignment.topCenter,
-              heightFactor: expanded,
+              heightFactor: persistentCompactToolbar ? 1 : expanded,
               child: Opacity(
-                opacity: expanded,
+                opacity: persistentCompactToolbar ? 1 : expanded,
                 child: SizedBox(
+                  key: const ValueKey('collection-detail-local-toolbar'),
                   height: kToolbarHeight,
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: horizontal - 8),

@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/authentication/netease_external_login.dart';
+
+typedef ExternalLoginUriLauncher = Future<bool> Function(Uri uri);
 
 enum LoginStage {
   idle,
@@ -13,6 +16,8 @@ enum LoginStage {
   storedCredentialExpired,
   restoreError,
   starting,
+  officialWebLogin,
+  officialWebError,
   waitingForScan,
   scannedAwaitingConfirmation,
   reconnecting,
@@ -35,14 +40,28 @@ enum DesktopQuickLoginStage {
   error,
 }
 
+enum SmsLoginStage {
+  hidden,
+  ready,
+  sendingCode,
+  codeSent,
+  authenticating,
+  error,
+}
+
 class LoginController extends ChangeNotifier {
   LoginController(
     this._gateway, {
     this._networkRetryDelay = const Duration(seconds: 1),
+    Future<void> Function(Duration)? delay,
+    ExternalLoginUriLauncher? externalLoginUriLauncher,
     this.desktopQuickLoginEnabled = false,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
-  }) : _credentialRestoreResult = initialCredentialRestore {
+  }) : _delay = delay ?? _defaultDelay,
+       _externalLoginUriLauncher =
+           externalLoginUriLauncher ?? openNeteaseQrConfirmationExternally,
+       _credentialRestoreResult = initialCredentialRestore {
     if (_gateway.hasAuthenticatedCredential) {
       _stage = LoginStage.authenticated;
       return;
@@ -62,6 +81,8 @@ class LoginController extends ChangeNotifier {
 
   final QqMusicAuthenticationGateway _gateway;
   final Duration _networkRetryDelay;
+  final Future<void> Function(Duration) _delay;
+  final ExternalLoginUriLauncher _externalLoginUriLauncher;
   final bool desktopQuickLoginEnabled;
   final Set<int> _pollingGenerations = <int>{};
 
@@ -71,7 +92,13 @@ class LoginController extends ChangeNotifier {
   CredentialVerificationOperation? _verificationOperation;
   DesktopQuickLoginStartOperation? _desktopQuickStartOperation;
   DesktopQuickLoginSession? _desktopQuickSession;
+  SmsCodeRequestOperation? _smsCodeRequestOperation;
+  SmsLoginOperation? _smsLoginOperation;
+  OfficialWebAuthenticationOperation? _officialWebOperation;
   Uint8List? _qrImageBytes;
+  Uri? _qrExternalConfirmationUri;
+  bool _openingQrExternally = false;
+  bool _externalQrLaunchFailed = false;
   LoginFailure? _failure;
   LoginQrChannel _qrChannel = LoginQrChannel.qq;
   CredentialSaveState _credentialSaveState = CredentialSaveState.none;
@@ -81,6 +108,10 @@ class LoginController extends ChangeNotifier {
   List<DesktopQuickLoginAccount> _desktopQuickAccounts = const [];
   DesktopQuickLoginFailure? _desktopQuickFailure;
   DesktopQuickLoginStage _desktopQuickStage = DesktopQuickLoginStage.idle;
+  SmsLoginStage _smsStage = SmsLoginStage.hidden;
+  SmsAuthenticationFailure? _smsFailure;
+  OfficialWebAuthenticationFailure? _officialWebFailure;
+  bool _smsCodeRequested = false;
   int? _desktopQuickSelectionId;
   int _generation = 0;
   int _desktopQuickGeneration = 0;
@@ -88,6 +119,12 @@ class LoginController extends ChangeNotifier {
 
   LoginStage get stage => _stage;
   Uint8List? get qrImageBytes => _qrImageBytes;
+  bool get canOpenQrExternally =>
+      _qrExternalConfirmationUri != null &&
+      (_session?.isActive ?? false) &&
+      !_openingQrExternally;
+  bool get openingQrExternally => _openingQrExternally;
+  bool get externalQrLaunchFailed => _externalQrLaunchFailed;
   LoginFailure? get failure => _failure;
   LoginQrChannel get qrChannel => _qrChannel;
   CredentialSaveState get credentialSaveState => _credentialSaveState;
@@ -101,6 +138,18 @@ class LoginController extends ChangeNotifier {
   DesktopQuickLoginStage get desktopQuickStage => supportsDesktopQuickLogin
       ? _desktopQuickStage
       : DesktopQuickLoginStage.disabled;
+  SmsLoginStage get smsStage =>
+      supportsSmsLogin ? _smsStage : SmsLoginStage.hidden;
+  SmsAuthenticationFailure? get smsFailure => _smsFailure;
+  OfficialWebAuthenticationFailure? get officialWebFailure =>
+      _officialWebFailure;
+  bool get smsCodeRequested => _smsCodeRequested;
+  bool get supportsSmsLogin => _gateway is SmsAuthenticationGateway;
+  bool get supportsOfficialWebLogin =>
+      _gateway is OfficialWebAuthenticationGateway &&
+      (_gateway as OfficialWebAuthenticationGateway).supportsOfficialWebLogin;
+  bool get showingSmsLogin =>
+      supportsSmsLogin && _smsStage != SmsLoginStage.hidden;
   int? get desktopQuickSelectionId => _desktopQuickSelectionId;
   String get providerId => (_gateway is ProviderAuthenticationPresentation)
       ? (_gateway as ProviderAuthenticationPresentation).providerId
@@ -115,7 +164,9 @@ class LoginController extends ChangeNotifier {
       desktopQuickLoginEnabled &&
       _gateway is DesktopQuickQqMusicAuthenticationGateway;
   bool get canCancel =>
-      _stage == LoginStage.starting || (_session?.isActive ?? false);
+      _stage == LoginStage.starting ||
+      _stage == LoginStage.officialWebLogin ||
+      (_session?.isActive ?? false);
 
   bool get canRetry =>
       _stage == LoginStage.error && (_session?.isActive ?? false);
@@ -127,6 +178,14 @@ class LoginController extends ChangeNotifier {
               CredentialVerificationResult.serviceUnavailable ||
           _credentialVerificationResult ==
               CredentialVerificationResult.invalidResponse);
+
+  bool get canRetryOfficialWebVerification =>
+      _stage == LoginStage.officialWebError &&
+      (_officialWebFailure == OfficialWebAuthenticationFailure.network ||
+          _officialWebFailure ==
+              OfficialWebAuthenticationFailure.serviceUnavailable ||
+          _officialWebFailure ==
+              OfficialWebAuthenticationFailure.invalidResponse);
 
   bool get isSigningOut => _signOutOperation != null;
 
@@ -154,8 +213,10 @@ class LoginController extends ChangeNotifier {
     _startOperation = null;
     _session?.cancel();
     _session = null;
+    _clearOfficialWebLogin();
+    _clearSmsAuthentication();
     _clearDesktopQuickLogin();
-    _qrImageBytes = null;
+    _clearQrChallenge();
     _failure = null;
     _credentialSaveState = CredentialSaveState.none;
     _credentialVerificationResult = null;
@@ -200,6 +261,8 @@ class LoginController extends ChangeNotifier {
     _verificationOperation?.cancel();
     _verificationOperation = null;
     _clearDesktopQuickLogin();
+    _clearSmsAuthentication();
+    _clearOfficialWebLogin();
     _startOperation?.cancel();
     _startOperation = null;
     _session?.cancel();
@@ -229,7 +292,7 @@ class LoginController extends ChangeNotifier {
       if (result == CredentialSignOutResult.coreUnavailable) {
         _stage = previousStage;
       } else {
-        _qrImageBytes = null;
+        _clearQrChallenge();
         _failure = null;
         _credentialSaveState = CredentialSaveState.none;
         _credentialRestoreResult = CredentialRestoreResult.signedOut;
@@ -367,7 +430,7 @@ class LoginController extends ChangeNotifier {
       _startOperation = null;
       _session?.cancel();
       _session = null;
-      _qrImageBytes = null;
+      _clearQrChallenge();
       _desktopQuickSession = null;
       _desktopQuickAccounts = const [];
       _desktopQuickFailure = null;
@@ -407,7 +470,9 @@ class LoginController extends ChangeNotifier {
     _startOperation = null;
     _session?.cancel();
     _session = null;
-    _qrImageBytes = null;
+    _clearOfficialWebLogin();
+    _clearSmsAuthentication();
+    _clearQrChallenge();
     _failure = null;
     _qrChannel = channel;
     _credentialSaveState = CredentialSaveState.none;
@@ -442,9 +507,234 @@ class LoginController extends ChangeNotifier {
 
     _session = session;
     _qrImageBytes = challenge.imageBytes;
+    _qrExternalConfirmationUri = challenge.externalConfirmationUri;
+    _openingQrExternally = false;
+    _externalQrLaunchFailed = false;
     _stage = LoginStage.waitingForScan;
     _notify();
     unawaited(_poll(generation));
+  }
+
+  void showSmsLogin() {
+    if (!supportsSmsLogin || _disposed) return;
+    ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
+    _startOperation?.cancel();
+    _startOperation = null;
+    _session?.cancel();
+    _session = null;
+    _clearOfficialWebLogin();
+    _clearDesktopQuickLogin();
+    _clearSmsAuthentication();
+    _clearQrChallenge();
+    _failure = null;
+    _credentialSaveState = CredentialSaveState.none;
+    _credentialRestoreResult = CredentialRestoreResult.signedOut;
+    _credentialVerificationResult = null;
+    _stage = LoginStage.idle;
+    _smsStage = SmsLoginStage.ready;
+    _notify();
+  }
+
+  void showQrLogin() => cancel();
+
+  /// Opens the official confirmation page for the current QR challenge while
+  /// leaving the Rust-owned session and its polling loop active.
+  Future<bool> openQrChallengeExternally() async {
+    if (!canOpenQrExternally || _disposed) return false;
+    final uri = _qrExternalConfirmationUri!;
+    final generation = _generation;
+    _openingQrExternally = true;
+    _externalQrLaunchFailed = false;
+    _notify();
+
+    bool opened;
+    try {
+      opened = await _externalLoginUriLauncher(uri);
+    } on Object {
+      opened = false;
+    }
+    if (!_isCurrent(generation) || uri != _qrExternalConfirmationUri) {
+      return opened;
+    }
+    _openingQrExternally = false;
+    _externalQrLaunchFailed = !opened;
+    debugPrint(
+      'FURA_DIAGNOSTIC netease_qr phase=external_handoff '
+      'outcome=${opened ? 'opened' : 'failure'}',
+    );
+    _notify();
+    return opened;
+  }
+
+  Future<void> startOfficialWebLogin() async {
+    if (!supportsOfficialWebLogin || _disposed) return;
+    final generation = ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
+    _startOperation?.cancel();
+    _startOperation = null;
+    _session?.cancel();
+    _session = null;
+    _clearSmsAuthentication();
+    _clearDesktopQuickLogin();
+    _clearOfficialWebLogin();
+    _clearQrChallenge();
+    _failure = null;
+    _officialWebFailure = null;
+    _credentialSaveState = CredentialSaveState.none;
+    _credentialRestoreResult = CredentialRestoreResult.signedOut;
+    _credentialVerificationResult = null;
+    _stage = LoginStage.officialWebLogin;
+    _notify();
+
+    final operation = (_gateway as OfficialWebAuthenticationGateway)
+        .beginOfficialWebLogin();
+    _officialWebOperation = operation;
+    final outcome = await operation.run();
+    if (identical(_officialWebOperation, operation)) {
+      _officialWebOperation = null;
+    }
+    if (!_isCurrent(generation)) return;
+    if (outcome.authenticated) {
+      await _finishAuthentication(generation);
+      return;
+    }
+    _officialWebFailure =
+        outcome.failure ?? OfficialWebAuthenticationFailure.coreUnavailable;
+    if (_officialWebFailure == OfficialWebAuthenticationFailure.cancelled ||
+        _officialWebFailure == OfficialWebAuthenticationFailure.replaced) {
+      _stage = LoginStage.idle;
+      _officialWebFailure = null;
+    } else {
+      _stage = LoginStage.officialWebError;
+    }
+    _notify();
+  }
+
+  Future<void> retryOfficialWebVerification() async {
+    if (!canRetryOfficialWebVerification || _disposed) return;
+    final generation = ++_generation;
+    _verificationOperation?.cancel();
+    final operation = _gateway.beginCredentialVerification();
+    _verificationOperation = operation;
+    _officialWebFailure = null;
+    _stage = LoginStage.officialWebLogin;
+    _notify();
+
+    final result = await operation.run();
+    if (identical(_verificationOperation, operation)) {
+      _verificationOperation = null;
+    }
+    if (!_isCurrent(generation)) return;
+    if (result == CredentialVerificationResult.authenticated) {
+      await _finishAuthentication(generation);
+      return;
+    }
+    _officialWebFailure = switch (result) {
+      CredentialVerificationResult.rejected ||
+      CredentialVerificationResult.rejectedStorageCleanupFailed =>
+        OfficialWebAuthenticationFailure.rejected,
+      CredentialVerificationResult.network =>
+        OfficialWebAuthenticationFailure.network,
+      CredentialVerificationResult.serviceUnavailable =>
+        OfficialWebAuthenticationFailure.serviceUnavailable,
+      CredentialVerificationResult.invalidResponse =>
+        OfficialWebAuthenticationFailure.invalidResponse,
+      CredentialVerificationResult.replaced =>
+        OfficialWebAuthenticationFailure.replaced,
+      CredentialVerificationResult.noRestoredCredential ||
+      CredentialVerificationResult.coreUnavailable =>
+        OfficialWebAuthenticationFailure.coreUnavailable,
+      CredentialVerificationResult.authenticated => null,
+    };
+    if (_officialWebFailure == OfficialWebAuthenticationFailure.replaced) {
+      _officialWebFailure = null;
+      _stage = LoginStage.idle;
+    } else {
+      _stage = LoginStage.officialWebError;
+    }
+    _notify();
+  }
+
+  Future<void> requestSmsCode({
+    required String countryCode,
+    required String phone,
+  }) async {
+    if (!supportsSmsLogin || _disposed) return;
+    final generation = ++_generation;
+    _verificationOperation?.cancel();
+    _verificationOperation = null;
+    _startOperation?.cancel();
+    _startOperation = null;
+    _session?.cancel();
+    _session = null;
+    _clearOfficialWebLogin();
+    _clearDesktopQuickLogin();
+    _clearSmsAuthentication();
+    _clearQrChallenge();
+    _failure = null;
+    _credentialSaveState = CredentialSaveState.none;
+    _credentialRestoreResult = CredentialRestoreResult.signedOut;
+    _credentialVerificationResult = null;
+    _stage = LoginStage.idle;
+    _smsStage = SmsLoginStage.sendingCode;
+    _notify();
+
+    final operation = (_gateway as SmsAuthenticationGateway)
+        .beginSmsCodeRequest(countryCode: countryCode, phone: phone);
+    _smsCodeRequestOperation = operation;
+    final outcome = await operation.run();
+    if (identical(_smsCodeRequestOperation, operation)) {
+      _smsCodeRequestOperation = null;
+    }
+    if (!_isCurrent(generation)) return;
+
+    if (outcome.success) {
+      _smsFailure = null;
+      _smsCodeRequested = true;
+      _smsStage = SmsLoginStage.codeSent;
+    } else {
+      _smsFailure = outcome.failure ?? SmsAuthenticationFailure.invalidResponse;
+      _smsStage = _smsFailure == SmsAuthenticationFailure.replaced
+          ? SmsLoginStage.ready
+          : SmsLoginStage.error;
+    }
+    _notify();
+  }
+
+  Future<void> authenticateSmsCode(String code) async {
+    if (!supportsSmsLogin || !_smsCodeRequested || _disposed) return;
+    final generation = ++_generation;
+    _smsLoginOperation?.cancel();
+    final operation = (_gateway as SmsAuthenticationGateway).beginSmsLogin(
+      code: code,
+    );
+    _smsLoginOperation = operation;
+    _smsFailure = null;
+    _smsStage = SmsLoginStage.authenticating;
+    _notify();
+
+    final outcome = await operation.run();
+    if (identical(_smsLoginOperation, operation)) {
+      _smsLoginOperation = null;
+    }
+    if (!_isCurrent(generation)) return;
+
+    if (outcome.success) {
+      _clearSmsAuthentication(cancelProvider: false);
+      await _finishAuthentication(generation);
+      return;
+    }
+    _smsFailure = outcome.failure ?? SmsAuthenticationFailure.invalidResponse;
+    if (_smsFailure == SmsAuthenticationFailure.replaced) {
+      _smsCodeRequested = false;
+      _smsStage = SmsLoginStage.ready;
+    } else {
+      _smsStage = SmsLoginStage.error;
+    }
+    _notify();
   }
 
   void retry() {
@@ -463,8 +753,10 @@ class LoginController extends ChangeNotifier {
     _startOperation = null;
     _session?.cancel();
     _session = null;
+    _clearOfficialWebLogin();
+    _clearSmsAuthentication();
     _clearDesktopQuickLogin();
-    _qrImageBytes = null;
+    _clearQrChallenge();
     _failure = null;
     _credentialSaveState = CredentialSaveState.none;
     _credentialRestoreResult = CredentialRestoreResult.signedOut;
@@ -475,8 +767,17 @@ class LoginController extends ChangeNotifier {
 
   Future<void> _poll(int generation) async {
     if (!_pollingGenerations.add(generation)) return;
+    final minimumPollInterval = _gateway is QrLoginPollingPolicy
+        ? (_gateway as QrLoginPollingPolicy).minimumQrPollInterval
+        : Duration.zero;
+    var paceNextPoll = false;
     try {
       while (_isCurrent(generation)) {
+        if (paceNextPoll && minimumPollInterval > Duration.zero) {
+          await _delay(minimumPollInterval);
+          if (!_isCurrent(generation)) return;
+        }
+        paceNextPoll = false;
         final session = _session;
         if (session == null || !session.isActive) return;
 
@@ -486,6 +787,7 @@ class LoginController extends ChangeNotifier {
         final progress = update.progress;
         if (progress != null) {
           if (await _applyProgress(progress, generation)) return;
+          paceNextPoll = true;
           _notify();
           continue;
         }
@@ -495,7 +797,7 @@ class LoginController extends ChangeNotifier {
           _failure = failure;
           _stage = LoginStage.reconnecting;
           _notify();
-          await Future<void>.delayed(_networkRetryDelay);
+          await _delay(_networkRetryDelay);
           continue;
         }
 
@@ -505,7 +807,7 @@ class LoginController extends ChangeNotifier {
             : LoginStage.error;
         if (!update.sessionActive) {
           _session = null;
-          _qrImageBytes = null;
+          _clearQrChallenge();
         }
         _notify();
         return;
@@ -514,6 +816,9 @@ class LoginController extends ChangeNotifier {
       _pollingGenerations.remove(generation);
     }
   }
+
+  static Future<void> _defaultDelay(Duration duration) =>
+      Future<void>.delayed(duration);
 
   Future<bool> _applyProgress(LoginProgress progress, int generation) async {
     switch (progress) {
@@ -527,25 +832,28 @@ class LoginController extends ChangeNotifier {
         return false;
       case LoginProgress.authenticated:
         _session = null;
-        _qrImageBytes = null;
+        _clearQrChallenge();
         _clearDesktopQuickLogin();
         await _finishAuthentication(generation);
         return true;
       case LoginProgress.expired:
         _stage = LoginStage.expired;
         _session = null;
+        _clearQrChallenge();
         _failure = null;
         _notify();
         return true;
       case LoginProgress.refused:
         _stage = LoginStage.refused;
         _session = null;
+        _clearQrChallenge();
         _failure = null;
         _notify();
         return true;
       case LoginProgress.timedOut:
         _stage = LoginStage.timedOut;
         _session = null;
+        _clearQrChallenge();
         _failure = null;
         _notify();
         return true;
@@ -582,6 +890,41 @@ class LoginController extends ChangeNotifier {
     _desktopQuickStage = DesktopQuickLoginStage.idle;
   }
 
+  void _clearSmsAuthentication({bool cancelProvider = true}) {
+    final hadProviderSession =
+        _smsCodeRequested ||
+        _smsCodeRequestOperation != null ||
+        _smsLoginOperation != null;
+    if (cancelProvider) {
+      var cancelledAttempt = false;
+      cancelledAttempt =
+          (_smsCodeRequestOperation?.cancel() ?? false) || cancelledAttempt;
+      cancelledAttempt =
+          (_smsLoginOperation?.cancel() ?? false) || cancelledAttempt;
+      if (hadProviderSession && !cancelledAttempt) {
+        (_gateway as SmsAuthenticationGateway).cancelSmsAuthentication();
+      }
+    }
+    _smsCodeRequestOperation = null;
+    _smsLoginOperation = null;
+    _smsFailure = null;
+    _smsCodeRequested = false;
+    _smsStage = SmsLoginStage.hidden;
+  }
+
+  void _clearOfficialWebLogin() {
+    _officialWebOperation?.cancel();
+    _officialWebOperation = null;
+    _officialWebFailure = null;
+  }
+
+  void _clearQrChallenge() {
+    _qrImageBytes = null;
+    _qrExternalConfirmationUri = null;
+    _openingQrExternally = false;
+    _externalQrLaunchFailed = false;
+  }
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -592,6 +935,8 @@ class LoginController extends ChangeNotifier {
     ++_generation;
     _verificationOperation?.cancel();
     _verificationOperation = null;
+    _clearOfficialWebLogin();
+    _clearSmsAuthentication();
     _clearDesktopQuickLogin();
     _startOperation?.cancel();
     _startOperation = null;

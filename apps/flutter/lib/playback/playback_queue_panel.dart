@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
@@ -339,13 +340,16 @@ class _QueueArtwork extends StatelessWidget {
             else
               Image.network(
                 artworkUri,
+                headers: musicArtworkRequestHeaders(artworkUri),
                 fit: BoxFit.cover,
                 excludeFromSemantics: true,
                 gaplessPlayback: true,
                 loadingBuilder: (context, child, progress) =>
                     progress == null ? child : const _QueueArtworkPlaceholder(),
-                errorBuilder: (context, error, stackTrace) =>
-                    const _QueueArtworkPlaceholder(),
+                errorBuilder: musicArtworkErrorBuilder(
+                  artworkUri,
+                  const _QueueArtworkPlaceholder(),
+                ),
               ),
             if (current)
               ColoredBox(

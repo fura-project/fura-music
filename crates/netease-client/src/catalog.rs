@@ -110,7 +110,7 @@ pub fn artwork(value: Option<String>) -> Result<Option<String>, Error> {
             if uri.scheme() == "http"
                 && uri
                     .host_str()
-                    .is_some_and(|h| h.ends_with(".music.126.net"))
+                    .is_some_and(|h| h == "music.126.net" || h.ends_with(".music.126.net"))
             {
                 uri.set_scheme("https")
                     .map_err(|()| Error::ResponseShapeMismatch)?;
@@ -203,9 +203,9 @@ impl<T: Transport> NeteaseClient<T> {
         let (kind, key, count) = kind.fields();
         let (v, _) = self
             .request(
-                "/api/search/get",
+                "/api/cloudsearch/pc",
                 json!({"s":q,"type":kind,"offset":offset,"limit":size,"total":true}),
-                false,
+                true,
                 None,
             )
             .await?;

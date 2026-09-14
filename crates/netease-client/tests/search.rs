@@ -7,6 +7,18 @@ struct FakeTransport {
 }
 impl Transport for FakeTransport {
     async fn send(&self, request: Request) -> Result<Response, Error> {
+        assert_eq!(
+            request.url(),
+            "https://interface.music.163.com/eapi/cloudsearch/pc"
+        );
+        assert_eq!(
+            request
+                .form()
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            ["params"]
+        );
         self.requests.lock().unwrap().push(request);
         Ok(Response {
             status: 200,
@@ -115,6 +127,10 @@ fn unsafe_artwork_is_rejected() {
     assert_eq!(
         netease_client::artwork(Some("http://p1.music.126.net/test".into())).unwrap(),
         Some("https://p1.music.126.net/test".into())
+    );
+    assert_eq!(
+        netease_client::artwork(Some("http://music.126.net/test".into())).unwrap(),
+        Some("https://music.126.net/test".into())
     );
 }
 #[tokio::test]

@@ -69,4 +69,67 @@ void main() {
     expect(handoffs, contains(true));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('compact collection keeps Back and toolbar action reachable', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MusicCollectionDetailLayout(
+            headerBuilder: (context, desktop, progress) =>
+                MusicCollectionDetailHeader(
+                  collapseProgress: progress,
+                  desktop: desktop,
+                  embedded: true,
+                  artwork: const ColoredBox(color: Colors.green),
+                  eyebrow: 'PLAYLIST',
+                  title: 'Compact collection',
+                  titleKey: const ValueKey('compact-title'),
+                  summary: '40 Tracks',
+                  onBack: () {},
+                  backKey: const ValueKey('compact-back'),
+                  backTooltip: 'Back',
+                  toolbarAction: IconButton(
+                    key: const ValueKey('compact-refresh'),
+                    onPressed: () {},
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ),
+            bodyBuilder: (context, desktop) => ListView.builder(
+              key: const ValueKey('compact-track-list'),
+              itemCount: 40,
+              itemBuilder: (context, index) =>
+                  SizedBox(height: 56, child: Text('Track $index')),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('compact-track-list')),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('collection-detail-local-toolbar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('compact-back')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('compact-refresh')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

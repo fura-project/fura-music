@@ -352,6 +352,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authNewCode => '刷新二维码';
 
   @override
+  String get authOpenQrExternally => '在系统浏览器或网易云 App 中打开';
+
+  @override
+  String get authOpeningQrExternally => '正在打开确认页…';
+
+  @override
+  String get authOpenQrExternallyFailed => '系统无法打开当前确认页，请使用另一台设备扫描二维码。';
+
+  @override
   String get authSignedInTitle => '登录成功';
 
   @override
@@ -381,6 +390,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authNotApprovedDetail => '账号没有发生任何变化，你可以重试。';
+
+  @override
+  String authSecurityVerificationTitle(Object provider) {
+    return '$provider 要求额外安全验证';
+  }
+
+  @override
+  String get authSecurityVerificationDetail =>
+      '此次二维码登录触发了服务方安全验证。Fura 不会绕过验证；请稍后生成新二维码重试。';
+
+  @override
+  String authSecondaryVerificationTitle(Object provider) {
+    return '$provider 要求完成二次验证';
+  }
+
+  @override
+  String get authSecondaryVerificationDetail => '请在网易云音乐官方网页中继续，完成由服务方控制的验证。';
 
   @override
   String get authServiceRejectedDetail => '服务未接受此请求，请稍后重试。';
@@ -446,6 +472,120 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authDesktopUnavailable => '桌面 QQ 快速登录不可用。';
+
+  @override
+  String get authUsePhoneCode => '使用手机验证码';
+
+  @override
+  String get authUseQrCode => '使用二维码';
+
+  @override
+  String get authUseOfficialWebsite => '前往网易云音乐官网继续';
+
+  @override
+  String get authOfficialWebTitle => '在网易云音乐官网完成登录';
+
+  @override
+  String get authOfficialWebDetail => '请使用官方登录窗口。Fura 仅导入登录结果，验证账号后才会保存。';
+
+  @override
+  String get authOfficialWebErrorTitle => '网易云音乐官方登录未完成';
+
+  @override
+  String get authOfficialWebUnavailable => '此设备上无法打开官方登录窗口。';
+
+  @override
+  String get authOfficialWebRejected => '网易云音乐未接受官方网页产生的会话。';
+
+  @override
+  String get authOfficialWebNetwork => '网络连接失败，无法验证官方网页产生的会话。';
+
+  @override
+  String get authOfficialWebServiceUnavailable =>
+      '官方登录交互已完成，但网易云音乐账号验证服务暂时不可用。';
+
+  @override
+  String get authOfficialWebInvalidCredential => '官方窗口未返回 Fura 可以验证的会话。';
+
+  @override
+  String get authOfficialWebAlreadyRunning => '已有一个网易云音乐官方登录窗口打开。';
+
+  @override
+  String get authOfficialWebFailed => '官方登录窗口无法安全完成，未保存任何会话。';
+
+  @override
+  String get authPhoneCodeTitle => '使用手机验证码登录';
+
+  @override
+  String get authPhoneCodeDetail => '向网易云音乐账号绑定的手机号发送一次性验证码。';
+
+  @override
+  String get authCountryCode => '国家或地区代码';
+
+  @override
+  String get authPhoneNumber => '手机号';
+
+  @override
+  String get authSmsCode => '验证码';
+
+  @override
+  String get authSendCode => '发送验证码';
+
+  @override
+  String get authResendCode => '重新发送';
+
+  @override
+  String authResendCodeIn(int seconds) {
+    return '$seconds 秒后重发';
+  }
+
+  @override
+  String get authCodeSent => '验证码已发送，请查看短信。';
+
+  @override
+  String get authSmsSignIn => '登录';
+
+  @override
+  String get authSendingCode => '正在发送验证码…';
+
+  @override
+  String get authCheckingSmsCode => '正在验证…';
+
+  @override
+  String get authSmsRiskWarning => '网易云仍可能要求额外安全验证。Fura 不会绕过验证，而会停止并明确报告。';
+
+  @override
+  String get authSmsInvalidInput => '请使用纯数字填写有效的国家或地区代码、手机号和验证码。';
+
+  @override
+  String get authSmsCodeRejected => '验证码未获接受，请核对后重试。';
+
+  @override
+  String get authSmsRateLimited => '请求过于频繁，请稍后再发送验证码。';
+
+  @override
+  String get authSmsSecurityVerification => '网易云要求此次手机登录完成额外安全验证，Fura 无法绕过。';
+
+  @override
+  String get authSmsSecondaryVerification => '网易云要求完成互动式二次验证，请前往官方网页继续登录。';
+
+  @override
+  String get authSmsNetworkFailure => '无法连接网易云，请检查网络后重试。';
+
+  @override
+  String get authSmsServiceUnavailable => '网易云手机登录暂时不可用，请稍后重试或改用二维码。';
+
+  @override
+  String get authSmsInvalidResponse => '网易云返回了当前版本无法验证的响应，没有安装登录会话。';
+
+  @override
+  String get authSmsAlreadyRunning => '已有手机登录请求正在进行。';
+
+  @override
+  String get authSmsAttemptReplaced => '此次手机登录已不是当前会话，请重新发送验证码。';
+
+  @override
+  String get authSmsCoreUnavailable => '音乐核心无法继续手机登录。';
 
   @override
   String get searchSongHint => '歌曲、歌手或专辑名称';

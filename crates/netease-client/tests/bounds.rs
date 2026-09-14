@@ -10,10 +10,15 @@ impl Transport for Fake {
     async fn send(&self, r: Request) -> Result<Response, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         assert!(r.cookie().is_none());
-        assert_eq!(r.form().len(), 2);
-        assert_eq!(r.form()[0].0, "params");
-        assert_eq!(r.form()[1].0, "encSecKey");
-        assert_eq!(r.form()[1].1.len(), 256);
+        if r.url().starts_with("https://interface.music.163.com/eapi/") {
+            assert_eq!(r.form().len(), 1);
+            assert_eq!(r.form()[0].0, "params");
+        } else {
+            assert_eq!(r.form().len(), 2);
+            assert_eq!(r.form()[0].0, "params");
+            assert_eq!(r.form()[1].0, "encSecKey");
+            assert_eq!(r.form()[1].1.len(), 256);
+        }
         Ok(Response {
             status: self.status,
             body: self.body.clone(),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -1087,8 +1088,9 @@ class _NewAlbumArtwork extends StatelessWidget {
           ? placeholder
           : Image.network(
               uri!,
+              headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
+              errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
   }
@@ -1980,8 +1982,9 @@ class _RecommendationArtwork extends StatelessWidget {
           ? placeholder
           : Image.network(
               uri!,
+              headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
+              errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
   }

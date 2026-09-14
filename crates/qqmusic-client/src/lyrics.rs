@@ -543,6 +543,19 @@ fn invalid_document<E>(
 }
 
 fn parse_qrc_xml(xml: &str) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDocumentField> {
+    match parse_qrc_xml_strict(xml) {
+        Err(QqMusicLyricDocumentField::Xml) => {
+            let content = extract_qq_pseudo_xml_lyric_content(xml)?;
+            lyric_debug_pseudo_xml(&content);
+            parse_qrc_content(&content)
+        }
+        result => result,
+    }
+}
+
+fn parse_qrc_xml_strict(
+    xml: &str,
+) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDocumentField> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
     loop {
@@ -556,9 +569,113 @@ fn parse_qrc_xml(xml: &str) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDo
             }
             Ok(Event::Eof) => return Err(QqMusicLyricDocumentField::LyricContent),
             Ok(_) => {}
-            Err(_) => return Err(QqMusicLyricDocumentField::Xml),
+            Err(error) => {
+                lyric_debug_xml_reader_error(&error);
+                return Err(QqMusicLyricDocumentField::Xml);
+            }
         }
     }
+}
+
+/// QQ's QRC envelope is XML-shaped, but the service does not consistently XML
+/// escape the `LyricContent` attribute. Keep the normal XML reader as the
+/// primary path, then recover only the documented single-track envelope when
+/// one or more literal quotes made that attribute invalid XML. The strict
+/// opening marker and closing structure prevent arbitrary malformed documents
+/// from being accepted as lyrics.
+fn extract_qq_pseudo_xml_lyric_content(xml: &str) -> Result<String, QqMusicLyricDocumentField> {
+    const OPEN: &str = r#"<Lyric_1 LyricType="1" LyricContent=""#;
+    const LYRIC_INFO_CLOSE: &str = "</LyricInfo>";
+    const QRC_INFOS_CLOSE: &str = "</QrcInfos>";
+
+    let content_start = xml
+        .find(OPEN)
+        .map(|index| index + OPEN.len())
+        .ok_or(QqMusicLyricDocumentField::Xml)?;
+    if xml[content_start..].contains(OPEN)
+        || !xml[..content_start].contains("<QrcInfos")
+        || !xml[..content_start].contains("<LyricInfo")
+    {
+        return Err(QqMusicLyricDocumentField::Xml);
+    }
+
+    let lyric_info_close = xml[content_start..]
+        .find(LYRIC_INFO_CLOSE)
+        .map(|offset| content_start + offset)
+        .ok_or(QqMusicLyricDocumentField::Xml)?;
+    let element_tail = xml[content_start..lyric_info_close].trim_end();
+    let content_with_quote = element_tail
+        .strip_suffix("/>")
+        .map(str::trim_end)
+        .ok_or(QqMusicLyricDocumentField::Xml)?;
+    let content = content_with_quote
+        .strip_suffix('"')
+        .ok_or(QqMusicLyricDocumentField::Xml)?;
+    if !content.contains('"') {
+        return Err(QqMusicLyricDocumentField::Xml);
+    }
+
+    let document_tail = &xml[lyric_info_close + LYRIC_INFO_CLOSE.len()..];
+    if document_tail.trim() != QRC_INFOS_CLOSE {
+        return Err(QqMusicLyricDocumentField::Xml);
+    }
+
+    // Removing only the attribute payload must produce valid XML. This keeps
+    // the compatibility path scoped to unescaped lyric quotes rather than
+    // accepting a damaged QRC envelope or unrelated markup.
+    let content_end = content_start + content.len();
+    let mut skeleton = String::with_capacity(xml.len() - content.len());
+    skeleton.push_str(&xml[..content_start]);
+    skeleton.push_str(&xml[content_end..]);
+    match parse_qrc_xml_strict(&skeleton) {
+        Ok(lines) if lines.is_empty() => {}
+        Ok(lines) => {
+            if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_some() {
+                eprintln!(
+                    "[fura][qq-lyrics] qrc_xml_stage=pseudo_xml_skeleton unexpected_lines={}",
+                    lines.len()
+                );
+            }
+            return Err(QqMusicLyricDocumentField::Xml);
+        }
+        Err(field) => {
+            if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_some() {
+                eprintln!(
+                    "[fura][qq-lyrics] qrc_xml_stage=pseudo_xml_skeleton error_field={field:?}"
+                );
+            }
+            return Err(QqMusicLyricDocumentField::Xml);
+        }
+    }
+    Ok(decode_qrc_xml_entities(content))
+}
+
+fn lyric_debug_pseudo_xml(content: &str) {
+    if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_some() {
+        eprintln!(
+            "[fura][qq-lyrics] qrc_xml_stage=pseudo_xml_fallback inner_quotes={} raw_lt={} raw_gt={} raw_ampersands={}",
+            content.bytes().filter(|byte| *byte == b'"').count(),
+            content.bytes().filter(|byte| *byte == b'<').count(),
+            content.bytes().filter(|byte| *byte == b'>').count(),
+            content.bytes().filter(|byte| *byte == b'&').count(),
+        );
+    }
+}
+
+fn lyric_debug_xml_reader_error(error: &quick_xml::Error) {
+    if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_none() {
+        return;
+    }
+    let kind = match error {
+        quick_xml::Error::Io(_) => "io",
+        quick_xml::Error::Syntax(_) => "syntax",
+        quick_xml::Error::IllFormed(_) => "ill_formed",
+        quick_xml::Error::InvalidAttr(_) => "invalid_attribute",
+        quick_xml::Error::Encoding(_) => "encoding",
+        quick_xml::Error::Escape(_) => "escape",
+        quick_xml::Error::Namespace(_) => "namespace",
+    };
+    eprintln!("[fura][qq-lyrics] qrc_xml_stage=reader error_kind={kind}");
 }
 
 fn decode_qrc_xml_entities(value: &str) -> String {
@@ -605,7 +722,21 @@ fn lyric_content(element: &BytesStart<'_>) -> Result<Option<String>, QqMusicLyri
     let mut lyric_type = None;
     let mut content = None;
     for attribute in element.attributes().with_checks(true) {
-        let attribute = attribute.map_err(|_| QqMusicLyricDocumentField::Xml)?;
+        let attribute = attribute.map_err(|error| {
+            if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_some() {
+                let kind = match error {
+                    quick_xml::events::attributes::AttrError::ExpectedEq(_) => "expected_eq",
+                    quick_xml::events::attributes::AttrError::ExpectedValue(_) => "expected_value",
+                    quick_xml::events::attributes::AttrError::UnquotedValue(_) => "unquoted_value",
+                    quick_xml::events::attributes::AttrError::ExpectedQuote(_, _) => {
+                        "expected_quote"
+                    }
+                    quick_xml::events::attributes::AttrError::Duplicated(_, _) => "duplicated",
+                };
+                eprintln!("[fura][qq-lyrics] qrc_xml_stage=lyric_attribute error_kind={kind}");
+            }
+            QqMusicLyricDocumentField::Xml
+        })?;
         match attribute.key.as_ref() {
             "LyricType" => {
                 lyric_type = Some(
@@ -1161,6 +1292,31 @@ mod tests {
         assert_eq!(lines[0].start_ms(), 1_000);
         assert_eq!(lines[0].segments().len(), 3);
         assert_eq!(lines[0].segments()[1].text(), "&");
+    }
+
+    #[test]
+    fn qrc_parser_recovers_unescaped_quotes_only_inside_known_qq_lyric_envelope() {
+        let xml = r#"<QrcInfos><LyricInfo LyricCount="1"><Lyric_1 LyricType="1" LyricContent="[1000,500]Say "go"(1000,500)"/></LyricInfo></QrcInfos>"#;
+        let lines = parse_qrc_xml(xml).expect("QQ pseudo XML with literal quotes");
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].text(), "Say \"go\"");
+        assert_eq!(lines[0].segments()[0].text(), "Say \"go\"");
+    }
+
+    #[test]
+    fn qrc_parser_does_not_recover_arbitrary_malformed_xml() {
+        let wrong_type = r#"<QrcInfos><LyricInfo><Lyric_1 LyricType="0" LyricContent="[1000,500]Say "go"(1000,500)"/></LyricInfo></QrcInfos>"#;
+        let extra_document = r#"<QrcInfos><LyricInfo><Lyric_1 LyricType="1" LyricContent="[1000,500]Say "go"(1000,500)"/></LyricInfo></QrcInfos><script/>"#;
+
+        assert_eq!(
+            parse_qrc_xml(wrong_type),
+            Err(QqMusicLyricDocumentField::Xml)
+        );
+        assert_eq!(
+            parse_qrc_xml(extra_document),
+            Err(QqMusicLyricDocumentField::Xml)
+        );
     }
 
     #[test]

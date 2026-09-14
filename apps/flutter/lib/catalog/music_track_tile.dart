@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
@@ -200,9 +201,10 @@ class _TrackArtwork extends StatelessWidget {
             ? placeholder
             : Image.network(
                 artworkUri,
+                headers: musicArtworkRequestHeaders(artworkUri),
                 fit: BoxFit.cover,
                 excludeFromSemantics: true,
-                errorBuilder: (_, _, _) => placeholder,
+                errorBuilder: musicArtworkErrorBuilder(artworkUri, placeholder),
               ),
       ),
     );

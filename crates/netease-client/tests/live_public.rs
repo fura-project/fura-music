@@ -144,6 +144,119 @@ async fn anonymous_catalog_slice() {
 }
 
 #[tokio::test]
+#[ignore = "explicit anonymous Cloud Search artwork probe; at most 3 HTTPS requests"]
+async fn anonymous_cloud_search_includes_track_artwork() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Budget {
+        http: HttpsTransport,
+        calls: AtomicUsize,
+    }
+
+    impl Transport for Budget {
+        async fn send(&self, request: Request) -> Result<Response, Error> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) >= 1 {
+                return Err(Error::InputBound);
+            }
+            self.http.send(request).await
+        }
+    }
+
+    assert_eq!(
+        std::env::var("FURA_NETEASE_ARTWORK_PROBE").as_deref(),
+        Ok("1")
+    );
+    let client = NeteaseClient::new(Budget {
+        http: HttpsTransport::new().unwrap(),
+        calls: AtomicUsize::new(0),
+    });
+    let page = client
+        .search_tracks("Mozart", 0, 1)
+        .await
+        .expect("anonymous Cloud Search result");
+    let track = page.items.first().expect("public Track sample required");
+    let mut artwork = url::Url::parse(
+        track
+            .album
+            .artwork
+            .as_deref()
+            .expect("public Track artwork required"),
+    )
+    .expect("public Track artwork should parse");
+    artwork
+        .set_scheme("https")
+        .expect("NetEase artwork should support HTTPS");
+    let image_client = reqwest::Client::builder()
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::limited(3))
+        .build()
+        .unwrap();
+    let current_policy = image_client
+        .get(artwork.as_str())
+        .header("Referer", "https://music.163.com/")
+        .header("User-Agent", "Mozilla/5.0")
+        .send()
+        .await
+        .expect("current artwork request policy should reach the CDN");
+    println!(
+        "artwork current-policy status={} final_host={}",
+        current_policy.status().as_u16(),
+        current_policy.url().host_str().unwrap_or("missing")
+    );
+    let browser_policy = image_client
+        .get(artwork.as_str())
+        .header("Referer", "https://music.163.com/")
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+        )
+        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .send()
+        .await
+        .expect("browser artwork request policy should reach the CDN");
+    println!(
+        "artwork browser-policy status={} final_host={}",
+        browser_policy.status().as_u16(),
+        browser_policy.url().host_str().unwrap_or("missing")
+    );
+    assert!(browser_policy.status().is_success());
+}
+
+#[tokio::test]
+#[ignore = "explicit anonymous QR start/poll compatibility probe; exactly 2 HTTPS requests"]
+async fn anonymous_qr_start_and_waiting_state() {
+    use netease_client::QrPoll;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Budget {
+        http: HttpsTransport,
+        calls: AtomicUsize,
+    }
+
+    impl Transport for Budget {
+        async fn send(&self, request: Request) -> Result<Response, Error> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) >= 2 {
+                return Err(Error::InputBound);
+            }
+            self.http.send(request).await
+        }
+    }
+
+    assert_eq!(std::env::var("FURA_NETEASE_QR_PROBE").as_deref(), Ok("1"));
+    let client = NeteaseClient::new(Budget {
+        http: HttpsTransport::new().unwrap(),
+        calls: AtomicUsize::new(0),
+    });
+    let mut key = client.qr_key().await.expect("anonymous QR key");
+    let png = key.image_png().expect("local QR PNG");
+    assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+    assert!(matches!(
+        client.qr_poll(&mut key).await,
+        Ok(QrPoll::Waiting)
+    ));
+}
+
+#[tokio::test]
 #[ignore = "explicit anonymous serial read-parity observation; hard maximum 9 HTTPS requests"]
 async fn anonymous_read_parity_slice() {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

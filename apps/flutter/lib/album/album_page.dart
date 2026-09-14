@@ -8,6 +8,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -721,8 +722,9 @@ class _AlbumArtwork extends StatelessWidget {
           ? placeholder
           : Image.network(
               uri!,
+              headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
+              errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
   }

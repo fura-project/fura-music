@@ -91,6 +91,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('compact row leaves Artist and Album navigation to More', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 160);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var rowPlays = 0;
+    var artistCalls = 0;
+    var albumCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MusicTrackRowSurface(
+            itemKey: const ValueKey('compact-row'),
+            desktop: false,
+            current: false,
+            semanticLabel: 'Interactive Track, First Artist',
+            onTap: () => rowPlays++,
+            contentBuilder: (context, active, hovered) => MusicTrackRowContent(
+              index: 1,
+              track: track,
+              desktop: false,
+              current: false,
+              active: active,
+              artistNames: 'First Artist',
+              onPlay: () {},
+              onAddToQueue: () {},
+              onMore: () {},
+              onOpenArtist: () => artistCalls++,
+              onOpenAlbum: () => albumCalls++,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(MusicTrackMetadataAction), findsNothing);
+    await tester.tap(find.text('First Artist'));
+    await tester.tap(find.text('Interactive Album'));
+
+    expect(artistCalls, 0);
+    expect(albumCalls, 0);
+    expect(rowPlays, 2);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('multiple Artists use the shared detail chooser', (tester) async {
     ArtistSummary? selected;
     const artists = [

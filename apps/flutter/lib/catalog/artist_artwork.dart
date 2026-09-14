@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 
 /// Provider-neutral Artist artwork with a truthful Material fallback.
 class ArtistArtwork extends StatelessWidget {
@@ -32,10 +33,11 @@ class ArtistArtwork extends StatelessWidget {
           ? fallback
           : Image.network(
               uri!,
+              headers: musicArtworkRequestHeaders(uri!),
               width: double.infinity,
               height: double.infinity,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => fallback,
+              errorBuilder: musicArtworkErrorBuilder(uri!, fallback),
             ),
     );
   }

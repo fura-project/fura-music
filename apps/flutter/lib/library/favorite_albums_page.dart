@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
@@ -413,8 +414,9 @@ class _AlbumArtwork extends StatelessWidget {
           ? fallback
           : Image.network(
               uri,
+              headers: musicArtworkRequestHeaders(uri),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => fallback,
+              errorBuilder: musicArtworkErrorBuilder(uri, fallback),
             ),
     );
   }

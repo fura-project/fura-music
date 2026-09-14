@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
@@ -49,7 +50,6 @@ class HomePage extends StatefulWidget {
     required this.authenticated,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
-    required this.onAccountAction,
     required this.onOpenRecommendation,
     this.providerDisplayName,
     this.lastOpenedRecommendation,
@@ -72,7 +72,6 @@ class HomePage extends StatefulWidget {
   final bool authenticated;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
-  final VoidCallback onAccountAction;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
   final String? providerDisplayName;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
@@ -384,7 +383,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
                 onOpenDiscover: widget.onOpenDiscover,
                 onOpenLibrary: widget.onOpenLibrary,
-                onAccountAction: widget.onAccountAction,
                 onOpenRecommendation: _openShelf,
                 onOpenFeatured: _openFeatured,
                 featuredReturnFocusNode: _returnToShelf
@@ -689,7 +687,6 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.onToggleSpotlightAutoPlay,
     required this.onOpenDiscover,
     required this.onOpenLibrary,
-    required this.onAccountAction,
     required this.onOpenRecommendation,
     required this.lastOpenedRecommendation,
     required this.recommendationReturnFocusNode,
@@ -718,7 +715,6 @@ class _HomeCompactLayout extends StatelessWidget {
   final VoidCallback onToggleSpotlightAutoPlay;
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
-  final VoidCallback onAccountAction;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
@@ -730,12 +726,6 @@ class _HomeCompactLayout extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _CompactCategoryBar(
-          onOpenDiscover: onOpenDiscover,
-          authenticated: authenticated,
-          providerDisplayName: providerDisplayName,
-          onAccountAction: onAccountAction,
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
             _HomeGeometry.compactPadding,
@@ -746,6 +736,7 @@ class _HomeCompactLayout extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const _HomeSemanticHeading(),
               _DailyRecommendationSection(
                 homeController: homeController,
                 controller: recommendationController,
@@ -907,136 +898,6 @@ class _HomeSemanticHeading extends StatelessWidget {
     label: context.l10n.homeRecommendationsSemantics,
     child: const SizedBox.shrink(),
   );
-}
-
-class _CompactCategoryBar extends StatelessWidget {
-  const _CompactCategoryBar({
-    required this.onOpenDiscover,
-    required this.authenticated,
-    required this.providerDisplayName,
-    required this.onAccountAction,
-  });
-
-  final VoidCallback onOpenDiscover;
-  final bool authenticated;
-  final String providerDisplayName;
-  final VoidCallback onAccountAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: 52,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
-          children: [
-            _CompactCategoryItem(
-              key: const ValueKey('home-heading'),
-              selected: true,
-              label: context.l10n.homeRecommendTab,
-              colors: colors,
-            ),
-            _CompactCategoryItem(
-              label: context.l10n.homeMusicTab,
-              colors: colors,
-              onPressed: onOpenDiscover,
-            ),
-            _CompactCategoryItem(
-              label: context.l10n.homeAudiobooksTab,
-              colors: colors,
-              unavailableReason: context.l10n.homeAudiobooksUnavailable,
-            ),
-            _CompactCategoryItem(
-              label: context.l10n.homePodcastsTab,
-              colors: colors,
-              unavailableReason: context.l10n.homePodcastsUnavailable,
-            ),
-            IconButton(
-              key: ValueKey(authenticated ? 'sign-out' : 'sign-in'),
-              onPressed: onAccountAction,
-              tooltip: authenticated
-                  ? context.l10n.homeSignOut
-                  : context.l10n.homeSignInToProvider(providerDisplayName),
-              icon: Icon(
-                authenticated ? Icons.more_vert_rounded : Icons.login_rounded,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactCategoryItem extends StatelessWidget {
-  const _CompactCategoryItem({
-    required this.label,
-    required this.colors,
-    this.selected = false,
-    this.onPressed,
-    this.unavailableReason,
-    super.key,
-  });
-
-  final String label;
-  final ColorScheme colors;
-  final bool selected;
-  final VoidCallback? onPressed;
-  final String? unavailableReason;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Semantics(
-      header: selected,
-      selected: selected,
-      enabled: selected || onPressed != null,
-      label: unavailableReason == null
-          ? label
-          : context.l10n.commonUnavailableSemantics(label),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected || onPressed != null
-                      ? colors.onSurface
-                      : colors.onSurfaceVariant.withValues(alpha: 0.55),
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: 28,
-                height: 3,
-                child: selected
-                    ? DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: colors.primary,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      )
-                    : null,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    return Expanded(
-      child: unavailableReason == null
-          ? content
-          : Tooltip(message: unavailableReason!, child: content),
-    );
-  }
 }
 
 class _HomeSectionHeader extends StatelessWidget {
@@ -3200,8 +3061,9 @@ class _HomeArtwork extends StatelessWidget {
           ? placeholder
           : Image.network(
               uri!,
+              headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
+              errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
   }

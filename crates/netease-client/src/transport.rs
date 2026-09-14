@@ -7,6 +7,7 @@ pub struct Request {
     pub(crate) url: String,
     pub(crate) form: Vec<(String, String)>,
     pub(crate) cookie: Option<String>,
+    pub(crate) headers: Vec<(String, String)>,
 }
 impl Request {
     #[must_use]
@@ -20,6 +21,10 @@ impl Request {
     #[must_use]
     pub fn cookie(&self) -> Option<&str> {
         self.cookie.as_deref()
+    }
+    #[must_use]
+    pub fn headers(&self) -> &[(String, String)] {
+        &self.headers
     }
 }
 impl fmt::Debug for Request {
@@ -60,16 +65,33 @@ impl HttpsTransport {
 }
 impl Transport for HttpsTransport {
     async fn send(&self, request: Request) -> Result<Response, Error> {
-        let mut builder = self
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::REFERER,
+            reqwest::header::HeaderValue::from_static("https://music.163.com/"),
+        );
+        headers.insert(
+            reqwest::header::USER_AGENT,
+            reqwest::header::HeaderValue::from_static("Mozilla/5.0"),
+        );
+        for (name, value) in request.headers {
+            let name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                .map_err(|_| Error::InputBound)?;
+            let value =
+                reqwest::header::HeaderValue::from_str(&value).map_err(|_| Error::InputBound)?;
+            headers.insert(name, value);
+        }
+        if let Some(cookie) = request.cookie {
+            headers.insert(
+                reqwest::header::COOKIE,
+                reqwest::header::HeaderValue::from_str(&cookie).map_err(|_| Error::InputBound)?,
+            );
+        }
+        let mut response = self
             .client
             .post(request.url)
-            .header("Referer", "https://music.163.com/")
-            .header("User-Agent", "Mozilla/5.0")
-            .form(&request.form);
-        if let Some(cookie) = request.cookie {
-            builder = builder.header("Cookie", cookie);
-        }
-        let mut response = builder
+            .headers(headers)
+            .form(&request.form)
             .send()
             .await
             .map_err(|_| Error::TemporaryNetworkFailure)?;

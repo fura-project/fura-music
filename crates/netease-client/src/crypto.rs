@@ -1,10 +1,14 @@
 //! Independently implemented wire encryption. See the pinned protocol evidence.
 use crate::Error;
-use aes::cipher::{BlockEncrypt, KeyInit, block_padding::Pkcs7};
+use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit, block_padding::Pkcs7};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cbc::cipher::{BlockEncryptMut, KeyIvInit};
+use flate2::read::GzDecoder;
 use md5::{Digest, Md5};
 use num_bigint::BigUint;
+use std::io::Read;
+
+const MAX_DECODED_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 
 const MODULUS: &str = concat!(
     "00e0b509f6259df8642dbc35662901477df22677ec152b5ff68ace615bb7",
@@ -73,6 +77,45 @@ pub(crate) fn eapi(path: &str, text: &str) -> Result<Vec<(String, String)>, Erro
     Ok(vec![("params".into(), encoded)])
 }
 
+fn maybe_gunzip(bytes: &[u8]) -> Result<Vec<u8>, Error> {
+    if !bytes.starts_with(&[0x1f, 0x8b]) {
+        return Ok(bytes.to_vec());
+    }
+    let mut decoded = Vec::new();
+    GzDecoder::new(bytes)
+        .take((MAX_DECODED_RESPONSE_BYTES + 1) as u64)
+        .read_to_end(&mut decoded)
+        .map_err(|_| Error::ResponseShapeMismatch)?;
+    if decoded.len() > MAX_DECODED_RESPONSE_BYTES {
+        return Err(Error::ResponseBound);
+    }
+    Ok(decoded)
+}
+
+pub(crate) fn eapi_response(bytes: &[u8]) -> Result<Vec<u8>, Error> {
+    let encrypted = maybe_gunzip(bytes)?;
+    if encrypted.is_empty() || encrypted.len() % 16 != 0 {
+        return Err(Error::ResponseShapeMismatch);
+    }
+    let cipher = aes::Aes128::new(b"e82ckenh8dichen8".into());
+    let mut decoded = encrypted;
+    for block in decoded.chunks_exact_mut(16) {
+        cipher.decrypt_block(block.into());
+    }
+    let padding = usize::from(*decoded.last().ok_or(Error::ResponseShapeMismatch)?);
+    if padding == 0
+        || padding > 16
+        || padding > decoded.len()
+        || decoded[decoded.len() - padding..]
+            .iter()
+            .any(|byte| usize::from(*byte) != padding)
+    {
+        return Err(Error::ResponseShapeMismatch);
+    }
+    decoded.truncate(decoded.len() - padding);
+    maybe_gunzip(&decoded)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +136,24 @@ mod tests {
     fn input_bounds_are_checked_before_encryption() {
         assert!(weapi(&"x".repeat(65537), b"0123456789abcdef").is_err());
         assert!(eapi("/other", "{}").is_err());
+    }
+
+    #[test]
+    fn mobile_eapi_response_uses_strict_pkcs7_decryption() {
+        let mut encrypted = br#"{"code":200}"#.to_vec();
+        let padding = 16 - encrypted.len() % 16;
+        encrypted.extend(std::iter::repeat_n(u8::try_from(padding).unwrap(), padding));
+        let cipher = aes::Aes128::new(b"e82ckenh8dichen8".into());
+        for block in encrypted.chunks_exact_mut(16) {
+            cipher.encrypt_block(block.into());
+        }
+        assert_eq!(eapi_response(&encrypted).unwrap(), br#"{"code":200}"#);
+
+        let mut invalid = encrypted;
+        *invalid.last_mut().unwrap() ^= 1;
+        assert!(matches!(
+            eapi_response(&invalid),
+            Err(Error::ResponseShapeMismatch)
+        ));
     }
 }

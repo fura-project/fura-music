@@ -600,6 +600,8 @@ pub enum AuthenticationError {
     SessionFinished,
     TimedOut,
     TooManyNetworkFailures,
+    SecurityVerificationRequired,
+    SecondaryVerificationRequired,
 }
 
 impl fmt::Display for AuthenticationError {
@@ -617,12 +619,72 @@ impl fmt::Display for AuthenticationError {
             Self::TooManyNetworkFailures => {
                 "authentication stopped after repeated network failures"
             }
+            Self::SecurityVerificationRequired => {
+                "authentication requires an additional provider security verification"
+            }
+            Self::SecondaryVerificationRequired => {
+                "authentication requires a second provider verification step"
+            }
         };
         formatter.write_str(message)
     }
 }
 
 impl std::error::Error for AuthenticationError {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SmsAuthenticationError {
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    InvalidInput,
+    CodeRejected,
+    RateLimited,
+    SecurityVerificationRequired,
+    SecondaryVerificationRequired,
+    Replaced,
+}
+
+impl fmt::Display for SmsAuthenticationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::Network => "SMS authentication network request failed",
+            Self::ServiceUnavailable => "SMS authentication service is unavailable",
+            Self::InvalidResponse => "SMS authentication returned an invalid response",
+            Self::InvalidInput => "SMS authentication input is invalid",
+            Self::CodeRejected => "SMS authentication code was rejected",
+            Self::RateLimited => "SMS authentication was rate limited",
+            Self::SecurityVerificationRequired => {
+                "SMS authentication requires provider security verification"
+            }
+            Self::SecondaryVerificationRequired => {
+                "SMS authentication requires a second provider verification step"
+            }
+            Self::Replaced => "SMS authentication was replaced by a newer attempt",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for SmsAuthenticationError {}
+
+/// Optional phone/SMS authentication capability. Providers retain the
+/// short-lived challenge in memory; phone numbers and codes are never exposed
+/// as account identity or persisted credentials.
+pub trait SmsAuthenticationProvider: MusicProvider + Sync {
+    type Error;
+
+    fn request_sms_code(
+        &self,
+        country_code: String,
+        phone: String,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn authenticate_sms_code(
+        &self,
+        code: String,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn cancel_sms_authentication(&self) -> bool;
+}
 
 /// One provider-owned QR authentication attempt.
 pub trait QrAuthenticationSession: Send {

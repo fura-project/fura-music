@@ -1,7 +1,9 @@
 //! Bounded, direct `NetEase` HTTPS protocol. No account discovery or retry policy.
 mod auth;
 mod catalog;
-pub use auth::{Account, Credential, QrKey, QrPoll, UserPlaylist, UserPlaylistPage};
+pub use auth::{
+    Account, Credential, QrKey, QrPoll, SmsLoginChallenge, UserPlaylist, UserPlaylistPage,
+};
 mod crypto;
 mod lyrics;
 mod media;
@@ -22,6 +24,8 @@ pub enum Error {
     CredentialRejected,
     RateLimited,
     SecurityVerificationRequired,
+    SecondaryVerificationRequired,
+    VerificationRejected,
     AccountRestricted,
     EntitlementDenied,
     CopyrightRestricted,
@@ -54,10 +58,28 @@ impl<T: Transport> NeteaseClient<T> {
     async fn raw_request(
         &self,
         path: &str,
-        mut payload: Value,
+        payload: Value,
         eapi: bool,
         cookie: Option<&str>,
     ) -> Result<(Value, Vec<String>), Error> {
+        self.raw_request_with_headers(path, payload, eapi, cookie, Vec::new())
+            .await
+    }
+    async fn raw_request_with_headers(
+        &self,
+        path: &str,
+        mut payload: Value,
+        eapi: bool,
+        cookie: Option<&str>,
+        headers: Vec<(String, String)>,
+    ) -> Result<(Value, Vec<String>), Error> {
+        if headers.len() > 16
+            || headers
+                .iter()
+                .any(|(name, value)| name.is_empty() || name.len() > 64 || value.len() > 1024)
+        {
+            return Err(Error::InputBound);
+        }
         let text = request_payload(&mut payload, eapi, cookie)?;
         let (base, form) = if eapi {
             (
@@ -79,6 +101,7 @@ impl<T: Transport> NeteaseClient<T> {
                 ),
                 form,
                 cookie: cookie.map(str::to_owned),
+                headers,
             })
             .await?;
         if response.body.len() > MAX_RESPONSE_BYTES {
@@ -101,13 +124,20 @@ impl<T: Transport> NeteaseClient<T> {
         cookie: Option<&str>,
     ) -> Result<(Value, Vec<String>), Error> {
         let (value, cookies) = self.raw_request(path, payload, eapi, cookie).await?;
+        Self::accepted_response(value, cookies, cookie.is_some())
+    }
+    fn accepted_response(
+        value: Value,
+        cookies: Vec<String>,
+        authenticated: bool,
+    ) -> Result<(Value, Vec<String>), Error> {
         match value
             .get("code")
             .and_then(Value::as_i64)
             .ok_or(Error::ResponseShapeMismatch)?
         {
             200 => Ok((value, cookies)),
-            301 if cookie.is_some() => Err(Error::CredentialRejected),
+            301 if authenticated => Err(Error::CredentialRejected),
             301 => Err(Error::AuthenticationRequired),
             _ => Err(Error::UpstreamUnknown),
         }

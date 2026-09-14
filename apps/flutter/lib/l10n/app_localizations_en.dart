@@ -373,6 +373,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authNewCode => 'New code';
 
   @override
+  String get authOpenQrExternally => 'Open in system browser or NetEase app';
+
+  @override
+  String get authOpeningQrExternally => 'Opening confirmation page…';
+
+  @override
+  String get authOpenQrExternallyFailed =>
+      'The system could not open this confirmation page. Scan the QR code on another device.';
+
+  @override
   String get authSignedInTitle => 'You’re signed in';
 
   @override
@@ -406,6 +416,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get authNotApprovedDetail =>
       'Nothing changed on your account. You can try again.';
+
+  @override
+  String authSecurityVerificationTitle(Object provider) {
+    return '$provider requires an additional security check';
+  }
+
+  @override
+  String get authSecurityVerificationDetail =>
+      'This QR sign-in triggered the provider’s security verification. Fura will not bypass it; create a fresh code and try again later.';
+
+  @override
+  String authSecondaryVerificationTitle(Object provider) {
+    return '$provider requires a second verification step';
+  }
+
+  @override
+  String get authSecondaryVerificationDetail =>
+      'Continue on the official NetEase website to complete the provider-controlled verification.';
 
   @override
   String get authServiceRejectedDetail =>
@@ -486,6 +514,141 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authDesktopUnavailable => 'Desktop QQ quick login is unavailable.';
+
+  @override
+  String get authUsePhoneCode => 'Use phone code';
+
+  @override
+  String get authUseQrCode => 'Use QR code';
+
+  @override
+  String get authUseOfficialWebsite => 'Continue on NetEase website';
+
+  @override
+  String get authOfficialWebTitle => 'Complete sign-in with NetEase';
+
+  @override
+  String get authOfficialWebDetail =>
+      'Use the official login window. Fura will import only the resulting session and verify it before saving.';
+
+  @override
+  String get authOfficialWebErrorTitle =>
+      'Official NetEase sign-in did not finish';
+
+  @override
+  String get authOfficialWebUnavailable =>
+      'The official login window is not available on this device.';
+
+  @override
+  String get authOfficialWebRejected =>
+      'NetEase did not accept the completed website session.';
+
+  @override
+  String get authOfficialWebNetwork =>
+      'The completed website session could not be verified because the connection failed.';
+
+  @override
+  String get authOfficialWebServiceUnavailable =>
+      'NetEase accepted the website interaction but its account verification service is unavailable.';
+
+  @override
+  String get authOfficialWebInvalidCredential =>
+      'The official window did not return a session Fura can validate.';
+
+  @override
+  String get authOfficialWebAlreadyRunning =>
+      'An official NetEase login window is already open.';
+
+  @override
+  String get authOfficialWebFailed =>
+      'The official login window could not complete safely. No session was saved.';
+
+  @override
+  String get authPhoneCodeTitle => 'Sign in with a phone code';
+
+  @override
+  String get authPhoneCodeDetail =>
+      'Request a one-time code for the phone number linked to NetEase Cloud Music.';
+
+  @override
+  String get authCountryCode => 'Country code';
+
+  @override
+  String get authPhoneNumber => 'Phone number';
+
+  @override
+  String get authSmsCode => 'Verification code';
+
+  @override
+  String get authSendCode => 'Send code';
+
+  @override
+  String get authResendCode => 'Resend code';
+
+  @override
+  String authResendCodeIn(int seconds) {
+    return 'Resend in ${seconds}s';
+  }
+
+  @override
+  String get authCodeSent => 'Code sent. Check your messages.';
+
+  @override
+  String get authSmsSignIn => 'Sign in';
+
+  @override
+  String get authSendingCode => 'Sending code…';
+
+  @override
+  String get authCheckingSmsCode => 'Checking code…';
+
+  @override
+  String get authSmsRiskWarning =>
+      'NetEase may still require an additional security check. Fura will stop and report it instead of bypassing the check.';
+
+  @override
+  String get authSmsInvalidInput =>
+      'Enter a valid country code, phone number, and verification code using digits only.';
+
+  @override
+  String get authSmsCodeRejected =>
+      'That verification code was not accepted. Check it and try again.';
+
+  @override
+  String get authSmsRateLimited =>
+      'Too many requests were made. Wait before requesting another code.';
+
+  @override
+  String get authSmsSecurityVerification =>
+      'NetEase requires an additional security check for this phone login. Fura cannot bypass it.';
+
+  @override
+  String get authSmsSecondaryVerification =>
+      'NetEase requires an interactive second verification. Continue on the official website to finish sign-in.';
+
+  @override
+  String get authSmsNetworkFailure =>
+      'Couldn’t reach NetEase. Check your connection and try again.';
+
+  @override
+  String get authSmsServiceUnavailable =>
+      'NetEase phone login is temporarily unavailable. Try again later or use QR sign-in.';
+
+  @override
+  String get authSmsInvalidResponse =>
+      'NetEase returned a response this version could not verify. No login was installed.';
+
+  @override
+  String get authSmsAlreadyRunning =>
+      'A phone login request is already in progress.';
+
+  @override
+  String get authSmsAttemptReplaced =>
+      'This phone login is no longer current. Request a new code.';
+
+  @override
+  String get authSmsCoreUnavailable =>
+      'The music core could not continue phone login.';
 
   @override
   String get searchSongHint => 'Song, artist, or album name';

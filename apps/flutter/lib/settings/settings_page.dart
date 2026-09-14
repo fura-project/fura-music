@@ -311,13 +311,15 @@ class _SettingsPageState extends State<SettingsPage> {
           )
         : settingsContent;
     if (widget.embedded) {
-      return Column(
-        key: const ValueKey('embedded-settings-page'),
-        children: [
-          if (widget.showToolbar)
-            SizedBox(height: kToolbarHeight, child: toolbar),
-          Expanded(child: body),
-        ],
+      return SafeArea(
+        child: Column(
+          key: const ValueKey('embedded-settings-page'),
+          children: [
+            if (widget.showToolbar)
+              SizedBox(height: kToolbarHeight, child: toolbar),
+            Expanded(child: body),
+          ],
+        ),
       );
     }
     return Scaffold(appBar: toolbar, body: body);

@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/comments/track_comments_surface.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -274,7 +275,7 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
 }
 
 ImageProvider<Object> _networkArtworkProvider(String artworkUri) =>
-    NetworkImage(artworkUri);
+    musicArtworkImageProvider(artworkUri);
 
 Future<ColorScheme> _materialArtworkColorScheme({
   required ImageProvider<Object> provider,
@@ -811,7 +812,10 @@ class _ExpandedArtwork extends StatelessWidget {
                     gaplessPlayback: true,
                     frameBuilder: (context, child, frame, synchronous) =>
                         synchronous || frame != null ? child : placeholder,
-                    errorBuilder: (context, error, stackTrace) => placeholder,
+                    errorBuilder: musicArtworkErrorBuilder(
+                      artworkUri!,
+                      placeholder,
+                    ),
                   ),
           ),
         ),

@@ -9,6 +9,7 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_catalog_header.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -132,32 +133,34 @@ class _ArtistPageState extends State<ArtistPage> {
       return Material(
         key: const ValueKey('embedded-artist-detail'),
         color: Theme.of(context).scaffoldBackgroundColor,
-        child: Column(
-          children: [
-            SizedBox(
-              height: kToolbarHeight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    IconButton(
-                      key: const ValueKey('artist-back'),
-                      tooltip: backTooltip,
-                      onPressed: widget.onBack,
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      context.l10n.artistType,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
+        child: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(
+                height: kToolbarHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        key: const ValueKey('artist-back'),
+                        tooltip: backTooltip,
+                        onPressed: widget.onBack,
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        context.l10n.artistType,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Expanded(child: body),
-          ],
+              Expanded(child: body),
+            ],
+          ),
         ),
       );
     }
@@ -512,8 +515,9 @@ class _ArtistAlbumArtwork extends StatelessWidget {
         ? fallback
         : Image.network(
             uri!,
+            headers: musicArtworkRequestHeaders(uri!),
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => fallback,
+            errorBuilder: musicArtworkErrorBuilder(uri!, fallback),
           );
     return ClipRRect(borderRadius: BorderRadius.circular(16), child: artwork);
   }

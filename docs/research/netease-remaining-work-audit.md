@@ -1,8 +1,19 @@
 # NetEase Remaining Work Audit
 
-Date: 2026-09-09. Authority: HD-023 + HD-024. Execution: `AUTONOMOUS_DEVELOPMENT / CORE`.
+Date: 2026-09-12. Authority: HD-023 + HD-024 plus the Linux Human regression. Execution: `HUMAN_GATED_REGRESSION / MIXED`.
 
-This is the required final-stop audit. `DONE` means the authorized machine-verifiable implementation/evidence boundary is complete; it never promotes real-account, unavailable-host, playback, UI, or release evidence. Current UI candidates and pre-existing QQ/Flutter working-tree edits were not modified by this Core pass.
+2026-09-14 addendum: Human runtime evidence rejected the embedded Linux WebKit
+candidate after native EGL/DMABuf and GStreamer failures disconnected Flutter.
+Embedded Android/Linux browser code is removed. Generic external-browser login
+cannot return isolated cookies without provider OAuth. The replacement hands
+the current QR's exact official scan-confirmation URL to the system browser or
+NetEase app while its Rust session continues polling. URL validation,
+cancellation and secret-free diagnostics are machine tested. Real OS routing,
+provider confirmation and restart persistence remain
+`HUMAN_EVIDENCE_REQUIRED`; this addendum does not change the final
+`HUMAN_REVIEW` gate below.
+
+This is the required final-stop audit. `DONE` means the authorized machine-verifiable implementation/evidence boundary is complete; it never promotes real-account, unavailable-host, playback, UI, or release evidence. This regression adds only the explicitly authorized NetEase phone-code form and its typed lifecycle; pre-existing QQ and unrelated Flutter working-tree edits remain preserved.
 
 ## Core hardening
 
@@ -11,6 +22,10 @@ This is the required final-stop audit. `DONE` means the authorized machine-verif
 | Canonical repository metadata | DONE | Canonical remote `fura-project/fura-music` was verified at the starting commit; workspace `repository` no longer points to the former personal URL. Internal crate/package IDs were intentionally retained. |
 | One native NetEase Provider owner | DONE | Private `native_netease_provider()` is the only native initializer; media borrows it. Pointer-identity test plus provider session/media state tests prevent a second hidden owner. QQ owner and failure boundary remain independent. |
 | QR confirmed transient recovery | DONE | Confirmed credentials become pending before account validation. Network/timeout/service retry retains pending; rejection, sign-out and replacement clear it; stale validation cannot install; pending cannot authenticate media or export. |
+| QR browser-session correction | HUMAN_EVIDENCE_REQUIRED | Web `type=1`, scan-login URL, shared browser cookie/chain context, response-body/Set-Cookie credential extraction and explicit 8821 mapping are locked by request-shape tests. Anonymous challenge/801 passes; Human 802/803/account/persistence is not yet accepted. |
+| Phone-code login candidate | HUMAN_EVIDENCE_REQUIRED | Mobile-EAPI send/login, encrypted response decoding, typed rejection/rate-limit/8821 results, active-operation plus completed-session cancellation and pending account verification are implemented and offline tested. Agent sent no SMS; Human must verify delivery, code acceptance, account correlation and vault persistence. |
+| External QR-confirmation handoff | HUMAN_EVIDENCE_REQUIRED | 8821 and 8830 remain explicit STOP states. The generic web-login button and embedded WebViews are removed. During an active QR session, Fura can externally open only the exact validated official scan-confirmation URL while the same Rust session keeps polling. Human must verify OS/app routing, confirmation, credential acceptance and restart persistence. |
+| Flutter artwork HTTP correction | HUMAN_EVIDENCE_REQUIRED | Human logs isolated real CDN HTTP 403. The duplicated `NetworkImage`/Dart User-Agent was reproduced; one default User-Agent plus host-scoped Referer returns HTTP 200 in the bounded live probe. Rebuilt application rendering remains Human review. |
 | Human account-read harness | DONE | New ignored, explicit-opt-in, read-only, serial harness compiles. Exact 72-request ceiling; no names/IDs/cookies/bodies/URIs logged; no source body download. Agent did not run it. |
 | Native Linux/Android packaging | DONE | Current worktree built Linux Release and one ARM64 Android debug APK containing the native Rust library. This is build evidence, not device runtime or release evidence. |
 | Windows/macOS/iOS current build | ENVIRONMENT_EVIDENCE_REQUIRED | Target dependency graphs resolve with the existing rustls/reqwest/getrandom stack, but the host lacks those compilers/SDKs. No current-ref remote workflow can run without publishing the local commits, which is prohibited. |
@@ -49,10 +64,11 @@ This is the required final-stop audit. `DONE` means the authorized machine-verif
 | `cargo test --locked --workspace --all-targets` | DONE | Final all-target host gate passes; ignored live/Human tests remain opt-in. |
 | `cargo fmt --all -- --check` | DONE | Final format gate passes. |
 | Strict workspace/all-target Clippy | DONE | Final `-D warnings` gate passes after removing one identity error-map warning. |
+| Flutter shared authentication gate | DONE | Pinned FRB generation, 248-file Dart format, `dart analyze` and all 567 Flutter tests pass, including phone-code success/retry/8821/cancel/dispose and compact form interaction. |
 | Linux Release | DONE | `flutter build linux --release` produced the x64 bundle. No runtime/user-account claim. |
 | Android development build | DONE | `flutter build apk --debug --target-platform android-arm64` produced an APK with `lib/arm64-v8a/librust_lib_flutterustmusic.so`. No physical-device claim. |
 | Remote cross-platform workflow | ENVIRONMENT_EVIDENCE_REQUIRED | Workflow exists, but current local commits cannot be selected without push; HD-024 forbids push. |
-| FRB generation/orphan audit | NOT_APPLICABLE | No public Bridge API/DTO changed. Regeneration would create irrelevant churn; pinned 2.13.0 output remains unchanged. |
+| FRB generation/orphan audit | DONE | Typed security-verification and phone-code request/login/cancel surfaces are present; pinned FRB 2.13.0 generation completed and generated Dart/Rust surfaces agree. |
 | Documentation consistency | DONE | HD-024, architecture, roadmap, progress, technical debt and protocol/auth/audit evidence distinguish machine, Human and environment results. |
 | Complexity review | DONE | Two focused client modules and one provider mapping module; no service locator, registry, Provider-specific Domain trait, sidecar, runtime plugin, UI state, fallback or source substitution. |
 
@@ -60,10 +76,11 @@ This is the required final-stop audit. `DONE` means the authorized machine-verif
 
 | Item | Classification | Exact boundary |
 |---|---|---|
-| QR/account/library/favorites/recommendations source authorization | HUMAN_EVIDENCE_REQUIRED | Explicit Human-only matrix exists and was intentionally not run by the Agent. |
+| QR/account/library/favorites/recommendations source authorization | HUMAN_EVIDENCE_REQUIRED | Explicit Human-only matrix exists and was intentionally not run by the Agent. Two Human application attempts now identify explicit 8821 after 802; Web QR 803/account/persistence remains unproven. |
+| Phone-code delivery and account authorization | HUMAN_EVIDENCE_REQUIRED | Use the rebuilt UI with a Human-controlled number and code. Record only typed phase/outcome; never share the number, code, cookie or response body. STOP on 8821/rate limit and do not resend automatically. |
 | Actual liked collection over 1,000 and latency | HUMAN_EVIDENCE_REQUIRED | Synthetic correctness exists; account-specific size/content/performance does not. |
 | Actual authenticated standard media | HUMAN_EVIDENCE_REQUIRED | Only request/decoder/generation fixtures exist; no account entitlement or playback claim. |
-| UI/Provider picker/native vault integration | HUMAN_DECISION_REQUIRED | Explicitly excluded from HD-024; retained visual candidates remain unchanged and unaccepted. |
+| Phone-code UI and native-vault runtime | HUMAN_EVIDENCE_REQUIRED | The authorized responsive form, typed outcomes and existing namespaced vault handoff are implemented and machine-tested. Human must accept the actual compact/desktop presentation and verify a real successful login persists across a clean restart. |
 | Writes, history report, cross-provider matching/substitution, third Provider, bypass | NOT_APPLICABLE | Explicitly excluded. No code or live action was added. |
 
 ## Final-stop answers

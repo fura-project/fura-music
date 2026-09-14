@@ -937,6 +937,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseSmsAuthenticationFailure
+  dco_decode_box_autoadd_netease_sms_authentication_failure(dynamic raw);
+
+  @protected
   PlaybackQueueFailure dco_decode_box_autoadd_playback_queue_failure(
     dynamic raw,
   );
@@ -1215,6 +1219,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LibraryTrackSummary> dco_decode_list_library_track_summary(dynamic raw);
 
   @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -1258,6 +1265,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NeteaseQrLoginStart dco_decode_netease_qr_login_start(dynamic raw);
+
+  @protected
+  NeteaseSmsAuthenticationFailure dco_decode_netease_sms_authentication_failure(
+    dynamic raw,
+  );
+
+  @protected
+  NeteaseSmsAuthenticationOutcome dco_decode_netease_sms_authentication_outcome(
+    dynamic raw,
+  );
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -1313,6 +1330,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaResolutionFailure? dco_decode_opt_box_autoadd_media_resolution_failure(
     dynamic raw,
   );
+
+  @protected
+  NeteaseSmsAuthenticationFailure?
+  dco_decode_opt_box_autoadd_netease_sms_authentication_failure(dynamic raw);
 
   @protected
   PlaybackQueueFailure? dco_decode_opt_box_autoadd_playback_queue_failure(
@@ -2738,6 +2759,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseSmsAuthenticationFailure
+  sse_decode_box_autoadd_netease_sms_authentication_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlaybackQueueFailure sse_decode_box_autoadd_playback_queue_failure(
     SseDeserializer deserializer,
   );
@@ -3110,6 +3137,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -3169,6 +3199,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseSmsAuthenticationFailure sse_decode_netease_sms_authentication_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseSmsAuthenticationOutcome sse_decode_netease_sms_authentication_outcome(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -3222,6 +3262,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaResolutionFailure? sse_decode_opt_box_autoadd_media_resolution_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseSmsAuthenticationFailure?
+  sse_decode_opt_box_autoadd_netease_sms_authentication_failure(
     SseDeserializer deserializer,
   );
 
@@ -4924,6 +4970,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_netease_sms_authentication_failure(
+    NeteaseSmsAuthenticationFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_playback_queue_failure(
     PlaybackQueueFailure self,
     SseSerializer serializer,
@@ -5323,6 +5375,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -5395,6 +5450,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_netease_sms_authentication_failure(
+    NeteaseSmsAuthenticationFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_sms_authentication_outcome(
+    NeteaseSmsAuthenticationOutcome self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -5457,6 +5524,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_media_resolution_failure(
     MediaResolutionFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_netease_sms_authentication_failure(
+    NeteaseSmsAuthenticationFailure? self,
     SseSerializer serializer,
   );
 

@@ -19,6 +19,69 @@ void main() {
     controller.dispose();
   });
 
+  test('external QR handoff keeps the active polling session alive', () async {
+    final session = _FakeLoginSession();
+    final confirmationUri = Uri.parse(
+      'https://music.163.com/st/platform/scanlogin?'
+      'codekey=synthetic-key&chainId=synthetic-chain&'
+      'hdw_device=web&hdw_appid=web&hitExp=1',
+    );
+    final launched = <Uri>[];
+    final controller = LoginController(
+      _FakeGateway.immediate(
+        _successfulStart(session, externalConfirmationUri: confirmationUri),
+      ),
+      externalLoginUriLauncher: (uri) async {
+        launched.add(uri);
+        return true;
+      },
+    );
+
+    await controller.startQr(LoginQrChannel.qq);
+    expect(controller.canOpenQrExternally, isTrue);
+
+    expect(await controller.openQrChallengeExternally(), isTrue);
+
+    expect(launched, [confirmationUri]);
+    expect(session.cancelCalls, 0);
+    expect(session.advanceCalls, 1);
+    expect(controller.stage, LoginStage.waitingForScan);
+    expect(controller.externalQrLaunchFailed, isFalse);
+    controller.dispose();
+  });
+
+  test(
+    'late external QR handoff cannot revive a cancelled challenge',
+    () async {
+      final session = _FakeLoginSession();
+      final confirmationUri = Uri.parse(
+        'https://music.163.com/st/platform/scanlogin?'
+        'codekey=synthetic-key&chainId=synthetic-chain&'
+        'hdw_device=web&hdw_appid=web&hitExp=1',
+      );
+      final launch = Completer<bool>();
+      final controller = LoginController(
+        _FakeGateway.immediate(
+          _successfulStart(session, externalConfirmationUri: confirmationUri),
+        ),
+        externalLoginUriLauncher: (_) => launch.future,
+      );
+
+      await controller.startQr(LoginQrChannel.qq);
+      final opening = controller.openQrChallengeExternally();
+      expect(controller.openingQrExternally, isTrue);
+
+      controller.cancel();
+      launch.complete(true);
+      expect(await opening, isTrue);
+
+      expect(controller.stage, LoginStage.idle);
+      expect(controller.openingQrExternally, isFalse);
+      expect(controller.externalQrLaunchFailed, isFalse);
+      controller.dispose();
+    },
+  );
+
   test('discovers masked desktop QQ accounts only when enabled', () async {
     final quickSession = _FakeDesktopQuickLoginSession();
     final gateway = _FakeGateway.immediate(
@@ -156,6 +219,47 @@ void main() {
   });
 
   test(
+    'paces QR polling for providers with immediate status endpoints',
+    () async {
+      final session = _FakeLoginSession();
+      final gateway = _PacedFakeGateway(
+        _successfulStart(session),
+        const Duration(seconds: 2),
+      );
+      final delays = <Duration>[];
+      final delayGates = <Completer<void>>[];
+      final controller = LoginController(
+        gateway,
+        delay: (duration) {
+          delays.add(duration);
+          final gate = Completer<void>();
+          delayGates.add(gate);
+          return gate.future;
+        },
+      );
+
+      await controller.start();
+      expect(session.advanceCalls, 1);
+
+      session.completeNext(
+        const LoginUpdate(
+          progress: LoginProgress.waitingForScan,
+          sessionActive: true,
+        ),
+      );
+      await pumpEventQueue();
+      expect(delays, [const Duration(seconds: 2)]);
+      expect(session.advanceCalls, 1);
+
+      delayGates.single.complete();
+      await pumpEventQueue();
+      expect(session.advanceCalls, 2);
+
+      controller.dispose();
+    },
+  );
+
+  test(
     'dispose cancels an active session and suppresses its late result',
     () async {
       final session = _FakeLoginSession();
@@ -228,6 +332,30 @@ void main() {
 
     expect(controller.stage, LoginStage.expired);
     expect(notifications, greaterThan(beforeTerminalUpdate));
+
+    controller.dispose();
+  });
+
+  test('keeps provider security verification distinct and terminal', () async {
+    final session = _FakeLoginSession();
+    final gateway = _FakeGateway.immediate(_successfulStart(session));
+    final controller = LoginController(
+      gateway,
+      networkRetryDelay: Duration.zero,
+    );
+
+    await controller.start();
+    session.completeNext(
+      const LoginUpdate(
+        failure: LoginFailure.securityVerificationRequired,
+        sessionActive: false,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(controller.stage, LoginStage.error);
+    expect(controller.failure, LoginFailure.securityVerificationRequired);
+    expect(controller.canRetry, isFalse);
 
     controller.dispose();
   });
@@ -509,13 +637,228 @@ void main() {
       expect(controller.isSigningOut, isFalse);
     },
   );
+
+  test(
+    'phone-code authentication persists only after provider success',
+    () async {
+      final gateway = _SmsFakeGateway(
+        codeRequestResults: const [SmsAuthenticationOutcome(success: true)],
+        loginResults: const [SmsAuthenticationOutcome(success: true)],
+      );
+      final controller = LoginController(gateway);
+
+      expect(controller.supportsSmsLogin, isTrue);
+      controller.showSmsLogin();
+      expect(controller.smsStage, SmsLoginStage.ready);
+
+      await controller.requestSmsCode(countryCode: '86', phone: '00000000000');
+      expect(gateway.phoneRequests, [('86', '00000000000')]);
+      expect(controller.smsStage, SmsLoginStage.codeSent);
+      expect(controller.smsCodeRequested, isTrue);
+      expect(controller.stage, LoginStage.idle);
+
+      await controller.authenticateSmsCode('000000');
+      expect(gateway.codes, ['000000']);
+      expect(controller.stage, LoginStage.authenticated);
+      expect(controller.credentialSaveState, CredentialSaveState.saved);
+      expect(gateway.persistCalls, 1);
+
+      controller.dispose();
+    },
+  );
+
+  test('a rejected phone code remains retryable in the same session', () async {
+    final gateway = _SmsFakeGateway(
+      codeRequestResults: const [SmsAuthenticationOutcome(success: true)],
+      loginResults: const [
+        SmsAuthenticationOutcome(
+          success: false,
+          failure: SmsAuthenticationFailure.codeRejected,
+        ),
+        SmsAuthenticationOutcome(success: true),
+      ],
+    );
+    final controller = LoginController(gateway)..showSmsLogin();
+
+    await controller.requestSmsCode(countryCode: '86', phone: '00000000000');
+    await controller.authenticateSmsCode('000001');
+
+    expect(controller.smsStage, SmsLoginStage.error);
+    expect(controller.smsFailure, SmsAuthenticationFailure.codeRejected);
+    expect(controller.smsCodeRequested, isTrue);
+    expect(gateway.persistCalls, 0);
+
+    await controller.authenticateSmsCode('000002');
+    expect(gateway.codes, ['000001', '000002']);
+    expect(controller.stage, LoginStage.authenticated);
+    expect(gateway.persistCalls, 1);
+
+    controller.dispose();
+  });
+
+  test('cancel clears a completed provider-owned phone code session', () async {
+    final gateway = _SmsFakeGateway(
+      codeRequestResults: const [SmsAuthenticationOutcome(success: true)],
+    );
+    final controller = LoginController(gateway)..showSmsLogin();
+
+    await controller.requestSmsCode(countryCode: '86', phone: '00000000000');
+    expect(controller.smsCodeRequested, isTrue);
+
+    controller.cancel();
+
+    expect(gateway.sessionCancelCalls, 1);
+    expect(controller.smsStage, SmsLoginStage.hidden);
+    expect(controller.smsCodeRequested, isFalse);
+    controller.dispose();
+    expect(gateway.sessionCancelCalls, 1);
+  });
+
+  test(
+    'phone security verification is distinct and installs nothing',
+    () async {
+      final gateway = _SmsFakeGateway(
+        codeRequestResults: const [
+          SmsAuthenticationOutcome(
+            success: false,
+            failure: SmsAuthenticationFailure.securityVerificationRequired,
+          ),
+        ],
+      );
+      final controller = LoginController(gateway)..showSmsLogin();
+
+      await controller.requestSmsCode(countryCode: '86', phone: '00000000000');
+
+      expect(controller.smsStage, SmsLoginStage.error);
+      expect(
+        controller.smsFailure,
+        SmsAuthenticationFailure.securityVerificationRequired,
+      );
+      expect(controller.smsCodeRequested, isFalse);
+      expect(gateway.persistCalls, 0);
+
+      controller.dispose();
+    },
+  );
+
+  test('dispose cancels phone code request and ignores late success', () async {
+    final pending = Completer<SmsAuthenticationOutcome>();
+    final gateway = _SmsFakeGateway(codeRequestResults: [pending.future]);
+    final controller = LoginController(gateway)..showSmsLogin();
+
+    final request = controller.requestSmsCode(
+      countryCode: '86',
+      phone: '00000000000',
+    );
+    expect(controller.smsStage, SmsLoginStage.sendingCode);
+    controller.dispose();
+    expect(gateway.codeRequestOperations.single.cancelCalls, 1);
+
+    pending.complete(const SmsAuthenticationOutcome(success: true));
+    await request;
+    expect(controller.smsStage, SmsLoginStage.hidden);
+    expect(controller.stage, LoginStage.idle);
+    expect(gateway.persistCalls, 0);
+  });
+
+  test('official website login persists only after verified success', () async {
+    final gateway = _OfficialWebFakeGateway(
+      outcomes: const [OfficialWebAuthenticationOutcome(authenticated: true)],
+    );
+    final controller = LoginController(gateway);
+
+    expect(controller.supportsOfficialWebLogin, isTrue);
+    final login = controller.startOfficialWebLogin();
+    expect(controller.stage, LoginStage.officialWebLogin);
+    await login;
+
+    expect(controller.stage, LoginStage.authenticated);
+    expect(controller.credentialSaveState, CredentialSaveState.saved);
+    expect(gateway.persistCalls, 1);
+    controller.dispose();
+  });
+
+  test('official website verification failure remains explicit', () async {
+    final gateway = _OfficialWebFakeGateway(
+      outcomes: const [
+        OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.rejected,
+        ),
+      ],
+    );
+    final controller = LoginController(gateway);
+
+    await controller.startOfficialWebLogin();
+
+    expect(controller.stage, LoginStage.officialWebError);
+    expect(
+      controller.officialWebFailure,
+      OfficialWebAuthenticationFailure.rejected,
+    );
+    expect(gateway.persistCalls, 0);
+    controller.dispose();
+  });
+
+  test(
+    'official website transient verification retries retained candidate',
+    () async {
+      final gateway = _OfficialWebFakeGateway(
+        outcomes: const [
+          OfficialWebAuthenticationOutcome(
+            authenticated: false,
+            failure: OfficialWebAuthenticationFailure.network,
+          ),
+        ],
+      );
+      final controller = LoginController(gateway);
+      await controller.startOfficialWebLogin();
+
+      expect(controller.canRetryOfficialWebVerification, isTrue);
+      final retry = controller.retryOfficialWebVerification();
+      expect(controller.stage, LoginStage.officialWebLogin);
+      gateway.completeVerification(
+        0,
+        CredentialVerificationResult.authenticated,
+      );
+      await retry;
+
+      expect(controller.stage, LoginStage.authenticated);
+      expect(gateway.persistCalls, 1);
+      expect(gateway.officialOperations, hasLength(1));
+      controller.dispose();
+    },
+  );
+
+  test('cancel suppresses a late official website login success', () async {
+    final pending = Completer<OfficialWebAuthenticationOutcome>();
+    final gateway = _OfficialWebFakeGateway(outcomes: [pending.future]);
+    final controller = LoginController(gateway);
+
+    final login = controller.startOfficialWebLogin();
+    expect(controller.stage, LoginStage.officialWebLogin);
+    controller.cancel();
+    expect(gateway.officialOperations.single.cancelCalls, 1);
+    pending.complete(
+      const OfficialWebAuthenticationOutcome(authenticated: true),
+    );
+    await login;
+
+    expect(controller.stage, LoginStage.idle);
+    expect(gateway.persistCalls, 0);
+    controller.dispose();
+  });
 }
 
-LoginStart _successfulStart(_FakeLoginSession session) => LoginStart(
+LoginStart _successfulStart(
+  _FakeLoginSession session, {
+  Uri? externalConfirmationUri,
+}) => LoginStart(
   session: session,
   challenge: LoginChallenge(
     imageFormat: LoginImageFormat.png,
     imageBytes: Uint8List.fromList(<int>[137, 80, 78, 71]),
+    externalConfirmationUri: externalConfirmationUri,
   ),
 );
 
@@ -628,6 +971,132 @@ class _FakeGateway
   void completeVerification(int index, CredentialVerificationResult result) {
     _pendingVerifications[index].complete(result);
   }
+}
+
+class _PacedFakeGateway extends _FakeGateway implements QrLoginPollingPolicy {
+  _PacedFakeGateway(super.result, this.minimumQrPollInterval)
+    : super.immediate();
+
+  @override
+  final Duration minimumQrPollInterval;
+}
+
+class _SmsFakeGateway extends _FakeGateway implements SmsAuthenticationGateway {
+  _SmsFakeGateway({
+    List<FutureOr<SmsAuthenticationOutcome>> codeRequestResults = const [],
+    List<FutureOr<SmsAuthenticationOutcome>> loginResults = const [],
+  }) : _codeRequestResults = List.of(codeRequestResults),
+       _loginResults = List.of(loginResults),
+       super.immediate(_successfulStart(_FakeLoginSession()));
+
+  final List<FutureOr<SmsAuthenticationOutcome>> _codeRequestResults;
+  final List<FutureOr<SmsAuthenticationOutcome>> _loginResults;
+  final List<(String, String)> phoneRequests = [];
+  final List<String> codes = [];
+  final List<_FakeSmsCodeRequestOperation> codeRequestOperations = [];
+  final List<_FakeSmsLoginOperation> loginOperations = [];
+  int sessionCancelCalls = 0;
+
+  @override
+  bool cancelSmsAuthentication() {
+    sessionCancelCalls += 1;
+    return true;
+  }
+
+  @override
+  SmsCodeRequestOperation beginSmsCodeRequest({
+    required String countryCode,
+    required String phone,
+  }) {
+    phoneRequests.add((countryCode, phone));
+    final operation = _FakeSmsCodeRequestOperation(
+      Future<SmsAuthenticationOutcome>.value(_codeRequestResults.removeAt(0)),
+    );
+    codeRequestOperations.add(operation);
+    return operation;
+  }
+
+  @override
+  SmsLoginOperation beginSmsLogin({required String code}) {
+    codes.add(code);
+    final operation = _FakeSmsLoginOperation(
+      Future<SmsAuthenticationOutcome>.value(_loginResults.removeAt(0)),
+    );
+    loginOperations.add(operation);
+    return operation;
+  }
+}
+
+class _OfficialWebFakeGateway extends _FakeGateway
+    implements OfficialWebAuthenticationGateway {
+  _OfficialWebFakeGateway({
+    required List<FutureOr<OfficialWebAuthenticationOutcome>> outcomes,
+  }) : _outcomes = List.of(outcomes),
+       super.immediate(_successfulStart(_FakeLoginSession()));
+
+  final List<FutureOr<OfficialWebAuthenticationOutcome>> _outcomes;
+  final List<_FakeOfficialWebAuthenticationOperation> officialOperations = [];
+
+  @override
+  bool get supportsOfficialWebLogin => true;
+
+  @override
+  OfficialWebAuthenticationOperation beginOfficialWebLogin() {
+    final operation = _FakeOfficialWebAuthenticationOperation(
+      Future<OfficialWebAuthenticationOutcome>.value(_outcomes.removeAt(0)),
+    );
+    officialOperations.add(operation);
+    return operation;
+  }
+}
+
+class _FakeOfficialWebAuthenticationOperation
+    implements OfficialWebAuthenticationOperation {
+  _FakeOfficialWebAuthenticationOperation(this._result);
+
+  final Future<OfficialWebAuthenticationOutcome> _result;
+  int cancelCalls = 0;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<OfficialWebAuthenticationOutcome> run() => _result;
+}
+
+class _FakeSmsCodeRequestOperation implements SmsCodeRequestOperation {
+  _FakeSmsCodeRequestOperation(this._result);
+
+  final Future<SmsAuthenticationOutcome> _result;
+  int cancelCalls = 0;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<SmsAuthenticationOutcome> run() => _result;
+}
+
+class _FakeSmsLoginOperation implements SmsLoginOperation {
+  _FakeSmsLoginOperation(this._result);
+
+  final Future<SmsAuthenticationOutcome> _result;
+  int cancelCalls = 0;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<SmsAuthenticationOutcome> run() => _result;
 }
 
 class _FakeDesktopQuickLoginStartOperation

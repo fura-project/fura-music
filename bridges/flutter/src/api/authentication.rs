@@ -100,6 +100,8 @@ pub enum QqMusicQrLoginFailure {
     TimedOut,
     TooManyNetworkFailures,
     AdvanceAlreadyInProgress,
+    SecurityVerificationRequired,
+    SecondaryVerificationRequired,
 }
 
 pub struct QqMusicQrLoginStart {
@@ -1082,6 +1084,12 @@ const fn map_error(error: AuthenticationError) -> QqMusicQrLoginFailure {
         AuthenticationError::TooManyNetworkFailures => {
             QqMusicQrLoginFailure::TooManyNetworkFailures
         }
+        AuthenticationError::SecurityVerificationRequired => {
+            QqMusicQrLoginFailure::SecurityVerificationRequired
+        }
+        AuthenticationError::SecondaryVerificationRequired => {
+            QqMusicQrLoginFailure::SecondaryVerificationRequired
+        }
     }
 }
 
@@ -1231,7 +1239,9 @@ const fn map_verification_failure(
         AuthenticationError::Rejected
         | AuthenticationError::SessionClosed
         | AuthenticationError::TimedOut
-        | AuthenticationError::TooManyNetworkFailures => {
+        | AuthenticationError::TooManyNetworkFailures
+        | AuthenticationError::SecurityVerificationRequired
+        | AuthenticationError::SecondaryVerificationRequired => {
             QqMusicCredentialVerificationFailure::CoreUnavailable
         }
     }
@@ -1262,6 +1272,10 @@ mod tests {
         assert_eq!(
             map_error(AuthenticationError::TooManyNetworkFailures),
             QqMusicQrLoginFailure::TooManyNetworkFailures
+        );
+        assert_eq!(
+            map_error(AuthenticationError::SecurityVerificationRequired),
+            QqMusicQrLoginFailure::SecurityVerificationRequired
         );
         let outcome = failed_start(QqMusicQrLoginFailure::InvalidResponse);
         assert!(outcome.session.is_none());

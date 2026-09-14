@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
@@ -515,14 +516,7 @@ class MusicTrackRowContent extends StatelessWidget {
             const SizedBox(height: 3),
             Row(
               children: [
-                Flexible(
-                  child: MusicTrackMetadataAction(
-                    value: artistNames,
-                    tooltip: artistTooltip ?? context.l10n.commonOpenArtist,
-                    onPressed: onOpenArtist,
-                    compact: true,
-                  ),
-                ),
+                Flexible(child: MusicTrackMetadataText(artistNames)),
                 if (track.albumTitle != null) ...[
                   Text(
                     ' · ',
@@ -530,14 +524,7 @@ class MusicTrackRowContent extends StatelessWidget {
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  Flexible(
-                    child: MusicTrackMetadataAction(
-                      value: track.albumTitle!,
-                      tooltip: albumTooltip ?? context.l10n.commonOpenAlbum,
-                      onPressed: onOpenAlbum,
-                      compact: true,
-                    ),
-                  ),
+                  Flexible(child: MusicTrackMetadataText(track.albumTitle!)),
                 ],
               ],
             ),
@@ -668,8 +655,9 @@ class MusicTrackArtwork extends StatelessWidget {
           ? placeholder
           : Image.network(
               uri!,
+              headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
+              errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
   }
