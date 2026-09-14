@@ -42,6 +42,9 @@ dependencies:
   audio_session: 0.2.4
   audioplayers: 6.8.1
   dbus: 0.7.15
+  # 2.x returns material_ui.ColorScheme; Fura's Flutter ThemeData requires the
+  # native Flutter ColorScheme still provided by 1.9.0.
+  dynamic_color: 1.9.0
   flutter_rust_bridge: 2.13.0
   flutter_secure_storage: 10.3.1
   media_kit: 1.2.6

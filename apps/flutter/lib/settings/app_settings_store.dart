@@ -100,10 +100,7 @@ class AppSettingsStore {
         state: AppSettingsLoadState.invalidDocument,
       );
     }
-    if (version != 1 &&
-        version != 2 &&
-        version != 3 &&
-        version != AppSettings.currentSchemaVersion) {
+    if (version < 1 || version > AppSettings.currentSchemaVersion) {
       return const AppSettingsLoadResult(
         settings: AppSettings.defaults,
         state: AppSettingsLoadState.unsupportedVersion,
@@ -148,26 +145,38 @@ class AppSettingsStore {
                   .firstOrNull ??
               AppMusicProvider.qqMusic;
     final localeName = decoded['localePreference'];
-    final localePreference = version < AppSettings.currentSchemaVersion
+    final localePreference = version < 4
         ? AppLocalePreference.system
         : AppLocalePreference.values
                   .where((candidate) => candidate.name == localeName)
                   .firstOrNull ??
               AppLocalePreference.system;
+    final colorSourceName = decoded['colorSource'];
+    final colorSource = version < AppSettings.currentSchemaVersion
+        ? AppColorSourcePreference.brand
+        : AppColorSourcePreference.values
+                  .where((candidate) => candidate.name == colorSourceName)
+                  .firstOrNull ??
+              AppColorSourcePreference.brand;
     final migrated =
         version < AppSettings.currentSchemaVersion ||
         (version >= 3 &&
             !AppMusicProvider.values.any(
               (candidate) => candidate.name == providerName,
             )) ||
-        (version == AppSettings.currentSchemaVersion &&
+        (version >= 4 &&
             !AppLocalePreference.values.any(
               (candidate) => candidate.name == localeName,
+            )) ||
+        (version == AppSettings.currentSchemaVersion &&
+            !AppColorSourcePreference.values.any(
+              (candidate) => candidate.name == colorSourceName,
             ));
 
     return AppSettingsLoadResult(
       settings: AppSettings(
         theme: theme,
+        colorSource: colorSource,
         playbackQuality: playbackQuality,
         musicProvider: musicProvider,
         localePreference: localePreference,
@@ -183,6 +192,7 @@ class AppSettingsStore {
         final document = jsonEncode(<String, Object>{
           'schemaVersion': AppSettings.currentSchemaVersion,
           'theme': settings.theme.name,
+          'colorSource': settings.colorSource.name,
           'playbackQuality': settings.playbackQuality.name,
           'musicProvider': settings.musicProvider.name,
           'localePreference': settings.localePreference.name,

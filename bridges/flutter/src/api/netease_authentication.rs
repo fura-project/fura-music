@@ -248,7 +248,8 @@ pub async fn authenticate_netease_with_system_browser(
     }
 
     #[cfg(not(target_os = "linux"))]
-    let capture = Err(NeteaseSystemBrowserAuthenticationFailure::UnsupportedPlatform);
+    let capture: Result<Vec<u8>, NeteaseSystemBrowserAuthenticationFailure> =
+        Err(NeteaseSystemBrowserAuthenticationFailure::UnsupportedPlatform);
     #[cfg(target_os = "linux")]
     let capture = crate::linux_system_chromium::capture_netease_credential(|| {
         *lock_attempt(&ACTIVE_SYSTEM_BROWSER) == Some(attempt_id)

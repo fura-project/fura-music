@@ -23,6 +23,10 @@ void main() {
       true,
     );
     expect(
+      SettingsSection.appearance.matches('monet', settings, english),
+      true,
+    );
+    expect(
       SettingsSection.musicService.matches('provider', settings, english),
       true,
     );
@@ -53,6 +57,7 @@ void main() {
     );
 
     expect(SettingsSection.appearance.matches('主题', settings, chinese), true);
+    expect(SettingsSection.appearance.matches('莫奈', settings, chinese), true);
     expect(SettingsSection.musicService.matches('音源', settings, chinese), true);
     expect(
       SettingsSection.musicService.matches('网易云', settings, chinese),

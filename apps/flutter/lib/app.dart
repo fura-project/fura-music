@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/l10n/app_locale.dart';
@@ -286,29 +287,48 @@ class _MusicAppState extends State<MusicApp> {
   Widget build(BuildContext context) {
     final settings = _settingsController.settings;
     final provider = widget.providerDependencies.select(settings.musicProvider);
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      onGenerateTitle: (context) => context.l10n.appTitle,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      locale: materialLocaleForPreference(settings.localePreference),
-      localeListResolutionCallback: resolveSupportedAppLocale,
-      theme: MusicMaterialTheme.light(),
-      darkTheme: MusicMaterialTheme.dark(),
-      themeMode: settings.theme.materialThemeMode,
-      home: LoginPage(
-        bootstrap: widget.bootstrap,
-        authenticationGateway: provider.authenticationGateway,
-        homeDependencies: provider.home,
-        libraryDependencies: provider.library,
-        discoveryDependencies: provider.discovery,
-        playbackDependencies: widget.playbackDependencies,
-        capabilities: provider.capabilities,
-        desktopQuickLoginEnabled: provider.desktopQuickLoginEnabled,
-        settings: settings,
-        onSettingsChanged: _updateSettings,
-        initialCredentialRestore: provider.initialCredentialRestore,
-      ),
+    Widget buildMaterialApp(
+      ColorScheme? lightDynamic,
+      ColorScheme? darkDynamic,
+    ) {
+      final useSystemColors =
+          settings.colorSource == AppColorSourcePreference.system;
+      final brandSeed = MusicMaterialTheme.brandSeedFor(settings.musicProvider);
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        onGenerateTitle: (context) => context.l10n.appTitle,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: materialLocaleForPreference(settings.localePreference),
+        localeListResolutionCallback: resolveSupportedAppLocale,
+        theme: MusicMaterialTheme.light(
+          seed: brandSeed,
+          colorScheme: useSystemColors ? lightDynamic : null,
+        ),
+        darkTheme: MusicMaterialTheme.dark(
+          seed: brandSeed,
+          colorScheme: useSystemColors ? darkDynamic : null,
+        ),
+        themeMode: settings.theme.materialThemeMode,
+        home: LoginPage(
+          bootstrap: widget.bootstrap,
+          authenticationGateway: provider.authenticationGateway,
+          homeDependencies: provider.home,
+          libraryDependencies: provider.library,
+          discoveryDependencies: provider.discovery,
+          playbackDependencies: widget.playbackDependencies,
+          capabilities: provider.capabilities,
+          desktopQuickLoginEnabled: provider.desktopQuickLoginEnabled,
+          settings: settings,
+          onSettingsChanged: _updateSettings,
+          initialCredentialRestore: provider.initialCredentialRestore,
+        ),
+      );
+    }
+
+    return DynamicColorBuilder(
+      key: const ValueKey('app-dynamic-color-loader'),
+      builder: buildMaterialApp,
     );
   }
 }

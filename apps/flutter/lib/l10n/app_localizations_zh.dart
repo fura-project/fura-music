@@ -2997,10 +2997,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAppearanceCompactLabel => '主题模式';
 
   @override
-  String get settingsAppearanceDescription => '主题模式与系统外观';
+  String get settingsAppearanceDescription => '主题模式与配色来源';
 
   @override
-  String get settingsAppearanceBody => '选择 fura music 如何跟随系统外观。';
+  String get settingsAppearanceBody => '选择 fura music 使用的明暗模式和配色方案。';
 
   @override
   String get settingsAppearanceSummarySystem => '跟随系统主题';
@@ -3012,7 +3012,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAppearanceSummaryDark => '深色主题';
 
   @override
-  String get settingsAppearanceSearchKeywords => '外观|主题|系统|浅色|深色|颜色';
+  String get settingsAppearanceSearchKeywords =>
+      '外观|主题|系统|浅色|深色|颜色|配色|色板|莫奈|Monet|壁纸|强调色|品牌|印象色';
 
   @override
   String get settingsThemeSystem => '跟随系统';
@@ -3022,6 +3023,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsThemeDark => '深色';
+
+  @override
+  String get settingsColorSourceLabel => '配色来源';
+
+  @override
+  String get settingsColorSourceBody => '选择 Material 3 色板的取色来源。';
+
+  @override
+  String get settingsColorSourceSystem => '系统动态取色（Monet）';
+
+  @override
+  String get settingsColorSourceSystemDescription =>
+      '在受支持的设备上使用壁纸或系统强调色；不可用时回退到当前音乐服务的印象色。';
+
+  @override
+  String get settingsColorSourceSystemSummary => '系统动态色';
+
+  @override
+  String get settingsColorSourceBrand => '品牌印象色';
+
+  @override
+  String settingsColorSourceBrandDescription(String provider) {
+    return '使用受 $provider 启发、在不同设备上保持一致的配色。';
+  }
+
+  @override
+  String get settingsColorSourceBrandSummary => '品牌印象色';
 
   @override
   String get settingsMusicServiceLabel => '音乐服务';

@@ -3287,12 +3287,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAppearanceCompactLabel => 'Theme mode';
 
   @override
-  String get settingsAppearanceDescription =>
-      'Theme mode and system appearance';
+  String get settingsAppearanceDescription => 'Theme mode and color palette';
 
   @override
   String get settingsAppearanceBody =>
-      'Choose how fura music follows your system appearance.';
+      'Choose the brightness and color palette used by fura music.';
 
   @override
   String get settingsAppearanceSummarySystem => 'Following the system theme';
@@ -3305,7 +3304,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAppearanceSearchKeywords =>
-      'appearance|theme|system|light|dark|color';
+      'appearance|theme|system|light|dark|color|palette|Monet|wallpaper|accent|brand';
 
   @override
   String get settingsThemeSystem => 'System';
@@ -3315,6 +3314,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsThemeDark => 'Dark';
+
+  @override
+  String get settingsColorSourceLabel => 'Color palette';
+
+  @override
+  String get settingsColorSourceBody =>
+      'Choose where the Material 3 palette comes from.';
+
+  @override
+  String get settingsColorSourceSystem => 'System colors (Monet)';
+
+  @override
+  String get settingsColorSourceSystemDescription =>
+      'Use wallpaper or OS accent colors where supported. The current music service palette is used as a fallback.';
+
+  @override
+  String get settingsColorSourceSystemSummary => 'System colors';
+
+  @override
+  String get settingsColorSourceBrand => 'Brand impression';
+
+  @override
+  String settingsColorSourceBrandDescription(String provider) {
+    return 'Use colors inspired by $provider, kept consistent across devices.';
+  }
+
+  @override
+  String get settingsColorSourceBrandSummary => 'Brand impression colors';
 
   @override
   String get settingsMusicServiceLabel => 'Music service';

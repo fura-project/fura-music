@@ -32,11 +32,9 @@ extension SettingsSectionPresentation on SettingsSection {
   };
 
   String summary(AppSettings settings, AppLocalizations l10n) => switch (this) {
-    SettingsSection.appearance => switch (settings.theme) {
-      AppThemePreference.system => l10n.settingsAppearanceSummarySystem,
-      AppThemePreference.light => l10n.settingsAppearanceSummaryLight,
-      AppThemePreference.dark => l10n.settingsAppearanceSummaryDark,
-    },
+    SettingsSection.appearance =>
+      '${_themeSummary(settings.theme, l10n)} · '
+          '${_colorSourceSummary(settings.colorSource, l10n)}',
     SettingsSection.musicService => _providerLabel(
       settings.musicProvider,
       l10n,
@@ -73,6 +71,21 @@ extension SettingsSectionPresentation on SettingsSection {
     );
   }
 }
+
+String _themeSummary(AppThemePreference theme, AppLocalizations l10n) =>
+    switch (theme) {
+      AppThemePreference.system => l10n.settingsAppearanceSummarySystem,
+      AppThemePreference.light => l10n.settingsAppearanceSummaryLight,
+      AppThemePreference.dark => l10n.settingsAppearanceSummaryDark,
+    };
+
+String _colorSourceSummary(
+  AppColorSourcePreference colorSource,
+  AppLocalizations l10n,
+) => switch (colorSource) {
+  AppColorSourcePreference.system => l10n.settingsColorSourceSystemSummary,
+  AppColorSourcePreference.brand => l10n.settingsColorSourceBrandSummary,
+};
 
 String _providerLabel(AppMusicProvider provider, AppLocalizations l10n) =>
     switch (provider) {
@@ -396,6 +409,74 @@ class _SettingsPageState extends State<SettingsPage> {
               _save(widget.settings.copyWith(theme: selection.single)),
             ),
     ),
+    const SizedBox(height: MusicSpacing.section),
+    Text(
+      context.l10n.settingsColorSourceLabel,
+      style: Theme.of(context).textTheme.titleMedium,
+    ),
+    const SizedBox(height: MusicSpacing.itemGap),
+    Text(
+      context.l10n.settingsColorSourceBody,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    ),
+    const SizedBox(height: MusicSpacing.itemGap),
+    RadioGroup<AppColorSourcePreference>(
+      key: const ValueKey('settings-color-source-selector'),
+      groupValue: widget.settings.colorSource,
+      onChanged: (colorSource) {
+        if (_saving || colorSource == null) return;
+        unawaited(_save(widget.settings.copyWith(colorSource: colorSource)));
+      },
+      child: IgnorePointer(
+        ignoring: _saving,
+        child: Column(
+          children: [
+            RadioListTile<AppColorSourcePreference>(
+              key: const ValueKey('settings-color-source-system'),
+              value: AppColorSourcePreference.system,
+              secondary: _ColorSourcePreview(
+                icon: Icons.wallpaper_rounded,
+                background: Theme.of(context).colorScheme.tertiaryContainer,
+                foreground: Theme.of(context).colorScheme.onTertiaryContainer,
+              ),
+              title: Text(context.l10n.settingsColorSourceSystem),
+              subtitle: Text(context.l10n.settingsColorSourceSystemDescription),
+            ),
+            Builder(
+              builder: (context) {
+                final brightness = Theme.of(context).brightness;
+                final previewColors = ColorScheme.fromSeed(
+                  seedColor: MusicMaterialTheme.brandSeedFor(
+                    widget.settings.musicProvider,
+                  ),
+                  brightness: brightness,
+                  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+                );
+                return RadioListTile<AppColorSourcePreference>(
+                  key: const ValueKey('settings-color-source-brand'),
+                  value: AppColorSourcePreference.brand,
+                  secondary: _ColorSourcePreview(
+                    icon: Icons.palette_rounded,
+                    background: previewColors.primaryContainer,
+                    foreground: previewColors.onPrimaryContainer,
+                  ),
+                  title: Text(context.l10n.settingsColorSourceBrand),
+                  subtitle: Text(
+                    context.l10n.settingsColorSourceBrandDescription(
+                      _providerLabel(
+                        widget.settings.musicProvider,
+                        context.l10n,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
   ];
 
   List<Widget> _musicServiceSection(BuildContext context, bool compact) => [
@@ -531,6 +612,29 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
     ),
   ];
+}
+
+class _ColorSourcePreview extends StatelessWidget {
+  const _ColorSourcePreview({
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: DecoratedBox(
+      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+      child: SizedBox.square(
+        dimension: 40,
+        child: Icon(icon, color: foreground, size: 22),
+      ),
+    ),
+  );
 }
 
 class _CompactSettingsMenu extends StatelessWidget {

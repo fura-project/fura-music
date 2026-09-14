@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui'
     show Clip, Locale, PointerDeviceKind, SemanticsAction, Size, Tristate;
 
+import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart'
     show ChangeNotifier, Listenable, ValueKey;
 import 'package:flutter/gestures.dart' show PointerHoverEvent, kSecondaryButton;
@@ -15,6 +16,8 @@ import 'package:flutter/material.dart'
         AppLifecycleState,
         Brightness,
         BuildContext,
+        Color,
+        ColorScheme,
         CustomScrollView,
         Divider,
         FadeTransition,
@@ -112,6 +115,7 @@ import 'package:flutterustmusic/search/track_search_page.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
 final AppLocalizations _zh = lookupAppLocalizations(simplifiedChineseAppLocale);
@@ -7603,6 +7607,70 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('applies detected system colors without replacing brand mode', (
+    tester,
+  ) async {
+    const accent = Color(0xFF6750A4);
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(DynamicColorPlugin.channel, (
+      call,
+    ) async {
+      if (call.method == DynamicColorPlugin.methodName) return null;
+      if (call.method == DynamicColorPlugin.accentColorMethodName) {
+        return accent.toARGB32();
+      }
+      return null;
+    });
+    addTearDown(
+      () =>
+          messenger.setMockMethodCallHandler(DynamicColorPlugin.channel, null),
+    );
+
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+        initialSettings: const AppSettings(
+          theme: AppThemePreference.light,
+          colorSource: AppColorSourcePreference.system,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final systemApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(
+      systemApp.theme!.colorScheme.primary,
+      ColorScheme.fromSeed(seedColor: accent).primary,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(_WaitingSession()),
+        initialSettings: const AppSettings(
+          theme: AppThemePreference.light,
+          colorSource: AppColorSourcePreference.brand,
+          musicProvider: AppMusicProvider.netEaseCloudMusic,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final brandApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(
+      brandApp.theme!.colorScheme.primary,
+      MusicMaterialTheme.light(seed: MusicMaterialTheme.netEaseSeedColor)
+          .colorScheme
+          .primary,
+    );
+    expect(
+      brandApp.theme!.colorScheme.primary,
+      isNot(ColorScheme.fromSeed(seedColor: accent).primary),
+    );
+  });
+
   testWidgets(
     'keeps the complete playlist sidebar clipped with pinned settings',
     (tester) async {
@@ -7688,6 +7756,10 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('settings-theme-selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-color-source-selector')),
         findsOneWidget,
       );
       await tester.tap(find.text('Dark'));
@@ -7866,6 +7938,10 @@ void main() {
       expect(find.byKey(const ValueKey('settings-toolbar')), findsNothing);
       expect(
         find.byKey(const ValueKey('settings-theme-selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-color-source-selector')),
         findsOneWidget,
       );
       expect(
@@ -8069,6 +8145,21 @@ void main() {
       await tester.tap(find.text('Dark'));
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"theme":"dark"'));
+      await tester.tap(find.text('System colors (Monet)'));
+      await tester.pumpAndSettle();
+      expect(settingsStorage.document, contains('"colorSource":"system"'));
+      expect(
+        find.byKey(const ValueKey('app-dynamic-color-loader')),
+        findsOneWidget,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-settings-mobile-system-colors.png'),
+          ),
+        );
+      }
       await tester.tap(find.byKey(const ValueKey('settings-back')));
       await tester.pump();
       expect(
@@ -8080,7 +8171,7 @@ void main() {
         findsOneWidget,
       );
       await tester.pumpAndSettle();
-      expect(find.text('Dark theme'), findsOneWidget);
+      expect(find.text('Dark theme · System colors'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey('settings-compact-musicService')),

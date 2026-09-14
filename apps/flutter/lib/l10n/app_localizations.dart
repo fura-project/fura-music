@@ -5250,13 +5250,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsAppearanceDescription.
   ///
   /// In en, this message translates to:
-  /// **'Theme mode and system appearance'**
+  /// **'Theme mode and color palette'**
   String get settingsAppearanceDescription;
 
   /// No description provided for @settingsAppearanceBody.
   ///
   /// In en, this message translates to:
-  /// **'Choose how fura music follows your system appearance.'**
+  /// **'Choose the brightness and color palette used by fura music.'**
   String get settingsAppearanceBody;
 
   /// No description provided for @settingsAppearanceSummarySystem.
@@ -5280,7 +5280,7 @@ abstract class AppLocalizations {
   /// Pipe-delimited localized search aliases for Appearance settings; preserve the pipe separator.
   ///
   /// In en, this message translates to:
-  /// **'appearance|theme|system|light|dark|color'**
+  /// **'appearance|theme|system|light|dark|color|palette|Monet|wallpaper|accent|brand'**
   String get settingsAppearanceSearchKeywords;
 
   /// No description provided for @settingsThemeSystem.
@@ -5300,6 +5300,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get settingsThemeDark;
+
+  /// No description provided for @settingsColorSourceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Color palette'**
+  String get settingsColorSourceLabel;
+
+  /// No description provided for @settingsColorSourceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where the Material 3 palette comes from.'**
+  String get settingsColorSourceBody;
+
+  /// No description provided for @settingsColorSourceSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System colors (Monet)'**
+  String get settingsColorSourceSystem;
+
+  /// No description provided for @settingsColorSourceSystemDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Use wallpaper or OS accent colors where supported. The current music service palette is used as a fallback.'**
+  String get settingsColorSourceSystemDescription;
+
+  /// No description provided for @settingsColorSourceSystemSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'System colors'**
+  String get settingsColorSourceSystemSummary;
+
+  /// No description provided for @settingsColorSourceBrand.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand impression'**
+  String get settingsColorSourceBrand;
+
+  /// Appearance setting description for the provider-aware brand impression palette.
+  ///
+  /// In en, this message translates to:
+  /// **'Use colors inspired by {provider}, kept consistent across devices.'**
+  String settingsColorSourceBrandDescription(String provider);
+
+  /// No description provided for @settingsColorSourceBrandSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand impression colors'**
+  String get settingsColorSourceBrandSummary;
 
   /// No description provided for @settingsMusicServiceLabel.
   ///

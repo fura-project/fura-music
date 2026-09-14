@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 
 abstract final class MusicSpacing {
   static const double pageCompact = 20;
@@ -30,19 +31,38 @@ abstract final class MusicMotion {
 
 abstract final class MusicMaterialTheme {
   static const Color seedColor = Color(0xFF31C27C);
+  static const Color netEaseSeedColor = Color(0xFFE60026);
 
-  static ThemeData light() => _create(Brightness.light);
+  static Color brandSeedFor(AppMusicProvider provider) => switch (provider) {
+    AppMusicProvider.qqMusic => seedColor,
+    AppMusicProvider.netEaseCloudMusic => netEaseSeedColor,
+  };
 
-  static ThemeData dark() => _create(Brightness.dark);
+  static ThemeData light({Color? seed, ColorScheme? colorScheme}) =>
+      _create(Brightness.light, seed: seed, colorScheme: colorScheme);
 
-  static ThemeData _create(Brightness brightness) {
-    final seededColors = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      brightness: brightness,
-      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  static ThemeData dark({Color? seed, ColorScheme? colorScheme}) =>
+      _create(Brightness.dark, seed: seed, colorScheme: colorScheme);
+
+  static ThemeData _create(
+    Brightness brightness, {
+    Color? seed,
+    ColorScheme? colorScheme,
+  }) {
+    assert(
+      colorScheme == null || colorScheme.brightness == brightness,
+      'The supplied ColorScheme must match the requested brightness.',
     );
-    final colors = brightness == Brightness.dark
-        ? seededColors.copyWith(
+    final suppliedSystemColors = colorScheme != null;
+    final baseColors =
+        colorScheme ??
+        ColorScheme.fromSeed(
+          seedColor: seed ?? seedColor,
+          brightness: brightness,
+          dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+        );
+    final colors = brightness == Brightness.dark && !suppliedSystemColors
+        ? baseColors.copyWith(
             surface: const Color(0xFF121412),
             surfaceDim: const Color(0xFF121412),
             surfaceBright: const Color(0xFF383B38),
@@ -56,7 +76,7 @@ abstract final class MusicMaterialTheme {
             outline: const Color(0xFF8B938C),
             outlineVariant: const Color(0xFF414843),
           )
-        : seededColors;
+        : baseColors;
     final base = ThemeData(colorScheme: colors, useMaterial3: true);
     final textTheme = base.textTheme.copyWith(
       displayMedium: base.textTheme.displayMedium?.copyWith(

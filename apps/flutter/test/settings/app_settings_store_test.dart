@@ -17,30 +17,34 @@ void main() {
 
   test('round trips every supported setting', () async {
     for (final theme in AppThemePreference.values) {
-      for (final playbackQuality in AppPlaybackQualityPreference.values) {
-        for (final musicProvider in AppMusicProvider.values) {
-          for (final localePreference in AppLocalePreference.values) {
-            final storage = _MemoryDocumentStorage();
-            final store = AppSettingsStore(storage: storage);
-            final settings = AppSettings(
-              theme: theme,
-              playbackQuality: playbackQuality,
-              musicProvider: musicProvider,
-              localePreference: localePreference,
-            );
+      for (final colorSource in AppColorSourcePreference.values) {
+        for (final playbackQuality in AppPlaybackQualityPreference.values) {
+          for (final musicProvider in AppMusicProvider.values) {
+            for (final localePreference in AppLocalePreference.values) {
+              final storage = _MemoryDocumentStorage();
+              final store = AppSettingsStore(storage: storage);
+              final settings = AppSettings(
+                theme: theme,
+                colorSource: colorSource,
+                playbackQuality: playbackQuality,
+                musicProvider: musicProvider,
+                localePreference: localePreference,
+              );
 
-            expect(await store.save(settings), AppSettingsWriteResult.saved);
-            final stored =
-                jsonDecode(storage.document!) as Map<String, dynamic>;
-            expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
-            expect(stored['theme'], theme.name);
-            expect(stored['playbackQuality'], playbackQuality.name);
-            expect(stored['musicProvider'], musicProvider.name);
-            expect(stored['localePreference'], localePreference.name);
+              expect(await store.save(settings), AppSettingsWriteResult.saved);
+              final stored =
+                  jsonDecode(storage.document!) as Map<String, dynamic>;
+              expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
+              expect(stored['theme'], theme.name);
+              expect(stored['colorSource'], colorSource.name);
+              expect(stored['playbackQuality'], playbackQuality.name);
+              expect(stored['musicProvider'], musicProvider.name);
+              expect(stored['localePreference'], localePreference.name);
 
-            final loaded = await store.load();
-            expect(loaded.state, AppSettingsLoadState.stored);
-            expect(loaded.settings, settings);
+              final loaded = await store.load();
+              expect(loaded.state, AppSettingsLoadState.stored);
+              expect(loaded.settings, settings);
+            }
           }
         }
       }
@@ -101,6 +105,7 @@ void main() {
         'playbackQuality': 'lossless',
         'musicProvider': 'futureProvider',
         'localePreference': 'english',
+        'colorSource': 'brand',
       }),
     );
 
@@ -152,6 +157,7 @@ void main() {
           'playbackQuality': 'standard',
           'musicProvider': 'qqMusic',
           'localePreference': 'futureLocale',
+          'colorSource': 'brand',
         }),
       );
 
@@ -161,6 +167,50 @@ void main() {
       expect(result.settings.localePreference, AppLocalePreference.system);
       expect(result.settings.theme, AppThemePreference.light);
       expect(result.settings.musicProvider, AppMusicProvider.qqMusic);
+    },
+  );
+
+  test('migrates version 4 documents to brand impression colors', () async {
+    final storage = _MemoryDocumentStorage(
+      document: jsonEncode(<String, Object>{
+        'schemaVersion': 4,
+        'theme': 'system',
+        'playbackQuality': 'high',
+        'musicProvider': 'netEaseCloudMusic',
+        'localePreference': 'simplifiedChinese',
+      }),
+    );
+
+    final result = await AppSettingsStore(storage: storage).load();
+
+    expect(result.state, AppSettingsLoadState.migrated);
+    expect(result.settings.colorSource, AppColorSourcePreference.brand);
+    expect(result.settings.musicProvider, AppMusicProvider.netEaseCloudMusic);
+    expect(
+      result.settings.localePreference,
+      AppLocalePreference.simplifiedChinese,
+    );
+  });
+
+  test(
+    'unknown color source safely falls back to brand and requests migration',
+    () async {
+      final storage = _MemoryDocumentStorage(
+        document: jsonEncode(<String, Object>{
+          'schemaVersion': AppSettings.currentSchemaVersion,
+          'theme': 'dark',
+          'colorSource': 'futurePalette',
+          'playbackQuality': 'standard',
+          'musicProvider': 'qqMusic',
+          'localePreference': 'system',
+        }),
+      );
+
+      final result = await AppSettingsStore(storage: storage).load();
+
+      expect(result.state, AppSettingsLoadState.migrated);
+      expect(result.settings.colorSource, AppColorSourcePreference.brand);
+      expect(result.settings.theme, AppThemePreference.dark);
     },
   );
 
@@ -175,7 +225,10 @@ void main() {
           AppSettingsLoadState.invalidDocument,
         ),
         (
-          jsonEncode(<String, Object>{'schemaVersion': 5, 'theme': 'dark'}),
+          jsonEncode(<String, Object>{
+            'schemaVersion': AppSettings.currentSchemaVersion + 1,
+            'theme': 'dark',
+          }),
           AppSettingsLoadState.unsupportedVersion,
         ),
         (

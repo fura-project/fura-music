@@ -73,6 +73,8 @@ void main() {
     expect(chinese.providerNeteaseCloudMusic, '网易云音乐');
     expect(chinese.settingsLanguageLabel, '语言');
     expect(chinese.settingsLanguageFollowSystem, '跟随系统');
+    expect(chinese.settingsColorSourceSystem, '系统动态取色（Monet）');
+    expect(chinese.settingsColorSourceBrand, '品牌印象色');
     expect(chinese.authProviderQrSemantics('网易云音乐'), '网易云音乐 登录二维码');
     expect(chinese.playbackPause, '暂停');
     expect(chinese.playbackShowQueue, '显示播放队列');

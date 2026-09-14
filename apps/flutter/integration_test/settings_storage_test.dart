@@ -27,6 +27,7 @@ void main() {
         await store.save(
           const AppSettings(
             theme: AppThemePreference.dark,
+            colorSource: AppColorSourcePreference.system,
             playbackQuality: AppPlaybackQualityPreference.high,
             localePreference: AppLocalePreference.simplifiedChinese,
           ),
@@ -39,6 +40,7 @@ void main() {
         loaded.settings,
         const AppSettings(
           theme: AppThemePreference.dark,
+          colorSource: AppColorSourcePreference.system,
           playbackQuality: AppPlaybackQualityPreference.high,
           localePreference: AppLocalePreference.simplifiedChinese,
         ),

@@ -81,6 +81,53 @@ void main() {
     expect(MusicMotion.stateChange, const Duration(milliseconds: 240));
   });
 
+  test('builds distinct provider-aware brand impression palettes', () {
+    final qqTheme = MusicMaterialTheme.light(
+      seed: MusicMaterialTheme.brandSeedFor(AppMusicProvider.qqMusic),
+    );
+    final netEaseTheme = MusicMaterialTheme.light(
+      seed: MusicMaterialTheme.brandSeedFor(AppMusicProvider.netEaseCloudMusic),
+    );
+
+    expect(
+      MusicMaterialTheme.brandSeedFor(AppMusicProvider.qqMusic),
+      MusicMaterialTheme.seedColor,
+    );
+    expect(
+      MusicMaterialTheme.brandSeedFor(AppMusicProvider.netEaseCloudMusic),
+      MusicMaterialTheme.netEaseSeedColor,
+    );
+    expect(
+      qqTheme.colorScheme.primary,
+      isNot(netEaseTheme.colorScheme.primary),
+    );
+  });
+
+  test('preserves complete supplied system color schemes', () {
+    final lightSystem = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF6750A4),
+      brightness: Brightness.light,
+    );
+    final darkSystem = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF6750A4),
+      brightness: Brightness.dark,
+    );
+
+    final lightTheme = MusicMaterialTheme.light(colorScheme: lightSystem);
+    final darkTheme = MusicMaterialTheme.dark(colorScheme: darkSystem);
+
+    expect(lightTheme.colorScheme, lightSystem);
+    expect(darkTheme.colorScheme, darkSystem);
+    expect(
+      darkTheme.colorScheme.surfaceContainerLowest,
+      darkSystem.surfaceContainerLowest,
+    );
+    expect(
+      darkTheme.colorScheme.surfaceContainerLowest,
+      isNot(const Color(0xFF0D0F0E)),
+    );
+  });
+
   test('maps each typed theme preference to Flutter Material', () {
     for (final (preference, expected) in <(AppThemePreference, ThemeMode)>[
       (AppThemePreference.system, ThemeMode.system),

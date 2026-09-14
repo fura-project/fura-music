@@ -4,12 +4,36 @@ execution:
   work_domain: MIXED
   state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
-  active_workstream: NETEASE_LINUX_SYSTEM_CHROMIUM_LOGIN
-  current_task: NETEASE_SYSTEM_CHROMIUM_MACHINE_CANDIDATE_COMPLETE
-  next_action: HUMAN_VERIFY_REAL_LOGIN_RESTORE_AND_CLEANUP
+  active_workstream: APPEARANCE_DYNAMIC_COLOR
+  current_task: MONET_AND_BRAND_COLOR_MACHINE_CANDIDATE_COMPLETE
+  next_action: HUMAN_VERIFY_ANDROID_WALLPAPER_COLOR_AND_VISUAL_RHYTHM
 ---
 
 # Current State
+
+- **2026-09-14 Monet and brand-impression color candidate:** Appearance now
+  separates brightness from the Material 3 palette source. The existing static
+  treatment remains the compatibility default, follows the selected music
+  service with QQ Music green or a NetEase red impression palette, and is the
+  migration result for settings schema versions 1-4. The opt-in system source
+  uses Android 12+ wallpaper colors or the supported desktop OS accent through
+  exactly pinned `dynamic_color 1.9.0`, retaining its complete light/dark
+  `ColorScheme`; unsupported platforms fall back to the current service's
+  impression palette. Version 2.x was rejected because it now returns the
+  incompatible `material_ui.ColorScheme` rather than Flutter's native type.
+  The color provider remains stable above `MaterialApp`, so changing palette
+  does not reset navigation, authentication, catalog state or playback.
+  Settings schema v5 round-trips and safely migrates old/unknown color values;
+  English and Simplified Chinese UI/search copy are generated and covered.
+  A pre-existing non-Linux type-inference failure in the official NetEase
+  browser bridge was corrected with one explicit `Vec<u8>` result annotation,
+  allowing Android validation to finish without changing login behavior.
+  Pinned FRB 2.13.0 regeneration produced no API output change. Dart analysis,
+  all 595 Flutter tests, native Linux Settings persistence, Linux Release and
+  Android ARM64 Debug pass. Desktop and 390 x 844 compact Appearance candidates
+  were rendered without overflow; physical Android wallpaper matching,
+  OEM-specific Monet behavior and final visual acceptance remain
+  `HUMAN_REVIEW`. Changes remain uncommitted and unpushed.
 
 - **2026-09-14 HD-029 isolated system-Chromium candidate:** the explicitly
   authorized repository-external Rust probe selected the root-owned native
