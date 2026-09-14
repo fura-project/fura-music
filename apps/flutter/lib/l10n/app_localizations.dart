@@ -1029,7 +1029,7 @@ abstract class AppLocalizations {
   /// **'Signed out, but website cleanup needs attention'**
   String get authSignedOutWebCleanupTitle;
 
-  /// No description provided for @authSignedOutWebCleanupDetail.
+  /// Explains that provider and vault sign-out succeeded while temporary official-login website data cleanup could not be confirmed.
   ///
   /// In en, this message translates to:
   /// **'The {providerName} account and saved session were removed, but Fura could not confirm that the temporary website data was cleared.'**
