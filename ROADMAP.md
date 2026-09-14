@@ -2,6 +2,36 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Active Experimental Workstream — NetEase `webview_all` official login (HD-027)
+
+**Goal:** obtain bounded evidence for one official NetEase Web-login candidate
+without replacing the current direct QR, external official QR-confirmation or
+phone-code compatibility paths.
+
+**Execution order:** audit the exactly pinned dependency and unchanged platform
+minimums; run a Linux-first visible lifecycle probe with native synthetic
+HttpOnly-cookie access, complete website-data cleanup and at least 50
+deterministic open/close cycles; only after that gate passes, connect a visible
+login route to the existing official-Web broker, Rust candidate staging,
+Account Summary verification and NetEase-only secure vault.
+
+**Bounded exit criteria:** no unsupported platform-minimum increase; default
+Linux renderer completes the probe without native crash, device disconnect,
+exit hang, stale overlay or unbounded helper/resource growth; cancellation and
+replacement suppress late Cookie and verification completion; product WebView
+data is cleared before a fresh attempt and after success/cancel/terminal
+failure; Queue, current Track, `AppPlaybackHost` and system-audio handler keep
+their identities; relevant Rust/Flutter analysis, tests and Linux/Android
+builds pass. Real login, restart restore and repeated interactive stability are
+Human evidence.
+
+**Boundaries:** Linux remains WebKitGTK 4.1 and prior EGL/DMA-BUF/GStreamer
+evidence remains authoritative. No global renderer/backend override, higher OS
+minimum, password/SMS/CAPTCHA automation, TLS bypass, risk-control emulation,
+second credential owner/vault/player/Queue, auth framework, sidecar or push is
+authorized. A default-runtime failure rejects the candidate and retains the
+external-QR baseline; an override-only success stops for Human decision.
+
 ## Machine-complete Review Workstream — First-party Flutter localization (HD-026)
 
 **Goal:** provide a coherent English and Simplified Chinese product UI with a

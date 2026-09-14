@@ -1,15 +1,31 @@
 ---
 execution:
-  mode: HUMAN_GATED_REGRESSION
+  mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: AWAITING_HUMAN_REVIEW
+  state: IN_PROGRESS
   acceptance_milestone: M1
-  active_workstream: NETEASE_QR_AND_ARTWORK_RUNTIME_REGRESSION
-  current_task: NETEASE_EXTERNAL_QR_CONFIRMATION_HANDOFF_CANDIDATE
-  next_action: HUMAN_REBUILD_TEST_NETEASE_EXTERNAL_QR_HANDOFF_AND_RESTART
+  active_workstream: NETEASE_WEBVIEW_ALL_OFFICIAL_LOGIN_TRIAL
+  current_task: WEBVIEW_ALL_LINUX_FIRST_PROBE
+  next_action: RUN_LINUX_WEBVIEW_ALL_LIFECYCLE_COOKIE_AND_CLEANUP_GATES
 ---
 
 # Current State
+
+- **2026-09-14 HD-027 bounded `webview_all` trial authorized:** the Human
+  explicitly switches this bounded NetEase official-Web-login experiment to
+  `AUTONOMOUS_DEVELOPMENT / MIXED`. Starting HEAD is
+  `a7f4f76284683058888dd17360c9d300e570a9f3` with a clean worktree. The
+  selected candidate is exactly pinned `webview_all 1.4.1` (MIT, Dart
+  `^3.9.0`, Flutter `>=3.35.0`). Its Android API 24, iOS 13 and macOS 10.15
+  floors do not raise Fura's resolved API 24, iOS 15 or macOS 12 baselines;
+  Windows requires Windows 10 1809+ and Linux still requires WebKitGTK 4.1.
+  This host currently provides WebKitGTK 2.52.5, GTK 3.24.52 and GStreamer
+  1.28.6 under Wayland with NVIDIA RTX 2060 Max-Q plus AMD Renoir graphics.
+  The next gate is a separate Linux-first visible lifecycle/HttpOnly-cookie/
+  cleanup/50-cycle probe. Direct QR, external QR confirmation, SMS, current
+  Rust credential staging/verification/vault and playback ownership remain the
+  rollback baseline; no successful compile will be treated as runtime or
+  real-account acceptance.
 
 - **2026-09-14 NetEase external QR-confirmation handoff checkpoint:** Human
   Linux runtime evidence rejects the previous embedded-WebKit candidate: the

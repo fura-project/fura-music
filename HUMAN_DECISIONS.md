@@ -301,3 +301,35 @@ translation scope. Native startup strings remain a documented follow-up rather
 than risking Android media-service initialization. Human acceptance is required
 for Chinese wording and final visual rhythm; machine checks cannot self-accept
 either.
+
+## HD-027 — Bounded `webview_all` NetEase official Web-login trial
+
+**Status:** Accepted by explicit Human instruction on 2026-09-14.
+
+**Decision:** Fura may perform one bounded experiment with an exactly pinned
+`webview_all` 1.4.x release for the official NetEase Web-login path. The trial
+is Linux-first because the previous embedded-WebKit candidate repeatedly
+failed in the Web process with EGL/DMA-BUF and GStreamer symptoms before
+Flutter lost its device connection. It must first prove a visible page
+lifecycle, native HttpOnly-cookie access, website-data cleanup and at least 50
+deterministic open/close cycles. Product integration may proceed only through
+the existing `OfficialWebAuthenticationGateway` / `OfficialWebLoginBroker`,
+Rust browser-credential staging, account verification and NetEase-only secure
+vault boundaries.
+
+**Preserved baseline:** Direct QR, the external official QR-confirmation
+handoff, and the mobile-EAPI phone-code compatibility candidate remain intact
+throughout the experiment. A build or synthetic test does not promote the
+candidate to the sole or primary production login method. Fura does not
+collect passwords, submit SMS from the WebView layer, automate CAPTCHA or
+security verification, bypass TLS, inject risk-control material, or copy the
+GPL-3.0 go-musicfox implementation; that project is behavioral evidence only.
+
+**Consequences:** `webview_all` still uses WebKitGTK 4.1 on Linux, so default
+renderer stability and the earlier native crash class remain the decisive
+runtime gate. Machine-complete work with real login and repeated Linux use
+still unobserved ends at `HUMAN_REVIEW`. If survival requires a process-global
+renderer/backend environment override, a higher supported OS minimum or a new
+distribution policy, the affected scope stops at `HUMAN_DECISION`. A failed
+candidate is rejected without weakening or deleting the existing external-QR
+rollback path. No push is authorized by this decision.
