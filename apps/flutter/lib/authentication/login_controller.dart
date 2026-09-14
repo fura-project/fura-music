@@ -165,6 +165,8 @@ class LoginController extends ChangeNotifier {
   bool get supportsOfficialWebLogin =>
       _gateway is OfficialWebAuthenticationGateway &&
       (_gateway as OfficialWebAuthenticationGateway).supportsOfficialWebLogin;
+  bool get usesOfficialWebOnly =>
+      _gateway is OfficialWebOnlyAuthenticationGateway;
   bool get showingSmsLogin =>
       supportsSmsLogin && _smsStage != SmsLoginStage.hidden;
   int? get desktopQuickSelectionId => _desktopQuickSelectionId;
@@ -474,9 +476,14 @@ class LoginController extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> start() => supportsDesktopQuickLogin
-      ? startDesktopQqAuthorization()
-      : startQr(LoginQrChannel.wechat);
+  Future<void> start() {
+    if (usesOfficialWebOnly) {
+      return startOfficialWebLogin();
+    }
+    return supportsDesktopQuickLogin
+        ? startDesktopQqAuthorization()
+        : startQr(LoginQrChannel.wechat);
+  }
 
   Future<void> startDesktopQqAuthorization() async {
     if (!supportsDesktopQuickLogin) {

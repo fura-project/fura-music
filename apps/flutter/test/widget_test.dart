@@ -8615,7 +8615,7 @@ void main() {
   );
 
   testWidgets(
-    'signed-out NetEase keeps public shell and exposes QR and phone code',
+    'signed-out NetEase keeps public shell and exposes only official web login',
     (tester) async {
       const captureReviewImages = bool.fromEnvironment(
         'BUILT_IN_PROVIDER_VISUAL_REVIEW',
@@ -8652,7 +8652,7 @@ void main() {
               ),
             ),
             netEase: _providerFixture(
-              authenticationGateway: _SmsProviderWidgetGateway(
+              authenticationGateway: _OfficialWebProviderWidgetGateway(
                 providerId: 'netease-cloud-music',
               ),
               capabilities: MusicProviderCapabilities.netEaseCloudMusic,
@@ -8692,73 +8692,38 @@ void main() {
       }
 
       await _openSignInDialog(tester);
-      expect(find.text('Scan with NetEase Cloud Music'), findsOneWidget);
+      expect(find.text('Complete sign-in with NetEase'), findsOneWidget);
       expect(find.text('Scan with QQ'), findsNothing);
       expect(find.text('Scan with WeChat'), findsNothing);
       expect(find.text('Quick login'), findsNothing);
-      expect(find.text('Use phone code'), findsOneWidget);
+      expect(find.text('Use phone code'), findsNothing);
+      expect(find.byKey(const ValueKey('start-qq-login-button')), findsNothing);
+      expect(find.byKey(const ValueKey('show-sms-login-button')), findsNothing);
       expect(
         find.byKey(const ValueKey('start-official-web-login-button')),
-        findsNothing,
-      );
-
-      await tester.tap(find.byKey(const ValueKey('start-qq-login-button')));
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey('open-netease-qr-externally')),
         findsOneWidget,
       );
-      await tester.tap(find.text('Cancel'));
-      await tester.pump();
-
-      await tester.tap(find.byKey(const ValueKey('show-sms-login-button')));
-      await tester.pumpAndSettle();
-      expect(find.text('Sign in with a phone code'), findsOneWidget);
       if (captureReviewImages) {
         await expectLater(
-          find.byType(MusicApp),
+          find.byKey(const ValueKey('authentication-dialog')),
           matchesGoldenFile(
-            Uri.file('/tmp/fura-netease-sms-login-compact.png'),
+            Uri.file('/tmp/fura-netease-web-only-auth-compact.png'),
           ),
         );
       }
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const ValueKey('sms-code-field')))
-            .enabled,
-        isFalse,
-      );
 
-      await tester.enterText(
-        find.byKey(const ValueKey('sms-phone-field')),
-        '00000000000',
+      await tester.tap(
+        find.byKey(const ValueKey('start-official-web-login-button')),
       );
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('request-sms-code-button')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('request-sms-code-button')));
       await tester.pump();
-      await tester.pump();
-      expect(find.text('Code sent. Check your messages.'), findsOneWidget);
       expect(
-        tester
-            .widget<TextField>(find.byKey(const ValueKey('sms-code-field')))
-            .enabled,
-        isTrue,
+        find.byKey(const ValueKey('official-web-login-surface')),
+        findsOneWidget,
       );
-
-      await tester.enterText(
-        find.byKey(const ValueKey('sms-code-field')),
-        '000000',
+      expect(
+        find.byKey(const ValueKey('fake-official-webview')),
+        findsOneWidget,
       );
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('submit-sms-login-button')),
-      );
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('submit-sms-login-button')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('authentication-dialog')), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -9879,39 +9844,10 @@ class _ProviderWidgetGateway
   }
 }
 
-class _SmsProviderWidgetGateway extends _ProviderWidgetGateway
-    implements SmsAuthenticationGateway {
-  _SmsProviderWidgetGateway({required super.providerId});
-
-  final List<(String, String)> phoneRequests = [];
-  final List<String> codes = [];
-
-  @override
-  bool cancelSmsAuthentication() => true;
-
-  @override
-  SmsCodeRequestOperation beginSmsCodeRequest({
-    required String countryCode,
-    required String phone,
-  }) {
-    phoneRequests.add((countryCode, phone));
-    return const _ImmediateWidgetSmsCodeRequest(
-      SmsAuthenticationOutcome(success: true),
-    );
-  }
-
-  @override
-  SmsLoginOperation beginSmsLogin({required String code}) {
-    codes.add(code);
-    return const _ImmediateWidgetSmsLogin(
-      SmsAuthenticationOutcome(success: true),
-    );
-  }
-}
-
 class _OfficialWebProviderWidgetGateway extends _ProviderWidgetGateway
     implements
         OfficialWebAuthenticationGateway,
+        OfficialWebOnlyAuthenticationGateway,
         OfficialWebAuthenticationPresentation {
   _OfficialWebProviderWidgetGateway({required super.providerId});
 
@@ -9974,30 +9910,6 @@ class _PendingWidgetOfficialWebOperation
 
   @override
   Future<OfficialWebAuthenticationOutcome> run() => _result.future;
-}
-
-class _ImmediateWidgetSmsCodeRequest implements SmsCodeRequestOperation {
-  const _ImmediateWidgetSmsCodeRequest(this.outcome);
-
-  final SmsAuthenticationOutcome outcome;
-
-  @override
-  bool cancel() => false;
-
-  @override
-  Future<SmsAuthenticationOutcome> run() async => outcome;
-}
-
-class _ImmediateWidgetSmsLogin implements SmsLoginOperation {
-  const _ImmediateWidgetSmsLogin(this.outcome);
-
-  final SmsAuthenticationOutcome outcome;
-
-  @override
-  bool cancel() => false;
-
-  @override
-  Future<SmsAuthenticationOutcome> run() async => outcome;
 }
 
 class _WidgetDesktopQuickLoginStartOperation

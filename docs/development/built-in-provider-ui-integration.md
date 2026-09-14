@@ -25,8 +25,10 @@ switching to another Provider activates its own lazy restore flow without
 probing inactive accounts.
 
 QQ retains desktop Quick Login plus QQ and WeChat QR where supported. NetEase
-uses only its native Provider-default QR channel. Neither flow collects a
-password or imports browser/local-client cookies.
+uses only its official website at the product boundary: the isolated Linux
+system-browser flow imports the resulting bounded session after service
+verification, while the Flutter gateway advertises neither internal QR nor SMS
+login. Fura does not collect a password.
 
 ## Capability mapping
 
@@ -52,10 +54,10 @@ not part of that reset.
 
 Offline fixtures and Widget tests can prove routing, isolation, persistence,
 rollback, stale-result suppression, capability hiding and Queue retention.
-They cannot prove a real NetEase QR approval, account Library contents,
-personalized recommendations, authenticated media entitlement, target secure
-storage behavior or visual acceptance. Those remain explicit Human or
-environment evidence.
+They cannot prove real personalized content, authenticated media entitlement,
+target secure-storage behavior or visual acceptance. The Human confirmed the
+Linux external-browser login and a signed-in Library on 2026-09-14; the media
+compatibility repair still requires a new Human playback check.
 
 ## Machine checkpoint
 
@@ -66,9 +68,10 @@ their Providers. Search, recommendation, release, ranking, library, detail,
 related, lyrics, comments and MV paths dispatch only to that owner. The two
 credential vault keys and rejection-cleanup paths are tested independently.
 
-The NetEase authentication adapter reuses the existing login controller and QR
-dialog but exposes only the Provider-default channel. Switching while QR
-creation or stored-credential verification is active invalidates that UI work.
+The NetEase authentication adapter reuses the existing login controller but is
+marked official-Web-only. The generic start action and the only visible login
+button enter the same official website operation. Switching while website login
+or stored-credential verification is active invalidates that UI work.
 Cancellation is not sign-out: a pending NetEase credential remains available
 for an explicit retry, and inactive Provider state is not cleared.
 
@@ -97,7 +100,7 @@ Final local machine evidence on 2026-09-12:
 | QQ credential vault | DONE | Existing key and restore compatibility retained. |
 | NetEase credential vault | DONE | Independent key, serialized access and isolated cleanup tested. |
 | QQ auth | DONE | Existing desktop Quick Login and QQ/WeChat QR composition retained. |
-| NetEase auth | HUMAN_EVIDENCE_REQUIRED | QR/restore/sign-out and cancellation are machine-wired; real approval remains Human-operated. |
+| NetEase auth | HUMAN_ACCEPTED_LINUX | Human confirmed isolated system-browser login and a signed-in Library; other platforms plus restart/sign-out isolation retain their own gates. |
 | Search x4 | DONE | Selected gateway bundle routes all four categories without aggregation. |
 | Home | DONE | Anonymous/authenticated slots are capability- and Provider-truthful in synthetic tests. |
 | Discover | DONE | Supported releases/rankings/playlists reuse the existing page; Radar is capability-gated. |
@@ -113,7 +116,7 @@ Final local machine evidence on 2026-09-12:
 | Lyrics | DONE | NetEase line timing and exact translation work without invented word timing. |
 | Comments | DONE | Current Track Provider owns paged hot/newest reads. |
 | MV | DONE | Current Track Provider owns exact associated-MV resolution. |
-| Media resolution | DONE | Both resolvers remain statically available; preferred versus actual quality stays truthful. |
+| Media resolution | HUMAN_REVIEW | Authenticated NetEase media now uses current interface3 EAPI desktop context; deterministic routing tests pass, but a real entitled Track must be replayed by the Human. |
 | Queue | DONE | Mixed QQ/NetEase positions and same opaque IDs preserve exact next/previous routing. |
 | Now Playing | DONE | Current Track identity, not Settings selection, owns playback-adjacent reads. |
 | Provider switching races | DONE | Search, controller, QR and verification late work is suppressed/cancelled without sign-out; playback survives. |
@@ -128,7 +131,7 @@ Final local machine evidence on 2026-09-12:
 | Linux build | DONE | Release bundle produced locally. |
 | Android build | DONE | ARM64 Release APK produced locally. |
 | Visual synthetic renders | HUMAN_EVIDENCE_REQUIRED | Required frames exist and passed machine inspection; aesthetics are not self-accepted. |
-| Human NetEase real account | HUMAN_EVIDENCE_REQUIRED | QR, Library, favorites, Daily Tracks, Personal FM and authenticated media require maintainer observation. |
+| Human NetEase real account | PARTIAL_HUMAN_EVIDENCE | Linux web login and signed-in Library are observed; favorites/personalized reads, restart/sign-out isolation and authenticated media are not all accepted. |
 | Human current pending platform reviews | HUMAN_EVIDENCE_REQUIRED | Existing Android system-media and credential-transfer Go/No-Go gates remain unchanged. |
 
 There is no `REMAINING_AUTONOMOUS_WORK` item in this bounded HD-025 scope.

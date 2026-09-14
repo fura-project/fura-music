@@ -805,6 +805,24 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'official-web-only provider start never creates an internal QR',
+    () async {
+      final gateway = _OfficialWebFakeGateway(
+        outcomes: const [OfficialWebAuthenticationOutcome(authenticated: true)],
+      );
+      final controller = LoginController(gateway);
+
+      expect(controller.usesOfficialWebOnly, isTrue);
+      await controller.start();
+
+      expect(controller.stage, LoginStage.authenticated);
+      expect(gateway.officialOperations, hasLength(1));
+      expect(gateway.persistCalls, 1);
+      controller.dispose();
+    },
+  );
+
   test('official website verification failure remains explicit', () async {
     final gateway = _OfficialWebFakeGateway(
       outcomes: const [
@@ -1055,7 +1073,9 @@ class _SmsFakeGateway extends _FakeGateway implements SmsAuthenticationGateway {
 }
 
 class _OfficialWebFakeGateway extends _FakeGateway
-    implements OfficialWebAuthenticationGateway {
+    implements
+        OfficialWebAuthenticationGateway,
+        OfficialWebOnlyAuthenticationGateway {
   _OfficialWebFakeGateway({
     required List<FutureOr<OfficialWebAuthenticationOutcome>> outcomes,
   }) : _outcomes = List.of(outcomes),

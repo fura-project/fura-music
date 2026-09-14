@@ -301,6 +301,34 @@ impl Credential {
     pub(crate) fn cookie(&self) -> String {
         format!("MUSIC_U={}; __csrf={}", self.music_u, self.csrf)
     }
+    pub(crate) fn media_context(&self) -> Result<(String, Value), Error> {
+        self.validate()?;
+        let request_id = format!("{}_{}", unix_millis()?, random_chars(b"0123456789", 4)?);
+        let fields = [
+            ("osver", "undefined".to_owned()),
+            ("deviceId", "undefined".to_owned()),
+            ("appver", "8.0.0".to_owned()),
+            ("versioncode", "140".to_owned()),
+            ("mobilename", "undefined".to_owned()),
+            ("buildver", "1623435496".to_owned()),
+            ("resolution", "1920x1080".to_owned()),
+            ("__csrf", self.csrf.clone()),
+            ("os", "pc".to_owned()),
+            ("channel", "undefined".to_owned()),
+            ("requestId", request_id),
+            ("MUSIC_U", self.music_u.clone()),
+        ];
+        let cookie = fields
+            .iter()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let header = fields
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), Value::String(value)))
+            .collect::<serde_json::Map<_, _>>();
+        Ok((cookie, Value::Object(header)))
+    }
     fn from_cookie_sources(cookie: &str, body_cookie: Option<&str>) -> Result<Self, Error> {
         if cookie.len() > 8192 || body_cookie.is_some_and(|value| value.len() > 32 * 1024) {
             return Err(Error::ResponseBound);
@@ -805,24 +833,6 @@ impl<T: Transport> NeteaseClient<T> {
             }
         }
         Ok(ids)
-    }
-    /// # Errors
-    /// Identical standard source rules with the explicit authenticated context.
-    pub async fn authenticated_media(
-        &self,
-        credential: &Credential,
-        id: u64,
-    ) -> Result<crate::Media, Error> {
-        crate::catalog::id(id)?;
-        let (v, _) = self
-            .request(
-                "/api/song/enhance/player/url/v1",
-                json!({"ids":format!("[{id}]"),"level":"standard","encodeType":"aac","e_r":false}),
-                true,
-                Some(&credential.cookie()),
-            )
-            .await?;
-        crate::media::decode_media(&v, id)
     }
     /// # Errors
     /// Bounded authenticated daily songs; there is no invented playlist identity.

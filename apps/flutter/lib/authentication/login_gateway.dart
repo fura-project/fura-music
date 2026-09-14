@@ -268,6 +268,13 @@ abstract interface class OfficialWebAuthenticationGateway {
   OfficialWebAuthenticationOperation beginOfficialWebLogin();
 }
 
+/// Marks a provider whose only product login route is its official website.
+///
+/// The legacy QR start required by [QqMusicAuthenticationGateway] remains an
+/// internal compatibility boundary, but the controller and UI never expose or
+/// invoke it for a gateway carrying this capability.
+abstract interface class OfficialWebOnlyAuthenticationGateway {}
+
 /// Optional visible presentation owned by an official-Web login broker.
 ///
 /// The controller and UI observe this boundary without passing a BuildContext
@@ -416,9 +423,8 @@ class RustNeteaseAuthenticationGateway
     implements
         QqMusicAuthenticationGateway,
         ProviderAuthenticationPresentation,
-        QrLoginPollingPolicy,
-        SmsAuthenticationGateway,
         OfficialWebAuthenticationGateway,
+        OfficialWebOnlyAuthenticationGateway,
         OfficialWebAuthenticationPresentation {
   RustNeteaseAuthenticationGateway({
     CredentialVault? credentialVault,
@@ -450,43 +456,12 @@ class RustNeteaseAuthenticationGateway
   String get providerId => 'netease-cloud-music';
 
   @override
-  Duration get minimumQrPollInterval => const Duration(seconds: 2);
-
-  @override
   bool get hasAuthenticatedCredential =>
       netease_bridge.neteaseHasAuthenticatedCredential();
 
   @override
-  LoginStartOperation beginStart() => _RustNeteaseLoginStartOperation(
-    netease_bridge.reserveNeteaseQrLoginStart(),
-  );
-
-  @override
-  SmsCodeRequestOperation beginSmsCodeRequest({
-    required String countryCode,
-    required String phone,
-  }) => _RustNeteaseSmsCodeRequestOperation(
-    netease_bridge.reserveNeteaseSmsCodeRequest(),
-    countryCode,
-    phone,
-  );
-
-  @override
-  SmsLoginOperation beginSmsLogin({required String code}) {
-    final attemptId = netease_bridge.reserveNeteaseSmsLogin();
-    return attemptId == null
-        ? const _ImmediateSmsLoginOperation(
-            SmsAuthenticationOutcome(
-              success: false,
-              failure: SmsAuthenticationFailure.alreadyRunning,
-            ),
-          )
-        : _RustNeteaseSmsLoginOperation(attemptId, code);
-  }
-
-  @override
-  bool cancelSmsAuthentication() =>
-      netease_bridge.cancelNeteaseSmsAuthentication();
+  LoginStartOperation beginStart() =>
+      const _OfficialWebOnlyLegacyStartOperation();
 
   @override
   bool get supportsOfficialWebLogin => _usesLinuxSystemBrowser
@@ -858,134 +833,6 @@ class _RustNeteaseOfficialWebAuthenticationOperation
   }
 }
 
-class _RustNeteaseSmsCodeRequestOperation implements SmsCodeRequestOperation {
-  const _RustNeteaseSmsCodeRequestOperation(
-    this._attemptId,
-    this._countryCode,
-    this._phone,
-  );
-
-  final int _attemptId;
-  final String _countryCode;
-  final String _phone;
-
-  @override
-  bool cancel() =>
-      netease_bridge.cancelNeteaseSmsCodeRequest(attemptId: _attemptId);
-
-  @override
-  Future<SmsAuthenticationOutcome> run() async {
-    try {
-      final outcome = _mapNeteaseSmsOutcome(
-        await netease_bridge.requestNeteaseSmsCode(
-          attemptId: _attemptId,
-          countryCode: _countryCode,
-          phone: _phone,
-        ),
-      );
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_sms phase=send '
-        'outcome=${outcome.success ? 'success' : 'failure'} '
-        'failure=${outcome.failure?.name ?? 'none'}',
-      );
-      return outcome;
-    } on Object catch (error) {
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_sms phase=send outcome=exception '
-        'error=${error.runtimeType}',
-      );
-      return const SmsAuthenticationOutcome(
-        success: false,
-        failure: SmsAuthenticationFailure.coreUnavailable,
-      );
-    }
-  }
-}
-
-class _RustNeteaseSmsLoginOperation implements SmsLoginOperation {
-  const _RustNeteaseSmsLoginOperation(this._attemptId, this._code);
-
-  final int _attemptId;
-  final String _code;
-
-  @override
-  bool cancel() => netease_bridge.cancelNeteaseSmsLogin(attemptId: _attemptId);
-
-  @override
-  Future<SmsAuthenticationOutcome> run() async {
-    try {
-      final outcome = _mapNeteaseSmsOutcome(
-        await netease_bridge.authenticateNeteaseSmsCode(
-          attemptId: _attemptId,
-          code: _code,
-        ),
-      );
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_sms phase=login '
-        'outcome=${outcome.success ? 'success' : 'failure'} '
-        'failure=${outcome.failure?.name ?? 'none'}',
-      );
-      return outcome;
-    } on Object catch (error) {
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_sms phase=login outcome=exception '
-        'error=${error.runtimeType}',
-      );
-      return const SmsAuthenticationOutcome(
-        success: false,
-        failure: SmsAuthenticationFailure.coreUnavailable,
-      );
-    }
-  }
-}
-
-class _ImmediateSmsLoginOperation implements SmsLoginOperation {
-  const _ImmediateSmsLoginOperation(this._outcome);
-
-  final SmsAuthenticationOutcome _outcome;
-
-  @override
-  bool cancel() => false;
-
-  @override
-  Future<SmsAuthenticationOutcome> run() async => _outcome;
-}
-
-SmsAuthenticationOutcome _mapNeteaseSmsOutcome(
-  netease_bridge.NeteaseSmsAuthenticationOutcome outcome,
-) => SmsAuthenticationOutcome(
-  success: outcome.success,
-  failure: switch (outcome.failure) {
-    netease_bridge.NeteaseSmsAuthenticationFailure.coreUnavailable =>
-      SmsAuthenticationFailure.coreUnavailable,
-    netease_bridge.NeteaseSmsAuthenticationFailure.network =>
-      SmsAuthenticationFailure.network,
-    netease_bridge.NeteaseSmsAuthenticationFailure.serviceUnavailable =>
-      SmsAuthenticationFailure.serviceUnavailable,
-    netease_bridge.NeteaseSmsAuthenticationFailure.invalidResponse =>
-      SmsAuthenticationFailure.invalidResponse,
-    netease_bridge.NeteaseSmsAuthenticationFailure.invalidInput =>
-      SmsAuthenticationFailure.invalidInput,
-    netease_bridge.NeteaseSmsAuthenticationFailure.codeRejected =>
-      SmsAuthenticationFailure.codeRejected,
-    netease_bridge.NeteaseSmsAuthenticationFailure.rateLimited =>
-      SmsAuthenticationFailure.rateLimited,
-    netease_bridge
-        .NeteaseSmsAuthenticationFailure
-        .securityVerificationRequired =>
-      SmsAuthenticationFailure.securityVerificationRequired,
-    netease_bridge
-        .NeteaseSmsAuthenticationFailure
-        .secondaryVerificationRequired =>
-      SmsAuthenticationFailure.secondaryVerificationRequired,
-    netease_bridge.NeteaseSmsAuthenticationFailure.replaced =>
-      SmsAuthenticationFailure.replaced,
-    netease_bridge.NeteaseSmsAuthenticationFailure.alreadyRunning =>
-      SmsAuthenticationFailure.alreadyRunning,
-    null => null,
-  },
-);
-
 CredentialVerificationOperation _reserveRustCredentialVerification() {
   final attemptId = bridge.reserveQqMusicCredentialVerification();
   return attemptId == null
@@ -1318,140 +1165,15 @@ DesktopQuickLoginFailure _mapDesktopQuickFailure(
     DesktopQuickLoginFailure.alreadyRunning,
 };
 
-class _RustNeteaseLoginStartOperation implements LoginStartOperation {
-  const _RustNeteaseLoginStartOperation(this._attemptId);
-
-  final int _attemptId;
+class _OfficialWebOnlyLegacyStartOperation implements LoginStartOperation {
+  const _OfficialWebOnlyLegacyStartOperation();
 
   @override
-  bool cancel() =>
-      netease_bridge.cancelNeteaseQrLoginStart(attemptId: _attemptId);
+  bool cancel() => false;
 
   @override
-  Future<LoginStart> run() async {
-    try {
-      final outcome = await netease_bridge.startNeteaseQrLogin(
-        attemptId: _attemptId,
-      );
-      final session = outcome.session;
-      final challenge = outcome.challenge;
-      final failure = outcome.failure;
-      if (session == null || challenge == null) {
-        final mappedFailure = failure == null
-            ? LoginFailure.invalidResponse
-            : _mapFailure(failure);
-        debugPrint(
-          'FURA_DIAGNOSTIC netease_qr phase=start '
-          'outcome=failure failure=${mappedFailure.name}',
-        );
-        return LoginStart(failure: mappedFailure);
-      }
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_qr phase=start outcome=challenge_ready',
-      );
-      return LoginStart(
-        session: _RustNeteaseLoginSession(session),
-        challenge: LoginChallenge(
-          imageFormat: switch (challenge.imageFormat) {
-            bridge.QqMusicQrImageFormat.png => LoginImageFormat.png,
-            bridge.QqMusicQrImageFormat.jpeg => LoginImageFormat.jpeg,
-          },
-          imageBytes: challenge.imageBytes,
-          externalConfirmationUri: _parseNeteaseConfirmationUri(
-            outcome.externalConfirmationUrl,
-          ),
-        ),
-      );
-    } on Object catch (error) {
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_qr phase=start outcome=exception '
-        'error=${error.runtimeType}',
-      );
-      return const LoginStart(failure: LoginFailure.coreUnavailable);
-    }
-  }
-}
-
-Uri? _parseNeteaseConfirmationUri(String? value) {
-  if (value == null || value.length > 1024) return null;
-  final uri = Uri.tryParse(value);
-  if (uri == null ||
-      uri.scheme != 'https' ||
-      uri.host != 'music.163.com' ||
-      uri.userInfo.isNotEmpty ||
-      uri.hasPort ||
-      uri.path != '/st/platform/scanlogin' ||
-      uri.fragment.isNotEmpty) {
-    return null;
-  }
-  const allowedKeys = <String>{
-    'codekey',
-    'chainId',
-    'hdw_device',
-    'hdw_appid',
-    'hitExp',
-  };
-  if (uri.queryParametersAll.keys.toSet().difference(allowedKeys).isNotEmpty ||
-      allowedKeys.difference(uri.queryParametersAll.keys.toSet()).isNotEmpty ||
-      uri.queryParametersAll.values.any((values) => values.length != 1)) {
-    return null;
-  }
-  final query = uri.queryParameters;
-  if (!_isSafeNeteaseQrToken(query['codekey']) ||
-      !_isSafeNeteaseQrToken(query['chainId']) ||
-      query['hdw_device'] != 'web' ||
-      query['hdw_appid'] != 'web' ||
-      query['hitExp'] != '1') {
-    return null;
-  }
-  return uri;
-}
-
-bool _isSafeNeteaseQrToken(String? value) =>
-    value != null &&
-    value.isNotEmpty &&
-    value.length <= 256 &&
-    RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(value);
-
-class _RustNeteaseLoginSession implements LoginSession {
-  const _RustNeteaseLoginSession(this._inner);
-
-  final netease_bridge.NeteaseQrLoginSessionHandle _inner;
-
-  @override
-  bool cancel() => _inner.cancel();
-
-  @override
-  bool get isActive => _inner.isActive;
-
-  @override
-  Future<LoginUpdate> advance() async {
-    try {
-      final update = await _inner.advance();
-      final progress = update.state == null
-          ? null
-          : _mapProgress(update.state!);
-      final failure = update.failure == null
-          ? null
-          : _mapFailure(update.failure!);
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_qr phase=poll '
-        'progress=${progress?.name ?? 'none'} '
-        'failure=${failure?.name ?? 'none'} active=${update.sessionActive}',
-      );
-      return LoginUpdate(
-        progress: progress,
-        failure: failure,
-        sessionActive: update.sessionActive,
-      );
-    } on Object catch (error) {
-      debugPrint(
-        'FURA_DIAGNOSTIC netease_qr phase=poll outcome=exception '
-        'error=${error.runtimeType}',
-      );
-      rethrow;
-    }
-  }
+  Future<LoginStart> run() async =>
+      const LoginStart(failure: LoginFailure.rejected);
 }
 
 class _RustLoginStartOperation implements LoginStartOperation {

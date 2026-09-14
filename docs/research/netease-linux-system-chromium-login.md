@@ -2,7 +2,7 @@
 
 Date: 2026-09-14
 Decision: HD-029
-Implementation status: machine-complete candidate; real-account acceptance is Human-only
+Implementation status: Human-accepted Linux login; broader account and media evidence remain scoped
 
 ## Outcome
 
@@ -14,10 +14,13 @@ session through a localhost-only Chrome DevTools Protocol endpoint, and sends
 only a coarse authenticated/failure result back to Dart. `MUSIC_U` and optional
 `__csrf` never cross the Rust-to-Dart Bridge.
 
-This does not claim that a real NetEase account has signed in. The Agent opened
-the official page only for no-login lifecycle checks; it did not type, scan,
-confirm, automate CAPTCHA, or access a stored account. The production candidate
-therefore ends at `HUMAN_REVIEW`.
+On 2026-09-14 the Human confirmed that the external browser completed a real
+login and Fura returned to a signed-in NetEase Library. The Agent still did not
+type, scan, confirm, automate CAPTCHA, or inspect account credentials. This is
+Human acceptance of the Linux login handoff, not evidence for every platform,
+restart/sign-out behavior, personalized endpoint, or media entitlement. The
+web-only product decision and subsequent media repair are recorded in
+[HD-030](netease-web-only-login-and-media.md).
 
 ## Why this route
 
@@ -30,7 +33,8 @@ would not address that renderer boundary. The system-Chromium route instead:
 - never opens, copies, queries, or locks the user's default browser profile;
 - avoids a bundled CEF/Chromium runtime, browser extension, sidecar service,
   Selenium, Puppeteer, ChromeDriver, or JavaScript Cookie extraction;
-- keeps the direct QR, external QR-confirmation, and SMS routes unchanged.
+- leaves the direct QR/SMS protocol implementation below the product boundary,
+  while HD-030 removes those risk-controlled routes from the NetEase UI.
 
 Chrome's official security change requires Chrome 136 and later to ignore
 remote-debugging switches for the default profile unless a non-standard

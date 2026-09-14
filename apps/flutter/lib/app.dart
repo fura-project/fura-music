@@ -837,31 +837,50 @@ class _AuthenticationContent extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      const _PanelIcon(icon: Icons.qr_code_2_rounded),
+      _PanelIcon(
+        icon: controller.usesOfficialWebOnly
+            ? Icons.open_in_browser_rounded
+            : Icons.qr_code_2_rounded,
+      ),
       const SizedBox(height: 24),
       Text(
-        context.l10n.authSignInTitle(_providerName(context)),
+        controller.usesOfficialWebOnly
+            ? context.l10n.authOfficialWebTitle
+            : context.l10n.authSignInTitle(_providerName(context)),
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 12),
       Text(
-        controller.supportsMultipleQrMethods
+        controller.usesOfficialWebOnly
+            ? context.l10n.authOfficialWebDetail
+            : controller.supportsMultipleQrMethods
             ? context.l10n.authIntroductionMultiple
             : context.l10n.authIntroductionSingle(_providerName(context)),
         style: _supportingStyle(context),
       ),
       const SizedBox(height: 28),
-      FilledButton.icon(
-        key: const ValueKey('start-qq-login-button'),
-        onPressed: controller.supportsDesktopQuickLogin
-            ? controller.startDesktopQqAuthorization
-            : controller.supportsMultipleQrMethods
-            ? () => controller.startQr(LoginQrChannel.qq)
-            : controller.start,
-        icon: const Icon(Icons.qr_code_2_rounded),
-        label: Text(_qrActionLabel(context)),
-      ),
-      if (controller.supportsMultipleQrMethods) ...[
+      if (controller.usesOfficialWebOnly)
+        FilledButton.icon(
+          key: const ValueKey('start-official-web-login-button'),
+          onPressed: controller.supportsOfficialWebLogin
+              ? controller.startOfficialWebLogin
+              : null,
+          icon: const Icon(Icons.open_in_browser_rounded),
+          label: Text(context.l10n.authUseOfficialWebsite),
+        )
+      else
+        FilledButton.icon(
+          key: const ValueKey('start-qq-login-button'),
+          onPressed: controller.supportsDesktopQuickLogin
+              ? controller.startDesktopQqAuthorization
+              : controller.supportsMultipleQrMethods
+              ? () => controller.startQr(LoginQrChannel.qq)
+              : controller.start,
+          icon: const Icon(Icons.qr_code_2_rounded),
+          label: Text(_qrActionLabel(context)),
+        ),
+      if (!controller.usesOfficialWebOnly &&
+          controller.supportsMultipleQrMethods) ...[
         const SizedBox(height: 10),
         OutlinedButton.icon(
           key: const ValueKey('start-wechat-login-button'),
@@ -870,7 +889,7 @@ class _AuthenticationContent extends StatelessWidget {
           label: Text(context.l10n.authScanWithWechat),
         ),
       ],
-      if (controller.supportsSmsLogin) ...[
+      if (!controller.usesOfficialWebOnly && controller.supportsSmsLogin) ...[
         const SizedBox(height: 10),
         OutlinedButton.icon(
           key: const ValueKey('show-sms-login-button'),
@@ -879,7 +898,8 @@ class _AuthenticationContent extends StatelessWidget {
           label: Text(context.l10n.authUsePhoneCode),
         ),
       ],
-      if (controller.supportsOfficialWebLogin) ...[
+      if (!controller.usesOfficialWebOnly &&
+          controller.supportsOfficialWebLogin) ...[
         const SizedBox(height: 10),
         TextButton.icon(
           key: const ValueKey('start-official-web-login-button'),

@@ -68,10 +68,39 @@ impl<T: Transport> NeteaseClient<T> {
     async fn raw_request_with_headers(
         &self,
         path: &str,
+        payload: Value,
+        eapi: bool,
+        cookie: Option<&str>,
+        headers: Vec<(String, String)>,
+    ) -> Result<(Value, Vec<String>), Error> {
+        self.raw_request_with_headers_at_base(path, payload, eapi, cookie, headers, None)
+            .await
+    }
+    async fn raw_interface3_eapi_request(
+        &self,
+        path: &str,
+        payload: Value,
+        cookie: Option<&str>,
+        headers: Vec<(String, String)>,
+    ) -> Result<(Value, Vec<String>), Error> {
+        self.raw_request_with_headers_at_base(
+            path,
+            payload,
+            true,
+            cookie,
+            headers,
+            Some("https://interface3.music.163.com/eapi/"),
+        )
+        .await
+    }
+    async fn raw_request_with_headers_at_base(
+        &self,
+        path: &str,
         mut payload: Value,
         eapi: bool,
         cookie: Option<&str>,
         headers: Vec<(String, String)>,
+        eapi_base: Option<&'static str>,
     ) -> Result<(Value, Vec<String>), Error> {
         if headers.len() > 16
             || headers
@@ -83,7 +112,7 @@ impl<T: Transport> NeteaseClient<T> {
         let text = request_payload(&mut payload, eapi, cookie)?;
         let (base, form) = if eapi {
             (
-                "https://interface.music.163.com/eapi/",
+                eapi_base.unwrap_or("https://interface.music.163.com/eapi/"),
                 crypto::eapi(path, &text)?,
             )
         } else {
@@ -154,7 +183,15 @@ fn request_payload(payload: &mut Value, eapi: bool, cookie: Option<&str>) -> Res
             .split("; ")
             .find_map(|p| p.strip_prefix("MUSIC_U="))
             .ok_or(Error::ResponseShapeMismatch)?;
-        payload["header"] = json!({"MUSIC_U":music_u,"__csrf":csrf});
+        if payload.get("header").is_none() {
+            payload["header"] = json!({});
+        }
+        let header = payload
+            .get_mut("header")
+            .and_then(Value::as_object_mut)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        header.insert("MUSIC_U".into(), json!(music_u));
+        header.insert("__csrf".into(), json!(csrf));
     }
     let text = serde_json::to_string(payload).map_err(|_| Error::InputBound)?;
     if text.len() > 65536 {
@@ -167,7 +204,12 @@ mod request_tests {
     use super::*;
     #[test]
     fn authenticated_envelopes_keep_csrf_and_session_in_protocol_layer() {
-        let mut payload = json!({"ids":"[1]","level":"standard","e_r":false});
+        let mut payload = json!({
+            "ids":"[1]",
+            "level":"standard",
+            "e_r":false,
+            "header":{"os":"pc","appver":"8.0.0"}
+        });
         let eapi = request_payload(
             &mut payload,
             true,
@@ -177,6 +219,8 @@ mod request_tests {
         let parsed: Value = serde_json::from_str(&eapi).unwrap();
         assert_eq!(parsed["header"]["MUSIC_U"], "synthetic-session");
         assert_eq!(parsed["header"]["__csrf"], "synthetic-csrf");
+        assert_eq!(parsed["header"]["os"], "pc");
+        assert_eq!(parsed["header"]["appver"], "8.0.0");
         assert_eq!(parsed["csrf_token"], "synthetic-csrf");
         let mut payload = json!({});
         let text = request_payload(&mut payload, false, None).unwrap();

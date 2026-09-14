@@ -13,6 +13,14 @@ provider confirmation and restart persistence remain
 `HUMAN_EVIDENCE_REQUIRED`; this addendum does not change the final
 `HUMAN_REVIEW` gate below.
 
+Later 2026-09-14 addendum: HD-030 supersedes the login-method and media rows in
+this historical audit. The Human confirmed the isolated Linux system-browser
+login and a signed-in Library. NetEase now exposes only official-Web login in
+the product UI; internal QR and SMS capabilities are retired from the Flutter
+gateway. Authenticated media was repaired to use the current interface3 EAPI
+desktop context, but real-account playback remains Human review. See
+[`netease-web-only-login-and-media.md`](netease-web-only-login-and-media.md).
+
 This is the required final-stop audit. `DONE` means the authorized machine-verifiable implementation/evidence boundary is complete; it never promotes real-account, unavailable-host, playback, UI, or release evidence. This regression adds only the explicitly authorized NetEase phone-code form and its typed lifecycle; pre-existing QQ and unrelated Flutter working-tree edits remain preserved.
 
 ## HD-027 `webview_all` candidate addendum — 2026-09-14

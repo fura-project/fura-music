@@ -19,7 +19,7 @@ Date: 2026-09-12. Authority: HD-023 + HD-024 plus the 2026-09-12 Linux Human reg
 | Family | Wire behavior | Fura decision |
 |---|---|---|
 | weapi | AES-128-CBC twice, Base64 between stages, reversed random session key with RSA exponent 65537 | Independent Rust; deterministic OpenSSL/integer known answers; direct `music.163.com/weapi` |
-| eapi | MD5 over path/JSON markers, AES-128-ECB, uppercase hex | Independent Rust; deterministic known answer; one standard media route at `interface.music.163.com/eapi`, JSON response requested |
+| eapi | MD5 over path/JSON markers, AES-128-ECB, uppercase hex | Independent Rust; deterministic known answer; anonymous compatibility retains the original route, while authenticated standard media uses `interface3.music.163.com/eapi` with bounded desktop context |
 | mobile eapi | Same encrypted EAPI family with mobile request metadata and an encrypted response (`e_r=true`) | Independent bounded SMS candidate at `interface3.music.163.com`; strict PKCS#7 plus bounded gzip response decoding; real delivery/login Human-gated |
 | linuxapi | AES-128-ECB forward envelope | Investigated; no current requirement justifies another production path |
 | plain api | Older/public unencrypted envelope over HTTPS | Investigated; no compatibility gap requires it |
@@ -40,7 +40,7 @@ Runtime is Flutter → in-process Rust → direct HTTPS. RustCrypto AES/CBC and 
 | Lyrics | `song/lyric` (weapi) | 512 KiB text, ≤10,000 lines; exact-time translation, no invented words or duration |
 | Rankings | `toplist` (weapi) | ≤100 summaries; ranking identity is provider-owned playlist identity |
 | Public recommendations | `personalized/playlist` (weapi) | Explicit bounded, non-paged sample; offset 0 only, no fabricated continuation/personalization |
-| Standard source | `song/enhance/player/url/v1` (eapi) | One exact ID, standard only, normal service response; trial STOP, returned TTL, redacted URI |
+| Standard source | `song/enhance/player/url/v1` (eapi) | One exact ID, standard only; authenticated requests use interface3 desktop Cookie/header context; trial STOP, returned TTL, redacted URI |
 | Track Comments | `v1/resource/comments/R_SO_4_<id>` (weapi) | True offset/limit page, latest `comments`, initial-page `hotComments`, exact IDs and bounded text; no mutation/user identity |
 | Related Tracks | `v1/discovery/simiSong` (weapi) | One exact seed, ≤50 rows, duplicate/seed rows rejected; no fuzzy seed, history or autoplay claim |
 | New songs | `v1/discovery/new/songs` (weapi) | Bounded whole response; exact All/Western/Japan/Korea area values, no invented pagination |
@@ -89,10 +89,10 @@ Phone-code send uses EAPI `/api/sms/captcha/sent` with `ctcode`, `cellphone`, `v
 | LyricsProvider | SUPPORTED | True LRC starts, exact-time translation, zero unknown durations and no fabricated words |
 | RankingsProvider | SUPPORTED | Bounded list and Track windows; neutral raw next-offset and omitted-count preserve continuation even when all details in a window are unavailable |
 | RecommendedPlaylistsProvider | PARTIAL | One bounded public sample at offset 0; no fake pagination or account personalization |
-| MediaSourceResolver | SUPPORTED | Exact static routing; normal standard source only; authenticated behavior awaits Human |
-| QrAuthenticationProvider | PARTIAL | Native ProviderDefault channel, PNG-only Web QR candidate; machine challenge/801 pass, Human 803/account/persistence pending |
-| QrAuthenticationSession | PARTIAL | Offline tested generation/cancel/drop/deadline/terminal/rejection transitions; 8821 is explicit and never bypassed |
-| SmsAuthenticationProvider | PARTIAL | Mobile-EAPI send/login, one device context, pending credential verification, cancellation/replacement and typed failures are offline tested; real delivery and login remain Human-gated |
+| MediaSourceResolver | PARTIAL_HUMAN | Exact static routing and current authenticated interface3 request are machine-tested; ordinary entitled real-account playback awaits Human rerun |
+| QrAuthenticationProvider | NOT_EXPOSED | Historical bounded Core implementation remains tested, but HD-030 removes the risk-controlled route from the NetEase product gateway/UI |
+| QrAuthenticationSession | NOT_EXPOSED | Historical lifecycle tests remain; no current NetEase UI action creates a session |
+| SmsAuthenticationProvider | NOT_EXPOSED | Historical bounded Core implementation remains tested, but HD-030 removes the risk-controlled route from the NetEase product gateway/UI |
 | AccountSummaryProvider | PARTIAL | Current credential generation, exact account/profile correlation; Human account evidence required |
 | UserPlaylistsProvider | PARTIAL | Explicit complete contract bounded to 10×100 rows; owned/saved and liked-purpose mapping |
 | OwnedPlaylistsProvider | PARTIAL | Filters exact creator identity after bounded complete collection |
@@ -133,4 +133,8 @@ The exhaustive stop audit is [netease-remaining-work-audit.md](netease-remaining
 
 The HD-024 validation result and platform evidence are recorded in the [Remaining Work Audit](netease-remaining-work-audit.md). The 2026-09-12 security-verification failure and optional phone-code outcomes changed the typed Bridge, so pinned FRB 2.13.0 generation was rerun successfully.
 
-No actual NetEase account observation is promoted to VERIFIED. The Human regression establishes 801/802 followed by 8821 on two Web-QR attempts and the two artwork HTTP 403s. The new Web QR Human matrix is compiled and ignored by default; the Agent did not run it. Phone-code request/login, retry, whole-session cancellation and Flutter handoff are machine-tested; all 567 Flutter tests, the Linux Release build and an Android ARM64 debug build pass, but no live SMS request was made.
+The 2026-09-14 Human observation now verifies the isolated Linux system-browser
+login and arrival in a signed-in Library. It does not retroactively verify the
+retired QR/SMS candidates or all account endpoints. HD-030 updates authenticated
+media request compatibility; real playback remains Human review. See
+[`netease-web-only-login-and-media.md`](netease-web-only-login-and-media.md).
