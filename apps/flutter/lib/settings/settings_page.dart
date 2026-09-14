@@ -212,23 +212,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final contentKey = normalizedQuery.isEmpty
         ? 'section-${widget.selectedSection.name}'
         : 'search-${sections.map((section) => section.name).join('-')}';
-    final settingsContent = AnimatedSwitcher(
+    final settingsContent = _SettingsContentTransition(
       key: const ValueKey('settings-content-transition'),
       duration: disableAnimations ? Duration.zero : MusicMotion.stateChange,
-      switchInCurve: Easing.emphasizedDecelerate,
-      switchOutCurve: Easing.emphasizedAccelerate,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0.025, 0),
-            end: Offset.zero,
-          ).animate(animation),
-          child: child,
-        ),
-      ),
+      contentKey: ValueKey(contentKey),
       child: SafeArea(
-        key: ValueKey(contentKey),
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -612,6 +600,112 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
     ),
   ];
+}
+
+/// A Material fade-through for peer Settings sections.
+///
+/// Only one section is mounted at any instant: the old section fades out,
+/// then the new section fades and moves in. This avoids the translucent
+/// incoming/outgoing page overlap produced by an [AnimatedSwitcher] stack.
+class _SettingsContentTransition extends StatefulWidget {
+  const _SettingsContentTransition({
+    required this.contentKey,
+    required this.duration,
+    required this.child,
+    super.key,
+  });
+
+  final Key contentKey;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  State<_SettingsContentTransition> createState() =>
+      _SettingsContentTransitionState();
+}
+
+class _SettingsContentTransitionState extends State<_SettingsContentTransition>
+    with SingleTickerProviderStateMixin {
+  static const double _swapPoint = 0.4;
+
+  late final AnimationController _controller;
+  late Key _contentKey;
+  late Widget _outgoing;
+  late Widget _incoming;
+
+  @override
+  void initState() {
+    super.initState();
+    _contentKey = widget.contentKey;
+    _outgoing = widget.child;
+    _incoming = widget.child;
+    _controller = AnimationController(
+      vsync: this,
+      value: 1,
+      duration: widget.duration,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_SettingsContentTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller.duration = widget.duration;
+    if (widget.contentKey == _contentKey) {
+      _incoming = widget.child;
+      if (_controller.isDismissed) _outgoing = widget.child;
+      return;
+    }
+
+    _outgoing = _controller.value < _swapPoint ? _outgoing : _incoming;
+    _incoming = widget.child;
+    _contentKey = widget.contentKey;
+    if (widget.duration == Duration.zero) {
+      _controller.value = 1;
+    } else {
+      unawaited(_controller.forward(from: 0));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, _) {
+      final progress = _controller.value;
+      final showingIncoming = progress >= _swapPoint;
+      final opacity = showingIncoming
+          ? Easing.emphasizedDecelerate.transform(
+              ((progress - _swapPoint) / (1 - _swapPoint)).clamp(0, 1),
+            )
+          : 1 -
+                Easing.emphasizedAccelerate.transform(
+                  (progress / _swapPoint).clamp(0, 1),
+                );
+      final slideProgress = showingIncoming
+          ? ((progress - _swapPoint) / (1 - _swapPoint)).clamp(0, 1)
+          : 1.0;
+      return ClipRect(
+        child: IgnorePointer(
+          ignoring: _controller.isAnimating,
+          child: Opacity(
+            opacity: opacity,
+            child: Transform.translate(
+              offset: Offset((1 - slideProgress) * 18, 0),
+              child: KeyedSubtree(
+                key: showingIncoming ? _contentKey : null,
+                child: showingIncoming ? _incoming : _outgoing,
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _ColorSourcePreview extends StatelessWidget {

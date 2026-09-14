@@ -32,6 +32,21 @@ pub fn parse_lrc(text: &str) -> Result<Vec<(u32, String)>, Error> {
                 .parse::<u32>()
                 .map_err(|_| Error::ResponseShapeMismatch)?;
             let (seconds, fraction) = seconds.split_once('.').unwrap_or((seconds, ""));
+            // NetEase can append an internal negative line marker to an
+            // otherwise standard LRC timestamp, for example `00:00.00-1`.
+            // It does not alter playback time and must not invalidate the
+            // entire document.
+            let fraction = if let Some((fraction, marker)) = fraction.split_once('-') {
+                if fraction.is_empty()
+                    || marker.is_empty()
+                    || !marker.bytes().all(|b| b.is_ascii_digit())
+                {
+                    return Err(Error::ResponseShapeMismatch);
+                }
+                fraction
+            } else {
+                fraction
+            };
             let seconds = seconds
                 .parse::<u32>()
                 .map_err(|_| Error::ResponseShapeMismatch)?;
@@ -128,10 +143,21 @@ mod tests {
                 (64567, "End".into())
             ]
         );
+        assert_eq!(
+            parse_lrc("[00:00.00-1] 作词 : Fixture\n[00:01.25]Line").unwrap(),
+            vec![(0, " 作词 : Fixture".into()), (1250, "Line".into())]
+        );
     }
     #[test]
     fn lrc_rejects_bad_timing_and_enforces_bounds() {
-        for text in ["[00:61.1]x", "[00:01.1234]x", "[999999999:00]x", "[00:aa]x"] {
+        for text in [
+            "[00:61.1]x",
+            "[00:01.1234]x",
+            "[00:01.-1]x",
+            "[00:01.12-x]x",
+            "[999999999:00]x",
+            "[00:aa]x",
+        ] {
             assert!(parse_lrc(text).is_err());
         }
         assert!(parse_lrc(&"[00:01]x\n".repeat(10001)).is_err());

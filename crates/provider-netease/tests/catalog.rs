@@ -74,6 +74,35 @@ async fn search_details_and_all_context_are_provider_scoped() {
     );
     assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
+
+#[tokio::test]
+async fn track_search_keeps_a_song_when_netease_has_no_album_identity() {
+    let row = json!({
+        "id": 3_422_334_311_u64,
+        "name": "神曼波 (Cover 陈阳)",
+        "ar": [{"id": 0, "name": "艺术嘉"}],
+        "al": {
+            "id": 0,
+            "name": "",
+            "picUrl": "https://p1.music.126.net/placeholder.jpg"
+        },
+        "dt": 151_000
+    });
+    let (provider, calls) = provider(vec![
+        json!({"code":200,"result":{"songCount":1,"songs":[row]}}),
+    ]);
+
+    let page = provider.search_tracks("神曼波".into(), 1, 1).await.unwrap();
+    let item = &page.items()[0];
+    assert_eq!(item.track().id().opaque(), "3422334311");
+    assert_eq!(item.track().artist_names(), &["艺术嘉"]);
+    assert!(item.album().is_none());
+    assert!(item.track().album().is_none());
+    assert!(item.track().album_title().is_none());
+    assert!(item.track().artwork_uri().is_none());
+    assert!(item.artists().is_empty());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
 #[tokio::test]
 async fn all_search_types_map_and_page_numbers_are_one_based() {
     let (p, c) = provider(vec![

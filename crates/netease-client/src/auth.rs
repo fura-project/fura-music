@@ -808,7 +808,8 @@ impl<T: Transport> NeteaseClient<T> {
         }
         Ok(UserPlaylistPage { items, more })
     }
-    /// Unordered liked identities; never pretend to be recent-play order.
+    /// Unordered liked identities for membership checks only. Display order
+    /// comes from the real Liked playlist's ordered `trackIds` table.
     /// # Errors
     /// Rejects lists above the body-budget-derived identity ceiling, duplicates and invalid IDs.
     pub async fn liked_ids(&self, credential: &Credential, user: u64) -> Result<Vec<u64>, Error> {

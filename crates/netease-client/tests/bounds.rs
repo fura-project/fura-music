@@ -127,3 +127,22 @@ async fn empty_catalog_and_missing_content_are_distinct_from_malformed() {
         Err(Error::ResponseShapeMismatch)
     ));
 }
+
+#[tokio::test]
+async fn lyrics_accept_netease_negative_line_markers_without_relaxing_timing() {
+    let lyrics = client(&json!({
+        "code": 200,
+        "lrc": {
+            "lyric": "[00:00.00-1] 作词 : Aljosha Frederick Konstanty/Liam Morgan Thomas\n[00:00.00-1] 作曲 : Aljosha Frederick Konstanty/Liam Morgan Thomas\n"
+        }
+    }))
+    .lyrics(1)
+    .await
+    .unwrap();
+
+    assert_eq!(lyrics.lines.len(), 2);
+    assert_eq!(lyrics.lines[0].start_ms, 0);
+    assert!(lyrics.lines[0].text.contains("作词"));
+    assert_eq!(lyrics.lines[1].start_ms, 0);
+    assert!(lyrics.lines[1].text.contains("作曲"));
+}

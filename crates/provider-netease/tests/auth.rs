@@ -625,8 +625,10 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
         Reply::Json(account()),
         Reply::Json(account()),
         Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
-        Reply::Json(json!({"code":200,"ids":[1,5]})),
-        Reply::Json(json!({"code":200,"songs":[song()]})),
+        Reply::Json(
+            json!({"code":200,"playlist":{"id":4,"name":"Liked","trackCount":2,"trackIds":[{"id":5},{"id":1}]}}),
+        ),
+        Reply::Json(json!({"code":200,"songs":[song(),sized_song(5)]})),
         Reply::Json(json!({"code":200,"data":{"dailySongs":[song()]}})),
         Reply::Json(json!({"code":200,"data":[song()]})),
         Reply::Json(json!({"code":200,"recommend":[]})),
@@ -645,7 +647,14 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
         .await
         .unwrap();
     assert_eq!(page.next_offset(), 2);
-    assert_eq!(page.omitted_track_count(), 1);
+    assert_eq!(page.omitted_track_count(), 0);
+    assert_eq!(
+        page.tracks()
+            .iter()
+            .map(|track| track.id().opaque())
+            .collect::<Vec<_>>(),
+        ["5", "1"]
+    );
     assert_eq!(p.daily_tracks().await.unwrap()[0].id().opaque(), "1");
     assert_eq!(p.personalized_tracks().await.unwrap().len(), 1);
     assert!(p.personalized_playlists().await.unwrap().is_empty());
@@ -654,13 +663,15 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
 
 #[tokio::test]
 async fn liked_collection_above_the_old_ceiling_pages_by_raw_identity() {
-    let ids: Vec<_> = (1..=1001).collect();
+    let ids: Vec<_> = (1..=1001).map(|id| json!({"id":id})).collect();
     let playlist =
         json!({"id":4,"name":"Liked","trackCount":1001,"specialType":5,"creator":{"userId":42}});
     let (p, calls, authenticated_calls) = provider(vec![
         Reply::Json(account()),
         Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
-        Reply::Json(json!({"code":200,"ids":ids})),
+        Reply::Json(
+            json!({"code":200,"playlist":{"id":4,"name":"Liked","trackCount":1001,"trackIds":ids}}),
+        ),
         Reply::Json(json!({"code":200,"songs":[sized_song(1001)]})),
     ]);
     p.import_credential(&credential()).unwrap();

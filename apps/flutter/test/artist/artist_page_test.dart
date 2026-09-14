@@ -159,6 +159,97 @@ void main() {
     expect(find.text('Synthetic album'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('embedded Artist header continuously follows Track scrolling', (
+    tester,
+  ) async {
+    const captureReviewImages = bool.fromEnvironment(
+      'ARTIST_HEADER_VISUAL_REVIEW',
+    );
+    tester.view.physicalSize = const Size(1100, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const artist = ArtistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'artist:61002:adaptiveArtistMid',
+      name: 'Adaptive artist',
+    );
+    final tracks = List.generate(
+      40,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:${42000 + index}:0:adaptiveMid$index:-',
+        title: 'Adaptive track ${index + 1}',
+        artistNames: const ['Adaptive artist'],
+      ),
+    );
+    final playback = QueuePlaybackController(
+      TestPlaybackQueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+    final collapsedStates = <bool>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ArtistPage(
+          artist: artist,
+          gateway: _ArtistListGateway(tracks),
+          queuePlaybackController: playback,
+          onBack: () {},
+          onSignInAgain: () {},
+          onHeaderCollapsedChanged: collapsedStates.add,
+          embedded: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('collection-detail-artwork')))
+          .width,
+      156,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(ArtistPage),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-artist-header-expanded.png'),
+        ),
+      );
+    }
+    final list = find.byKey(const PageStorageKey('artist-tracks'));
+    tester
+        .state<ScrollableState>(
+          find.descendant(of: list, matching: find.byType(Scrollable)),
+        )
+        .position
+        .jumpTo(180);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('collection-detail-artwork')))
+          .width,
+      64,
+    );
+    expect(collapsedStates, contains(true));
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(ArtistPage),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-artist-header-collapsed.png'),
+        ),
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _ArtistGateway implements ArtistTrackGateway {
@@ -186,6 +277,25 @@ class _ArtistOperation implements ArtistTrackPageLoadOperation {
 
   @override
   Future<ArtistTrackPageResult> run() async => result;
+}
+
+class _ArtistListGateway implements ArtistTrackGateway {
+  const _ArtistListGateway(this.tracks);
+
+  final List<PlaylistTrackSummary> tracks;
+
+  @override
+  ArtistTrackPageLoadOperation beginLoad({
+    required ArtistSummary artist,
+    required int offset,
+    required int size,
+  }) => _ArtistOperation(
+    ArtistTrackPageResult(
+      offset: offset,
+      total: tracks.length,
+      tracks: tracks.skip(offset).take(size).toList(growable: false),
+    ),
+  );
 }
 
 class _ArtistAlbumGateway implements ArtistAlbumGateway {

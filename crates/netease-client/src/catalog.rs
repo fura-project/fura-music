@@ -136,6 +136,13 @@ impl Artist {
     }
 }
 impl Album {
+    /// Whether this embedded Album carries the minimum identity needed for a
+    /// provider-neutral catalog transition.
+    #[must_use]
+    pub fn has_catalog_identity(&self) -> bool {
+        self.id > 0 && !self.name.trim().is_empty()
+    }
+
     pub(crate) fn validate(&self) -> Result<(), Error> {
         id(self.id)?;
         text(&self.name)?;
@@ -161,7 +168,26 @@ impl Song {
     pub(crate) fn validate(&self) -> Result<(), Error> {
         id(self.id)?;
         text(&self.name)?;
-        self.album.validate()?;
+        if self.album.id == 0 && self.album.name.trim().is_empty() {
+            artwork(self.album.artwork.clone())?;
+            if self.album.artists.len() > 32
+                || self
+                    .album
+                    .description
+                    .as_ref()
+                    .is_some_and(|d| d.len() > 128 * 1024)
+            {
+                return Err(Error::ResponseBound);
+            }
+            for artist in &self.album.artists {
+                text(&artist.name)?;
+                if artist.id > 0 {
+                    artist.validate()?;
+                }
+            }
+        } else {
+            self.album.validate()?;
+        }
         if self.artists.len() > 32 || self.duration > 86_400_000 {
             return Err(Error::ResponseBound);
         }
@@ -510,7 +536,7 @@ impl<T: Transport> NeteaseClient<T> {
         }
         for song in &songs {
             song.validate()?;
-            if song.album.id != album {
+            if !song.album.has_catalog_identity() || song.album.id != album {
                 return Err(Error::ResponseShapeMismatch);
             }
         }

@@ -582,6 +582,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool _discoverHeaderCollapsed = false;
   bool _collectionDetailHeaderCollapsed = false;
   final Map<String, bool> _collectionDetailCollapsedByRoute = {};
+  final Map<String, PlaylistDetailShellAction> _playlistShellActions = {};
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
 
@@ -672,6 +673,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _discoverHeaderCollapsed = false;
     _collectionDetailHeaderCollapsed = false;
     _collectionDetailCollapsedByRoute.clear();
+    _playlistShellActions.clear();
     _initializeProviderControllers();
     _loadProviderRoot();
   }
@@ -899,6 +901,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         ? (collapsed) =>
               _updateCollectionDetailHeaderCollapsed(route, collapsed)
         : null,
+    onShellActionChanged: embedded
+        ? (action) => _updatePlaylistShellAction(route, action)
+        : null,
     embedded: embedded,
   );
 
@@ -950,6 +955,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         onOpenAlbum: (album) => _openAlbumFromArtist(route.origin, album),
         backTooltip: _artistBackTooltip(route.origin),
         onSignInAgain: widget.onSignInAgain,
+        onHeaderCollapsedChanged: embedded
+            ? (collapsed) =>
+                  _updateCollectionDetailHeaderCollapsed(route, collapsed)
+            : null,
         embedded: embedded,
       );
 
@@ -1031,6 +1040,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _collectionDetailCollapsedByRoute.remove(
         _collectionRouteIdentity(result.route),
       );
+      _playlistShellActions.remove(_collectionRouteIdentity(result.route));
       _collectionDetailHeaderCollapsed = _currentCollectionCollapsed;
     });
     _restoreFocusAfterBack(result, previousPrimary: previousPrimary);
@@ -1043,6 +1053,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     setState(() {
       route = _navigation.popRoute()!;
       _collectionDetailCollapsedByRoute.remove(_collectionRouteIdentity(route));
+      _playlistShellActions.remove(_collectionRouteIdentity(route));
       _collectionDetailHeaderCollapsed = _currentCollectionCollapsed;
     });
     _restoreFocusAfterBack(
@@ -1625,8 +1636,28 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           'album:${album.providerId}:${album.opaqueId}',
         RankingLocalRoute(:final ranking) =>
           'ranking:${ranking.providerId}:${ranking.opaqueId}',
+        ArtistLocalRoute(:final artist) =>
+          'artist:${artist.providerId}:${artist.opaqueId}',
         _ => null,
       };
+
+  void _updatePlaylistShellAction(
+    PlaylistLocalRoute route,
+    PlaylistDetailShellAction action,
+  ) {
+    if (!mounted) return;
+    final identity = _collectionRouteIdentity(route);
+    if (identity == null ||
+        _collectionRouteIdentity(_navigation.topRoute) != identity) {
+      return;
+    }
+    final previous = _playlistShellActions[identity];
+    if (previous?.refreshing == action.refreshing &&
+        (previous?.onRefresh == null) == (action.onRefresh == null)) {
+      return;
+    }
+    setState(() => _playlistShellActions[identity] = action);
+  }
 
   bool get _currentCollectionCollapsed {
     final identity = _collectionRouteIdentity(_navigation.topRoute);
@@ -1672,9 +1703,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final collectionDetailOpen =
           embeddedShellRoute is PlaylistLocalRoute ||
           embeddedShellRoute is AlbumLocalRoute ||
-          embeddedShellRoute is RankingLocalRoute;
-      final artistDetailOpen = embeddedShellRoute is ArtistLocalRoute;
-      final catalogDetailOpen = collectionDetailOpen || artistDetailOpen;
+          embeddedShellRoute is RankingLocalRoute ||
+          embeddedShellRoute is ArtistLocalRoute;
+      final catalogDetailOpen = collectionDetailOpen;
       final collectionDetailTitle = switch (embeddedShellRoute) {
         PlaylistLocalRoute(:final playlist) => playlist.title,
         AlbumLocalRoute(:final album) => album.title,
@@ -1682,6 +1713,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         ArtistLocalRoute(:final artist) => artist.name,
         _ => null,
       };
+      final collectionIdentity = _collectionRouteIdentity(embeddedShellRoute);
+      final playlistShellAction = embeddedShellRoute is PlaylistLocalRoute
+          ? _playlistShellActions[collectionIdentity]
+          : null;
       final likedHeaderOwnsTopBar =
           likedSongsOpen && embeddedShellRoute == null && _likedHeaderCollapsed;
       final recentHeaderOwnsTopBar =
@@ -1829,123 +1864,143 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       );
       final disableAnimations =
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      final showCollectionShellControls =
+          collectionDetailOpen && _collectionDetailHeaderCollapsed;
       final mainAppBar = AppBar(
-        leading: collectionDetailOpen && _collectionDetailHeaderCollapsed
-            ? IconButton(
-                key: const ValueKey('collection-detail-shell-back'),
-                tooltip: context.l10n.commonBack,
-                onPressed: _returnFromTopRoute,
-                icon: const Icon(Icons.arrow_back_rounded),
-              )
-            : null,
-        title: AnimatedSwitcher(
+        automaticallyImplyLeading: false,
+        title: Stack(
           key: const ValueKey('shell-top-bar-transition'),
-          duration: disableAnimations
-              ? Duration.zero
-              : const Duration(milliseconds: 280),
-          switchInCurve: Easing.emphasizedDecelerate,
-          switchOutCurve: Easing.emphasizedAccelerate,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.04, 0),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
+          fit: StackFit.passthrough,
+          children: [
+            _PrimaryShellTitle(
+              key: const ValueKey('primary-shell-top-bar'),
+              onSearchFocusChanged: settingsOpen ? null : _updateTopSearchFocus,
+              title: settingsOpen
+                  ? context.l10n.settingsTitle
+                  : collectionDetailTitle ??
+                        switch (destination) {
+                          AuthenticatedPrimaryDestination.home =>
+                            context.l10n.navHome,
+                          AuthenticatedPrimaryDestination.discover =>
+                            context.l10n.navDiscover,
+                          AuthenticatedPrimaryDestination.search =>
+                            context.l10n.shellSearchProvider(
+                              _providerDisplayName,
+                            ),
+                          AuthenticatedPrimaryDestination.library =>
+                            context.l10n.navLiked,
+                          AuthenticatedPrimaryDestination.recentPlays =>
+                            context.l10n.navRecentPlays,
+                        },
+              compact: compactActions,
+              showTitle: settingsOpen
+                  ? false
+                  : catalogDetailOpen
+                  ? false
+                  : discoverRootOpen
+                  ? _discoverHeaderCollapsed
+                  : !likedSongsOpen &&
+                        destination !=
+                            AuthenticatedPrimaryDestination.recentPlays &&
+                        (destination != AuthenticatedPrimaryDestination.home ||
+                            !extendedSidebar),
+              showSearchShortcut: settingsOpen
+                  ? wide
+                  : extendedSidebar &&
+                        destination != AuthenticatedPrimaryDestination.search,
+              searchKey: settingsOpen
+                  ? const ValueKey('settings-search')
+                  : const ValueKey('top-search-shortcut'),
+              searchHint: settingsOpen
+                  ? context.l10n.settingsSearchLabel
+                  : context.l10n.shellSearchProvider(_providerDisplayName),
+              searchController: settingsOpen
+                  ? _settingsSearchController
+                  : _topSearchController,
+              onSearchChanged: settingsOpen ? _updateSettingsSearch : null,
+              onSearchSubmitted: settingsOpen
+                  ? _updateSettingsSearch
+                  : _submitTopSearch,
+              searchTrailing:
+                  showCollectionShellControls && playlistShellAction != null
+                  ? IconButton(
+                      key: const ValueKey('collection-detail-shell-refresh'),
+                      tooltip: playlistShellAction.refreshing
+                          ? context.l10n.libraryRefreshingPlaylist
+                          : context.l10n.libraryRefreshPlaylist,
+                      onPressed: playlistShellAction.onRefresh,
+                      icon: playlistShellAction.refreshing
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Icon(Icons.refresh_rounded),
+                    )
+                  : null,
             ),
-          ),
-          child: settingsOpen
-              ? _PrimaryShellTitle(
-                  key: const ValueKey('settings-shell-top-bar'),
-                  title: context.l10n.settingsTitle,
-                  compact: compactActions,
-                  showTitle: false,
-                  showSearchShortcut: wide,
-                  searchKey: const ValueKey('settings-search'),
-                  searchHint: context.l10n.settingsSearchLabel,
-                  searchController: _settingsSearchController,
-                  onSearchChanged: _updateSettingsSearch,
-                  onSearchSubmitted: _updateSettingsSearch,
-                )
-              : _PrimaryShellTitle(
-                  key: const ValueKey('music-shell-top-bar'),
-                  onSearchFocusChanged: _updateTopSearchFocus,
-                  title:
-                      collectionDetailTitle ??
-                      switch (destination) {
-                        AuthenticatedPrimaryDestination.home =>
-                          context.l10n.navHome,
-                        AuthenticatedPrimaryDestination.discover =>
-                          context.l10n.navDiscover,
-                        AuthenticatedPrimaryDestination.search =>
-                          context.l10n.shellSearchProvider(
-                            _providerDisplayName,
-                          ),
-                        AuthenticatedPrimaryDestination.library =>
-                          context.l10n.navLiked,
-                        AuthenticatedPrimaryDestination.recentPlays =>
-                          context.l10n.navRecentPlays,
-                      },
-                  compact: compactActions,
-                  showTitle: catalogDetailOpen
-                      ? collectionDetailOpen && _collectionDetailHeaderCollapsed
-                      : discoverRootOpen
-                      ? _discoverHeaderCollapsed
-                      : !likedSongsOpen &&
-                            destination !=
-                                AuthenticatedPrimaryDestination.recentPlays &&
-                            (destination !=
-                                    AuthenticatedPrimaryDestination.home ||
-                                !extendedSidebar),
-                  showSearchShortcut:
-                      extendedSidebar &&
-                      destination != AuthenticatedPrimaryDestination.search,
-                  searchKey: const ValueKey('top-search-shortcut'),
-                  searchHint: context.l10n.shellSearchProvider(
-                    _providerDisplayName,
+            if (showCollectionShellControls)
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    key: const ValueKey('collection-detail-shell-back'),
+                    tooltip: context.l10n.commonBack,
+                    onPressed: _returnFromTopRoute,
+                    icon: const Icon(Icons.arrow_back_rounded),
                   ),
-                  searchController: _topSearchController,
-                  onSearchChanged: null,
-                  onSearchSubmitted: _submitTopSearch,
                 ),
+              ),
+          ],
         ),
         titleSpacing: compactActions ? 8 : 16,
-        actions: [
-          AnimatedSwitcher(
-            key: const ValueKey('shell-account-actions-transition'),
-            duration: disableAnimations
-                ? Duration.zero
-                : const Duration(milliseconds: 220),
-            switchInCurve: Easing.emphasizedDecelerate,
-            switchOutCurve: Easing.emphasizedAccelerate,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.12, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            ),
-            child: settingsOpen
-                ? const SizedBox(
-                    key: ValueKey('settings-shell-actions'),
-                    width: 8,
-                  )
-                : Row(
-                    key: const ValueKey('music-shell-actions'),
-                    mainAxisSize: MainAxisSize.min,
-                    children: _primaryActions(
-                      compactActions: compactActions,
-                      showSettings: !wide,
-                      showAccount: !extendedSidebar,
-                      settingsSelected: false,
+        actions: extendedSidebar
+            ? [
+                SizedBox(
+                  key: ValueKey(
+                    settingsOpen
+                        ? 'settings-shell-actions'
+                        : 'music-shell-actions',
+                  ),
+                  width: 8,
+                ),
+              ]
+            : [
+                AnimatedSwitcher(
+                  key: const ValueKey('shell-account-actions-transition'),
+                  duration: disableAnimations
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  switchInCurve: Easing.emphasizedDecelerate,
+                  switchOutCurve: Easing.emphasizedAccelerate,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.12, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
                     ),
                   ),
-          ),
-        ],
+                  child: settingsOpen
+                      ? const SizedBox(
+                          key: ValueKey('settings-shell-actions'),
+                          width: 8,
+                        )
+                      : Row(
+                          key: const ValueKey('music-shell-actions'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: _primaryActions(
+                            compactActions: compactActions,
+                            showSettings: !wide,
+                            showAccount: !extendedSidebar,
+                            settingsSelected: false,
+                          ),
+                        ),
+                ),
+              ],
       );
       final musicSidebar = AnimatedBuilder(
         animation: _controller,
@@ -2985,6 +3040,7 @@ class _PrimaryShellTitle extends StatelessWidget {
     required this.onSearchChanged,
     required this.onSearchSubmitted,
     this.onSearchFocusChanged,
+    this.searchTrailing,
     super.key,
   });
 
@@ -2998,6 +3054,7 @@ class _PrimaryShellTitle extends StatelessWidget {
   final ValueChanged<String>? onSearchChanged;
   final ValueChanged<String> onSearchSubmitted;
   final ValueChanged<bool>? onSearchFocusChanged;
+  final Widget? searchTrailing;
 
   @override
   Widget build(BuildContext context) {
@@ -3052,6 +3109,28 @@ class _PrimaryShellTitle extends StatelessWidget {
             child: titleContent,
           );
     if (!showSearchShortcut) return titleTransition;
+    final search = Focus(
+      skipTraversal: true,
+      onFocusChange: onSearchFocusChanged,
+      child: SearchBar(
+        key: searchKey,
+        controller: searchController,
+        onChanged: onSearchChanged,
+        onSubmitted: onSearchSubmitted,
+        textInputAction: TextInputAction.search,
+        hintText: searchHint,
+        leading: const Icon(Icons.search_rounded),
+        elevation: const WidgetStatePropertyAll(0),
+        backgroundColor: WidgetStatePropertyAll(
+          Theme.of(context).colorScheme.surfaceContainerHigh,
+        ),
+        constraints: const BoxConstraints(minHeight: 40),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 16),
+        ),
+      ),
+    );
+    final trailing = searchTrailing;
     return Row(
       children: [
         titleTransition,
@@ -3070,28 +3149,21 @@ class _PrimaryShellTitle extends StatelessWidget {
             duration: transitionDuration,
             curve: Curves.easeInOutCubic,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 448),
-              child: Focus(
-                skipTraversal: true,
-                onFocusChange: onSearchFocusChanged,
-                child: SearchBar(
-                  key: searchKey,
-                  controller: searchController,
-                  onChanged: onSearchChanged,
-                  onSubmitted: onSearchSubmitted,
-                  textInputAction: TextInputAction.search,
-                  hintText: searchHint,
-                  leading: const Icon(Icons.search_rounded),
-                  elevation: const WidgetStatePropertyAll(0),
-                  backgroundColor: WidgetStatePropertyAll(
-                    Theme.of(context).colorScheme.surfaceContainerHigh,
-                  ),
-                  constraints: const BoxConstraints(minHeight: 40),
-                  padding: const WidgetStatePropertyAll(
-                    EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                ),
+              constraints: BoxConstraints(
+                maxWidth: searchTrailing == null ? 448 : 560,
               ),
+              child: trailing != null
+                  ? Row(
+                      children: [
+                        // Reserve the same width on the leading side so the
+                        // search field does not move when this action appears.
+                        const SizedBox(width: 56),
+                        Expanded(child: search),
+                        const SizedBox(width: 8),
+                        SizedBox.square(dimension: 48, child: trailing),
+                      ],
+                    )
+                  : search,
             ),
           ),
         ),

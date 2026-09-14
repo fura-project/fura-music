@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
+import 'package:webview_all/webview_all.dart';
 
 void main() {
   test('reports unavailable without creating or clearing a session', () async {
@@ -24,14 +25,22 @@ void main() {
     expect(runtime.sessions, isEmpty);
   });
 
-  test('allows only the bounded NetEase HTTPS top-level origin', () {
+  test('allows only the bounded NetEase HTTPS top-level origins', () {
     expect(
       isAllowedNeteaseOfficialNavigation('https://music.163.com/#/login'),
       isTrue,
     );
     expect(isAllowedNeteaseOfficialNavigation('about:blank'), isTrue);
     expect(
+      isAllowedNeteaseOfficialNavigation('https://y.music.163.com/m/login'),
+      isTrue,
+    );
+    expect(
       isAllowedNeteaseOfficialNavigation('http://music.163.com/#/login'),
+      isFalse,
+    );
+    expect(
+      isAllowedNeteaseOfficialNavigation('https://evil.y.music.163.com/login'),
       isFalse,
     );
     expect(
@@ -50,6 +59,63 @@ void main() {
     );
     expect(
       isAllowedNeteaseOfficialNavigation('https://music.163.com:8443/login'),
+      isFalse,
+    );
+  });
+
+  test('accepts WebView2 known cleanup limits only on Windows', () {
+    final result = WebViewDataClearingResult(
+      clearedDataTypes: const {
+        WebViewDataType.cookies,
+        WebViewDataType.cache,
+        WebViewDataType.localStorage,
+        WebViewDataType.indexedDb,
+        WebViewDataType.webSql,
+        WebViewDataType.cacheStorage,
+      },
+      unsupportedDataTypes: const {
+        WebViewDataType.sessionStorage,
+        WebViewDataType.serviceWorkers,
+      },
+    );
+
+    expect(
+      isOfficialLoginWebsiteDataCleared(
+        result,
+        platform: TargetPlatform.windows,
+      ),
+      isTrue,
+    );
+    expect(
+      isOfficialLoginWebsiteDataCleared(
+        result,
+        platform: TargetPlatform.android,
+      ),
+      isFalse,
+    );
+  });
+
+  test('does not hide WebView2 clearing failures or missing categories', () {
+    final failed = WebViewDataClearingResult(
+      clearedDataTypes: const {
+        WebViewDataType.cache,
+        WebViewDataType.localStorage,
+        WebViewDataType.indexedDb,
+        WebViewDataType.webSql,
+        WebViewDataType.cacheStorage,
+      },
+      unsupportedDataTypes: const {
+        WebViewDataType.sessionStorage,
+        WebViewDataType.serviceWorkers,
+      },
+      failures: const {WebViewDataType.cookies: 'native failure'},
+    );
+
+    expect(
+      isOfficialLoginWebsiteDataCleared(
+        failed,
+        platform: TargetPlatform.windows,
+      ),
       isFalse,
     );
   });

@@ -16,6 +16,17 @@ import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 
+@immutable
+class PlaylistDetailShellAction {
+  const PlaylistDetailShellAction({
+    required this.refreshing,
+    required this.onRefresh,
+  });
+
+  final bool refreshing;
+  final VoidCallback? onRefresh;
+}
+
 class PlaylistDetailPage extends StatefulWidget {
   const PlaylistDetailPage({
     required this.playlist,
@@ -26,6 +37,7 @@ class PlaylistDetailPage extends StatefulWidget {
     this.onOpenAlbum,
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
+    this.onShellActionChanged,
     this.embedded = false,
     super.key,
   });
@@ -38,6 +50,7 @@ class PlaylistDetailPage extends StatefulWidget {
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
+  final ValueChanged<PlaylistDetailShellAction>? onShellActionChanged;
   final bool embedded;
 
   @override
@@ -56,13 +69,42 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       _controller,
       widget.queuePlaybackController,
     ]);
+    _controller.addListener(_scheduleShellActionUpdate);
     unawaited(_controller.load());
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleShellActionUpdate();
+  }
+
+  @override
+  void didUpdateWidget(PlaylistDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onShellActionChanged != widget.onShellActionChanged) {
+      _scheduleShellActionUpdate();
+    }
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_scheduleShellActionUpdate);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _scheduleShellActionUpdate() {
+    if (widget.onShellActionChanged == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onShellActionChanged?.call(
+        PlaylistDetailShellAction(
+          refreshing: _controller.isRefreshing,
+          onRefresh: _controller.isLoading ? null : _controller.refresh,
+        ),
+      );
+    });
   }
 
   @override
@@ -272,6 +314,7 @@ class _PlaylistHeader extends StatelessWidget {
       backKey: const ValueKey('playlist-detail-back'),
       backTooltip: l10n.libraryBackToPlaylists,
       toolbarAction: IconButton(
+        key: const ValueKey('playlist-detail-header-refresh'),
         tooltip: refreshing
             ? l10n.libraryRefreshingPlaylist
             : l10n.libraryRefreshPlaylist,

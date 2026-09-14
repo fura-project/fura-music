@@ -223,6 +223,76 @@ async fn anonymous_cloud_search_includes_track_artwork() {
 }
 
 #[tokio::test]
+#[ignore = "explicit anonymous Cloud Search response-shape probe; exactly 1 HTTPS request"]
+async fn anonymous_cloud_search_query_shape() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Budget {
+        http: ShapeTransport,
+        calls: AtomicUsize,
+    }
+
+    impl Transport for Budget {
+        async fn send(&self, request: Request) -> Result<Response, Error> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) >= 1 {
+                return Err(Error::InputBound);
+            }
+            self.http.send(request).await
+        }
+    }
+
+    assert_eq!(
+        std::env::var("FURA_NETEASE_QUERY_SHAPE_PROBE").as_deref(),
+        Ok("1")
+    );
+    let query =
+        std::env::var("FURA_NETEASE_PUBLIC_QUERY").expect("FURA_NETEASE_PUBLIC_QUERY is required");
+    let client = NeteaseClient::new(Budget {
+        http: ShapeTransport(HttpsTransport::new().unwrap()),
+        calls: AtomicUsize::new(0),
+    });
+    let page = client
+        .search_tracks(&query, 0, 30)
+        .await
+        .expect("anonymous Cloud Search response should decode and validate");
+    assert!(!page.items.is_empty());
+}
+
+#[tokio::test]
+#[ignore = "explicit anonymous Peace of Mind lyric compatibility probe; exactly 1 HTTPS request"]
+async fn anonymous_peace_of_mind_lyrics() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Budget {
+        http: HttpsTransport,
+        calls: AtomicUsize,
+    }
+
+    impl Transport for Budget {
+        async fn send(&self, request: Request) -> Result<Response, Error> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) >= 1 {
+                return Err(Error::InputBound);
+            }
+            self.http.send(request).await
+        }
+    }
+
+    assert_eq!(
+        std::env::var("FURA_NETEASE_PEACE_LYRIC_PROBE").as_deref(),
+        Ok("1")
+    );
+    let client = NeteaseClient::new(Budget {
+        http: HttpsTransport::new().unwrap(),
+        calls: AtomicUsize::new(0),
+    });
+    let lyrics = client
+        .lyrics(1_447_233_166)
+        .await
+        .expect("Peace of Mind lyrics should decode safely");
+    assert!(!lyrics.lines.is_empty());
+}
+
+#[tokio::test]
 #[ignore = "explicit anonymous QR start/poll compatibility probe; exactly 2 HTTPS requests"]
 async fn anonymous_qr_start_and_waiting_state() {
     use netease_client::QrPoll;

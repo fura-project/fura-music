@@ -144,3 +144,38 @@ async fn display_only_zero_artist_identity_is_not_fabricated() {
     assert_eq!(page.items[0].artists[0].id, 0);
     assert_eq!(page.items[0].artists[0].name, "Fixture artist");
 }
+
+#[tokio::test]
+async fn track_search_accepts_only_the_exact_missing_album_placeholder() {
+    let mut missing_album = song();
+    missing_album["album"] = json!({
+        "id": 0,
+        "name": "",
+        "picUrl": "https://p1.music.126.net/placeholder.jpg"
+    });
+    let page = client(json!({
+        "code": 200,
+        "result": {"songCount": 1, "songs": [missing_album]}
+    }))
+    .search_tracks("神曼波", 0, 1)
+    .await
+    .unwrap();
+    assert!(!page.items[0].album.has_catalog_identity());
+
+    for album in [
+        json!({"id": 0, "name": "Unexpected"}),
+        json!({"id": 67, "name": ""}),
+    ] {
+        let mut malformed = song();
+        malformed["album"] = album;
+        assert!(matches!(
+            client(json!({
+                "code": 200,
+                "result": {"songCount": 1, "songs": [malformed]}
+            }))
+            .search_tracks("fixture", 0, 1)
+            .await,
+            Err(Error::ResponseShapeMismatch)
+        ));
+    }
+}

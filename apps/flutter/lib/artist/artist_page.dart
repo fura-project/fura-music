@@ -7,7 +7,7 @@ import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_controller.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
-import 'package:flutterustmusic/catalog/music_catalog_header.dart';
+import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
@@ -28,6 +28,7 @@ class ArtistPage extends StatefulWidget {
     this.albumGateway,
     this.onOpenAlbum,
     this.backTooltip,
+    this.onHeaderCollapsedChanged,
     this.embedded = false,
     super.key,
   });
@@ -40,6 +41,7 @@ class ArtistPage extends StatefulWidget {
   final ArtistAlbumGateway? albumGateway;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final String? backTooltip;
+  final ValueChanged<bool>? onHeaderCollapsedChanged;
   final bool embedded;
 
   @override
@@ -79,53 +81,56 @@ class _ArtistPageState extends State<ArtistPage> {
     final body = SafeArea(
       child: AnimatedBuilder(
         animation: _controllers,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= 820;
-            return Column(
-              children: [
-                _ArtistHeader(
-                  artist: widget.artist,
-                  total: _visibleTotal,
-                  section: _section,
-                  desktop: desktop,
+        builder: (context, _) => MusicCollectionDetailLayout(
+          key: ValueKey('artist-detail-layout-${widget.artist.opaqueId}'),
+          onHeaderCollapsedChanged: widget.onHeaderCollapsedChanged,
+          headerBuilder: (context, desktop, progress) => _ArtistHeader(
+            artist: widget.artist,
+            total: _visibleTotal,
+            section: _section,
+            desktop: desktop,
+            collapseProgress: progress,
+            embedded: widget.embedded,
+            onBack: widget.onBack,
+            backTooltip: backTooltip,
+          ),
+          bodyBuilder: (context, desktop) => Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  desktop ? 48 : 20,
+                  0,
+                  desktop ? 48 : 20,
+                  16,
                 ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    desktop ? 48 : 20,
-                    0,
-                    desktop ? 48 : 20,
-                    16,
-                  ),
-                  child: SegmentedButton<_ArtistSection>(
-                    key: const ValueKey('artist-sections'),
-                    segments: [
-                      ButtonSegment(
-                        value: _ArtistSection.tracks,
-                        icon: const Icon(Icons.music_note_rounded),
-                        label: Text(context.l10n.artistTracksSection),
-                      ),
-                      ButtonSegment(
-                        value: _ArtistSection.albums,
-                        icon: const Icon(Icons.album_rounded),
-                        label: Text(context.l10n.artistAlbumsSection),
-                      ),
-                    ],
-                    selected: {_section},
-                    onSelectionChanged: _selectSection,
-                  ),
+                child: SegmentedButton<_ArtistSection>(
+                  key: const ValueKey('artist-sections'),
+                  segments: [
+                    ButtonSegment(
+                      value: _ArtistSection.tracks,
+                      icon: const Icon(Icons.music_note_rounded),
+                      label: Text(context.l10n.artistTracksSection),
+                    ),
+                    ButtonSegment(
+                      value: _ArtistSection.albums,
+                      icon: const Icon(Icons.album_rounded),
+                      label: Text(context.l10n.artistAlbumsSection),
+                    ),
+                  ],
+                  selected: {_section},
+                  onSelectionChanged: _selectSection,
                 ),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: _section == _ArtistSection.tracks
-                        ? _trackBody(desktop)
-                        : _albumBody(desktop),
-                  ),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: _section == _ArtistSection.tracks
+                      ? _trackBody(desktop)
+                      : _albumBody(desktop),
                 ),
-              ],
-            );
-          },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -133,35 +138,7 @@ class _ArtistPageState extends State<ArtistPage> {
       return Material(
         key: const ValueKey('embedded-artist-detail'),
         color: Theme.of(context).scaffoldBackgroundColor,
-        child: SafeArea(
-          child: Column(
-            children: [
-              SizedBox(
-                height: kToolbarHeight,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        key: const ValueKey('artist-back'),
-                        tooltip: backTooltip,
-                        onPressed: widget.onBack,
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        context.l10n.artistType,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(child: body),
-            ],
-          ),
-        ),
+        child: body,
       );
     }
     return Scaffold(
@@ -319,35 +296,43 @@ class _ArtistHeader extends StatelessWidget {
     required this.total,
     required this.section,
     required this.desktop,
+    required this.collapseProgress,
+    required this.embedded,
+    required this.onBack,
+    required this.backTooltip,
   });
 
   final ArtistSummary artist;
   final int? total;
   final _ArtistSection section;
   final bool desktop;
+  final double collapseProgress;
+  final bool embedded;
+  final VoidCallback onBack;
+  final String backTooltip;
 
   @override
   Widget build(BuildContext context) {
-    final portrait = ArtistArtwork(
-      uri: artist.artworkUri,
-      iconSize: desktop ? 68 : 48,
-    );
-    return MusicCatalogHeader(
-      artwork: portrait,
+    final summary = total == null
+        ? builtInProviderDisplayName(artist.providerId, context.l10n)
+        : section == _ArtistSection.tracks
+        ? context.l10n.artistTrackCount(total!)
+        : context.l10n.artistAlbumCount(total!);
+    return MusicCollectionDetailHeader(
+      collapseProgress: collapseProgress,
+      desktop: desktop,
+      embedded: embedded,
+      artwork: ArtistArtwork(
+        uri: artist.artworkUri,
+        iconSize: desktop ? 68 : 48,
+      ),
       eyebrow: context.l10n.artistType,
       title: artist.name,
       titleKey: const ValueKey('artist-name'),
-      desktop: desktop,
-      children: [
-        if (total case final count?) ...[
-          const SizedBox(height: 8),
-          Text(
-            section == _ArtistSection.tracks
-                ? context.l10n.artistTrackCount(count)
-                : context.l10n.artistAlbumCount(count),
-          ),
-        ],
-      ],
+      summary: summary,
+      onBack: onBack,
+      backKey: const ValueKey('artist-back'),
+      backTooltip: backTooltip,
     );
   }
 }

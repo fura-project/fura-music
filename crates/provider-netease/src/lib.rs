@@ -79,7 +79,11 @@ fn playlist(p: Playlist) -> Result<PlaylistSummary, Error> {
     .with_track_count(Some(p.track_count)))
 }
 fn song(s: Song) -> Result<TrackSummary, Error> {
-    let album = album(s.album)?;
+    let album = if s.album.has_catalog_identity() {
+        Some(album(s.album)?)
+    } else {
+        None
+    };
     let names = s.artists.iter().map(|a| a.name.clone()).collect();
     let artists = s
         .artists
@@ -87,17 +91,21 @@ fn song(s: Song) -> Result<TrackSummary, Error> {
         .filter(|a| a.id > 0)
         .map(artist)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(TrackSummary::new(
+    let mut track = TrackSummary::new(
         TrackId::new(provider_id(), s.id.to_string()).map_err(|_| Error::ResponseShapeMismatch)?,
         s.name,
         names,
     )
     .map_err(|_| Error::ResponseShapeMismatch)?
-    .with_album_title(Some(album.title().into()))
-    .with_artwork_uri(album.artwork_uri().map(str::to_owned))
-    .with_album(Some(album))
     .with_artists(artists)
-    .with_duration_seconds(Some(s.duration / 1000)))
+    .with_duration_seconds(Some(s.duration / 1000));
+    if let Some(album) = album {
+        track = track
+            .with_album_title(Some(album.title().into()))
+            .with_artwork_uri(album.artwork_uri().map(str::to_owned))
+            .with_album(Some(album));
+    }
+    Ok(track)
 }
 fn search_error(e: Error) -> SearchError {
     match e {

@@ -326,8 +326,10 @@ class WebViewAllOfficialWebRuntime implements OfficialWebRuntime {
   }
 
   @override
-  Future<bool> clearAllWebsiteData() async =>
-      (await _dataManager.clearAllWebsiteData()).isComplete;
+  Future<bool> clearAllWebsiteData() async => isOfficialLoginWebsiteDataCleared(
+    await _dataManager.clearAllWebsiteData(),
+    platform: defaultTargetPlatform,
+  );
 
   @override
   Future<OfficialWebViewSession> createSession({
@@ -413,10 +415,42 @@ bool isAllowedNeteaseOfficialNavigation(String rawUrl) {
   final uri = Uri.tryParse(rawUrl);
   if (uri == null) return false;
   if (uri.scheme == 'about' && uri.path == 'blank') return true;
+  const allowedHosts = <String>{'music.163.com', 'y.music.163.com'};
   return uri.scheme == 'https' &&
-      uri.host == 'music.163.com' &&
+      allowedHosts.contains(uri.host) &&
       !uri.hasPort &&
       uri.userInfo.isEmpty;
+}
+
+/// Whether clearing the WebView store is sufficient for a short-lived login.
+///
+/// WebView2 reports session storage and service-worker registration as
+/// unsupported even after it successfully clears every cookie and persistent
+/// web storage/cache category. Session storage is destroyed with the owned
+/// WebView session. No other unsupported category or native clearing failure
+/// is accepted.
+bool isOfficialLoginWebsiteDataCleared(
+  WebViewDataClearingResult result, {
+  required TargetPlatform platform,
+}) {
+  if (result.isComplete) return true;
+  if (platform != TargetPlatform.windows || result.failures.isNotEmpty) {
+    return false;
+  }
+  const webView2Unsupported = <WebViewDataType>{
+    WebViewDataType.sessionStorage,
+    WebViewDataType.serviceWorkers,
+  };
+  const requiredCleared = <WebViewDataType>{
+    WebViewDataType.cookies,
+    WebViewDataType.cache,
+    WebViewDataType.localStorage,
+    WebViewDataType.indexedDb,
+    WebViewDataType.webSql,
+    WebViewDataType.cacheStorage,
+  };
+  return webView2Unsupported.containsAll(result.unsupportedDataTypes) &&
+      result.clearedDataTypes.containsAll(requiredCleared);
 }
 
 Uint8List? _minimalCredentialCandidate(List<OfficialWebCookie> cookies) {

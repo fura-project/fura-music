@@ -768,36 +768,37 @@ impl<T: Transport> NeteaseProvider<T> {
                 return Err(Error::InputBound.into());
             }
         }
-        let ids = self.auth.run(g, self.client.liked_ids(&c, user)).await?;
-        let total = u32::try_from(ids.len()).map_err(|_| Error::ResponseBound)?;
-        let selected: Vec<_> = ids
-            .into_iter()
-            .skip(offset as usize)
-            .take(size as usize)
-            .collect();
-        let next = offset + u32::try_from(selected.len()).map_err(|_| Error::ResponseBound)?;
-        let songs = if selected.is_empty() {
+        // `/song/like/get` is a membership set and does not define display
+        // order. The actual Liked playlist's `trackIds` is the canonical
+        // ordered identity table, just as it is for every other playlist.
+        let selection = self
+            .auth
+            .run(
+                g,
+                self.client
+                    .authenticated_playlist_selection(&c, expected_playlist, offset, size),
+            )
+            .await?;
+        let songs = if selection.ids().is_empty() {
             vec![]
         } else {
             self.auth
-                .run(g, self.client.authenticated_songs(&c, &selected))
+                .run(g, self.client.authenticated_songs(&c, selection.ids()))
                 .await?
         };
-        let mut lookup: std::collections::HashMap<_, _> =
-            songs.into_iter().map(|s| (s.id, s)).collect();
-        let tracks = selected
-            .iter()
-            .filter_map(|id| lookup.remove(id))
+        self.auth.current(g)?;
+        let page = selection.with_songs(songs).map_err(Failure::Client)?;
+        let tracks = page
+            .tracks
+            .into_iter()
             .map(song)
             .collect::<Result<Vec<_>, _>>()?;
-        let omitted =
-            next - offset - u32::try_from(tracks.len()).map_err(|_| Error::ResponseBound)?;
         Ok(PlaylistTracksPage::new_with_cursor(
-            offset,
-            next,
-            total,
-            next < total,
-            omitted,
+            page.offset,
+            page.next,
+            page.total,
+            page.next < page.total,
+            page.omitted,
             tracks,
         ))
     }

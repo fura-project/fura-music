@@ -1,15 +1,70 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: MIXED
+  work_domain: UI
   state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
-  active_workstream: APPEARANCE_DYNAMIC_COLOR
-  current_task: MONET_AND_BRAND_COLOR_MACHINE_CANDIDATE_COMPLETE
-  next_action: HUMAN_VERIFY_ANDROID_WALLPAPER_COLOR_AND_VISUAL_RHYTHM
+  active_workstream: RESPONSIVE_SHELL_AND_COLLECTION_HEADERS
+  current_task: LARGE_SHELL_SETTINGS_AND_ARTIST_COLLAPSE_MACHINE_FIX_COMPLETE
+  next_action: HUMAN_REVIEW_LARGE_SCREEN_MOTION_AND_COLLECTION_COLLAPSE
 ---
 
 # Current State
+
+- **2026-09-14 responsive Shell, Settings motion and Artist collapse:** the
+  large-screen top bar is now one persistent Shell-owned surface across Home
+  and Settings, so its centered search field keeps the same geometry instead
+  of entering and leaving with the page transition. Settings peer sections use
+  a sequential fade-through that unmounts the outgoing content before mounting
+  the incoming content, eliminating the formerly overlapping transparent
+  pages. Playlist, Album, Ranking and Artist details suppress the redundant
+  Shell title after collapse; Back is overlaid without moving the search field,
+  and Playlist Refresh moves to a separate 48 dp target beside that field while
+  retaining its real loading/disabled state. Artist Tracks and Albums now use
+  the shared collection detail layout, continuously reducing artwork from 156
+  to 64 px and tightening metadata as the active list scrolls. An embedded
+  Artist surface now owns the Material needed by reusable track-row ink
+  interactions. Direct Dart analysis and all 598 Flutter tests pass. Desktop
+  Settings, expanded/collapsed Artist and desktop-collapsed/mobile Playlist
+  review artifacts were rendered without overflow; final motion feel and
+  aesthetics remain `HUMAN_REVIEW`. The earlier uncommitted NetEase
+  compatibility work remains intact; build caches were retained. No commit or
+  push.
+
+- **2026-09-14 NetEase official-login and catalog compatibility repair:** four
+  independent regressions were reproduced at their owning boundaries and fixed
+  without replacing the existing compatibility paths. Windows WebView2 did
+  clear cookies and persistent website data, but `webview_all 1.4.1` reports
+  session storage and service workers as unsupported, so Fura's former
+  `isComplete` check always discarded the candidate credential; the Windows
+  policy now accepts only that exact unsupported pair while still requiring
+  every cookie/persistent-data category to clear and every native operation to
+  succeed. Android's mobile user agent causes the official
+  `music.163.com/#/login` page to redirect its main frame to the exact official
+  `https://y.music.163.com/m/login` host; that host is now allowed without
+  admitting subdomains, non-HTTPS URLs, ports or user-info. The public search
+  result for `神曼波` contains one otherwise-valid Track whose embedded Album is
+  the exact upstream absent-identity placeholder (`id=0`, blank name); Track
+  decoding and Provider mapping now retain that Track without inventing an
+  Album, while Album-detail decoding and malformed partial identities remain
+  strict. `Peace of Mind` by AK / Liam Thomas returns valid lyric metadata rows
+  with the current `[00:00.00-1]` marker; the lyric parser now accepts only that
+  bounded fractional suffix and keeps every prior timestamp/parser path. The
+  account Liked view now obtains its display order from the account's actual
+  special-type Liked playlist `trackIds` and reorders song-detail results to
+  match, instead of presenting the unordered membership-ID endpoint as list
+  order. Focused Windows/Android policy, malformed search, exact lyric and
+  ordered-Liked regressions pass; bounded one-request anonymous live probes for
+  `神曼波` Search and the exact `Peace of Mind` lyric both pass. Full Rust
+  workspace tests, strict all-target Clippy, Rust/Dart formatting, direct Dart
+  analysis, all 597 Flutter tests and Android ARM64 Debug pass. The generic
+  multi-ABI Android command correctly stops at the repository's system-Cargo
+  single-target guard; the supported explicit ARM64 command succeeds. Actual
+  Windows credential capture/cleanup, Android visible page/login completion and
+  same-account Liked order remain `HUMAN_REVIEW`. `flutter analyze` still exits
+  before code diagnostics because its LSP initialization input is truncated;
+  direct `dart analyze .` is clean. Build caches were retained. Changes remain
+  uncommitted and unpushed.
 
 - **2026-09-14 Monet and brand-impression color candidate:** Appearance now
   separates brightness from the Material 3 palette source. The existing static

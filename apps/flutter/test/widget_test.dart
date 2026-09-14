@@ -3432,7 +3432,7 @@ void main() {
       expect(collapsedHeadingOpacities, contains(0));
       expect(
         find.descendant(
-          of: find.byKey(const ValueKey('music-shell-top-bar')),
+          of: find.byKey(const ValueKey('primary-shell-top-bar')),
           matching: find.text('Discover'),
         ),
         findsOneWidget,
@@ -5691,22 +5691,21 @@ void main() {
       title: 'Shell playlist',
       trackCount: 1,
     );
-    final detailGateway = _WidgetDetailGateway([
-      PlaylistTrackPageResult(
-        total: 12,
-        tracks: List.generate(
-          12,
-          (index) => PlaylistTrackSummary(
-            providerId: 'qq-music',
-            opaqueId: 'track:shell-playlist:$index',
-            title: index == 0 ? 'Shell track' : 'Shell track ${index + 1}',
-            artistNames: const ['Shell artist'],
-            albumTitle: 'Shell album ${index + 1}',
-            durationSeconds: 185,
-          ),
+    final detailResult = PlaylistTrackPageResult(
+      total: 12,
+      tracks: List.generate(
+        12,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'track:shell-playlist:$index',
+          title: index == 0 ? 'Shell track' : 'Shell track ${index + 1}',
+          artistNames: const ['Shell artist'],
+          albumTitle: 'Shell album ${index + 1}',
+          durationSeconds: 185,
         ),
       ),
-    ]);
+    );
+    final detailGateway = _WidgetDetailGateway([detailResult, detailResult]);
 
     await tester.pumpWidget(
       MusicApp(
@@ -5783,6 +5782,9 @@ void main() {
     final expandedArtwork = tester.getSize(
       find.byKey(const ValueKey('collection-detail-artwork')),
     );
+    final expandedSearchCenter = tester.getCenter(
+      find.byKey(const ValueKey('top-search-shortcut')),
+    );
     final detailList = find.byKey(
       const PageStorageKey<String>('playlist-detail-track-list'),
     );
@@ -5800,12 +5802,25 @@ void main() {
     expect(collapsedArtwork.width, lessThan(100));
     expect(
       find.byKey(const ValueKey('shell-top-bar-title-Shell playlist')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('collection-detail-shell-back')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('collection-detail-shell-refresh')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('top-search-shortcut'))),
+      expandedSearchCenter,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('collection-detail-shell-refresh')),
+    );
+    await tester.pumpAndSettle();
+    expect(detailGateway.requests, hasLength(2));
     if (captureReviewImages) {
       await expectLater(
         find.byType(MusicApp),
@@ -5839,7 +5854,7 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
-    expect(detailGateway.requests, hasLength(1));
+    expect(detailGateway.requests, hasLength(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -7848,6 +7863,9 @@ void main() {
         findsNothing,
       );
       expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
+      final homeSearchCenter = tester.getCenter(
+        find.byKey(const ValueKey('top-search-shortcut')),
+      );
 
       await tester.tap(signOut);
       await tester.pumpAndSettle();
@@ -7892,10 +7910,15 @@ void main() {
           ),
         );
       }
-      expect(find.byKey(const ValueKey('music-shell-top-bar')), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('settings-shell-top-bar')),
+        find.byKey(const ValueKey('primary-shell-top-bar')),
         findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
+      expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+      expect(
+        tester.getCenter(find.byKey(const ValueKey('settings-search'))),
+        homeSearchCenter,
       );
       expect(find.byKey(const ValueKey('sign-out')), findsOneWidget);
       await tester.pumpAndSettle();
@@ -7956,11 +7979,50 @@ void main() {
       }
 
       await tester.tap(find.byKey(const ValueKey('settings-nav-musicService')));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('settings-appearance-section')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-music-service-section')),
+        findsNothing,
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(
+        find.byKey(const ValueKey('settings-appearance-section')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-music-service-section')),
+        findsNothing,
+      );
+      if (captureReviewImage) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-settings-section-outgoing.png'),
+          ),
+        );
+      }
+      await tester.pump(const Duration(milliseconds: 32));
       expect(
         find.byKey(const ValueKey('settings-music-service-section')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('settings-appearance-section')),
+        findsNothing,
+      );
+      if (captureReviewImage) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-settings-section-incoming.png'),
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-provider-qq-music')),
         findsOneWidget,
@@ -8452,11 +8514,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('settings-shell-top-bar')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('music-shell-top-bar')), findsNothing);
+    expect(find.byKey(const ValueKey('primary-shell-top-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+    expect(find.byKey(const ValueKey('top-search-shortcut')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
     await tester.pump();
@@ -8465,8 +8525,9 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('desktop-music-sidebar')), findsOneWidget);
-    expect(find.byKey(const ValueKey('settings-shell-top-bar')), findsNothing);
-    expect(find.byKey(const ValueKey('music-shell-top-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('primary-shell-top-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-search')), findsNothing);
+    expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
