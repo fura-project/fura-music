@@ -14,6 +14,7 @@ import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 import 'package:flutterustmusic/authentication/qq_music_media_credential_cleanup.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
@@ -413,8 +414,9 @@ class _LoginPageState extends State<LoginPage> {
   void _onAuthenticationChanged() {
     final stage = _controller.stage;
     final shouldExplainSignOutCleanup =
-        stage == LoginStage.signOutStorageCleanupFailed &&
-        _previousStage != LoginStage.signOutStorageCleanupFailed;
+        (stage == LoginStage.signOutStorageCleanupFailed ||
+            stage == LoginStage.signOutBrowserCleanupFailed) &&
+        stage != _previousStage;
     _previousStage = stage;
     if (shouldExplainSignOutCleanup) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -511,7 +513,8 @@ class _AuthenticationDialogState extends State<_AuthenticationDialog> {
   void _closeAfterAuthentication() {
     final stage = widget.controller.stage;
     final completedStorageCleanup =
-        _previousStage == LoginStage.signOutStorageCleanupFailed &&
+        (_previousStage == LoginStage.signOutStorageCleanupFailed ||
+            _previousStage == LoginStage.signOutBrowserCleanupFailed) &&
         stage == LoginStage.idle;
     _previousStage = stage;
     if ((stage != LoginStage.authenticated && !completedStorageCleanup) ||
@@ -526,37 +529,196 @@ class _AuthenticationDialogState extends State<_AuthenticationDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: false,
-    child: Dialog(
-      key: const ValueKey('authentication-dialog'),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: widget.controller.supportsDesktopQuickLogin ? 720 : 440,
-          maxHeight: 720,
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.controller,
+    builder: (context, _) {
+      if (widget.controller.stage == LoginStage.officialWebLogin &&
+          widget.controller.officialWebPresentationListenable != null) {
+        return _OfficialWebAuthenticationDialog(
+          controller: widget.controller,
+          onClose: widget.onClose,
+        );
+      }
+      return PopScope(
+        canPop: false,
+        child: Dialog(
+          key: const ValueKey('authentication-dialog'),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: widget.controller.supportsDesktopQuickLogin ? 720 : 440,
+              maxHeight: 720,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      key: const ValueKey('close-authentication-dialog'),
+                      onPressed: widget.onClose,
+                      tooltip: context.l10n.authCloseTooltip,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ),
+                  _AuthenticationPanel(controller: widget.controller),
+                ],
+              ),
+            ),
+          ),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+      );
+    },
+  );
+}
+
+class _OfficialWebAuthenticationDialog extends StatelessWidget {
+  const _OfficialWebAuthenticationDialog({
+    required this.controller,
+    required this.onClose,
+  });
+
+  final LoginController controller;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final presentation = controller.officialWebPresentationListenable!;
+    final colors = Theme.of(context).colorScheme;
+    return PopScope(
+      canPop: false,
+      child: Dialog.fullscreen(
+        key: const ValueKey('authentication-dialog'),
+        child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  key: const ValueKey('close-authentication-dialog'),
-                  onPressed: widget.onClose,
-                  tooltip: context.l10n.authCloseTooltip,
-                  icon: const Icon(Icons.close_rounded),
+              Material(
+                color: colors.surfaceContainerLow,
+                child: SizedBox(
+                  height: 64,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        key: const ValueKey('close-authentication-dialog'),
+                        onPressed: onClose,
+                        tooltip: context.l10n.authCloseTooltip,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.l10n.authOfficialWebTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(end: 16),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified_user_outlined,
+                              size: 20,
+                              color: colors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'music.163.com',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(color: colors.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              _AuthenticationPanel(controller: widget.controller),
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: presentation,
+                  builder: (context, _) {
+                    final view = controller.officialWebLoginView;
+                    final stage = controller.officialWebPresentationStage;
+                    if (view != null &&
+                        stage ==
+                            OfficialWebLoginPresentationStage
+                                .waitingForSignIn) {
+                      return Column(
+                        children: [
+                          Material(
+                            color: colors.secondaryContainer,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline_rounded,
+                                    color: colors.onSecondaryContainer,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      context.l10n.authOfficialWebWaiting,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: colors.onSecondaryContainer,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: ColoredBox(
+                              key: const ValueKey('official-web-login-surface'),
+                              color: colors.surface,
+                              child: view,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    final verifying =
+                        stage == OfficialWebLoginPresentationStage.finishing;
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 20),
+                            Text(
+                              verifying
+                                  ? context.l10n.authOfficialWebVerifying
+                                  : context.l10n.authOfficialWebLoading,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _AuthenticationPanel extends StatelessWidget {
@@ -626,7 +788,8 @@ class _AuthenticationContent extends StatelessWidget {
         stage == LoginStage.restoreError ||
         stage == LoginStage.credentialRejected ||
         stage == LoginStage.verificationError ||
-        stage == LoginStage.signOutStorageCleanupFailed) {
+        stage == LoginStage.signOutStorageCleanupFailed ||
+        stage == LoginStage.signOutBrowserCleanupFailed) {
       return _restoreTerminal(context);
     }
     if (stage == LoginStage.starting) return _starting(context);
@@ -818,6 +981,10 @@ class _AuthenticationContent extends StatelessWidget {
         context.l10n.authOfficialWebInvalidCredential,
       OfficialWebAuthenticationFailure.alreadyRunning =>
         context.l10n.authOfficialWebAlreadyRunning,
+      OfficialWebAuthenticationFailure.timedOut =>
+        context.l10n.authOfficialWebTimedOut,
+      OfficialWebAuthenticationFailure.cleanupFailed =>
+        context.l10n.authOfficialWebCleanupFailed,
       OfficialWebAuthenticationFailure.cancelled ||
       OfficialWebAuthenticationFailure.replaced ||
       OfficialWebAuthenticationFailure.coreUnavailable ||
@@ -859,6 +1026,10 @@ class _AuthenticationContent extends StatelessWidget {
         l10n.authSignedOutStorageTitle,
         l10n.authSignedOutStorageDetail(providerName),
       ),
+      LoginStage.signOutBrowserCleanupFailed => (
+        l10n.authSignedOutWebCleanupTitle,
+        l10n.authSignedOutWebCleanupDetail(providerName),
+      ),
       LoginStage.credentialRejected ||
       LoginStage.verificationError => _verificationTerminalCopy(
         controller.credentialVerificationResult,
@@ -899,7 +1070,8 @@ class _AuthenticationContent extends StatelessWidget {
         const SizedBox(height: 24),
         _announcedAuthenticationMessage(context, title, detail),
         const SizedBox(height: 24),
-        if (controller.stage == LoginStage.signOutStorageCleanupFailed)
+        if (controller.stage == LoginStage.signOutStorageCleanupFailed ||
+            controller.stage == LoginStage.signOutBrowserCleanupFailed)
           FilledButton.tonal(
             key: const ValueKey('retry-sign-out-storage-cleanup'),
             onPressed: controller.canRetrySignOut

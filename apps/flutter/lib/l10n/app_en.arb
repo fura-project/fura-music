@@ -169,6 +169,21 @@
   "authOfficialWebInvalidCredential": "The official window did not return a session Fura can validate.",
   "authOfficialWebAlreadyRunning": "An official NetEase login window is already open.",
   "authOfficialWebFailed": "The official login window could not complete safely. No session was saved.",
+  "authOfficialWebLoading": "Loading the official NetEase sign-in page",
+  "authOfficialWebWaiting": "Complete sign-in on the official page. Fura will verify the resulting session before saving it.",
+  "authOfficialWebVerifying": "Verifying your NetEase account",
+  "authOfficialWebTimedOut": "The official login session timed out. Start a new attempt.",
+  "authOfficialWebCleanupFailed": "Fura could not clear the temporary website session. No credential was saved.",
+  "authSignedOutWebCleanupTitle": "Signed out, but website cleanup needs attention",
+  "authSignedOutWebCleanupDetail": "The {providerName} account and saved session were removed, but Fura could not confirm that the temporary website data was cleared.",
+  "@authSignedOutWebCleanupDetail": {
+    "description": "Explains that provider and vault sign-out succeeded while temporary official-login website data cleanup could not be confirmed.",
+    "placeholders": {
+      "providerName": {
+        "type": "String"
+      }
+    }
+  },
   "authPhoneCodeTitle": "Sign in with a phone code",
   "authPhoneCodeDetail": "Request a one-time code for the phone number linked to NetEase Cloud Music.",
   "authCountryCode": "Country code",

@@ -993,6 +993,48 @@ abstract class AppLocalizations {
   /// **'The official login window could not complete safely. No session was saved.'**
   String get authOfficialWebFailed;
 
+  /// No description provided for @authOfficialWebLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the official NetEase sign-in page'**
+  String get authOfficialWebLoading;
+
+  /// No description provided for @authOfficialWebWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete sign-in on the official page. Fura will verify the resulting session before saving it.'**
+  String get authOfficialWebWaiting;
+
+  /// No description provided for @authOfficialWebVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying your NetEase account'**
+  String get authOfficialWebVerifying;
+
+  /// No description provided for @authOfficialWebTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'The official login session timed out. Start a new attempt.'**
+  String get authOfficialWebTimedOut;
+
+  /// No description provided for @authOfficialWebCleanupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Fura could not clear the temporary website session. No credential was saved.'**
+  String get authOfficialWebCleanupFailed;
+
+  /// No description provided for @authSignedOutWebCleanupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out, but website cleanup needs attention'**
+  String get authSignedOutWebCleanupTitle;
+
+  /// No description provided for @authSignedOutWebCleanupDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'The {providerName} account and saved session were removed, but Fura could not confirm that the temporary website data was cleared.'**
+  String authSignedOutWebCleanupDetail(String providerName);
+
   /// No description provided for @authPhoneCodeTitle.
   ///
   /// In en, this message translates to:

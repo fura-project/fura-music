@@ -149,6 +149,21 @@
   "authOfficialWebInvalidCredential": "官方窗口未返回 Fura 可以验证的会话。",
   "authOfficialWebAlreadyRunning": "已有一个网易云音乐官方登录窗口打开。",
   "authOfficialWebFailed": "官方登录窗口无法安全完成，未保存任何会话。",
+  "authOfficialWebLoading": "正在加载网易云音乐官方登录页",
+  "authOfficialWebWaiting": "请在官方页面完成登录。Fura 会先验证登录结果，再保存会话。",
+  "authOfficialWebVerifying": "正在验证网易云音乐账号",
+  "authOfficialWebTimedOut": "官方登录会话已超时，请重新开始。",
+  "authOfficialWebCleanupFailed": "Fura 无法清理临时网页会话，未保存任何凭据。",
+  "authSignedOutWebCleanupTitle": "已退出登录，但网页数据清理需要处理",
+  "authSignedOutWebCleanupDetail": "已移除{providerName}账号和已保存会话，但 Fura 无法确认临时网页数据已清理。",
+  "@authSignedOutWebCleanupDetail": {
+    "description": "说明账号和本地会话已移除，但官方登录页的临时网页数据清理尚未确认。",
+    "placeholders": {
+      "providerName": {
+        "type": "String"
+      }
+    }
+  },
   "authPhoneCodeTitle": "使用手机验证码登录",
   "authPhoneCodeDetail": "向网易云音乐账号绑定的手机号发送一次性验证码。",
   "authCountryCode": "国家或地区代码",

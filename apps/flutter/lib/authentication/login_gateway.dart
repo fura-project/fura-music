@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
@@ -75,6 +76,8 @@ enum OfficialWebAuthenticationFailure {
   cancelled,
   alreadyRunning,
   invalidCredential,
+  timedOut,
+  cleanupFailed,
   rejected,
   network,
   serviceUnavailable,
@@ -124,6 +127,7 @@ enum CredentialVerificationResult {
 enum CredentialSignOutResult {
   signedOut,
   storageCleanupFailed,
+  browserCleanupFailed,
   coreUnavailable,
 }
 
@@ -262,6 +266,16 @@ abstract interface class SmsAuthenticationGateway {
 abstract interface class OfficialWebAuthenticationGateway {
   bool get supportsOfficialWebLogin;
   OfficialWebAuthenticationOperation beginOfficialWebLogin();
+}
+
+/// Optional visible presentation owned by an official-Web login broker.
+///
+/// The controller and UI observe this boundary without passing a BuildContext
+/// into authentication or credential layers.
+abstract interface class OfficialWebAuthenticationPresentation {
+  Listenable get officialWebPresentationListenable;
+  OfficialWebLoginPresentationStage get officialWebPresentationStage;
+  Widget? get officialWebLoginView;
 }
 
 abstract interface class OfficialWebAuthenticationOperation {
@@ -404,10 +418,12 @@ class RustNeteaseAuthenticationGateway
         ProviderAuthenticationPresentation,
         QrLoginPollingPolicy,
         SmsAuthenticationGateway,
-        OfficialWebAuthenticationGateway {
+        OfficialWebAuthenticationGateway,
+        OfficialWebAuthenticationPresentation {
   RustNeteaseAuthenticationGateway({
     CredentialVault? credentialVault,
     OfficialWebLoginBroker? officialWebLoginBroker,
+    CredentialSignOutCore? credentialSignOutCore,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ??
              PlatformCredentialVault(
@@ -415,10 +431,13 @@ class RustNeteaseAuthenticationGateway
              ),
        ),
        _officialWebLoginBroker =
-           officialWebLoginBroker ?? PlatformNeteaseOfficialWebLoginBroker();
+           officialWebLoginBroker ?? PlatformNeteaseOfficialWebLoginBroker(),
+       _credentialSignOutCore =
+           credentialSignOutCore ?? netease_bridge.signOutNetease;
 
   final CredentialVault _credentialVault;
   final OfficialWebLoginBroker _officialWebLoginBroker;
+  final CredentialSignOutCore _credentialSignOutCore;
 
   @override
   String get providerId => 'netease-cloud-music';
@@ -464,6 +483,17 @@ class RustNeteaseAuthenticationGateway
 
   @override
   bool get supportsOfficialWebLogin => _officialWebLoginBroker.isSupported;
+
+  @override
+  Listenable get officialWebPresentationListenable =>
+      _officialWebLoginBroker.presentationListenable;
+
+  @override
+  OfficialWebLoginPresentationStage get officialWebPresentationStage =>
+      _officialWebLoginBroker.presentationStage;
+
+  @override
+  Widget? get officialWebLoginView => _officialWebLoginBroker.activeView;
 
   @override
   OfficialWebAuthenticationOperation beginOfficialWebLogin() =>
@@ -514,8 +544,11 @@ class RustNeteaseAuthenticationGateway
 
   @override
   Future<CredentialSignOutResult> signOut() async {
+    _officialWebLoginBroker.cancel();
+    final browserCleanupSucceeded = await _officialWebLoginBroker
+        .clearWebsiteData();
     try {
-      if (!netease_bridge.signOutNetease()) {
+      if (!_credentialSignOutCore()) {
         return CredentialSignOutResult.coreUnavailable;
       }
     } on Object {
@@ -523,7 +556,9 @@ class RustNeteaseAuthenticationGateway
     }
     try {
       await _credentialVault.delete();
-      return CredentialSignOutResult.signedOut;
+      return browserCleanupSucceeded
+          ? CredentialSignOutResult.signedOut
+          : CredentialSignOutResult.browserCleanupFailed;
     } on Object {
       return CredentialSignOutResult.storageCleanupFailed;
     }
@@ -560,6 +595,12 @@ class _RustNeteaseOfficialWebAuthenticationOperation
             OfficialWebAuthenticationFailure.unavailable,
           OfficialWebLoginFailure.alreadyRunning =>
             OfficialWebAuthenticationFailure.alreadyRunning,
+          OfficialWebLoginFailure.invalidCredential =>
+            OfficialWebAuthenticationFailure.invalidCredential,
+          OfficialWebLoginFailure.timedOut =>
+            OfficialWebAuthenticationFailure.timedOut,
+          OfficialWebLoginFailure.cleanupFailed =>
+            OfficialWebAuthenticationFailure.cleanupFailed,
           OfficialWebLoginFailure.failed =>
             OfficialWebAuthenticationFailure.coreUnavailable,
         },

@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/authentication/netease_external_login.dart';
+import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 
 typedef ExternalLoginUriLauncher = Future<bool> Function(Uri uri);
 
@@ -26,6 +28,7 @@ enum LoginStage {
   refused,
   timedOut,
   error,
+  signOutBrowserCleanupFailed,
 }
 
 enum CredentialSaveState { none, saving, saved, failed }
@@ -143,6 +146,20 @@ class LoginController extends ChangeNotifier {
   SmsAuthenticationFailure? get smsFailure => _smsFailure;
   OfficialWebAuthenticationFailure? get officialWebFailure =>
       _officialWebFailure;
+  Listenable? get officialWebPresentationListenable =>
+      _gateway is OfficialWebAuthenticationPresentation
+      ? (_gateway as OfficialWebAuthenticationPresentation)
+            .officialWebPresentationListenable
+      : null;
+  OfficialWebLoginPresentationStage get officialWebPresentationStage =>
+      _gateway is OfficialWebAuthenticationPresentation
+      ? (_gateway as OfficialWebAuthenticationPresentation)
+            .officialWebPresentationStage
+      : OfficialWebLoginPresentationStage.idle;
+  Widget? get officialWebLoginView =>
+      _gateway is OfficialWebAuthenticationPresentation
+      ? (_gateway as OfficialWebAuthenticationPresentation).officialWebLoginView
+      : null;
   bool get smsCodeRequested => _smsCodeRequested;
   bool get supportsSmsLogin => _gateway is SmsAuthenticationGateway;
   bool get supportsOfficialWebLogin =>
@@ -190,7 +207,9 @@ class LoginController extends ChangeNotifier {
   bool get isSigningOut => _signOutOperation != null;
 
   bool get canRetrySignOut =>
-      _stage == LoginStage.signOutStorageCleanupFailed && !isSigningOut;
+      (_stage == LoginStage.signOutStorageCleanupFailed ||
+          _stage == LoginStage.signOutBrowserCleanupFailed) &&
+      !isSigningOut;
 
   /// Restores only the provider that has just become the active UI context.
   ///
@@ -253,7 +272,8 @@ class LoginController extends ChangeNotifier {
 
     final previousStage = _stage;
     if (previousStage != LoginStage.authenticated &&
-        previousStage != LoginStage.signOutStorageCleanupFailed) {
+        previousStage != LoginStage.signOutStorageCleanupFailed &&
+        previousStage != LoginStage.signOutBrowserCleanupFailed) {
       return Future.value(CredentialSignOutResult.coreUnavailable);
     }
 
@@ -297,9 +317,14 @@ class LoginController extends ChangeNotifier {
         _credentialSaveState = CredentialSaveState.none;
         _credentialRestoreResult = CredentialRestoreResult.signedOut;
         _credentialVerificationResult = null;
-        _stage = result == CredentialSignOutResult.signedOut
-            ? LoginStage.idle
-            : LoginStage.signOutStorageCleanupFailed;
+        _stage = switch (result) {
+          CredentialSignOutResult.signedOut => LoginStage.idle,
+          CredentialSignOutResult.storageCleanupFailed =>
+            LoginStage.signOutStorageCleanupFailed,
+          CredentialSignOutResult.browserCleanupFailed =>
+            LoginStage.signOutBrowserCleanupFailed,
+          CredentialSignOutResult.coreUnavailable => previousStage,
+        };
       }
     }
 

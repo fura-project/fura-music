@@ -564,6 +564,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'The official login window could not complete safely. No session was saved.';
 
   @override
+  String get authOfficialWebLoading =>
+      'Loading the official NetEase sign-in page';
+
+  @override
+  String get authOfficialWebWaiting =>
+      'Complete sign-in on the official page. Fura will verify the resulting session before saving it.';
+
+  @override
+  String get authOfficialWebVerifying => 'Verifying your NetEase account';
+
+  @override
+  String get authOfficialWebTimedOut =>
+      'The official login session timed out. Start a new attempt.';
+
+  @override
+  String get authOfficialWebCleanupFailed =>
+      'Fura could not clear the temporary website session. No credential was saved.';
+
+  @override
+  String get authSignedOutWebCleanupTitle =>
+      'Signed out, but website cleanup needs attention';
+
+  @override
+  String authSignedOutWebCleanupDetail(String providerName) {
+    return 'The $providerName account and saved session were removed, but Fura could not confirm that the temporary website data was cleared.';
+  }
+
+  @override
   String get authPhoneCodeTitle => 'Sign in with a phone code';
 
   @override

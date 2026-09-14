@@ -514,6 +514,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authOfficialWebFailed => '官方登录窗口无法安全完成，未保存任何会话。';
 
   @override
+  String get authOfficialWebLoading => '正在加载网易云音乐官方登录页';
+
+  @override
+  String get authOfficialWebWaiting => '请在官方页面完成登录。Fura 会先验证登录结果，再保存会话。';
+
+  @override
+  String get authOfficialWebVerifying => '正在验证网易云音乐账号';
+
+  @override
+  String get authOfficialWebTimedOut => '官方登录会话已超时，请重新开始。';
+
+  @override
+  String get authOfficialWebCleanupFailed => 'Fura 无法清理临时网页会话，未保存任何凭据。';
+
+  @override
+  String get authSignedOutWebCleanupTitle => '已退出登录，但网页数据清理需要处理';
+
+  @override
+  String authSignedOutWebCleanupDetail(String providerName) {
+    return '已移除$providerName账号和已保存会话，但 Fura 无法确认临时网页数据已清理。';
+  }
+
+  @override
   String get authPhoneCodeTitle => '使用手机验证码登录';
 
   @override
