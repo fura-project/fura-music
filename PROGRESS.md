@@ -4,12 +4,37 @@ execution:
   work_domain: MIXED
   state: AWAITING_HUMAN_DECISION
   acceptance_milestone: M1
-  active_workstream: NETEASE_WEBVIEW_ALL_OFFICIAL_LOGIN_TRIAL
-  current_task: NETEASE_WEBVIEW_ALL_LINUX_CANDIDATE_REJECTED
+  active_workstream: NETEASE_LINUX_EMBEDDED_LOGIN_DECISION
+  current_task: NETEASE_TAURI_WEBKIT_COMPARISON_COMPLETE
   next_action: HUMAN_CHOOSE_NON_WEBKIT_LINUX_ROUTE_OR_NO_EMBEDDED_LOGIN
 ---
 
 # Current State
+
+- **2026-09-14 HD-028 isolated Tauri/Wry comparison complete:** a repository-
+  external Tauri 2.11.5 / Wry 0.55.1 probe used the same Wayland session,
+  WebKitGTK 2.52.5 and NVIDIA 610.57.04 stack as the rejected Flutter
+  `webview_all` candidate. Tauri default rendered the official NetEase page and
+  completed an initial 10/10 lifecycle run, then completed 12 cycles in the
+  strict 100-cycle run before attempt 13 failed its bounded 45-second
+  `PageLoadEvent::Finished` deadline; it logged zero DMA-BUF import errors and
+  produced no core. With only `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`, cycles 1
+  and 2 completed and cycle 3 reached `Finished`, then
+  `WebKitWebProcess` crashed with SIGSEGV on `SkiaGPUWorker` in
+  `libnvidia-eglcore.so.610.57.04`, with `libEGL_nvidia.so.0` in the same core.
+  The harness observed the Tauri host still alive and terminated it immediately
+  rather than continuing after the crash. This matches the prior Flutter SHM
+  crash in process role, signal, thread and NVIDIA EGL libraries, proving that
+  Flutter/`webview_all` integration is not required for the fatal failure.
+  Tauri default's lack of the Flutter default blank/DMA-BUF symptom remains a
+  measured embedding-path difference, not proof that WebKitGTK is stable.
+  Per the stop rule, synthetic HttpOnly Cookie/cleanup work was not run and no
+  additional renderer workaround was tested. Fura production source, playback,
+  credentials and login routes were unchanged; direct and external QR remain
+  intact. The isolated source, build and evidence stay under `/tmp`, and no
+  real login or account action was attempted. The bounded diagnostic is
+  complete; choosing current external QR/no embedded Linux login or authorizing
+  a non-WebKit CEF/Chromium trial remains `HUMAN_DECISION`.
 
 - **2026-09-14 HD-027 Linux `webview_all` renderer candidate rejected; Human
   decision required:** the maintainer-reported default failure was reproduced

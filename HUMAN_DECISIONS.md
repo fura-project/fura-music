@@ -343,3 +343,32 @@ completed page load. Under the explicitly supplied Case C rule, the SHM
 production candidate is rejected and removed; no compositing-disable,
 software/X11 or other renderer workaround may be stacked. Choosing a CEF/non-
 WebKit Linux backend or no embedded Linux login is a new `HUMAN_DECISION`.
+
+## HD-028 — Isolated Tauri/Wry WebKitGTK diagnostic probe
+
+**Status:** Accepted by explicit Human instruction on 2026-09-14; bounded
+diagnostic complete.
+
+**Decision:** Create a repository-external Linux Tauri 2 / Wry probe that loads
+the real official NetEase login page through its default WebKitGTK backend on
+the same host/session as HD-027. Compare natural renderer behavior with only
+`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`, using one sequential WebView at a time,
+strict Started/Finished/resize/close/destroy counts and immediate native-crash
+collection. The probe must not modify Fura production source, join its Cargo
+workspace, initialize its Core/player, authenticate an account or introduce a
+sidecar. Cookie capability is authorized only after at least 50 crash-free
+official-page cycles.
+
+**Observed consequence:** Tauri default visibly rendered the official page,
+logged no DMA-BUF import error and completed 12 strict cycles before attempt 13
+timed out waiting for `Finished`; no default core occurred. The SHM arm
+completed two cycles, reached `Finished` on attempt 3 and then reproduced the
+HD-027 crash class: `WebKitWebProcess`, SIGSEGV, `SkiaGPUWorker`,
+`libnvidia-eglcore.so.610.57.04` and `libEGL_nvidia.so.0`. The Tauri host was
+still alive when the harness detected the core and terminated it. Therefore
+Flutter/`webview_all` embedding is not necessary for the fatal native crash,
+although its contribution to the separate default blank/DMA-BUF behavior is
+not excluded. The stop rule made the Cookie phase `NOT_RUN`; no helper or
+production Tauri dependency was created. The WebKitGTK Linux embedded-login
+line remains rejected, and any non-WebKit helper/backend is a new Human
+decision. No push is authorized.

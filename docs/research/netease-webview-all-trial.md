@@ -305,3 +305,14 @@ The observed WebProcess crash and Flutter disconnect stop promotion now. The
 preserved external QR-confirmation baseline remains the supported rollback
 path. Further embedded-Linux work requires `HUMAN_DECISION`, not another
 renderer environment experiment.
+
+## HD-028 isolated-host follow-up
+
+The subsequent [Tauri/Wry comparison](netease-tauri-webkit-comparison.md)
+reproduced the same fatal SHM crash outside Flutter: `WebKitWebProcess`
+received SIGSEGV on `SkiaGPUWorker` with NVIDIA 610.57.04 EGL libraries after
+the third official-page Finished event. Tauri default visibly rendered and did
+not emit this trial's DMA-BUF diagnostics during 12 completed strict cycles,
+but attempt 13 timed out and therefore did not establish 100/100 stability.
+The fatal common-layer result keeps embedded Linux WebKit rejected and leaves
+the separate default-rendering difference explicitly unresolved.

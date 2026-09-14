@@ -2,6 +2,30 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Completed Diagnostic — isolated Tauri/Wry WebKitGTK comparison (HD-028)
+
+**Goal:** determine whether the fatal Linux official-login failure requires
+Flutter/`webview_all` embedding or can reproduce through an isolated
+Tauri/Wry host sharing only the WebKitGTK/GPU stack.
+
+**2026-09-14 result:** the repository-external Tauri 2.11.5 / Wry 0.55.1 probe
+did not reproduce Flutter's default blank/DMA-BUF symptom in its 12 completed
+strict default cycles, although default attempt 13 timed out waiting for
+`PageLoadEvent::Finished` and therefore did not qualify as 100/100. The
+one-variable SHM arm reproduced the decisive failure outside Flutter: cycle 3
+reached `Finished`, then `WebKitWebProcess` received SIGSEGV on
+`SkiaGPUWorker` inside NVIDIA EGL while the Tauri host was still alive. This is
+strong common-layer evidence that the fatal crash does not depend on Flutter,
+`GtkOverlay` or `webview_all`; it does not exclude those layers from the
+separate default-rendering difference.
+
+**Exit and next gate:** the WebKitGTK embedded-login line remains rejected.
+The stop condition prevented synthetic Cookie work and any further renderer
+flag. Fura source and its direct/external QR baseline are unchanged. This
+diagnostic is complete; a production choice between no embedded Linux login
+and a separately authorized non-WebKit CEF/Chromium experiment remains a Human
+decision.
+
 ## Human Review Workstream — NetEase `webview_all` official login (HD-027)
 
 **Goal:** obtain bounded evidence for one official NetEase Web-login candidate

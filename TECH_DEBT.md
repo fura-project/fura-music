@@ -226,32 +226,38 @@ candidate produced Human-observed EGL/DMABuf and GStreamer WebProcess failures.
 A 50-cycle machine soak passing on one Wayland/NVIDIA+AMD host cannot erase
 that runtime evidence or establish broad hardware/driver stability.
 
-**Why accepted:** The trial was bounded and preserved direct/external QR
+**Why accepted:** The HD-027 trial was bounded and preserved direct/external QR
 rollback. Later Human evidence showed that the initial default-renderer probe
 was not representative: the actual product route stayed blank while WebKitGTK
 repeatedly failed DMA-BUF EGL imports. A controlled SHM A/B restored initial
 rendering, but the strict actual-page soak crashed `WebKitWebProcess` after 17
-completed loads. The candidate is therefore evidence-rejected rather than
-accepted for production.
+completed loads. HD-028 then reproduced the same process, signal, crash thread
+and NVIDIA EGL library class through isolated Tauri/Wry after the third SHM
+page finish. The candidate is therefore evidence-rejected rather than accepted
+for production, and switching Flutter WebView wrappers cannot address the
+measured fatal path.
 
 **Impact:** Linux packages again require WebKitGTK 4.1 development/runtime
 libraries, and the official login route can increase binary/runtime dependency
 surface even though playback, Provider and credential ownership remain
 unchanged.
 
-**Risk:** Default transport produces a blank page and continuous DMA-BUF import
-failures; forced SHM still reached SIGSEGV in NVIDIA EGL on WebKit's
-`SkiaGPUWorker`. Real security-verification pages, long-lived sessions, another
+**Risk:** Flutter's default transport produces a blank page and continuous
+DMA-BUF import failures. Tauri default did render and complete 12 strict cycles,
+but attempt 13 timed out rather than reaching the required 100/100. Forced SHM
+reached SIGSEGV in NVIDIA EGL on WebKit's `SkiaGPUWorker` through both Flutter
+and Tauri hosts. Real security-verification pages, long-lived sessions, another
 compositor or another GPU/driver add more unknowns. Shipping either observed
-path would expose users to a broken login or process loss.
+WebKit path would expose users to a broken login or process loss.
 
 **Suggested solution:** Keep external QR as the supported Linux rollback and
 make a Human decision between a CEF/non-WebKit backend and no embedded Linux
-login. Retest WebKitGTK only after a relevant WebKitGTK/NVIDIA-driver change;
-do not stack renderer flags on the current build.
+login. Do not spend another bounded experiment on a third WebKitGTK wrapper.
+Retest WebKitGTK only after a relevant WebKitGTK/NVIDIA-driver change; do not
+stack renderer flags on the current build.
 
-**Trigger condition:** Reassess after the Human HD-027 trial, any WebProcess or
-Flutter device disconnect, a WebKitGTK/package upgrade, or before a Linux
-release claims official Web login support.
+**Trigger condition:** Reassess after a relevant WebKitGTK/NVIDIA package
+upgrade, a separately accepted non-WebKit decision, or before a Linux release
+claims embedded official Web login support.
 
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.
