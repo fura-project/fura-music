@@ -520,6 +520,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authOfficialWebWaiting => '请在官方页面完成登录。Fura 会先验证登录结果，再保存会话。';
 
   @override
+  String get authOfficialWebSystemBrowserWaiting =>
+      '已打开独立的系统浏览器窗口。请在其中完成登录；Fura 安全读取并验证会话后会关闭该窗口。';
+
+  @override
   String get authOfficialWebVerifying => '正在验证网易云音乐账号';
 
   @override

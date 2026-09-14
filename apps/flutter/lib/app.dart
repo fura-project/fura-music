@@ -691,21 +691,45 @@ class _OfficialWebAuthenticationDialog extends StatelessWidget {
                     }
                     final verifying =
                         stage == OfficialWebLoginPresentationStage.finishing;
+                    final waitingInSystemBrowser =
+                        view == null &&
+                        stage ==
+                            OfficialWebLoginPresentationStage.waitingForSignIn;
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const CircularProgressIndicator(),
+                            if (waitingInSystemBrowser)
+                              Icon(
+                                Icons.open_in_browser_rounded,
+                                size: 48,
+                                color: colors.primary,
+                              )
+                            else
+                              const CircularProgressIndicator(),
                             const SizedBox(height: 20),
                             Text(
-                              verifying
+                              waitingInSystemBrowser
+                                  ? context
+                                        .l10n
+                                        .authOfficialWebSystemBrowserWaiting
+                                  : verifying
                                   ? context.l10n.authOfficialWebVerifying
                                   : context.l10n.authOfficialWebLoading,
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
+                            if (waitingInSystemBrowser) ...[
+                              const SizedBox(height: 20),
+                              const SizedBox.square(
+                                dimension: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

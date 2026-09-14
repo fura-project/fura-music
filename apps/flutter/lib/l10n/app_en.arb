@@ -171,6 +171,7 @@
   "authOfficialWebFailed": "The official login window could not complete safely. No session was saved.",
   "authOfficialWebLoading": "Loading the official NetEase sign-in page",
   "authOfficialWebWaiting": "Complete sign-in on the official page. Fura will verify the resulting session before saving it.",
+  "authOfficialWebSystemBrowserWaiting": "A private system-browser window is open. Complete sign-in there; Fura will close it after securely reading and verifying the resulting session.",
   "authOfficialWebVerifying": "Verifying your NetEase account",
   "authOfficialWebTimedOut": "The official login session timed out. Start a new attempt.",
   "authOfficialWebCleanupFailed": "Fura could not clear the temporary website session. No credential was saved.",

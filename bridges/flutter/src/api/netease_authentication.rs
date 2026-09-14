@@ -25,6 +25,8 @@ static ACTIVE_START: StdMutex<Option<u32>> = StdMutex::new(None);
 static ACTIVE_VERIFICATION: StdMutex<Option<u32>> = StdMutex::new(None);
 static ACTIVE_SMS_SEND: StdMutex<Option<u32>> = StdMutex::new(None);
 static ACTIVE_SMS_LOGIN: StdMutex<Option<u32>> = StdMutex::new(None);
+static ACTIVE_SYSTEM_BROWSER: StdMutex<Option<u32>> = StdMutex::new(None);
+static SYSTEM_BROWSER_GATE: AsyncMutex<()> = AsyncMutex::const_new(());
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NeteaseSmsAuthenticationFailure {
@@ -52,6 +54,34 @@ pub struct NeteaseQrLoginStart {
     pub challenge: Option<QqMusicQrChallenge>,
     pub external_confirmation_url: Option<String>,
     pub failure: Option<QqMusicQrLoginFailure>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeteaseSystemBrowserAuthenticationFailure {
+    UnsupportedPlatform,
+    BrowserUnavailable,
+    BrowserLaunchFailed,
+    ProfileSetupFailed,
+    DevtoolsUnavailable,
+    DevtoolsInvalid,
+    OfficialTargetUnavailable,
+    BrowserClosed,
+    InvalidCredential,
+    TimedOut,
+    Cancelled,
+    CleanupFailed,
+    Rejected,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Replaced,
+    CoreUnavailable,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NeteaseSystemBrowserAuthenticationOutcome {
+    pub authenticated: bool,
+    pub failure: Option<NeteaseSystemBrowserAuthenticationFailure>,
 }
 
 impl fmt::Debug for NeteaseQrLoginStart {
@@ -178,6 +208,143 @@ pub fn cancel_netease_qr_login_start(attempt_id: u32) -> bool {
 pub fn netease_has_authenticated_credential() -> bool {
     crate::native_netease::native_netease_provider()
         .is_ok_and(QrAuthenticationProvider::has_authenticated_credential)
+}
+
+/// Whether a supported, root-owned Chromium-family binary is available on
+/// Linux. This never starts the browser or inspects any browser profile.
+#[flutter_rust_bridge::frb(sync)]
+pub fn netease_system_browser_login_supported() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        crate::linux_system_chromium::is_supported()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Reserves a single serialized system-browser attempt. A newer reservation
+/// replaces an older attempt, whose owner will close its browser and profile.
+#[flutter_rust_bridge::frb(sync)]
+pub fn reserve_netease_system_browser_login() -> u32 {
+    let attempt = next_attempt();
+    *lock_attempt(&ACTIVE_SYSTEM_BROWSER) = Some(attempt);
+    attempt
+}
+
+/// Runs the complete Linux official-browser path. Raw browser Cookie values
+/// stay in Rust: they are staged, zeroed, and verified before this function
+/// returns a coarse result to Dart.
+pub async fn authenticate_netease_with_system_browser(
+    attempt_id: u32,
+) -> NeteaseSystemBrowserAuthenticationOutcome {
+    if *lock_attempt(&ACTIVE_SYSTEM_BROWSER) != Some(attempt_id) {
+        return failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::Replaced);
+    }
+    let _gate = SYSTEM_BROWSER_GATE.lock().await;
+    if *lock_attempt(&ACTIVE_SYSTEM_BROWSER) != Some(attempt_id) {
+        return failed_system_browser(classify_system_browser_cancellation(attempt_id));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    let capture = Err(NeteaseSystemBrowserAuthenticationFailure::UnsupportedPlatform);
+    #[cfg(target_os = "linux")]
+    let capture = crate::linux_system_chromium::capture_netease_credential(|| {
+        *lock_attempt(&ACTIVE_SYSTEM_BROWSER) == Some(attempt_id)
+    })
+    .await
+    .map_err(map_system_browser_capture_failure);
+
+    let mut secret_bytes = match capture {
+        Ok(secret_bytes) => secret_bytes,
+        Err(failure) => {
+            let failure = if failure == NeteaseSystemBrowserAuthenticationFailure::Cancelled {
+                classify_system_browser_cancellation(attempt_id)
+            } else {
+                failure
+            };
+            clear_attempt(&ACTIVE_SYSTEM_BROWSER, attempt_id);
+            return failed_system_browser(failure);
+        }
+    };
+    if *lock_attempt(&ACTIVE_SYSTEM_BROWSER) != Some(attempt_id) {
+        secret_bytes.fill(0);
+        return failed_system_browser(classify_system_browser_cancellation(attempt_id));
+    }
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        secret_bytes.fill(0);
+        clear_attempt(&ACTIVE_SYSTEM_BROWSER, attempt_id);
+        return failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::CoreUnavailable);
+    };
+    let staged = provider.import_browser_credential(&secret_bytes);
+    secret_bytes.fill(0);
+    if let Err(error) = staged {
+        clear_attempt(&ACTIVE_SYSTEM_BROWSER, attempt_id);
+        return failed_system_browser(match error {
+            AccountSummaryError::InvalidResponse => {
+                NeteaseSystemBrowserAuthenticationFailure::InvalidCredential
+            }
+            AccountSummaryError::Replaced => NeteaseSystemBrowserAuthenticationFailure::Replaced,
+            _ => NeteaseSystemBrowserAuthenticationFailure::InvalidCredential,
+        });
+    }
+
+    let verification = provider.verify_pending_credential().await;
+    let still_current = *lock_attempt(&ACTIVE_SYSTEM_BROWSER) == Some(attempt_id);
+    if !still_current {
+        let failure = classify_system_browser_cancellation(attempt_id);
+        clear_attempt(&ACTIVE_SYSTEM_BROWSER, attempt_id);
+        return failed_system_browser(failure);
+    }
+    clear_attempt(&ACTIVE_SYSTEM_BROWSER, attempt_id);
+    match verification {
+        Ok(()) => NeteaseSystemBrowserAuthenticationOutcome {
+            authenticated: true,
+            failure: None,
+        },
+        Err(AccountSummaryError::CredentialRejected) => {
+            failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::Rejected)
+        }
+        Err(AccountSummaryError::Network) => {
+            failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::Network)
+        }
+        Err(AccountSummaryError::ServiceUnavailable) => {
+            failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::ServiceUnavailable)
+        }
+        Err(AccountSummaryError::InvalidResponse) => {
+            failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::InvalidResponse)
+        }
+        Err(AccountSummaryError::Replaced) => {
+            failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::Replaced)
+        }
+        Err(AccountSummaryError::AuthenticationRequired) => {
+            failed_system_browser(NeteaseSystemBrowserAuthenticationFailure::CoreUnavailable)
+        }
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_netease_system_browser_login(attempt_id: u32) -> bool {
+    let mut active = lock_attempt(&ACTIVE_SYSTEM_BROWSER);
+    if *active != Some(attempt_id) {
+        return false;
+    }
+    *active = None;
+    drop(active);
+    let _ = crate::native_netease::native_netease_provider()
+        .is_ok_and(provider_netease::NeteaseProvider::cancel_pending_credential_verification);
+    true
+}
+
+/// Cancels any attempt and waits until its browser/profile owner has completed
+/// cleanup. Used by sign-out and provider replacement boundaries.
+pub async fn cancel_active_netease_system_browser_login_and_wait() -> bool {
+    let was_active = lock_attempt(&ACTIVE_SYSTEM_BROWSER).take().is_some();
+    let _ = crate::native_netease::native_netease_provider()
+        .is_ok_and(provider_netease::NeteaseProvider::cancel_pending_credential_verification);
+    let _gate = SYSTEM_BROWSER_GATE.lock().await;
+    was_active
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -419,6 +586,7 @@ pub fn sign_out_netease() -> bool {
     *lock_attempt(&ACTIVE_VERIFICATION) = None;
     *lock_attempt(&ACTIVE_SMS_SEND) = None;
     *lock_attempt(&ACTIVE_SMS_LOGIN) = None;
+    *lock_attempt(&ACTIVE_SYSTEM_BROWSER) = None;
     QrAuthenticationProvider::sign_out(provider);
     true
 }
@@ -486,6 +654,59 @@ const fn failed_sms(failure: NeteaseSmsAuthenticationFailure) -> NeteaseSmsAuthe
     NeteaseSmsAuthenticationOutcome {
         success: false,
         failure: Some(failure),
+    }
+}
+
+const fn failed_system_browser(
+    failure: NeteaseSystemBrowserAuthenticationFailure,
+) -> NeteaseSystemBrowserAuthenticationOutcome {
+    NeteaseSystemBrowserAuthenticationOutcome {
+        authenticated: false,
+        failure: Some(failure),
+    }
+}
+
+fn classify_system_browser_cancellation(
+    attempt_id: u32,
+) -> NeteaseSystemBrowserAuthenticationFailure {
+    match *lock_attempt(&ACTIVE_SYSTEM_BROWSER) {
+        None => NeteaseSystemBrowserAuthenticationFailure::Cancelled,
+        Some(active) if active != attempt_id => NeteaseSystemBrowserAuthenticationFailure::Replaced,
+        Some(_) => NeteaseSystemBrowserAuthenticationFailure::Cancelled,
+    }
+}
+
+#[cfg(target_os = "linux")]
+const fn map_system_browser_capture_failure(
+    failure: crate::linux_system_chromium::CaptureFailure,
+) -> NeteaseSystemBrowserAuthenticationFailure {
+    use crate::linux_system_chromium::CaptureFailure;
+    match failure {
+        CaptureFailure::BrowserUnavailable => {
+            NeteaseSystemBrowserAuthenticationFailure::BrowserUnavailable
+        }
+        CaptureFailure::BrowserLaunchFailed => {
+            NeteaseSystemBrowserAuthenticationFailure::BrowserLaunchFailed
+        }
+        CaptureFailure::ProfileSetupFailed => {
+            NeteaseSystemBrowserAuthenticationFailure::ProfileSetupFailed
+        }
+        CaptureFailure::DevtoolsUnavailable => {
+            NeteaseSystemBrowserAuthenticationFailure::DevtoolsUnavailable
+        }
+        CaptureFailure::DevtoolsInvalid => {
+            NeteaseSystemBrowserAuthenticationFailure::DevtoolsInvalid
+        }
+        CaptureFailure::OfficialTargetUnavailable => {
+            NeteaseSystemBrowserAuthenticationFailure::OfficialTargetUnavailable
+        }
+        CaptureFailure::BrowserClosed => NeteaseSystemBrowserAuthenticationFailure::BrowserClosed,
+        CaptureFailure::InvalidCredential => {
+            NeteaseSystemBrowserAuthenticationFailure::InvalidCredential
+        }
+        CaptureFailure::TimedOut => NeteaseSystemBrowserAuthenticationFailure::TimedOut,
+        CaptureFailure::Cancelled => NeteaseSystemBrowserAuthenticationFailure::Cancelled,
+        CaptureFailure::CleanupFailed => NeteaseSystemBrowserAuthenticationFailure::CleanupFailed,
     }
 }
 

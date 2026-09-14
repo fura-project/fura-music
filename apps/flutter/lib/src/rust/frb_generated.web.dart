@@ -943,6 +943,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_netease_sms_authentication_failure(dynamic raw);
 
   @protected
+  NeteaseSystemBrowserAuthenticationFailure
+  dco_decode_box_autoadd_netease_system_browser_authentication_failure(
+    dynamic raw,
+  );
+
+  @protected
   PlaybackQueueFailure dco_decode_box_autoadd_playback_queue_failure(
     dynamic raw,
   );
@@ -1279,6 +1285,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseSystemBrowserAuthenticationFailure
+  dco_decode_netease_system_browser_authentication_failure(dynamic raw);
+
+  @protected
+  NeteaseSystemBrowserAuthenticationOutcome
+  dco_decode_netease_system_browser_authentication_outcome(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -1336,6 +1350,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   NeteaseSmsAuthenticationFailure?
   dco_decode_opt_box_autoadd_netease_sms_authentication_failure(dynamic raw);
+
+  @protected
+  NeteaseSystemBrowserAuthenticationFailure?
+  dco_decode_opt_box_autoadd_netease_system_browser_authentication_failure(
+    dynamic raw,
+  );
 
   @protected
   PlaybackQueueFailure? dco_decode_opt_box_autoadd_playback_queue_failure(
@@ -2767,6 +2787,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseSystemBrowserAuthenticationFailure
+  sse_decode_box_autoadd_netease_system_browser_authentication_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlaybackQueueFailure sse_decode_box_autoadd_playback_queue_failure(
     SseDeserializer deserializer,
   );
@@ -3211,6 +3237,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseSystemBrowserAuthenticationFailure
+  sse_decode_netease_system_browser_authentication_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseSystemBrowserAuthenticationOutcome
+  sse_decode_netease_system_browser_authentication_outcome(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -3270,6 +3308,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   NeteaseSmsAuthenticationFailure?
   sse_decode_opt_box_autoadd_netease_sms_authentication_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseSystemBrowserAuthenticationFailure?
+  sse_decode_opt_box_autoadd_netease_system_browser_authentication_failure(
     SseDeserializer deserializer,
   );
 
@@ -4978,6 +5022,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_netease_system_browser_authentication_failure(
+    NeteaseSystemBrowserAuthenticationFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_playback_queue_failure(
     PlaybackQueueFailure self,
     SseSerializer serializer,
@@ -5464,6 +5514,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_netease_system_browser_authentication_failure(
+    NeteaseSystemBrowserAuthenticationFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_system_browser_authentication_outcome(
+    NeteaseSystemBrowserAuthenticationOutcome self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -5532,6 +5594,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_netease_sms_authentication_failure(
     NeteaseSmsAuthenticationFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_netease_system_browser_authentication_failure(
+    NeteaseSystemBrowserAuthenticationFailure? self,
     SseSerializer serializer,
   );
 

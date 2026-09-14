@@ -1005,6 +1005,12 @@ abstract class AppLocalizations {
   /// **'Complete sign-in on the official page. Fura will verify the resulting session before saving it.'**
   String get authOfficialWebWaiting;
 
+  /// No description provided for @authOfficialWebSystemBrowserWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'A private system-browser window is open. Complete sign-in there; Fura will close it after securely reading and verifying the resulting session.'**
+  String get authOfficialWebSystemBrowserWaiting;
+
   /// No description provided for @authOfficialWebVerifying.
   ///
   /// In en, this message translates to:

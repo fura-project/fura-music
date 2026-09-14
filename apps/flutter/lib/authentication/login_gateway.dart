@@ -432,11 +432,18 @@ class RustNeteaseAuthenticationGateway
        ),
        _officialWebLoginBroker =
            officialWebLoginBroker ?? PlatformNeteaseOfficialWebLoginBroker(),
+       _usesLinuxSystemBrowser =
+           officialWebLoginBroker == null &&
+           !kIsWeb &&
+           defaultTargetPlatform == TargetPlatform.linux,
        _credentialSignOutCore =
            credentialSignOutCore ?? netease_bridge.signOutNetease;
 
   final CredentialVault _credentialVault;
   final OfficialWebLoginBroker _officialWebLoginBroker;
+  final bool _usesLinuxSystemBrowser;
+  final _SystemBrowserOfficialWebPresentation _systemBrowserPresentation =
+      _SystemBrowserOfficialWebPresentation();
   final CredentialSignOutCore _credentialSignOutCore;
 
   @override
@@ -482,22 +489,33 @@ class RustNeteaseAuthenticationGateway
       netease_bridge.cancelNeteaseSmsAuthentication();
 
   @override
-  bool get supportsOfficialWebLogin => _officialWebLoginBroker.isSupported;
+  bool get supportsOfficialWebLogin => _usesLinuxSystemBrowser
+      ? netease_bridge.neteaseSystemBrowserLoginSupported()
+      : _officialWebLoginBroker.isSupported;
 
   @override
-  Listenable get officialWebPresentationListenable =>
-      _officialWebLoginBroker.presentationListenable;
+  Listenable get officialWebPresentationListenable => _usesLinuxSystemBrowser
+      ? _systemBrowserPresentation
+      : _officialWebLoginBroker.presentationListenable;
 
   @override
   OfficialWebLoginPresentationStage get officialWebPresentationStage =>
-      _officialWebLoginBroker.presentationStage;
+      _usesLinuxSystemBrowser
+      ? _systemBrowserPresentation.stage
+      : _officialWebLoginBroker.presentationStage;
 
   @override
-  Widget? get officialWebLoginView => _officialWebLoginBroker.activeView;
+  Widget? get officialWebLoginView =>
+      _usesLinuxSystemBrowser ? null : _officialWebLoginBroker.activeView;
 
   @override
   OfficialWebAuthenticationOperation beginOfficialWebLogin() =>
-      _RustNeteaseOfficialWebAuthenticationOperation(_officialWebLoginBroker);
+      _usesLinuxSystemBrowser
+      ? _RustNeteaseSystemBrowserAuthenticationOperation(
+          netease_bridge.reserveNeteaseSystemBrowserLogin(),
+          _systemBrowserPresentation,
+        )
+      : _RustNeteaseOfficialWebAuthenticationOperation(_officialWebLoginBroker);
 
   @override
   CredentialVerificationOperation beginCredentialVerification() =>
@@ -544,9 +562,9 @@ class RustNeteaseAuthenticationGateway
 
   @override
   Future<CredentialSignOutResult> signOut() async {
-    _officialWebLoginBroker.cancel();
-    final browserCleanupSucceeded = await _officialWebLoginBroker
-        .clearWebsiteData();
+    final browserCleanupSucceeded = _usesLinuxSystemBrowser
+        ? await _cancelLinuxSystemBrowserForSignOut()
+        : await _clearEmbeddedOfficialWebSession();
     try {
       if (!_credentialSignOutCore()) {
         return CredentialSignOutResult.coreUnavailable;
@@ -563,7 +581,150 @@ class RustNeteaseAuthenticationGateway
       return CredentialSignOutResult.storageCleanupFailed;
     }
   }
+
+  Future<bool> _cancelLinuxSystemBrowserForSignOut() async {
+    _systemBrowserPresentation.reset();
+    try {
+      await netease_bridge.cancelActiveNeteaseSystemBrowserLoginAndWait();
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _clearEmbeddedOfficialWebSession() async {
+    _officialWebLoginBroker.cancel();
+    return _officialWebLoginBroker.clearWebsiteData();
+  }
 }
+
+class _SystemBrowserOfficialWebPresentation extends ChangeNotifier {
+  OfficialWebLoginPresentationStage _stage =
+      OfficialWebLoginPresentationStage.idle;
+
+  OfficialWebLoginPresentationStage get stage => _stage;
+
+  void show(OfficialWebLoginPresentationStage stage) {
+    if (_stage == stage) return;
+    _stage = stage;
+    notifyListeners();
+  }
+
+  void reset() => show(OfficialWebLoginPresentationStage.idle);
+}
+
+class _RustNeteaseSystemBrowserAuthenticationOperation
+    implements OfficialWebAuthenticationOperation {
+  _RustNeteaseSystemBrowserAuthenticationOperation(
+    this._attemptId,
+    this._presentation,
+  );
+
+  final int _attemptId;
+  final _SystemBrowserOfficialWebPresentation _presentation;
+  bool _cancelled = false;
+
+  @override
+  bool cancel() {
+    if (_cancelled) return false;
+    _cancelled = true;
+    _presentation.reset();
+    return netease_bridge.cancelNeteaseSystemBrowserLogin(
+      attemptId: _attemptId,
+    );
+  }
+
+  @override
+  Future<OfficialWebAuthenticationOutcome> run() async {
+    _presentation.show(OfficialWebLoginPresentationStage.preparing);
+    await Future<void>.delayed(Duration.zero);
+    if (_cancelled) {
+      return const OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: OfficialWebAuthenticationFailure.cancelled,
+      );
+    }
+    _presentation.show(OfficialWebLoginPresentationStage.waitingForSignIn);
+    try {
+      final outcome = await netease_bridge.authenticateNeteaseWithSystemBrowser(
+        attemptId: _attemptId,
+      );
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_system_browser phase=complete '
+        'outcome=${outcome.authenticated ? 'authenticated' : 'failure'} '
+        'failure=${outcome.failure?.name ?? 'none'}',
+      );
+      if (_cancelled) {
+        return const OfficialWebAuthenticationOutcome(
+          authenticated: false,
+          failure: OfficialWebAuthenticationFailure.cancelled,
+        );
+      }
+      if (outcome.authenticated) {
+        _presentation.show(OfficialWebLoginPresentationStage.finishing);
+        return const OfficialWebAuthenticationOutcome(authenticated: true);
+      }
+      return OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: _mapSystemBrowserFailure(outcome.failure),
+      );
+    } on Object catch (error) {
+      debugPrint(
+        'FURA_DIAGNOSTIC netease_system_browser phase=complete '
+        'outcome=exception error=${error.runtimeType}',
+      );
+      return const OfficialWebAuthenticationOutcome(
+        authenticated: false,
+        failure: OfficialWebAuthenticationFailure.coreUnavailable,
+      );
+    } finally {
+      _presentation.reset();
+    }
+  }
+}
+
+OfficialWebAuthenticationFailure _mapSystemBrowserFailure(
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure? failure,
+) => switch (failure) {
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.cancelled =>
+    OfficialWebAuthenticationFailure.cancelled,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.replaced =>
+    OfficialWebAuthenticationFailure.replaced,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.timedOut =>
+    OfficialWebAuthenticationFailure.timedOut,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.invalidCredential =>
+    OfficialWebAuthenticationFailure.invalidCredential,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.cleanupFailed =>
+    OfficialWebAuthenticationFailure.cleanupFailed,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.rejected =>
+    OfficialWebAuthenticationFailure.rejected,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.network =>
+    OfficialWebAuthenticationFailure.network,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.serviceUnavailable =>
+    OfficialWebAuthenticationFailure.serviceUnavailable,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.invalidResponse =>
+    OfficialWebAuthenticationFailure.invalidResponse,
+  netease_bridge
+      .NeteaseSystemBrowserAuthenticationFailure
+      .unsupportedPlatform ||
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.browserUnavailable =>
+    OfficialWebAuthenticationFailure.unavailable,
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.browserClosed =>
+    OfficialWebAuthenticationFailure.cancelled,
+  netease_bridge
+      .NeteaseSystemBrowserAuthenticationFailure
+      .browserLaunchFailed ||
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.profileSetupFailed ||
+  netease_bridge
+      .NeteaseSystemBrowserAuthenticationFailure
+      .devtoolsUnavailable ||
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.devtoolsInvalid ||
+  netease_bridge
+      .NeteaseSystemBrowserAuthenticationFailure
+      .officialTargetUnavailable ||
+  netease_bridge.NeteaseSystemBrowserAuthenticationFailure.coreUnavailable ||
+  null => OfficialWebAuthenticationFailure.coreUnavailable,
+};
 
 class _RustNeteaseOfficialWebAuthenticationOperation
     implements OfficialWebAuthenticationOperation {

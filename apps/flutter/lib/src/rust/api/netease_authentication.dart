@@ -8,8 +8,8 @@ import 'authentication.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_attempt`, `failed_export`, `failed_restore`, `failed_sms`, `failed_start`, `failed_verification`, `lock_attempt`, `map_auth_error`, `map_progress`, `map_sms_error`, `next_attempt`, `successful_sms`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `classify_system_browser_cancellation`, `clear_attempt`, `failed_export`, `failed_restore`, `failed_sms`, `failed_start`, `failed_system_browser`, `failed_verification`, `lock_attempt`, `map_auth_error`, `map_progress`, `map_sms_error`, `map_system_browser_capture_failure`, `next_attempt`, `successful_sms`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveNeteaseQrLoginStart() => RustLib.instance.api
     .crateApiNeteaseAuthenticationReserveNeteaseQrLoginStart();
@@ -26,6 +26,41 @@ bool cancelNeteaseQrLoginStart({required int attemptId}) =>
 
 bool neteaseHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiNeteaseAuthenticationNeteaseHasAuthenticatedCredential();
+
+/// Whether a supported, root-owned Chromium-family binary is available on
+/// Linux. This never starts the browser or inspects any browser profile.
+bool neteaseSystemBrowserLoginSupported() => RustLib.instance.api
+    .crateApiNeteaseAuthenticationNeteaseSystemBrowserLoginSupported();
+
+/// Reserves a single serialized system-browser attempt. A newer reservation
+/// replaces an older attempt, whose owner will close its browser and profile.
+int reserveNeteaseSystemBrowserLogin() => RustLib.instance.api
+    .crateApiNeteaseAuthenticationReserveNeteaseSystemBrowserLogin();
+
+/// Runs the complete Linux official-browser path. Raw browser Cookie values
+/// stay in Rust: they are staged, zeroed, and verified before this function
+/// returns a coarse result to Dart.
+Future<NeteaseSystemBrowserAuthenticationOutcome>
+authenticateNeteaseWithSystemBrowser({required int attemptId}) => RustLib
+    .instance
+    .api
+    .crateApiNeteaseAuthenticationAuthenticateNeteaseWithSystemBrowser(
+      attemptId: attemptId,
+    );
+
+bool cancelNeteaseSystemBrowserLogin({required int attemptId}) => RustLib
+    .instance
+    .api
+    .crateApiNeteaseAuthenticationCancelNeteaseSystemBrowserLogin(
+      attemptId: attemptId,
+    );
+
+/// Cancels any attempt and waits until its browser/profile owner has completed
+/// cleanup. Used by sign-out and provider replacement boundaries.
+Future<bool> cancelActiveNeteaseSystemBrowserLoginAndWait() => RustLib
+    .instance
+    .api
+    .crateApiNeteaseAuthenticationCancelActiveNeteaseSystemBrowserLoginAndWait();
 
 int reserveNeteaseSmsCodeRequest() => RustLib.instance.api
     .crateApiNeteaseAuthenticationReserveNeteaseSmsCodeRequest();
@@ -179,5 +214,47 @@ class NeteaseSmsAuthenticationOutcome {
       other is NeteaseSmsAuthenticationOutcome &&
           runtimeType == other.runtimeType &&
           success == other.success &&
+          failure == other.failure;
+}
+
+enum NeteaseSystemBrowserAuthenticationFailure {
+  unsupportedPlatform,
+  browserUnavailable,
+  browserLaunchFailed,
+  profileSetupFailed,
+  devtoolsUnavailable,
+  devtoolsInvalid,
+  officialTargetUnavailable,
+  browserClosed,
+  invalidCredential,
+  timedOut,
+  cancelled,
+  cleanupFailed,
+  rejected,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  replaced,
+  coreUnavailable,
+}
+
+class NeteaseSystemBrowserAuthenticationOutcome {
+  final bool authenticated;
+  final NeteaseSystemBrowserAuthenticationFailure? failure;
+
+  const NeteaseSystemBrowserAuthenticationOutcome({
+    required this.authenticated,
+    this.failure,
+  });
+
+  @override
+  int get hashCode => authenticated.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NeteaseSystemBrowserAuthenticationOutcome &&
+          runtimeType == other.runtimeType &&
+          authenticated == other.authenticated &&
           failure == other.failure;
 }

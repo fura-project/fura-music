@@ -572,6 +572,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Complete sign-in on the official page. Fura will verify the resulting session before saving it.';
 
   @override
+  String get authOfficialWebSystemBrowserWaiting =>
+      'A private system-browser window is open. Complete sign-in there; Fura will close it after securely reading and verifying the resulting session.';
+
+  @override
   String get authOfficialWebVerifying => 'Verifying your NetEase account';
 
   @override
