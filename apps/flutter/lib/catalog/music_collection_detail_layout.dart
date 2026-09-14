@@ -49,6 +49,15 @@ class _MusicCollectionDetailLayoutState
     if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
       return false;
     }
+    // A ScrollStartNotification can be dispatched synchronously from
+    // ScrollPosition.applyNewDimensions while RenderViewport is laying out an
+    // out-of-range restored offset. Rebuilding here violates the frame
+    // contract and also interrupts the position's own ballistic correction.
+    // Header progress only needs notifications that represent actual motion.
+    if (notification is! ScrollUpdateNotification &&
+        notification is! OverscrollNotification) {
+      return false;
+    }
     final next = (notification.metrics.pixels / _collapseExtent).clamp(
       0.0,
       1.0,

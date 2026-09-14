@@ -132,4 +132,39 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'restored offset beyond shortened content does not rebuild during layout',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 480);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final scroll = ScrollController(initialScrollOffset: 1562);
+      addTearDown(scroll.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MusicCollectionDetailLayout(
+              headerBuilder: (context, desktop, progress) => SizedBox(
+                key: const ValueKey('restored-offset-header'),
+                height: 120 - (56 * progress),
+              ),
+              bodyBuilder: (context, desktop) => ListView.builder(
+                key: const ValueKey('restored-offset-list'),
+                controller: scroll,
+                itemCount: 7,
+                itemBuilder: (context, index) => const SizedBox(height: 56),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(scroll.offset, lessThanOrEqualTo(scroll.position.maxScrollExtent));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
