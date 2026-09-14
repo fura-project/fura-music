@@ -29,19 +29,53 @@ registrants are dependency output, not hand-written platform implementations.
 | Property | Observed value |
 |---|---|
 | Session | Wayland (`XDG_SESSION_TYPE=wayland`, `WAYLAND_DISPLAY=wayland-0`) |
-| Flutter backend environment | inherited `GDK_BACKEND=wayland`; the trial did not inject it |
+| Flutter backend environment | host inherited `GDK_BACKEND=wayland`; the corrected A/B explicitly unset it so neither arm inherited an external backend choice |
 | WebKitGTK | 2.52.5, API 4.1 |
 | GTK | 3.24.52 |
 | GStreamer | 1.28.6 |
 | Discrete GPU | NVIDIA GeForce RTX 2060 Max-Q, `nvidia` driver |
 | Integrated GPU | AMD Renoir, `amdgpu` driver |
-| Renderer overrides | none |
+| Renderer A/B | default WebKitGTK transport versus only `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` |
 
-No DMA-BUF disable, software-rendering switch, X11 override, sandbox disable,
-TLS bypass or other process-global renderer workaround was set. Because the
-default environment passed the bounded probe, there is no diagnostic override
-A/B result to promote. Any future need for a global renderer override returns
-to `HUMAN_DECISION`.
+The initial machine probe used no renderer override and appeared to pass. Later
+Human evidence from the actual product route invalidated that confidence, so a
+new production-route A/B explicitly unset `WEBKIT_DISABLE_DMABUF_RENDERER`,
+`WEBKIT_DISABLE_COMPOSITING_MODE`, `LIBGL_ALWAYS_SOFTWARE` and `GDK_BACKEND` in
+both arms. The default arm also unset
+`WEBKIT_DMABUF_RENDERER_FORCE_SHM`; the comparison arm set only that variable
+to `1`. No sandbox disable, TLS bypass, software renderer, X11 forcing or
+second renderer flag was used.
+
+### Corrected product-route A/B
+
+The probe entered the actual Fura NetEase official-login surface with real
+production dependencies but deliberately skipped stored settings and
+credential restoration. It never performed login, scanned a QR code, sent an
+SMS request or inspected a Cookie. Diagnostic-only entry code and resize timers
+were removed after the observation.
+
+| Arm | Product route | DMA-BUF EGL-import diagnostics | Visual result | Resize / close |
+|---|---|---:|---|---|
+| Default | actual Fura official login | 228 in the full run; 12 and 233 in independent resize runs | Fura toolbar visible, embedded official content blank | Fura remained responsive; no stale overlay after close |
+| `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` only | same route and host | 0 in full and resized runs | complete official `music.163.com` page and QR rendered | 1280 x 720 and 900 x 600 mapped correctly; interaction and close showed no tearing, offset or stale overlay |
+
+There was no native crash or Flutter device disconnect in either bounded A/B
+arm, but the repeated default diagnostic and blank page are independently a
+release-blocking renderer failure. Because the one-variable SHM arm removed the
+diagnostic and restored visible content, the fallback
+`WEBKIT_DISABLE_COMPOSITING_MODE=1` experiment was not run; stacking flags
+would make the causal result ambiguous.
+
+The accepted production correction is deliberately narrow. Before GTK/WebKit
+initialization, the Linux runner sets
+`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` only when the environment does not already
+contain that name. An explicit value such as `0` is preserved. This affects the
+WebKitGTK process transport, not Flutter's Impeller selection, `media_kit`, the
+audio engine or another operating system.
+
+The inspected screenshots and raw logs are ephemeral local evidence under
+`/tmp/fura-webview-renderer-evidence`; they include a short-lived provider QR
+challenge and are intentionally not committed.
 
 ## Linux-first probe
 
@@ -49,10 +83,10 @@ to `HUMAN_DECISION`.
 disposable loopback HTTP server and a synthetic HttpOnly cookie. The probe does
 not use a real account, retain browser data, or log page contents or cookies.
 
-Results on the host above:
+Results on the host above, rerun through the corrected Linux runner:
 
 - 50 visible create/load/input/JavaScript/scroll/resize/unmount/close cycles
-  completed in the default runtime;
+  completed with the runner-selected SHM transport;
 - native crash count: 0;
 - Flutter device disconnect count: 0;
 - the local server's `fura_webview_probe=synthetic; HttpOnly; SameSite=Lax`
@@ -60,7 +94,7 @@ Results on the host above:
   `WebViewCookieManager.getCookies(...)`;
 - `WebViewDataManager.clearAllWebsiteData()` completed and the native cookie
   query no longer returned the synthetic cookie;
-- an opt-in render-only request to `https://music.163.com/#/login` reached an
+- an opt-in account-free request to `https://music.163.com/#/login` reached an
   interactive/complete document at the exact allowed HTTPS origin;
 - the first render probe waited only for `onPageFinished` and timed out without
   a native crash. The probe was corrected to accept the browser document's
@@ -68,8 +102,20 @@ Results on the host above:
   network activity. The corrected probe passed in approximately six seconds
   during development and in approximately three seconds in the final
   current-tree run;
+- the corrected current-tree integration run passed all three cases in 40
+  seconds with zero DMA-BUF-import errors, native crashes or Flutter device
+  disconnects;
 - the WebKit child process seen immediately after exit disappeared by the next
   one-second observation; no persistent probe process was observed.
+
+A separate diagnostic loop rapidly mounted and closed 50 *remote* product
+sessions. All 50 WebView widgets became visible and no DMA-BUF error or crash
+occurred, but no session emitted `page_finished` and the retained final Web
+content remained blank after 30 seconds. That loop is rejected as load/render
+success evidence rather than being counted toward the deterministic 50-cycle
+result above. It is consistent with an incomplete or throttled remote
+navigation, and does not weaken the deterministic local lifecycle result or
+replace the independent real-page render A/B.
 
 The official-page probe performed no login. Rendering evidence is not account
 acceptance, CAPTCHA compatibility, restart persistence or long-duration Linux
@@ -77,7 +123,8 @@ stability evidence.
 
 ## Final machine verification
 
-The final current-tree checkpoint produced the following bounded evidence:
+The original trial checkpoint and the renderer-corrected current-tree rerun
+produced the following bounded evidence:
 
 - `cargo fmt --all -- --check` passed;
 - `cargo test --locked --workspace` and
@@ -87,20 +134,21 @@ The final current-tree checkpoint produced the following bounded evidence:
 - `flutter gen-l10n` completed, and Dart formatting checked 253 files with zero
   changes;
 - the first full Flutter run exposed one missing ARB placeholder description;
-  after correcting that metadata, its focused seven tests and the complete 588-
-  test Flutter suite passed;
+  after correcting that metadata, its focused tests passed. The renderer-
+  corrected tree subsequently passed the complete 589-test Flutter suite,
+  including the independent restored-scroll-offset regression;
 - `dart analyze .` reported no issues. `flutter analyze` did not reach code
   diagnostics because this SDK's analysis-server LSP initialization payload was
   truncated and exited 255; that pre-existing tool-process failure is retained
   as a limitation rather than reported as a code diagnostic;
-- the deterministic Linux integration run passed the HttpOnly/cleanup and 50-
-  cycle tests, with the account-free official-page case intentionally skipped;
-  the separate opt-in official-page-only run passed;
+- the final deterministic Linux integration run passed the HttpOnly/cleanup,
+  50-cycle and opt-in account-free official-page cases together in 40 seconds,
+  and its log contains zero DMA-BUF-import errors or disconnects;
 - Linux Release built successfully. `ldd` resolves the candidate plugin,
   WebKitGTK 4.1, JavaScriptCoreGTK, the Rust library and all other dependencies
   with no `not found` entry;
-- the Android ARM64 Debug APK built successfully and contains only the requested
-  ARM64 Flutter and Rust native libraries among those inspected;
+- the Android ARM64 Debug APK built successfully and contains only ARM64 native
+  libraries among those inspected, including the requested Rust library;
 - no public Rust Bridge API changed, so pinned FRB generation was not needed.
 
 An older Human-started `flutter run -d linux --debug` process remained active
@@ -224,8 +272,8 @@ The Agent did not log into a real NetEase account. Human acceptance checklist:
 The Human must not share `MUSIC_U`, a password, an SMS code, a browser cookie
 database or DevTools output, and must not install a MITM certificate.
 
-Promotion requires the Human evidence above. A default-runtime WebProcess
-crash, Flutter disconnect, exit hang, overlay corruption, pointer interception,
-unreadable HttpOnly cookie, incomplete website-data cleanup or need for a
-global renderer override immediately stops automatic promotion. The preserved
-external QR-confirmation baseline remains the rollback path.
+Promotion requires the Human evidence above. A WebProcess crash, Flutter
+disconnect, exit hang, overlay corruption, pointer interception, unreadable
+HttpOnly cookie or incomplete website-data cleanup with the measured SHM
+default stops promotion. The preserved external QR-confirmation baseline
+remains the rollback path.

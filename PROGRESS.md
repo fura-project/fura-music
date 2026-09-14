@@ -11,14 +11,49 @@ execution:
 
 # Current State
 
+- **2026-09-14 HD-027 Linux renderer correction complete; Human account review
+  still required:** a maintainer-reported default-renderer failure was reproduced
+  in the actual Fura official-login route on this Wayland/WebKitGTK host. The
+  default run logged 228 repeated `Failed to create EGL image from DMABuf`
+  errors while the Fura toolbar remained usable but the embedded page stayed
+  blank; independent default resize runs logged 12 and 233 of the same error.
+  A controlled A/B that changed only
+  `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` rendered the complete official
+  `music.163.com` page at 1280 x 720 and 900 x 600, survived resize,
+  interaction and close, and logged zero DMA-BUF import errors, native crashes
+  or Flutter disconnects. The Linux runner now selects that measured
+  shared-memory transport only when the user has not already supplied the
+  variable. The deterministic integration suite then passed native HttpOnly
+  Cookie cleanup, exactly 50 complete create/load/JavaScript-scroll/resize/
+  close cycles and an account-free official-page `readyState=complete` probe in
+  40 seconds with zero DMA-BUF errors or disconnects. A separate rapid 50-open
+  remote-site diagnostic was deliberately rejected as load evidence because it
+  mounted every view but produced no `page_finished` event and its retained
+  final Web content was blank. No compositing-disable fallback was stacked or
+  tested because the single-variable SHM path passed. Screenshots and logs are
+  ephemeral review artifacts under `/tmp/fura-webview-renderer-evidence` and
+  are not tracked. The Agent did not perform account login, QR confirmation,
+  SMS or security verification; authenticated reads, restart restore, real
+  security pages, repeated Human interaction and sign-out isolation remain
+  `HUMAN_REVIEW`. Final gates pass: Rust format, both locked workspace test
+  modes (550 passed and 23 intentionally ignored in each), strict all-target
+  Clippy, generated localization, 253-file Dart format, `dart analyze .`, all
+  589 Flutter tests, Linux Release with no missing WebKit/plugin/Rust library,
+  and an Android ARM64 Debug APK containing the requested ARM64 Rust library.
+  `flutter analyze` still exits before code diagnostics because this SDK's LSP
+  initialization JSON is truncated; direct Dart analysis is clean. Build caches
+  are intentionally retained per maintainer instruction.
+
 - **2026-09-14 HD-027 machine checkpoint complete; Human review required:**
   the exactly pinned `webview_all 1.4.1` candidate is now connected through one
   visible full-screen official-login route to the existing Rust pending-
   credential staging, Account Summary verification and NetEase-only vault.
-  Default Wayland completed the synthetic HttpOnly Cookie/website-data cleanup
-  probe and exactly 50 visible create/interact/resize/close cycles with zero
-  native crash or Flutter disconnect; a separate opt-in official
+  The initial machine run completed the synthetic HttpOnly Cookie/website-data
+  cleanup probe and exactly 50 visible create/interact/resize/close cycles with
+  zero native crash or Flutter disconnect; a separate opt-in official
   `https://music.163.com/#/login` render-only probe passed without signing in.
+  Later Human and production-route evidence supersedes that initial renderer
+  confidence; see the correction checkpoint above.
   Rust format, both workspace test modes (550 passed, 23 intentionally ignored),
   strict Clippy, generated localization, formatting of 253 Dart files, direct
   Dart analysis and all 588 Flutter tests pass. Linux Release links

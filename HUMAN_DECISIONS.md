@@ -333,3 +333,13 @@ renderer/backend environment override, a higher supported OS minimum or a new
 distribution policy, the affected scope stops at `HUMAN_DECISION`. A failed
 candidate is rejected without weakening or deleting the existing external-QR
 rollback path. No push is authorized by this decision.
+
+**2026-09-14 follow-up decision:** After Human evidence reproduced the blank
+page and DMA-BUF EGL-import failure, the maintainer explicitly authorized an
+exact default-versus-SHM A/B and a bounded production correction if the SHM
+path passed. Fura may therefore set
+`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` in the Linux runner only when the process
+environment has not already defined it. This does not authorize stacking
+`WEBKIT_DISABLE_COMPOSITING_MODE`, forcing software/X11 rendering, changing
+another platform, automating a login/security step, accepting a real account,
+or pushing commits.

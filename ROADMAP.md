@@ -25,22 +25,28 @@ their identities; relevant Rust/Flutter analysis, tests and Linux/Android
 builds pass. Real login, restart restore and repeated interactive stability are
 Human evidence.
 
-**2026-09-14 machine checkpoint:** the dependency/platform audit, default-
-renderer Linux probe, native HttpOnly Cookie read and clear, exactly 50 visible
-lifecycle cycles, render-only official-page probe, visible product route,
-bounded Cookie broker, cancellation/replacement/sign-out cleanup, existing Rust
-staging and verification reuse, playback-owner isolation, localized failure
-presentation, Rust/Flutter tests and Linux/Android builds are complete. No
-autonomous implementation item remains inside HD-027. Promotion now requires
-the documented Human real-account, security-page, authenticated-read, playback,
+**2026-09-14 corrected machine checkpoint:** Human evidence invalidated the
+initial default-renderer confidence. The failure was reproduced in the visible
+product route as a blank official page with repeated DMA-BUF EGL-import errors.
+A one-variable A/B selected `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`: the same
+route rendered correctly at full and reduced size, interaction/close remained
+clean, and the deterministic suite passed native HttpOnly Cookie cleanup,
+exactly 50 complete create/load/JavaScript-scroll/resize/close cycles and an
+account-free official-page completed-document check with zero DMA-BUF errors,
+crashes or disconnects. The Linux runner applies the measured SHM transport
+only when the user has not supplied an explicit value. No autonomous
+implementation item remains inside HD-027. Promotion still requires the
+documented Human real-account, security-page, authenticated-read, playback,
 restart, repeated-open/close, sign-out-isolation and visual checks.
 
 **Boundaries:** Linux remains WebKitGTK 4.1 and prior EGL/DMA-BUF/GStreamer
-evidence remains authoritative. No global renderer/backend override, higher OS
-minimum, password/SMS/CAPTCHA automation, TLS bypass, risk-control emulation,
-second credential owner/vault/player/Queue, auth framework, sidecar or push is
-authorized. A default-runtime failure rejects the candidate and retains the
-external-QR baseline; an override-only success stops for Human decision.
+evidence remains authoritative. The explicit follow-up Human instruction
+authorizes only the measured, Linux-runner SHM default and requires preservation
+of an externally supplied value. No second renderer flag, forced software/X11
+backend, higher OS minimum, password/SMS/CAPTCHA automation, TLS bypass,
+risk-control emulation, second credential owner/vault/player/Queue, auth
+framework, sidecar or push is authorized. The external-QR baseline remains the
+rollback path.
 
 ## Machine-complete Review Workstream — First-party Flutter localization (HD-026)
 

@@ -217,7 +217,7 @@ the playback plugin exposes a safe in-place localized metadata update.
 
 ## TD-013 — NetEase official login inherits Linux WebKitGTK risk
 
-**Status:** Human-gated candidate
+**Status:** Mitigated on the measured host; Human-gated across real accounts
 
 **Problem:** HD-027's pinned `webview_all 1.4.1` candidate provides a common
 visible WebView, native HttpOnly Cookie access and deterministic session close,
@@ -226,28 +226,35 @@ candidate produced Human-observed EGL/DMABuf and GStreamer WebProcess failures.
 A 50-cycle machine soak passing on one Wayland/NVIDIA+AMD host cannot erase
 that runtime evidence or establish broad hardware/driver stability.
 
-**Why accepted:** The default, unmodified Linux environment passed the bounded
-lifecycle, interaction, resize, HttpOnly Cookie and website-data cleanup probes,
-and the current official page rendered without a Flutter disconnect. The
-candidate stays behind the existing authentication gateway and preserves the
-external QR handoff as immediate rollback. No renderer override is shipped.
+**Why accepted:** Later Human evidence showed that the initial default-renderer
+probe was not representative: the actual product route stayed blank while
+WebKitGTK repeatedly failed DMA-BUF EGL imports. A controlled A/B changed only
+`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`; the official page then rendered at full
+and reduced size and the deterministic Cookie/cleanup plus 50-cycle load,
+interaction, resize and close suite passed without DMA-BUF errors, crashes or
+disconnects. The measured SHM transport is now a Linux-only default that
+preserves an explicit user environment value. The candidate stays behind the
+existing authentication gateway and preserves external QR as rollback.
 
 **Impact:** Linux packages again require WebKitGTK 4.1 development/runtime
 libraries, and the official login route can increase binary/runtime dependency
 surface even though playback, Provider and credential ownership remain
 unchanged.
 
-**Risk:** A real security-verification page, long-lived session, repeated
-window teardown, another compositor or another GPU/driver can still crash or
-hang a WebProcess. A global DMA-BUF/software-rendering workaround could affect
-the entire application and is not authorized by HD-027.
+**Risk:** The setting is process-wide for WebKitGTK WebViews, although it does
+not select Flutter's renderer or the playback engine. A real security-
+verification page, long-lived session, another compositor or another GPU/
+driver can still crash or hang a WebProcess. Shared-memory transport may cost
+more copy/bandwidth than direct DMA-BUF import. Explicit user overrides remain
+available for diagnostics and future WebKitGTK fixes.
 
 **Suggested solution:** Complete the documented Human real-account/open-close/
-resize/restart/sign-out matrix on the default renderer. Promote only after zero
-crash, disconnect, exit-hang, overlay or pointer-interception evidence. If a
-default-runtime failure recurs, keep the external QR baseline and make a new
-Human decision between an explicitly measured renderer workaround, a CEF-class
-engine, or no embedded official login.
+resize/restart/sign-out matrix with the measured SHM default. Promote only after
+zero crash, disconnect, exit-hang, overlay or pointer-interception evidence.
+Retest after WebKitGTK/GPU-driver changes and remove the default only after the
+unmodified renderer is proven. If the SHM path fails elsewhere, keep external
+QR and make a new Human decision between a narrower compatibility switch, a
+CEF-class engine, or no embedded official login.
 
 **Trigger condition:** Reassess after the Human HD-027 trial, any WebProcess or
 Flutter device disconnect, a WebKitGTK/package upgrade, or before a Linux
