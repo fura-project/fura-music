@@ -215,4 +215,42 @@ identity requirements justify them.
 when notification-channel copy becomes a product acceptance criterion, or when
 the playback plugin exposes a safe in-place localized metadata update.
 
+## TD-013 — NetEase official login inherits Linux WebKitGTK risk
+
+**Status:** Human-gated candidate
+
+**Problem:** HD-027's pinned `webview_all 1.4.1` candidate provides a common
+visible WebView, native HttpOnly Cookie access and deterministic session close,
+but its Linux implementation still runs on WebKitGTK 4.1. The earlier embedded
+candidate produced Human-observed EGL/DMABuf and GStreamer WebProcess failures.
+A 50-cycle machine soak passing on one Wayland/NVIDIA+AMD host cannot erase
+that runtime evidence or establish broad hardware/driver stability.
+
+**Why accepted:** The default, unmodified Linux environment passed the bounded
+lifecycle, interaction, resize, HttpOnly Cookie and website-data cleanup probes,
+and the current official page rendered without a Flutter disconnect. The
+candidate stays behind the existing authentication gateway and preserves the
+external QR handoff as immediate rollback. No renderer override is shipped.
+
+**Impact:** Linux packages again require WebKitGTK 4.1 development/runtime
+libraries, and the official login route can increase binary/runtime dependency
+surface even though playback, Provider and credential ownership remain
+unchanged.
+
+**Risk:** A real security-verification page, long-lived session, repeated
+window teardown, another compositor or another GPU/driver can still crash or
+hang a WebProcess. A global DMA-BUF/software-rendering workaround could affect
+the entire application and is not authorized by HD-027.
+
+**Suggested solution:** Complete the documented Human real-account/open-close/
+resize/restart/sign-out matrix on the default renderer. Promote only after zero
+crash, disconnect, exit-hang, overlay or pointer-interception evidence. If a
+default-runtime failure recurs, keep the external QR baseline and make a new
+Human decision between an explicitly measured renderer workaround, a CEF-class
+engine, or no embedded official login.
+
+**Trigger condition:** Reassess after the Human HD-027 trial, any WebProcess or
+Flutter device disconnect, a WebKitGTK/package upgrade, or before a Linux
+release claims official Web login support.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

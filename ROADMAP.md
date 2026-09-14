@@ -2,7 +2,7 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
-## Active Experimental Workstream — NetEase `webview_all` official login (HD-027)
+## Human Review Workstream — NetEase `webview_all` official login (HD-027)
 
 **Goal:** obtain bounded evidence for one official NetEase Web-login candidate
 without replacing the current direct QR, external official QR-confirmation or
@@ -24,6 +24,16 @@ failure; Queue, current Track, `AppPlaybackHost` and system-audio handler keep
 their identities; relevant Rust/Flutter analysis, tests and Linux/Android
 builds pass. Real login, restart restore and repeated interactive stability are
 Human evidence.
+
+**2026-09-14 machine checkpoint:** the dependency/platform audit, default-
+renderer Linux probe, native HttpOnly Cookie read and clear, exactly 50 visible
+lifecycle cycles, render-only official-page probe, visible product route,
+bounded Cookie broker, cancellation/replacement/sign-out cleanup, existing Rust
+staging and verification reuse, playback-owner isolation, localized failure
+presentation, Rust/Flutter tests and Linux/Android builds are complete. No
+autonomous implementation item remains inside HD-027. Promotion now requires
+the documented Human real-account, security-page, authenticated-read, playback,
+restart, repeated-open/close, sign-out-isolation and visual checks.
 
 **Boundaries:** Linux remains WebKitGTK 4.1 and prior EGL/DMA-BUF/GStreamer
 evidence remains authoritative. No global renderer/backend override, higher OS

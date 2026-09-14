@@ -15,6 +15,53 @@ provider confirmation and restart persistence remain
 
 This is the required final-stop audit. `DONE` means the authorized machine-verifiable implementation/evidence boundary is complete; it never promotes real-account, unavailable-host, playback, UI, or release evidence. This regression adds only the explicitly authorized NetEase phone-code form and its typed lifecycle; pre-existing QQ and unrelated Flutter working-tree edits remain preserved.
 
+## HD-027 `webview_all` candidate addendum — 2026-09-14
+
+HD-027 supersedes only the earlier conclusion that no bounded embedded-browser
+candidate remained. It does not erase the previous Linux crash evidence and it
+does not promote the candidate without Human real-account and stability
+evidence. Full design and host evidence are recorded in
+`docs/research/netease-webview-all-trial.md`.
+
+| Item | Classification | Evidence / exact boundary |
+|---|---|---|
+| HD-027 | DONE | Explicit Human authorization records one bounded `AUTONOMOUS_DEVELOPMENT / MIXED` trial; no generic browser framework or release claim. |
+| Dependency audit and license | DONE | Exactly pinned `webview_all 1.4.1`, MIT, matches Flutter/Dart baselines. |
+| Android minimum | DONE | Fura's resolved Flutter Android minimum remains API 24, matching the dependency minimum. |
+| Linux WebKitGTK build dependency | DONE | CI installs WebKitGTK 4.1 development files; current host exposes WebKitGTK 2.52.5. |
+| Linux default runtime | DONE | Current Wayland host passed the machine probe with inherited environment and no renderer override. This is one-host evidence only. |
+| `music.163.com` render/input/scroll/resize | DONE | Official render-only probe reached the exact HTTPS origin; synthetic visible probes exercised input, JavaScript, scroll and resize. No account login. |
+| 50+ close/reopen | DONE | Exactly 50 visible create/load/interact/resize/unmount/close cycles; zero native crash and zero Flutter disconnect. |
+| Synthetic HttpOnly Cookie | DONE | Hidden from JavaScript and observed by the native/common Cookie API. |
+| Website-data clear | DONE | Native clearing completed and the synthetic Cookie disappeared. |
+| `OfficialWebLoginBroker` | DONE | One typed broker owns support, presentation, attempt, timeout, cleanup and minimal candidate production. |
+| Visible login route | DONE | Dedicated full-screen Material surface mounts the provider-owned `WebViewWidget`; no `BuildContext` enters the gateway. Human visual acceptance remains separate. |
+| Cookie polling | DONE | Native Cookie API only, approximately one second plus page wakeups, one sequential read at a time. |
+| Rust staging reuse | DONE | Returned mutable bytes still enter `stage_netease_official_web_credential`; no browser-to-vault write or second Provider owner. |
+| Account verification | DONE | Existing Account Summary verification remains mandatory after staging; success/rejection/transient/cancel mappings are machine-tested. Real account is Human-only. |
+| Vault persistence | DONE | Existing NetEase-only vault is written only after verified success; candidate bytes are cleared after staging. Runtime restart restore is Human-only. |
+| Cancel and Provider-switch stale suppression | DONE | Attempt/controller generations cancel the WebView and verification, discard late Cookie/results and serialize replacement after cleanup. |
+| Sign-out cleanup | DONE | NetEase sign-out cancels/clears browser data, then clears native state and its own vault; browser cleanup failure is separately retryable. Human isolation is pending. |
+| Direct QR, external handoff and SMS | DONE | Preserved unchanged as rollback and alternate candidates, including their tests/evidence. |
+| QQ regression | DONE | No QQ implementation path changed; the full Flutter suite is the regression gate. |
+| Playback regression | DONE | A playing fake-backed shared owner remains identical and playing through official-route open/close; current Track stays identical and session receives zero stop calls. |
+| i18n | DONE | English and Simplified Chinese loading/waiting/verifying/timeout/cleanup copy is generated from ARB. Human wording/visual acceptance remains pending. |
+| Rust gates | DONE | Rust format and strict workspace/all-target Clippy pass. Workspace and all-target test modes each pass 550 tests with 23 explicit live/Human tests ignored. No Rust or public Bridge API changed. |
+| Flutter gates | DONE | Generated localization and formatting of 253 Dart files pass, `dart analyze .` reports no issues, and all 588 Flutter tests pass. `flutter analyze` exits 255 before diagnostics on the existing truncated-LSP-initialization host failure. |
+| FRB | NOT_APPLICABLE | No public Rust Bridge signature changed; pinned regeneration is neither required nor performed. |
+| Linux WebView integration | DONE | Final default-runtime run passes native HttpOnly read/clear and exactly 50 visible lifecycle cycles; the separate opt-in official-page-only render probe also passes. No account login was performed. |
+| Linux Release | DONE | Current-tree Release builds and `ldd` resolves the WebView plugin, WebKitGTK 4.1, JavaScriptCoreGTK and Rust library with no missing dependency; runtime login remains Human-only. |
+| Android ARM64 | DONE | Current-tree ARM64 debug APK builds and contains the requested `arm64-v8a` Rust library; physical-device login is not claimed. |
+| Windows build | ENVIRONMENT_EVIDENCE_REQUIRED | Linux host lacks the Windows toolchain/runtime. Generated registrant and dependency constraints are present only. |
+| macOS build | ENVIRONMENT_EVIDENCE_REQUIRED | Linux host lacks Xcode/macOS runtime. Generated registrant and dependency constraints are present only. |
+| iOS build | ENVIRONMENT_EVIDENCE_REQUIRED | Linux host lacks Xcode/iOS runtime. Dependency floors are compatible only. |
+| Human real NetEase login | HUMAN_EVIDENCE_REQUIRED | Agent did not use an account; Human must complete provider-owned login/security verification and confirm Account Summary/Library. |
+| Human Linux stability | HUMAN_EVIDENCE_REQUIRED | Human must keep playback active, resize, repeat open/close, restart, restore and sign out on the default renderer. |
+| Human visual acceptance | HUMAN_EVIDENCE_REQUIRED | The full-screen official surface and English/Chinese wording are review artifacts, not accepted product UI. |
+
+No HD-027 item remains `REMAINING_AUTONOMOUS_WORK`. The correct stop remains
+`HUMAN_REVIEW`.
+
 ## Core hardening
 
 | Item | Classification | Evidence / exact boundary |

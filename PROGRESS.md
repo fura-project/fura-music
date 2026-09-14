@@ -2,14 +2,35 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: IN_PROGRESS
+  state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
   active_workstream: NETEASE_WEBVIEW_ALL_OFFICIAL_LOGIN_TRIAL
-  current_task: WEBVIEW_ALL_LINUX_FIRST_PROBE
-  next_action: RUN_LINUX_WEBVIEW_ALL_LIFECYCLE_COOKIE_AND_CLEANUP_GATES
+  current_task: NETEASE_WEBVIEW_ALL_HUMAN_REAL_ACCOUNT_AND_STABILITY_REVIEW
+  next_action: HUMAN_RUN_OFFICIAL_LOGIN_PLAYBACK_RESTART_AND_SIGN_OUT_MATRIX
 ---
 
 # Current State
+
+- **2026-09-14 HD-027 machine checkpoint complete; Human review required:**
+  the exactly pinned `webview_all 1.4.1` candidate is now connected through one
+  visible full-screen official-login route to the existing Rust pending-
+  credential staging, Account Summary verification and NetEase-only vault.
+  Default Wayland completed the synthetic HttpOnly Cookie/website-data cleanup
+  probe and exactly 50 visible create/interact/resize/close cycles with zero
+  native crash or Flutter disconnect; a separate opt-in official
+  `https://music.163.com/#/login` render-only probe passed without signing in.
+  Rust format, both workspace test modes (550 passed, 23 intentionally ignored),
+  strict Clippy, generated localization, formatting of 253 Dart files, direct
+  Dart analysis and all 588 Flutter tests pass. Linux Release links
+  `libwebview_all_linux_plugin.so`, WebKitGTK 4.1 and the Rust bridge with no
+  missing library; the Android ARM64 Debug APK contains the ARM64 Rust library.
+  `flutter analyze` still fails before code diagnostics because this SDK's LSP
+  initialization JSON is truncated; `dart analyze .` reports no issues. No
+  public Rust Bridge signature changed, so FRB regeneration was not performed.
+  Real account login/security handling, authenticated reads, restart restore,
+  repeated default-renderer stability, sign-out isolation and visual acceptance
+  remain strictly Human evidence. Five logical commits are local and unpushed;
+  final documentation is the remaining local handoff commit.
 
 - **2026-09-14 HD-027 bounded `webview_all` trial authorized:** the Human
   explicitly switches this bounded NetEase official-Web-login experiment to

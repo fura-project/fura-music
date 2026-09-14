@@ -145,6 +145,23 @@ The signed-in account-summary capability reuses the same bounded `GetLoginUserIn
 
 Authentication presentation keeps asynchronous status/error information separate from controls. The signed-out Shell opens one adaptive dialog offering QQ QR or WeChat QR without collecting a password. Active QR waiting, scanned-awaiting-confirmation, reconnecting, saved-session, and terminal copy expose only their title and explanation as one semantic live region; the QR image, cancel, retry, cleanup, and method-selection controls remain independent semantic nodes. This is presentation behavior only and does not change credential classification, polling, retry authority, or protocol state.
 
+HD-027 adds one bounded NetEase official-Web candidate behind the existing
+`OfficialWebAuthenticationGateway`. `PlatformNeteaseOfficialWebLoginBroker`
+owns a short-lived `webview_all` session and exposes only its visible Widget
+and coarse presentation stage; no `BuildContext` enters the gateway. The full-
+screen Material login surface can therefore mount and detach the native view
+without replacing the app-lifetime Queue/playback owner. Exact HTTPS
+`music.163.com` is the only current top-level Web origin. Native Cookie access
+selects only `MUSIC_U` and optional `__csrf`, constructs bounded mutable bytes,
+then closes and clears WebView data. Those bytes still enter the existing Rust
+pending-candidate staging and Account Summary verification path; they never
+authenticate or enter the NetEase-only vault directly. Cancel, route close,
+Provider replacement, disposal and sign-out invalidate generations and
+suppress late Cookie/verification results. Direct QR, its external official
+confirmation handoff, SMS and QQ authentication remain independent rollback
+paths. Linux promotion remains Human-gated because the package still uses
+WebKitGTK; see `docs/research/netease-webview-all-trial.md`.
+
 Explicit sign-out is local and ordered across the same boundary; it does not invent a remote QQ Music account-logout protocol. `QQMusicProvider` cancels the current QR generation, clears restoration-verification authority, and replaces authenticated, pending, or expired credential state with signed out under the existing lock order. Late verification or Provider work therefore resolves as replaced instead of reviving the session. The synchronous Bridge reports only whether Core performed that transition. Dart deletes the one serialized platform-vault entry only after Core succeeds: Core failure retains both current login and vault, while vault failure leaves Core signed out, reports that restart may restore the saved copy, and offers cleanup retry. `LoginController` owns one in-flight sign-out Future, so repeated activation cannot duplicate Core/vault work; retry presentation stays visible and disabled while that operation runs, and an unexpected gateway exception is reduced to the same Core-unavailable state. The authenticated page confirms the action and stops foreground playback while vault deletion is pending.
 
 QR starts reserve opaque process-local attempt numbers at the Bridge before network work begins. Cancel/restart/dispose can cancel the exact pending operation; comparison against the current start prevents a late old controller from cancelling its replacement. After a challenge returns, Dart discards the start operation and uses the Rust-owned session handle. Dart owns presentation stages, one-second QR network-reconnect delay, adaptive layout, animation, and late-result visibility guards. Rust remains the authority for protocol deadlines, failure counts, session generations, and credential state.
