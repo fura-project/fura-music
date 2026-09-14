@@ -60,15 +60,7 @@ pub(crate) fn decode_media(v: &Value, expected: u64) -> Result<Media, Error> {
     if uri.len() > 8192 {
         return Err(Error::ResponseBound);
     }
-    let parsed = url::Url::parse(&uri).map_err(|_| Error::ResponseShapeMismatch)?;
-    if !matches!(parsed.scheme(), "https" | "http")
-        || parsed.host_str().is_none()
-        || !parsed.username().is_empty()
-        || parsed.password().is_some()
-        || parsed.fragment().is_some()
-    {
-        return Err(Error::ResponseShapeMismatch);
-    }
+    let uri = normalize_media_uri(&uri)?;
     let format = match item.format.as_deref() {
         Some("mp3") => MediaFormat::Mp3,
         Some("m4a" | "aac") => MediaFormat::M4a,
@@ -87,6 +79,55 @@ pub(crate) fn decode_media(v: &Value, expected: u64) -> Result<Media, Error> {
         valid_for_seconds: ttl,
     })
 }
+
+fn normalize_media_uri(uri: &str) -> Result<String, Error> {
+    let mut parsed = url::Url::parse(uri).map_err(|_| Error::ResponseShapeMismatch)?;
+    let host = parsed.host_str().ok_or(Error::ResponseShapeMismatch)?;
+    if !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.port().is_some()
+        || uri
+            .split_once("://")
+            .and_then(|(_, remainder)| remainder.split(['/', '?', '#']).next())
+            .is_some_and(|authority| authority.contains(':'))
+        || parsed.fragment().is_some()
+    {
+        return Err(Error::ResponseShapeMismatch);
+    }
+    match parsed.scheme() {
+        "https" => {}
+        "http" if trusted_cleartext_media_host(host) => {
+            parsed
+                .set_scheme("https")
+                .map_err(|()| Error::ResponseShapeMismatch)?;
+        }
+        _ => return Err(Error::ResponseShapeMismatch),
+    }
+    Ok(parsed.into())
+}
+
+fn trusted_cleartext_media_host(host: &str) -> bool {
+    let Some(label) = host.strip_suffix(".music.126.net") else {
+        return false;
+    };
+    let Some(digits) = label.strip_prefix('m') else {
+        return false;
+    };
+    !digits.is_empty() && digits.len() <= 4 && digits.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn log_media_source(media: &Media) {
+    let Ok(uri) = url::Url::parse(media.uri()) else {
+        return;
+    };
+    media_debug(format_args!(
+        "phase=source outcome=ready scheme={} host={} format={:?} quality=standard ttl={}",
+        uri.scheme(),
+        uri.host_str().unwrap_or("none"),
+        media.format,
+        media.valid_for_seconds,
+    ));
+}
 impl<T: Transport> NeteaseClient<T> {
     /// One normal, standard-quality source request. No fallback, substitution or trial escalation.
     /// # Errors
@@ -101,7 +142,9 @@ impl<T: Transport> NeteaseClient<T> {
                 None,
             )
             .await?;
-        decode_media(&v, id)
+        let media = decode_media(&v, id)?;
+        log_media_source(&media);
+        Ok(media)
     }
 
     /// Resolves one standard source using the current desktop EAPI route and
@@ -159,7 +202,9 @@ impl<T: Transport> NeteaseClient<T> {
                 .unwrap_or("none"),
         ));
         let (value, _) = Self::accepted_response(value, cookies, true)?;
-        decode_media(&value, id)
+        let media = decode_media(&value, id)?;
+        log_media_source(&media);
+        Ok(media)
     }
 }
 
@@ -197,11 +242,38 @@ mod tests {
             "file:///secret",
             "https://u:p@example.test/a",
             "https://example.test/a#token",
+            "http://m701.music.126.net.evil.test/source",
+            "http://evil.music.126.net/source",
+            "http://m701.music.126.net:80/source",
+            "https://fixture.invalid:443/source",
+            "http://m.music.126.net/source",
+            "http://m12345.music.126.net/source",
+            "http://m701a.music.126.net/source",
         ] {
             let mut v = value();
             v["data"][0]["url"] = json!(url);
             assert!(decode_media(&v, 7).is_err());
         }
+    }
+
+    #[test]
+    fn trusted_cleartext_media_is_upgraded_without_changing_path_or_query() {
+        let mut v = value();
+        v["data"][0]["url"] =
+            json!("http://m701.music.126.net/a%2Fb/source.m4a?token=synthetic%2Fvalue");
+        v["data"][0]["type"] = json!("m4a");
+        let source = decode_media(&v, 7).unwrap();
+        assert_eq!(
+            source.uri(),
+            "https://m701.music.126.net/a%2Fb/source.m4a?token=synthetic%2Fvalue"
+        );
+        assert_eq!(source.format, MediaFormat::M4a);
+    }
+
+    #[test]
+    fn native_https_media_is_preserved() {
+        let source = decode_media(&value(), 7).unwrap();
+        assert_eq!(source.uri(), "https://fixture.invalid/source");
     }
 
     struct RecordingTransport {

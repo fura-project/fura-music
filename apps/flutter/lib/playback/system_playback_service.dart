@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -74,6 +75,48 @@ class AudioServiceAppPlaybackHost implements AppPlaybackHost {
   }
 }
 
+typedef ProjectAudioServiceInitializer = Future<void> Function(
+  ProjectSystemAudioHandler handler,
+  AudioServiceConfig config,
+);
+
+typedef ProjectAudioSessionFactory = Future<ProjectAudioSession> Function();
+
+abstract interface class ProjectAudioSession {
+  Stream<AudioInterruptionEvent> get interruptionEvents;
+
+  Stream<void> get becomingNoisyEvents;
+
+  Future<void> configureMusic();
+}
+
+class PlatformProjectAudioSession implements ProjectAudioSession {
+  PlatformProjectAudioSession._(this._session);
+
+  final AudioSession _session;
+
+  static Future<ProjectAudioSession> create() async =>
+      PlatformProjectAudioSession._(await AudioSession.instance);
+
+  @override
+  Stream<AudioInterruptionEvent> get interruptionEvents =>
+      _session.interruptionEventStream;
+
+  @override
+  Stream<void> get becomingNoisyEvents => _session.becomingNoisyEventStream;
+
+  @override
+  Future<void> configureMusic() =>
+      _session.configure(const AudioSessionConfiguration.music());
+}
+
+Future<void> _initializeProjectAudioService(
+  ProjectSystemAudioHandler handler,
+  AudioServiceConfig config,
+) async {
+  await AudioService.init(builder: () => handler, config: config);
+}
+
 QueuePlaybackController createAppPlaybackController({
   required PlaybackQueueGateway playbackQueueGateway,
   required MediaResolutionGateway mediaResolutionGateway,
@@ -131,6 +174,12 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
   required MediaResolutionGateway mediaResolutionGateway,
   required LyricGateway lyricGateway,
   required ForegroundAudioEngine audioEngine,
+  @visibleForTesting
+  ProjectAudioServiceInitializer audioServiceInitializer =
+      _initializeProjectAudioService,
+  @visibleForTesting
+  ProjectAudioSessionFactory audioSessionFactory =
+      PlatformProjectAudioSession.create,
 }) async {
   final controller = createAppPlaybackController(
     playbackQueueGateway: playbackQueueGateway,
@@ -139,53 +188,48 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     audioEngine: audioEngine,
   );
   final handler = ProjectSystemAudioHandler(controller);
+  _logSystemPlayback(phase: 'audio_service_init', outcome: 'started');
   try {
     registerProjectLinuxMprisAudioService();
-    await AudioService.init(
-      builder: () => handler,
-      config: projectAudioServiceConfig,
-    );
+    await audioServiceInitializer(handler, projectAudioServiceConfig);
   } on Object catch (error) {
     handler.close(clearPlatformState: false);
-    developer.log(
-      'System media-session initialization failed; '
-      'phase=audio-service platform=${defaultTargetPlatform.name} '
-      'errorType=${error.runtimeType}; foreground playback remains available.',
-      name: 'fura_music.system_playback',
+    _logSystemPlayback(
+      phase: 'audio_service_init',
+      outcome: 'failed',
+      error: error,
       level: 1000,
     );
+    _logSystemPlayback(phase: 'host_selected', outcome: 'foreground_only');
     return ForegroundAppPlaybackHost(controller);
   }
+  _logSystemPlayback(phase: 'audio_service_init', outcome: 'success');
 
   StreamSubscription<AudioInterruptionEvent>? interruptionSubscription;
   StreamSubscription<void>? becomingNoisySubscription;
+  _logSystemPlayback(phase: 'audio_session_configure', outcome: 'started');
   try {
-    final audioSession = await AudioSession.instance;
-    await audioSession.configure(const AudioSessionConfiguration.music());
-    interruptionSubscription = audioSession.interruptionEventStream.listen((
-      event,
-    ) {
+    final audioSession = await audioSessionFactory();
+    await audioSession.configureMusic();
+    interruptionSubscription = audioSession.interruptionEvents.listen((event) {
       if (event.begin && event.type != AudioInterruptionType.duck) {
         unawaited(handler.pause());
       }
     });
-    becomingNoisySubscription = audioSession.becomingNoisyEventStream.listen(
+    becomingNoisySubscription = audioSession.becomingNoisyEvents.listen(
       (_) => unawaited(handler.pause()),
     );
+    _logSystemPlayback(phase: 'audio_session_configure', outcome: 'success');
   } on Object catch (error) {
-    developer.log(
-      'Audio focus configuration failed; '
-      'platform=${defaultTargetPlatform.name} errorType=${error.runtimeType}; '
-      'the initialized system media session remains active.',
-      name: 'fura_music.system_playback',
+    _logSystemPlayback(
+      phase: 'audio_session_configure',
+      outcome: 'failed',
+      error: error,
       level: 900,
     );
   }
 
-  developer.log(
-    'System media session ready; platform=${defaultTargetPlatform.name}.',
-    name: 'fura_music.system_playback',
-  );
+  _logSystemPlayback(phase: 'host_selected', outcome: 'audio_service');
   return AudioServiceAppPlaybackHost._(
     handler,
     interruptionSubscription,
@@ -394,9 +438,10 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> onTaskRemoved() async {
-    developer.log(
-      'Android task removed; playbackStage=${controller.playback.stage.name}.',
-      name: 'fura_music.system_playback',
+    _logSystemPlayback(
+      phase: 'task_removed',
+      outcome: 'received',
+      detail: 'stage=${controller.playback.stage.name}',
     );
   }
 
@@ -423,9 +468,10 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
     required bool accepted,
     required String reason,
   }) {
-    developer.log(
-      'System media command; action=$action accepted=$accepted reason=$reason.',
-      name: 'fura_music.system_playback',
+    _logSystemPlayback(
+      phase: 'system_command',
+      outcome: 'received',
+      detail: 'action=$action accepted=$accepted reason=$reason',
     );
   }
 
@@ -460,6 +506,11 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
     if (force || itemSignature != _lastItemSignature) {
       _lastItemSignature = itemSignature;
       mediaItem.add(currentItem);
+      _logSystemPlayback(
+        phase: 'handler_media_item',
+        outcome: 'published',
+        detail: 'present=${currentItem != null}',
+      );
     }
 
     final stage = controller.playback.stage;
@@ -477,6 +528,8 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
       order: controller.order,
       repeatMode: controller.repeatMode,
     );
+    final semanticsChanged =
+        _lastPlayback == null || !_lastPlayback!.sameSemantics(nextPlayback);
     if (!force && !_shouldPublishPlayback(nextPlayback)) return;
     _lastPlayback = nextPlayback;
 
@@ -516,6 +569,15 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
             : null,
       ),
     );
+    if (force || semanticsChanged) {
+      _logSystemPlayback(
+        phase: 'handler_playback_state',
+        outcome: 'published',
+        detail:
+            'stage=${stage.name} playing=${stage == TrackPlaybackStage.playing} '
+            'controls=${_controls(controller).length}',
+      );
+    }
   }
 
   bool _shouldPublishPlayback(_PublishedPlayback next) {
@@ -528,6 +590,29 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
     return (next.position - projected).abs() >= const Duration(seconds: 2);
   }
 }
+
+void _logSystemPlayback({
+  required String phase,
+  required String outcome,
+  String? detail,
+  Object? error,
+  int level = 0,
+}) {
+  final platformCode = error is PlatformException
+      ? _safeSystemPlaybackPlatformCode(error.code)
+      : 'none';
+  developer.log(
+    'FURA_DIAGNOSTIC android_system_playback phase=$phase outcome=$outcome '
+    'platform=${defaultTargetPlatform.name}'
+    '${detail == null ? '' : ' $detail'}'
+    '${error == null ? '' : ' errorType=${error.runtimeType} platformCode=$platformCode'}',
+    name: 'fura_music.system_playback',
+    level: level,
+  );
+}
+
+String _safeSystemPlaybackPlatformCode(String value) =>
+    RegExp(r'^[A-Za-z0-9_.-]{1,64}$').hasMatch(value) ? value : 'unrecognized';
 
 List<MediaControl> _controls(QueuePlaybackController controller) => [
   if (controller.hasPrevious) MediaControl.skipToPrevious,

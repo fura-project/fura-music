@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -117,6 +119,12 @@ class TrackPlaybackController extends ChangeNotifier {
     _engineFailure = null;
     _resolvedQuality = null;
     _resolving = true;
+    final safeProvider = _safeProviderName(track.providerId);
+    _logPlaybackResolution(
+      phase: 'resolve',
+      outcome: 'started',
+      provider: safeProvider,
+    );
     _setStage(TrackPlaybackStage.resolving);
     await _playback.stop();
     if (!_isCurrent(generation)) return;
@@ -137,12 +145,27 @@ class TrackPlaybackController extends ChangeNotifier {
     if (failure != null || source == null) {
       _resolving = false;
       _resolutionFailure = failure ?? MediaResolutionFailure.invalidResponse;
+      _logPlaybackResolution(
+        phase: 'resolve',
+        outcome: 'failure',
+        provider: safeProvider,
+        detail: 'failure=${_resolutionFailure!.name}',
+      );
       _setStage(TrackPlaybackStage.resolutionError);
       return;
     }
 
     _resolving = false;
     _resolvedQuality = source.quality;
+    _logPlaybackResolution(
+      phase: 'resolve',
+      outcome: 'success',
+      provider: safeProvider,
+      detail:
+          'scheme=${_safeScheme(source.uri.scheme)} '
+          'host=${_safeHost(source.uri.host)} format=${source.format.name} '
+          'quality=${source.quality.name} ttl=${source.validForSeconds}',
+    );
     await _playback.playRemote(
       source.uri,
       format: switch (source.format) {
@@ -192,6 +215,12 @@ class TrackPlaybackController extends ChangeNotifier {
     if (_playback.stage == ForegroundPlaybackStage.error) {
       _engineFailure =
           playbackFailure ?? ForegroundAudioFailure.coreUnavailable;
+      _logPlaybackResolution(
+        phase: 'engine',
+        outcome: 'failure',
+        provider: _safeProviderName(_track?.providerId),
+        detail: 'failure=${_engineFailure!.name}',
+      );
       if (!_setStage(TrackPlaybackStage.engineError) &&
           (positionChanged || volumeChanged)) {
         notifyListeners();
@@ -233,3 +262,34 @@ class TrackPlaybackController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+void _logPlaybackResolution({
+  required String phase,
+  required String outcome,
+  required String provider,
+  String? detail,
+}) {
+  developer.log(
+    'FURA_DIAGNOSTIC media_playback phase=$phase outcome=$outcome '
+    'provider=$provider${detail == null ? '' : ' $detail'}',
+    name: 'fura_music.playback',
+    level: outcome == 'failure' ? 1000 : 0,
+  );
+}
+
+String _safeProviderName(String? providerId) => switch (providerId) {
+  'qq-music' => 'qq_music',
+  'netease-cloud-music' => 'netease',
+  _ => 'other',
+};
+
+String _safeScheme(String value) => switch (value) {
+  'http' => 'http',
+  'https' => 'https',
+  _ => 'other',
+};
+
+String _safeHost(String value) =>
+    RegExp(r'^[A-Za-z0-9.-]{1,253}$').hasMatch(value)
+    ? value.toLowerCase()
+    : 'unrecognized';

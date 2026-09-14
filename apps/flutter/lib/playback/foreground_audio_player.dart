@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:audioplayers/audioplayers.dart' as audio;
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 enum ForegroundAudioState { stopped, playing, paused, completed }
 
@@ -24,6 +28,28 @@ abstract interface class ForegroundAudioEngine {
   });
 }
 
+/// Audio focus remains owned by audio_session. The audioplayers Android
+/// implementation is configured not to create a competing focus request.
+abstract interface class ForegroundAudioFocusManager {
+  Future<bool> setActive(bool active);
+}
+
+class AudioSessionForegroundAudioFocusManager
+    implements ForegroundAudioFocusManager {
+  const AudioSessionForegroundAudioFocusManager();
+
+  @override
+  Future<bool> setActive(bool active) async =>
+      (await AudioSession.instance).setActive(active);
+}
+
+@visibleForTesting
+final projectAudioplayersAudioContext = audio.AudioContext(
+  android: const audio.AudioContextAndroid(
+    audioFocus: audio.AndroidAudioFocus.none,
+  ),
+);
+
 abstract interface class ForegroundAudioSession {
   Stream<ForegroundAudioState> get states;
   Stream<ForegroundAudioFailure> get failures;
@@ -38,12 +64,18 @@ abstract interface class ForegroundAudioSession {
 }
 
 class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
-  AudioplayersForegroundAudioEngine() {
+  AudioplayersForegroundAudioEngine({
+    ForegroundAudioFocusManager? audioFocusManager,
+  }) : _audioFocusManager =
+           audioFocusManager ??
+           const AudioSessionForegroundAudioFocusManager() {
     // AudioPlayerException includes player.source in its string form. QQ media
     // URIs can carry authorization, so plugin-owned logging is disabled before
     // any player exists. The adapter exposes only coarse project failures.
     audio.AudioLogger.logLevel = audio.AudioLogLevel.none;
   }
+
+  final ForegroundAudioFocusManager _audioFocusManager;
 
   @override
   Future<ForegroundAudioSession> loadRemote(
@@ -55,9 +87,13 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
       throw const ForegroundAudioException(ForegroundAudioFailure.load);
     }
 
-    final session = _AudioplayersForegroundAudioSession(audio.AudioPlayer());
+    final session = _AudioplayersForegroundAudioSession(
+      audio.AudioPlayer(),
+      _audioFocusManager,
+    );
     try {
       await session.prepare(source, format);
+      _logEngineSuccess(phase: 'prepare');
       return session;
     } on Object {
       await session.dispose();
@@ -67,9 +103,13 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
 }
 
 class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
-  _AudioplayersForegroundAudioSession(this._player) {
+  _AudioplayersForegroundAudioSession(this._player, this._audioFocusManager) {
     _stateSubscription = _player.onPlayerStateChanged.listen((state) {
       if (_disposed) return;
+      if (state == audio.PlayerState.stopped ||
+          state == audio.PlayerState.completed) {
+        unawaited(_deactivateFocus());
+      }
       _states.add(switch (state) {
         audio.PlayerState.stopped => ForegroundAudioState.stopped,
         audio.PlayerState.playing => ForegroundAudioState.playing,
@@ -89,6 +129,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
   }
 
   final audio.AudioPlayer _player;
+  final ForegroundAudioFocusManager _audioFocusManager;
   final StreamController<ForegroundAudioState> _states =
       StreamController.broadcast();
   final StreamController<ForegroundAudioFailure> _failures =
@@ -98,6 +139,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
   late final StreamSubscription<audio.AudioEvent> _eventSubscription;
   late final StreamSubscription<Duration> _positionSubscription;
   bool _disposed = false;
+  bool _focusActive = false;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -108,26 +150,72 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
   @override
   Stream<int> get positionMs => _positions.stream;
 
-  Future<void> prepare(Uri source, ForegroundAudioFormat format) =>
-      _invoke(() async {
-        await _player.setReleaseMode(audio.ReleaseMode.stop);
-        await _player.setSourceUrl(
-          source.toString(),
-          mimeType: switch (format) {
-            ForegroundAudioFormat.mp3 => 'audio/mpeg',
-            ForegroundAudioFormat.m4a => 'audio/mp4',
-            ForegroundAudioFormat.flac => 'audio/flac',
-          },
+  Future<void> prepare(Uri source, ForegroundAudioFormat format) => _invoke(
+    () async {
+      // audioplayers_android defaults to AUDIOFOCUS_GAIN. Fura has one
+      // audio_session focus owner, so disable the plugin-local request before
+      // the source is loaded and before playback can begin.
+      await _player.setAudioContext(projectAudioplayersAudioContext);
+      await _player.setReleaseMode(audio.ReleaseMode.stop);
+      await _player.setSourceUrl(
+        source.toString(),
+        mimeType: switch (format) {
+          ForegroundAudioFormat.mp3 => 'audio/mpeg',
+          ForegroundAudioFormat.m4a => 'audio/mp4',
+          ForegroundAudioFormat.flac => 'audio/flac',
+        },
+      );
+    },
+    ForegroundAudioFailure.load,
+    phase: 'prepare',
+  );
+
+  @override
+  Future<void> play() async {
+    if (_disposed) {
+      throw const ForegroundAudioException(
+        ForegroundAudioFailure.coreUnavailable,
+      );
+    }
+    var activated = false;
+    try {
+      activated = await _audioFocusManager.setActive(true);
+      if (!activated) {
+        _logEngineFailure(
+          phase: 'focus_activate',
+          failure: ForegroundAudioFailure.playback,
+          errorType: 'FocusDenied',
         );
-      }, ForegroundAudioFailure.load);
+        throw const ForegroundAudioException(ForegroundAudioFailure.playback);
+      }
+      _focusActive = true;
+      await _player.resume();
+      _logEngineSuccess(phase: 'play');
+    } on ForegroundAudioException {
+      rethrow;
+    } on Object catch (error) {
+      _logEngineFailure(
+        phase: activated ? 'play' : 'focus_activate',
+        failure: ForegroundAudioFailure.playback,
+        error: error,
+      );
+      if (activated) await _deactivateFocus();
+      throw const ForegroundAudioException(ForegroundAudioFailure.playback);
+    }
+  }
 
   @override
-  Future<void> play() =>
-      _invoke(_player.resume, ForegroundAudioFailure.playback);
-
-  @override
-  Future<void> pause() =>
-      _invoke(_player.pause, ForegroundAudioFailure.playback);
+  Future<void> pause() async {
+    try {
+      await _invoke(
+        _player.pause,
+        ForegroundAudioFailure.playback,
+        phase: 'pause',
+      );
+    } finally {
+      await _deactivateFocus();
+    }
+  }
 
   @override
   Future<void> seekToMs(int positionMs) async {
@@ -137,6 +225,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     await _invoke(
       () => _player.seek(Duration(milliseconds: positionMs)),
       ForegroundAudioFailure.playback,
+      phase: 'seek',
     );
   }
 
@@ -148,16 +237,28 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     await _invoke(
       () => _player.setVolume(volume),
       ForegroundAudioFailure.playback,
+      phase: 'volume',
     );
   }
 
   @override
-  Future<void> stop() => _invoke(_player.stop, ForegroundAudioFailure.playback);
+  Future<void> stop() async {
+    try {
+      await _invoke(
+        _player.stop,
+        ForegroundAudioFailure.playback,
+        phase: 'stop',
+      );
+    } finally {
+      await _deactivateFocus();
+    }
+  }
 
   Future<void> _invoke(
     Future<void> Function() operation,
-    ForegroundAudioFailure failure,
-  ) async {
+    ForegroundAudioFailure failure, {
+    required String phase,
+  }) async {
     if (_disposed) {
       throw const ForegroundAudioException(
         ForegroundAudioFailure.coreUnavailable,
@@ -165,13 +266,31 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     }
     try {
       await operation();
-    } on Object {
+    } on Object catch (error) {
+      _logEngineFailure(phase: phase, failure: failure, error: error);
       throw ForegroundAudioException(failure);
     }
   }
 
+  Future<void> _deactivateFocus() async {
+    if (!_focusActive) return;
+    _focusActive = false;
+    try {
+      await _audioFocusManager.setActive(false);
+    } on Object catch (error) {
+      _logEngineFailure(
+        phase: 'focus_deactivate',
+        failure: ForegroundAudioFailure.playback,
+        error: error,
+      );
+    }
+  }
+
   void _emitFailure(ForegroundAudioFailure failure) {
-    if (!_disposed && !_failures.isClosed) _failures.add(failure);
+    if (!_disposed && !_failures.isClosed) {
+      unawaited(_deactivateFocus());
+      _failures.add(failure);
+    }
   }
 
   @override
@@ -181,6 +300,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     await _stateSubscription.cancel();
     await _eventSubscription.cancel();
     await _positionSubscription.cancel();
+    await _deactivateFocus();
     try {
       await _player.dispose();
     } on Object {
@@ -193,3 +313,31 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     }
   }
 }
+
+void _logEngineSuccess({required String phase}) {
+  developer.log(
+    'FURA_DIAGNOSTIC playback_engine phase=$phase outcome=success',
+    name: 'fura_music.playback',
+  );
+}
+
+void _logEngineFailure({
+  required String phase,
+  required ForegroundAudioFailure failure,
+  Object? error,
+  String? errorType,
+}) {
+  final platformCode = error is PlatformException
+      ? _safePlatformCode(error.code)
+      : 'none';
+  developer.log(
+    'FURA_DIAGNOSTIC playback_engine phase=$phase outcome=failure '
+    'failure=${failure.name} errorType=${errorType ?? error?.runtimeType ?? 'none'} '
+    'platformCode=$platformCode',
+    name: 'fura_music.playback',
+    level: 1000,
+  );
+}
+
+String _safePlatformCode(String value) =>
+    RegExp(r'^[A-Za-z0-9_.-]{1,64}$').hasMatch(value) ? value : 'unrecognized';

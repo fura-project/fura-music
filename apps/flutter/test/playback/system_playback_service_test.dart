@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -139,6 +141,72 @@ void main() {
     handler.close();
     controller.dispose();
   });
+
+  test('AudioService success keeps the exact initialized controller', () async {
+    ProjectSystemAudioHandler? initializedHandler;
+    final audioSession = _FakeProjectAudioSession();
+    final audioEngine = _FakeAudioEngine();
+    final host = await initializeAppPlaybackHost(
+      playbackQueueGateway: _MemoryQueueGateway(),
+      mediaResolutionGateway: const _MediaGateway(),
+      lyricGateway: const _NeverLyricGateway(),
+      audioEngine: audioEngine,
+      audioServiceInitializer: (handler, config) async {
+        initializedHandler = handler;
+        expect(config, same(projectAudioServiceConfig));
+      },
+      audioSessionFactory: () async => audioSession,
+    );
+
+    expect(host, isA<AudioServiceAppPlaybackHost>());
+    expect(initializedHandler, isNotNull);
+    expect(host.controller, same(initializedHandler!.controller));
+    expect(audioSession.configureCalls, 1);
+
+    await host.controller.replaceAndPlay(const [first], 0);
+    audioSession.emitInterruption(
+      AudioInterruptionEvent(true, AudioInterruptionType.pause),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(audioEngine.sessions.single.pauseCalls, 1);
+
+    await host.controller.playback.resume();
+    audioSession.emitBecomingNoisy();
+    await Future<void>.delayed(Duration.zero);
+    expect(audioEngine.sessions.single.pauseCalls, 2);
+
+    await host.dispose();
+    await audioSession.close();
+  });
+
+  test(
+    'AudioService failure falls back without replacing the controller',
+    () async {
+      ProjectSystemAudioHandler? initializedHandler;
+      var audioSessionRequested = false;
+      final host = await initializeAppPlaybackHost(
+        playbackQueueGateway: _MemoryQueueGateway(),
+        mediaResolutionGateway: const _MediaGateway(),
+        lyricGateway: const _NeverLyricGateway(),
+        audioEngine: _FakeAudioEngine(),
+        audioServiceInitializer: (handler, _) async {
+          initializedHandler = handler;
+          throw StateError('synthetic initialization failure');
+        },
+        audioSessionFactory: () async {
+          audioSessionRequested = true;
+          return _FakeProjectAudioSession();
+        },
+      );
+
+      expect(host, isA<ForegroundAppPlaybackHost>());
+      expect(initializedHandler, isNotNull);
+      expect(host.controller, same(initializedHandler!.controller));
+      expect(audioSessionRequested, isFalse);
+
+      await host.dispose();
+    },
+  );
 }
 
 const first = PlaylistTrackSummary(
@@ -365,5 +433,52 @@ class _FakeAudioSession implements ForegroundAudioSession {
     await _states.close();
     await _failures.close();
     await _positions.close();
+  }
+}
+
+class _NeverLyricGateway implements LyricGateway {
+  const _NeverLyricGateway();
+
+  @override
+  LyricLoadOperation beginLoad({
+    required String providerId,
+    required String opaqueTrackId,
+  }) => const _UnavailableLyricOperation();
+}
+
+class _UnavailableLyricOperation implements LyricLoadOperation {
+  const _UnavailableLyricOperation();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<LyricLoadResult> run() async =>
+      const LyricLoadResult(failure: LyricFailure.unavailable);
+}
+
+class _FakeProjectAudioSession implements ProjectAudioSession {
+  final _interruptions = StreamController<AudioInterruptionEvent>.broadcast();
+  final _becomingNoisy = StreamController<void>.broadcast();
+  int configureCalls = 0;
+
+  @override
+  Stream<AudioInterruptionEvent> get interruptionEvents =>
+      _interruptions.stream;
+
+  @override
+  Stream<void> get becomingNoisyEvents => _becomingNoisy.stream;
+
+  @override
+  Future<void> configureMusic() async => configureCalls += 1;
+
+  void emitInterruption(AudioInterruptionEvent event) =>
+      _interruptions.add(event);
+
+  void emitBecomingNoisy() => _becomingNoisy.add(null);
+
+  Future<void> close() async {
+    await _interruptions.close();
+    await _becomingNoisy.close();
   }
 }

@@ -40,4 +40,19 @@ void main() {
       ),
     );
   });
+
+  test('audioplayers delegates Android audio focus to audio_session', () {
+    expect(
+      projectAudioplayersAudioContext.android.audioFocus,
+      AndroidAudioFocus.none,
+    );
+    expect(
+      projectAudioplayersAudioContext.android.contentType,
+      AndroidContentType.music,
+    );
+    expect(
+      projectAudioplayersAudioContext.android.usageType,
+      AndroidUsageType.media,
+    );
+  });
 }

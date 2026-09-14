@@ -1,5 +1,6 @@
 //! Serial anonymous compatibility evidence. Never reads cookies or account files.
 use netease_client::{Error, HttpsTransport, NeteaseClient, Request, Response, Transport};
+use std::time::Duration;
 struct ShapeTransport(HttpsTransport);
 fn shape(v: &serde_json::Value, depth: u8) -> serde_json::Value {
     if depth == 0 {
@@ -141,6 +142,83 @@ async fn anonymous_catalog_slice() {
     report("public recommendations", client.recommendations(3).await);
     // Every attempted capability must succeed; this remains evidence for these samples only.
     assert!(!tracks.items.is_empty());
+}
+
+#[tokio::test]
+#[ignore = "explicit anonymous media transport observation; exactly 4 bounded requests"]
+async fn anonymous_media_transport_observation() {
+    assert_eq!(
+        std::env::var("FURA_NETEASE_MEDIA_TRANSPORT_PROBE").as_deref(),
+        Ok("1")
+    );
+    let client = NeteaseClient::new(HttpsTransport::new().unwrap());
+    let tracks = client.search_tracks("Mozart", 0, 1).await.unwrap();
+    let track = tracks.items.first().expect("one public Track is required");
+    let media = client.media(track.id).await.unwrap();
+    let source = url::Url::parse(media.uri()).unwrap();
+    assert_eq!(source.scheme(), "https");
+    assert!(
+        source
+            .host_str()
+            .is_some_and(|host| host.starts_with('m') && host.ends_with(".music.126.net"))
+    );
+    println!(
+        "media source: scheme={} host={} format={:?} ttl={}",
+        source.scheme(),
+        source.host_str().unwrap_or("none"),
+        media.format,
+        media.valid_for_seconds
+    );
+
+    let probe_client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(12))
+        .build()
+        .unwrap();
+    for scheme in ["http", "https"] {
+        let mut candidate = source.clone();
+        candidate.set_scheme(scheme).unwrap();
+        let response = probe_client
+            .get(candidate)
+            .header(reqwest::header::RANGE, "bytes=0-4095")
+            .send()
+            .await
+            .unwrap();
+        let status = response.status().as_u16();
+        assert_eq!(status, 206, "the CDN must honor the bounded Range request");
+        assert!(
+            response
+                .content_length()
+                .is_some_and(|length| length <= 4096)
+        );
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("none")
+            .to_owned();
+        let body = response.bytes().await.unwrap();
+        assert_ne!(media_signature(&body), "other");
+        println!(
+            "media range: scheme={scheme} status={status} content_type={content_type} bytes={} signature={}",
+            body.len(),
+            media_signature(&body)
+        );
+    }
+}
+
+fn media_signature(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(b"ID3") {
+        "id3"
+    } else if bytes.starts_with(b"fLaC") {
+        "flac"
+    } else if bytes.get(4..8) == Some(b"ftyp") {
+        "mp4"
+    } else if bytes.len() >= 2 && bytes[0] == 0xff && bytes[1] & 0xe0 == 0xe0 {
+        "mpeg-frame"
+    } else {
+        "other"
+    }
 }
 
 #[tokio::test]
