@@ -547,9 +547,12 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
     required this.onQualityPreferenceChanged,
   });
 
-  static const _secondaryExtent = 44.0;
+  static const _secondaryExtent = 40.0;
   static const _primaryExtent = 48.0;
-  static const _preferredGap = 8.0;
+  static const _minimumGap = 2.0;
+  static const _preferredGap = 4.0;
+  static const _horizontalInset = 4.0;
+  static const _qualityFallbackWidth = 320.0;
 
   final QueuePlaybackController controller;
   final bool authenticationFailure;
@@ -585,37 +588,8 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
           ),
           _ => null,
         };
-        const leftExtent = 2 * _secondaryExtent;
-        const fallbackRightExtent = 3 * _secondaryExtent;
-        const preferredRightExtent = 4 * _secondaryExtent;
-        const preferredRequiredExtent =
-            leftExtent +
-            _primaryExtent +
-            preferredRightExtent +
-            (2 * _preferredGap);
         final showQuality =
-            quality != null && constraints.maxWidth >= preferredRequiredExtent;
-        final rightExtent = showQuality
-            ? preferredRightExtent
-            : fallbackRightExtent;
-        final desiredCenter = constraints.maxWidth / 2;
-        final leadingGapCapacity =
-            desiredCenter - leftExtent - (_primaryExtent / 2);
-        final trailingGapCapacity =
-            constraints.maxWidth -
-            rightExtent -
-            (_primaryExtent / 2) -
-            desiredCenter;
-        final centeredGapCapacity = leadingGapCapacity < trailingGapCapacity
-            ? leadingGapCapacity
-            : trailingGapCapacity;
-        final gap = centeredGapCapacity.clamp(0.0, _preferredGap).toDouble();
-        final minimumCenter = leftExtent + gap + (_primaryExtent / 2);
-        final maximumCenter =
-            constraints.maxWidth - rightExtent - gap - (_primaryExtent / 2);
-        final centerFromStart = minimumCenter <= maximumCenter
-            ? desiredCenter.clamp(minimumCenter, maximumCenter).toDouble()
-            : desiredCenter;
+            quality != null && constraints.maxWidth > _qualityFallbackWidth;
         final primary = authenticationFailure
             ? IconButton.filled(
                 key: const ValueKey('now-playing-sign-in-again'),
@@ -628,6 +602,55 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
                 icon: const Icon(Icons.login_rounded),
               )
             : transport[2];
+        final trailingControls = <Widget>[
+          transport[3],
+          transport[4],
+          if (showQuality) quality,
+          _QueueButton(controller: controller, dimension: _secondaryExtent),
+        ];
+        final secondaryCount = 2 + trailingControls.length;
+        final gapCount = secondaryCount;
+        final baseStripExtent =
+            (secondaryCount * _secondaryExtent) + _primaryExtent;
+        final centeredGapCapacity =
+            ((constraints.maxWidth / 2) -
+                _horizontalInset -
+                (_primaryExtent / 2) -
+                (trailingControls.length * _secondaryExtent)) /
+            trailingControls.length;
+        final fitGapCapacity =
+            (constraints.maxWidth - (2 * _horizontalInset) - baseStripExtent) /
+            gapCount;
+        final gapCapacity = centeredGapCapacity < fitGapCapacity
+            ? centeredGapCapacity
+            : fitGapCapacity;
+        final gap = gapCapacity.clamp(_minimumGap, _preferredGap).toDouble();
+        final stripExtent = baseStripExtent + (gapCount * gap);
+        final primaryCenterInsideStrip =
+            (2 * _secondaryExtent) + (2 * gap) + (_primaryExtent / 2);
+        final idealStart =
+            (constraints.maxWidth / 2) - primaryCenterInsideStrip;
+        const minimumStart = _horizontalInset;
+        final maximumStart =
+            constraints.maxWidth - _horizontalInset - stripExtent;
+        final stripStart = idealStart
+            .clamp(
+              minimumStart,
+              maximumStart < minimumStart ? minimumStart : maximumStart,
+            )
+            .toDouble();
+        final controls = <Widget>[
+          ...transport.take(2),
+          primary,
+          ...trailingControls,
+        ];
+        final spacedControls = <Widget>[];
+        for (final control in controls) {
+          if (spacedControls.isNotEmpty) {
+            spacedControls.add(SizedBox(width: gap));
+          }
+          spacedControls.add(control);
+        }
         return IconButtonTheme(
           data: const IconButtonThemeData(
             style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
@@ -637,44 +660,15 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               PositionedDirectional(
-                start: 0,
-                top: 6,
-                child: Row(
-                  key: const ValueKey(
-                    'expanded-now-playing-compact-left-cluster',
-                  ),
-                  mainAxisSize: MainAxisSize.min,
-                  children: transport.take(2).toList(growable: false),
-                ),
-              ),
-              PositionedDirectional(
-                start: centerFromStart - (_primaryExtent / 2),
+                start: stripStart,
                 top: 4,
-                child: SizedBox.square(
-                  key: const ValueKey(
-                    'expanded-now-playing-compact-primary-slot',
-                  ),
-                  dimension: _primaryExtent,
-                  child: primary,
-                ),
-              ),
-              PositionedDirectional(
-                end: 0,
-                top: 6,
                 child: Row(
                   key: const ValueKey(
-                    'expanded-now-playing-compact-right-cluster',
+                    'expanded-now-playing-compact-control-strip',
                   ),
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    transport[3],
-                    transport[4],
-                    if (showQuality) quality,
-                    _QueueButton(
-                      controller: controller,
-                      dimension: _secondaryExtent,
-                    ),
-                  ],
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: spacedControls,
                 ),
               ),
             ],

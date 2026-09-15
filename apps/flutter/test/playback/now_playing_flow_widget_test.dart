@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/gestures.dart';
@@ -1762,126 +1763,123 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'compact expanded controls clamp the primary action without scaling',
-    (tester) async {
-      tester.view.physicalSize = const Size(430, 932);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(
-        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
-      );
+  testWidgets('compact expanded controls form one formula-positioned strip', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await _loadPlaybackControlReviewFonts(tester);
 
-      await _openDetail(
-        tester,
-        media: _FakeMediaGateway([
-          _ImmediateMediaOperation(_success('compact-geometry')),
-        ]),
-        audio: _FakeAudioEngine([_FakeAudioSession()]),
-      );
-      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
-      await tester.pumpAndSettle();
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('compact-geometry')),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession()]),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+    await tester.pumpAndSettle();
 
-      for (final size in const [
-        Size(430, 932),
-        Size(412, 915),
-        Size(390, 844),
-        Size(360, 800),
-        Size(320, 700),
-      ]) {
-        if (size.width == 320) {
-          tester.platformDispatcher.accessibilityFeaturesTestValue =
-              FakeAccessibilityFeatures.allOn;
-        }
-        tester.view.physicalSize = size;
-        await tester.pumpAndSettle();
-
-        final controls = find.byKey(
-          const ValueKey('expanded-now-playing-compact-controls'),
-        );
-        final row = find.byKey(
-          const ValueKey('expanded-now-playing-compact-control-row'),
-        );
-        final leftCluster = find.byKey(
-          const ValueKey('expanded-now-playing-compact-left-cluster'),
-        );
-        final primarySlot = find.byKey(
-          const ValueKey('expanded-now-playing-compact-primary-slot'),
-        );
-        final rightCluster = find.byKey(
-          const ValueKey('expanded-now-playing-compact-right-cluster'),
-        );
-        expect(controls, findsOneWidget);
-        expect(
-          find.descendant(of: controls, matching: find.byType(FittedBox)),
-          findsNothing,
-        );
-
-        final rowRect = tester.getRect(row);
-        final leftRect = tester.getRect(leftCluster);
-        final primaryRect = tester.getRect(primarySlot);
-        final rightRect = tester.getRect(rightCluster);
-        expect(rowRect.width, size.width);
-        expect(rowRect.center.dx, closeTo(size.width / 2, 0.5));
-        final minimumCenter = leftRect.right + (primaryRect.width / 2);
-        final maximumCenter = rightRect.left - (primaryRect.width / 2);
-        final expectedCenter = rowRect.center.dx
-            .clamp(minimumCenter, maximumCenter)
-            .toDouble();
-        expect(primaryRect.center.dx, closeTo(expectedCenter, 0.5));
-        final centerTolerance = switch (size.width) {
-          430 || 412 => 0.5,
-          390 => 5.5,
-          360 => 20.5,
-          320 => 0.5,
-          _ => 0.5,
-        };
-        expect(
-          (primaryRect.center.dx - rowRect.center.dx).abs(),
-          lessThanOrEqualTo(centerTolerance),
-        );
-        expect(primaryRect.width, 48);
-        expect(primaryRect.height, 48);
-        expect(leftRect.left, greaterThanOrEqualTo(rowRect.left));
-        expect(rightRect.right, lessThanOrEqualTo(rowRect.right));
-        expect(primaryRect.left, greaterThanOrEqualTo(leftRect.right));
-        expect(primaryRect.right, lessThanOrEqualTo(rightRect.left));
-        expect(
-          find.byKey(const ValueKey('now-playing-quality')),
-          size.width == 320 ? findsNothing : findsOneWidget,
-        );
-        for (final key in const [
-          'now-playing-shuffle',
-          'now-playing-previous',
-          'now-playing-primary-action',
-          'now-playing-next',
-          'now-playing-repeat',
-          'now-playing-show-queue',
-        ]) {
-          final target = tester.getRect(find.byKey(ValueKey(key)));
-          expect(target.width, greaterThanOrEqualTo(44));
-          expect(target.height, greaterThanOrEqualTo(44));
-        }
-        if (const bool.fromEnvironment('PLAYBACK_CONTROL_VISUAL_REVIEW')) {
-          await expectLater(
-            find.byType(MaterialApp),
-            matchesGoldenFile(
-              Uri.file(
-                '/tmp/fura-expanded-controls-'
-                '${size.width.toInt()}x${size.height.toInt()}.png',
-              ),
-            ),
-          );
-        }
-        expect(tester.takeException(), isNull);
+    for (final size in const [
+      Size(430, 932),
+      Size(412, 915),
+      Size(390, 844),
+      Size(360, 800),
+      Size(320, 700),
+    ]) {
+      if (size.width == 320) {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            FakeAccessibilityFeatures.allOn;
       }
-    },
-  );
+      tester.view.physicalSize = size;
+      await tester.pumpAndSettle();
 
-  testWidgets('compact expanded controls mirror their clusters in RTL', (
+      final controls = find.byKey(
+        const ValueKey('expanded-now-playing-compact-controls'),
+      );
+      final row = find.byKey(
+        const ValueKey('expanded-now-playing-compact-control-row'),
+      );
+      final strip = find.byKey(
+        const ValueKey('expanded-now-playing-compact-control-strip'),
+      );
+      final primary = find.byKey(const ValueKey('now-playing-primary-action'));
+      expect(controls, findsOneWidget);
+      expect(strip, findsOneWidget);
+      expect(
+        find.descendant(of: controls, matching: find.byType(FittedBox)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: row, matching: find.byType(PositionedDirectional)),
+        findsOneWidget,
+      );
+      final rowRect = tester.getRect(row);
+      final stripRect = tester.getRect(strip);
+      final primaryRect = tester.getRect(primary);
+      final geometry = _expectedCompactControlGeometry(size.width);
+      expect(rowRect.width, size.width);
+      expect(rowRect.center.dx, closeTo(size.width / 2, 0.5));
+      expect(stripRect.left, closeTo(rowRect.left + geometry.stripStart, 0.5));
+      expect(stripRect.width, closeTo(geometry.stripExtent, 0.5));
+      expect(
+        primaryRect.center.dx,
+        closeTo(stripRect.left + geometry.primaryCenterInsideStrip, 0.5),
+      );
+      expect(primaryRect.width, 48);
+      expect(primaryRect.height, 48);
+      expect(stripRect.left, greaterThanOrEqualTo(rowRect.left + 3.5));
+      expect(stripRect.right, lessThanOrEqualTo(rowRect.right - 3.5));
+      expect(stripRect.width, lessThan(rowRect.width - 40));
+      expect(
+        find.byKey(const ValueKey('now-playing-quality')),
+        geometry.showQuality ? findsOneWidget : findsNothing,
+      );
+      final orderedKeys = <String>[
+        'now-playing-shuffle',
+        'now-playing-previous',
+        'now-playing-primary-action',
+        'now-playing-next',
+        'now-playing-repeat',
+        if (geometry.showQuality) 'now-playing-quality',
+        'now-playing-show-queue',
+      ];
+      final targetRects = [
+        for (final key in orderedKeys)
+          tester.getRect(find.byKey(ValueKey(key))),
+      ];
+      for (var index = 0; index < targetRects.length; index += 1) {
+        final target = targetRects[index];
+        final expectedExtent =
+            orderedKeys[index] == 'now-playing-primary-action' ? 48.0 : 40.0;
+        expect(target.width, closeTo(expectedExtent, 0.5));
+        expect(target.height, closeTo(expectedExtent, 0.5));
+        if (index == 0) continue;
+        final adjacentGap = target.left - targetRects[index - 1].right;
+        expect(adjacentGap, closeTo(geometry.gap, 0.5));
+        expect(adjacentGap, inInclusiveRange(2, 4));
+      }
+      if (const bool.fromEnvironment('PLAYBACK_CONTROL_VISUAL_REVIEW')) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            Uri.file(
+              '/tmp/fura-expanded-controls-'
+              '${size.width.toInt()}x${size.height.toInt()}.png',
+            ),
+          ),
+        );
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('compact expanded controls remain one contiguous strip in RTL', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 240);
@@ -1935,28 +1933,38 @@ void main() {
     final rowRect = tester.getRect(
       find.byKey(const ValueKey('expanded-now-playing-compact-control-row')),
     );
-    final startClusterRect = tester.getRect(
-      find.byKey(const ValueKey('expanded-now-playing-compact-left-cluster')),
+    final stripRect = tester.getRect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-control-strip')),
     );
     final primaryRect = tester.getRect(
-      find.byKey(const ValueKey('expanded-now-playing-compact-primary-slot')),
+      find.byKey(const ValueKey('now-playing-primary-action')),
     );
-    final endClusterRect = tester.getRect(
-      find.byKey(const ValueKey('expanded-now-playing-compact-right-cluster')),
-    );
-    expect(startClusterRect.left, greaterThanOrEqualTo(primaryRect.right));
-    expect(endClusterRect.right, lessThanOrEqualTo(primaryRect.left));
-    final minimumCenterFromStart =
-        startClusterRect.width + (primaryRect.width / 2);
-    final maximumCenterFromStart =
-        rowRect.width - endClusterRect.width - (primaryRect.width / 2);
-    final expectedCenterFromStart = (rowRect.width / 2)
-        .clamp(minimumCenterFromStart, maximumCenterFromStart)
-        .toDouble();
+    final geometry = _expectedCompactControlGeometry(rowRect.width);
+    expect(stripRect.width, closeTo(geometry.stripExtent, 0.5));
+    expect(stripRect.right, closeTo(rowRect.right - geometry.stripStart, 0.5));
     expect(
       rowRect.right - primaryRect.center.dx,
-      closeTo(expectedCenterFromStart, 0.5),
+      closeTo(geometry.stripStart + geometry.primaryCenterInsideStrip, 0.5),
     );
+    final physicalOrder = [
+      'now-playing-show-queue',
+      'now-playing-quality',
+      'now-playing-repeat',
+      'now-playing-next',
+      'now-playing-primary-action',
+      'now-playing-previous',
+      'now-playing-shuffle',
+    ];
+    final physicalRects = [
+      for (final key in physicalOrder)
+        tester.getRect(find.byKey(ValueKey(key))),
+    ];
+    for (var index = 1; index < physicalRects.length; index += 1) {
+      expect(
+        physicalRects[index].left - physicalRects[index - 1].right,
+        closeTo(geometry.gap, 0.5),
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 
@@ -2061,6 +2069,70 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+({
+  bool showQuality,
+  double gap,
+  double stripExtent,
+  double primaryCenterInsideStrip,
+  double stripStart,
+})
+_expectedCompactControlGeometry(double availableWidth) {
+  const secondaryExtent = 40.0;
+  const primaryExtent = 48.0;
+  const minimumGap = 2.0;
+  const preferredGap = 4.0;
+  const horizontalInset = 4.0;
+  final showQuality = availableWidth > 320;
+  final trailingControlCount = showQuality ? 4 : 3;
+  final secondaryCount = 2 + trailingControlCount;
+  final gapCount = secondaryCount;
+  final baseStripExtent = (secondaryCount * secondaryExtent) + primaryExtent;
+  final centeredGapCapacity =
+      ((availableWidth / 2) -
+          horizontalInset -
+          (primaryExtent / 2) -
+          (trailingControlCount * secondaryExtent)) /
+      trailingControlCount;
+  final fitGapCapacity =
+      (availableWidth - (2 * horizontalInset) - baseStripExtent) / gapCount;
+  final gapCapacity = centeredGapCapacity < fitGapCapacity
+      ? centeredGapCapacity
+      : fitGapCapacity;
+  final gap = gapCapacity.clamp(minimumGap, preferredGap).toDouble();
+  final stripExtent = baseStripExtent + (gapCount * gap);
+  final primaryCenterInsideStrip =
+      (2 * secondaryExtent) + (2 * gap) + (primaryExtent / 2);
+  final idealStart = (availableWidth / 2) - primaryCenterInsideStrip;
+  final maximumStart = availableWidth - horizontalInset - stripExtent;
+  final stripStart = idealStart
+      .clamp(
+        horizontalInset,
+        maximumStart < horizontalInset ? horizontalInset : maximumStart,
+      )
+      .toDouble();
+  return (
+    showQuality: showQuality,
+    gap: gap,
+    stripExtent: stripExtent,
+    primaryCenterInsideStrip: primaryCenterInsideStrip,
+    stripStart: stripStart,
+  );
+}
+
+Future<void> _loadPlaybackControlReviewFonts(WidgetTester tester) async {
+  const capture = bool.fromEnvironment('PLAYBACK_CONTROL_VISUAL_REVIEW');
+  const reviewFont = String.fromEnvironment('HOME_REVIEW_CJK_FONT');
+  if (!capture || reviewFont.isEmpty) return;
+  await tester.runAsync(() async {
+    await (FontLoader('Roboto')
+          ..addFont(File(reviewFont).readAsBytes().then(ByteData.sublistView)))
+        .load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+  });
 }
 
 String? _nowPlayingTitle(WidgetTester tester) =>

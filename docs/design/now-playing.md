@@ -34,18 +34,20 @@ This revision does not add a second player, change Queue/audio/lyric ownership, 
 
 ## Compact Expanded controls
 
-The compact Expanded Now Playing transport row is composed from three logical
-regions instead of scaling one oversized desktop row:
+The compact Expanded Now Playing transport row is one continuous strip rather
+than three independently positioned regions or a scaled desktop row:
 
-- Shuffle and Previous form the leading cluster; Next, Repeat, Quality and
-  Queue form the trailing cluster; the 48 dp Play/Pause action occupies its own
-  slot between them.
-- The primary action prefers the physical center of the full available row.
-  The preferred 8 dp cluster gap contracts first, and the primary action is
-  clamped only when a side cluster would otherwise overlap it. Secondary
-  controls retain at least 44 dp interaction targets.
-- The composition uses directional positioning, so the clusters mirror in RTL
-  while transport meaning and the centered primary action remain intact.
+- Shuffle, Previous, Play/Pause, Next, Repeat, Quality and Queue share one Row
+  with stable 2--4 dp adjacent gaps. Secondary controls retain 40 dp targets and
+  the primary action retains its 48 dp emphasis.
+- The whole strip is positioned from one formula. Its ideal start places the
+  Play/Pause center at the physical row center; the start is then clamped
+  between the horizontal inset and the last position where the complete strip
+  remains in bounds. When asymmetric trailing actions cannot fit around an
+  exactly centered primary action, the entire strip shifts toward the leading
+  edge without opening a large gap between any adjacent controls.
+- Directional placement mirrors the complete strip in RTL while the existing
+  music-transport control meanings and icons remain unchanged.
 - Quality remains present from 360 dp upward. At the explicit 320 dp fallback,
   only Quality leaves this row; it remains available from Settings and wider
   playback surfaces. Queue and core transport actions are never removed.
@@ -55,7 +57,7 @@ regions instead of scaling one oversized desktop row:
   layout jump between playback and credential-recovery states.
 
 The persistent compact mini-player remains a separate 68 px Shell surface and
-does not inherit this Expanded-page cluster composition.
+does not inherit this Expanded-page strip composition.
 
 ## Responsive lyric-page refinement
 

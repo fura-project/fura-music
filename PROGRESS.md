@@ -31,10 +31,14 @@ execution:
   retain duplicate keyed error panels while type changes still animate.
 
   Compact Expanded playback follows [Now Playing design](docs/design/now-playing.md):
-  a 48 dp primary action is centered between directional control clusters
-  without `FittedBox`, with a 320 dp Quality-only fallback and RTL/reduced-motion
-  coverage. The prior artwork-responsive hero, dynamic-color side sheets,
-  comment avatars, tonal top bar and first-play entrance remain intact.
+  one continuous Shuffle/Previous/Play/Next/Repeat/Quality/Queue strip uses
+  40 dp secondary targets, a 48 dp primary action and bounded 2--4 dp gaps. One
+  formula centers the primary action when the whole strip fits and otherwise
+  shifts the complete strip toward its leading edge; no control clusters or
+  `FittedBox` remain. The 320 dp fallback removes only Quality, with RTL and
+  reduced-motion coverage. The prior artwork-responsive hero, dynamic-color
+  side sheets, comment avatars, tonal top bar and first-play entrance remain
+  intact.
 
   Focused interaction suites, generated localization, 256-file formatting,
   direct Dart analysis, all 617 Flutter tests, Linux Release, the current
