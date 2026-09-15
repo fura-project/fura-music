@@ -5080,7 +5080,7 @@ void main() {
         tester.getSize(
           find.byKey(const ValueKey('now-playing-primary-action')),
         ),
-        const Size(56, 56),
+        const Size(48, 48),
       );
       expect(tester.takeException(), isNull);
 
