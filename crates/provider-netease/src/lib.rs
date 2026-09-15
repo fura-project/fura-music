@@ -107,6 +107,53 @@ fn song(s: Song) -> Result<TrackSummary, Error> {
     }
     Ok(track)
 }
+
+/// Collection-context Track mapping. Canonical Track identity and title stay
+/// strict while optional Album/Artist navigation and artwork may be absent.
+fn collection_song(s: Song) -> Result<TrackSummary, Error> {
+    let names = s.artists.iter().map(|artist| artist.name.clone()).collect();
+    let artists = s
+        .artists
+        .iter()
+        .filter(|artist| artist.id > 0)
+        .filter_map(|source| {
+            let id = ArtistId::new(provider_id(), source.id.to_string()).ok()?;
+            let summary = ArtistSummary::new(id, source.name.clone()).ok()?;
+            Some(summary.with_artwork_uri(netease_client::artwork(source.artwork.clone()).ok()?))
+        })
+        .collect::<Vec<_>>();
+    let album = if s.album.has_catalog_identity() {
+        AlbumId::new(provider_id(), s.album.id.to_string())
+            .ok()
+            .and_then(|id| AlbumSummary::new(id, s.album.name.clone()).ok())
+            .map(|summary| {
+                summary.with_artwork_uri(
+                    netease_client::artwork(s.album.artwork.clone())
+                        .ok()
+                        .flatten(),
+                )
+            })
+    } else {
+        None
+    };
+    let mut track = TrackSummary::new(
+        TrackId::new(provider_id(), s.id.to_string()).map_err(|_| Error::ResponseShapeMismatch)?,
+        s.name,
+        names,
+    )
+    .map_err(|_| Error::ResponseShapeMismatch)?
+    .with_artists(artists)
+    .with_duration_seconds((s.duration > 0).then_some(s.duration / 1000));
+    if let Some(title) = (!s.album.name.trim().is_empty()).then_some(s.album.name) {
+        track = track.with_album_title(Some(title));
+    }
+    if let Some(album) = album {
+        track = track
+            .with_artwork_uri(album.artwork_uri().map(str::to_owned))
+            .with_album(Some(album));
+    }
+    Ok(track)
+}
 fn search_error(e: Error) -> SearchError {
     match e {
         Error::TemporaryNetworkFailure => SearchError::Network,
@@ -134,24 +181,26 @@ impl<T: Transport> TrackSearchProvider for NeteaseProvider<T> {
             .search_tracks(&query, offset(page, size)?, size)
             .await
             .map_err(search_error)?;
-        let tracks = p
-            .items
-            .into_iter()
-            .map(|s| {
-                let t = song(s)?;
-                Ok(TrackSearchItem::new(
-                    t.clone(),
-                    t.album().cloned(),
-                    t.artists().to_vec(),
-                ))
-            })
-            .collect::<Result<Vec<_>, Error>>()
-            .map_err(search_error)?;
-        Ok(TrackSearchPage::new(page, p.total, p.more, tracks))
+        let mut omitted = p.omitted;
+        let mut tracks = Vec::with_capacity(p.items.len());
+        for source in p.items {
+            match collection_song(source) {
+                Ok(track) => tracks.push(TrackSearchItem::new(
+                    track.clone(),
+                    track.album().cloned(),
+                    track.artists().to_vec(),
+                )),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(SearchError::InvalidResponse)?;
+                }
+                Err(error) => return Err(search_error(error)),
+            }
+        }
+        Ok(TrackSearchPage::new(page, p.total, p.more, tracks).with_omitted_item_count(omitted))
     }
 }
 macro_rules! search {
-    ($contract:ident,$method:ident,$page:ident,$map:ident) => {
+    ($contract:ident,$method:ident,$page:ident,$map:ident,$integrity:ident) => {
         impl<T: Transport> $contract for NeteaseProvider<T> {
             type Error = SearchError;
             async fn $method(
@@ -165,16 +214,18 @@ macro_rules! search {
                     .$method(&query, offset(page, size)?, size)
                     .await
                     .map_err(search_error)?;
-                Ok($page::new(
-                    page,
-                    p.total,
-                    p.more,
-                    p.items
-                        .into_iter()
-                        .map($map)
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(search_error)?,
-                ))
+                let mut omitted = p.omitted;
+                let mut items = Vec::with_capacity(p.items.len());
+                for source in p.items {
+                    match $map(source) {
+                        Ok(item) => items.push(item),
+                        Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                            omitted = omitted.checked_add(1).ok_or(SearchError::InvalidResponse)?;
+                        }
+                        Err(error) => return Err(search_error(error)),
+                    }
+                }
+                Ok($page::new(page, p.total, p.more, items).$integrity(omitted))
             }
         }
     };
@@ -183,12 +234,20 @@ search!(
     ArtistSearchProvider,
     search_artists,
     ArtistSearchPage,
-    artist
+    artist,
+    with_omitted_artist_count
 );
-search!(AlbumSearchProvider, search_albums, AlbumSearchPage, album);
+search!(
+    AlbumSearchProvider,
+    search_albums,
+    AlbumSearchPage,
+    album,
+    with_omitted_album_count
+);
 search!(
     PlaylistSearchProvider,
     search_playlists,
     PlaylistSearchPage,
-    playlist
+    playlist,
+    with_omitted_playlist_count
 );

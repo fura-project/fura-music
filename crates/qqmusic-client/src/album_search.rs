@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::protocol_strategy::{QqProtocolOutcome, classify_musicu_codes};
 use crate::{HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicClient};
@@ -188,6 +189,7 @@ pub struct QqMusicAlbumSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_album_count: u32,
     albums: Vec<QqMusicAlbumSummary>,
 }
 
@@ -208,6 +210,11 @@ impl QqMusicAlbumSearchPage {
     }
 
     #[must_use]
+    pub const fn omitted_album_count(&self) -> u32 {
+        self.omitted_album_count
+    }
+
+    #[must_use]
     pub fn albums(&self) -> &[QqMusicAlbumSummary] {
         &self.albums
     }
@@ -220,6 +227,7 @@ impl fmt::Debug for QqMusicAlbumSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_album_count", &self.omitted_album_count)
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -341,7 +349,7 @@ struct AlbumSearchBody {
 
 #[derive(Deserialize)]
 struct AlbumSearchAlbums {
-    list: Option<Vec<RawSearchAlbum>>,
+    list: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -432,15 +440,30 @@ fn map_response<E>(
         value if value > i64::from(page) && raw_count != 0 && page_end < total => true,
         _ => return Err(QqMusicAlbumSearchError::InvalidPagination),
     };
-    let albums = raw_albums
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_album(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut albums = Vec::with_capacity(raw_albums.len());
+    let mut omitted_album_count = 0_u32;
+    for (index, value) in raw_albums.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawSearchAlbum>(value)
+            .map_err(|_| QqMusicAlbumSearchError::InvalidAlbum {
+                index,
+                field: AlbumSearchField::AlbumId,
+            })
+            .and_then(|raw| map_album(raw, index));
+        match mapped {
+            Ok(album) => albums.push(album),
+            Err(QqMusicAlbumSearchError::InvalidAlbum { .. }) => {
+                omitted_album_count = omitted_album_count
+                    .checked_add(1)
+                    .ok_or(QqMusicAlbumSearchError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicAlbumSearchPage {
         page,
         total,
         has_more,
+        omitted_album_count,
         albums,
     })
 }
@@ -640,7 +663,7 @@ mod tests {
             QqMusicAlbumSearchError::InvalidPagination
         ));
 
-        let malformed = QqMusicClient::new(SearchTransport::new(&album_search_page_json(
+        let partial = QqMusicClient::new(SearchTransport::new(&album_search_page_json(
             &json!([{
                 "albumID": 43001,
                 "albumMID": "bad/mid",
@@ -653,12 +676,10 @@ mod tests {
         )))
         .search_albums("private query", 1, 5)
         .await
-        .expect_err("invalid Album MID");
-        assert!(matches!(
-            malformed,
-            QqMusicAlbumSearchError::InvalidAlbum { .. }
-        ));
-        let debug = format!("{malformed:?} {malformed}");
+        .expect("malformed Album row is isolated");
+        assert!(partial.albums().is_empty());
+        assert_eq!(partial.omitted_album_count(), 1);
+        let debug = format!("{partial:?}");
         assert!(!debug.contains("private query"));
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("bad/mid"));

@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::protocol_strategy::{QqProtocolOutcome, classify_musicu_codes};
 use crate::{HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
@@ -190,7 +191,7 @@ pub struct QqMusicPlaylistSearchSummary {
     playlist_id: u64,
     title: String,
     artwork_uri: Option<String>,
-    track_count: u32,
+    track_count: Option<u32>,
 }
 
 impl QqMusicPlaylistSearchSummary {
@@ -210,7 +211,7 @@ impl QqMusicPlaylistSearchSummary {
     }
 
     #[must_use]
-    pub const fn track_count(&self) -> u32 {
+    pub const fn track_count(&self) -> Option<u32> {
         self.track_count
     }
 }
@@ -232,6 +233,7 @@ pub struct QqMusicPlaylistSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_playlist_count: u32,
     playlists: Vec<QqMusicPlaylistSearchSummary>,
 }
 
@@ -252,6 +254,11 @@ impl QqMusicPlaylistSearchPage {
     }
 
     #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+
+    #[must_use]
     pub fn playlists(&self) -> &[QqMusicPlaylistSearchSummary] {
         &self.playlists
     }
@@ -264,6 +271,7 @@ impl fmt::Debug for QqMusicPlaylistSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())
             .finish()
     }
@@ -385,7 +393,7 @@ struct PlaylistSearchBody {
 
 #[derive(Deserialize)]
 struct PlaylistSearchRows {
-    list: Option<Vec<RawSearchPlaylist>>,
+    list: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -467,15 +475,30 @@ fn map_response<E>(
         value if value > i64::from(page) && raw_count != 0 => true,
         _ => return Err(QqMusicPlaylistSearchError::InvalidPagination),
     };
-    let playlists = raw_playlists
-        .into_iter()
-        .enumerate()
-        .map(|(index, playlist)| map_playlist(playlist, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut playlists = Vec::with_capacity(raw_playlists.len());
+    let mut omitted_playlist_count = 0_u32;
+    for (index, value) in raw_playlists.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawSearchPlaylist>(value)
+            .map_err(|_| QqMusicPlaylistSearchError::InvalidPlaylist {
+                index,
+                field: PlaylistSearchField::PlaylistId,
+            })
+            .and_then(|raw| map_playlist(raw, index));
+        match mapped {
+            Ok(playlist) => playlists.push(playlist),
+            Err(QqMusicPlaylistSearchError::InvalidPlaylist { .. }) => {
+                omitted_playlist_count = omitted_playlist_count
+                    .checked_add(1)
+                    .ok_or(QqMusicPlaylistSearchError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicPlaylistSearchPage {
         page,
         total,
         has_more,
+        omitted_playlist_count,
         playlists,
     })
 }
@@ -497,17 +520,11 @@ fn map_playlist<E>(
         index,
         field: PlaylistSearchField::Title,
     })?;
-    let track_count = raw
-        .song_count
-        .ok_or(QqMusicPlaylistSearchError::InvalidPlaylist {
-            index,
-            field: PlaylistSearchField::TrackCount,
-        })?;
     Ok(QqMusicPlaylistSearchSummary {
         playlist_id,
         title,
         artwork_uri: normalized_https_image_uri(raw.imgurl),
-        track_count,
+        track_count: raw.song_count,
     })
 }
 
@@ -524,7 +541,7 @@ mod tests {
 
     use crate::{HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient};
 
-    use super::{MUSICU_URL, PlaylistSearchField, QqMusicPlaylistSearchError};
+    use super::{MUSICU_URL, QqMusicPlaylistSearchError};
 
     struct SearchTransport {
         response: HttpResponse,
@@ -577,7 +594,7 @@ mod tests {
         assert_eq!(page.playlists().len(), 1);
         assert_eq!(page.playlists()[0].playlist_id(), 44_001);
         assert_eq!(page.playlists()[0].title(), "Synthetic Playlist");
-        assert_eq!(page.playlists()[0].track_count(), 42);
+        assert_eq!(page.playlists()[0].track_count(), Some(42));
 
         let requests = client.transport().requests();
         assert_eq!(requests.len(), 1);
@@ -686,20 +703,15 @@ mod tests {
             "imgurl": "https://example.invalid/private.jpg",
             "song_count": 1
         }]);
-        let error = QqMusicClient::new(SearchTransport::new(&playlist_search_page_json(
+        let partial = QqMusicClient::new(SearchTransport::new(&playlist_search_page_json(
             &invalid, 1, -1, 1, 5,
         )))
         .search_playlists("private query", 1, 5)
         .await
-        .expect_err("invalid playlist identity");
-        assert!(matches!(
-            error,
-            QqMusicPlaylistSearchError::InvalidPlaylist {
-                field: PlaylistSearchField::PlaylistId,
-                ..
-            }
-        ));
-        let debug = format!("{pagination:?} {pagination} {error:?} {error}");
+        .expect("malformed playlist row is isolated");
+        assert!(partial.playlists().is_empty());
+        assert_eq!(partial.omitted_playlist_count(), 1);
+        let debug = format!("{pagination:?} {pagination} {partial:?}");
         assert!(!debug.contains("private query"));
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("not-a-number"));

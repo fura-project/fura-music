@@ -1254,8 +1254,10 @@ impl<T: Transport> NeteaseClient<T> {
                 Some(&credential.cookie()),
             )
             .await?;
-        let items: Vec<crate::Album> =
-            decode(v.get("data").cloned().ok_or(Error::ResponseShapeMismatch)?)?;
+        let rows = v
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
         let total: u32 = decode(
             v.get("count")
                 .cloned()
@@ -1266,15 +1268,28 @@ impl<T: Transport> NeteaseClient<T> {
                 .cloned()
                 .ok_or(Error::ResponseShapeMismatch)?,
         )?;
-        crate::catalog::check_page(items.len(), offset, size, total, more)?;
-        for a in &items {
-            a.validate()?;
+        crate::catalog::check_page(rows.len(), offset, size, total, more)?;
+        let mut items = Vec::with_capacity(rows.len());
+        let mut omitted = 0_u32;
+        for row in rows {
+            match crate::catalog::collection_album(row) {
+                Ok(album) => items.push(album),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error),
+            }
         }
+        let next = offset
+            .checked_add(u32::try_from(rows.len()).map_err(|_| Error::ResponseBound)?)
+            .ok_or(Error::ResponseBound)?;
         Ok(crate::Page {
             items,
             offset,
+            next,
             total,
             more,
+            omitted,
         })
     }
     /// # Errors
@@ -1294,8 +1309,10 @@ impl<T: Transport> NeteaseClient<T> {
                 Some(&credential.cookie()),
             )
             .await?;
-        let items: Vec<crate::Artist> =
-            decode(v.get("data").cloned().ok_or(Error::ResponseShapeMismatch)?)?;
+        let rows = v
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
         let total: u32 = decode(
             v.get("count")
                 .cloned()
@@ -1306,15 +1323,28 @@ impl<T: Transport> NeteaseClient<T> {
                 .cloned()
                 .ok_or(Error::ResponseShapeMismatch)?,
         )?;
-        crate::catalog::check_page(items.len(), offset, size, total, more)?;
-        for a in &items {
-            a.validate()?;
+        crate::catalog::check_page(rows.len(), offset, size, total, more)?;
+        let mut items = Vec::with_capacity(rows.len());
+        let mut omitted = 0_u32;
+        for row in rows {
+            match crate::catalog::collection_artist(row) {
+                Ok(artist) => items.push(artist),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error),
+            }
         }
+        let next = offset
+            .checked_add(u32::try_from(rows.len()).map_err(|_| Error::ResponseBound)?)
+            .ok_or(Error::ResponseBound)?;
         Ok(crate::Page {
             items,
             offset,
+            next,
             total,
             more,
+            omitted,
         })
     }
 }

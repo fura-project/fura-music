@@ -1,7 +1,7 @@
 use crate::catalog::{bounds, check_page, decode, id, text};
 use crate::{Album, Error, NeteaseClient, Song, Transport};
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 const MAX_HOT_COMMENTS: usize = 100;
 const MAX_RELATED_TRACKS: usize = 50;
@@ -39,10 +39,13 @@ impl Comment {
 
 pub struct CommentsPage {
     pub offset: u32,
+    pub next: u32,
     pub total: u32,
     pub more: bool,
     pub hot: Vec<Comment>,
     pub latest: Vec<Comment>,
+    pub omitted_hot: u32,
+    pub omitted_latest: u32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -134,34 +137,32 @@ impl<T: Transport> NeteaseClient<T> {
                 .cloned()
                 .ok_or(Error::ResponseShapeMismatch)?,
         )?;
-        let latest: Vec<Comment> = decode(
-            value
-                .get("comments")
-                .cloned()
-                .ok_or(Error::ResponseShapeMismatch)?,
-        )?;
-        check_page(latest.len(), offset, size, total, more)?;
-        let hot: Vec<Comment> = if offset == 0 {
-            decode(
-                value
-                    .get("hotComments")
-                    .cloned()
-                    .unwrap_or_else(|| json!([])),
-            )?
+        let latest_value = value.get("comments").ok_or(Error::ResponseShapeMismatch)?;
+        let latest_raw = latest_value
+            .as_array()
+            .ok_or(Error::ResponseShapeMismatch)?;
+        check_page(latest_raw.len(), offset, size, total, more)?;
+        let (latest, omitted_latest) = decode_comments(latest_value, size as usize)?;
+        let (hot, omitted_hot) = if offset == 0 {
+            match value.get("hotComments") {
+                Some(value) => decode_comments(value, MAX_HOT_COMMENTS)?,
+                None => (Vec::new(), 0),
+            }
         } else {
-            Vec::new()
+            (Vec::new(), 0)
         };
-        if hot.len() > MAX_HOT_COMMENTS {
-            return Err(Error::ResponseBound);
-        }
-        validate_comments(&latest)?;
-        validate_comments(&hot)?;
+        let next = offset
+            .checked_add(u32::try_from(latest_raw.len()).map_err(|_| Error::ResponseBound)?)
+            .ok_or(Error::ResponseBound)?;
         Ok(CommentsPage {
             offset,
+            next,
             total,
             more,
             hot,
             latest,
+            omitted_hot,
+            omitted_latest,
         })
     }
 
@@ -239,46 +240,82 @@ impl<T: Transport> NeteaseClient<T> {
                 None,
             )
             .await?;
-        let items: Vec<NewAlbum> = decode(
-            value
-                .get("albums")
-                .cloned()
-                .ok_or(Error::ResponseShapeMismatch)?,
-        )?;
+        let rows = value
+            .get("albums")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
         let total: u32 = decode(
             value
                 .get("total")
                 .cloned()
                 .ok_or(Error::ResponseShapeMismatch)?,
         )?;
-        let len = u32::try_from(items.len()).map_err(|_| Error::ResponseBound)?;
-        let more = offset.checked_add(len).ok_or(Error::ResponseBound)? < total;
-        check_page(items.len(), offset, size, total, more)?;
+        let raw_count = u32::try_from(rows.len()).map_err(|_| Error::ResponseBound)?;
+        let next = offset.checked_add(raw_count).ok_or(Error::ResponseBound)?;
+        let more = next < total;
+        check_page(rows.len(), offset, size, total, more)?;
+        let mut items = Vec::with_capacity(rows.len());
         let mut seen = std::collections::HashSet::new();
-        for item in &items {
-            item.validate()?;
-            if !seen.insert(item.album.id) {
-                return Err(Error::ResponseShapeMismatch);
+        let mut omitted = 0_u32;
+        for row in rows {
+            let mapped = crate::catalog::collection_album(row).and_then(|album| {
+                let publish_time_millis = row
+                    .get("publishTime")
+                    .and_then(Value::as_u64)
+                    .filter(|value| *value > 0);
+                let item = NewAlbum {
+                    album,
+                    publish_time_millis,
+                };
+                item.validate()?;
+                Ok(item)
+            });
+            match mapped {
+                Ok(item) if seen.insert(item.album.id) => items.push(item),
+                Ok(_) | Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error),
             }
         }
         Ok(crate::Page {
             items,
             offset,
+            next,
             total,
             more,
+            omitted,
         })
     }
 }
 
-fn validate_comments(items: &[Comment]) -> Result<(), Error> {
+fn decode_comments(value: &Value, maximum: usize) -> Result<(Vec<Comment>, u32), Error> {
+    let rows = value.as_array().ok_or(Error::ResponseShapeMismatch)?;
+    if rows.len() > maximum {
+        return Err(Error::ResponseBound);
+    }
+    let mut items = Vec::with_capacity(rows.len());
     let mut seen = std::collections::HashSet::new();
-    for item in items {
-        item.validate()?;
-        if !seen.insert(item.id) {
-            return Err(Error::ResponseShapeMismatch);
+    let mut omitted = 0_u32;
+    for row in rows {
+        let item = match decode::<Comment>(row.clone()).and_then(|item| {
+            item.validate()?;
+            Ok(item)
+        }) {
+            Ok(item) => item,
+            Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if seen.insert(item.id) {
+            items.push(item);
+        } else {
+            omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
         }
     }
-    Ok(())
+    Ok((items, omitted))
 }
 
 fn validate_songs(items: &[Song], excluded: Option<u64>) -> Result<(), Error> {

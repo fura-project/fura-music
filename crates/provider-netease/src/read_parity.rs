@@ -69,19 +69,39 @@ impl<T: Transport> TrackCommentsProvider for NeteaseProvider<T> {
             .map(|comment_domain| comment_domain.with_author_avatar_uri(author_avatar_uri))
             .map_err(|_| CommentsError::InvalidResponse)
         };
-        Ok(TrackCommentsPage::new(
-            page.offset,
-            page.total,
-            page.more,
-            page.hot
-                .into_iter()
-                .map(map)
-                .collect::<Result<Vec<_>, _>>()?,
-            page.latest
-                .into_iter()
-                .map(map)
-                .collect::<Result<Vec<_>, _>>()?,
-        ))
+        let mut omitted_hot = page.omitted_hot;
+        let mut hot = Vec::with_capacity(page.hot.len());
+        for comment in page.hot {
+            match map(comment) {
+                Ok(comment) => hot.push(comment),
+                Err(CommentsError::InvalidResponse) => {
+                    omitted_hot = omitted_hot
+                        .checked_add(1)
+                        .ok_or(CommentsError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        let mut omitted_latest = page.omitted_latest;
+        let mut latest = Vec::with_capacity(page.latest.len());
+        for comment in page.latest {
+            match map(comment) {
+                Ok(comment) => latest.push(comment),
+                Err(CommentsError::InvalidResponse) => {
+                    omitted_latest = omitted_latest
+                        .checked_add(1)
+                        .ok_or(CommentsError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(
+            TrackCommentsPage::new(page.offset, page.total, page.more, hot, latest).with_integrity(
+                page.next,
+                omitted_hot,
+                omitted_latest,
+            ),
+        )
     }
 }
 
@@ -154,10 +174,10 @@ impl<T: Transport> NewAlbumReleasesProvider for NeteaseProvider<T> {
             .new_albums(area, offset, size)
             .await
             .map_err(super::catalog::catalog_error)?;
-        let releases = page
-            .items
-            .into_iter()
-            .map(|release| {
+        let mut omitted = page.omitted;
+        let mut releases = Vec::with_capacity(page.items.len());
+        for release in page.items {
+            let mapped = (|| {
                 let artists = release
                     .album
                     .artists
@@ -170,16 +190,21 @@ impl<T: Transport> NewAlbumReleasesProvider for NeteaseProvider<T> {
                 // display-date conversion is deliberately omitted until its
                 // service timezone semantics are evidenced.
                 Ok(NewAlbumRelease::new(album(release.album)?, artists, None))
-            })
-            .collect::<Result<Vec<_>, Error>>()
-            .map_err(super::catalog::catalog_error)?;
-        Ok(NewAlbumReleasesPage::new(
-            region,
-            page.offset,
-            page.total,
-            page.more,
-            releases,
-        ))
+            })();
+            match mapped {
+                Ok(item) => releases.push(item),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+                Err(error) => return Err(super::catalog::catalog_error(error)),
+            }
+        }
+        Ok(
+            NewAlbumReleasesPage::new(region, page.offset, page.total, page.more, releases)
+                .with_integrity(page.next, omitted),
+        )
     }
 }
 

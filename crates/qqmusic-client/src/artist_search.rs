@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::protocol_strategy::{QqProtocolOutcome, classify_musicu_codes};
 use crate::{HttpRequest, HttpTransport, QqMusicArtistSummary, QqMusicClient};
@@ -190,6 +191,7 @@ pub struct QqMusicArtistSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_artist_count: u32,
     artists: Vec<QqMusicArtistSummary>,
 }
 
@@ -210,6 +212,11 @@ impl QqMusicArtistSearchPage {
     }
 
     #[must_use]
+    pub const fn omitted_artist_count(&self) -> u32 {
+        self.omitted_artist_count
+    }
+
+    #[must_use]
     pub fn artists(&self) -> &[QqMusicArtistSummary] {
         &self.artists
     }
@@ -222,6 +229,7 @@ impl fmt::Debug for QqMusicArtistSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_artist_count", &self.omitted_artist_count)
             .field("artist_count", &self.artists.len())
             .finish()
     }
@@ -343,7 +351,7 @@ struct ArtistSearchBody {
 
 #[derive(Deserialize)]
 struct ArtistSearchArtists {
-    list: Option<Vec<RawSearchArtist>>,
+    list: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -434,15 +442,30 @@ fn map_response<E>(
         value if value > i64::from(page) && raw_count != 0 && page_end < total => true,
         _ => return Err(QqMusicArtistSearchError::InvalidPagination),
     };
-    let artists = raw_artists
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_artist(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut artists = Vec::with_capacity(raw_artists.len());
+    let mut omitted_artist_count = 0_u32;
+    for (index, value) in raw_artists.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawSearchArtist>(value)
+            .map_err(|_| QqMusicArtistSearchError::InvalidArtist {
+                index,
+                field: ArtistSearchField::ArtistId,
+            })
+            .and_then(|raw| map_artist(raw, index));
+        match mapped {
+            Ok(artist) => artists.push(artist),
+            Err(QqMusicArtistSearchError::InvalidArtist { .. }) => {
+                omitted_artist_count = omitted_artist_count
+                    .checked_add(1)
+                    .ok_or(QqMusicArtistSearchError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicArtistSearchPage {
         page,
         total,
         has_more,
+        omitted_artist_count,
         artists,
     })
 }
@@ -658,7 +681,7 @@ mod tests {
         .expect("valid Artist");
         assert!(!format!("{invalid:?}").contains("must-not-leak"));
 
-        let malformed = QqMusicClient::new(SearchTransport::new(&artist_search_page_json(
+        let partial = QqMusicClient::new(SearchTransport::new(&artist_search_page_json(
             &json!([{
                 "singerID": 42001,
                 "singerMID": "bad/mid",
@@ -671,12 +694,10 @@ mod tests {
         )))
         .search_artists("private query", 1, 5)
         .await
-        .expect_err("invalid Artist MID");
-        assert!(matches!(
-            malformed,
-            QqMusicArtistSearchError::InvalidArtist { .. }
-        ));
-        let debug = format!("{malformed:?} {malformed}");
+        .expect("malformed Artist row is isolated");
+        assert!(partial.artists().is_empty());
+        assert_eq!(partial.omitted_artist_count(), 1);
+        let debug = format!("{partial:?}");
         assert!(!debug.contains("private query"));
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("bad/mid"));

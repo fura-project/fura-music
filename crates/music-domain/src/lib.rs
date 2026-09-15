@@ -1720,15 +1720,18 @@ impl std::error::Error for InvalidTrackComment {}
 #[derive(Clone, Eq, PartialEq)]
 pub struct TrackCommentsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_hot_comment_count: u32,
+    omitted_latest_comment_count: u32,
     hot_comments: Vec<TrackComment>,
     latest_comments: Vec<TrackComment>,
 }
 
 impl TrackCommentsPage {
     #[must_use]
-    pub const fn new(
+    pub fn new(
         offset: u32,
         total: u32,
         has_more: bool,
@@ -1737,16 +1740,55 @@ impl TrackCommentsPage {
     ) -> Self {
         Self {
             offset,
+            next_offset: offset
+                .saturating_add(u32::try_from(latest_comments.len()).unwrap_or(u32::MAX)),
             total,
             has_more,
+            omitted_hot_comment_count: 0,
+            omitted_latest_comment_count: 0,
             hot_comments,
             latest_comments,
         }
     }
 
+    /// Preserve raw upstream progression and explicit row omissions.
+    #[must_use]
+    pub const fn with_integrity(
+        mut self,
+        next_offset: u32,
+        omitted_hot_comment_count: u32,
+        omitted_latest_comment_count: u32,
+    ) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_hot_comment_count = omitted_hot_comment_count;
+        self.omitted_latest_comment_count = omitted_latest_comment_count;
+        self
+    }
+
     #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_hot_comment_count(&self) -> u32 {
+        self.omitted_hot_comment_count
+    }
+
+    #[must_use]
+    pub const fn omitted_latest_comment_count(&self) -> u32 {
+        self.omitted_latest_comment_count
+    }
+
+    #[must_use]
+    pub const fn omitted_comment_count(&self) -> u32 {
+        self.omitted_hot_comment_count
+            .saturating_add(self.omitted_latest_comment_count)
     }
 
     #[must_use]
@@ -1775,8 +1817,14 @@ impl fmt::Debug for TrackCommentsPage {
         formatter
             .debug_struct("TrackCommentsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_hot_comment_count", &self.omitted_hot_comment_count)
+            .field(
+                "omitted_latest_comment_count",
+                &self.omitted_latest_comment_count,
+            )
             .field("hot_comment_count", &self.hot_comments.len())
             .field("latest_comment_count", &self.latest_comments.len())
             .finish()
@@ -1801,7 +1849,9 @@ pub struct PlaylistTracksPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct RecommendedPlaylistsPage {
     offset: u32,
+    next_offset: u32,
     has_more: bool,
+    omitted_playlist_count: u32,
     playlists: Vec<PlaylistSummary>,
 }
 
@@ -1812,6 +1862,7 @@ pub struct RecommendedPlaylistsPage {
 pub struct RadarTrackPage {
     page: u32,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<TrackSummary>,
 }
 
@@ -1820,8 +1871,10 @@ pub struct RadarTrackPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct FavoriteAlbumsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_album_count: u32,
     albums: Vec<AlbumSummary>,
 }
 
@@ -1830,25 +1883,47 @@ pub struct FavoriteAlbumsPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct FavoriteArtistsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_artist_count: u32,
     artists: Vec<ArtistSummary>,
 }
 
 impl FavoriteArtistsPage {
     #[must_use]
-    pub const fn new(offset: u32, total: u32, has_more: bool, artists: Vec<ArtistSummary>) -> Self {
+    pub fn new(offset: u32, total: u32, has_more: bool, artists: Vec<ArtistSummary>) -> Self {
+        let visible_count = u32::try_from(artists.len()).unwrap_or(u32::MAX);
         Self {
             offset,
+            next_offset: offset.saturating_add(visible_count),
             total,
             has_more,
+            omitted_artist_count: 0,
             artists,
         }
     }
 
     #[must_use]
+    pub const fn with_integrity(mut self, next_offset: u32, omitted_artist_count: u32) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_artist_count = omitted_artist_count;
+        self
+    }
+
+    #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_artist_count(&self) -> u32 {
+        self.omitted_artist_count
     }
 
     #[must_use]
@@ -1872,8 +1947,10 @@ impl fmt::Debug for FavoriteArtistsPage {
         formatter
             .debug_struct("FavoriteArtistsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_artist_count", &self.omitted_artist_count)
             .field("artist_count", &self.artists.len())
             .finish()
     }
@@ -1881,18 +1958,38 @@ impl fmt::Debug for FavoriteArtistsPage {
 
 impl FavoriteAlbumsPage {
     #[must_use]
-    pub const fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
+    pub fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
+        let visible_count = u32::try_from(albums.len()).unwrap_or(u32::MAX);
         Self {
             offset,
+            next_offset: offset.saturating_add(visible_count),
             total,
             has_more,
+            omitted_album_count: 0,
             albums,
         }
     }
 
     #[must_use]
+    pub const fn with_integrity(mut self, next_offset: u32, omitted_album_count: u32) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_album_count = omitted_album_count;
+        self
+    }
+
+    #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_album_count(&self) -> u32 {
+        self.omitted_album_count
     }
 
     #[must_use]
@@ -1916,8 +2013,10 @@ impl fmt::Debug for FavoriteAlbumsPage {
         formatter
             .debug_struct("FavoriteAlbumsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_album_count", &self.omitted_album_count)
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -1929,8 +2028,15 @@ impl RadarTrackPage {
         Self {
             page,
             has_more,
+            omitted_track_count: 0,
             tracks,
         }
+    }
+
+    #[must_use]
+    pub const fn with_omitted_track_count(mut self, omitted_track_count: u32) -> Self {
+        self.omitted_track_count = omitted_track_count;
+        self
     }
 
     #[must_use]
@@ -1941,6 +2047,11 @@ impl RadarTrackPage {
     #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -1955,6 +2066,7 @@ impl fmt::Debug for RadarTrackPage {
             .debug_struct("RadarTrackPage")
             .field("page", &self.page)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -2057,17 +2169,37 @@ impl fmt::Debug for RankingTracksPage {
 
 impl RecommendedPlaylistsPage {
     #[must_use]
-    pub const fn new(offset: u32, has_more: bool, playlists: Vec<PlaylistSummary>) -> Self {
+    pub fn new(offset: u32, has_more: bool, playlists: Vec<PlaylistSummary>) -> Self {
+        let visible_count = u32::try_from(playlists.len()).unwrap_or(u32::MAX);
         Self {
             offset,
+            next_offset: offset.saturating_add(visible_count),
             has_more,
+            omitted_playlist_count: 0,
             playlists,
         }
     }
 
     #[must_use]
+    pub const fn with_integrity(mut self, next_offset: u32, omitted_playlist_count: u32) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_playlist_count = omitted_playlist_count;
+        self
+    }
+
+    #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
     }
 
     #[must_use]
@@ -2086,7 +2218,9 @@ impl fmt::Debug for RecommendedPlaylistsPage {
         formatter
             .debug_struct("RecommendedPlaylistsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())
             .finish()
     }
@@ -2099,6 +2233,7 @@ pub struct TrackSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_item_count: u32,
     items: Vec<TrackSearchItem>,
 }
 
@@ -2160,8 +2295,15 @@ impl TrackSearchPage {
             page,
             total,
             has_more,
+            omitted_item_count: 0,
             items,
         }
+    }
+
+    #[must_use]
+    pub const fn with_omitted_item_count(mut self, omitted_item_count: u32) -> Self {
+        self.omitted_item_count = omitted_item_count;
+        self
     }
 
     #[must_use]
@@ -2177,6 +2319,11 @@ impl TrackSearchPage {
     #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_item_count(&self) -> u32 {
+        self.omitted_item_count
     }
 
     #[must_use]
@@ -2192,6 +2339,7 @@ impl fmt::Debug for TrackSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_item_count", &self.omitted_item_count)
             .field("item_count", &self.items.len())
             .finish()
     }
@@ -2204,6 +2352,7 @@ pub struct ArtistSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_artist_count: u32,
     artists: Vec<ArtistSummary>,
 }
 
@@ -2214,8 +2363,15 @@ impl ArtistSearchPage {
             page,
             total,
             has_more,
+            omitted_artist_count: 0,
             artists,
         }
+    }
+
+    #[must_use]
+    pub const fn with_omitted_artist_count(mut self, omitted_artist_count: u32) -> Self {
+        self.omitted_artist_count = omitted_artist_count;
+        self
     }
 
     #[must_use]
@@ -2231,6 +2387,11 @@ impl ArtistSearchPage {
     #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_artist_count(&self) -> u32 {
+        self.omitted_artist_count
     }
 
     #[must_use]
@@ -2246,6 +2407,7 @@ impl fmt::Debug for ArtistSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_artist_count", &self.omitted_artist_count)
             .field("artist_count", &self.artists.len())
             .finish()
     }
@@ -2258,6 +2420,7 @@ pub struct AlbumSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_album_count: u32,
     albums: Vec<AlbumSummary>,
 }
 
@@ -2268,8 +2431,15 @@ impl AlbumSearchPage {
             page,
             total,
             has_more,
+            omitted_album_count: 0,
             albums,
         }
+    }
+
+    #[must_use]
+    pub const fn with_omitted_album_count(mut self, omitted_album_count: u32) -> Self {
+        self.omitted_album_count = omitted_album_count;
+        self
     }
 
     #[must_use]
@@ -2285,6 +2455,11 @@ impl AlbumSearchPage {
     #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_album_count(&self) -> u32 {
+        self.omitted_album_count
     }
 
     #[must_use]
@@ -2300,6 +2475,7 @@ impl fmt::Debug for AlbumSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_album_count", &self.omitted_album_count)
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -2312,6 +2488,7 @@ pub struct PlaylistSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_playlist_count: u32,
     playlists: Vec<PlaylistSummary>,
 }
 
@@ -2327,8 +2504,15 @@ impl PlaylistSearchPage {
             page,
             total,
             has_more,
+            omitted_playlist_count: 0,
             playlists,
         }
+    }
+
+    #[must_use]
+    pub const fn with_omitted_playlist_count(mut self, omitted_playlist_count: u32) -> Self {
+        self.omitted_playlist_count = omitted_playlist_count;
+        self
     }
 
     #[must_use]
@@ -2347,6 +2531,11 @@ impl PlaylistSearchPage {
     }
 
     #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+
+    #[must_use]
     pub fn playlists(&self) -> &[PlaylistSummary] {
         &self.playlists
     }
@@ -2359,6 +2548,7 @@ impl fmt::Debug for PlaylistSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())
             .finish()
     }
@@ -2369,25 +2559,47 @@ impl fmt::Debug for PlaylistSearchPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct AlbumTracksPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<TrackSummary>,
 }
 
 impl AlbumTracksPage {
     #[must_use]
-    pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+    pub fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+        let visible_count = u32::try_from(tracks.len()).unwrap_or(u32::MAX);
         Self {
             offset,
+            next_offset: offset.saturating_add(visible_count),
             total,
             has_more,
+            omitted_track_count: 0,
             tracks,
         }
     }
 
     #[must_use]
+    pub const fn with_integrity(mut self, next_offset: u32, omitted_track_count: u32) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_track_count = omitted_track_count;
+        self
+    }
+
+    #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -2411,8 +2623,10 @@ impl fmt::Debug for AlbumTracksPage {
         formatter
             .debug_struct("AlbumTracksPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -2423,25 +2637,47 @@ impl fmt::Debug for AlbumTracksPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct ArtistTracksPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<TrackSummary>,
 }
 
 impl ArtistTracksPage {
     #[must_use]
-    pub const fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+    pub fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
+        let visible_count = u32::try_from(tracks.len()).unwrap_or(u32::MAX);
         Self {
             offset,
+            next_offset: offset.saturating_add(visible_count),
             total,
             has_more,
+            omitted_track_count: 0,
             tracks,
         }
     }
 
     #[must_use]
+    pub const fn with_integrity(mut self, next_offset: u32, omitted_track_count: u32) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_track_count = omitted_track_count;
+        self
+    }
+
+    #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -2465,8 +2701,10 @@ impl fmt::Debug for ArtistTracksPage {
         formatter
             .debug_struct("ArtistTracksPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -2477,25 +2715,47 @@ impl fmt::Debug for ArtistTracksPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct ArtistAlbumsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_album_count: u32,
     albums: Vec<AlbumSummary>,
 }
 
 impl ArtistAlbumsPage {
     #[must_use]
-    pub const fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
+    pub fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
+        let visible_count = u32::try_from(albums.len()).unwrap_or(u32::MAX);
         Self {
             offset,
+            next_offset: offset.saturating_add(visible_count),
             total,
             has_more,
+            omitted_album_count: 0,
             albums,
         }
     }
 
     #[must_use]
+    pub const fn with_integrity(mut self, next_offset: u32, omitted_album_count: u32) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_album_count = omitted_album_count;
+        self
+    }
+
+    #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_album_count(&self) -> u32 {
+        self.omitted_album_count
     }
 
     #[must_use]
@@ -2519,8 +2779,10 @@ impl fmt::Debug for ArtistAlbumsPage {
         formatter
             .debug_struct("ArtistAlbumsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_album_count", &self.omitted_album_count)
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -2556,18 +2818,34 @@ pub enum NewSongCategory {
 #[derive(Clone, Eq, PartialEq)]
 pub struct NewSongCollection {
     category: NewSongCategory,
+    omitted_track_count: u32,
     tracks: Vec<TrackSummary>,
 }
 
 impl NewSongCollection {
     #[must_use]
     pub const fn new(category: NewSongCategory, tracks: Vec<TrackSummary>) -> Self {
-        Self { category, tracks }
+        Self {
+            category,
+            omitted_track_count: 0,
+            tracks,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_omitted_track_count(mut self, omitted_track_count: u32) -> Self {
+        self.omitted_track_count = omitted_track_count;
+        self
     }
 
     #[must_use]
     pub const fn category(&self) -> NewSongCategory {
         self.category
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -2581,6 +2859,7 @@ impl fmt::Debug for NewSongCollection {
         formatter
             .debug_struct("NewSongCollection")
             .field("category", &self.category)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -2642,27 +2921,39 @@ impl fmt::Debug for NewAlbumRelease {
 pub struct NewAlbumReleasesPage {
     region: NewAlbumRegion,
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_release_count: u32,
     releases: Vec<NewAlbumRelease>,
 }
 
 impl NewAlbumReleasesPage {
     #[must_use]
-    pub const fn new(
+    pub fn new(
         region: NewAlbumRegion,
         offset: u32,
         total: u32,
         has_more: bool,
         releases: Vec<NewAlbumRelease>,
     ) -> Self {
+        let visible_count = u32::try_from(releases.len()).unwrap_or(u32::MAX);
         Self {
             region,
             offset,
+            next_offset: offset.saturating_add(visible_count),
             total,
             has_more,
+            omitted_release_count: 0,
             releases,
         }
+    }
+
+    #[must_use]
+    pub const fn with_integrity(mut self, next_offset: u32, omitted_release_count: u32) -> Self {
+        self.next_offset = next_offset;
+        self.omitted_release_count = omitted_release_count;
+        self
     }
 
     #[must_use]
@@ -2673,6 +2964,16 @@ impl NewAlbumReleasesPage {
     #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_release_count(&self) -> u32 {
+        self.omitted_release_count
     }
 
     #[must_use]
@@ -2697,8 +2998,10 @@ impl fmt::Debug for NewAlbumReleasesPage {
             .debug_struct("NewAlbumReleasesPage")
             .field("region", &self.region)
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_release_count", &self.omitted_release_count)
             .field("release_count", &self.releases.len())
             .finish()
     }

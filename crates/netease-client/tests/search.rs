@@ -89,16 +89,26 @@ async fn valid_empty_is_distinct_from_missing_shape_and_unknown_codes() {
     ));
 }
 #[tokio::test]
-async fn malformed_rows_and_over_limit_pages_stop() {
-    for field in ["id", "name", "duration", "artists", "album"] {
+async fn canonical_row_corruption_is_omitted_and_optional_metadata_degrades() {
+    for field in ["id", "name"] {
         let mut s = song();
         s.as_object_mut().unwrap().remove(field);
-        assert!(matches!(
-            client(json!({"code":200,"result":{"songCount":1,"songs":[s]}}))
-                .search_tracks("fixture", 0, 1)
-                .await,
-            Err(Error::ResponseShapeMismatch)
-        ));
+        let page = client(json!({"code":200,"result":{"songCount":1,"songs":[s]}}))
+            .search_tracks("fixture", 0, 1)
+            .await
+            .unwrap();
+        assert!(page.items.is_empty());
+        assert_eq!((page.next, page.omitted), (1, 1));
+    }
+    for field in ["duration", "artists", "album"] {
+        let mut s = song();
+        s.as_object_mut().unwrap().remove(field);
+        let page = client(json!({"code":200,"result":{"songCount":1,"songs":[s]}}))
+            .search_tracks("fixture", 0, 1)
+            .await
+            .unwrap();
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.omitted, 0);
     }
     assert!(matches!(
         client(json!({"code":200,"result":{"songCount":2,"songs":[song(),song()]}}))
@@ -146,7 +156,7 @@ async fn display_only_zero_artist_identity_is_not_fabricated() {
 }
 
 #[tokio::test]
-async fn track_search_accepts_only_the_exact_missing_album_placeholder() {
+async fn track_search_keeps_track_when_optional_album_navigation_is_incomplete() {
     let mut missing_album = song();
     missing_album["album"] = json!({
         "id": 0,
@@ -168,14 +178,34 @@ async fn track_search_accepts_only_the_exact_missing_album_placeholder() {
     ] {
         let mut malformed = song();
         malformed["album"] = album;
-        assert!(matches!(
-            client(json!({
-                "code": 200,
-                "result": {"songCount": 1, "songs": [malformed]}
-            }))
-            .search_tracks("fixture", 0, 1)
-            .await,
-            Err(Error::ResponseShapeMismatch)
-        ));
+        let page = client(json!({
+            "code": 200,
+            "result": {"songCount": 1, "songs": [malformed]}
+        }))
+        .search_tracks("fixture", 0, 1)
+        .await
+        .unwrap();
+        assert_eq!(page.items.len(), 1);
+        assert!(!page.items[0].album.has_catalog_identity());
     }
+}
+
+#[tokio::test]
+async fn track_search_keeps_good_bad_good_order_and_raw_progress() {
+    let mut bad = song();
+    bad.as_object_mut().unwrap().remove("name");
+    let mut second = song();
+    second["id"] = json!(124);
+    let page = client(json!({
+        "code": 200,
+        "result": {"songCount": 3, "songs": [song(), bad, second]}
+    }))
+    .search_tracks("fixture", 0, 3)
+    .await
+    .unwrap();
+    assert_eq!(
+        page.items.iter().map(|song| song.id).collect::<Vec<_>>(),
+        [123, 124]
+    );
+    assert_eq!((page.next, page.omitted, page.more), (3, 1, false));
 }

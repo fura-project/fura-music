@@ -739,7 +739,11 @@ impl<T: Transport> NeteaseProvider<T> {
             vec![]
         } else {
             self.auth
-                .run(g, self.client.authenticated_songs(&c, selection.ids()))
+                .run(
+                    g,
+                    self.client
+                        .authenticated_collection_songs(&c, selection.ids()),
+                )
                 .await?
         };
         self.auth.current(g)?;
@@ -783,22 +787,32 @@ impl<T: Transport> NeteaseProvider<T> {
             vec![]
         } else {
             self.auth
-                .run(g, self.client.authenticated_songs(&c, selection.ids()))
+                .run(
+                    g,
+                    self.client
+                        .authenticated_collection_songs(&c, selection.ids()),
+                )
                 .await?
         };
         self.auth.current(g)?;
         let page = selection.with_songs(songs).map_err(Failure::Client)?;
-        let tracks = page
-            .tracks
-            .into_iter()
-            .map(song)
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut omitted = page.omitted;
+        let mut tracks = Vec::with_capacity(page.tracks.len());
+        for source in page.tracks {
+            match super::collection_song(source) {
+                Ok(track) => tracks.push(track),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
         Ok(PlaylistTracksPage::new_with_cursor(
             page.offset,
             page.next,
             page.total,
             page.next < page.total,
-            page.omitted,
+            omitted,
             tracks,
         ))
     }
@@ -919,16 +933,21 @@ macro_rules! favorite_page {
                     .run(g, self.client.$method(&c, offset, size))
                     .await
                     .map_err(library_error)?;
-                Ok(music_domain::$page::new(
-                    p.offset,
-                    p.total,
-                    p.more,
-                    p.items
-                        .into_iter()
-                        .map(super::$map)
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|e| library_error(e.into()))?,
-                ))
+                let mut omitted = p.omitted;
+                let mut items = Vec::with_capacity(p.items.len());
+                for source in p.items {
+                    match super::$map(source) {
+                        Ok(item) => items.push(item),
+                        Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                            omitted = omitted
+                                .checked_add(1)
+                                .ok_or(UserLibraryError::InvalidResponse)?;
+                        }
+                        Err(error) => return Err(library_error(error.into())),
+                    }
+                }
+                Ok(music_domain::$page::new(p.offset, p.total, p.more, items)
+                    .with_integrity(p.next, omitted))
             }
         }
     };

@@ -126,17 +126,17 @@ async fn comments_keep_true_hot_and_latest_paging_without_identity_leakage() {
 }
 
 #[tokio::test]
-async fn valid_empty_comments_and_duplicate_rejection_are_distinct() {
+async fn valid_empty_and_partial_duplicate_comments_are_distinct() {
     let (provider, _) = provider(vec![
         json!({"code":200,"total":0,"more":false,"hotComments":[],"comments":[]}),
         json!({"code":200,"total":2,"more":false,"hotComments":[],"comments":[comment(1),comment(1)]}),
     ]);
     let empty = provider.track_comments(track(), 0, 10).await.unwrap();
     assert!(empty.latest_comments().is_empty());
-    assert_eq!(
-        provider.track_comments(track(), 0, 2).await,
-        Err(CommentsError::InvalidResponse)
-    );
+    let partial = provider.track_comments(track(), 0, 2).await.unwrap();
+    assert_eq!(partial.latest_comments().len(), 1);
+    assert_eq!(partial.next_offset(), 2);
+    assert_eq!(partial.omitted_latest_comment_count(), 1);
 }
 
 #[tokio::test]

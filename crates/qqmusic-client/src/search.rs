@@ -203,6 +203,7 @@ pub struct QqMusicTrackSearchPage {
     page: u32,
     total: u32,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<QqMusicTrackSummary>,
 }
 
@@ -223,6 +224,11 @@ impl QqMusicTrackSearchPage {
     }
 
     #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
+    }
+
+    #[must_use]
     pub fn tracks(&self) -> &[QqMusicTrackSummary] {
         &self.tracks
     }
@@ -235,6 +241,7 @@ impl fmt::Debug for QqMusicTrackSearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -380,7 +387,7 @@ struct TrackSearchBody {
 
 #[derive(Deserialize)]
 struct TrackSearchSongs {
-    list: Option<Vec<RawSearchTrack>>,
+    list: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Deserialize)]
@@ -465,15 +472,32 @@ fn map_response<E>(
         value if value > i64::from(page) => true,
         _ => return Err(QqMusicSearchError::InvalidPagination),
     };
-    let tracks = raw_tracks
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_track(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    let mut omitted_track_count = 0_u32;
+    for (index, value) in raw_tracks.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawSearchTrack>(value)
+            .map_err(|_| QqMusicSearchError::InvalidTrack {
+                index,
+                field: SearchTrackField::TrackId,
+            })
+            .and_then(|raw| map_track(raw, index));
+        match mapped {
+            Ok(track) => tracks.push(track),
+            Err(
+                QqMusicSearchError::InvalidTrack { .. } | QqMusicSearchError::InvalidArtist { .. },
+            ) => {
+                omitted_track_count = omitted_track_count
+                    .checked_add(1)
+                    .ok_or(QqMusicSearchError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicTrackSearchPage {
         page,
         total,
         has_more,
+        omitted_track_count,
         tracks,
     })
 }
@@ -701,7 +725,7 @@ mod tests {
             .expect_err("wrong current page");
         assert!(matches!(pagination, QqMusicSearchError::InvalidPagination));
 
-        let invalid = QqMusicClient::new(SearchTransport::new(&search_page_json(
+        let partial = QqMusicClient::new(SearchTransport::new(&search_page_json(
             &json!([{
                 "id": 41001,
                 "mid": "fixtureTrackMid1",
@@ -715,9 +739,10 @@ mod tests {
         )))
         .search_tracks("private query", 1, 5)
         .await
-        .expect_err("blank artist");
-        assert!(matches!(invalid, QqMusicSearchError::InvalidArtist { .. }));
-        let debug = format!("{invalid:?} {invalid}");
+        .expect("isolated blank artist is a partial page");
+        assert!(partial.tracks().is_empty());
+        assert_eq!(partial.omitted_track_count(), 1);
+        let debug = format!("{partial:?}");
         assert!(!debug.contains("private query"));
         assert!(!debug.contains("must-not-leak"));
     }

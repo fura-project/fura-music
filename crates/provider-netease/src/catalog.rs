@@ -1,4 +1,4 @@
-use super::{NeteaseProvider, album, artist, playlist, provider_id, song};
+use super::{NeteaseProvider, album, artist, collection_song, playlist, provider_id, song};
 use music_domain::{
     AlbumDetails, AlbumId, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistTracksPage,
     AudioFormat, AudioQuality, PlaylistId, PlaylistTracksPage, RankingGroup, RankingId,
@@ -80,17 +80,26 @@ impl<T: Transport> PlaylistDetailsProvider for NeteaseProvider<T> {
             .playlist_source(id, offset, size)
             .await
             .map_err(super::auth::library_error)?;
+        let mut omitted = p.omitted;
+        let mut tracks = Vec::with_capacity(p.tracks.len());
+        for source in p.tracks {
+            match collection_song(source) {
+                Ok(track) => tracks.push(track),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(provider_api::UserLibraryError::InvalidResponse)?;
+                }
+                Err(error) => return Err(map(error)),
+            }
+        }
         Ok(PlaylistTracksPage::new_with_cursor(
             p.offset,
             p.next,
             p.total,
             p.next < p.total,
-            p.omitted,
-            p.tracks
-                .into_iter()
-                .map(song)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(map)?,
+            omitted,
+            tracks,
         ))
     }
 }
@@ -125,25 +134,41 @@ impl<T: Transport> AlbumTracksProvider for NeteaseProvider<T> {
         }
         let id = identity(id.provider(), id.opaque()).map_err(catalog_error)?;
         let a = self.client.album(id).await.map_err(catalog_error)?;
-        let total = u32::try_from(a.songs.len()).map_err(|_| CatalogError::InvalidResponse)?;
-        let songs = a
-            .songs
+        let total = u32::try_from(a.raw_songs.len()).map_err(|_| CatalogError::InvalidResponse)?;
+        let window = a
+            .raw_songs
             .into_iter()
             .skip(offset as usize)
             .take(size as usize)
-            .map(song)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(catalog_error)?;
-        Ok(AlbumTracksPage::new(
-            offset,
-            total,
-            offset.saturating_add(size) < total,
-            songs,
-        ))
+            .collect::<Vec<_>>();
+        let raw_count = u32::try_from(window.len()).map_err(|_| CatalogError::InvalidResponse)?;
+        let next = offset
+            .checked_add(raw_count)
+            .ok_or(CatalogError::InvalidResponse)?;
+        let mut songs = Vec::with_capacity(window.len());
+        let mut omitted = 0_u32;
+        for source in window {
+            let Some(source) = source else {
+                omitted = omitted
+                    .checked_add(1)
+                    .ok_or(CatalogError::InvalidResponse)?;
+                continue;
+            };
+            match collection_song(source) {
+                Ok(track) => songs.push(track),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+                Err(error) => return Err(catalog_error(error)),
+            }
+        }
+        Ok(AlbumTracksPage::new(offset, total, next < total, songs).with_integrity(next, omitted))
     }
 }
 macro_rules! artist_page {
-    ($contract:ident,$method:ident,$page:ident,$map:ident) => {
+    ($contract:ident,$method:ident,$page:ident,$map:ident,$integrity:ident) => {
         impl<T: Transport> $contract for NeteaseProvider<T> {
             type Error = CatalogError;
             async fn $method(
@@ -158,22 +183,38 @@ macro_rules! artist_page {
                     .$method(id, offset, size)
                     .await
                     .map_err(catalog_error)?;
-                Ok($page::new(
-                    p.offset,
-                    p.total,
-                    p.more,
-                    p.items
-                        .into_iter()
-                        .map($map)
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(catalog_error)?,
-                ))
+                let mut omitted = p.omitted;
+                let mut items = Vec::with_capacity(p.items.len());
+                for source in p.items {
+                    match $map(source) {
+                        Ok(item) => items.push(item),
+                        Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                            omitted = omitted
+                                .checked_add(1)
+                                .ok_or(CatalogError::InvalidResponse)?;
+                        }
+                        Err(error) => return Err(catalog_error(error)),
+                    }
+                }
+                Ok($page::new(p.offset, p.total, p.more, items).$integrity(p.next, omitted))
             }
         }
     };
 }
-artist_page!(ArtistTracksProvider, artist_tracks, ArtistTracksPage, song);
-artist_page!(ArtistAlbumsProvider, artist_albums, ArtistAlbumsPage, album);
+artist_page!(
+    ArtistTracksProvider,
+    artist_tracks,
+    ArtistTracksPage,
+    collection_song,
+    with_integrity
+);
+artist_page!(
+    ArtistAlbumsProvider,
+    artist_albums,
+    ArtistAlbumsPage,
+    album,
+    with_integrity
+);
 impl<T: Transport> RecommendedPlaylistsProvider for NeteaseProvider<T> {
     type Error = RecommendationError;
     async fn recommended_playlists(
@@ -244,18 +285,23 @@ impl<T: Transport> RankingsProvider for NeteaseProvider<T> {
         .map_err(|_| CatalogError::InvalidResponse)?
         .with_artwork_uri(netease_client::artwork(p.playlist.artwork).map_err(catalog_error)?)
         .with_track_count(Some(p.total));
-        Ok(RankingTracksPage::new(
-            ranking,
-            p.offset,
-            p.total,
-            p.next < p.total,
-            p.tracks
-                .into_iter()
-                .map(song)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(catalog_error)?,
+        let mut omitted = p.omitted;
+        let mut tracks = Vec::with_capacity(p.tracks.len());
+        for source in p.tracks {
+            match collection_song(source) {
+                Ok(track) => tracks.push(track),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+                Err(error) => return Err(catalog_error(error)),
+            }
+        }
+        Ok(
+            RankingTracksPage::new(ranking, p.offset, p.total, p.next < p.total, tracks)
+                .with_raw_cursor(p.next, omitted),
         )
-        .with_raw_cursor(p.next, p.omitted))
     }
 }
 impl<T: Transport> LyricsProvider for NeteaseProvider<T> {

@@ -157,6 +157,30 @@ async fn playlist_consumes_raw_cursor_for_unavailable_details_and_restores_order
     assert_eq!(page.tracks()[1].id().opaque(), "5");
     assert_eq!(c.load(Ordering::SeqCst), 2);
 }
+
+#[tokio::test]
+async fn playlist_good_bad_good_maps_partial_domain_without_cursor_drift() {
+    let mut malformed = s(5);
+    malformed.as_object_mut().unwrap().remove("name");
+    let (provider, calls) = provider(vec![
+        json!({"code":200,"playlist":p()}),
+        json!({"code":200,"songs":[s(1),malformed,s(6)]}),
+    ]);
+    let page = provider
+        .playlist_tracks_page(PlaylistId::new(provider_id(), "4").unwrap(), 0, 3)
+        .await
+        .unwrap();
+    assert_eq!(
+        page.tracks()
+            .iter()
+            .map(|track| track.id().opaque())
+            .collect::<Vec<_>>(),
+        ["1", "6"]
+    );
+    assert_eq!((page.next_offset(), page.omitted_track_count()), (3, 1));
+    assert!(!page.has_more());
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
 #[tokio::test]
 async fn empty_playlist_never_requests_song_details() {
     let (p, c) = provider(vec![

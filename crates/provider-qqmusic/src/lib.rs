@@ -719,21 +719,20 @@ where
     ) -> Result<TrackSearchPage, Self::Error> {
         let response = self.client().search_tracks(&query, page, size).await;
         let page = response.as_ref().map_err(map_search_error)?;
-        if page.has_more() && page.tracks().is_empty() {
-            return Err(SearchError::InvalidResponse);
+        let mut omitted = page.omitted_track_count();
+        let mut items = Vec::with_capacity(page.tracks().len());
+        for track in page.tracks() {
+            match map_search_item(track) {
+                Ok(item) => items.push(item),
+                Err(()) => {
+                    omitted = omitted.checked_add(1).ok_or(SearchError::InvalidResponse)?;
+                }
+            }
         }
-        let items = page
-            .tracks()
-            .iter()
-            .map(map_search_item)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| SearchError::InvalidResponse)?;
-        Ok(TrackSearchPage::new(
-            page.page(),
-            page.total(),
-            page.has_more(),
-            items,
-        ))
+        Ok(
+            TrackSearchPage::new(page.page(), page.total(), page.has_more(), items)
+                .with_omitted_item_count(omitted),
+        )
     }
 }
 
@@ -751,21 +750,18 @@ where
     ) -> Result<ArtistSearchPage, Self::Error> {
         let response = self.client().search_artists(&query, page, size).await;
         let page = response.as_ref().map_err(map_artist_search_error)?;
-        if page.has_more() && page.artists().is_empty() {
-            return Err(SearchError::InvalidResponse);
+        let mut omitted = page.omitted_artist_count();
+        let mut artists = Vec::with_capacity(page.artists().len());
+        for artist in page.artists() {
+            match map_artist_summary(artist) {
+                Ok(artist) => artists.push(artist),
+                Err(()) => omitted = omitted.checked_add(1).ok_or(SearchError::InvalidResponse)?,
+            }
         }
-        let artists = page
-            .artists()
-            .iter()
-            .map(map_artist_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| SearchError::InvalidResponse)?;
-        Ok(ArtistSearchPage::new(
-            page.page(),
-            page.total(),
-            page.has_more(),
-            artists,
-        ))
+        Ok(
+            ArtistSearchPage::new(page.page(), page.total(), page.has_more(), artists)
+                .with_omitted_artist_count(omitted),
+        )
     }
 }
 
@@ -783,21 +779,18 @@ where
     ) -> Result<AlbumSearchPage, Self::Error> {
         let response = self.client().search_albums(&query, page, size).await;
         let page = response.as_ref().map_err(map_album_search_error)?;
-        if page.has_more() && page.albums().is_empty() {
-            return Err(SearchError::InvalidResponse);
+        let mut omitted = page.omitted_album_count();
+        let mut albums = Vec::with_capacity(page.albums().len());
+        for album in page.albums() {
+            match map_album_summary(album) {
+                Ok(album) => albums.push(album),
+                Err(()) => omitted = omitted.checked_add(1).ok_or(SearchError::InvalidResponse)?,
+            }
         }
-        let albums = page
-            .albums()
-            .iter()
-            .map(map_album_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| SearchError::InvalidResponse)?;
-        Ok(AlbumSearchPage::new(
-            page.page(),
-            page.total(),
-            page.has_more(),
-            albums,
-        ))
+        Ok(
+            AlbumSearchPage::new(page.page(), page.total(), page.has_more(), albums)
+                .with_omitted_album_count(omitted),
+        )
     }
 }
 
@@ -815,20 +808,18 @@ where
     ) -> Result<PlaylistSearchPage, Self::Error> {
         let response = self.client().search_playlists(&query, page, size).await;
         let page = response.as_ref().map_err(map_playlist_search_error)?;
-        if page.has_more() && page.playlists().is_empty() {
-            return Err(SearchError::InvalidResponse);
+        let mut omitted = page.omitted_playlist_count();
+        let mut playlists = Vec::with_capacity(page.playlists().len());
+        for playlist in page.playlists() {
+            match map_playlist_search_summary(playlist) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(_) => omitted = omitted.checked_add(1).ok_or(SearchError::InvalidResponse)?,
+            }
         }
-        let playlists = page
-            .playlists()
-            .iter()
-            .map(map_playlist_search_summary)
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(PlaylistSearchPage::new(
-            page.page(),
-            page.total(),
-            page.has_more(),
-            playlists,
-        ))
+        Ok(
+            PlaylistSearchPage::new(page.page(), page.total(), page.has_more(), playlists)
+                .with_omitted_playlist_count(omitted),
+        )
     }
 }
 
@@ -2279,7 +2270,7 @@ fn map_playlist_search_summary(
         .map(|summary| {
             summary
                 .with_artwork_uri(playlist.artwork_uri().map(str::to_owned))
-                .with_track_count(Some(playlist.track_count()))
+                .with_track_count(playlist.track_count())
         })
         .map_err(|_| SearchError::InvalidResponse)
 }
