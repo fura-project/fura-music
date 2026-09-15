@@ -1,0 +1,19 @@
+[package]
+name = "provider-kugou"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kugou-client = { path = "../kugou-client" }
+music-domain = { path = "../music-domain" }
+provider-api = { path = "../provider-api" }
+
+[dev-dependencies]
+serde_json = "1.0.149"
+tokio = { version = "1.53.1", features = ["macros", "rt"] }
+url = "2.5.7"
+
+[lints]
+workspace = true

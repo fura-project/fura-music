@@ -7,6 +7,8 @@ members = [
     "crates/provider-qqmusic",
     "crates/netease-client",
     "crates/provider-netease",
+    "crates/kugou-client",
+    "crates/provider-kugou",
 ]
 resolver = "3"
 

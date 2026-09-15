@@ -5,11 +5,28 @@ execution:
   state: IN_PROGRESS
   acceptance_milestone: HD-031
   active_workstream: KUGOU_PUBLIC_PROVIDER
-  current_task: KUGOU_TRACK_SEARCH_AND_IDENTITY
-  next_action: IMPLEMENT_BOUNDED_KUGOU_TRACK_SEARCH
+  current_task: KUGOU_TRACK_DETAIL_AND_IDENTITY
+  next_action: INVESTIGATE_PUBLIC_TRACK_DETAIL
 ---
 
 # Current State
+
+- **2026-09-15 KuGou Track Search Core slice:** independent `kugou-client` and
+  `provider-kugou` crates now implement one direct, unsigned, anonymous HTTPS
+  Track Search page with strict input/body/content-type/page/identity bounds.
+  Provider mapping keeps `MixSongID` opaque under `kugou-music`; quality hashes
+  remain private search context, zero Artist IDs remain display-only, absent
+  Albums remain absent, and only exact `imge.kugou.com` artwork is upgraded to
+  HTTPS after same-path byte-equivalence evidence. No signature, `dfid`, Cookie,
+  persistent device identity, QQ credential, QQ identity, TME abstraction,
+  sidecar or cross-Provider fallback was added. Five client contracts and two
+  Provider contracts pass offline; strict focused Clippy passes; the default
+  suite ignores live work; and an explicit one-request anonymous compatibility
+  test passed without logging query, body, title or identity. Bridge and Flutter
+  are intentionally unchanged because Search alone is not a coherent finished
+  KuGou product surface. Canonical identity remains partial until Track detail,
+  collection, lyrics and media evidence agree. Next: exact public Track detail
+  investigation. No push.
 
 - **2026-09-15 HD-031 KuGou workstream activated:** the Human authorizes a
   third static, public/read-first KuGou Provider and restores

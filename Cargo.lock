@@ -1041,6 +1041,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kugou-client"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1320,6 +1331,18 @@ name = "provider-api"
 version = "0.1.0"
 dependencies = [
  "music-domain",
+]
+
+[[package]]
+name = "provider-kugou"
+version = "0.1.0"
+dependencies = [
+ "kugou-client",
+ "music-domain",
+ "provider-api",
+ "serde_json",
+ "tokio",
+ "url",
 ]
 
 [[package]]

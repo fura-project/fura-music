@@ -54,8 +54,9 @@ products, but they add no independent wire vote.
 
 ## Bounded anonymous observation
 
-Observation date: 2026-09-15. Request count: 2. Both requests were HTTPS,
-anonymous, read-only, single-attempt and limited to two rows. No Cookie, token,
+Observation date: 2026-09-15. Request count: 5. The Search requests were HTTPS,
+anonymous, read-only and single-attempt; the largest response was limited to two
+rows. The artwork comparison used two 4 KiB Range requests. No Cookie, token,
 dfid, persistent device ID, proxy, retry or response content was logged.
 
 1. The legacy public Track Search surface returned HTTP 200, a success envelope,
@@ -65,6 +66,13 @@ dfid, persistent device ID, proxy, retry or response content was logged.
    signature returned HTTP 200 with a non-success business envelope and no
    rows. It is not a production candidate unless its signing boundary is later
    proved safe; no signing constant will be imported merely to make it pass.
+3. Exact-path HTTP and HTTPS Range requests for the returned
+   `imge.kugou.com` artwork were byte-identical JPEG content. Production upgrades
+   only that exact host; QQ's separately evidenced artwork host family is not
+   reused or generalized.
+4. The committed opt-in compatibility test performed exactly one additional
+   unsigned Track Search request through the bounded Rust transport and passed.
+   It retained and printed no query, response body, title or identity.
 
 This proves only current bounded anonymous Search compatibility. It does not
 prove stable identity across catalog operations, content completeness, media
@@ -74,7 +82,7 @@ availability, entitlement, recommendation quality or another network/region.
 
 | Capability | State | Evidence and next proof |
 | --- | --- | --- |
-| Track Search | `SUPPORTED_EVIDENCE` | Current MakcRe and KugouMusic.NET shapes; independent LX/Listen1 shapes; bounded unsigned HTTPS success. Implement first. |
+| Track Search | `IMPLEMENTED_CORE` | Independent bounded Rust client and Provider mapping; five offline client contracts, two Provider contracts, strict Clippy and the one-request opt-in live gate pass. Bridge/UI not yet exposed. |
 | Artist Search | `SUPPORTED_EVIDENCE` | MakcRe and KugouMusic.NET expose a direct type; live and identity proof pending. |
 | Album Search | `SUPPORTED_EVIDENCE` | MakcRe and KugouMusic.NET expose a direct type; live and pagination proof pending. |
 | Playlist Search | `SUPPORTED_EVIDENCE` | MakcRe and historical Listen1 expose direct public results; current live proof pending. |
@@ -124,7 +132,7 @@ These labels describe only evidence as of the last update.
 | Group-level label/catalog rights | `SHARED_CONFIRMED` | Official TME materials describe central licensing/catalog availability across products. |
 | User membership/entitlement | `UNKNOWN` | Shared catalog rights do not prove interchangeable subscriptions or playback authorization. |
 | Media CDN host/signing/TTL/headers | `UNKNOWN` | Must be compared from exact provider responses; no shared resolver or fallback. |
-| Artwork CDN normalization | `UNKNOWN` | Only exact host/path HTTPS equivalence can justify a small helper. |
+| Artwork CDN normalization | `PROVIDER_SPECIFIC` | KuGou Search returns `imge.kugou.com`; QQ uses separately allowlisted `qpic.y.qq.com`/`p.qpic.cn`/`y.gtimg.cn` hosts. KuGou exact-path HTTP/HTTPS artwork bytes matched, but no shared TME host/pattern exists and no shared helper was created. |
 | QQ/WeChat as upstream identity | `SIMILAR_BUT_DISTINCT` | Social identity may be offered by multiple TME products, but each service must exchange it for its own session. QQ credentials never enter KuGou. |
 | Request signing/device/timestamp primitives | `UNKNOWN` | Similar-looking fields do not establish a stable shared primitive. |
 | Error envelopes | `SIMILAR_BUT_DISTINCT` | Both expose status/business-code envelopes, but names and meanings remain provider-owned. |
@@ -153,9 +161,9 @@ evidence has not met that threshold.
 | --- | --- |
 | Governance / source provenance / license audit | `DONE` |
 | TME hypothesis and exact-isolation plan | `DONE` |
-| Canonical Track identity | `REMAINING_AUTONOMOUS_WORK` |
-| Bounded HTTP transport | `REMAINING_AUTONOMOUS_WORK` |
-| Track Search | `REMAINING_AUTONOMOUS_WORK` |
+| Canonical Track identity | `PARTIAL` — Search now owns opaque `MixSongID`; cross-capability proof remains |
+| Bounded HTTP transport | `DONE` for the exact unsigned Search host |
+| Track Search | `DONE_CORE` — Bridge/UI integration intentionally waits for a coherent public capability slice |
 | Artist / Album / Playlist Search | `REMAINING_AUTONOMOUS_WORK` |
 | Track detail and public Playlist / Album / Artist reads | `REMAINING_AUTONOMOUS_WORK` |
 | Lyrics / Rankings / evidenced recommendations | `REMAINING_AUTONOMOUS_WORK` |
@@ -168,6 +176,6 @@ evidence has not met that threshold.
 | Public distribution authorization | `HUMAN_DECISION_REQUIRED` |
 | Real-account acceptance | `NOT_APPLICABLE` for the public-only phase |
 
-The next autonomous slice is the bounded Rust transport plus Track Search. The
-matrix must be updated after each capability instead of retroactively declaring
-the whole family implemented.
+The next autonomous slice investigates exact Track detail and identity linkage.
+The matrix must be updated after each capability instead of retroactively
+declaring the whole family implemented.
