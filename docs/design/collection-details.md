@@ -71,11 +71,38 @@ refresh/search policy, Queue operation and wording.
 - Loading/error/empty panels can scroll within unusually short windows instead
   of overflowing while the Shell and compact navigation consume vertical room.
 
+## Current-Track locator
+
+Playlist, Liked, Album, Artist, Ranking and Search result lists share one
+`MusicTrackLocatorOverlay`. It is a viewport aid, not a second selection or
+Queue owner.
+
+- The page supplies the active row index, its exact row extent and any leading
+  sliver extent. Separated and non-separated lists must not guess the same
+  geometry.
+- The locator appears only when the complete active-row interval lies outside
+  the current viewport. If any part of the row is visible, the locator is
+  hidden.
+- Scroll notifications, viewport metric changes, row-density changes, current
+  Track changes and controller attachment changes coalesce into one post-frame
+  visibility calculation. No geometry is read from a detached controller or
+  while layout is dirty.
+- The Material button subtree keeps one stable identity while visibility
+  changes. Hidden state is non-hit-testable, has no tooltip callback and is
+  excluded from the semantics tree; it is not removed while an accessibility
+  update is in flight.
+- Activation animates to the row when motion is allowed and jumps directly
+  when reduced motion is enabled. Either path re-evaluates visibility after
+  the viewport settles.
+
 ## Verification boundary
 
 Widget tests cover continuous artwork contraction, Shell title hand-off,
 stable route preservation, independent Track sub-actions, multiple-Artist
-selection, compact overflow, keyboard traversal and direct/nested Album Shell
-retention. Deterministic desktop renders exist for expanded Album/Ranking and
-collapsed Playlist states. These establish layout and interaction behavior;
-final motion feel and visual hierarchy remain Human review.
+selection, compact overflow, keyboard traversal, direct/nested Album Shell
+retention and locator lifecycle changes across resize, controller ownership and
+semantics collection. Deterministic desktop renders exist for expanded
+Album/Ranking and collapsed Playlist states; focused compact/desktop locator
+renders cover both visible and offscreen current rows. These establish layout
+and interaction behavior; final motion feel and visual hierarchy remain Human
+review.

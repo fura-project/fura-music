@@ -2,6 +2,25 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Human Review Workstream — M4 interaction polish
+
+**Goal:** accept the current responsive interaction checkpoint without
+expanding its implementation scope.
+
+**Next gate:** review rapid Linux resize through the Recent Plays header
+transition; current-Track locator appearance and return behavior; Search
+suggestion usefulness with keyboard, mouse, touch and IME input; and compact
+Expanded playback at 430, 390, 360 and 320 dp. Confirm English/Chinese, light
+and dark presentation plus reduced motion on representative desktop and mobile
+devices.
+
+Machine tests and deterministic renders establish geometry, semantics and
+lifecycle behavior only. They do not close visual taste, physical touch,
+real-provider suggestion quality or the previously reported Linux disconnect.
+Canonical behavior is documented in [Search](docs/design/search.md),
+[Collection Details](docs/design/collection-details.md), [Now Playing](docs/design/now-playing.md)
+and [Recent Plays](docs/design/recent-plays.md).
+
 ## Human Review Workstream — Android system and NetEase playback (HD-030)
 
 **Goal:** finish the machine-side diagnosis and minimum repair for two

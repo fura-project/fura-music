@@ -25,6 +25,11 @@ These frames are the visual source of truth for the current Home implementation.
 
 Home remains pending maintainer visual acceptance. This record preserves source identity; it does not itself establish visual completion.
 
+Home's top Search field uses the canonical provider-backed suggestion behavior
+defined in [Search design](search.md). Home owns only the anchored popup and
+route hand-off; suggestion cancellation, ordering, keyboard selection and raw
+query behavior are shared with the dedicated Search page.
+
 ## 2026-09-08 recommendation regression candidate
 
 The Human supplied four Fura/official QQ screenshots and requested signed-in vs guest sources, fresh account-driven spotlight, removal of the personal-shelf Liked link, overflow-safe horizontal shelves, and recent-listening-based related songs. These targeted corrections preserve the approved Shell and are pending Human visual review. The public hero is guest-only; the signed-in hero uses the existing account playlist feed. Playlist shelves stay on one scrollable row at all widths, with desktop navigation when they overflow. Refresh is separate from carousel rotation and active only in visible foreground Home. Exact policy, references and session-only history limitations are in [the implementation research](../research/home-recommendation-strategy.md).

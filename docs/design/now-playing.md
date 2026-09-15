@@ -32,6 +32,30 @@ Expanded Now Playing remains pending maintainer visual acceptance. This record p
 
 This revision does not add a second player, change Queue/audio/lyric ownership, or claim that automated screenshots constitute maintainer visual acceptance.
 
+## Compact Expanded controls
+
+The compact Expanded Now Playing transport row is composed from three logical
+regions instead of scaling one oversized desktop row:
+
+- Shuffle and Previous form the leading cluster; Next, Repeat, Quality and
+  Queue form the trailing cluster; the 48 dp Play/Pause action occupies its own
+  slot between them.
+- The primary action prefers the physical center of the available row and is
+  clamped only when a side cluster would otherwise overlap it. Secondary
+  controls retain at least 44 dp interaction targets.
+- The composition uses directional positioning, so the clusters mirror in RTL
+  while transport meaning and the centered primary action remain intact.
+- Quality remains present from 360 dp upward. At the explicit 320 dp fallback,
+  only Quality leaves this row; it remains available from Settings and wider
+  playback surfaces. Queue and core transport actions are never removed.
+- Reduced motion changes animation timing, not geometry. A `FittedBox` must not
+  shrink text, icons or hit targets to make this row fit.
+- The signed-out recovery action uses the same 48 dp primary slot, avoiding a
+  layout jump between playback and credential-recovery states.
+
+The persistent compact mini-player remains a separate 68 px Shell surface and
+does not inherit this Expanded-page cluster composition.
+
 ## Responsive lyric-page refinement
 
 **Design source:** Maintainer-provided overflow and Queue screenshots plus the
