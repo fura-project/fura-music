@@ -14,8 +14,13 @@ import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
@@ -146,7 +151,6 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-
       await _openDetail(
         tester,
         media: _FakeMediaGateway([
@@ -1755,6 +1759,178 @@ void main() {
 
     expect(find.byKey(const ValueKey('now-playing-shuffle')), findsOneWidget);
     expect(find.byKey(const ValueKey('now-playing-repeat')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'compact expanded controls clamp the primary action without scaling',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+
+      await _openDetail(
+        tester,
+        media: _FakeMediaGateway([
+          _ImmediateMediaOperation(_success('compact-geometry')),
+        ]),
+        audio: _FakeAudioEngine([_FakeAudioSession()]),
+      );
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pumpAndSettle();
+
+      for (final size in const [
+        Size(430, 932),
+        Size(412, 915),
+        Size(390, 844),
+        Size(360, 800),
+        Size(320, 700),
+      ]) {
+        if (size.width == 320) {
+          tester.platformDispatcher.accessibilityFeaturesTestValue =
+              FakeAccessibilityFeatures.allOn;
+        }
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+
+        final controls = find.byKey(
+          const ValueKey('expanded-now-playing-compact-controls'),
+        );
+        final row = find.byKey(
+          const ValueKey('expanded-now-playing-compact-control-row'),
+        );
+        final leftCluster = find.byKey(
+          const ValueKey('expanded-now-playing-compact-left-cluster'),
+        );
+        final primarySlot = find.byKey(
+          const ValueKey('expanded-now-playing-compact-primary-slot'),
+        );
+        final rightCluster = find.byKey(
+          const ValueKey('expanded-now-playing-compact-right-cluster'),
+        );
+        expect(controls, findsOneWidget);
+        expect(
+          find.descendant(of: controls, matching: find.byType(FittedBox)),
+          findsNothing,
+        );
+
+        final rowRect = tester.getRect(row);
+        final leftRect = tester.getRect(leftCluster);
+        final primaryRect = tester.getRect(primarySlot);
+        final rightRect = tester.getRect(rightCluster);
+        final minimumCenter = leftRect.right + 8 + (primaryRect.width / 2);
+        final maximumCenter = rightRect.left - 8 - (primaryRect.width / 2);
+        final expectedCenter = rowRect.center.dx
+            .clamp(minimumCenter, maximumCenter)
+            .toDouble();
+        expect(primaryRect.center.dx, closeTo(expectedCenter, 0.5));
+        expect(primaryRect.width, 48);
+        expect(primaryRect.height, 48);
+        expect(leftRect.left, greaterThanOrEqualTo(rowRect.left));
+        expect(rightRect.right, lessThanOrEqualTo(rowRect.right));
+        expect(
+          find.byKey(const ValueKey('now-playing-quality')),
+          size.width == 320 ? findsNothing : findsOneWidget,
+        );
+        for (final key in const [
+          'now-playing-shuffle',
+          'now-playing-previous',
+          'now-playing-primary-action',
+          'now-playing-next',
+          'now-playing-repeat',
+          'now-playing-show-queue',
+        ]) {
+          final target = tester.getRect(find.byKey(ValueKey(key)));
+          expect(target.width, greaterThanOrEqualTo(44));
+          expect(target.height, greaterThanOrEqualTo(44));
+        }
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets('compact expanded controls mirror their clusters in RTL', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 240);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const tracks = [
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:rtl:first',
+        title: 'RTL first',
+        artistNames: ['RTL artist'],
+        durationSeconds: 120,
+      ),
+      PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:rtl:second',
+        title: 'RTL second',
+        artistNames: ['RTL artist'],
+        durationSeconds: 120,
+      ),
+    ];
+    final queue = _WidgetQueueGateway();
+    final controller = QueuePlaybackController(
+      queue,
+      TrackPlaybackController(
+        _FakeMediaGateway([_ImmediateMediaOperation(_success('rtl-geometry'))]),
+        ForegroundPlaybackController(_FakeAudioEngine([_FakeAudioSession()])),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.replaceAndPlay(tracks, 0);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            bottomNavigationBar: NowPlayingBar.expanded(
+              controller: controller,
+              onSignInAgain: () {},
+              qualityPreference: AppPlaybackQualityPreference.standard,
+              onQualityPreferenceChanged: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rowRect = tester.getRect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-control-row')),
+    );
+    final startClusterRect = tester.getRect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-left-cluster')),
+    );
+    final primaryRect = tester.getRect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-primary-slot')),
+    );
+    final endClusterRect = tester.getRect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-right-cluster')),
+    );
+    expect(startClusterRect.left, greaterThan(primaryRect.right));
+    expect(endClusterRect.right, lessThan(primaryRect.left));
+    final minimumCenterFromStart =
+        startClusterRect.width + 8 + (primaryRect.width / 2);
+    final maximumCenterFromStart =
+        rowRect.width - endClusterRect.width - 8 - (primaryRect.width / 2);
+    final expectedCenterFromStart = (rowRect.width / 2)
+        .clamp(minimumCenterFromStart, maximumCenterFromStart)
+        .toDouble();
+    expect(
+      rowRect.right - primaryRect.center.dx,
+      closeTo(expectedCenterFromStart, 0.5),
+    );
     expect(tester.takeException(), isNull);
   });
 

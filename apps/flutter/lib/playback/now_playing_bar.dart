@@ -467,14 +467,22 @@ class _ExpandedPlaybackControls extends StatelessWidget {
               const SizedBox(height: 2),
               LayoutBuilder(
                 builder: (context, constraints) {
+                  if (constraints.maxWidth < 600) {
+                    return _CompactExpandedPlaybackControls(
+                      controller: controller,
+                      authenticationFailure: authenticationFailure,
+                      onSignInAgain: onSignInAgain,
+                      qualityPreference: qualityPreference,
+                      onQualityPreferenceChanged: onQualityPreferenceChanged,
+                    );
+                  }
                   final transport = _transportControls(
                     context,
                     controller,
                     authenticationFailure,
                     onSignInAgain,
                     prominentPrimary: true,
-                    includeStop: constraints.maxWidth >= 600,
-                    buttonSize: constraints.maxWidth < 600 ? 44 : 48,
+                    buttonSize: 48,
                   );
                   final utilities = <Widget>[
                     if (qualityPreference case final preference?)
@@ -483,33 +491,11 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                           preference: preference,
                           actualQuality: playback.resolvedQuality,
                           onChanged: onChanged,
-                          dimension: constraints.maxWidth < 600 ? 44 : 48,
+                          dimension: 48,
                         ),
-                    if (constraints.maxWidth >= 600)
-                      _VolumeButton(controller: controller),
-                    _QueueButton(
-                      controller: controller,
-                      dimension: constraints.maxWidth < 600 ? 44 : 48,
-                    ),
+                    _VolumeButton(controller: controller),
+                    _QueueButton(controller: controller),
                   ];
-                  if (constraints.maxWidth < 600) {
-                    return SizedBox(
-                      key: const ValueKey(
-                        'expanded-now-playing-compact-controls',
-                      ),
-                      height: 56,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          key: const ValueKey(
-                            'expanded-now-playing-compact-control-row',
-                          ),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [...transport, ...utilities],
-                        ),
-                      ),
-                    );
-                  }
                   return SizedBox(
                     key: const ValueKey('expanded-now-playing-wide-controls'),
                     height: 56,
@@ -538,6 +524,146 @@ class _ExpandedPlaybackControls extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CompactExpandedPlaybackControls extends StatelessWidget {
+  const _CompactExpandedPlaybackControls({
+    required this.controller,
+    required this.authenticationFailure,
+    required this.onSignInAgain,
+    required this.qualityPreference,
+    required this.onQualityPreferenceChanged,
+  });
+
+  static const _secondaryExtent = 44.0;
+  static const _primaryExtent = 48.0;
+  static const _preferredGap = 8.0;
+
+  final QueuePlaybackController controller;
+  final bool authenticationFailure;
+  final VoidCallback onSignInAgain;
+  final AppPlaybackQualityPreference? qualityPreference;
+  final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: const ValueKey('expanded-now-playing-compact-controls'),
+    height: 56,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final transport = _transportControls(
+          context,
+          controller,
+          authenticationFailure,
+          onSignInAgain,
+          prominentPrimary: true,
+          prominentPrimarySize: _primaryExtent,
+          includeStop: false,
+          buttonSize: _secondaryExtent,
+        );
+        final quality = switch ((
+          qualityPreference,
+          onQualityPreferenceChanged,
+        )) {
+          (final preference?, final onChanged?) => _PlaybackQualityButton(
+            preference: preference,
+            actualQuality: controller.playback.resolvedQuality,
+            onChanged: onChanged,
+            dimension: _secondaryExtent,
+          ),
+          _ => null,
+        };
+        const leftExtent = 2 * _secondaryExtent;
+        const fallbackRightExtent = 3 * _secondaryExtent;
+        const preferredRightExtent = 4 * _secondaryExtent;
+        const preferredRequiredExtent =
+            leftExtent +
+            _primaryExtent +
+            preferredRightExtent +
+            (2 * _preferredGap);
+        final showQuality =
+            quality != null && constraints.maxWidth >= preferredRequiredExtent;
+        final rightExtent = showQuality
+            ? preferredRightExtent
+            : fallbackRightExtent;
+        final unpaddedExtent = leftExtent + _primaryExtent + rightExtent;
+        final gap = ((constraints.maxWidth - unpaddedExtent) / 2)
+            .clamp(0.0, _preferredGap)
+            .toDouble();
+        final minimumCenter = leftExtent + gap + (_primaryExtent / 2);
+        final maximumCenter =
+            constraints.maxWidth - rightExtent - gap - (_primaryExtent / 2);
+        final desiredCenter = constraints.maxWidth / 2;
+        final centerFromStart = minimumCenter <= maximumCenter
+            ? desiredCenter.clamp(minimumCenter, maximumCenter).toDouble()
+            : desiredCenter;
+        final primary = authenticationFailure
+            ? IconButton.filled(
+                key: const ValueKey('now-playing-sign-in-again'),
+                tooltip: context.l10n.playbackSignIn,
+                onPressed: onSignInAgain,
+                constraints: const BoxConstraints.tightFor(
+                  width: _primaryExtent,
+                  height: _primaryExtent,
+                ),
+                icon: const Icon(Icons.login_rounded),
+              )
+            : transport[2];
+        return IconButtonTheme(
+          data: const IconButtonThemeData(
+            style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          ),
+          child: Stack(
+            key: const ValueKey('expanded-now-playing-compact-control-row'),
+            clipBehavior: Clip.none,
+            children: [
+              PositionedDirectional(
+                start: 0,
+                top: 6,
+                child: Row(
+                  key: const ValueKey(
+                    'expanded-now-playing-compact-left-cluster',
+                  ),
+                  mainAxisSize: MainAxisSize.min,
+                  children: transport.take(2).toList(growable: false),
+                ),
+              ),
+              PositionedDirectional(
+                start: centerFromStart - (_primaryExtent / 2),
+                top: 4,
+                child: SizedBox.square(
+                  key: const ValueKey(
+                    'expanded-now-playing-compact-primary-slot',
+                  ),
+                  dimension: _primaryExtent,
+                  child: primary,
+                ),
+              ),
+              PositionedDirectional(
+                end: 0,
+                top: 6,
+                child: Row(
+                  key: const ValueKey(
+                    'expanded-now-playing-compact-right-cluster',
+                  ),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    transport[3],
+                    transport[4],
+                    if (showQuality) quality,
+                    _QueueButton(
+                      controller: controller,
+                      dimension: _secondaryExtent,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
 }
 
 class _PlaybackQualityButton extends StatefulWidget {
