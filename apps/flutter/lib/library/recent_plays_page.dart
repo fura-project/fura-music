@@ -23,6 +23,7 @@ class RecentPlaysPage extends StatefulWidget {
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
     this.collapsedHeaderActions,
+    this.compactCollapsedTopBarInShell = false,
     this.collapseSuppressed = false,
     super.key,
   });
@@ -34,6 +35,10 @@ class RecentPlaysPage extends StatefulWidget {
   final bool active;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
   final Widget? collapsedHeaderActions;
+
+  /// The compact Shell owns the collapsed title and account actions while the
+  /// page keeps ownership of search, count, Play and Refresh below it.
+  final bool compactCollapsedTopBarInShell;
   final bool collapseSuppressed;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
@@ -532,17 +537,19 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
       return Column(
         key: const ValueKey('recent-plays-collapsed-column'),
         children: [
-          Row(
-            children: [
-              Flexible(child: _collapsedTitle(context)),
-              const Spacer(),
-              if (widget.collapsedHeaderActions case final actions?) ...[
-                const SizedBox(width: 12),
-                actions,
+          if (!widget.compactCollapsedTopBarInShell) ...[
+            Row(
+              children: [
+                Flexible(child: _collapsedTitle(context)),
+                const Spacer(),
+                if (widget.collapsedHeaderActions case final actions?) ...[
+                  const SizedBox(width: 12),
+                  actions,
+                ],
               ],
-            ],
-          ),
-          const SizedBox(height: 8),
+            ),
+            const SizedBox(height: 8),
+          ],
           _recentSearch(enabled: hasSnapshot),
           const SizedBox(height: 8),
           SizedBox(

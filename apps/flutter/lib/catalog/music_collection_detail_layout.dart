@@ -14,6 +14,8 @@ typedef MusicCollectionBodyBuilder = Widget Function(
   bool desktop,
 );
 
+const double _musicCollectionShellHandoffProgress = 0.55;
+
 /// Coordinates the scroll-driven header treatment shared by collection pages.
 ///
 /// The Track viewport keeps ownership of its controller and paging behavior.
@@ -40,7 +42,6 @@ class MusicCollectionDetailLayout extends StatefulWidget {
 class _MusicCollectionDetailLayoutState
     extends State<MusicCollectionDetailLayout> {
   static const double _collapseExtent = 132;
-  static const double _shellHandoffProgress = 0.55;
 
   double _progress = 0;
   bool _reportedCollapsed = false;
@@ -62,7 +63,7 @@ class _MusicCollectionDetailLayoutState
       0.0,
       1.0,
     );
-    final collapsed = next >= _shellHandoffProgress;
+    final collapsed = next >= _musicCollectionShellHandoffProgress;
     if ((next - _progress).abs() >= 0.002 || collapsed != _reportedCollapsed) {
       setState(() {
         _progress = next;
@@ -137,6 +138,13 @@ class MusicCollectionDetailHeader extends StatelessWidget {
     final progress = collapseProgress.clamp(0.0, 1.0);
     final expanded = 1 - progress;
     final persistentCompactToolbar = MediaQuery.sizeOf(context).width < 520;
+    // On medium and large layouts the Shell becomes the sole toolbar owner at
+    // the hand-off threshold. Finish removing the page-local toolbar by that
+    // same point so the two Back controls can never occupy different surface
+    // layers during the remainder of the hero collapse.
+    final localToolbarVisibility = persistentCompactToolbar
+        ? 1.0
+        : (1 - progress / _musicCollectionShellHandoffProgress).clamp(0.0, 1.0);
     final horizontal = desktop
         ? MusicSpacing.pageWide
         : MusicSpacing.pageCompact;
@@ -155,10 +163,11 @@ class MusicCollectionDetailHeader extends StatelessWidget {
         if (embedded)
           ClipRect(
             child: Align(
+              key: const ValueKey('collection-detail-local-toolbar-region'),
               alignment: Alignment.topCenter,
-              heightFactor: persistentCompactToolbar ? 1 : expanded,
+              heightFactor: localToolbarVisibility,
               child: Opacity(
-                opacity: persistentCompactToolbar ? 1 : expanded,
+                opacity: localToolbarVisibility,
                 child: SizedBox(
                   key: const ValueKey('collection-detail-local-toolbar'),
                   height: kToolbarHeight,

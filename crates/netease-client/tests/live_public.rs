@@ -1,5 +1,7 @@
 //! Serial anonymous compatibility evidence. Never reads cookies or account files.
-use netease_client::{Error, HttpsTransport, NeteaseClient, Request, Response, Transport};
+use netease_client::{
+    Error, HttpsTransport, MediaQuality, NeteaseClient, Request, Response, Transport,
+};
 use std::time::Duration;
 struct ShapeTransport(HttpsTransport);
 fn shape(v: &serde_json::Value, depth: u8) -> serde_json::Value {
@@ -145,8 +147,8 @@ async fn anonymous_catalog_slice() {
 }
 
 #[tokio::test]
-#[ignore = "explicit anonymous media transport observation; exactly 4 bounded requests"]
-async fn anonymous_media_transport_observation() {
+#[ignore = "explicit anonymous HQ media transport observation; exactly 4 bounded requests"]
+async fn anonymous_high_quality_media_transport_observation() {
     assert_eq!(
         std::env::var("FURA_NETEASE_MEDIA_TRANSPORT_PROBE").as_deref(),
         Ok("1")
@@ -154,7 +156,11 @@ async fn anonymous_media_transport_observation() {
     let client = NeteaseClient::new(HttpsTransport::new().unwrap());
     let tracks = client.search_tracks("Mozart", 0, 1).await.unwrap();
     let track = tracks.items.first().expect("one public Track is required");
-    let media = client.media(track.id).await.unwrap();
+    let media = client
+        .media_with_quality(track.id, MediaQuality::High)
+        .await
+        .unwrap();
+    assert_eq!(media.quality, MediaQuality::High);
     let source = url::Url::parse(media.uri()).unwrap();
     assert_eq!(source.scheme(), "https");
     assert!(
@@ -163,10 +169,11 @@ async fn anonymous_media_transport_observation() {
             .is_some_and(|host| host.starts_with('m') && host.ends_with(".music.126.net"))
     );
     println!(
-        "media source: scheme={} host={} format={:?} ttl={}",
+        "media source: scheme={} host={} format={:?} quality={:?} ttl={}",
         source.scheme(),
         source.host_str().unwrap_or("none"),
         media.format,
+        media.quality,
         media.valid_for_seconds
     );
 

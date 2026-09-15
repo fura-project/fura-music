@@ -5,7 +5,7 @@ use music_domain::{
     RankingSummary, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
     SynchronizedLyricLine, SynchronizedLyrics, TrackId, TrackSummary,
 };
-use netease_client::{Error, MediaFormat, Transport};
+use netease_client::{Error, MediaFormat, MediaQuality, Transport};
 use provider_api::{
     AlbumDetailsProvider, AlbumTracksProvider, ArtistAlbumsProvider, ArtistTracksProvider,
     CatalogError, LyricsError, LyricsProvider, MediaResolutionError, MediaSourceResolver,
@@ -301,13 +301,20 @@ impl<T: Transport> MediaSourceResolver for NeteaseMediaSourceResolver<'_, T> {
     async fn resolve_media(
         &self,
         track: TrackId,
-        _preferred: AudioQuality,
+        preferred: AudioQuality,
     ) -> Result<ResolvedMediaSource, MediaResolutionError> {
         let id = identity(track.provider(), track.opaque())
             .map_err(|_| MediaResolutionError::Unavailable)?;
         let media = self
             .provider
-            .resolve_source(id)
+            .resolve_source(
+                id,
+                match preferred {
+                    AudioQuality::Low | AudioQuality::Standard => MediaQuality::Standard,
+                    AudioQuality::High => MediaQuality::High,
+                    AudioQuality::Lossless => MediaQuality::Lossless,
+                },
+            )
             .await
             .map_err(|failure| match failure {
                 super::auth::Failure::Replaced => MediaResolutionError::Replaced,
@@ -331,8 +338,13 @@ impl<T: Transport> MediaSourceResolver for NeteaseMediaSourceResolver<'_, T> {
             match media.format {
                 MediaFormat::Mp3 => AudioFormat::Mp3,
                 MediaFormat::M4a => AudioFormat::M4a,
+                MediaFormat::Flac => AudioFormat::Flac,
             },
-            AudioQuality::Standard,
+            match media.quality {
+                MediaQuality::Standard => AudioQuality::Standard,
+                MediaQuality::High => AudioQuality::High,
+                MediaQuality::Lossless => AudioQuality::Lossless,
+            },
             media.valid_for_seconds,
         )
         .map_err(|_| MediaResolutionError::InvalidResponse)

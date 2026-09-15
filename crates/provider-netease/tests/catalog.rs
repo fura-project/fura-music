@@ -291,6 +291,30 @@ async fn recommendations_rankings_and_standard_media_map_without_raw_fields() {
 }
 
 #[tokio::test]
+async fn selected_media_quality_maps_requested_and_actual_netease_levels() {
+    let high = json!({"code":200,"data":[{"id":1,"code":200,"url":"https://fixture.invalid/high","type":"mp3","expi":600,"freeTrialInfo":null,"level":"exhigh"}]});
+    let lossless = json!({"code":200,"data":[{"id":1,"code":200,"url":"https://fixture.invalid/lossless","type":"flac","expi":600,"freeTrialInfo":null,"level":"lossless"}]});
+    let (provider, calls) = provider(vec![high, lossless]);
+
+    let high_source = provider
+        .media_source_resolver()
+        .resolve_media(track(), AudioQuality::High)
+        .await
+        .unwrap();
+    assert_eq!(high_source.format(), AudioFormat::Mp3);
+    assert_eq!(high_source.quality(), AudioQuality::High);
+
+    let lossless_source = provider
+        .media_source_resolver()
+        .resolve_media(track(), AudioQuality::Lossless)
+        .await
+        .unwrap();
+    assert_eq!(lossless_source.format(), AudioFormat::Flac);
+    assert_eq!(lossless_source.quality(), AudioQuality::Lossless);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
 async fn ranking_omissions_preserve_cursor_even_when_entire_window_is_unavailable() {
     let detail = json!({"code":200,"playlist":{"id":4,"name":"Ranking","trackCount":3,"trackIds":[{"id":1},{"id":5},{"id":7}]}});
     let (p, calls) = provider(vec![

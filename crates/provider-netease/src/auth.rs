@@ -4,7 +4,7 @@ use music_domain::{
     PlaylistTracksPage, TrackSummary,
 };
 use netease_client::{
-    Credential, Error, NeteaseClient, QrKey, QrPoll, SmsLoginChallenge, Transport,
+    Credential, Error, MediaQuality, NeteaseClient, QrKey, QrPoll, SmsLoginChallenge, Transport,
 };
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AuthenticationError, DailyRecommendationError,
@@ -853,7 +853,11 @@ impl<T: Transport> DailyTracksProvider for NeteaseProvider<T> {
 }
 
 impl<T: Transport> NeteaseProvider<T> {
-    pub(super) async fn resolve_source(&self, id: u64) -> Result<netease_client::Media, Failure> {
+    pub(super) async fn resolve_source(
+        &self,
+        id: u64,
+        preferred: MediaQuality,
+    ) -> Result<netease_client::Media, Failure> {
         let (g, c) = {
             let s = self.auth.lock();
             (s.generation, s.active.as_ref().map(|(c, _)| c.clone()))
@@ -861,10 +865,18 @@ impl<T: Transport> NeteaseProvider<T> {
         match c {
             Some(c) => {
                 self.auth
-                    .run(g, self.client.authenticated_media(&c, id))
+                    .run(
+                        g,
+                        self.client
+                            .authenticated_media_with_quality(&c, id, preferred),
+                    )
                     .await
             }
-            None => self.auth.run(g, self.client.media(id)).await,
+            None => {
+                self.auth
+                    .run(g, self.client.media_with_quality(id, preferred))
+                    .await
+            }
         }
     }
 }

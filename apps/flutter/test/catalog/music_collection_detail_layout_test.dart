@@ -134,6 +134,70 @@ void main() {
   });
 
   testWidgets(
+    'medium collection removes its local toolbar before the Shell handoff',
+    (tester) async {
+      tester.view.physicalSize = const Size(700, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final handoffs = <bool>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MusicCollectionDetailLayout(
+              onHeaderCollapsedChanged: handoffs.add,
+              headerBuilder: (context, desktop, progress) =>
+                  MusicCollectionDetailHeader(
+                    collapseProgress: progress,
+                    desktop: desktop,
+                    embedded: true,
+                    artwork: const ColoredBox(color: Colors.green),
+                    eyebrow: 'PLAYLIST',
+                    title: 'Medium collection',
+                    titleKey: const ValueKey('medium-title'),
+                    summary: '40 Tracks',
+                    onBack: () {},
+                    backKey: const ValueKey('medium-back'),
+                    backTooltip: 'Back',
+                  ),
+              bodyBuilder: (context, desktop) => ListView.builder(
+                key: const ValueKey('medium-track-list'),
+                itemCount: 40,
+                itemBuilder: (context, index) =>
+                    SizedBox(height: 56, child: Text('Track $index')),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('medium-track-list')),
+        const Offset(0, -80),
+      );
+      await tester.pump();
+
+      expect(handoffs, contains(true));
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey('collection-detail-local-toolbar-region'),
+              ),
+            )
+            .height,
+        0,
+      );
+      expect(
+        find.byKey(const ValueKey('medium-back')).hitTestable(),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'restored offset beyond shortened content does not rebuild during layout',
     (tester) async {
       tester.view.physicalSize = const Size(1100, 480);

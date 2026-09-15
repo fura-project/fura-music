@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 pub struct Media {
     pub(crate) uri: String,
     pub format: MediaFormat,
+    pub quality: MediaQuality,
     pub valid_for_seconds: u32,
 }
 impl Media {
@@ -23,6 +24,22 @@ impl std::fmt::Debug for Media {
 pub enum MediaFormat {
     Mp3,
     M4a,
+    Flac,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaQuality {
+    Standard,
+    High,
+    Lossless,
+}
+impl MediaQuality {
+    const fn request_level(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::High => "exhigh",
+            Self::Lossless => "lossless",
+        }
+    }
 }
 #[derive(Deserialize)]
 struct MediaItem {
@@ -64,11 +81,19 @@ pub(crate) fn decode_media(v: &Value, expected: u64) -> Result<Media, Error> {
     let format = match item.format.as_deref() {
         Some("mp3") => MediaFormat::Mp3,
         Some("m4a" | "aac") => MediaFormat::M4a,
+        Some("flac") => MediaFormat::Flac,
         _ => return Err(Error::ProtocolUnavailable),
     };
-    if item.level.as_deref() != Some("standard") {
-        return Err(Error::ProtocolUnavailable);
-    }
+    // NetEase may legally return a lower account-entitled level than requested.
+    // Preserve the response level as the actual quality instead of claiming the
+    // preference was fulfilled. `higher` is 192 kbps, so it remains below the
+    // app's 320 kbps HQ contract and is reported as Standard.
+    let quality = match item.level.as_deref() {
+        Some("standard" | "higher") => MediaQuality::Standard,
+        Some("exhigh") => MediaQuality::High,
+        Some("lossless" | "hires") => MediaQuality::Lossless,
+        _ => return Err(Error::ProtocolUnavailable),
+    };
     let ttl = item
         .ttl
         .filter(|ttl| *ttl > 0 && *ttl <= 86400)
@@ -76,6 +101,7 @@ pub(crate) fn decode_media(v: &Value, expected: u64) -> Result<Media, Error> {
     Ok(Media {
         uri,
         format,
+        quality,
         valid_for_seconds: ttl,
     })
 }
@@ -121,23 +147,43 @@ fn log_media_source(media: &Media) {
         return;
     };
     media_debug(format_args!(
-        "phase=source outcome=ready scheme={} host={} format={:?} quality=standard ttl={}",
+        "phase=source outcome=ready scheme={} host={} format={:?} quality={:?} ttl={}",
         uri.scheme(),
         uri.host_str().unwrap_or("none"),
         media.format,
+        media.quality,
         media.valid_for_seconds,
     ));
 }
 impl<T: Transport> NeteaseClient<T> {
-    /// One normal, standard-quality source request. No fallback, substitution or trial escalation.
+    /// Compatibility entry point for one normal, standard-quality source.
     /// # Errors
     /// Access denial, missing source, unknown codes and unsupported profiles all stop.
     pub async fn media(&self, id: u64) -> Result<Media, Error> {
+        self.media_with_quality(id, MediaQuality::Standard).await
+    }
+
+    /// Resolves one anonymous source at the selected quality. `NetEase` may
+    /// return a lower actual level when the account or Track is not entitled;
+    /// that actual level is retained in [`Media::quality`].
+    /// # Errors
+    /// Access denial, missing source, unknown codes and unsupported profiles all stop.
+    pub async fn media_with_quality(
+        &self,
+        id: u64,
+        preferred: MediaQuality,
+    ) -> Result<Media, Error> {
         crate::catalog::id(id)?;
+        let level = preferred.request_level();
+        let encode_type = if preferred == MediaQuality::Standard {
+            "aac"
+        } else {
+            "flac"
+        };
         let (v, _) = self
             .request(
                 "/api/song/enhance/player/url/v1",
-                json!({"ids":format!("[{id}]"),"level":"standard","encodeType":"aac","e_r":false}),
+                json!({"ids":format!("[{id}]"),"level":level,"encodeType":encode_type,"e_r":false}),
                 true,
                 None,
             )
@@ -147,9 +193,7 @@ impl<T: Transport> NeteaseClient<T> {
         Ok(media)
     }
 
-    /// Resolves one standard source using the current desktop EAPI route and
-    /// the already-verified account session. The richer desktop context is
-    /// request-local and is never persisted with the credential.
+    /// Compatibility entry point for one authenticated standard source.
     /// # Errors
     /// Access denial, missing source, unknown codes and unsupported profiles all stop.
     pub async fn authenticated_media(
@@ -157,14 +201,30 @@ impl<T: Transport> NeteaseClient<T> {
         credential: &Credential,
         id: u64,
     ) -> Result<Media, Error> {
+        self.authenticated_media_with_quality(credential, id, MediaQuality::Standard)
+            .await
+    }
+
+    /// Resolves one selected-quality source using the current desktop EAPI route and
+    /// the already-verified account session. The richer desktop context is
+    /// request-local and is never persisted with the credential.
+    /// # Errors
+    /// Access denial, missing source, unknown codes and unsupported profiles all stop.
+    pub async fn authenticated_media_with_quality(
+        &self,
+        credential: &Credential,
+        id: u64,
+        preferred: MediaQuality,
+    ) -> Result<Media, Error> {
         crate::catalog::id(id)?;
         let (cookie, header) = credential.media_context()?;
+        let level = preferred.request_level();
         let response = self
             .raw_interface3_eapi_request(
                 "/api/song/enhance/player/url/v1",
                 json!({
                     "ids":format!("[{id}]"),
-                    "level":"standard",
+                    "level":level,
                     "encodeType":"flac",
                     "header":header,
                 }),
@@ -224,8 +284,39 @@ mod tests {
     fn source_is_exact_short_lived_and_redacted() {
         let source = decode_media(&value(), 7).unwrap();
         assert_eq!(source.valid_for_seconds, 1200);
+        assert_eq!(source.quality, MediaQuality::Standard);
         assert!(!format!("{source:?}").contains("fixture.invalid"));
         assert!(decode_media(&value(), 8).is_err());
+    }
+
+    #[test]
+    fn response_level_and_format_report_actual_quality_including_downgrade() {
+        let mut high = value();
+        high["data"][0]["level"] = json!("exhigh");
+        assert_eq!(decode_media(&high, 7).unwrap().quality, MediaQuality::High);
+
+        let mut lossless = value();
+        lossless["data"][0]["level"] = json!("lossless");
+        lossless["data"][0]["type"] = json!("flac");
+        let source = decode_media(&lossless, 7).unwrap();
+        assert_eq!(source.quality, MediaQuality::Lossless);
+        assert_eq!(source.format, MediaFormat::Flac);
+
+        // A service-side fallback is accepted and reported as what actually
+        // arrived, rather than what the caller preferred.
+        let mut fallback = value();
+        fallback["data"][0]["level"] = json!("higher");
+        assert_eq!(
+            decode_media(&fallback, 7).unwrap().quality,
+            MediaQuality::Standard
+        );
+
+        let mut unknown = value();
+        unknown["data"][0]["level"] = json!("future-profile");
+        assert!(matches!(
+            decode_media(&unknown, 7),
+            Err(Error::ProtocolUnavailable)
+        ));
     }
     #[test]
     fn trial_missing_source_unknown_code_and_bad_url_stop() {
@@ -278,6 +369,8 @@ mod tests {
 
     struct RecordingTransport {
         request: Arc<Mutex<Option<crate::Request>>>,
+        response_level: &'static str,
+        response_format: &'static str,
     }
 
     impl Transport for RecordingTransport {
@@ -291,10 +384,10 @@ mod tests {
                         "id":7,
                         "code":200,
                         "url":"https://fixture.invalid/source",
-                        "type":"mp3",
+                        "type":self.response_format,
                         "expi":1200,
                         "freeTrialInfo":null,
-                        "level":"standard"
+                        "level":self.response_level
                     }]
                 }))
                 .unwrap(),
@@ -320,6 +413,8 @@ mod tests {
         let captured = Arc::new(Mutex::new(None));
         let client = NeteaseClient::new(RecordingTransport {
             request: Arc::clone(&captured),
+            response_level: "standard",
+            response_format: "mp3",
         });
         let credential = Credential::import(
             &serde_json::to_vec(&json!({
@@ -368,5 +463,65 @@ mod tests {
                 .unwrap()
                 .contains('_')
         );
+    }
+
+    #[tokio::test]
+    async fn anonymous_high_request_uses_exhigh_and_reports_the_response_level() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = NeteaseClient::new(RecordingTransport {
+            request: Arc::clone(&captured),
+            response_level: "exhigh",
+            response_format: "mp3",
+        });
+
+        let source = client
+            .media_with_quality(7, MediaQuality::High)
+            .await
+            .unwrap();
+        assert_eq!(source.quality, MediaQuality::High);
+        assert_eq!(source.format, MediaFormat::Mp3);
+
+        let request = captured.lock().unwrap().take().unwrap();
+        assert_eq!(
+            request.url(),
+            "https://interface.music.163.com/eapi/song/enhance/player/url/v1"
+        );
+        assert!(request.cookie().is_none());
+        let payload = decode_eapi_payload(&request.form()[0].1);
+        assert_eq!(payload["ids"], "[7]");
+        assert_eq!(payload["level"], "exhigh");
+        assert_eq!(payload["encodeType"], "flac");
+    }
+
+    #[tokio::test]
+    async fn authenticated_lossless_request_uses_lossless_and_reports_flac() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = NeteaseClient::new(RecordingTransport {
+            request: Arc::clone(&captured),
+            response_level: "lossless",
+            response_format: "flac",
+        });
+        let credential = Credential::import(
+            &serde_json::to_vec(&json!({
+                "version":1,
+                "provider":"netease-cloud-music",
+                "music_u":"synthetic-session",
+                "csrf":"synthetic-csrf"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let source = client
+            .authenticated_media_with_quality(&credential, 7, MediaQuality::Lossless)
+            .await
+            .unwrap();
+        assert_eq!(source.quality, MediaQuality::Lossless);
+        assert_eq!(source.format, MediaFormat::Flac);
+
+        let request = captured.lock().unwrap().take().unwrap();
+        let payload = decode_eapi_payload(&request.form()[0].1);
+        assert_eq!(payload["level"], "lossless");
+        assert_eq!(payload["encodeType"], "flac");
     }
 }

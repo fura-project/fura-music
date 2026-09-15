@@ -1734,12 +1734,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           : null;
       final likedHeaderOwnsTopBar =
           likedSongsOpen && embeddedShellRoute == null && _likedHeaderCollapsed;
-      final recentHeaderOwnsTopBar =
+      final recentCollapsed =
           destination == AuthenticatedPrimaryDestination.recentPlays &&
           embeddedShellRoute == null &&
           _recentHeaderCollapsed &&
           constraints.maxHeight >= 480 &&
           !_topSearchFocused;
+      final compactRecentShellOwnsTopBar = recentCollapsed && compactActions;
+      final recentHeaderOwnsTopBar = recentCollapsed && !compactActions;
       final discoverRootOpen =
           destination == AuthenticatedPrimaryDestination.discover &&
           embeddedShellRoute == null;
@@ -1846,15 +1848,18 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               gateway: _library.recentPlaysGateway,
               onHeaderCollapsedChanged: _updateRecentHeaderCollapsed,
               collapseSuppressed: _topSearchFocused,
-              collapsedHeaderActions: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: _primaryActions(
-                  compactActions: compactActions,
-                  showSettings: !wide,
-                  showAccount: !extendedSidebar,
-                  settingsSelected: false,
-                ),
-              ),
+              compactCollapsedTopBarInShell: compactRecentShellOwnsTopBar,
+              collapsedHeaderActions: compactActions
+                  ? null
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _primaryActions(
+                        compactActions: compactActions,
+                        showSettings: !wide,
+                        showAccount: !extendedSidebar,
+                        settingsSelected: false,
+                      ),
+                    ),
               playback: _queuePlaybackController,
               onSignInAgain: widget.onSignInAgain,
               onOpenAlbum: _openTrackContextAlbum,
@@ -1900,78 +1905,88 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           : null;
       final mainAppBar = AppBar(
         automaticallyImplyLeading: false,
-        title: Stack(
-          key: const ValueKey('shell-top-bar-transition'),
-          fit: StackFit.passthrough,
-          children: [
-            _PrimaryShellTitle(
-              key: const ValueKey('primary-shell-top-bar'),
-              onSearchFocusChanged: settingsOpen ? null : _updateTopSearchFocus,
-              title: settingsOpen
-                  ? context.l10n.settingsTitle
-                  : collectionDetailTitle ??
-                        switch (destination) {
-                          AuthenticatedPrimaryDestination.home =>
-                            context.l10n.navHome,
-                          AuthenticatedPrimaryDestination.discover =>
-                            context.l10n.navDiscover,
-                          AuthenticatedPrimaryDestination.search =>
-                            context.l10n.navSearch,
-                          AuthenticatedPrimaryDestination.library =>
-                            context.l10n.navLiked,
-                          AuthenticatedPrimaryDestination.recentPlays =>
-                            context.l10n.navRecentPlays,
-                        },
-              compact: compactActions,
-              showTitle: settingsOpen
-                  ? false
-                  : catalogDetailOpen
-                  ? false
-                  : discoverRootOpen
-                  ? _discoverHeaderCollapsed
-                  : !likedSongsOpen &&
-                        destination !=
-                            AuthenticatedPrimaryDestination.recentPlays &&
-                        (destination != AuthenticatedPrimaryDestination.home ||
-                            !extendedSidebar),
-              showSearchShortcut: settingsOpen
-                  ? wide
-                  : extendedSidebar &&
-                        destination != AuthenticatedPrimaryDestination.search,
-              searchKey: settingsOpen
-                  ? const ValueKey('settings-search')
-                  : const ValueKey('top-search-shortcut'),
-              searchHint: settingsOpen
-                  ? context.l10n.settingsSearchLabel
-                  : context.l10n.shellSearchProvider(_providerDisplayName),
-              searchController: settingsOpen
-                  ? _settingsSearchController
-                  : _topSearchController,
-              onSearchChanged: settingsOpen ? _updateSettingsSearch : null,
-              onSearchSubmitted: settingsOpen
-                  ? _updateSettingsSearch
-                  : _submitTopSearch,
-              searchSuggestions: settingsOpen
-                  ? null
-                  : _topSearchSuggestionController,
-              onSearchSuggestionSelected: settingsOpen
-                  ? null
-                  : _selectTopSearchSuggestion,
-              searchEndInset: collectionRefreshAction == null ? 0 : 48,
-            ),
-            if (showCollectionShellControls)
-              Positioned.fill(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    key: const ValueKey('collection-detail-shell-back'),
-                    tooltip: context.l10n.commonBack,
-                    onPressed: _returnFromTopRoute,
-                    icon: const Icon(Icons.arrow_back_rounded),
+        title: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: showCollectionShellControls ? kToolbarHeight : 0,
+            minHeight: showCollectionShellControls ? kToolbarHeight : 0,
+          ),
+          child: Stack(
+            key: const ValueKey('shell-top-bar-transition'),
+            fit: StackFit.passthrough,
+            children: [
+              _PrimaryShellTitle(
+                key: const ValueKey('primary-shell-top-bar'),
+                onSearchFocusChanged: settingsOpen
+                    ? null
+                    : _updateTopSearchFocus,
+                title: settingsOpen
+                    ? context.l10n.settingsTitle
+                    : collectionDetailTitle ??
+                          switch (destination) {
+                            AuthenticatedPrimaryDestination.home =>
+                              context.l10n.navHome,
+                            AuthenticatedPrimaryDestination.discover =>
+                              context.l10n.navDiscover,
+                            AuthenticatedPrimaryDestination.search =>
+                              context.l10n.navSearch,
+                            AuthenticatedPrimaryDestination.library =>
+                              context.l10n.navLiked,
+                            AuthenticatedPrimaryDestination.recentPlays =>
+                              context.l10n.navRecentPlays,
+                          },
+                compact: compactActions,
+                showTitle: settingsOpen
+                    ? false
+                    : catalogDetailOpen
+                    ? false
+                    : discoverRootOpen
+                    ? _discoverHeaderCollapsed
+                    : !likedSongsOpen &&
+                          (destination !=
+                                  AuthenticatedPrimaryDestination.recentPlays ||
+                              compactRecentShellOwnsTopBar) &&
+                          (destination !=
+                                  AuthenticatedPrimaryDestination.home ||
+                              !extendedSidebar),
+                showSearchShortcut: settingsOpen
+                    ? wide
+                    : extendedSidebar &&
+                          destination != AuthenticatedPrimaryDestination.search,
+                searchKey: settingsOpen
+                    ? const ValueKey('settings-search')
+                    : const ValueKey('top-search-shortcut'),
+                searchHint: settingsOpen
+                    ? context.l10n.settingsSearchLabel
+                    : context.l10n.shellSearchProvider(_providerDisplayName),
+                searchController: settingsOpen
+                    ? _settingsSearchController
+                    : _topSearchController,
+                onSearchChanged: settingsOpen ? _updateSettingsSearch : null,
+                onSearchSubmitted: settingsOpen
+                    ? _updateSettingsSearch
+                    : _submitTopSearch,
+                searchSuggestions: settingsOpen
+                    ? null
+                    : _topSearchSuggestionController,
+                onSearchSuggestionSelected: settingsOpen
+                    ? null
+                    : _selectTopSearchSuggestion,
+                searchEndInset: collectionRefreshAction == null ? 0 : 48,
+              ),
+              if (showCollectionShellControls)
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      key: const ValueKey('collection-detail-shell-back'),
+                      tooltip: context.l10n.commonBack,
+                      onPressed: _returnFromTopRoute,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
         titleSpacing: compactActions ? 8 : 16,
         actions: extendedSidebar

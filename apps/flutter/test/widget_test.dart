@@ -488,8 +488,24 @@ void main() {
       expect(recentScroll.offset, 260);
       tester.view.physicalSize = const Size(390, 844);
       await tester.pumpAndSettle();
-      expect(collapsedTitle, findsOneWidget);
-      expect(find.byType(AppBar), findsNothing);
+      expect(collapsedTitle, findsNothing);
+      expect(find.byType(AppBar), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('shell-top-bar-title-${_en.navRecentPlays}')),
+        findsOneWidget,
+      );
+      final settingsRect = tester.getRect(
+        find.byKey(const ValueKey('open-settings')),
+      );
+      final signOutRect = tester.getRect(
+        find.byKey(const ValueKey('sign-out')),
+      );
+      expect(settingsRect.right, closeTo(signOutRect.left, 1));
+      expect(signOutRect.right, greaterThan(380));
+      expect(
+        settingsRect.center.dy,
+        closeTo(tester.getRect(find.byType(AppBar)).center.dy, 1),
+      );
       final mobileRecentPlayRect = tester.getRect(
         find.byKey(const ValueKey('recent-plays-play')),
       );
@@ -5936,12 +5952,12 @@ void main() {
     final detailList = find.byKey(
       const PageStorageKey<String>('playlist-detail-track-list'),
     );
-    tester
+    final detailScroll = tester
         .state<ScrollableState>(
           find.descendant(of: detailList, matching: find.byType(Scrollable)),
         )
-        .position
-        .jumpTo(180);
+        .position;
+    detailScroll.jumpTo(180);
     await tester.pumpAndSettle();
     final collapsedArtwork = tester.getSize(
       find.byKey(const ValueKey('collection-detail-artwork')),
@@ -5982,6 +5998,51 @@ void main() {
         find.byType(MusicApp),
         matchesGoldenFile(
           Uri.file('/tmp/flutterustmusic-playlist-shell-desktop-collapsed.png'),
+        ),
+      );
+    }
+
+    // At the exact medium-layout handoff, the page-local toolbar must already
+    // be gone before the Shell Back/Refresh controls become interactive.
+    detailScroll.jumpTo(0);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(700, 404);
+    await tester.pumpAndSettle();
+    final mediumDetailScroll = tester
+        .state<ScrollableState>(
+          find.descendant(of: detailList, matching: find.byType(Scrollable)),
+        )
+        .position;
+    mediumDetailScroll.jumpTo(80);
+    await tester.pumpAndSettle();
+    expect(mediumDetailScroll.pixels, greaterThanOrEqualTo(72));
+    expect(
+      find.byKey(const ValueKey('collection-detail-shell-back')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('collection-detail-shell-back')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('playlist-detail-back')).hitTestable(),
+      findsNothing,
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(
+              const ValueKey('collection-detail-local-toolbar-region'),
+            ),
+          )
+          .height,
+      0,
+    );
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-playlist-shell-medium-handoff.png'),
         ),
       );
     }
