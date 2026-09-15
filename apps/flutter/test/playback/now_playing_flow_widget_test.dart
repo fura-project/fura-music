@@ -1824,16 +1824,31 @@ void main() {
         final leftRect = tester.getRect(leftCluster);
         final primaryRect = tester.getRect(primarySlot);
         final rightRect = tester.getRect(rightCluster);
-        final minimumCenter = leftRect.right + 8 + (primaryRect.width / 2);
-        final maximumCenter = rightRect.left - 8 - (primaryRect.width / 2);
+        expect(rowRect.width, size.width);
+        expect(rowRect.center.dx, closeTo(size.width / 2, 0.5));
+        final minimumCenter = leftRect.right + (primaryRect.width / 2);
+        final maximumCenter = rightRect.left - (primaryRect.width / 2);
         final expectedCenter = rowRect.center.dx
             .clamp(minimumCenter, maximumCenter)
             .toDouble();
         expect(primaryRect.center.dx, closeTo(expectedCenter, 0.5));
+        final centerTolerance = switch (size.width) {
+          430 || 412 => 0.5,
+          390 => 5.5,
+          360 => 20.5,
+          320 => 0.5,
+          _ => 0.5,
+        };
+        expect(
+          (primaryRect.center.dx - rowRect.center.dx).abs(),
+          lessThanOrEqualTo(centerTolerance),
+        );
         expect(primaryRect.width, 48);
         expect(primaryRect.height, 48);
         expect(leftRect.left, greaterThanOrEqualTo(rowRect.left));
         expect(rightRect.right, lessThanOrEqualTo(rowRect.right));
+        expect(primaryRect.left, greaterThanOrEqualTo(leftRect.right));
+        expect(primaryRect.right, lessThanOrEqualTo(rightRect.left));
         expect(
           find.byKey(const ValueKey('now-playing-quality')),
           size.width == 320 ? findsNothing : findsOneWidget,
@@ -1929,12 +1944,12 @@ void main() {
     final endClusterRect = tester.getRect(
       find.byKey(const ValueKey('expanded-now-playing-compact-right-cluster')),
     );
-    expect(startClusterRect.left, greaterThan(primaryRect.right));
-    expect(endClusterRect.right, lessThan(primaryRect.left));
+    expect(startClusterRect.left, greaterThanOrEqualTo(primaryRect.right));
+    expect(endClusterRect.right, lessThanOrEqualTo(primaryRect.left));
     final minimumCenterFromStart =
-        startClusterRect.width + 8 + (primaryRect.width / 2);
+        startClusterRect.width + (primaryRect.width / 2);
     final maximumCenterFromStart =
-        rowRect.width - endClusterRect.width - 8 - (primaryRect.width / 2);
+        rowRect.width - endClusterRect.width - (primaryRect.width / 2);
     final expectedCenterFromStart = (rowRect.width / 2)
         .clamp(minimumCenterFromStart, maximumCenterFromStart)
         .toDouble();

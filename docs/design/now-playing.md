@@ -40,7 +40,8 @@ regions instead of scaling one oversized desktop row:
 - Shuffle and Previous form the leading cluster; Next, Repeat, Quality and
   Queue form the trailing cluster; the 48 dp Play/Pause action occupies its own
   slot between them.
-- The primary action prefers the physical center of the available row and is
+- The primary action prefers the physical center of the full available row.
+  The preferred 8 dp cluster gap contracts first, and the primary action is
   clamped only when a side cluster would otherwise overlap it. Secondary
   controls retain at least 44 dp interaction targets.
 - The composition uses directional positioning, so the clusters mirror in RTL

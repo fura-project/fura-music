@@ -442,28 +442,34 @@ class _ExpandedPlaybackControls extends StatelessWidget {
         color: theme.colorScheme.surfaceContainer,
         elevation: 3,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 12, 8),
+          padding: const EdgeInsets.only(top: 6, bottom: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Semantics(
-                container: true,
-                liveRegion: true,
-                label: status,
-                excludeSemantics: true,
-                child: Text(
-                  status,
-                  key: const ValueKey('now-playing-status'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: error
-                        ? theme.colorScheme.error
-                        : theme.colorScheme.onSurfaceVariant,
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 16, end: 12),
+                child: Semantics(
+                  container: true,
+                  liveRegion: true,
+                  label: status,
+                  excludeSemantics: true,
+                  child: Text(
+                    status,
+                    key: const ValueKey('now-playing-status'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: error
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
-              _PlaybackProgress(controller: playback, track: track),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 16, end: 12),
+                child: _PlaybackProgress(controller: playback, track: track),
+              ),
               const SizedBox(height: 2),
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -496,24 +502,30 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                     _VolumeButton(controller: controller),
                     _QueueButton(controller: controller),
                   ];
-                  return SizedBox(
-                    key: const ValueKey('expanded-now-playing-wide-controls'),
-                    height: 56,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: transport,
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Row(
+                  return Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 16,
+                      end: 12,
+                    ),
+                    child: SizedBox(
+                      key: const ValueKey('expanded-now-playing-wide-controls'),
+                      height: 56,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: utilities,
+                            children: transport,
                           ),
-                        ),
-                      ],
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: utilities,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -586,14 +598,21 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
         final rightExtent = showQuality
             ? preferredRightExtent
             : fallbackRightExtent;
-        final unpaddedExtent = leftExtent + _primaryExtent + rightExtent;
-        final gap = ((constraints.maxWidth - unpaddedExtent) / 2)
-            .clamp(0.0, _preferredGap)
-            .toDouble();
+        final desiredCenter = constraints.maxWidth / 2;
+        final leadingGapCapacity =
+            desiredCenter - leftExtent - (_primaryExtent / 2);
+        final trailingGapCapacity =
+            constraints.maxWidth -
+            rightExtent -
+            (_primaryExtent / 2) -
+            desiredCenter;
+        final centeredGapCapacity = leadingGapCapacity < trailingGapCapacity
+            ? leadingGapCapacity
+            : trailingGapCapacity;
+        final gap = centeredGapCapacity.clamp(0.0, _preferredGap).toDouble();
         final minimumCenter = leftExtent + gap + (_primaryExtent / 2);
         final maximumCenter =
             constraints.maxWidth - rightExtent - gap - (_primaryExtent / 2);
-        final desiredCenter = constraints.maxWidth / 2;
         final centerFromStart = minimumCenter <= maximumCenter
             ? desiredCenter.clamp(minimumCenter, maximumCenter).toDouble()
             : desiredCenter;
