@@ -7,6 +7,8 @@ void main() {
   test('maps a valid Bridge page into presentation-safe playlists', () {
     final result = mapBridgePlaylistSearchPage(
       const bridge.QqMusicPlaylistSearchPageLoad(
+        omittedPlaylistCount: 0,
+
         page: 1,
         total: 25,
         hasMore: true,
@@ -53,6 +55,8 @@ void main() {
 
     final conflict = mapBridgePlaylistSearchPage(
       const bridge.QqMusicPlaylistSearchPageLoad(
+        omittedPlaylistCount: 0,
+
         page: 1,
         total: 0,
         hasMore: false,
@@ -64,6 +68,8 @@ void main() {
 
     final invalidIdentity = mapBridgePlaylistSearchPage(
       const bridge.QqMusicPlaylistSearchPageLoad(
+        omittedPlaylistCount: 0,
+
         page: 1,
         total: 1,
         hasMore: false,

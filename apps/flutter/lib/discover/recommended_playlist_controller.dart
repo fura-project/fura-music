@@ -18,6 +18,8 @@ class RecommendedPlaylistController extends ChangeNotifier {
   RecommendedPlaylistFailure? _appendFailure;
   int _nextOffset = 0;
   bool _hasMore = false;
+  int _omittedPlaylistCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   RecommendedPlaylistPageLoadOperation? _operation;
   int _generation = 0;
@@ -29,6 +31,8 @@ class RecommendedPlaylistController extends ChangeNotifier {
   RecommendedPlaylistFailure? get appendFailure => _appendFailure;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
+  int get omittedPlaylistCount => _omittedPlaylistCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry =>
       _stage == RecommendedPlaylistStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
@@ -52,6 +56,7 @@ class RecommendedPlaylistController extends ChangeNotifier {
       _appendFailure = null;
       _nextOffset = 0;
       _hasMore = false;
+      _omittedPlaylistCount = 0;
       _isLoadingMore = false;
       _stage = RecommendedPlaylistStage.error;
       _notify();
@@ -63,6 +68,7 @@ class RecommendedPlaylistController extends ChangeNotifier {
     _appendFailure = null;
     _nextOffset = 0;
     _hasMore = false;
+    _omittedPlaylistCount = 0;
     _isLoadingMore = false;
     _stage = RecommendedPlaylistStage.loading;
     _notify();
@@ -73,9 +79,11 @@ class RecommendedPlaylistController extends ChangeNotifier {
 
     if (_validPage(result, expectedOffset: 0)) {
       _playlists = List.unmodifiable(result.playlists);
-      _nextOffset = result.playlists.length;
+      _nextOffset = result.playlists.length + result.omittedPlaylistCount;
       _hasMore = result.hasMore;
-      _stage = _playlists.isEmpty
+      _omittedPlaylistCount = result.omittedPlaylistCount;
+      if (result.omittedPlaylistCount > 0) _partialResultRevision += 1;
+      _stage = _playlists.isEmpty && _omittedPlaylistCount == 0
           ? RecommendedPlaylistStage.empty
           : RecommendedPlaylistStage.content;
     } else {
@@ -112,8 +120,13 @@ class RecommendedPlaylistController extends ChangeNotifier {
             seen.add('${playlist.providerId}\u0000${playlist.opaqueId}'),
       );
       _playlists = List.unmodifiable([..._playlists, ...additions]);
-      _nextOffset = expectedOffset + result.playlists.length;
+      _nextOffset =
+          expectedOffset +
+          result.playlists.length +
+          result.omittedPlaylistCount;
       _hasMore = result.hasMore;
+      _omittedPlaylistCount += result.omittedPlaylistCount;
+      if (result.omittedPlaylistCount > 0) _partialResultRevision += 1;
     } else {
       _appendFailure =
           result.failure ?? RecommendedPlaylistFailure.invalidResponse;
@@ -135,7 +148,10 @@ class RecommendedPlaylistController extends ChangeNotifier {
   }) =>
       result.failure == null &&
       result.offset == expectedOffset &&
-      (!result.hasMore || result.playlists.isNotEmpty);
+      result.omittedPlaylistCount >= 0 &&
+      (!result.hasMore ||
+          result.playlists.isNotEmpty ||
+          result.omittedPlaylistCount > 0);
 
   bool _isRetryable(RecommendedPlaylistFailure? failure) =>
       failure == RecommendedPlaylistFailure.coreUnavailable ||

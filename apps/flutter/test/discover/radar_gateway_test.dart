@@ -11,6 +11,8 @@ void main() {
   test('maps a valid Radar page into immutable presentation Tracks', () {
     final result = mapBridgeRadarTrackPage(
       const bridge.QqMusicRadarTrackPageLoad(
+        omittedTrackCount: 0,
+
         page: 2,
         hasMore: true,
         tracks: [
@@ -73,6 +75,8 @@ void main() {
 
     final conflict = mapBridgeRadarTrackPage(
       const bridge.QqMusicRadarTrackPageLoad(
+        omittedTrackCount: 0,
+
         page: 0,
         hasMore: false,
         tracks: [
@@ -93,16 +97,22 @@ void main() {
   test('rejects invalid pagination and malformed Track fields', () {
     final invalidPages = [
       const bridge.QqMusicRadarTrackPageLoad(
+        omittedTrackCount: 0,
+
         page: 0,
         hasMore: false,
         tracks: [],
       ),
       const bridge.QqMusicRadarTrackPageLoad(
+        omittedTrackCount: 0,
+
         page: 1,
         hasMore: true,
         tracks: [],
       ),
       const bridge.QqMusicRadarTrackPageLoad(
+        omittedTrackCount: 0,
+
         page: 1,
         hasMore: false,
         tracks: [

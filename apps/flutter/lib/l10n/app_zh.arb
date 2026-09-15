@@ -912,5 +912,10 @@
   "playbackQualitySummaryStandard": "标准音质",
   "playbackQualitySummaryHigh": "高品质",
   "playbackQualitySummaryLossless": "SQ 无损音质",
-  "commonLocateCurrentTrack": "定位当前歌曲"
+  "commonLocateCurrentTrack": "定位当前歌曲",
+  "partialResultsNotice": "部分内容无法安全显示，已跳过 {count} 项，其余结果不受影响。",
+  "@partialResultsNotice": {
+    "description": "集合响应中存在损坏行时，对每个新结果只公告一次的行内提示。",
+    "placeholders": {"count": {"type": "int"}}
+  }
 }

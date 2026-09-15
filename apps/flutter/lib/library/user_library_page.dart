@@ -10,6 +10,7 @@ import 'package:flutterustmusic/artist/artist_page.dart';
 import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -2504,12 +2505,27 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     UserLibraryStage.loading => const _LibraryLoading(
       key: ValueKey('user-library-loading'),
     ),
-    UserLibraryStage.content => _PlaylistCollection(
+    UserLibraryStage.content => Column(
       key: const ValueKey('user-library-content'),
-      playlists: _controller.playlists,
-      onSelected: _openPlaylist,
-      returnFocusPlaylist: _lastOpenedPlaylist,
-      returnFocusNode: _playlistReturnFocusNode,
+      children: [
+        if (_controller.omittedPlaylistCount > 0)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: PartialResultsNotice(
+              omittedCount: _controller.omittedPlaylistCount,
+              resultRevision: _controller.partialResultRevision,
+            ),
+          ),
+        Expanded(
+          child: _PlaylistCollection(
+            key: const ValueKey('user-library-playlist-collection'),
+            playlists: _controller.playlists,
+            onSelected: _openPlaylist,
+            returnFocusPlaylist: _lastOpenedPlaylist,
+            returnFocusNode: _playlistReturnFocusNode,
+          ),
+        ),
+      ],
     ),
     UserLibraryStage.empty => _LibraryEmpty(
       key: const ValueKey('user-library-empty'),

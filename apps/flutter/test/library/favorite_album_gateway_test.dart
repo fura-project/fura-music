@@ -10,6 +10,9 @@ void main() {
   test('maps a valid favorite-Album page into immutable summaries', () {
     final result = mapBridgeFavoriteAlbumPage(
       const bridge.QqMusicFavoriteAlbumPageLoad(
+        nextOffset: 21,
+        omittedAlbumCount: 0,
+
         offset: 20,
         total: 21,
         hasMore: false,
@@ -59,6 +62,9 @@ void main() {
 
     final conflict = mapBridgeFavoriteAlbumPage(
       const bridge.QqMusicFavoriteAlbumPageLoad(
+        nextOffset: 0,
+        omittedAlbumCount: 0,
+
         offset: 0,
         total: 1,
         hasMore: false,
@@ -76,6 +82,9 @@ void main() {
 
     final malformed = mapBridgeFavoriteAlbumPage(
       const bridge.QqMusicFavoriteAlbumPageLoad(
+        nextOffset: 0,
+        omittedAlbumCount: 0,
+
         offset: 0,
         total: 1,
         hasMore: false,
@@ -92,6 +101,9 @@ void main() {
 
     final contradictoryPagination = mapBridgeFavoriteAlbumPage(
       const bridge.QqMusicFavoriteAlbumPageLoad(
+        nextOffset: 0,
+        omittedAlbumCount: 0,
+
         offset: 0,
         total: 2,
         hasMore: false,

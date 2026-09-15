@@ -27,6 +27,8 @@ class FavoriteArtistController extends ChangeNotifier {
   int _total = 0;
   int _nextOffset = 0;
   bool _hasMore = false;
+  int _omittedArtistCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   FavoriteArtistPageLoadOperation? _operation;
   int _generation = 0;
@@ -40,6 +42,8 @@ class FavoriteArtistController extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoading => _operation != null;
   bool get isLoadingMore => _isLoadingMore;
+  int get omittedArtistCount => _omittedArtistCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry =>
       _stage == FavoriteArtistStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
@@ -62,6 +66,7 @@ class FavoriteArtistController extends ChangeNotifier {
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
+    _omittedArtistCount = 0;
     _isLoadingMore = false;
     _stage = FavoriteArtistStage.loading;
     _notify();
@@ -73,9 +78,11 @@ class FavoriteArtistController extends ChangeNotifier {
     if (_validPage(result, expectedOffset: 0)) {
       _artists = List.unmodifiable(result.artists);
       _total = result.total;
-      _nextOffset = result.artists.length;
+      _nextOffset = result.artists.length + result.omittedArtistCount;
       _hasMore = result.hasMore;
-      _stage = _artists.isEmpty
+      _omittedArtistCount = result.omittedArtistCount;
+      if (result.omittedArtistCount > 0) _partialResultRevision += 1;
+      _stage = _artists.isEmpty && _omittedArtistCount == 0
           ? FavoriteArtistStage.empty
           : FavoriteArtistStage.content;
     } else {
@@ -113,13 +120,17 @@ class FavoriteArtistController extends ChangeNotifier {
       );
       _artists = List.unmodifiable([..._artists, ...additions]);
       _total = result.total;
-      _nextOffset = expectedOffset + result.artists.length;
+      _nextOffset =
+          expectedOffset + result.artists.length + result.omittedArtistCount;
       _hasMore = result.hasMore;
+      _omittedArtistCount += result.omittedArtistCount;
+      if (result.omittedArtistCount > 0) _partialResultRevision += 1;
     } else if (_isSessionFailure(result.failure)) {
       _artists = const [];
       _total = 0;
       _nextOffset = 0;
       _hasMore = false;
+      _omittedArtistCount = 0;
       _applyInitialFailure(
         result.failure ?? FavoriteArtistFailure.invalidResponse,
       );
@@ -141,12 +152,15 @@ class FavoriteArtistController extends ChangeNotifier {
     FavoriteArtistPageResult result, {
     required int expectedOffset,
   }) {
-    final pageEnd = expectedOffset + result.artists.length;
+    final pageEnd =
+        expectedOffset + result.artists.length + result.omittedArtistCount;
     return result.failure == null &&
         result.offset == expectedOffset &&
+        result.omittedArtistCount >= 0 &&
         pageEnd <= result.total &&
         (result.hasMore
-            ? result.artists.isNotEmpty && pageEnd < result.total
+            ? (result.artists.isNotEmpty || result.omittedArtistCount > 0) &&
+                  pageEnd < result.total
             : pageEnd == result.total);
   }
 

@@ -87,15 +87,19 @@ class CatalogArtistSummary {
 
 class QqMusicArtistAlbumPageLoad {
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedAlbumCount;
   final List<CatalogAlbumSummary> albums;
   final QqMusicArtistAlbumPageLoadFailure? failure;
 
   const QqMusicArtistAlbumPageLoad({
     required this.offset,
+    required this.nextOffset,
     required this.total,
     required this.hasMore,
+    required this.omittedAlbumCount,
     required this.albums,
     this.failure,
   });
@@ -103,8 +107,10 @@ class QqMusicArtistAlbumPageLoad {
   @override
   int get hashCode =>
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedAlbumCount.hashCode ^
       albums.hashCode ^
       failure.hashCode;
 
@@ -114,8 +120,10 @@ class QqMusicArtistAlbumPageLoad {
       other is QqMusicArtistAlbumPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedAlbumCount == other.omittedAlbumCount &&
           albums == other.albums &&
           failure == other.failure;
 }
@@ -131,15 +139,19 @@ enum QqMusicArtistAlbumPageLoadFailure {
 
 class QqMusicArtistTrackPageLoad {
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedTrackCount;
   final List<LibraryTrackSummary> tracks;
   final QqMusicArtistTrackPageLoadFailure? failure;
 
   const QqMusicArtistTrackPageLoad({
     required this.offset,
+    required this.nextOffset,
     required this.total,
     required this.hasMore,
+    required this.omittedTrackCount,
     required this.tracks,
     this.failure,
   });
@@ -147,8 +159,10 @@ class QqMusicArtistTrackPageLoad {
   @override
   int get hashCode =>
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedTrackCount.hashCode ^
       tracks.hashCode ^
       failure.hashCode;
 
@@ -158,8 +172,10 @@ class QqMusicArtistTrackPageLoad {
       other is QqMusicArtistTrackPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedTrackCount == other.omittedTrackCount &&
           tracks == other.tracks &&
           failure == other.failure;
 }

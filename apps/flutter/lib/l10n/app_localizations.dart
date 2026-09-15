@@ -5546,6 +5546,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Locate current track'**
   String get commonLocateCurrentTrack;
+
+  /// Inline warning shown once when malformed rows are omitted from an otherwise successful collection response.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Some items could not be displayed. 1 unsafe item was skipped; the remaining results are shown.} other{Some items could not be displayed. {count} unsafe items were skipped; the remaining results are shown.}}'**
+  String partialResultsNotice(int count);
 }
 
 class _AppLocalizationsDelegate

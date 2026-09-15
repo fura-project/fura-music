@@ -10,6 +10,8 @@ void main() {
   test('maps a bounded personalized playlist list and valid absence', () {
     final available = mapBridgePersonalizedPlaylists(
       const bridge.QqMusicPersonalizedPlaylistsLoad(
+        omittedPlaylistCount: 0,
+
         playlists: [
           bridge_library.LibraryPlaylistSummary(
             isLikedSongs: false,
@@ -26,7 +28,11 @@ void main() {
     expect(available.playlists.single.title, 'Personalized playlist');
 
     final absent = mapBridgePersonalizedPlaylists(
-      const bridge.QqMusicPersonalizedPlaylistsLoad(playlists: []),
+      const bridge.QqMusicPersonalizedPlaylistsLoad(
+        omittedPlaylistCount: 0,
+
+        playlists: [],
+      ),
     );
     expect(absent.failure, isNull);
     expect(absent.playlists, isEmpty);
@@ -59,6 +65,8 @@ void main() {
 
     final conflict = mapBridgePersonalizedPlaylists(
       const bridge.QqMusicPersonalizedPlaylistsLoad(
+        omittedPlaylistCount: 0,
+
         playlists: [
           bridge_library.LibraryPlaylistSummary(
             isLikedSongs: false,
@@ -109,7 +117,10 @@ void main() {
     ]) {
       expect(
         mapBridgePersonalizedPlaylists(
-          bridge.QqMusicPersonalizedPlaylistsLoad(playlists: playlists),
+          bridge.QqMusicPersonalizedPlaylistsLoad(
+            omittedPlaylistCount: 0,
+            playlists: playlists,
+          ),
         ).failure,
         PersonalizedPlaylistsFailure.invalidResponse,
       );

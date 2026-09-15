@@ -7,6 +7,7 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -305,6 +306,8 @@ class TrackSearchPageState extends State<TrackSearchPage> {
         query: _controller.query,
         items: _controller.items,
         total: _controller.total,
+        omittedItemCount: _controller.omittedItemCount,
+        partialResultRevision: _controller.partialResultRevision,
         hasMore: _controller.hasMore,
         isLoadingMore: _controller.isLoadingMore,
         appendFailure: _controller.appendFailure,
@@ -356,6 +359,8 @@ class TrackSearchPageState extends State<TrackSearchPage> {
           query: _artistController.query,
           artists: _artistController.artists,
           total: _artistController.total,
+          omittedCount: _artistController.omittedArtistCount,
+          partialResultRevision: _artistController.partialResultRevision,
           hasMore: _artistController.hasMore,
           isLoadingMore: _artistController.isLoadingMore,
           appendFailure: _artistController.appendFailure != null,
@@ -402,6 +407,8 @@ class TrackSearchPageState extends State<TrackSearchPage> {
           query: _albumController.query,
           albums: _albumController.albums,
           total: _albumController.total,
+          omittedCount: _albumController.omittedAlbumCount,
+          partialResultRevision: _albumController.partialResultRevision,
           hasMore: _albumController.hasMore,
           isLoadingMore: _albumController.isLoadingMore,
           appendFailure: _albumController.appendFailure != null,
@@ -448,6 +455,8 @@ class TrackSearchPageState extends State<TrackSearchPage> {
       query: _playlistController.query,
       playlists: _playlistController.playlists,
       total: _playlistController.total,
+      omittedCount: _playlistController.omittedPlaylistCount,
+      partialResultRevision: _playlistController.partialResultRevision,
       hasMore: _playlistController.hasMore,
       isLoadingMore: _playlistController.isLoadingMore,
       appendFailure: _playlistController.appendFailure != null,
@@ -764,6 +773,8 @@ class _SearchResults extends StatefulWidget {
     required this.query,
     required this.items,
     required this.total,
+    required this.omittedItemCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -781,6 +792,8 @@ class _SearchResults extends StatefulWidget {
   final String query;
   final List<TrackSearchItem> items;
   final int total;
+  final int omittedItemCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final SearchFailure? appendFailure;
@@ -850,6 +863,19 @@ class _SearchResultsState extends State<_SearchResults> {
               ),
             ),
           ),
+          if (widget.omittedItemCount > 0)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                widget.desktop ? 48 : 20,
+                0,
+                widget.desktop ? 48 : 20,
+                12,
+              ),
+              child: PartialResultsNotice(
+                omittedCount: widget.omittedItemCount,
+                resultRevision: widget.partialResultRevision,
+              ),
+            ),
           if (widget.desktop)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -934,6 +960,8 @@ class _ArtistSearchResults extends StatelessWidget {
     required this.query,
     required this.artists,
     required this.total,
+    required this.omittedCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -947,6 +975,8 @@ class _ArtistSearchResults extends StatelessWidget {
   final String query;
   final List<ArtistSummary> artists;
   final int total;
+  final int omittedCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final bool appendFailure;
@@ -970,18 +1000,30 @@ class _ArtistSearchResults extends StatelessWidget {
         itemCount: artists.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
-              child: Semantics(
-                header: true,
-                child: Text(
-                  context.l10n.searchArtistResultCount(total, query),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      context.l10n.searchArtistResultCount(total, query),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ),
-              ),
+                if (omittedCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
+                    child: PartialResultsNotice(
+                      omittedCount: omittedCount,
+                      resultRevision: partialResultRevision,
+                    ),
+                  ),
+              ],
             );
           }
           if (index == artists.length + 1) {
@@ -1027,6 +1069,8 @@ class _AlbumSearchResults extends StatelessWidget {
     required this.query,
     required this.albums,
     required this.total,
+    required this.omittedCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -1040,6 +1084,8 @@ class _AlbumSearchResults extends StatelessWidget {
   final String query;
   final List<AlbumSummary> albums;
   final int total;
+  final int omittedCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final bool appendFailure;
@@ -1063,18 +1109,30 @@ class _AlbumSearchResults extends StatelessWidget {
         itemCount: albums.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
-              child: Semantics(
-                header: true,
-                child: Text(
-                  context.l10n.searchAlbumResultCount(total, query),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      context.l10n.searchAlbumResultCount(total, query),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ),
-              ),
+                if (omittedCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
+                    child: PartialResultsNotice(
+                      omittedCount: omittedCount,
+                      resultRevision: partialResultRevision,
+                    ),
+                  ),
+              ],
             );
           }
           if (index == albums.length + 1) {
@@ -1120,6 +1178,8 @@ class _PlaylistSearchResults extends StatelessWidget {
     required this.query,
     required this.playlists,
     required this.total,
+    required this.omittedCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -1133,6 +1193,8 @@ class _PlaylistSearchResults extends StatelessWidget {
   final String query;
   final List<UserPlaylistSummary> playlists;
   final int total;
+  final int omittedCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final bool appendFailure;
@@ -1156,18 +1218,30 @@ class _PlaylistSearchResults extends StatelessWidget {
         itemCount: playlists.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
-              child: Semantics(
-                header: true,
-                child: Text(
-                  context.l10n.searchPlaylistResultCount(total, query),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      context.l10n.searchPlaylistResultCount(total, query),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ),
-              ),
+                if (omittedCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
+                    child: PartialResultsNotice(
+                      omittedCount: omittedCount,
+                      resultRevision: partialResultRevision,
+                    ),
+                  ),
+              ],
             );
           }
           if (index == playlists.length + 1) {

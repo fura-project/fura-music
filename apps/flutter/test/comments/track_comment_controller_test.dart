@@ -12,8 +12,10 @@ void main() {
       final gateway = _ScriptedGateway([
         _PendingOperation.completed(
           TrackCommentPageResult(
+            nextOffset: 20,
             total: 22,
             hasMore: true,
+            omittedLatestCommentCount: 18,
             hotComments: [_comment('hot')],
             latestComments: [_comment('one'), _comment('two')],
           ),
@@ -21,6 +23,7 @@ void main() {
         _PendingOperation.completed(
           TrackCommentPageResult(
             offset: 20,
+            nextOffset: 22,
             total: 22,
             latestComments: [_comment('two'), _comment('three')],
           ),
@@ -57,8 +60,10 @@ void main() {
       ),
       _PendingOperation.completed(
         TrackCommentPageResult(
+          nextOffset: 20,
           total: 21,
           hasMore: true,
+          omittedLatestCommentCount: 19,
           latestComments: [_comment('one')],
         ),
       ),
@@ -68,6 +73,7 @@ void main() {
       _PendingOperation.completed(
         TrackCommentPageResult(
           offset: 20,
+          nextOffset: 21,
           total: 21,
           latestComments: [_comment('two')],
         ),
@@ -107,13 +113,21 @@ void main() {
     expect(first.cancelCalls, 1);
 
     first.complete(
-      TrackCommentPageResult(total: 1, latestComments: [_comment('late')]),
+      TrackCommentPageResult(
+        nextOffset: 1,
+        total: 1,
+        latestComments: [_comment('late')],
+      ),
     );
     await firstLoad;
     expect(controller.stage, TrackCommentStage.loading);
 
     second.complete(
-      TrackCommentPageResult(total: 1, latestComments: [_comment('current')]),
+      TrackCommentPageResult(
+        nextOffset: 1,
+        total: 1,
+        latestComments: [_comment('current')],
+      ),
     );
     await secondLoad;
     expect(controller.latestComments.single.opaqueId, 'comment:current');
@@ -143,7 +157,9 @@ void main() {
       final gateway = _ScriptedGateway([
         _PendingOperation.completed(
           TrackCommentPageResult(
+            nextOffset: 3,
             total: 3,
+            omittedLatestCommentCount: 2,
             latestComments: [_comment('visible')],
           ),
         ),
@@ -165,11 +181,17 @@ void main() {
     () async {
       final gateway = _ScriptedGateway([
         _PendingOperation.completed(
-          const TrackCommentPageResult(total: 21, hasMore: true),
+          const TrackCommentPageResult(
+            nextOffset: 20,
+            total: 21,
+            hasMore: true,
+            omittedLatestCommentCount: 20,
+          ),
         ),
         _PendingOperation.completed(
           TrackCommentPageResult(
             offset: 20,
+            nextOffset: 21,
             total: 21,
             latestComments: [_comment('visible')],
           ),

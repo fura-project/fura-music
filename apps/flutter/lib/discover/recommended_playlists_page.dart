@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -248,6 +249,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     RecommendedPlaylistStage.content => _RecommendationCollection(
       key: const ValueKey('recommendations-content'),
       playlists: _controller.playlists,
+      omittedPlaylistCount: _controller.omittedPlaylistCount,
+      partialResultRevision: _controller.partialResultRevision,
       hasMore: _controller.hasMore,
       isLoadingMore: _controller.isLoadingMore,
       appendFailure: _controller.appendFailure,
@@ -295,6 +298,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
         RankingGroupStage.content => _RankingCollection(
           key: const ValueKey('rankings-content'),
           groups: _rankingController.groups,
+          omittedRankingCount: _rankingController.omittedRankingCount,
+          partialResultRevision: _rankingController.partialResultRevision,
           onSelected: widget.onOpenRanking,
           bottomPadding: bottomPadding,
         ),
@@ -323,6 +328,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       key: const ValueKey('radar-content'),
       controller: _radarController,
       tracks: _radarController.tracks,
+      omittedTrackCount: _radarController.omittedTrackCount,
+      partialResultRevision: _radarController.partialResultRevision,
       hasMore: _radarController.hasMore,
       isLoadingMore: _radarController.isLoadingMore,
       appendFailure: _radarController.appendFailure,
@@ -379,6 +386,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
           key: const ValueKey('new-albums-content'),
           region: _newAlbumController.region,
           releases: _newAlbumController.releases,
+          omittedReleaseCount: _newAlbumController.omittedReleaseCount,
+          partialResultRevision: _newAlbumController.partialResultRevision,
           hasMore: _newAlbumController.hasMore,
           isLoadingMore: _newAlbumController.isLoadingMore,
           appendFailure: _newAlbumController.appendFailure,
@@ -433,6 +442,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
           key: const ValueKey('new-songs-content'),
           category: _newSongController.category,
           tracks: _newSongController.tracks,
+          omittedTrackCount: _newSongController.omittedTrackCount,
+          partialResultRevision: _newSongController.partialResultRevision,
           onPlay: _playNewSong,
           onQueue: _queueNewSong,
           onOpenAlbum: widget.onOpenTrackAlbum,
@@ -748,6 +759,8 @@ class _NewSongCollection extends StatelessWidget {
   const _NewSongCollection({
     required this.category,
     required this.tracks,
+    required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.onPlay,
     required this.onQueue,
     required this.onOpenAlbum,
@@ -759,6 +772,8 @@ class _NewSongCollection extends StatelessWidget {
 
   final NewSongCategory category;
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
+  final int partialResultRevision;
   final ValueChanged<int> onPlay;
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
@@ -781,6 +796,16 @@ class _NewSongCollection extends StatelessWidget {
           child: CustomScrollView(
             key: PageStorageKey<String>('new-song-list-${category.name}'),
             slivers: [
+              if (omittedTrackCount > 0)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: PartialResultsNotice(
+                      omittedCount: omittedTrackCount,
+                      resultRevision: partialResultRevision,
+                    ),
+                  ),
+                ),
               if (desktop)
                 SliverPadding(
                   padding: EdgeInsets.symmetric(horizontal: horizontal),
@@ -894,6 +919,8 @@ class _NewAlbumCollection extends StatelessWidget {
   const _NewAlbumCollection({
     required this.region,
     required this.releases,
+    required this.omittedReleaseCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -906,6 +933,8 @@ class _NewAlbumCollection extends StatelessWidget {
 
   final NewAlbumRegion region;
   final List<NewAlbumRelease> releases;
+  final int omittedReleaseCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final NewAlbumFailure? appendFailure;
@@ -936,6 +965,16 @@ class _NewAlbumCollection extends StatelessWidget {
           child: CustomScrollView(
             key: PageStorageKey<String>('new-album-grid-${region.name}'),
             slivers: [
+              if (omittedReleaseCount > 0)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: PartialResultsNotice(
+                      omittedCount: omittedReleaseCount,
+                      resultRevision: partialResultRevision,
+                    ),
+                  ),
+                ),
               SliverPadding(
                 padding: EdgeInsets.symmetric(horizontal: horizontal),
                 sliver: SliverGrid.builder(
@@ -1156,12 +1195,16 @@ String _newAlbumSemanticLabel(AppLocalizations l10n, NewAlbumRelease release) =>
 class _RankingCollection extends StatelessWidget {
   const _RankingCollection({
     required this.groups,
+    required this.omittedRankingCount,
+    required this.partialResultRevision,
     required this.onSelected,
     required this.bottomPadding,
     super.key,
   });
 
   final List<RankingGroup> groups;
+  final int omittedRankingCount;
+  final int partialResultRevision;
   final ValueChanged<RankingSummary> onSelected;
   final double bottomPadding;
 
@@ -1186,6 +1229,13 @@ class _RankingCollection extends StatelessWidget {
               bottomPadding,
             ),
             children: [
+              if (omittedRankingCount > 0) ...[
+                PartialResultsNotice(
+                  omittedCount: omittedRankingCount,
+                  resultRevision: partialResultRevision,
+                ),
+                const SizedBox(height: 16),
+              ],
               for (final group in groups) ...[
                 Semantics(
                   header: true,
@@ -1566,6 +1616,8 @@ class _RadarCollection extends StatefulWidget {
   const _RadarCollection({
     required this.controller,
     required this.tracks,
+    required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -1584,6 +1636,8 @@ class _RadarCollection extends StatefulWidget {
 
   final RadarController controller;
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final RadarFailure? appendFailure;
@@ -1673,6 +1727,16 @@ class _RadarCollectionState extends State<_RadarCollection> {
             child: CustomScrollView(
               key: const PageStorageKey<String>('radar-tracks'),
               slivers: [
+                if (widget.omittedTrackCount > 0)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
+                    sliver: SliverToBoxAdapter(
+                      child: PartialResultsNotice(
+                        omittedCount: widget.omittedTrackCount,
+                        resultRevision: widget.partialResultRevision,
+                      ),
+                    ),
+                  ),
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
                   sliver: SliverToBoxAdapter(
@@ -1831,6 +1895,8 @@ class _RadarFooter extends StatelessWidget {
 class _RecommendationCollection extends StatelessWidget {
   const _RecommendationCollection({
     required this.playlists,
+    required this.omittedPlaylistCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -1842,6 +1908,8 @@ class _RecommendationCollection extends StatelessWidget {
   });
 
   final List<RecommendedPlaylistSummary> playlists;
+  final int omittedPlaylistCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final RecommendedPlaylistFailure? appendFailure;
@@ -1867,6 +1935,16 @@ class _RecommendationCollection extends StatelessWidget {
       return CustomScrollView(
         key: const PageStorageKey<String>('recommended-playlist-grid'),
         slivers: [
+          if (omittedPlaylistCount > 0)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
+              sliver: SliverToBoxAdapter(
+                child: PartialResultsNotice(
+                  omittedCount: omittedPlaylistCount,
+                  resultRevision: partialResultRevision,
+                ),
+              ),
+            ),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
             sliver: SliverGrid.builder(

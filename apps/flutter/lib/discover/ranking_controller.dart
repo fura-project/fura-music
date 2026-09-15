@@ -14,6 +14,8 @@ class RankingGroupController extends ChangeNotifier {
   RankingGroupStage _stage = RankingGroupStage.loading;
   List<RankingGroup> _groups = const [];
   RankingFailure? _failure;
+  int _omittedRankingCount = 0;
+  int _partialResultRevision = 0;
   RankingGroupLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
@@ -21,6 +23,8 @@ class RankingGroupController extends ChangeNotifier {
   RankingGroupStage get stage => _stage;
   List<RankingGroup> get groups => _groups;
   RankingFailure? get failure => _failure;
+  int get omittedRankingCount => _omittedRankingCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry =>
       _stage == RankingGroupStage.error && _isRetryable(_failure);
 
@@ -30,6 +34,7 @@ class RankingGroupController extends ChangeNotifier {
     final operation = _gateway.beginGroupLoad();
     _operation = operation;
     _groups = const [];
+    _omittedRankingCount = 0;
     _failure = null;
     _stage = RankingGroupStage.loading;
     _notify();
@@ -40,7 +45,9 @@ class RankingGroupController extends ChangeNotifier {
 
     if (result.failure == null) {
       _groups = List.unmodifiable(result.groups);
-      _stage = _groups.isEmpty
+      _omittedRankingCount = result.omittedRankingCount;
+      if (result.omittedRankingCount > 0) _partialResultRevision += 1;
+      _stage = _groups.isEmpty && _omittedRankingCount == 0
           ? RankingGroupStage.empty
           : RankingGroupStage.content;
     } else {
@@ -88,6 +95,8 @@ class RankingTrackController extends ChangeNotifier {
   int _total = 0;
   int _nextOffset = 0;
   bool _hasMore = false;
+  int _omittedTrackCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   RankingTrackPageLoadOperation? _operation;
   int _generation = 0;
@@ -101,6 +110,8 @@ class RankingTrackController extends ChangeNotifier {
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
+  int get omittedTrackCount => _omittedTrackCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry =>
       _stage == RankingTrackStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
@@ -127,6 +138,7 @@ class RankingTrackController extends ChangeNotifier {
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
+    _omittedTrackCount = 0;
     _isLoadingMore = false;
     _stage = RankingTrackStage.loading;
     _notify();
@@ -139,9 +151,11 @@ class RankingTrackController extends ChangeNotifier {
       _ranking = result.ranking!;
       _tracks = List.unmodifiable(result.tracks);
       _total = result.total;
-      _nextOffset = result.tracks.length;
+      _nextOffset = result.tracks.length + result.omittedTrackCount;
       _hasMore = result.hasMore;
-      _stage = _tracks.isEmpty
+      _omittedTrackCount = result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
+      _stage = _tracks.isEmpty && _omittedTrackCount == 0
           ? RankingTrackStage.empty
           : RankingTrackStage.content;
     } else {
@@ -180,8 +194,11 @@ class RankingTrackController extends ChangeNotifier {
       );
       _tracks = List.unmodifiable([..._tracks, ...additions]);
       _total = result.total;
-      _nextOffset = expectedOffset + result.tracks.length;
+      _nextOffset =
+          expectedOffset + result.tracks.length + result.omittedTrackCount;
       _hasMore = result.hasMore;
+      _omittedTrackCount += result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
     } else {
       _appendFailure = result.failure ?? RankingFailure.invalidResponse;
     }
@@ -205,8 +222,12 @@ class RankingTrackController extends ChangeNotifier {
       result.ranking!.providerId == _ranking.providerId &&
       result.ranking!.opaqueId == _ranking.opaqueId &&
       result.offset == expectedOffset &&
-      result.total >= expectedOffset + result.tracks.length &&
-      (!result.hasMore || result.tracks.isNotEmpty);
+      result.omittedTrackCount >= 0 &&
+      result.total >=
+          expectedOffset + result.tracks.length + result.omittedTrackCount &&
+      (!result.hasMore ||
+          result.tracks.isNotEmpty ||
+          result.omittedTrackCount > 0);
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 

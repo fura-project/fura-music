@@ -41,17 +41,23 @@ enum QqMusicNewSongCategory {
 
 class QqMusicNewSongsLoad {
   final QqMusicNewSongCategory category;
+  final int omittedTrackCount;
   final List<LibraryTrackSummary> tracks;
   final QqMusicNewSongsLoadFailure? failure;
 
   const QqMusicNewSongsLoad({
     required this.category,
+    required this.omittedTrackCount,
     required this.tracks,
     this.failure,
   });
 
   @override
-  int get hashCode => category.hashCode ^ tracks.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      category.hashCode ^
+      omittedTrackCount.hashCode ^
+      tracks.hashCode ^
+      failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -59,6 +65,7 @@ class QqMusicNewSongsLoad {
       other is QqMusicNewSongsLoad &&
           runtimeType == other.runtimeType &&
           category == other.category &&
+          omittedTrackCount == other.omittedTrackCount &&
           tracks == other.tracks &&
           failure == other.failure;
 }

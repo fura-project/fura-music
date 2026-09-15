@@ -9,6 +9,8 @@ void main() {
   test('maps a valid Bridge page into presentation-safe Tracks', () {
     final result = mapBridgeTrackSearchPage(
       const bridge.QqMusicTrackSearchPageLoad(
+        omittedItemCount: 0,
+
         page: 1,
         total: 31,
         hasMore: true,
@@ -90,6 +92,8 @@ void main() {
 
     final conflict = mapBridgeTrackSearchPage(
       const bridge.QqMusicTrackSearchPageLoad(
+        omittedItemCount: 0,
+
         page: 1,
         total: 0,
         hasMore: false,

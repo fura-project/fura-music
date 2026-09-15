@@ -10,6 +10,7 @@ import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -210,6 +211,8 @@ class _ArtistPageState extends State<ArtistPage> {
       ArtistTrackStage.content => _ArtistTracks(
         key: const ValueKey('artist-content'),
         tracks: _controller.tracks,
+        omittedTrackCount: _controller.omittedTrackCount,
+        partialResultRevision: _controller.partialResultRevision,
         hasMore: _controller.hasMore,
         isLoadingMore: _controller.isLoadingMore,
         appendFailure: _controller.appendFailure,
@@ -257,6 +260,8 @@ class _ArtistPageState extends State<ArtistPage> {
       ArtistAlbumStage.content => _ArtistAlbums(
         key: const ValueKey('artist-albums-content'),
         albums: _albumController.albums,
+        omittedAlbumCount: _albumController.omittedAlbumCount,
+        partialResultRevision: _albumController.partialResultRevision,
         hasMore: _albumController.hasMore,
         isLoadingMore: _albumController.isLoadingMore,
         appendFailure: _albumController.appendFailure,
@@ -340,6 +345,8 @@ class _ArtistHeader extends StatelessWidget {
 class _ArtistAlbums extends StatelessWidget {
   const _ArtistAlbums({
     required this.albums,
+    required this.omittedAlbumCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -351,6 +358,8 @@ class _ArtistAlbums extends StatelessWidget {
   });
 
   final List<AlbumSummary> albums;
+  final int omittedAlbumCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final ArtistAlbumFailure? appendFailure;
@@ -366,6 +375,21 @@ class _ArtistAlbums extends StatelessWidget {
       child: CustomScrollView(
         key: const PageStorageKey('artist-albums'),
         slivers: [
+          if (omittedAlbumCount > 0)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                desktop ? 40 : 12,
+                0,
+                desktop ? 40 : 12,
+                8,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: PartialResultsNotice(
+                  omittedCount: omittedAlbumCount,
+                  resultRevision: partialResultRevision,
+                ),
+              ),
+            ),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
               desktop ? 40 : 12,
@@ -557,6 +581,8 @@ class _ArtistAlbumFooter extends StatelessWidget {
 class _ArtistTracks extends StatefulWidget {
   const _ArtistTracks({
     required this.tracks,
+    required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -571,6 +597,8 @@ class _ArtistTracks extends StatefulWidget {
   });
 
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final ArtistTrackFailure? appendFailure;
@@ -620,6 +648,14 @@ class _ArtistTracksState extends State<_ArtistTracks> {
         constraints: const BoxConstraints(maxWidth: 1180),
         child: Column(
           children: [
+            if (widget.omittedTrackCount > 0)
+              Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
+                child: PartialResultsNotice(
+                  omittedCount: widget.omittedTrackCount,
+                  resultRevision: widget.partialResultRevision,
+                ),
+              ),
             if (widget.desktop)
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontal),

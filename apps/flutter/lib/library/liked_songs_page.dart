@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -388,6 +389,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
             processedCount: controller.processedCount,
             availableTrackCount: controller.tracks.length,
             omittedTrackCount: controller.omittedTrackCount,
+            partialResultRevision: controller.partialResultRevision,
             total: controller.total,
             hasMore: controller.hasMore,
             isLoadingMore: controller.isLoadingMore,
@@ -1145,6 +1147,7 @@ class _LikedTrackCollection extends StatefulWidget {
     required this.processedCount,
     required this.availableTrackCount,
     required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.total,
     required this.hasMore,
     required this.isLoadingMore,
@@ -1166,6 +1169,7 @@ class _LikedTrackCollection extends StatefulWidget {
   final int processedCount;
   final int availableTrackCount;
   final int omittedTrackCount;
+  final int partialResultRevision;
   final int total;
   final bool hasMore;
   final bool isLoadingMore;
@@ -1242,6 +1246,7 @@ class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
                       processedCount: widget.processedCount,
                       availableTrackCount: widget.availableTrackCount,
                       omittedTrackCount: widget.omittedTrackCount,
+                      partialResultRevision: widget.partialResultRevision,
                       total: widget.total,
                       hasMore: widget.hasMore,
                       loading: widget.isLoadingMore,
@@ -1547,6 +1552,7 @@ class _LikedTrackFooter extends StatelessWidget {
     required this.processedCount,
     required this.availableTrackCount,
     required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.total,
     required this.hasMore,
     required this.loading,
@@ -1562,6 +1568,7 @@ class _LikedTrackFooter extends StatelessWidget {
   final int processedCount;
   final int availableTrackCount;
   final int omittedTrackCount;
+  final int partialResultRevision;
   final int total;
   final bool hasMore;
   final bool loading;
@@ -1584,13 +1591,10 @@ class _LikedTrackFooter extends StatelessWidget {
               ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         if (omittedTrackCount > 0) ...[
-          const SizedBox(height: 4),
-          Text(
-            context.l10n.likedOmittedTracksDetail(omittedTrackCount),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
+          const SizedBox(height: 8),
+          PartialResultsNotice(
+            omittedCount: omittedTrackCount,
+            resultRevision: partialResultRevision,
           ),
         ],
         const SizedBox(height: 10),

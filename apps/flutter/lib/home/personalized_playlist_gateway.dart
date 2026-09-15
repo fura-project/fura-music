@@ -17,9 +17,14 @@ enum PersonalizedPlaylistsFailure {
 }
 
 class PersonalizedPlaylistsResult {
-  const PersonalizedPlaylistsResult({this.playlists = const [], this.failure});
+  const PersonalizedPlaylistsResult({
+    this.playlists = const [],
+    this.omittedPlaylistCount = 0,
+    this.failure,
+  });
 
   final List<RecommendedPlaylistSummary> playlists;
+  final int omittedPlaylistCount;
   final PersonalizedPlaylistsFailure? failure;
 }
 
@@ -119,13 +124,18 @@ PersonalizedPlaylistsResult mapBridgePersonalizedPlaylists(
 ) {
   final failure = result.failure;
   if (failure != null) {
-    if (result.playlists.isNotEmpty) {
+    if (result.playlists.isNotEmpty || result.omittedPlaylistCount != 0) {
       return const PersonalizedPlaylistsResult(
         failure: PersonalizedPlaylistsFailure.invalidResponse,
       );
     }
     return PersonalizedPlaylistsResult(
       failure: mapBridgePersonalizedPlaylistsFailure(failure),
+    );
+  }
+  if (result.omittedPlaylistCount < 0) {
+    return const PersonalizedPlaylistsResult(
+      failure: PersonalizedPlaylistsFailure.invalidResponse,
     );
   }
 
@@ -153,7 +163,10 @@ PersonalizedPlaylistsResult mapBridgePersonalizedPlaylists(
       ),
     );
   }
-  return PersonalizedPlaylistsResult(playlists: List.unmodifiable(playlists));
+  return PersonalizedPlaylistsResult(
+    playlists: List.unmodifiable(playlists),
+    omittedPlaylistCount: result.omittedPlaylistCount,
+  );
 }
 
 @visibleForTesting

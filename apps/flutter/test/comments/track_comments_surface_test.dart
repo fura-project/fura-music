@@ -17,6 +17,7 @@ void main() {
     final gateway = _ScriptedGateway([
       const TrackCommentPageResult(failure: TrackCommentFailure.network),
       TrackCommentPageResult(
+        nextOffset: 1,
         total: 1,
         latestComments: [
           _comment(
@@ -84,6 +85,36 @@ void main() {
 
     expect(find.byKey(const ValueKey('track-comments-empty')), findsOneWidget);
     expect(find.text('No comments yet'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps valid comments visible beside a partial-result notice', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: MusicMaterialTheme.light(),
+        home: Scaffold(
+          body: TrackCommentsPanel(
+            gateway: _ScriptedGateway([
+              TrackCommentPageResult(
+                nextOffset: 2,
+                total: 2,
+                omittedLatestCommentCount: 1,
+                latestComments: [_comment('safe', 'Visible safe comment')],
+              ),
+            ]),
+            track: _track,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Visible safe comment'), findsOneWidget);
+    expect(find.textContaining('1 unsafe item was skipped'), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-comments-error')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

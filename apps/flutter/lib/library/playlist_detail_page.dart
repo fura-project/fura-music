@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
@@ -212,6 +213,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         child: _TrackCollection(
           tracks: _controller.tracks,
           total: _controller.total,
+          omittedTrackCount: _controller.omittedTrackCount,
+          partialResultRevision: _controller.partialResultRevision,
           hasMore: _controller.hasMore,
           isLoadingMore: _controller.isLoadingMore,
           appendFailure: _controller.appendFailure,
@@ -334,6 +337,8 @@ class _TrackCollection extends StatefulWidget {
   const _TrackCollection({
     required this.tracks,
     required this.total,
+    required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -349,6 +354,8 @@ class _TrackCollection extends StatefulWidget {
 
   final List<PlaylistTrackSummary> tracks;
   final int total;
+  final int omittedTrackCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final UserLibraryFailure? appendFailure;
@@ -427,6 +434,13 @@ class _TrackCollectionState extends State<_TrackCollection> {
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Column(
                         children: [
+                          if (widget.omittedTrackCount > 0) ...[
+                            PartialResultsNotice(
+                              omittedCount: widget.omittedTrackCount,
+                              resultRevision: widget.partialResultRevision,
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           Text(
                             context.l10n.libraryShowingTracks(
                               widget.tracks.length,

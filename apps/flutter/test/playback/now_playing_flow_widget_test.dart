@@ -1979,6 +1979,7 @@ void main() {
         _ImmediateCommentOperation(
           TrackCommentPageResult(
             total: 1,
+            nextOffset: 1,
             hotComments: [_comment('hot', 'A hot comment')],
             latestComments: [_comment('latest', 'A newest comment')],
           ),
@@ -1986,6 +1987,7 @@ void main() {
         _ImmediateCommentOperation(
           TrackCommentPageResult(
             total: 1,
+            nextOffset: 1,
             latestComments: [
               _comment(
                 'wide',

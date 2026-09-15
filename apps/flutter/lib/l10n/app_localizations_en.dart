@@ -3452,4 +3452,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonLocateCurrentTrack => 'Locate current track';
+
+  @override
+  String partialResultsNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Some items could not be displayed. $count unsafe items were skipped; the remaining results are shown.',
+      one: 'Some items could not be displayed. 1 unsafe item was skipped; the remaining results are shown.',
+    );
+    return '$_temp0';
+  }
 }

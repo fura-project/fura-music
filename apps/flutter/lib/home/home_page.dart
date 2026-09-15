@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
@@ -1022,48 +1023,55 @@ class _DailyRecommendationSection extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
-        _DailyRecommendationContent(
-          key: const ValueKey('home-recommendations-section'),
-          featuredPlaylist: spotlightPlaylist,
-          guestPopularPlaylist: supportingPlaylist,
-          publicStage: controller.stage,
-          featuredCount: authenticated
-              ? homeController.personalizedPlaylists.length
-              : publicPlaylists.length,
-          featuredStage: authenticated
-              ? homeController.personalizedPlaylistsStage
-              : switch (controller.stage) {
-                  RecommendedPlaylistStage.loading => HomeResourceStage.loading,
-                  RecommendedPlaylistStage.content => HomeResourceStage.content,
-                  RecommendedPlaylistStage.empty => HomeResourceStage.empty,
-                  RecommendedPlaylistStage.error => HomeResourceStage.error,
-                },
-          onRetryFeatured: authenticated
-              ? homeController.retryPersonalizedPlaylists
-              : controller.retry,
-          newSongController: newSongController,
-          dailyPlaylist: daily,
-          dailyTracks: dailyTracks,
-          dailyTracksEnabled: dailyTracksEnabled,
-          providerDisplayName: providerDisplayName,
-          dailyStage: homeController.dailyStage,
-          radarController: radarController,
-          radarEnabled: radarEnabled,
-          queueController: queueController,
-          authenticated: authenticated,
-          compact: compact,
-          onSelected: onSelected,
-          onRetryPublic: controller.retry,
-          onRetryDaily: homeController.retryDaily,
-          onPreviousSpotlight: onPreviousSpotlight,
-          onNextSpotlight: onNextSpotlight,
-          spotlightAutoPlaying: spotlightAutoPlaying,
-          spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
-          spotlightMotionDirection: spotlightMotionDirection,
-          spotlightProgress: spotlightProgress,
-          onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
-          lastOpened: lastOpened,
-          returnFocusNode: returnFocusNode,
+        _PartialHomeSection(
+          key: const ValueKey('home-daily-partial-section'),
+          omittedCount: homeController.dailyOmittedTrackCount,
+          resultRevision: homeController.dailyPartialResultRevision,
+          child: _DailyRecommendationContent(
+            key: const ValueKey('home-recommendations-section'),
+            featuredPlaylist: spotlightPlaylist,
+            guestPopularPlaylist: supportingPlaylist,
+            publicStage: controller.stage,
+            featuredCount: authenticated
+                ? homeController.personalizedPlaylists.length
+                : publicPlaylists.length,
+            featuredStage: authenticated
+                ? homeController.personalizedPlaylistsStage
+                : switch (controller.stage) {
+                    RecommendedPlaylistStage.loading =>
+                      HomeResourceStage.loading,
+                    RecommendedPlaylistStage.content =>
+                      HomeResourceStage.content,
+                    RecommendedPlaylistStage.empty => HomeResourceStage.empty,
+                    RecommendedPlaylistStage.error => HomeResourceStage.error,
+                  },
+            onRetryFeatured: authenticated
+                ? homeController.retryPersonalizedPlaylists
+                : controller.retry,
+            newSongController: newSongController,
+            dailyPlaylist: daily,
+            dailyTracks: dailyTracks,
+            dailyTracksEnabled: dailyTracksEnabled,
+            providerDisplayName: providerDisplayName,
+            dailyStage: homeController.dailyStage,
+            radarController: radarController,
+            radarEnabled: radarEnabled,
+            queueController: queueController,
+            authenticated: authenticated,
+            compact: compact,
+            onSelected: onSelected,
+            onRetryPublic: controller.retry,
+            onRetryDaily: homeController.retryDaily,
+            onPreviousSpotlight: onPreviousSpotlight,
+            onNextSpotlight: onNextSpotlight,
+            spotlightAutoPlaying: spotlightAutoPlaying,
+            spotlightAutoPlayAvailable: spotlightAutoPlayAvailable,
+            spotlightMotionDirection: spotlightMotionDirection,
+            spotlightProgress: spotlightProgress,
+            onToggleSpotlightAutoPlay: onToggleSpotlightAutoPlay,
+            lastOpened: lastOpened,
+            returnFocusNode: returnFocusNode,
+          ),
         ),
       ],
     );
@@ -2131,7 +2139,12 @@ class _GuestPlaylistSection extends StatelessWidget {
               )
             : null,
       ),
-      RecommendedPlaylistStage.content => _guestPlaylistContent(context),
+      RecommendedPlaylistStage.content => _PartialHomeSection(
+        key: const ValueKey('home-guest-playlists-partial-section'),
+        omittedCount: controller.omittedPlaylistCount,
+        resultRevision: controller.partialResultRevision,
+        child: _guestPlaylistContent(context),
+      ),
     };
   }
 
@@ -2223,14 +2236,25 @@ class _NewSongSection extends StatelessWidget {
               )
             : null,
       ),
-      NewSongStage.content => _HomeTrackContent(
-        tracks: controller.tracks.take(6).toList(growable: false),
-        queueController: queueController,
-        compact: compact,
-        sectionKey: ValueKey(
-          authenticated ? 'home-new-songs' : 'home-guest-new-songs',
+      NewSongStage.content => _PartialHomeSection(
+        key: ValueKey(
+          authenticated
+              ? 'home-new-songs-partial-section'
+              : 'home-guest-new-songs-partial-section',
         ),
-        itemKeyPrefix: authenticated ? 'home-new-song' : 'home-guest-new-song',
+        omittedCount: controller.omittedTrackCount,
+        resultRevision: controller.partialResultRevision,
+        child: _HomeTrackContent(
+          tracks: controller.tracks.take(6).toList(growable: false),
+          queueController: queueController,
+          compact: compact,
+          sectionKey: ValueKey(
+            authenticated ? 'home-new-songs' : 'home-guest-new-songs',
+          ),
+          itemKeyPrefix: authenticated
+              ? 'home-new-song'
+              : 'home-guest-new-song',
+        ),
       ),
     };
   }
@@ -2287,24 +2311,29 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
           child: Text(context.l10n.commonRetry),
         ),
       ),
-      HomeResourceStage.content => _PlaylistShelf<RecommendedPlaylistSummary>(
-        key: const ValueKey('home-library-section'),
-        layoutKey: const ValueKey('home-library-shelf'),
-        items: controller.personalizedPlaylists,
-        compact: compact,
-        title: (playlist) => playlist.title,
-        artworkUri: (playlist) => playlist.artworkUri,
-        semanticLabel: (playlist) => playlist.trackCount == null
-            ? context.l10n.homePersonalizedPlaylistSemantics(playlist.title)
-            : '${playlist.title}, ${context.l10n.trackCount(playlist.trackCount!)}',
-        itemKey: (index) => ValueKey('home-library-playlist-$index'),
-        onSelected: onSelected,
-        focusNode: (playlist) =>
-            lastOpened?.providerId == playlist.providerId &&
-                lastOpened?.opaqueId == playlist.opaqueId
-            ? returnFocusNode
-            : null,
-        placeholderIcon: Icons.auto_awesome_rounded,
+      HomeResourceStage.content => _PartialHomeSection(
+        key: const ValueKey('home-library-partial-section'),
+        omittedCount: controller.personalizedPlaylistsOmittedCount,
+        resultRevision: controller.personalizedPlaylistsPartialResultRevision,
+        child: _PlaylistShelf<RecommendedPlaylistSummary>(
+          key: const ValueKey('home-library-section'),
+          layoutKey: const ValueKey('home-library-shelf'),
+          items: controller.personalizedPlaylists,
+          compact: compact,
+          title: (playlist) => playlist.title,
+          artworkUri: (playlist) => playlist.artworkUri,
+          semanticLabel: (playlist) => playlist.trackCount == null
+              ? context.l10n.homePersonalizedPlaylistSemantics(playlist.title)
+              : '${playlist.title}, ${context.l10n.trackCount(playlist.trackCount!)}',
+          itemKey: (index) => ValueKey('home-library-playlist-$index'),
+          onSelected: onSelected,
+          focusNode: (playlist) =>
+              lastOpened?.providerId == playlist.providerId &&
+                  lastOpened?.opaqueId == playlist.opaqueId
+              ? returnFocusNode
+              : null,
+          placeholderIcon: Icons.auto_awesome_rounded,
+        ),
       ),
     };
   }
@@ -2355,12 +2384,17 @@ class _PersonalizedTrackSection extends StatelessWidget {
           child: Text(context.l10n.commonRetry),
         ),
       ),
-      HomeResourceStage.content => _HomeTrackContent(
-        tracks: controller.personalizedTracks.take(6).toList(growable: false),
-        queueController: queueController,
-        compact: compact,
-        sectionKey: const ValueKey('home-personalized-tracks'),
-        itemKeyPrefix: 'home-personalized-track',
+      HomeResourceStage.content => _PartialHomeSection(
+        key: const ValueKey('home-personalized-tracks-partial-section'),
+        omittedCount: controller.personalizedTracksOmittedCount,
+        resultRevision: controller.personalizedTracksPartialResultRevision,
+        child: _HomeTrackContent(
+          tracks: controller.personalizedTracks.take(6).toList(growable: false),
+          queueController: queueController,
+          compact: compact,
+          sectionKey: const ValueKey('home-personalized-tracks'),
+          itemKeyPrefix: 'home-personalized-track',
+        ),
       ),
     };
   }
@@ -2422,31 +2456,63 @@ class _RelatedTrackSection extends StatelessWidget {
                 child: Text(context.l10n.commonRetry),
               ),
       ),
-      HomeResourceStage.content => Column(
+      HomeResourceStage.content => _PartialHomeSection(
         key: const ValueKey('home-related-tracks-section'),
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.l10n.homeBecauseListened(
-              seed?.title ?? context.l10n.homeRecentSong,
+        omittedCount: controller.relatedTracksOmittedCount,
+        resultRevision: controller.relatedTracksPartialResultRevision,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.homeBecauseListened(
+                seed?.title ?? context.l10n.homeRecentSong,
+              ),
+              key: const ValueKey('home-related-tracks-seed'),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            key: const ValueKey('home-related-tracks-seed'),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            const SizedBox(height: 8),
+            _HomeTrackContent(
+              tracks: controller.relatedTracks.take(6).toList(growable: false),
+              queueController: queueController,
+              compact: compact,
+              sectionKey: const ValueKey('home-related-tracks'),
+              itemKeyPrefix: 'home-related-track',
             ),
-          ),
-          const SizedBox(height: 8),
-          _HomeTrackContent(
-            tracks: controller.relatedTracks.take(6).toList(growable: false),
-            queueController: queueController,
-            compact: compact,
-            sectionKey: const ValueKey('home-related-tracks'),
-            itemKeyPrefix: 'home-related-track',
-          ),
-        ],
+          ],
+        ),
       ),
     };
   }
+}
+
+class _PartialHomeSection extends StatelessWidget {
+  const _PartialHomeSection({
+    required this.omittedCount,
+    required this.resultRevision,
+    required this.child,
+    super.key,
+  });
+
+  final int omittedCount;
+  final int resultRevision;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (omittedCount > 0) ...[
+        PartialResultsNotice(
+          omittedCount: omittedCount,
+          resultRevision: resultRevision,
+        ),
+        const SizedBox(height: 8),
+      ],
+      child,
+    ],
+  );
 }
 
 class _HomeTrackContent extends StatelessWidget {
@@ -2690,30 +2756,40 @@ class _MoreRecommendationsSection extends StatelessWidget {
         .take(6)
         .toList(growable: false);
     if (items.isEmpty) {
-      return _HomeInlineState(
-        key: const ValueKey('home-more-recommendations-empty'),
-        icon: Icons.queue_music_outlined,
-        title: context.l10n.homeNoAdditionalPublicPlaylists,
-        detail: context.l10n.homeAvailablePublicShown,
+      return _PartialHomeSection(
+        key: const ValueKey('home-public-playlists-partial-section'),
+        omittedCount: controller.omittedPlaylistCount,
+        resultRevision: controller.partialResultRevision,
+        child: _HomeInlineState(
+          key: const ValueKey('home-more-recommendations-empty'),
+          icon: Icons.queue_music_outlined,
+          title: context.l10n.homeNoAdditionalPublicPlaylists,
+          detail: context.l10n.homeAvailablePublicShown,
+        ),
       );
     }
-    return _PlaylistShelf<RecommendedPlaylistSummary>(
-      key: const ValueKey('home-public-playlists-section'),
-      layoutKey: const ValueKey('home-public-playlists-shelf'),
-      items: items,
-      compact: compact,
-      title: (playlist) => playlist.title,
-      artworkUri: (playlist) => playlist.artworkUri,
-      semanticLabel: (playlist) =>
-          _recommendationSemanticLabel(context.l10n, playlist),
-      itemKey: (index) => ValueKey('home-recommendation-${index + 1}'),
-      onSelected: onSelected,
-      focusNode: (playlist) =>
-          lastOpened?.providerId == playlist.providerId &&
-              lastOpened?.opaqueId == playlist.opaqueId
-          ? returnFocusNode
-          : null,
-      placeholderIcon: Icons.queue_music_rounded,
+    return _PartialHomeSection(
+      key: const ValueKey('home-public-playlists-partial-section'),
+      omittedCount: controller.omittedPlaylistCount,
+      resultRevision: controller.partialResultRevision,
+      child: _PlaylistShelf<RecommendedPlaylistSummary>(
+        key: const ValueKey('home-public-playlists-section'),
+        layoutKey: const ValueKey('home-public-playlists-shelf'),
+        items: items,
+        compact: compact,
+        title: (playlist) => playlist.title,
+        artworkUri: (playlist) => playlist.artworkUri,
+        semanticLabel: (playlist) =>
+            _recommendationSemanticLabel(context.l10n, playlist),
+        itemKey: (index) => ValueKey('home-recommendation-${index + 1}'),
+        onSelected: onSelected,
+        focusNode: (playlist) =>
+            lastOpened?.providerId == playlist.providerId &&
+                lastOpened?.opaqueId == playlist.opaqueId
+            ? returnFocusNode
+            : null,
+        placeholderIcon: Icons.queue_music_rounded,
+      ),
     );
   }
 }

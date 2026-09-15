@@ -34,16 +34,22 @@ abstract class QqMusicTrackCommentPageLoadHandle
 
 class QqMusicTrackCommentPageLoad {
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedHotCommentCount;
+  final int omittedLatestCommentCount;
   final List<TrackCommentSummary> hotComments;
   final List<TrackCommentSummary> latestComments;
   final QqMusicTrackCommentPageLoadFailure? failure;
 
   const QqMusicTrackCommentPageLoad({
     required this.offset,
+    required this.nextOffset,
     required this.total,
     required this.hasMore,
+    required this.omittedHotCommentCount,
+    required this.omittedLatestCommentCount,
     required this.hotComments,
     required this.latestComments,
     this.failure,
@@ -52,8 +58,11 @@ class QqMusicTrackCommentPageLoad {
   @override
   int get hashCode =>
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedHotCommentCount.hashCode ^
+      omittedLatestCommentCount.hashCode ^
       hotComments.hashCode ^
       latestComments.hashCode ^
       failure.hashCode;
@@ -64,8 +73,11 @@ class QqMusicTrackCommentPageLoad {
       other is QqMusicTrackCommentPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedHotCommentCount == other.omittedHotCommentCount &&
+          omittedLatestCommentCount == other.omittedLatestCommentCount &&
           hotComments == other.hotComments &&
           latestComments == other.latestComments &&
           failure == other.failure;

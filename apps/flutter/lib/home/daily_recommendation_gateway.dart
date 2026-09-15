@@ -21,11 +21,13 @@ class DailyRecommendationResult {
   const DailyRecommendationResult({
     this.playlist,
     this.tracks = const [],
+    this.omittedTrackCount = 0,
     this.failure,
   });
 
   final RecommendedPlaylistSummary? playlist;
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
   final DailyRecommendationFailure? failure;
 }
 
@@ -127,7 +129,9 @@ DailyRecommendationResult mapBridgeDailyRecommendation(
   final playlist = result.playlist;
   final bridgeTracks = result.tracks;
   if (failure != null) {
-    if (playlist != null || bridgeTracks.isNotEmpty) {
+    if (playlist != null ||
+        bridgeTracks.isNotEmpty ||
+        result.omittedTrackCount != 0) {
       return const DailyRecommendationResult(
         failure: DailyRecommendationFailure.invalidResponse,
       );
@@ -136,7 +140,9 @@ DailyRecommendationResult mapBridgeDailyRecommendation(
       failure: mapBridgeDailyRecommendationFailure(failure),
     );
   }
-  if (playlist != null && bridgeTracks.isNotEmpty) {
+  if (result.omittedTrackCount < 0 ||
+      playlist != null &&
+          (bridgeTracks.isNotEmpty || result.omittedTrackCount != 0)) {
     return const DailyRecommendationResult(
       failure: DailyRecommendationFailure.invalidResponse,
     );
@@ -154,9 +160,16 @@ DailyRecommendationResult mapBridgeDailyRecommendation(
       }
       tracks.add(track);
     }
-    return DailyRecommendationResult(tracks: List.unmodifiable(tracks));
+    return DailyRecommendationResult(
+      tracks: List.unmodifiable(tracks),
+      omittedTrackCount: result.omittedTrackCount,
+    );
   }
-  if (playlist == null) return const DailyRecommendationResult();
+  if (playlist == null) {
+    return DailyRecommendationResult(
+      omittedTrackCount: result.omittedTrackCount,
+    );
+  }
   if (playlist.providerId.trim().isEmpty ||
       playlist.opaqueId.trim().isEmpty ||
       playlist.title.trim().isEmpty ||

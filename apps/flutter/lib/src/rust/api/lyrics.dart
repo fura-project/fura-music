@@ -99,18 +99,23 @@ class QqMusicSynchronizedLyricLine {
 
 class QqMusicSynchronizedLyrics {
   final List<QqMusicSynchronizedLyricLine> lines;
+  final int omittedLineCount;
 
-  const QqMusicSynchronizedLyrics({required this.lines});
+  const QqMusicSynchronizedLyrics({
+    required this.lines,
+    required this.omittedLineCount,
+  });
 
   @override
-  int get hashCode => lines.hashCode;
+  int get hashCode => lines.hashCode ^ omittedLineCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is QqMusicSynchronizedLyrics &&
           runtimeType == other.runtimeType &&
-          lines == other.lines;
+          lines == other.lines &&
+          omittedLineCount == other.omittedLineCount;
 }
 
 class QqMusicTimedLyricSegment {

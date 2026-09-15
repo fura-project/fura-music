@@ -37,9 +37,14 @@ enum RankingFailure {
 }
 
 class RankingGroupResult {
-  const RankingGroupResult({this.groups = const [], this.failure});
+  const RankingGroupResult({
+    this.groups = const [],
+    this.omittedRankingCount = 0,
+    this.failure,
+  });
 
   final List<RankingGroup> groups;
+  final int omittedRankingCount;
   final RankingFailure? failure;
 }
 
@@ -50,6 +55,7 @@ class RankingTrackPageResult {
     this.total = 0,
     this.hasMore = false,
     this.tracks = const [],
+    this.omittedTrackCount = 0,
     this.failure,
   });
 
@@ -58,6 +64,7 @@ class RankingTrackPageResult {
   final int total;
   final bool hasMore;
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
   final RankingFailure? failure;
 }
 
@@ -177,10 +184,13 @@ RankingGroupResult mapBridgeRankingGroups(
 ) {
   final failure = result.failure;
   if (failure != null) {
-    if (result.groups.isNotEmpty) {
+    if (result.groups.isNotEmpty || result.omittedRankingCount != 0) {
       return const RankingGroupResult(failure: RankingFailure.invalidResponse);
     }
     return RankingGroupResult(failure: mapBridgeRankingFailure(failure));
+  }
+  if (result.omittedRankingCount < 0) {
+    return const RankingGroupResult(failure: RankingFailure.invalidResponse);
   }
   final groups = <RankingGroup>[];
   for (final group in result.groups) {
@@ -201,7 +211,10 @@ RankingGroupResult mapBridgeRankingGroups(
       RankingGroup(title: group.title, rankings: List.unmodifiable(rankings)),
     );
   }
-  return RankingGroupResult(groups: List.unmodifiable(groups));
+  return RankingGroupResult(
+    groups: List.unmodifiable(groups),
+    omittedRankingCount: result.omittedRankingCount,
+  );
 }
 
 @visibleForTesting
@@ -213,9 +226,11 @@ RankingTrackPageResult mapBridgeRankingTrackPage(
   if (failure != null) {
     if (result.ranking != null ||
         result.offset != 0 ||
+        result.nextOffset != 0 ||
         result.total != 0 ||
         result.hasMore ||
-        result.tracks.isNotEmpty) {
+        result.tracks.isNotEmpty ||
+        result.omittedTrackCount != 0) {
       return const RankingTrackPageResult(
         failure: RankingFailure.invalidResponse,
       );
@@ -223,13 +238,16 @@ RankingTrackPageResult mapBridgeRankingTrackPage(
     return RankingTrackPageResult(failure: mapBridgeRankingFailure(failure));
   }
   final ranking = result.ranking == null ? null : _mapSummary(result.ranking!);
+  final rawCount = result.tracks.length + result.omittedTrackCount;
   if (ranking == null ||
       ranking.providerId != expected.providerId ||
       ranking.opaqueId != expected.opaqueId ||
       result.offset < 0 ||
       result.total < 0 ||
-      result.offset + result.tracks.length > result.total ||
-      (result.hasMore && result.tracks.isEmpty)) {
+      result.omittedTrackCount < 0 ||
+      result.nextOffset != result.offset + rawCount ||
+      result.nextOffset > result.total ||
+      (result.hasMore && rawCount == 0)) {
     return const RankingTrackPageResult(
       failure: RankingFailure.invalidResponse,
     );
@@ -250,6 +268,7 @@ RankingTrackPageResult mapBridgeRankingTrackPage(
     total: result.total,
     hasMore: result.hasMore,
     tracks: List.unmodifiable(tracks),
+    omittedTrackCount: result.omittedTrackCount,
   );
 }
 

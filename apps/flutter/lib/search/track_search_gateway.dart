@@ -12,6 +12,7 @@ class TrackSearchPageResult {
     this.page = 0,
     this.total = 0,
     this.hasMore = false,
+    this.omittedItemCount = 0,
     this.items = const [],
     this.failure,
   });
@@ -19,6 +20,7 @@ class TrackSearchPageResult {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedItemCount;
   final List<TrackSearchItem> items;
   final SearchFailure? failure;
 }
@@ -114,6 +116,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     if (result.page != 0 ||
         result.total != 0 ||
         result.hasMore ||
+        result.omittedItemCount != 0 ||
         result.items.isNotEmpty) {
       return const TrackSearchPageResult(
         failure: SearchFailure.invalidResponse,
@@ -123,8 +126,11 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
   }
   if (result.page <= 0 ||
       result.total < 0 ||
-      result.items.length > result.total ||
-      (result.hasMore && result.items.isEmpty)) {
+      result.omittedItemCount < 0 ||
+      result.items.length + result.omittedItemCount > result.total ||
+      (result.hasMore &&
+          result.items.isEmpty &&
+          result.omittedItemCount == 0)) {
     return const TrackSearchPageResult(failure: SearchFailure.invalidResponse);
   }
   final items = <TrackSearchItem>[];
@@ -195,6 +201,7 @@ TrackSearchPageResult mapBridgeTrackSearchPage(
     page: result.page,
     total: result.total,
     hasMore: result.hasMore,
+    omittedItemCount: result.omittedItemCount,
     items: List.unmodifiable(items),
   );
 }

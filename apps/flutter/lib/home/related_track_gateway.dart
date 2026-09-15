@@ -13,9 +13,14 @@ enum RelatedTracksFailure {
 }
 
 class RelatedTracksResult {
-  const RelatedTracksResult({this.tracks = const [], this.failure});
+  const RelatedTracksResult({
+    this.tracks = const [],
+    this.omittedTrackCount = 0,
+    this.failure,
+  });
 
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
   final RelatedTracksFailure? failure;
 }
 
@@ -78,12 +83,17 @@ RelatedTracksResult mapBridgeRelatedTracks(
 ) {
   final failure = result.failure;
   if (failure != null) {
-    if (result.tracks.isNotEmpty) {
+    if (result.tracks.isNotEmpty || result.omittedTrackCount != 0) {
       return const RelatedTracksResult(
         failure: RelatedTracksFailure.invalidResponse,
       );
     }
     return RelatedTracksResult(failure: mapBridgeRelatedTracksFailure(failure));
+  }
+  if (result.omittedTrackCount < 0) {
+    return const RelatedTracksResult(
+      failure: RelatedTracksFailure.invalidResponse,
+    );
   }
 
   final identities = <String>{};
@@ -98,7 +108,10 @@ RelatedTracksResult mapBridgeRelatedTracks(
     }
     tracks.add(mapped);
   }
-  return RelatedTracksResult(tracks: List.unmodifiable(tracks));
+  return RelatedTracksResult(
+    tracks: List.unmodifiable(tracks),
+    omittedTrackCount: result.omittedTrackCount,
+  );
 }
 
 @visibleForTesting

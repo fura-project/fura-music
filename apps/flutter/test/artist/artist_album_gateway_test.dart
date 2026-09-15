@@ -14,6 +14,9 @@ void main() {
   test('maps a valid Bridge Artist Album page', () {
     final result = mapBridgeArtistAlbumPage(
       const bridge.QqMusicArtistAlbumPageLoad(
+        nextOffset: 1,
+        omittedAlbumCount: 0,
+
         offset: 0,
         total: 31,
         hasMore: true,
@@ -57,6 +60,9 @@ void main() {
 
     final conflict = mapBridgeArtistAlbumPage(
       const bridge.QqMusicArtistAlbumPageLoad(
+        nextOffset: 0,
+        omittedAlbumCount: 0,
+
         offset: 0,
         total: 1,
         hasMore: false,
@@ -68,6 +74,9 @@ void main() {
 
     final malformed = mapBridgeArtistAlbumPage(
       const bridge.QqMusicArtistAlbumPageLoad(
+        nextOffset: 0,
+        omittedAlbumCount: 0,
+
         offset: 0,
         total: 1,
         hasMore: false,

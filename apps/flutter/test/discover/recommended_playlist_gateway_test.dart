@@ -7,6 +7,9 @@ void main() {
   test('maps a valid Bridge recommendation page into presentation data', () {
     final result = mapBridgeRecommendedPlaylistPage(
       const bridge.QqMusicRecommendedPlaylistPageLoad(
+        nextOffset: 21,
+        omittedPlaylistCount: 0,
+
         offset: 20,
         hasMore: true,
         playlists: [
@@ -55,6 +58,9 @@ void main() {
 
     final conflict = mapBridgeRecommendedPlaylistPage(
       const bridge.QqMusicRecommendedPlaylistPageLoad(
+        nextOffset: 0,
+        omittedPlaylistCount: 0,
+
         offset: 0,
         hasMore: false,
         playlists: [
@@ -74,6 +80,9 @@ void main() {
   test('rejects malformed page and playlist fields', () {
     final nonAdvancing = mapBridgeRecommendedPlaylistPage(
       const bridge.QqMusicRecommendedPlaylistPageLoad(
+        nextOffset: 0,
+        omittedPlaylistCount: 0,
+
         offset: 0,
         hasMore: true,
         playlists: [],
@@ -83,6 +92,9 @@ void main() {
 
     final malformed = mapBridgeRecommendedPlaylistPage(
       const bridge.QqMusicRecommendedPlaylistPageLoad(
+        nextOffset: 0,
+        omittedPlaylistCount: 0,
+
         offset: 0,
         hasMore: false,
         playlists: [

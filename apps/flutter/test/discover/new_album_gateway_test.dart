@@ -8,6 +8,9 @@ void main() {
   test('maps a valid regional new Album page', () {
     final result = mapBridgeNewAlbumPage(
       const bridge.QqMusicNewAlbumPageLoad(
+        nextOffset: 6,
+        omittedReleaseCount: 0,
+
         region: bridge.QqMusicNewAlbumRegion.japan,
         offset: 5,
         total: 11,
@@ -64,6 +67,9 @@ void main() {
 
     final mismatched = mapBridgeNewAlbumPage(
       const bridge.QqMusicNewAlbumPageLoad(
+        nextOffset: 0,
+        omittedReleaseCount: 0,
+
         region: bridge.QqMusicNewAlbumRegion.korea,
         offset: 0,
         total: 0,
@@ -76,6 +82,9 @@ void main() {
 
     final conflict = mapBridgeNewAlbumPage(
       const bridge.QqMusicNewAlbumPageLoad(
+        nextOffset: 0,
+        omittedReleaseCount: 0,
+
         region: bridge.QqMusicNewAlbumRegion.western,
         offset: 0,
         total: 1,
@@ -89,6 +98,9 @@ void main() {
 
     final malformed = mapBridgeNewAlbumPage(
       const bridge.QqMusicNewAlbumPageLoad(
+        nextOffset: 0,
+        omittedReleaseCount: 0,
+
         region: bridge.QqMusicNewAlbumRegion.western,
         offset: 0,
         total: 1,

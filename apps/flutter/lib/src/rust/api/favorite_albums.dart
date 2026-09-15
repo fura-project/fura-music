@@ -34,15 +34,19 @@ abstract class QqMusicFavoriteAlbumPageLoadHandle
 
 class QqMusicFavoriteAlbumPageLoad {
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedAlbumCount;
   final List<CatalogAlbumSummary> albums;
   final QqMusicFavoriteAlbumPageLoadFailure? failure;
 
   const QqMusicFavoriteAlbumPageLoad({
     required this.offset,
+    required this.nextOffset,
     required this.total,
     required this.hasMore,
+    required this.omittedAlbumCount,
     required this.albums,
     this.failure,
   });
@@ -50,8 +54,10 @@ class QqMusicFavoriteAlbumPageLoad {
   @override
   int get hashCode =>
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedAlbumCount.hashCode ^
       albums.hashCode ^
       failure.hashCode;
 
@@ -61,8 +67,10 @@ class QqMusicFavoriteAlbumPageLoad {
       other is QqMusicFavoriteAlbumPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedAlbumCount == other.omittedAlbumCount &&
           albums == other.albums &&
           failure == other.failure;
 }

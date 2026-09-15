@@ -46,6 +46,14 @@ class HomeController extends ChangeNotifier {
   PersonalizedPlaylistsFailure? _personalizedPlaylistsFailure;
   PersonalizedTracksFailure? _personalizedTracksFailure;
   RelatedTracksFailure? _relatedTracksFailure;
+  int _dailyOmittedTrackCount = 0;
+  int _personalizedPlaylistsOmittedCount = 0;
+  int _personalizedTracksOmittedCount = 0;
+  int _relatedTracksOmittedCount = 0;
+  int _dailyPartialResultRevision = 0;
+  int _personalizedPlaylistsPartialResultRevision = 0;
+  int _personalizedTracksPartialResultRevision = 0;
+  int _relatedTracksPartialResultRevision = 0;
   AccountSummaryLoadOperation? _accountOperation;
   DailyRecommendationLoadOperation? _dailyOperation;
   PersonalizedPlaylistsLoadOperation? _personalizedPlaylistsOperation;
@@ -91,6 +99,18 @@ class HomeController extends ChangeNotifier {
   PersonalizedTracksFailure? get personalizedTracksFailure =>
       _personalizedTracksFailure;
   RelatedTracksFailure? get relatedTracksFailure => _relatedTracksFailure;
+  int get dailyOmittedTrackCount => _dailyOmittedTrackCount;
+  int get personalizedPlaylistsOmittedCount =>
+      _personalizedPlaylistsOmittedCount;
+  int get personalizedTracksOmittedCount => _personalizedTracksOmittedCount;
+  int get relatedTracksOmittedCount => _relatedTracksOmittedCount;
+  int get dailyPartialResultRevision => _dailyPartialResultRevision;
+  int get personalizedPlaylistsPartialResultRevision =>
+      _personalizedPlaylistsPartialResultRevision;
+  int get personalizedTracksPartialResultRevision =>
+      _personalizedTracksPartialResultRevision;
+  int get relatedTracksPartialResultRevision =>
+      _relatedTracksPartialResultRevision;
 
   bool get requiresSignIn =>
       _accountRequiresSignIn(_accountFailure) ||
@@ -158,6 +178,7 @@ class HomeController extends ChangeNotifier {
     _relatedTracksOperation = null;
     _relatedSeed = seed;
     _relatedTracks = const [];
+    _relatedTracksOmittedCount = 0;
     _relatedTracksFailure = null;
     if (seed == null) {
       _relatedTracksStage = HomeResourceStage.empty;
@@ -228,10 +249,16 @@ class HomeController extends ChangeNotifier {
     }
     _dailyPlaylist = result.playlist;
     _dailyTracks = List.unmodifiable(result.tracks);
+    _dailyOmittedTrackCount = result.omittedTrackCount;
+    if (result.omittedTrackCount > 0) {
+      _dailyPartialResultRevision += 1;
+    }
     _dailyFailure = result.failure;
     _dailyStage = result.failure != null
         ? HomeResourceStage.error
-        : result.playlist == null && result.tracks.isEmpty
+        : result.playlist == null &&
+              result.tracks.isEmpty &&
+              result.omittedTrackCount == 0
         ? HomeResourceStage.empty
         : HomeResourceStage.content;
     _notify();
@@ -271,10 +298,14 @@ class HomeController extends ChangeNotifier {
       return;
     }
     _personalizedPlaylists = List.unmodifiable(result.playlists);
+    _personalizedPlaylistsOmittedCount = result.omittedPlaylistCount;
+    if (result.omittedPlaylistCount > 0) {
+      _personalizedPlaylistsPartialResultRevision += 1;
+    }
     _personalizedPlaylistsFailure = result.failure;
     _personalizedPlaylistsStage = result.failure != null
         ? HomeResourceStage.error
-        : result.playlists.isEmpty
+        : result.playlists.isEmpty && result.omittedPlaylistCount == 0
         ? HomeResourceStage.empty
         : HomeResourceStage.content;
     _notify();
@@ -313,10 +344,14 @@ class HomeController extends ChangeNotifier {
       return;
     }
     _personalizedTracks = List.unmodifiable(result.tracks);
+    _personalizedTracksOmittedCount = result.omittedTrackCount;
+    if (result.omittedTrackCount > 0) {
+      _personalizedTracksPartialResultRevision += 1;
+    }
     _personalizedTracksFailure = result.failure;
     _personalizedTracksStage = result.failure != null
         ? HomeResourceStage.error
-        : result.tracks.isEmpty
+        : result.tracks.isEmpty && result.omittedTrackCount == 0
         ? HomeResourceStage.empty
         : HomeResourceStage.content;
     _notify();
@@ -330,6 +365,7 @@ class HomeController extends ChangeNotifier {
       operation = _relatedTracksGateway.beginLoad(seed);
     } on Object {
       _relatedTracks = const [];
+      _relatedTracksOmittedCount = 0;
       _relatedTracksFailure = RelatedTracksFailure.coreUnavailable;
       _relatedTracksStage = HomeResourceStage.error;
       _notify();
@@ -337,6 +373,7 @@ class HomeController extends ChangeNotifier {
     }
     _relatedTracksOperation = operation;
     _relatedTracks = const [];
+    _relatedTracksOmittedCount = 0;
     _relatedTracksFailure = null;
     _relatedTracksStage = HomeResourceStage.loading;
     _notify();
@@ -346,10 +383,14 @@ class HomeController extends ChangeNotifier {
     }
     if (!_relatedTracksCurrent(generation, seed)) return;
     _relatedTracks = List.unmodifiable(result.tracks);
+    _relatedTracksOmittedCount = result.omittedTrackCount;
+    if (result.omittedTrackCount > 0) {
+      _relatedTracksPartialResultRevision += 1;
+    }
     _relatedTracksFailure = result.failure;
     _relatedTracksStage = result.failure != null
         ? HomeResourceStage.error
-        : result.tracks.isEmpty
+        : result.tracks.isEmpty && result.omittedTrackCount == 0
         ? HomeResourceStage.empty
         : HomeResourceStage.content;
     _notify();

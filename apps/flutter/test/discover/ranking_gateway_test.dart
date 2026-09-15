@@ -14,6 +14,8 @@ void main() {
   test('maps immutable ranking groups and optional current metadata', () {
     final result = mapBridgeRankingGroups(
       const bridge.QqMusicRankingGroupLoad(
+        omittedRankingCount: 0,
+
         groups: [
           bridge.CatalogRankingGroup(
             title: 'Synthetic group',
@@ -44,6 +46,8 @@ void main() {
   test('rejects malformed or contradictory group results', () {
     final malformed = mapBridgeRankingGroups(
       const bridge.QqMusicRankingGroupLoad(
+        omittedRankingCount: 0,
+
         groups: [bridge.CatalogRankingGroup(title: ' ', rankings: [])],
       ),
     );
@@ -51,6 +55,8 @@ void main() {
 
     final contradictory = mapBridgeRankingGroups(
       const bridge.QqMusicRankingGroupLoad(
+        omittedRankingCount: 0,
+
         groups: [
           bridge.CatalogRankingGroup(
             title: 'Synthetic group',
@@ -71,6 +77,9 @@ void main() {
 
   test('maps ranking Track page and rejects route mismatch', () {
     const bridgeResult = bridge.QqMusicRankingTrackPageLoad(
+      nextOffset: 1,
+      omittedTrackCount: 0,
+
       ranking: bridge.CatalogRankingSummary(
         providerId: 'qq-music',
         opaqueId: 'ranking:62001',

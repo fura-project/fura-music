@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/favorite_artist_controller.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
@@ -143,6 +144,8 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
     FavoriteArtistStage.content => _ArtistCollection(
       key: const ValueKey('favorite-artists-content'),
       artists: _controller.artists,
+      omittedArtistCount: _controller.omittedArtistCount,
+      partialResultRevision: _controller.partialResultRevision,
       isLoadingMore: _controller.isLoadingMore,
       appendFailure: _controller.appendFailure,
       canLoadMore: _controller.canLoadMore,
@@ -207,6 +210,8 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
 class _ArtistCollection extends StatelessWidget {
   const _ArtistCollection({
     required this.artists,
+    required this.omittedArtistCount,
+    required this.partialResultRevision,
     required this.isLoadingMore,
     required this.appendFailure,
     required this.canLoadMore,
@@ -219,6 +224,8 @@ class _ArtistCollection extends StatelessWidget {
   });
 
   final List<ArtistSummary> artists;
+  final int omittedArtistCount;
+  final int partialResultRevision;
   final bool isLoadingMore;
   final FavoriteArtistFailure? appendFailure;
   final bool canLoadMore;
@@ -249,36 +256,54 @@ class _ArtistCollection extends StatelessWidget {
             desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
             MusicSpacing.pageCompact,
           ),
-          child: desktop
-              ? GridView.builder(
-                  key: const PageStorageKey<String>('favorite-artist-grid'),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisExtent: 210,
-                    crossAxisSpacing: 24,
-                    mainAxisSpacing: 28,
-                  ),
-                  itemCount: artists.length + 1,
-                  itemBuilder: (context, index) => index == artists.length
-                      ? footer
-                      : _ArtistGridItem(
-                          index: index,
-                          artist: artists[index],
-                          onTap: () => onOpenArtist(artists[index]),
-                        ),
-                )
-              : ListView.separated(
-                  key: const PageStorageKey<String>('favorite-artist-list'),
-                  itemCount: artists.length + 1,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) => index == artists.length
-                      ? footer
-                      : _ArtistListItem(
-                          index: index,
-                          artist: artists[index],
-                          onTap: () => onOpenArtist(artists[index]),
-                        ),
+          child: Column(
+            children: [
+              if (omittedArtistCount > 0) ...[
+                PartialResultsNotice(
+                  omittedCount: omittedArtistCount,
+                  resultRevision: partialResultRevision,
                 ),
+                const SizedBox(height: 8),
+              ],
+              Expanded(
+                child: desktop
+                    ? GridView.builder(
+                        key: const PageStorageKey<String>(
+                          'favorite-artist-grid',
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 220,
+                              mainAxisExtent: 210,
+                              crossAxisSpacing: 24,
+                              mainAxisSpacing: 28,
+                            ),
+                        itemCount: artists.length + 1,
+                        itemBuilder: (context, index) => index == artists.length
+                            ? footer
+                            : _ArtistGridItem(
+                                index: index,
+                                artist: artists[index],
+                                onTap: () => onOpenArtist(artists[index]),
+                              ),
+                      )
+                    : ListView.separated(
+                        key: const PageStorageKey<String>(
+                          'favorite-artist-list',
+                        ),
+                        itemCount: artists.length + 1,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) => index == artists.length
+                            ? footer
+                            : _ArtistListItem(
+                                index: index,
+                                artist: artists[index],
+                                onTap: () => onOpenArtist(artists[index]),
+                              ),
+                      ),
+              ),
+            ],
+          ),
         );
       },
     );

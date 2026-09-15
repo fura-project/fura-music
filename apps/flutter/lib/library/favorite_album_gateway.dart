@@ -22,6 +22,7 @@ class FavoriteAlbumPageResult {
     this.total = 0,
     this.hasMore = false,
     this.albums = const [],
+    this.omittedAlbumCount = 0,
     this.failure,
   });
 
@@ -29,6 +30,7 @@ class FavoriteAlbumPageResult {
   final int total;
   final bool hasMore;
   final List<AlbumSummary> albums;
+  final int omittedAlbumCount;
   final FavoriteAlbumFailure? failure;
 }
 
@@ -141,9 +143,11 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
   final failure = result.failure;
   if (failure != null) {
     if (result.offset != 0 ||
+        result.nextOffset != 0 ||
         result.total != 0 ||
         result.hasMore ||
-        result.albums.isNotEmpty) {
+        result.albums.isNotEmpty ||
+        result.omittedAlbumCount != 0) {
       return const FavoriteAlbumPageResult(
         failure: FavoriteAlbumFailure.invalidResponse,
       );
@@ -152,11 +156,16 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
       failure: mapBridgeFavoriteAlbumFailure(failure),
     );
   }
-  final pageEnd = result.offset + result.albums.length;
+  final pageEnd =
+      result.offset + result.albums.length + result.omittedAlbumCount;
   if (result.offset < 0 ||
       result.total < 0 ||
+      result.omittedAlbumCount < 0 ||
+      result.nextOffset != pageEnd ||
       pageEnd > result.total ||
-      (result.hasMore && (result.albums.isEmpty || pageEnd >= result.total)) ||
+      (result.hasMore &&
+          (result.albums.isEmpty && result.omittedAlbumCount == 0 ||
+              pageEnd >= result.total)) ||
       (!result.hasMore && pageEnd != result.total)) {
     return const FavoriteAlbumPageResult(
       failure: FavoriteAlbumFailure.invalidResponse,
@@ -186,6 +195,7 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
     total: result.total,
     hasMore: result.hasMore,
     albums: List.unmodifiable(albums),
+    omittedAlbumCount: result.omittedAlbumCount,
   );
 }
 

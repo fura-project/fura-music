@@ -11,6 +11,8 @@ void main() {
   test('maps an immutable personalized Track list and valid absence', () {
     final available = mapBridgePersonalizedTracks(
       const bridge.QqMusicPersonalizedTracksLoad(
+        omittedTrackCount: 0,
+
         tracks: [
           bridge_library.LibraryTrackSummary(
             providerId: 'qq-music',
@@ -36,7 +38,11 @@ void main() {
     expect(() => available.tracks.clear(), throwsUnsupportedError);
 
     final absent = mapBridgePersonalizedTracks(
-      const bridge.QqMusicPersonalizedTracksLoad(tracks: []),
+      const bridge.QqMusicPersonalizedTracksLoad(
+        omittedTrackCount: 0,
+
+        tracks: [],
+      ),
     );
     expect(absent.failure, isNull);
     expect(absent.tracks, isEmpty);
@@ -69,6 +75,8 @@ void main() {
 
     final conflict = mapBridgePersonalizedTracks(
       const bridge.QqMusicPersonalizedTracksLoad(
+        omittedTrackCount: 0,
+
         tracks: [
           bridge_library.LibraryTrackSummary(
             providerId: 'qq-music',
@@ -88,6 +96,8 @@ void main() {
   test('rejects malformed and duplicate Track summaries', () {
     final malformed = mapBridgePersonalizedTracks(
       const bridge.QqMusicPersonalizedTracksLoad(
+        omittedTrackCount: 0,
+
         tracks: [
           bridge_library.LibraryTrackSummary(
             providerId: 'qq-music',
@@ -109,7 +119,11 @@ void main() {
       artists: [],
     );
     final duplicate = mapBridgePersonalizedTracks(
-      const bridge.QqMusicPersonalizedTracksLoad(tracks: [track, track]),
+      const bridge.QqMusicPersonalizedTracksLoad(
+        omittedTrackCount: 0,
+
+        tracks: [track, track],
+      ),
     );
     expect(duplicate.failure, PersonalizedTracksFailure.invalidResponse);
   });

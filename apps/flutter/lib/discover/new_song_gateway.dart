@@ -24,11 +24,13 @@ class NewSongResult {
   const NewSongResult({
     required this.category,
     this.tracks = const [],
+    this.omittedTrackCount = 0,
     this.failure,
   });
 
   final NewSongCategory category;
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
   final NewSongFailure? failure;
 }
 
@@ -106,7 +108,7 @@ NewSongResult mapBridgeNewSongs(
   }
   final failure = result.failure;
   if (failure != null) {
-    if (result.tracks.isNotEmpty) {
+    if (result.tracks.isNotEmpty || result.omittedTrackCount != 0) {
       return NewSongResult(
         category: category,
         failure: NewSongFailure.invalidResponse,
@@ -115,6 +117,12 @@ NewSongResult mapBridgeNewSongs(
     return NewSongResult(
       category: category,
       failure: mapBridgeNewSongFailure(failure),
+    );
+  }
+  if (result.omittedTrackCount < 0) {
+    return NewSongResult(
+      category: category,
+      failure: NewSongFailure.invalidResponse,
     );
   }
 
@@ -129,7 +137,11 @@ NewSongResult mapBridgeNewSongs(
     }
     tracks.add(mapped);
   }
-  return NewSongResult(category: category, tracks: List.unmodifiable(tracks));
+  return NewSongResult(
+    category: category,
+    tracks: List.unmodifiable(tracks),
+    omittedTrackCount: result.omittedTrackCount,
+  );
 }
 
 @visibleForTesting

@@ -37,9 +37,14 @@ class UserPlaylistSummary {
 }
 
 class UserLibraryResult {
-  const UserLibraryResult({this.playlists = const [], this.failure});
+  const UserLibraryResult({
+    this.playlists = const [],
+    this.omittedPlaylistCount = 0,
+    this.failure,
+  });
 
   final List<UserPlaylistSummary> playlists;
+  final int omittedPlaylistCount;
   final UserLibraryFailure? failure;
 }
 
@@ -92,6 +97,17 @@ class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
     try {
       final result = await _handle.run();
       final failure = result.failure;
+      if (failure != null &&
+          (result.playlists.isNotEmpty || result.omittedPlaylistCount != 0)) {
+        return const UserLibraryResult(
+          failure: UserLibraryFailure.invalidResponse,
+        );
+      }
+      if (result.omittedPlaylistCount < 0) {
+        return const UserLibraryResult(
+          failure: UserLibraryFailure.invalidResponse,
+        );
+      }
       return UserLibraryResult(
         playlists: failure == null
             ? result.playlists
@@ -116,6 +132,7 @@ class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
                   )
                   .toList(growable: false)
             : const [],
+        omittedPlaylistCount: failure == null ? result.omittedPlaylistCount : 0,
         failure: failure == null ? null : _mapFailure(failure),
       );
     } catch (_) {

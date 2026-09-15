@@ -40,12 +40,14 @@ class RecommendedPlaylistPageResult {
     this.offset = 0,
     this.hasMore = false,
     this.playlists = const [],
+    this.omittedPlaylistCount = 0,
     this.failure,
   });
 
   final int offset;
   final bool hasMore;
   final List<RecommendedPlaylistSummary> playlists;
+  final int omittedPlaylistCount;
   final RecommendedPlaylistFailure? failure;
 }
 
@@ -121,7 +123,11 @@ RecommendedPlaylistPageResult mapBridgeRecommendedPlaylistPage(
 ) {
   final failure = result.failure;
   if (failure != null) {
-    if (result.offset != 0 || result.hasMore || result.playlists.isNotEmpty) {
+    if (result.offset != 0 ||
+        result.nextOffset != 0 ||
+        result.hasMore ||
+        result.playlists.isNotEmpty ||
+        result.omittedPlaylistCount != 0) {
       return const RecommendedPlaylistPageResult(
         failure: RecommendedPlaylistFailure.invalidResponse,
       );
@@ -130,7 +136,11 @@ RecommendedPlaylistPageResult mapBridgeRecommendedPlaylistPage(
       failure: mapBridgeRecommendedPlaylistFailure(failure),
     );
   }
-  if (result.offset < 0 || (result.hasMore && result.playlists.isEmpty)) {
+  final rawCount = result.playlists.length + result.omittedPlaylistCount;
+  if (result.offset < 0 ||
+      result.omittedPlaylistCount < 0 ||
+      result.nextOffset != result.offset + rawCount ||
+      (result.hasMore && rawCount == 0)) {
     return const RecommendedPlaylistPageResult(
       failure: RecommendedPlaylistFailure.invalidResponse,
     );
@@ -160,6 +170,7 @@ RecommendedPlaylistPageResult mapBridgeRecommendedPlaylistPage(
     offset: result.offset,
     hasMore: result.hasMore,
     playlists: List.unmodifiable(playlists),
+    omittedPlaylistCount: result.omittedPlaylistCount,
   );
 }
 

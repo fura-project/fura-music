@@ -23,6 +23,8 @@ class NewAlbumController extends ChangeNotifier {
   int _total = 0;
   int _nextOffset = 0;
   bool _hasMore = false;
+  int _omittedReleaseCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   NewAlbumPageLoadOperation? _operation;
   int _generation = 0;
@@ -36,6 +38,8 @@ class NewAlbumController extends ChangeNotifier {
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
+  int get omittedReleaseCount => _omittedReleaseCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry => _stage == NewAlbumStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
       _stage == NewAlbumStage.content && _hasMore && !_isLoadingMore;
@@ -67,6 +71,7 @@ class NewAlbumController extends ChangeNotifier {
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
+    _omittedReleaseCount = 0;
     _isLoadingMore = false;
     _stage = NewAlbumStage.loading;
     _notify();
@@ -78,9 +83,13 @@ class NewAlbumController extends ChangeNotifier {
     if (_validPage(result, expectedRegion: expectedRegion, expectedOffset: 0)) {
       _releases = List.unmodifiable(result.releases);
       _total = result.total;
-      _nextOffset = result.releases.length;
+      _nextOffset = result.releases.length + result.omittedReleaseCount;
       _hasMore = result.hasMore;
-      _stage = _releases.isEmpty ? NewAlbumStage.empty : NewAlbumStage.content;
+      _omittedReleaseCount = result.omittedReleaseCount;
+      if (result.omittedReleaseCount > 0) _partialResultRevision += 1;
+      _stage = _releases.isEmpty && _omittedReleaseCount == 0
+          ? NewAlbumStage.empty
+          : NewAlbumStage.content;
     } else {
       _failure = result.failure ?? NewAlbumFailure.invalidResponse;
       _stage = NewAlbumStage.error;
@@ -126,8 +135,11 @@ class NewAlbumController extends ChangeNotifier {
       );
       _releases = List.unmodifiable([..._releases, ...additions]);
       _total = result.total;
-      _nextOffset = expectedOffset + result.releases.length;
+      _nextOffset =
+          expectedOffset + result.releases.length + result.omittedReleaseCount;
       _hasMore = result.hasMore;
+      _omittedReleaseCount += result.omittedReleaseCount;
+      if (result.omittedReleaseCount > 0) _partialResultRevision += 1;
     } else {
       _appendFailure = result.failure ?? NewAlbumFailure.invalidResponse;
     }
@@ -150,8 +162,14 @@ class NewAlbumController extends ChangeNotifier {
       result.failure == null &&
       result.region == expectedRegion &&
       result.offset == expectedOffset &&
-      result.total >= expectedOffset + result.releases.length &&
-      (!result.hasMore || result.releases.isNotEmpty);
+      result.omittedReleaseCount >= 0 &&
+      result.total >=
+          expectedOffset +
+              result.releases.length +
+              result.omittedReleaseCount &&
+      (!result.hasMore ||
+          result.releases.isNotEmpty ||
+          result.omittedReleaseCount > 0);
 
   bool _isRetryable(NewAlbumFailure? failure) =>
       failure == NewAlbumFailure.coreUnavailable ||

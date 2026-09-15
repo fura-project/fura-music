@@ -18,6 +18,7 @@ class ArtistAlbumPageResult {
     this.total = 0,
     this.hasMore = false,
     this.albums = const [],
+    this.omittedAlbumCount = 0,
     this.failure,
   });
 
@@ -25,6 +26,7 @@ class ArtistAlbumPageResult {
   final int total;
   final bool hasMore;
   final List<AlbumSummary> albums;
+  final int omittedAlbumCount;
   final ArtistAlbumFailure? failure;
 }
 
@@ -104,19 +106,24 @@ ArtistAlbumPageResult mapBridgeArtistAlbumPage(
   final failure = result.failure;
   if (failure != null) {
     if (result.offset != 0 ||
+        result.nextOffset != 0 ||
         result.total != 0 ||
         result.hasMore ||
-        result.albums.isNotEmpty) {
+        result.albums.isNotEmpty ||
+        result.omittedAlbumCount != 0) {
       return const ArtistAlbumPageResult(
         failure: ArtistAlbumFailure.invalidResponse,
       );
     }
     return ArtistAlbumPageResult(failure: mapBridgeArtistAlbumFailure(failure));
   }
+  final rawCount = result.albums.length + result.omittedAlbumCount;
   if (result.offset < 0 ||
       result.total < 0 ||
-      result.offset + result.albums.length > result.total ||
-      (result.hasMore && result.albums.isEmpty)) {
+      result.omittedAlbumCount < 0 ||
+      result.nextOffset != result.offset + rawCount ||
+      result.offset + rawCount > result.total ||
+      (result.hasMore && rawCount == 0)) {
     return const ArtistAlbumPageResult(
       failure: ArtistAlbumFailure.invalidResponse,
     );
@@ -145,6 +152,7 @@ ArtistAlbumPageResult mapBridgeArtistAlbumPage(
     total: result.total,
     hasMore: result.hasMore,
     albums: List.unmodifiable(albums),
+    omittedAlbumCount: result.omittedAlbumCount,
   );
 }
 

@@ -40,6 +40,7 @@ class NewAlbumPageResult {
     this.total = 0,
     this.hasMore = false,
     this.releases = const [],
+    this.omittedReleaseCount = 0,
     this.failure,
   });
 
@@ -48,6 +49,7 @@ class NewAlbumPageResult {
   final int total;
   final bool hasMore;
   final List<NewAlbumRelease> releases;
+  final int omittedReleaseCount;
   final NewAlbumFailure? failure;
 }
 
@@ -141,9 +143,11 @@ NewAlbumPageResult mapBridgeNewAlbumPage(
   }
   if (failure != null) {
     if (result.offset != 0 ||
+        result.nextOffset != 0 ||
         result.total != 0 ||
         result.hasMore ||
-        result.releases.isNotEmpty) {
+        result.releases.isNotEmpty ||
+        result.omittedReleaseCount != 0) {
       return NewAlbumPageResult(
         region: region,
         failure: NewAlbumFailure.invalidResponse,
@@ -154,10 +158,13 @@ NewAlbumPageResult mapBridgeNewAlbumPage(
       failure: mapBridgeNewAlbumFailure(failure),
     );
   }
+  final rawCount = result.releases.length + result.omittedReleaseCount;
   if (result.offset < 0 ||
       result.total < 0 ||
-      result.offset + result.releases.length > result.total ||
-      (result.hasMore && result.releases.isEmpty)) {
+      result.omittedReleaseCount < 0 ||
+      result.nextOffset != result.offset + rawCount ||
+      result.nextOffset > result.total ||
+      (result.hasMore && rawCount == 0)) {
     return NewAlbumPageResult(
       region: region,
       failure: NewAlbumFailure.invalidResponse,
@@ -216,6 +223,7 @@ NewAlbumPageResult mapBridgeNewAlbumPage(
     total: result.total,
     hasMore: result.hasMore,
     releases: List.unmodifiable(releases),
+    omittedReleaseCount: result.omittedReleaseCount,
   );
 }
 

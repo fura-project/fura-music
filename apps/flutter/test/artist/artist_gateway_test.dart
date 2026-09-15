@@ -13,6 +13,9 @@ void main() {
   test('maps a valid Bridge Artist page into presentation-safe Tracks', () {
     final result = mapBridgeArtistTrackPage(
       const bridge.QqMusicArtistTrackPageLoad(
+        nextOffset: 1,
+        omittedTrackCount: 0,
+
         offset: 0,
         total: 31,
         hasMore: true,
@@ -65,6 +68,9 @@ void main() {
 
     final conflict = mapBridgeArtistTrackPage(
       const bridge.QqMusicArtistTrackPageLoad(
+        nextOffset: 0,
+        omittedTrackCount: 0,
+
         offset: 0,
         total: 1,
         hasMore: false,

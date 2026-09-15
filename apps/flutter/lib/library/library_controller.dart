@@ -21,6 +21,8 @@ class UserLibraryController extends ChangeNotifier {
   List<UserPlaylistSummary> _playlists = const [];
   UserLibraryFailure? _failure;
   UserLibraryFailure? _refreshFailure;
+  int _omittedPlaylistCount = 0;
+  int _partialResultRevision = 0;
   UserLibraryLoadOperation? _operation;
   int _generation = 0;
   bool _isRefreshing = false;
@@ -37,6 +39,8 @@ class UserLibraryController extends ChangeNotifier {
 
   UserLibraryFailure? get failure => _failure;
   UserLibraryFailure? get refreshFailure => _refreshFailure;
+  int get omittedPlaylistCount => _omittedPlaylistCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get isLoading => _operation != null;
   bool get isRefreshing => _isRefreshing;
 
@@ -62,6 +66,7 @@ class UserLibraryController extends ChangeNotifier {
     _isRefreshing = preserveSnapshot;
     if (!preserveSnapshot) {
       _playlists = const [];
+      _omittedPlaylistCount = 0;
       _stage = UserLibraryStage.loading;
     }
     _notify();
@@ -76,7 +81,9 @@ class UserLibraryController extends ChangeNotifier {
     _failure = result.failure;
     if (result.failure == null) {
       _playlists = List<UserPlaylistSummary>.unmodifiable(result.playlists);
-      _stage = _playlists.isEmpty
+      _omittedPlaylistCount = result.omittedPlaylistCount;
+      if (result.omittedPlaylistCount > 0) _partialResultRevision += 1;
+      _stage = _playlists.isEmpty && _omittedPlaylistCount == 0
           ? UserLibraryStage.empty
           : UserLibraryStage.content;
     } else if (preserveSnapshot && _canRetainSnapshot(result.failure)) {
@@ -84,6 +91,7 @@ class UserLibraryController extends ChangeNotifier {
       _refreshFailure = result.failure;
     } else {
       _playlists = const [];
+      _omittedPlaylistCount = 0;
       _stage = switch (result.failure!) {
         UserLibraryFailure.authenticationRequired ||
         UserLibraryFailure.replaced ||

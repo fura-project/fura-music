@@ -27,6 +27,8 @@ class FavoriteAlbumController extends ChangeNotifier {
   int _total = 0;
   int _nextOffset = 0;
   bool _hasMore = false;
+  int _omittedAlbumCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   FavoriteAlbumPageLoadOperation? _operation;
   int _generation = 0;
@@ -40,6 +42,8 @@ class FavoriteAlbumController extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoading => _operation != null;
   bool get isLoadingMore => _isLoadingMore;
+  int get omittedAlbumCount => _omittedAlbumCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry =>
       _stage == FavoriteAlbumStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
@@ -62,6 +66,7 @@ class FavoriteAlbumController extends ChangeNotifier {
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
+    _omittedAlbumCount = 0;
     _isLoadingMore = false;
     _stage = FavoriteAlbumStage.loading;
     _notify();
@@ -73,9 +78,11 @@ class FavoriteAlbumController extends ChangeNotifier {
     if (_validPage(result, expectedOffset: 0)) {
       _albums = List.unmodifiable(result.albums);
       _total = result.total;
-      _nextOffset = result.albums.length;
+      _nextOffset = result.albums.length + result.omittedAlbumCount;
       _hasMore = result.hasMore;
-      _stage = _albums.isEmpty
+      _omittedAlbumCount = result.omittedAlbumCount;
+      if (result.omittedAlbumCount > 0) _partialResultRevision += 1;
+      _stage = _albums.isEmpty && _omittedAlbumCount == 0
           ? FavoriteAlbumStage.empty
           : FavoriteAlbumStage.content;
     } else {
@@ -113,13 +120,17 @@ class FavoriteAlbumController extends ChangeNotifier {
       );
       _albums = List.unmodifiable([..._albums, ...additions]);
       _total = result.total;
-      _nextOffset = expectedOffset + result.albums.length;
+      _nextOffset =
+          expectedOffset + result.albums.length + result.omittedAlbumCount;
       _hasMore = result.hasMore;
+      _omittedAlbumCount += result.omittedAlbumCount;
+      if (result.omittedAlbumCount > 0) _partialResultRevision += 1;
     } else if (_isSessionFailure(result.failure)) {
       _albums = const [];
       _total = 0;
       _nextOffset = 0;
       _hasMore = false;
+      _omittedAlbumCount = 0;
       _applyInitialFailure(
         result.failure ?? FavoriteAlbumFailure.invalidResponse,
       );
@@ -141,12 +152,15 @@ class FavoriteAlbumController extends ChangeNotifier {
     FavoriteAlbumPageResult result, {
     required int expectedOffset,
   }) {
-    final pageEnd = expectedOffset + result.albums.length;
+    final pageEnd =
+        expectedOffset + result.albums.length + result.omittedAlbumCount;
     return result.failure == null &&
         result.offset == expectedOffset &&
+        result.omittedAlbumCount >= 0 &&
         pageEnd <= result.total &&
         (result.hasMore
-            ? result.albums.isNotEmpty && pageEnd < result.total
+            ? (result.albums.isNotEmpty || result.omittedAlbumCount > 0) &&
+                  pageEnd < result.total
             : pageEnd == result.total);
   }
 

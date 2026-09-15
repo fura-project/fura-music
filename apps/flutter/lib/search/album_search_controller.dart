@@ -19,6 +19,8 @@ class AlbumSearchController extends ChangeNotifier {
   SearchFailure? _failure;
   SearchFailure? _appendFailure;
   int _total = 0;
+  int _omittedAlbumCount = 0;
+  int _partialResultRevision = 0;
   int _nextPage = 1;
   bool _hasMore = false;
   bool _isLoadingMore = false;
@@ -32,6 +34,8 @@ class AlbumSearchController extends ChangeNotifier {
   SearchFailure? get failure => _failure;
   SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
+  int get omittedAlbumCount => _omittedAlbumCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get canRetry =>
@@ -62,6 +66,7 @@ class AlbumSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedAlbumCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -75,9 +80,11 @@ class AlbumSearchController extends ChangeNotifier {
     if (_validPage(result, expectedPage: 1)) {
       _albums = List.unmodifiable(result.albums);
       _total = result.total;
+      _omittedAlbumCount = result.omittedAlbumCount;
+      if (result.omittedAlbumCount > 0) _partialResultRevision += 1;
       _nextPage = 2;
       _hasMore = result.hasMore;
-      _stage = _albums.isEmpty
+      _stage = _albums.isEmpty && _omittedAlbumCount == 0
           ? AlbumSearchStage.empty
           : AlbumSearchStage.content;
     } else {
@@ -115,6 +122,10 @@ class AlbumSearchController extends ChangeNotifier {
       );
       _albums = List.unmodifiable([..._albums, ...additions]);
       _total = result.total;
+      if (result.omittedAlbumCount > 0) {
+        _omittedAlbumCount += result.omittedAlbumCount;
+        _partialResultRevision += 1;
+      }
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
@@ -140,6 +151,7 @@ class AlbumSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedAlbumCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -151,7 +163,11 @@ class AlbumSearchController extends ChangeNotifier {
       result.failure == null &&
       result.page == expectedPage &&
       result.total >= result.albums.length &&
-      (!result.hasMore || result.albums.isNotEmpty);
+      result.omittedAlbumCount >= 0 &&
+      result.total >= result.albums.length + result.omittedAlbumCount &&
+      (!result.hasMore ||
+          result.albums.isNotEmpty ||
+          result.omittedAlbumCount > 0);
 
   bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 

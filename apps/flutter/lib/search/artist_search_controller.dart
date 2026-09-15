@@ -19,6 +19,8 @@ class ArtistSearchController extends ChangeNotifier {
   SearchFailure? _failure;
   SearchFailure? _appendFailure;
   int _total = 0;
+  int _omittedArtistCount = 0;
+  int _partialResultRevision = 0;
   int _nextPage = 1;
   bool _hasMore = false;
   bool _isLoadingMore = false;
@@ -32,6 +34,8 @@ class ArtistSearchController extends ChangeNotifier {
   SearchFailure? get failure => _failure;
   SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
+  int get omittedArtistCount => _omittedArtistCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get canRetry =>
@@ -62,6 +66,7 @@ class ArtistSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedArtistCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -75,9 +80,11 @@ class ArtistSearchController extends ChangeNotifier {
     if (_validPage(result, expectedPage: 1)) {
       _artists = List.unmodifiable(result.artists);
       _total = result.total;
+      _omittedArtistCount = result.omittedArtistCount;
+      if (result.omittedArtistCount > 0) _partialResultRevision += 1;
       _nextPage = 2;
       _hasMore = result.hasMore;
-      _stage = _artists.isEmpty
+      _stage = _artists.isEmpty && _omittedArtistCount == 0
           ? ArtistSearchStage.empty
           : ArtistSearchStage.content;
     } else {
@@ -115,6 +122,10 @@ class ArtistSearchController extends ChangeNotifier {
       );
       _artists = List.unmodifiable([..._artists, ...additions]);
       _total = result.total;
+      if (result.omittedArtistCount > 0) {
+        _omittedArtistCount += result.omittedArtistCount;
+        _partialResultRevision += 1;
+      }
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
@@ -140,6 +151,7 @@ class ArtistSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedArtistCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -151,7 +163,11 @@ class ArtistSearchController extends ChangeNotifier {
       result.failure == null &&
       result.page == expectedPage &&
       result.total >= result.artists.length &&
-      (!result.hasMore || result.artists.isNotEmpty);
+      result.omittedArtistCount >= 0 &&
+      result.total >= result.artists.length + result.omittedArtistCount &&
+      (!result.hasMore ||
+          result.artists.isNotEmpty ||
+          result.omittedArtistCount > 0);
 
   bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 

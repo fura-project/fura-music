@@ -7,6 +7,8 @@ void main() {
   test('maps a valid Bridge page into presentation-safe Albums', () {
     final result = mapBridgeAlbumSearchPage(
       const bridge.QqMusicAlbumSearchPageLoad(
+        omittedAlbumCount: 0,
+
         page: 1,
         total: 25,
         hasMore: true,
@@ -49,6 +51,8 @@ void main() {
 
     final conflict = mapBridgeAlbumSearchPage(
       const bridge.QqMusicAlbumSearchPageLoad(
+        omittedAlbumCount: 0,
+
         page: 1,
         total: 0,
         hasMore: false,
@@ -60,6 +64,8 @@ void main() {
 
     final invalidIdentity = mapBridgeAlbumSearchPage(
       const bridge.QqMusicAlbumSearchPageLoad(
+        omittedAlbumCount: 0,
+
         page: 1,
         total: 1,
         hasMore: false,

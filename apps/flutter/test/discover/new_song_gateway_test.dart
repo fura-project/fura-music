@@ -7,6 +7,8 @@ void main() {
   test('maps a valid bounded new-song collection', () {
     final result = mapBridgeNewSongs(
       const bridge.QqMusicNewSongsLoad(
+        omittedTrackCount: 0,
+
         category: bridge.QqMusicNewSongCategory.latest,
         tracks: [
           bridge_library.LibraryTrackSummary(
@@ -33,6 +35,8 @@ void main() {
   test('rejects category mismatch and contradictory failure data', () {
     final mismatch = mapBridgeNewSongs(
       const bridge.QqMusicNewSongsLoad(
+        omittedTrackCount: 0,
+
         category: bridge.QqMusicNewSongCategory.japan,
         tracks: [],
       ),
@@ -42,6 +46,8 @@ void main() {
 
     final conflict = mapBridgeNewSongs(
       const bridge.QqMusicNewSongsLoad(
+        omittedTrackCount: 0,
+
         category: bridge.QqMusicNewSongCategory.latest,
         tracks: [
           bridge_library.LibraryTrackSummary(

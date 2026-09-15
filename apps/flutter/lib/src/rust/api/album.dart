@@ -161,15 +161,19 @@ enum QqMusicAlbumDetailsLoadFailure {
 
 class QqMusicAlbumTrackPageLoad {
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedTrackCount;
   final List<LibraryTrackSummary> tracks;
   final QqMusicAlbumTrackPageLoadFailure? failure;
 
   const QqMusicAlbumTrackPageLoad({
     required this.offset,
+    required this.nextOffset,
     required this.total,
     required this.hasMore,
+    required this.omittedTrackCount,
     required this.tracks,
     this.failure,
   });
@@ -177,8 +181,10 @@ class QqMusicAlbumTrackPageLoad {
   @override
   int get hashCode =>
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedTrackCount.hashCode ^
       tracks.hashCode ^
       failure.hashCode;
 
@@ -188,8 +194,10 @@ class QqMusicAlbumTrackPageLoad {
       other is QqMusicAlbumTrackPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedTrackCount == other.omittedTrackCount &&
           tracks == other.tracks &&
           failure == other.failure;
 }

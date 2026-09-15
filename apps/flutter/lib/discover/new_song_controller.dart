@@ -18,6 +18,8 @@ class NewSongController extends ChangeNotifier {
   NewSongStage _stage = NewSongStage.loading;
   List<PlaylistTrackSummary> _tracks = const [];
   NewSongFailure? _failure;
+  int _omittedTrackCount = 0;
+  int _partialResultRevision = 0;
   NewSongLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
@@ -26,6 +28,8 @@ class NewSongController extends ChangeNotifier {
   NewSongStage get stage => _stage;
   List<PlaylistTrackSummary> get tracks => _tracks;
   NewSongFailure? get failure => _failure;
+  int get omittedTrackCount => _omittedTrackCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry => _stage == NewSongStage.error && _isRetryable(_failure);
 
   Future<void> load() => _load(_category);
@@ -50,6 +54,7 @@ class NewSongController extends ChangeNotifier {
       if (!_isCurrent(generation, expectedCategory)) return;
       _operation = null;
       _tracks = const [];
+      _omittedTrackCount = 0;
       _failure = NewSongFailure.coreUnavailable;
       _stage = NewSongStage.error;
       _notify();
@@ -57,6 +62,7 @@ class NewSongController extends ChangeNotifier {
     }
     _operation = operation;
     _tracks = const [];
+    _omittedTrackCount = 0;
     _failure = null;
     _stage = NewSongStage.loading;
     _notify();
@@ -67,7 +73,11 @@ class NewSongController extends ChangeNotifier {
 
     if (result.failure == null && result.category == expectedCategory) {
       _tracks = List.unmodifiable(result.tracks);
-      _stage = _tracks.isEmpty ? NewSongStage.empty : NewSongStage.content;
+      _omittedTrackCount = result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
+      _stage = _tracks.isEmpty && _omittedTrackCount == 0
+          ? NewSongStage.empty
+          : NewSongStage.content;
     } else {
       _failure = result.failure ?? NewSongFailure.invalidResponse;
       _stage = NewSongStage.error;

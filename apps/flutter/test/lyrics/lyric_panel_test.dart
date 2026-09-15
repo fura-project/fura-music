@@ -85,6 +85,37 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets('keeps valid lyric lines beside a partial-result notice', (
+    tester,
+  ) async {
+    final controller = LyricController(
+      _ScriptedGateway([
+        _ImmediateOperation(
+          LyricLoadResult(
+            lyrics: SynchronizedLyrics([
+              SynchronizedLyricLine(
+                text: 'Visible lyric line',
+                startMs: 0,
+                durationMs: 1000,
+                segments: const [],
+              ),
+            ], omittedLineCount: 1),
+          ),
+        ),
+      ]),
+    );
+    await controller.load(_track);
+
+    await _pumpPanel(tester, controller);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Visible lyric line'), findsOneWidget);
+    expect(find.textContaining('1 unsafe item was skipped'), findsOneWidget);
+    expect(find.byKey(const ValueKey('lyrics-error')), findsNothing);
+    expect(tester.takeException(), isNull);
+    controller.dispose();
+  });
+
   testWidgets(
     'highlights the displayed lyric without inserting mismatched segment text',
     (tester) async {

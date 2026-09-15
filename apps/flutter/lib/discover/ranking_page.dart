@@ -5,6 +5,7 @@ import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
@@ -148,6 +149,8 @@ class _RankingPageState extends State<RankingPage> {
     RankingTrackStage.content => _RankingTracks(
       key: const ValueKey('ranking-tracks-content'),
       tracks: _controller.tracks,
+      omittedTrackCount: _controller.omittedTrackCount,
+      partialResultRevision: _controller.partialResultRevision,
       total: _controller.total,
       hasMore: _controller.hasMore,
       isLoadingMore: _controller.isLoadingMore,
@@ -226,6 +229,8 @@ class _RankingHeader extends StatelessWidget {
 class _RankingTracks extends StatefulWidget {
   const _RankingTracks({
     required this.tracks,
+    required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.total,
     required this.hasMore,
     required this.isLoadingMore,
@@ -242,6 +247,8 @@ class _RankingTracks extends StatefulWidget {
   });
 
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
+  final int partialResultRevision;
   final int total;
   final bool hasMore;
   final bool isLoadingMore;
@@ -293,6 +300,14 @@ class _RankingTracksState extends State<_RankingTracks> {
         constraints: const BoxConstraints(maxWidth: 1180),
         child: Column(
           children: [
+            if (widget.omittedTrackCount > 0)
+              Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
+                child: PartialResultsNotice(
+                  omittedCount: widget.omittedTrackCount,
+                  resultRevision: widget.partialResultRevision,
+                ),
+              ),
             if (widget.desktop)
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontal),

@@ -9,6 +9,8 @@ void main() {
   test('maps an immutable related Track list and valid absence', () {
     final available = mapBridgeRelatedTracks(
       const bridge.QqMusicRelatedTracksLoad(
+        omittedTrackCount: 0,
+
         tracks: [
           bridge_library.LibraryTrackSummary(
             providerId: 'qq-music',
@@ -33,7 +35,7 @@ void main() {
     expect(() => available.tracks.clear(), throwsUnsupportedError);
 
     final absent = mapBridgeRelatedTracks(
-      const bridge.QqMusicRelatedTracksLoad(tracks: []),
+      const bridge.QqMusicRelatedTracksLoad(omittedTrackCount: 0, tracks: []),
     );
     expect(absent.failure, isNull);
     expect(absent.tracks, isEmpty);
@@ -62,6 +64,8 @@ void main() {
 
     final conflict = mapBridgeRelatedTracks(
       const bridge.QqMusicRelatedTracksLoad(
+        omittedTrackCount: 0,
+
         tracks: [
           bridge_library.LibraryTrackSummary(
             providerId: 'qq-music',
@@ -81,6 +85,8 @@ void main() {
   test('rejects malformed and duplicate Track summaries', () {
     final malformed = mapBridgeRelatedTracks(
       const bridge.QqMusicRelatedTracksLoad(
+        omittedTrackCount: 0,
+
         tracks: [
           bridge_library.LibraryTrackSummary(
             providerId: 'qq-music',
@@ -102,7 +108,11 @@ void main() {
       artists: [],
     );
     final duplicate = mapBridgeRelatedTracks(
-      const bridge.QqMusicRelatedTracksLoad(tracks: [track, track]),
+      const bridge.QqMusicRelatedTracksLoad(
+        omittedTrackCount: 0,
+
+        tracks: [track, track],
+      ),
     );
     expect(duplicate.failure, RelatedTracksFailure.invalidResponse);
   });

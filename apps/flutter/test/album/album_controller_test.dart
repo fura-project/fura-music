@@ -100,6 +100,34 @@ void main() {
     },
   );
 
+  test('advances pagination across omitted upstream rows', () async {
+    final gateway = _ScriptedGateway([
+      const _ImmediateOperation(
+        AlbumTrackPageResult(
+          offset: 0,
+          total: 3,
+          hasMore: true,
+          omittedTrackCount: 1,
+          tracks: [firstTrack],
+        ),
+      ),
+      const _ImmediateOperation(
+        AlbumTrackPageResult(offset: 2, total: 3, tracks: [secondTrack]),
+      ),
+    ]);
+    final controller = AlbumController(album, gateway);
+
+    await controller.load();
+    expect(controller.tracks, [firstTrack]);
+    expect(controller.omittedTrackCount, 1);
+    expect(controller.partialResultRevision, 1);
+
+    await controller.loadMore();
+    expect(controller.tracks, [firstTrack, secondTrack]);
+    expect(gateway.requests, [(album, 0, 30), (album, 2, 30)]);
+    controller.dispose();
+  });
+
   test(
     'replaced and disposed loads cancel and suppress late results',
     () async {

@@ -19,6 +19,8 @@ class TrackSearchController extends ChangeNotifier {
   SearchFailure? _failure;
   SearchFailure? _appendFailure;
   int _total = 0;
+  int _omittedItemCount = 0;
+  int _partialResultRevision = 0;
   int _nextPage = 1;
   bool _hasMore = false;
   bool _isLoadingMore = false;
@@ -34,6 +36,8 @@ class TrackSearchController extends ChangeNotifier {
   SearchFailure? get failure => _failure;
   SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
+  int get omittedItemCount => _omittedItemCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get canRetry =>
@@ -64,6 +68,7 @@ class TrackSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedItemCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -77,9 +82,11 @@ class TrackSearchController extends ChangeNotifier {
     if (_validPage(result, expectedPage: 1)) {
       _items = List.unmodifiable(result.items);
       _total = result.total;
+      _omittedItemCount = result.omittedItemCount;
+      if (_omittedItemCount > 0) _partialResultRevision += 1;
       _nextPage = 2;
       _hasMore = result.hasMore;
-      _stage = _items.isEmpty
+      _stage = _items.isEmpty && _omittedItemCount == 0
           ? TrackSearchStage.empty
           : TrackSearchStage.content;
     } else {
@@ -118,6 +125,10 @@ class TrackSearchController extends ChangeNotifier {
       );
       _items = List.unmodifiable([..._items, ...additions]);
       _total = result.total;
+      if (result.omittedItemCount > 0) {
+        _omittedItemCount += result.omittedItemCount;
+        _partialResultRevision += 1;
+      }
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
@@ -143,6 +154,7 @@ class TrackSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedItemCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -154,7 +166,11 @@ class TrackSearchController extends ChangeNotifier {
       result.failure == null &&
       result.page == expectedPage &&
       result.total >= result.items.length &&
-      (!result.hasMore || result.items.isNotEmpty);
+      result.omittedItemCount >= 0 &&
+      result.total >= result.items.length + result.omittedItemCount &&
+      (!result.hasMore ||
+          result.items.isNotEmpty ||
+          result.omittedItemCount > 0);
 
   bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 

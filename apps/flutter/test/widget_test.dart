@@ -6611,6 +6611,59 @@ void main() {
     );
   });
 
+  testWidgets('playlist detail keeps safe rows when one raw row is omitted', (
+    tester,
+  ) async {
+    const playlist = UserPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'favorite:partial-playlist',
+      title: 'Partial playlist',
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(playlists: [playlist]),
+        ]),
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(
+            nextOffset: 3,
+            total: 3,
+            omittedTrackCount: 1,
+            tracks: [
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:partial:a',
+                title: 'Safe playlist track A',
+                artistNames: ['Artist A'],
+              ),
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:partial:b',
+                title: 'Safe playlist track B',
+                artistNames: ['Artist B'],
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openPlaylists(tester);
+    await tester.tap(find.text('Partial playlist').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Safe playlist track A'), findsOneWidget);
+    expect(find.text('Safe playlist track B'), findsOneWidget);
+    expect(find.text(_en.partialResultsNotice(1)), findsOneWidget);
+    expect(find.byKey(const ValueKey('playlist-detail-error')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('retries a transient library failure', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
@@ -6941,6 +6994,59 @@ void main() {
       find.text(_en.likedSearchCompleteStatus(_en.likedExactResults(1), 2)),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Liked page keeps safe rows when one raw row is omitted', (
+    tester,
+  ) async {
+    const likedPlaylist = UserPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'liked:partial',
+      title: 'Partial liked songs',
+      isLikedSongs: true,
+      ownership: UserPlaylistOwnership.owned,
+    );
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(playlists: [likedPlaylist]),
+        ]),
+        playlistDetailGateway: _WidgetDetailGateway([
+          const PlaylistTrackPageResult(
+            nextOffset: 3,
+            total: 3,
+            omittedTrackCount: 1,
+            tracks: [
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:liked:a',
+                title: 'Safe liked track A',
+                artistNames: ['Artist A'],
+              ),
+              PlaylistTrackSummary(
+                providerId: 'qq-music',
+                opaqueId: 'track:liked:b',
+                title: 'Safe liked track B',
+                artistNames: ['Artist B'],
+              ),
+            ],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openLibrary(tester);
+
+    expect(find.text('Safe liked track A'), findsOneWidget);
+    expect(find.text('Safe liked track B'), findsOneWidget);
+    expect(find.text(_en.partialResultsNotice(1)), findsOneWidget);
+    expect(find.byKey(const ValueKey('liked-songs-error')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

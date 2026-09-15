@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
@@ -164,6 +165,8 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
     FavoriteAlbumStage.content => _AlbumCollection(
       key: const ValueKey('favorite-albums-content'),
       albums: _visibleAlbums,
+      omittedAlbumCount: _controller.omittedAlbumCount,
+      partialResultRevision: _controller.partialResultRevision,
       isLoadingMore: _controller.isLoadingMore,
       appendFailure: _controller.appendFailure,
       canLoadMore: _controller.canLoadMore,
@@ -228,6 +231,8 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
 class _AlbumCollection extends StatelessWidget {
   const _AlbumCollection({
     required this.albums,
+    required this.omittedAlbumCount,
+    required this.partialResultRevision,
     required this.isLoadingMore,
     required this.appendFailure,
     required this.canLoadMore,
@@ -240,6 +245,8 @@ class _AlbumCollection extends StatelessWidget {
   });
 
   final List<AlbumSummary> albums;
+  final int omittedAlbumCount;
+  final int partialResultRevision;
   final bool isLoadingMore;
   final FavoriteAlbumFailure? appendFailure;
   final bool canLoadMore;
@@ -270,34 +277,52 @@ class _AlbumCollection extends StatelessWidget {
             desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
             MusicSpacing.pageCompact,
           ),
-          child: desktop
-              ? GridView.builder(
-                  key: const PageStorageKey<String>('favorite-album-grid'),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisExtent: 255,
-                    crossAxisSpacing: 24,
-                    mainAxisSpacing: 28,
-                  ),
-                  itemCount: albums.length + 1,
-                  itemBuilder: (context, index) => index == albums.length
-                      ? footer
-                      : _AlbumGridItem(
-                          album: albums[index],
-                          onTap: () => onOpenAlbum(albums[index]),
-                        ),
-                )
-              : ListView.separated(
-                  key: const PageStorageKey<String>('favorite-album-list'),
-                  itemCount: albums.length + 1,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) => index == albums.length
-                      ? footer
-                      : _AlbumListItem(
-                          album: albums[index],
-                          onTap: () => onOpenAlbum(albums[index]),
-                        ),
+          child: Column(
+            children: [
+              if (omittedAlbumCount > 0) ...[
+                PartialResultsNotice(
+                  omittedCount: omittedAlbumCount,
+                  resultRevision: partialResultRevision,
                 ),
+                const SizedBox(height: 8),
+              ],
+              Expanded(
+                child: desktop
+                    ? GridView.builder(
+                        key: const PageStorageKey<String>(
+                          'favorite-album-grid',
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 220,
+                              mainAxisExtent: 255,
+                              crossAxisSpacing: 24,
+                              mainAxisSpacing: 28,
+                            ),
+                        itemCount: albums.length + 1,
+                        itemBuilder: (context, index) => index == albums.length
+                            ? footer
+                            : _AlbumGridItem(
+                                album: albums[index],
+                                onTap: () => onOpenAlbum(albums[index]),
+                              ),
+                      )
+                    : ListView.separated(
+                        key: const PageStorageKey<String>(
+                          'favorite-album-list',
+                        ),
+                        itemCount: albums.length + 1,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) => index == albums.length
+                            ? footer
+                            : _AlbumListItem(
+                                album: albums[index],
+                                onTap: () => onOpenAlbum(albums[index]),
+                              ),
+                      ),
+              ),
+            ],
+          ),
         );
       },
     );

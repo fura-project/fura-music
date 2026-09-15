@@ -9,6 +9,7 @@ import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -164,6 +165,8 @@ class _AlbumPageState extends State<AlbumPage> {
       AlbumTrackStage.content => _AlbumTracks(
         key: const ValueKey('album-content'),
         tracks: _controller.tracks,
+        omittedTrackCount: _controller.omittedTrackCount,
+        partialResultRevision: _controller.partialResultRevision,
         hasMore: _controller.hasMore,
         isLoadingMore: _controller.isLoadingMore,
         appendFailure: _controller.appendFailure,
@@ -497,6 +500,8 @@ class _AlbumArtistSelection extends StatelessWidget {
 class _AlbumTracks extends StatefulWidget {
   const _AlbumTracks({
     required this.tracks,
+    required this.omittedTrackCount,
+    required this.partialResultRevision,
     required this.hasMore,
     required this.isLoadingMore,
     required this.appendFailure,
@@ -511,6 +516,8 @@ class _AlbumTracks extends StatefulWidget {
   });
 
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
+  final int partialResultRevision;
   final bool hasMore;
   final bool isLoadingMore;
   final AlbumTrackFailure? appendFailure;
@@ -560,6 +567,14 @@ class _AlbumTracksState extends State<_AlbumTracks> {
         constraints: const BoxConstraints(maxWidth: 1180),
         child: Column(
           children: [
+            if (widget.omittedTrackCount > 0)
+              Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
+                child: PartialResultsNotice(
+                  omittedCount: widget.omittedTrackCount,
+                  resultRevision: widget.partialResultRevision,
+                ),
+              ),
             if (widget.desktop)
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontal),

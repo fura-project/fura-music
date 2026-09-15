@@ -20,6 +20,7 @@ class ArtistTrackPageResult {
     this.total = 0,
     this.hasMore = false,
     this.tracks = const [],
+    this.omittedTrackCount = 0,
     this.failure,
   });
 
@@ -27,6 +28,7 @@ class ArtistTrackPageResult {
   final int total;
   final bool hasMore;
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
   final ArtistTrackFailure? failure;
 }
 
@@ -106,19 +108,24 @@ ArtistTrackPageResult mapBridgeArtistTrackPage(
   final failure = result.failure;
   if (failure != null) {
     if (result.offset != 0 ||
+        result.nextOffset != 0 ||
         result.total != 0 ||
         result.hasMore ||
-        result.tracks.isNotEmpty) {
+        result.tracks.isNotEmpty ||
+        result.omittedTrackCount != 0) {
       return const ArtistTrackPageResult(
         failure: ArtistTrackFailure.invalidResponse,
       );
     }
     return ArtistTrackPageResult(failure: mapBridgeArtistTrackFailure(failure));
   }
+  final rawCount = result.tracks.length + result.omittedTrackCount;
   if (result.offset < 0 ||
       result.total < 0 ||
-      result.offset + result.tracks.length > result.total ||
-      (result.hasMore && result.tracks.isEmpty)) {
+      result.omittedTrackCount < 0 ||
+      result.nextOffset != result.offset + rawCount ||
+      result.offset + rawCount > result.total ||
+      (result.hasMore && rawCount == 0)) {
     return const ArtistTrackPageResult(
       failure: ArtistTrackFailure.invalidResponse,
     );
@@ -138,6 +145,7 @@ ArtistTrackPageResult mapBridgeArtistTrackPage(
     total: result.total,
     hasMore: result.hasMore,
     tracks: List.unmodifiable(tracks),
+    omittedTrackCount: result.omittedTrackCount,
   );
 }
 

@@ -10,6 +10,7 @@ class PlaylistSearchPageResult {
     this.page = 0,
     this.total = 0,
     this.hasMore = false,
+    this.omittedPlaylistCount = 0,
     this.playlists = const [],
     this.failure,
   });
@@ -17,6 +18,7 @@ class PlaylistSearchPageResult {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedPlaylistCount;
   final List<UserPlaylistSummary> playlists;
   final SearchFailure? failure;
 }
@@ -100,6 +102,7 @@ PlaylistSearchPageResult mapBridgePlaylistSearchPage(
     if (result.page != 0 ||
         result.total != 0 ||
         result.hasMore ||
+        result.omittedPlaylistCount != 0 ||
         result.playlists.isNotEmpty) {
       return const PlaylistSearchPageResult(
         failure: SearchFailure.invalidResponse,
@@ -109,8 +112,11 @@ PlaylistSearchPageResult mapBridgePlaylistSearchPage(
   }
   if (result.page <= 0 ||
       result.total < 0 ||
-      result.playlists.length > result.total ||
-      (result.hasMore && result.playlists.isEmpty)) {
+      result.omittedPlaylistCount < 0 ||
+      result.playlists.length + result.omittedPlaylistCount > result.total ||
+      (result.hasMore &&
+          result.playlists.isEmpty &&
+          result.omittedPlaylistCount == 0)) {
     return const PlaylistSearchPageResult(
       failure: SearchFailure.invalidResponse,
     );
@@ -140,6 +146,7 @@ PlaylistSearchPageResult mapBridgePlaylistSearchPage(
     page: result.page,
     total: result.total,
     hasMore: result.hasMore,
+    omittedPlaylistCount: result.omittedPlaylistCount,
     playlists: List.unmodifiable(playlists),
   );
 }

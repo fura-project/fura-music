@@ -1175,5 +1175,10 @@
   "@commentsEmptyTitle": {"description": "Empty state title for a successful response with no track comments."},
   "@musicVideoEmptyTitle": {"description": "Empty state title when the current track has no music video."},
   "commonLocateCurrentTrack": "Locate current track",
-  "@commonLocateCurrentTrack": {"description": "Tooltip for returning a scrolled music list to its currently playing row."}
+  "@commonLocateCurrentTrack": {"description": "Tooltip for returning a scrolled music list to its currently playing row."},
+  "partialResultsNotice": "{count, plural, =1{Some items could not be displayed. 1 unsafe item was skipped; the remaining results are shown.} other{Some items could not be displayed. {count} unsafe items were skipped; the remaining results are shown.}}",
+  "@partialResultsNotice": {
+    "description": "Inline warning shown once when malformed rows are omitted from an otherwise successful collection response.",
+    "placeholders": {"count": {"type": "int"}}
+  }
 }

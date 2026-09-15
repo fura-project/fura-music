@@ -24,6 +24,8 @@ class RadarController extends ChangeNotifier {
   RadarFailure? _appendFailure;
   int _nextPage = 1;
   bool _hasMore = false;
+  int _omittedTrackCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   bool _manualPageRequested = false;
   int _prefetchTarget = 0;
@@ -41,6 +43,8 @@ class RadarController extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   Duration get estimatedPageLatency => _estimatedPageLatency;
+  int get omittedTrackCount => _omittedTrackCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry => _stage == RadarStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
       _stage == RadarStage.content && _hasMore && !_isLoadingMore;
@@ -62,6 +66,7 @@ class RadarController extends ChangeNotifier {
     _appendFailure = null;
     _nextPage = 1;
     _hasMore = false;
+    _omittedTrackCount = 0;
     _isLoadingMore = false;
     _stage = RadarStage.loading;
     _notify();
@@ -89,7 +94,11 @@ class RadarController extends ChangeNotifier {
       _tracks = List.unmodifiable(result.tracks);
       _nextPage = 2;
       _hasMore = result.hasMore;
-      _stage = _tracks.isEmpty ? RadarStage.empty : RadarStage.content;
+      _omittedTrackCount = result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
+      _stage = _tracks.isEmpty && _omittedTrackCount == 0
+          ? RadarStage.empty
+          : RadarStage.content;
     } else {
       _failure = result.failure ?? RadarFailure.invalidResponse;
       _stage = RadarStage.error;
@@ -212,6 +221,8 @@ class RadarController extends ChangeNotifier {
       _tracks = List.unmodifiable([..._tracks, ...additions]);
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
+      _omittedTrackCount += result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
     } else {
       _appendFailure = result.failure ?? RadarFailure.invalidResponse;
     }
@@ -237,7 +248,10 @@ class RadarController extends ChangeNotifier {
   bool _validPage(RadarTrackPageResult result, {required int expectedPage}) =>
       result.failure == null &&
       result.page == expectedPage &&
-      (!result.hasMore || result.tracks.isNotEmpty);
+      result.omittedTrackCount >= 0 &&
+      (!result.hasMore ||
+          result.tracks.isNotEmpty ||
+          result.omittedTrackCount > 0);
 
   bool _isRetryable(RadarFailure? failure) =>
       failure == RadarFailure.coreUnavailable ||

@@ -120,16 +120,22 @@ abstract class QqMusicRelatedTracksLoadHandle implements RustOpaqueInterface {
 class QqMusicDailyRecommendationLoad {
   final LibraryPlaylistSummary? playlist;
   final List<LibraryTrackSummary> tracks;
+  final int omittedTrackCount;
   final QqMusicDailyRecommendationLoadFailure? failure;
 
   const QqMusicDailyRecommendationLoad({
     this.playlist,
     required this.tracks,
+    required this.omittedTrackCount,
     this.failure,
   });
 
   @override
-  int get hashCode => playlist.hashCode ^ tracks.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      playlist.hashCode ^
+      tracks.hashCode ^
+      omittedTrackCount.hashCode ^
+      failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -138,6 +144,7 @@ class QqMusicDailyRecommendationLoad {
           runtimeType == other.runtimeType &&
           playlist == other.playlist &&
           tracks == other.tracks &&
+          omittedTrackCount == other.omittedTrackCount &&
           failure == other.failure;
 }
 
@@ -155,15 +162,18 @@ enum QqMusicDailyRecommendationLoadFailure {
 
 class QqMusicPersonalizedPlaylistsLoad {
   final List<LibraryPlaylistSummary> playlists;
+  final int omittedPlaylistCount;
   final QqMusicPersonalizedPlaylistsLoadFailure? failure;
 
   const QqMusicPersonalizedPlaylistsLoad({
     required this.playlists,
+    required this.omittedPlaylistCount,
     this.failure,
   });
 
   @override
-  int get hashCode => playlists.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      playlists.hashCode ^ omittedPlaylistCount.hashCode ^ failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -171,6 +181,7 @@ class QqMusicPersonalizedPlaylistsLoad {
       other is QqMusicPersonalizedPlaylistsLoad &&
           runtimeType == other.runtimeType &&
           playlists == other.playlists &&
+          omittedPlaylistCount == other.omittedPlaylistCount &&
           failure == other.failure;
 }
 
@@ -188,12 +199,18 @@ enum QqMusicPersonalizedPlaylistsLoadFailure {
 
 class QqMusicPersonalizedTracksLoad {
   final List<LibraryTrackSummary> tracks;
+  final int omittedTrackCount;
   final QqMusicPersonalizedTracksLoadFailure? failure;
 
-  const QqMusicPersonalizedTracksLoad({required this.tracks, this.failure});
+  const QqMusicPersonalizedTracksLoad({
+    required this.tracks,
+    required this.omittedTrackCount,
+    this.failure,
+  });
 
   @override
-  int get hashCode => tracks.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      tracks.hashCode ^ omittedTrackCount.hashCode ^ failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -201,6 +218,7 @@ class QqMusicPersonalizedTracksLoad {
       other is QqMusicPersonalizedTracksLoad &&
           runtimeType == other.runtimeType &&
           tracks == other.tracks &&
+          omittedTrackCount == other.omittedTrackCount &&
           failure == other.failure;
 }
 
@@ -219,19 +237,25 @@ enum QqMusicPersonalizedTracksLoadFailure {
 class QqMusicRadarTrackPageLoad {
   final int page;
   final bool hasMore;
+  final int omittedTrackCount;
   final List<LibraryTrackSummary> tracks;
   final QqMusicRadarTrackPageLoadFailure? failure;
 
   const QqMusicRadarTrackPageLoad({
     required this.page,
     required this.hasMore,
+    required this.omittedTrackCount,
     required this.tracks,
     this.failure,
   });
 
   @override
   int get hashCode =>
-      page.hashCode ^ hasMore.hashCode ^ tracks.hashCode ^ failure.hashCode;
+      page.hashCode ^
+      hasMore.hashCode ^
+      omittedTrackCount.hashCode ^
+      tracks.hashCode ^
+      failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -240,6 +264,7 @@ class QqMusicRadarTrackPageLoad {
           runtimeType == other.runtimeType &&
           page == other.page &&
           hasMore == other.hasMore &&
+          omittedTrackCount == other.omittedTrackCount &&
           tracks == other.tracks &&
           failure == other.failure;
 }
@@ -258,13 +283,17 @@ enum QqMusicRadarTrackPageLoadFailure {
 
 class QqMusicRecommendedPlaylistPageLoad {
   final int offset;
+  final int nextOffset;
   final bool hasMore;
+  final int omittedPlaylistCount;
   final List<LibraryPlaylistSummary> playlists;
   final QqMusicRecommendedPlaylistPageLoadFailure? failure;
 
   const QqMusicRecommendedPlaylistPageLoad({
     required this.offset,
+    required this.nextOffset,
     required this.hasMore,
+    required this.omittedPlaylistCount,
     required this.playlists,
     this.failure,
   });
@@ -272,7 +301,9 @@ class QqMusicRecommendedPlaylistPageLoad {
   @override
   int get hashCode =>
       offset.hashCode ^
+      nextOffset.hashCode ^
       hasMore.hashCode ^
+      omittedPlaylistCount.hashCode ^
       playlists.hashCode ^
       failure.hashCode;
 
@@ -282,7 +313,9 @@ class QqMusicRecommendedPlaylistPageLoad {
       other is QqMusicRecommendedPlaylistPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           hasMore == other.hasMore &&
+          omittedPlaylistCount == other.omittedPlaylistCount &&
           playlists == other.playlists &&
           failure == other.failure;
 }
@@ -298,12 +331,18 @@ enum QqMusicRecommendedPlaylistPageLoadFailure {
 
 class QqMusicRelatedTracksLoad {
   final List<LibraryTrackSummary> tracks;
+  final int omittedTrackCount;
   final QqMusicRelatedTracksLoadFailure? failure;
 
-  const QqMusicRelatedTracksLoad({required this.tracks, this.failure});
+  const QqMusicRelatedTracksLoad({
+    required this.tracks,
+    required this.omittedTrackCount,
+    this.failure,
+  });
 
   @override
-  int get hashCode => tracks.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      tracks.hashCode ^ omittedTrackCount.hashCode ^ failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -311,6 +350,7 @@ class QqMusicRelatedTracksLoad {
       other is QqMusicRelatedTracksLoad &&
           runtimeType == other.runtimeType &&
           tracks == other.tracks &&
+          omittedTrackCount == other.omittedTrackCount &&
           failure == other.failure;
 }
 

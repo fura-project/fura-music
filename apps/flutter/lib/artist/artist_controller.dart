@@ -21,6 +21,8 @@ class ArtistController extends ChangeNotifier {
   int _total = 0;
   int _nextOffset = 0;
   bool _hasMore = false;
+  int _omittedTrackCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   ArtistTrackPageLoadOperation? _operation;
   int _generation = 0;
@@ -33,6 +35,8 @@ class ArtistController extends ChangeNotifier {
   int get total => _total;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
+  int get omittedTrackCount => _omittedTrackCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry =>
       _stage == ArtistTrackStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
@@ -59,6 +63,7 @@ class ArtistController extends ChangeNotifier {
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
+    _omittedTrackCount = 0;
     _isLoadingMore = false;
     _stage = ArtistTrackStage.loading;
     _notify();
@@ -70,9 +75,11 @@ class ArtistController extends ChangeNotifier {
     if (_validPage(result, expectedOffset: 0)) {
       _tracks = List.unmodifiable(result.tracks);
       _total = result.total;
-      _nextOffset = result.tracks.length;
+      _nextOffset = result.tracks.length + result.omittedTrackCount;
       _hasMore = result.hasMore;
-      _stage = _tracks.isEmpty
+      _omittedTrackCount = result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
+      _stage = _tracks.isEmpty && _omittedTrackCount == 0
           ? ArtistTrackStage.empty
           : ArtistTrackStage.content;
     } else {
@@ -110,8 +117,11 @@ class ArtistController extends ChangeNotifier {
       );
       _tracks = List.unmodifiable([..._tracks, ...additions]);
       _total = result.total;
-      _nextOffset = expectedOffset + result.tracks.length;
+      _nextOffset =
+          expectedOffset + result.tracks.length + result.omittedTrackCount;
       _hasMore = result.hasMore;
+      _omittedTrackCount += result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
     } else {
       _appendFailure = result.failure ?? ArtistTrackFailure.invalidResponse;
     }
@@ -132,8 +142,12 @@ class ArtistController extends ChangeNotifier {
   }) =>
       result.failure == null &&
       result.offset == expectedOffset &&
-      result.total >= expectedOffset + result.tracks.length &&
-      (!result.hasMore || result.tracks.isNotEmpty);
+      result.omittedTrackCount >= 0 &&
+      result.total >=
+          expectedOffset + result.tracks.length + result.omittedTrackCount &&
+      (!result.hasMore ||
+          result.tracks.isNotEmpty ||
+          result.omittedTrackCount > 0);
 
   bool _isRetryable(ArtistTrackFailure? failure) =>
       failure == ArtistTrackFailure.coreUnavailable ||

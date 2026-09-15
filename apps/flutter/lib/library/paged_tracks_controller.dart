@@ -44,6 +44,7 @@ class PagedTracksController extends ChangeNotifier {
   bool _hasMore = false;
   int _nextOffset = 0;
   int _omittedTrackCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   bool _isLoadingAll = false;
   bool _isRefreshing = false;
@@ -65,6 +66,7 @@ class PagedTracksController extends ChangeNotifier {
   bool get totalIsExact => _totalIsExact;
   int get processedCount => _nextOffset;
   int get omittedTrackCount => _omittedTrackCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get isLoadingAll => _isLoadingAll;
@@ -140,6 +142,7 @@ class PagedTracksController extends ChangeNotifier {
       _hasMore = hasMore;
       _nextOffset = nextOffset;
       _omittedTrackCount = result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
       _failure = null;
       _stage = _tracks.isEmpty
           ? PlaylistDetailStage.empty
@@ -248,6 +251,7 @@ class PagedTracksController extends ChangeNotifier {
       _tracks = List.unmodifiable([..._tracks, ...additions]);
       _nextOffset = pageEnd;
       _omittedTrackCount += result.omittedTrackCount;
+      if (result.omittedTrackCount > 0) _partialResultRevision += 1;
       _total = result.total;
       _totalIsExact = result.totalIsExact;
       _hasMore = hasMore;

@@ -21,6 +21,9 @@ class TrackCommentController extends ChangeNotifier {
   TrackCommentFailure? _appendFailure;
   int _total = 0;
   int _nextOffset = 0;
+  int _omittedHotCommentCount = 0;
+  int _omittedLatestCommentCount = 0;
+  int _partialResultRevision = 0;
   bool _hasMore = false;
   bool _isLoadingMore = false;
   TrackCommentPageLoadOperation? _operation;
@@ -33,6 +36,9 @@ class TrackCommentController extends ChangeNotifier {
   TrackCommentFailure? get failure => _failure;
   TrackCommentFailure? get appendFailure => _appendFailure;
   int get total => _total;
+  int get omittedCommentCount =>
+      _omittedHotCommentCount + _omittedLatestCommentCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get canRetry =>
@@ -61,6 +67,8 @@ class TrackCommentController extends ChangeNotifier {
     _appendFailure = null;
     _total = 0;
     _nextOffset = 0;
+    _omittedHotCommentCount = 0;
+    _omittedLatestCommentCount = 0;
     _hasMore = false;
     _isLoadingMore = false;
     _stage = TrackCommentStage.loading;
@@ -74,10 +82,16 @@ class TrackCommentController extends ChangeNotifier {
       _hotComments = List.unmodifiable(result.hotComments);
       _latestComments = List.unmodifiable(result.latestComments);
       _total = result.total;
-      _nextOffset = result.hasMore ? pageSize : result.latestComments.length;
+      _nextOffset = result.nextOffset;
+      _omittedHotCommentCount = result.omittedHotCommentCount;
+      _omittedLatestCommentCount = result.omittedLatestCommentCount;
+      if (omittedCommentCount > 0) _partialResultRevision += 1;
       _hasMore = result.hasMore;
       _stage =
-          _hotComments.isEmpty && _latestComments.isEmpty && !result.hasMore
+          _hotComments.isEmpty &&
+              _latestComments.isEmpty &&
+              omittedCommentCount == 0 &&
+              !result.hasMore
           ? TrackCommentStage.empty
           : TrackCommentStage.content;
     } else {
@@ -115,9 +129,11 @@ class TrackCommentController extends ChangeNotifier {
       );
       _latestComments = List.unmodifiable([..._latestComments, ...additions]);
       _total = result.total;
-      _nextOffset = result.hasMore
-          ? expectedOffset + pageSize
-          : expectedOffset + result.latestComments.length;
+      _nextOffset = result.nextOffset;
+      if (result.omittedLatestCommentCount > 0) {
+        _omittedLatestCommentCount += result.omittedLatestCommentCount;
+        _partialResultRevision += 1;
+      }
       _hasMore = result.hasMore;
     } else {
       _appendFailure = result.failure ?? TrackCommentFailure.invalidResponse;
@@ -138,12 +154,21 @@ class TrackCommentController extends ChangeNotifier {
     required int expectedOffset,
     required bool firstPage,
   }) {
-    final pageEnd = expectedOffset + result.latestComments.length;
+    final consumedCount = result.nextOffset - expectedOffset;
     return result.failure == null &&
         result.offset == expectedOffset &&
-        result.total >= pageEnd &&
-        (firstPage || result.hotComments.isEmpty) &&
-        (!result.hasMore || pageEnd < result.total);
+        result.nextOffset >= expectedOffset &&
+        result.nextOffset <= result.total &&
+        result.omittedHotCommentCount >= 0 &&
+        result.omittedLatestCommentCount >= 0 &&
+        result.latestComments.length + result.omittedLatestCommentCount <=
+            consumedCount &&
+        (firstPage ||
+            (result.hotComments.isEmpty &&
+                result.omittedHotCommentCount == 0)) &&
+        (!result.hasMore ||
+            (result.nextOffset > expectedOffset &&
+                result.nextOffset < result.total));
   }
 
   bool _isRetryable(TrackCommentFailure? failure) =>

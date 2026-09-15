@@ -10,6 +10,7 @@ class ArtistSearchPageResult {
     this.page = 0,
     this.total = 0,
     this.hasMore = false,
+    this.omittedArtistCount = 0,
     this.artists = const [],
     this.failure,
   });
@@ -17,6 +18,7 @@ class ArtistSearchPageResult {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedArtistCount;
   final List<ArtistSummary> artists;
   final SearchFailure? failure;
 }
@@ -100,6 +102,7 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
     if (result.page != 0 ||
         result.total != 0 ||
         result.hasMore ||
+        result.omittedArtistCount != 0 ||
         result.artists.isNotEmpty) {
       return const ArtistSearchPageResult(
         failure: SearchFailure.invalidResponse,
@@ -109,8 +112,11 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
   }
   if (result.page <= 0 ||
       result.total < 0 ||
-      result.artists.length > result.total ||
-      (result.hasMore && result.artists.isEmpty)) {
+      result.omittedArtistCount < 0 ||
+      result.artists.length + result.omittedArtistCount > result.total ||
+      (result.hasMore &&
+          result.artists.isEmpty &&
+          result.omittedArtistCount == 0)) {
     return const ArtistSearchPageResult(failure: SearchFailure.invalidResponse);
   }
   final artists = <ArtistSummary>[];
@@ -136,6 +142,7 @@ ArtistSearchPageResult mapBridgeArtistSearchPage(
     page: result.page,
     total: result.total,
     hasMore: result.hasMore,
+    omittedArtistCount: result.omittedArtistCount,
     artists: List.unmodifiable(artists),
   );
 }

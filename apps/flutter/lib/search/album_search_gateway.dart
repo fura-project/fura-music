@@ -10,6 +10,7 @@ class AlbumSearchPageResult {
     this.page = 0,
     this.total = 0,
     this.hasMore = false,
+    this.omittedAlbumCount = 0,
     this.albums = const [],
     this.failure,
   });
@@ -17,6 +18,7 @@ class AlbumSearchPageResult {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedAlbumCount;
   final List<AlbumSummary> albums;
   final SearchFailure? failure;
 }
@@ -100,6 +102,7 @@ AlbumSearchPageResult mapBridgeAlbumSearchPage(
     if (result.page != 0 ||
         result.total != 0 ||
         result.hasMore ||
+        result.omittedAlbumCount != 0 ||
         result.albums.isNotEmpty) {
       return const AlbumSearchPageResult(
         failure: SearchFailure.invalidResponse,
@@ -109,8 +112,11 @@ AlbumSearchPageResult mapBridgeAlbumSearchPage(
   }
   if (result.page <= 0 ||
       result.total < 0 ||
-      result.albums.length > result.total ||
-      (result.hasMore && result.albums.isEmpty)) {
+      result.omittedAlbumCount < 0 ||
+      result.albums.length + result.omittedAlbumCount > result.total ||
+      (result.hasMore &&
+          result.albums.isEmpty &&
+          result.omittedAlbumCount == 0)) {
     return const AlbumSearchPageResult(failure: SearchFailure.invalidResponse);
   }
   final albums = <AlbumSummary>[];
@@ -136,6 +142,7 @@ AlbumSearchPageResult mapBridgeAlbumSearchPage(
     page: result.page,
     total: result.total,
     hasMore: result.hasMore,
+    omittedAlbumCount: result.omittedAlbumCount,
     albums: List.unmodifiable(albums),
   );
 }

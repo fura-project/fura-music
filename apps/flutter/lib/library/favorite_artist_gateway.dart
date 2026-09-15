@@ -22,6 +22,7 @@ class FavoriteArtistPageResult {
     this.total = 0,
     this.hasMore = false,
     this.artists = const [],
+    this.omittedArtistCount = 0,
     this.failure,
   });
 
@@ -29,6 +30,7 @@ class FavoriteArtistPageResult {
   final int total;
   final bool hasMore;
   final List<ArtistSummary> artists;
+  final int omittedArtistCount;
   final FavoriteArtistFailure? failure;
 }
 
@@ -141,9 +143,11 @@ FavoriteArtistPageResult mapBridgeFavoriteArtistPage(
   final failure = result.failure;
   if (failure != null) {
     if (result.offset != 0 ||
+        result.nextOffset != 0 ||
         result.total != 0 ||
         result.hasMore ||
-        result.artists.isNotEmpty) {
+        result.artists.isNotEmpty ||
+        result.omittedArtistCount != 0) {
       return const FavoriteArtistPageResult(
         failure: FavoriteArtistFailure.invalidResponse,
       );
@@ -152,11 +156,16 @@ FavoriteArtistPageResult mapBridgeFavoriteArtistPage(
       failure: mapBridgeFavoriteArtistFailure(failure),
     );
   }
-  final pageEnd = result.offset + result.artists.length;
+  final pageEnd =
+      result.offset + result.artists.length + result.omittedArtistCount;
   if (result.offset < 0 ||
       result.total < 0 ||
+      result.omittedArtistCount < 0 ||
+      result.nextOffset != pageEnd ||
       pageEnd > result.total ||
-      (result.hasMore && (result.artists.isEmpty || pageEnd >= result.total)) ||
+      (result.hasMore &&
+          (result.artists.isEmpty && result.omittedArtistCount == 0 ||
+              pageEnd >= result.total)) ||
       (!result.hasMore && pageEnd != result.total)) {
     return const FavoriteArtistPageResult(
       failure: FavoriteArtistFailure.invalidResponse,
@@ -186,6 +195,7 @@ FavoriteArtistPageResult mapBridgeFavoriteArtistPage(
     total: result.total,
     hasMore: result.hasMore,
     artists: List.unmodifiable(artists),
+    omittedArtistCount: result.omittedArtistCount,
   );
 }
 

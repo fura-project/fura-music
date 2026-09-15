@@ -19,6 +19,8 @@ class PlaylistSearchController extends ChangeNotifier {
   SearchFailure? _failure;
   SearchFailure? _appendFailure;
   int _total = 0;
+  int _omittedPlaylistCount = 0;
+  int _partialResultRevision = 0;
   int _nextPage = 1;
   bool _hasMore = false;
   bool _isLoadingMore = false;
@@ -32,6 +34,8 @@ class PlaylistSearchController extends ChangeNotifier {
   SearchFailure? get failure => _failure;
   SearchFailure? get appendFailure => _appendFailure;
   int get total => _total;
+  int get omittedPlaylistCount => _omittedPlaylistCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get canRetry =>
@@ -62,6 +66,7 @@ class PlaylistSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedPlaylistCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -75,9 +80,11 @@ class PlaylistSearchController extends ChangeNotifier {
     if (_validPage(result, expectedPage: 1)) {
       _playlists = List.unmodifiable(result.playlists);
       _total = result.total;
+      _omittedPlaylistCount = result.omittedPlaylistCount;
+      if (result.omittedPlaylistCount > 0) _partialResultRevision += 1;
       _nextPage = 2;
       _hasMore = result.hasMore;
-      _stage = _playlists.isEmpty
+      _stage = _playlists.isEmpty && _omittedPlaylistCount == 0
           ? PlaylistSearchStage.empty
           : PlaylistSearchStage.content;
     } else {
@@ -116,6 +123,10 @@ class PlaylistSearchController extends ChangeNotifier {
       );
       _playlists = List.unmodifiable([..._playlists, ...additions]);
       _total = result.total;
+      if (result.omittedPlaylistCount > 0) {
+        _omittedPlaylistCount += result.omittedPlaylistCount;
+        _partialResultRevision += 1;
+      }
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
     } else {
@@ -141,6 +152,7 @@ class PlaylistSearchController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _total = 0;
+    _omittedPlaylistCount = 0;
     _nextPage = 1;
     _hasMore = false;
     _isLoadingMore = false;
@@ -155,7 +167,11 @@ class PlaylistSearchController extends ChangeNotifier {
       result.failure == null &&
       result.page == expectedPage &&
       result.total >= result.playlists.length &&
-      (!result.hasMore || result.playlists.isNotEmpty);
+      result.omittedPlaylistCount >= 0 &&
+      result.total >= result.playlists.length + result.omittedPlaylistCount &&
+      (!result.hasMore ||
+          result.playlists.isNotEmpty ||
+          result.omittedPlaylistCount > 0);
 
   bool _isRetryable(SearchFailure? failure) => failure?.isRetryable ?? false;
 

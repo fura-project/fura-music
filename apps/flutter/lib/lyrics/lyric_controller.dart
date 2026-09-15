@@ -53,6 +53,7 @@ class LyricController extends ChangeNotifier {
   LyricFailure? _failure;
   LyricLoadOperation? _operation;
   int _positionMs = 0;
+  int _partialResultRevision = 0;
   ActiveLyricSelection? _activeSelection;
   int _generation = 0;
   bool _disposed = false;
@@ -62,6 +63,8 @@ class LyricController extends ChangeNotifier {
   SynchronizedLyrics? get lyrics => _lyrics;
   LyricFailure? get failure => _failure;
   int get positionMs => _positionMs;
+  int get omittedLineCount => _lyrics?.omittedLineCount ?? 0;
+  int get partialResultRevision => _partialResultRevision;
   ActiveLyricSelection? get activeSelection => _activeSelection;
   SynchronizedLyricLine? get activeLine {
     final selection = _activeSelection;
@@ -111,6 +114,9 @@ class LyricController extends ChangeNotifier {
     _lyrics = result.lyrics;
     _failure = result.failure;
     if (result.failure == null && result.lyrics != null) {
+      if (result.lyrics!.omittedLineCount > 0) {
+        _partialResultRevision += 1;
+      }
       _stage = LyricStage.content;
       _activeSelection = selectActiveLyrics(result.lyrics!, _positionMs);
     } else {

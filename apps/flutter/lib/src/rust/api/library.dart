@@ -227,12 +227,18 @@ enum QqMusicPlaylistTrackPageLoadFailure {
 
 class QqMusicUserPlaylistLoad {
   final List<LibraryPlaylistSummary> playlists;
+  final int omittedPlaylistCount;
   final QqMusicUserPlaylistLoadFailure? failure;
 
-  const QqMusicUserPlaylistLoad({required this.playlists, this.failure});
+  const QqMusicUserPlaylistLoad({
+    required this.playlists,
+    required this.omittedPlaylistCount,
+    this.failure,
+  });
 
   @override
-  int get hashCode => playlists.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      playlists.hashCode ^ omittedPlaylistCount.hashCode ^ failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -240,6 +246,7 @@ class QqMusicUserPlaylistLoad {
       other is QqMusicUserPlaylistLoad &&
           runtimeType == other.runtimeType &&
           playlists == other.playlists &&
+          omittedPlaylistCount == other.omittedPlaylistCount &&
           failure == other.failure;
 }
 

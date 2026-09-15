@@ -10,6 +10,8 @@ void main() {
   test('maps an optional valid Daily 30 playlist', () {
     final available = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
+        omittedTrackCount: 0,
+
         tracks: [],
         playlist: bridge_library.LibraryPlaylistSummary(
           isLikedSongs: false,
@@ -29,7 +31,11 @@ void main() {
     );
 
     final absent = mapBridgeDailyRecommendation(
-      const bridge.QqMusicDailyRecommendationLoad(tracks: []),
+      const bridge.QqMusicDailyRecommendationLoad(
+        omittedTrackCount: 0,
+
+        tracks: [],
+      ),
     );
     expect(absent.failure, isNull);
     expect(absent.playlist, isNull);
@@ -38,6 +44,8 @@ void main() {
   test('maps NetEase Daily Tracks without fabricating a playlist', () {
     final result = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
+        omittedTrackCount: 0,
+
         tracks: [
           bridge_library.LibraryTrackSummary(
             providerId: 'netease-cloud-music',
@@ -69,13 +77,19 @@ void main() {
       artists: [],
     );
     final duplicate = mapBridgeDailyRecommendation(
-      const bridge.QqMusicDailyRecommendationLoad(tracks: [track, track]),
+      const bridge.QqMusicDailyRecommendationLoad(
+        omittedTrackCount: 0,
+
+        tracks: [track, track],
+      ),
     );
     expect(duplicate.failure, DailyRecommendationFailure.invalidResponse);
     expect(duplicate.tracks, isEmpty);
 
     final mixed = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
+        omittedTrackCount: 0,
+
         playlist: bridge_library.LibraryPlaylistSummary(
           providerId: 'qq-music',
           opaqueId: 'catalog:daily',
@@ -117,6 +131,8 @@ void main() {
 
     final conflict = mapBridgeDailyRecommendation(
       const bridge.QqMusicDailyRecommendationLoad(
+        omittedTrackCount: 0,
+
         tracks: [],
         playlist: bridge_library.LibraryPlaylistSummary(
           isLikedSongs: false,
@@ -162,6 +178,8 @@ void main() {
       expect(
         mapBridgeDailyRecommendation(
           bridge.QqMusicDailyRecommendationLoad(
+            omittedTrackCount: 0,
+
             playlist: playlist,
             tracks: const [],
           ),

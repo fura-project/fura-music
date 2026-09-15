@@ -7,6 +7,10 @@ void main() {
   test('maps a valid page and keeps returned collections immutable', () {
     final result = mapBridgeTrackCommentPage(
       bridge.QqMusicTrackCommentPageLoad(
+        nextOffset: 1,
+        omittedHotCommentCount: 0,
+        omittedLatestCommentCount: 0,
+
         offset: 0,
         total: 2,
         hasMore: true,
@@ -55,6 +59,10 @@ void main() {
   test('accepts a terminal page whose unavailable raw rows were omitted', () {
     final result = mapBridgeTrackCommentPage(
       bridge.QqMusicTrackCommentPageLoad(
+        nextOffset: 28,
+        omittedHotCommentCount: 0,
+        omittedLatestCommentCount: 7,
+
         offset: 20,
         total: 28,
         hasMore: false,
@@ -73,6 +81,10 @@ void main() {
   test('keeps a full omitted raw page reachable through its cursor bound', () {
     final result = mapBridgeTrackCommentPage(
       const bridge.QqMusicTrackCommentPageLoad(
+        nextOffset: 40,
+        omittedHotCommentCount: 0,
+        omittedLatestCommentCount: 20,
+
         offset: 20,
         total: 41,
         hasMore: true,
@@ -92,6 +104,10 @@ void main() {
     final valid = _bridgeComment('one', 'Author', 'Content');
     final malformed = [
       bridge.QqMusicTrackCommentPageLoad(
+        nextOffset: 1,
+        omittedHotCommentCount: 0,
+        omittedLatestCommentCount: 0,
+
         offset: 1,
         total: 0,
         hasMore: false,
@@ -100,6 +116,10 @@ void main() {
         failure: bridge.QqMusicTrackCommentPageLoadFailure.network,
       ),
       bridge.QqMusicTrackCommentPageLoad(
+        nextOffset: 1,
+        omittedHotCommentCount: 0,
+        omittedLatestCommentCount: 0,
+
         offset: 1,
         total: 2,
         hasMore: false,
@@ -107,6 +127,10 @@ void main() {
         latestComments: [valid],
       ),
       bridge.QqMusicTrackCommentPageLoad(
+        nextOffset: 0,
+        omittedHotCommentCount: 0,
+        omittedLatestCommentCount: 0,
+
         offset: 0,
         total: 1,
         hasMore: true,
@@ -114,6 +138,10 @@ void main() {
         latestComments: [valid],
       ),
       bridge.QqMusicTrackCommentPageLoad(
+        nextOffset: 0,
+        omittedHotCommentCount: 0,
+        omittedLatestCommentCount: 0,
+
         offset: 0,
         total: 1,
         hasMore: false,

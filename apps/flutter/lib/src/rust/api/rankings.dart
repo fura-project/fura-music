@@ -109,12 +109,18 @@ class CatalogRankingSummary {
 
 class QqMusicRankingGroupLoad {
   final List<CatalogRankingGroup> groups;
+  final int omittedRankingCount;
   final QqMusicRankingLoadFailure? failure;
 
-  const QqMusicRankingGroupLoad({required this.groups, this.failure});
+  const QqMusicRankingGroupLoad({
+    required this.groups,
+    required this.omittedRankingCount,
+    this.failure,
+  });
 
   @override
-  int get hashCode => groups.hashCode ^ failure.hashCode;
+  int get hashCode =>
+      groups.hashCode ^ omittedRankingCount.hashCode ^ failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -122,6 +128,7 @@ class QqMusicRankingGroupLoad {
       other is QqMusicRankingGroupLoad &&
           runtimeType == other.runtimeType &&
           groups == other.groups &&
+          omittedRankingCount == other.omittedRankingCount &&
           failure == other.failure;
 }
 
@@ -137,16 +144,20 @@ enum QqMusicRankingLoadFailure {
 class QqMusicRankingTrackPageLoad {
   final CatalogRankingSummary? ranking;
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedTrackCount;
   final List<LibraryTrackSummary> tracks;
   final QqMusicRankingLoadFailure? failure;
 
   const QqMusicRankingTrackPageLoad({
     this.ranking,
     required this.offset,
+    required this.nextOffset,
     required this.total,
     required this.hasMore,
+    required this.omittedTrackCount,
     required this.tracks,
     this.failure,
   });
@@ -155,8 +166,10 @@ class QqMusicRankingTrackPageLoad {
   int get hashCode =>
       ranking.hashCode ^
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedTrackCount.hashCode ^
       tracks.hashCode ^
       failure.hashCode;
 
@@ -167,8 +180,10 @@ class QqMusicRankingTrackPageLoad {
           runtimeType == other.runtimeType &&
           ranking == other.ranking &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedTrackCount == other.omittedTrackCount &&
           tracks == other.tracks &&
           failure == other.failure;
 }

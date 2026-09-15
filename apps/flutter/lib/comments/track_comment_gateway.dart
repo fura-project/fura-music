@@ -34,16 +34,22 @@ enum TrackCommentFailure {
 class TrackCommentPageResult {
   const TrackCommentPageResult({
     this.offset = 0,
+    this.nextOffset = 0,
     this.total = 0,
     this.hasMore = false,
+    this.omittedHotCommentCount = 0,
+    this.omittedLatestCommentCount = 0,
     this.hotComments = const [],
     this.latestComments = const [],
     this.failure,
   });
 
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedHotCommentCount;
+  final int omittedLatestCommentCount;
   final List<TrackCommentSummary> hotComments;
   final List<TrackCommentSummary> latestComments;
   final TrackCommentFailure? failure;
@@ -127,8 +133,11 @@ TrackCommentPageResult mapBridgeTrackCommentPage(
   final failure = result.failure;
   if (failure != null) {
     if (result.offset != 0 ||
+        result.nextOffset != 0 ||
         result.total != 0 ||
         result.hasMore ||
+        result.omittedHotCommentCount != 0 ||
+        result.omittedLatestCommentCount != 0 ||
         result.hotComments.isNotEmpty ||
         result.latestComments.isNotEmpty) {
       return const TrackCommentPageResult(
@@ -139,12 +148,20 @@ TrackCommentPageResult mapBridgeTrackCommentPage(
       failure: mapBridgeTrackCommentFailure(failure),
     );
   }
-  final pageEnd = result.offset + result.latestComments.length;
   if (result.offset < 0 ||
+      result.nextOffset < result.offset ||
       result.total < 0 ||
-      pageEnd > result.total ||
-      (result.offset > 0 && result.hotComments.isNotEmpty) ||
-      (result.hasMore && pageEnd >= result.total)) {
+      result.nextOffset > result.total ||
+      result.omittedHotCommentCount < 0 ||
+      result.omittedLatestCommentCount < 0 ||
+      result.latestComments.length + result.omittedLatestCommentCount >
+          result.nextOffset - result.offset ||
+      (result.offset > 0 &&
+          (result.hotComments.isNotEmpty ||
+              result.omittedHotCommentCount != 0)) ||
+      (result.hasMore &&
+          (result.nextOffset <= result.offset ||
+              result.nextOffset >= result.total))) {
     return const TrackCommentPageResult(
       failure: TrackCommentFailure.invalidResponse,
     );
@@ -158,8 +175,11 @@ TrackCommentPageResult mapBridgeTrackCommentPage(
   }
   return TrackCommentPageResult(
     offset: result.offset,
+    nextOffset: result.nextOffset,
     total: result.total,
     hasMore: result.hasMore,
+    omittedHotCommentCount: result.omittedHotCommentCount,
+    omittedLatestCommentCount: result.omittedLatestCommentCount,
     hotComments: hotComments,
     latestComments: latestComments,
   );

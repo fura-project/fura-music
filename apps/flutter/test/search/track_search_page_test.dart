@@ -340,6 +340,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('keeps valid Track Search rows beside a partial-result notice', (
+    tester,
+  ) async {
+    const track = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:partial-search',
+      title: 'Visible partial search track',
+      artistNames: ['Visible artist'],
+    );
+    final playback = QueuePlaybackController(
+      TestPlaybackQueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TrackSearchPage(
+          gateway: const _ResultSearchGateway(
+            TrackSearchPageResult(
+              page: 1,
+              total: 2,
+              omittedItemCount: 1,
+              items: [TrackSearchItem(track: track)],
+            ),
+          ),
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      'partial',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Visible partial search track'), findsOneWidget);
+    expect(find.textContaining('1 unsafe item was skipped'), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-search-error')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('typing overlays debounced provider-backed suggestions', (
     tester,
   ) async {

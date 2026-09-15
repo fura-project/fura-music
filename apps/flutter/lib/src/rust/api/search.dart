@@ -103,6 +103,7 @@ class QqMusicAlbumSearchPageLoad {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedAlbumCount;
   final List<CatalogAlbumSummary> albums;
   final QqMusicAlbumSearchPageLoadFailure? failure;
 
@@ -110,6 +111,7 @@ class QqMusicAlbumSearchPageLoad {
     required this.page,
     required this.total,
     required this.hasMore,
+    required this.omittedAlbumCount,
     required this.albums,
     this.failure,
   });
@@ -119,6 +121,7 @@ class QqMusicAlbumSearchPageLoad {
       page.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedAlbumCount.hashCode ^
       albums.hashCode ^
       failure.hashCode;
 
@@ -130,6 +133,7 @@ class QqMusicAlbumSearchPageLoad {
           page == other.page &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedAlbumCount == other.omittedAlbumCount &&
           albums == other.albums &&
           failure == other.failure;
 }
@@ -147,6 +151,7 @@ class QqMusicArtistSearchPageLoad {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedArtistCount;
   final List<CatalogArtistSummary> artists;
   final QqMusicArtistSearchPageLoadFailure? failure;
 
@@ -154,6 +159,7 @@ class QqMusicArtistSearchPageLoad {
     required this.page,
     required this.total,
     required this.hasMore,
+    required this.omittedArtistCount,
     required this.artists,
     this.failure,
   });
@@ -163,6 +169,7 @@ class QqMusicArtistSearchPageLoad {
       page.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedArtistCount.hashCode ^
       artists.hashCode ^
       failure.hashCode;
 
@@ -174,6 +181,7 @@ class QqMusicArtistSearchPageLoad {
           page == other.page &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedArtistCount == other.omittedArtistCount &&
           artists == other.artists &&
           failure == other.failure;
 }
@@ -191,6 +199,7 @@ class QqMusicPlaylistSearchPageLoad {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedPlaylistCount;
   final List<LibraryPlaylistSummary> playlists;
   final QqMusicPlaylistSearchPageLoadFailure? failure;
 
@@ -198,6 +207,7 @@ class QqMusicPlaylistSearchPageLoad {
     required this.page,
     required this.total,
     required this.hasMore,
+    required this.omittedPlaylistCount,
     required this.playlists,
     this.failure,
   });
@@ -207,6 +217,7 @@ class QqMusicPlaylistSearchPageLoad {
       page.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedPlaylistCount.hashCode ^
       playlists.hashCode ^
       failure.hashCode;
 
@@ -218,6 +229,7 @@ class QqMusicPlaylistSearchPageLoad {
           page == other.page &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedPlaylistCount == other.omittedPlaylistCount &&
           playlists == other.playlists &&
           failure == other.failure;
 }
@@ -259,6 +271,7 @@ class QqMusicTrackSearchPageLoad {
   final int page;
   final int total;
   final bool hasMore;
+  final int omittedItemCount;
   final List<QqMusicTrackSearchItem> items;
   final QqMusicTrackSearchPageLoadFailure? failure;
 
@@ -266,6 +279,7 @@ class QqMusicTrackSearchPageLoad {
     required this.page,
     required this.total,
     required this.hasMore,
+    required this.omittedItemCount,
     required this.items,
     this.failure,
   });
@@ -275,6 +289,7 @@ class QqMusicTrackSearchPageLoad {
       page.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedItemCount.hashCode ^
       items.hashCode ^
       failure.hashCode;
 
@@ -286,6 +301,7 @@ class QqMusicTrackSearchPageLoad {
           page == other.page &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedItemCount == other.omittedItemCount &&
           items == other.items &&
           failure == other.failure;
 }

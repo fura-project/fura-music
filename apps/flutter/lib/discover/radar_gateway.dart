@@ -21,12 +21,14 @@ class RadarTrackPageResult {
     this.page = 0,
     this.hasMore = false,
     this.tracks = const [],
+    this.omittedTrackCount = 0,
     this.failure,
   });
 
   final int page;
   final bool hasMore;
   final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
   final RadarFailure? failure;
 }
 
@@ -137,12 +139,19 @@ RadarTrackPageResult mapBridgeRadarTrackPage(
 ) {
   final failure = result.failure;
   if (failure != null) {
-    if (result.page != 0 || result.hasMore || result.tracks.isNotEmpty) {
+    if (result.page != 0 ||
+        result.hasMore ||
+        result.tracks.isNotEmpty ||
+        result.omittedTrackCount != 0) {
       return const RadarTrackPageResult(failure: RadarFailure.invalidResponse);
     }
     return RadarTrackPageResult(failure: mapBridgeRadarFailure(failure));
   }
-  if (result.page <= 0 || (result.hasMore && result.tracks.isEmpty)) {
+  if (result.page <= 0 ||
+      result.omittedTrackCount < 0 ||
+      (result.hasMore &&
+          result.tracks.isEmpty &&
+          result.omittedTrackCount == 0)) {
     return const RadarTrackPageResult(failure: RadarFailure.invalidResponse);
   }
 
@@ -158,6 +167,7 @@ RadarTrackPageResult mapBridgeRadarTrackPage(
     page: result.page,
     hasMore: result.hasMore,
     tracks: List.unmodifiable(tracks),
+    omittedTrackCount: result.omittedTrackCount,
   );
 }
 

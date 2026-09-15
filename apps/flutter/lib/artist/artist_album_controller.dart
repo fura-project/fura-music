@@ -22,6 +22,8 @@ class ArtistAlbumController extends ChangeNotifier {
   int _total = 0;
   int _nextOffset = 0;
   bool _hasMore = false;
+  int _omittedAlbumCount = 0;
+  int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   bool _hasLoaded = false;
   ArtistAlbumPageLoadOperation? _operation;
@@ -36,6 +38,8 @@ class ArtistAlbumController extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasLoaded => _hasLoaded;
+  int get omittedAlbumCount => _omittedAlbumCount;
+  int get partialResultRevision => _partialResultRevision;
   bool get canRetry =>
       _stage == ArtistAlbumStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
@@ -62,6 +66,7 @@ class ArtistAlbumController extends ChangeNotifier {
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
+    _omittedAlbumCount = 0;
     _isLoadingMore = false;
     _hasLoaded = false;
     _stage = ArtistAlbumStage.loading;
@@ -75,9 +80,11 @@ class ArtistAlbumController extends ChangeNotifier {
     if (_validPage(result, expectedOffset: 0)) {
       _albums = List.unmodifiable(result.albums);
       _total = result.total;
-      _nextOffset = result.albums.length;
+      _nextOffset = result.albums.length + result.omittedAlbumCount;
       _hasMore = result.hasMore;
-      _stage = _albums.isEmpty
+      _omittedAlbumCount = result.omittedAlbumCount;
+      if (result.omittedAlbumCount > 0) _partialResultRevision += 1;
+      _stage = _albums.isEmpty && _omittedAlbumCount == 0
           ? ArtistAlbumStage.empty
           : ArtistAlbumStage.content;
     } else {
@@ -115,8 +122,11 @@ class ArtistAlbumController extends ChangeNotifier {
       );
       _albums = List.unmodifiable([..._albums, ...additions]);
       _total = result.total;
-      _nextOffset = expectedOffset + result.albums.length;
+      _nextOffset =
+          expectedOffset + result.albums.length + result.omittedAlbumCount;
       _hasMore = result.hasMore;
+      _omittedAlbumCount += result.omittedAlbumCount;
+      if (result.omittedAlbumCount > 0) _partialResultRevision += 1;
     } else {
       _appendFailure = result.failure ?? ArtistAlbumFailure.invalidResponse;
     }
@@ -137,8 +147,12 @@ class ArtistAlbumController extends ChangeNotifier {
   }) =>
       result.failure == null &&
       result.offset == expectedOffset &&
-      result.total >= expectedOffset + result.albums.length &&
-      (!result.hasMore || result.albums.isNotEmpty);
+      result.omittedAlbumCount >= 0 &&
+      result.total >=
+          expectedOffset + result.albums.length + result.omittedAlbumCount &&
+      (!result.hasMore ||
+          result.albums.isNotEmpty ||
+          result.omittedAlbumCount > 0);
 
   bool _isRetryable(ArtistAlbumFailure? failure) =>
       failure == ArtistAlbumFailure.coreUnavailable ||

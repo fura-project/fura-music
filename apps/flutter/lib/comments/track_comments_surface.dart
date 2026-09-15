@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/adaptive_side_sheet.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/comments/track_comment_controller.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -212,6 +213,8 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
       key: const ValueKey('track-comments-content'),
       hotComments: _controller.hotComments,
       latestComments: _controller.latestComments,
+      omittedCommentCount: _controller.omittedCommentCount,
+      partialResultRevision: _controller.partialResultRevision,
       isLoadingMore: _controller.isLoadingMore,
       appendFailure: _controller.appendFailure,
       canLoadMore: _controller.canLoadMore,
@@ -230,6 +233,8 @@ class _CommentList extends StatelessWidget {
   const _CommentList({
     required this.hotComments,
     required this.latestComments,
+    required this.omittedCommentCount,
+    required this.partialResultRevision,
     required this.isLoadingMore,
     required this.appendFailure,
     required this.canLoadMore,
@@ -242,6 +247,8 @@ class _CommentList extends StatelessWidget {
 
   final List<TrackCommentSummary> hotComments;
   final List<TrackCommentSummary> latestComments;
+  final int omittedCommentCount;
+  final int partialResultRevision;
   final bool isLoadingMore;
   final TrackCommentFailure? appendFailure;
   final bool canLoadMore;
@@ -253,6 +260,14 @@ class _CommentList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[];
+    if (omittedCommentCount > 0) {
+      children.add(
+        PartialResultsNotice(
+          omittedCount: omittedCommentCount,
+          resultRevision: partialResultRevision,
+        ),
+      );
+    }
     if (hotComments.isNotEmpty) {
       children.add(_SectionHeading(title: context.l10n.commentsHot));
       children.addAll(

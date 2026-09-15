@@ -65,10 +65,16 @@ void main() {
         failure: bridge.QqMusicLyricLoadFailure.network,
       ),
       const bridge.QqMusicLyricLoad(
-        lyrics: bridge.QqMusicSynchronizedLyrics(lines: []),
+        lyrics: bridge.QqMusicSynchronizedLyrics(
+          omittedLineCount: 0,
+
+          lines: [],
+        ),
       ),
       const bridge.QqMusicLyricLoad(
         lyrics: bridge.QqMusicSynchronizedLyrics(
+          omittedLineCount: 0,
+
           lines: [
             bridge.QqMusicSynchronizedLyricLine(
               text: '',
@@ -81,6 +87,8 @@ void main() {
       ),
       const bridge.QqMusicLyricLoad(
         lyrics: bridge.QqMusicSynchronizedLyrics(
+          omittedLineCount: 0,
+
           lines: [
             bridge.QqMusicSynchronizedLyricLine(
               text: '',
@@ -93,6 +101,8 @@ void main() {
       ),
       const bridge.QqMusicLyricLoad(
         lyrics: bridge.QqMusicSynchronizedLyrics(
+          omittedLineCount: 0,
+
           lines: [
             bridge.QqMusicSynchronizedLyricLine(
               text: '',
@@ -106,6 +116,8 @@ void main() {
       ),
       const bridge.QqMusicLyricLoad(
         lyrics: bridge.QqMusicSynchronizedLyrics(
+          omittedLineCount: 0,
+
           lines: [
             bridge.QqMusicSynchronizedLyricLine(
               text: '',
@@ -234,6 +246,8 @@ void main() {
 
 bridge.QqMusicLyricLoad _validBridgeLoad() => const bridge.QqMusicLyricLoad(
   lyrics: bridge.QqMusicSynchronizedLyrics(
+    omittedLineCount: 0,
+
     lines: [
       bridge.QqMusicSynchronizedLyricLine(
         text: 'private original',

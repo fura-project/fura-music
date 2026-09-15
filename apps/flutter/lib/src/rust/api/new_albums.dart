@@ -60,16 +60,20 @@ class CatalogNewAlbumRelease {
 class QqMusicNewAlbumPageLoad {
   final QqMusicNewAlbumRegion region;
   final int offset;
+  final int nextOffset;
   final int total;
   final bool hasMore;
+  final int omittedReleaseCount;
   final List<CatalogNewAlbumRelease> releases;
   final QqMusicNewAlbumPageLoadFailure? failure;
 
   const QqMusicNewAlbumPageLoad({
     required this.region,
     required this.offset,
+    required this.nextOffset,
     required this.total,
     required this.hasMore,
+    required this.omittedReleaseCount,
     required this.releases,
     this.failure,
   });
@@ -78,8 +82,10 @@ class QqMusicNewAlbumPageLoad {
   int get hashCode =>
       region.hashCode ^
       offset.hashCode ^
+      nextOffset.hashCode ^
       total.hashCode ^
       hasMore.hashCode ^
+      omittedReleaseCount.hashCode ^
       releases.hashCode ^
       failure.hashCode;
 
@@ -90,8 +96,10 @@ class QqMusicNewAlbumPageLoad {
           runtimeType == other.runtimeType &&
           region == other.region &&
           offset == other.offset &&
+          nextOffset == other.nextOffset &&
           total == other.total &&
           hasMore == other.hasMore &&
+          omittedReleaseCount == other.omittedReleaseCount &&
           releases == other.releases &&
           failure == other.failure;
 }

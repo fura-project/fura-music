@@ -3151,6 +3151,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonLocateCurrentTrack => '定位当前歌曲';
+
+  @override
+  String partialResultsNotice(int count) {
+    return '部分内容无法安全显示，已跳过 $count 项，其余结果不受影响。';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).

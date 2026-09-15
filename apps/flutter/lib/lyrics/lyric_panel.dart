@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -287,52 +288,73 @@ class _LyricContentState extends State<_LyricContent> {
       }
     }
 
-    return Stack(
+    return Column(
       children: [
-        NotificationListener<UserScrollNotification>(
-          onNotification: _onUserScroll,
-          child: ListView.builder(
-            key: const ValueKey('lyrics-line-list'),
-            controller: _scrollController,
+        if (lyrics.omittedLineCount > 0)
+          Padding(
             padding: EdgeInsets.fromLTRB(
               widget.immersive ? 20 : 16,
-              widget.immersive ? 12 : 20,
+              0,
               widget.immersive ? 20 : 16,
-              _following ? 20 : 88,
+              8,
             ),
-            itemCount: lines.length,
-            itemBuilder: (context, index) {
-              return KeyedSubtree(
-                key: _lineKey(index),
-                child: _LyricLine(
-                  key: ValueKey('lyrics-line-$index'),
-                  line: lines[index],
-                  lineIndex: index,
-                  active: index == activeLineIndex,
-                  immersive: widget.immersive,
-                  positionMs: widget.controller.positionMs,
-                  onSeek: widget.onSeek == null
-                      ? null
-                      : () => unawaited(widget.onSeek!(lines[index].startMs)),
+            child: PartialResultsNotice(
+              omittedCount: lyrics.omittedLineCount,
+              resultRevision: widget.controller.partialResultRevision,
+            ),
+          ),
+        Expanded(
+          child: Stack(
+            children: [
+              NotificationListener<UserScrollNotification>(
+                onNotification: _onUserScroll,
+                child: ListView.builder(
+                  key: const ValueKey('lyrics-line-list'),
+                  controller: _scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    widget.immersive ? 20 : 16,
+                    widget.immersive ? 12 : 20,
+                    widget.immersive ? 20 : 16,
+                    _following ? 20 : 88,
+                  ),
+                  itemCount: lines.length,
+                  itemBuilder: (context, index) {
+                    return KeyedSubtree(
+                      key: _lineKey(index),
+                      child: _LyricLine(
+                        key: ValueKey('lyrics-line-$index'),
+                        line: lines[index],
+                        lineIndex: index,
+                        active: index == activeLineIndex,
+                        immersive: widget.immersive,
+                        positionMs: widget.controller.positionMs,
+                        onSeek: widget.onSeek == null
+                            ? null
+                            : () => unawaited(
+                                widget.onSeek!(lines[index].startMs),
+                              ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+              if (!_following)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 16,
+                  child: Center(
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('lyrics-resume-following'),
+                      onPressed: _resumeFollowing,
+                      icon: const Icon(Icons.my_location_rounded),
+                      label: Text(context.l10n.lyricsFollowCurrent),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-        if (!_following)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 16,
-            child: Center(
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('lyrics-resume-following'),
-                onPressed: _resumeFollowing,
-                icon: const Icon(Icons.my_location_rounded),
-                label: Text(context.l10n.lyricsFollowCurrent),
-              ),
-            ),
-          ),
       ],
     );
   }

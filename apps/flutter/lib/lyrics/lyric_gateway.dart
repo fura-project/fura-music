@@ -61,15 +61,19 @@ class SynchronizedLyricLine {
 }
 
 class SynchronizedLyrics {
-  SynchronizedLyrics(List<SynchronizedLyricLine> lines)
-    : lines = List.unmodifiable(lines);
+  SynchronizedLyrics(
+    List<SynchronizedLyricLine> lines, {
+    this.omittedLineCount = 0,
+  }) : lines = List.unmodifiable(lines);
 
   final List<SynchronizedLyricLine> lines;
+  final int omittedLineCount;
   bool get hasWordTiming => lines.any((line) => line.segments.isNotEmpty);
 
   @override
   String toString() =>
       'SynchronizedLyrics(lineCount: ${lines.length}, '
+      'omittedLineCount: $omittedLineCount, '
       'hasWordTiming: $hasWordTiming)';
 }
 
@@ -193,7 +197,9 @@ LyricLoadResult mapBridgeLyricLoad(bridge.QqMusicLyricLoad result) {
           : LyricFailure.invalidResponse,
     );
   }
-  if (bridgeLyrics == null || bridgeLyrics.lines.isEmpty) {
+  if (bridgeLyrics == null ||
+      bridgeLyrics.lines.isEmpty ||
+      bridgeLyrics.omittedLineCount < 0) {
     return const LyricLoadResult(failure: LyricFailure.invalidResponse);
   }
 
@@ -229,7 +235,12 @@ LyricLoadResult mapBridgeLyricLoad(bridge.QqMusicLyricLoad result) {
     );
   }
 
-  return LyricLoadResult(lyrics: SynchronizedLyrics(List.unmodifiable(lines)));
+  return LyricLoadResult(
+    lyrics: SynchronizedLyrics(
+      List.unmodifiable(lines),
+      omittedLineCount: bridgeLyrics.omittedLineCount,
+    ),
+  );
 }
 
 bool _validTiming(int startMs, int durationMs) {
