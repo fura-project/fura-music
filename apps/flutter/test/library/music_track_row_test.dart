@@ -271,7 +271,135 @@ void main() {
 
     expect(controller.offset, greaterThan(1000));
     expect(find.byKey(const ValueKey('locator-row-20')), findsOneWidget);
-    expect(locator, findsNothing);
+    expect(locator, findsOneWidget);
+    expect(locator.hitTestable(), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'locator stays semantics-safe through metrics and owner changes',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(390, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _locatorHarness(
+          controller: controller,
+          currentIndex: 20,
+          desktop: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final locator = find.byKey(const ValueKey('locate-current-track'));
+      final locatorSemantics = find.semantics.byPredicate(
+        (node) => node.tooltip == 'Locate current track',
+      );
+      expect(locator, findsOneWidget);
+      expect(locatorSemantics, findsOne);
+      final stableLocatorElement = tester.element(locator);
+
+      await tester.tap(locator);
+      await tester.pump(const Duration(milliseconds: 12));
+      expect(tester.takeException(), isNull);
+
+      tester.view.physicalSize = const Size(520, 300);
+      await tester.pumpWidget(
+        _locatorHarness(
+          controller: controller,
+          currentIndex: 5,
+          desktop: true,
+          leadingExtent: 34,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 8));
+      expect(tester.takeException(), isNull);
+
+      controller.jumpTo(controller.position.minScrollExtent);
+      tester.view.physicalSize = const Size(320, 500);
+      await tester.pumpWidget(
+        _locatorHarness(
+          controller: controller,
+          currentIndex: 0,
+          desktop: false,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 8));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(locator, findsOneWidget);
+      expect(tester.element(locator), same(stableLocatorElement));
+      expect(locator.hitTestable(), findsNothing);
+      expect(locatorSemantics, findsNothing);
+
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('locator remains hidden while any part of its row is visible', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(390, 300);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _locatorHarness(controller: controller, currentIndex: 5, desktop: false),
+    );
+    await tester.pumpAndSettle();
+    final locator = find.byKey(const ValueKey('locate-current-track'));
+    final locatorSemantics = find.semantics.byPredicate(
+      (node) => node.tooltip == 'Locate current track',
+    );
+
+    controller.jumpTo(26);
+    await tester.pumpAndSettle();
+    expect(locator, findsOneWidget);
+    expect(locator.hitTestable(), findsNothing);
+    expect(locatorSemantics, findsNothing);
+
+    controller.jumpTo(25);
+    await tester.pumpAndSettle();
+    expect(locator, findsOneWidget);
+    expect(locatorSemantics, findsOne);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
 }
+
+Widget _locatorHarness({
+  required ScrollController controller,
+  required int? currentIndex,
+  required bool desktop,
+  double leadingExtent = 0,
+}) => MaterialApp(
+  home: Scaffold(
+    body: MusicTrackLocatorOverlay(
+      controller: controller,
+      currentIndex: currentIndex,
+      desktop: desktop,
+      leadingExtent: leadingExtent,
+      itemExtent: musicTrackRowExtent(desktop: desktop),
+      child: ListView.builder(
+        controller: controller,
+        itemExtent: musicTrackRowExtent(desktop: desktop),
+        itemCount: 40,
+        itemBuilder: (context, index) => SizedBox(
+          key: ValueKey('locator-row-$index'),
+          child: Text('Track ${index + 1}'),
+        ),
+      ),
+    ),
+  ),
+);

@@ -755,6 +755,10 @@ class _SearchResultsState extends State<_SearchResults> {
                 widget.current,
               ),
               desktop: widget.desktop,
+              itemExtent: musicTrackRowExtent(
+                desktop: widget.desktop,
+                includesSeparator: false,
+              ),
               child: NotificationListener<ScrollNotification>(
                 onNotification: _clearHoverOnScroll,
                 child: ListView.builder(

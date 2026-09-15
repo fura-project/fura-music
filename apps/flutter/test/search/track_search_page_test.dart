@@ -244,6 +244,13 @@ void main() {
     expect(find.text('Search artist'), findsOneWidget);
     expect(find.text('Search album'), findsOneWidget);
     expect(find.text(_en.searchResultCount(1, 'search words')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(TrackSearchPage),
+        matching: find.byKey(const ValueKey('locate-current-track')),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('track-search-more-0')));
     await tester.pumpAndSettle();

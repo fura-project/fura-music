@@ -11,6 +11,17 @@ typedef MusicTrackRowContentBuilder = Widget Function(
   bool hovered,
 );
 
+const double musicTrackDesktopRowExtent = 56;
+const double musicTrackCompactRowExtent = 64;
+const double musicTrackRowSeparatorExtent = 1;
+
+double musicTrackRowExtent({
+  required bool desktop,
+  bool includesSeparator = true,
+}) =>
+    (desktop ? musicTrackDesktopRowExtent : musicTrackCompactRowExtent) +
+    (includesSeparator ? musicTrackRowSeparatorExtent : 0);
+
 enum MusicTrackAction { play, addToQueue, openAlbum, openArtist }
 
 Future<void> openMusicTrackArtists({
@@ -253,7 +264,9 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: widget.desktop ? 56 : 64,
+                  minHeight: widget.desktop
+                      ? musicTrackDesktopRowExtent
+                      : musicTrackCompactRowExtent,
                 ),
                 child: Padding(
                   padding: EdgeInsets.symmetric(
@@ -672,6 +685,7 @@ class MusicTrackLocatorOverlay extends StatefulWidget {
     required this.desktop,
     required this.child,
     this.leadingExtent = 0,
+    this.itemExtent,
     this.bottomInset,
     this.buttonKey = const ValueKey('locate-current-track'),
     super.key,
@@ -682,6 +696,7 @@ class MusicTrackLocatorOverlay extends StatefulWidget {
   final bool desktop;
   final Widget child;
   final double leadingExtent;
+  final double? itemExtent;
   final double? bottomInset;
   final Key buttonKey;
 
@@ -692,47 +707,56 @@ class MusicTrackLocatorOverlay extends StatefulWidget {
 
 class _MusicTrackLocatorOverlayState extends State<MusicTrackLocatorOverlay> {
   bool _visible = false;
+  bool _visibilityUpdateScheduled = false;
 
-  double get _itemExtent => widget.desktop ? 57 : 65;
+  double get _itemExtent =>
+      widget.itemExtent ?? musicTrackRowExtent(desktop: widget.desktop);
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_updateVisibility);
-    _scheduleUpdate();
+    widget.controller.addListener(_requestVisibilityUpdate);
+    _requestVisibilityUpdate();
   }
 
   @override
   void didUpdateWidget(MusicTrackLocatorOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_updateVisibility);
-      widget.controller.addListener(_updateVisibility);
+      oldWidget.controller.removeListener(_requestVisibilityUpdate);
+      widget.controller.addListener(_requestVisibilityUpdate);
     }
-    _scheduleUpdate();
+    _requestVisibilityUpdate();
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_updateVisibility);
+    widget.controller.removeListener(_requestVisibilityUpdate);
     super.dispose();
   }
 
-  void _scheduleUpdate() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) _updateVisibility();
-  });
+  void _requestVisibilityUpdate() {
+    if (_visibilityUpdateScheduled) return;
+    _visibilityUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _visibilityUpdateScheduled = false;
+      if (mounted) _updateVisibilityAfterLayout();
+    });
+  }
 
-  void _updateVisibility() {
+  void _updateVisibilityAfterLayout() {
     final index = widget.currentIndex;
     final controller = widget.controller;
     var visible = false;
-    if (index != null && controller.hasClients) {
+    if (index != null && controller.positions.length == 1) {
       final position = controller.position;
-      final rowStart = widget.leadingExtent + (index * _itemExtent);
-      final rowEnd = rowStart + _itemExtent;
-      final viewportStart = position.pixels;
-      final viewportEnd = viewportStart + position.viewportDimension;
-      visible = rowEnd < viewportStart || rowStart > viewportEnd;
+      if (position.hasContentDimensions) {
+        final rowStart = widget.leadingExtent + (index * _itemExtent);
+        final rowEnd = rowStart + _itemExtent;
+        final viewportStart = position.pixels;
+        final viewportEnd = viewportStart + position.viewportDimension;
+        visible = rowEnd <= viewportStart || rowStart >= viewportEnd;
+      }
     }
     if (_visible != visible) setState(() => _visible = visible);
   }
@@ -740,8 +764,9 @@ class _MusicTrackLocatorOverlayState extends State<MusicTrackLocatorOverlay> {
   void _locate() {
     final index = widget.currentIndex;
     final controller = widget.controller;
-    if (index == null || !controller.hasClients) return;
+    if (index == null || controller.positions.length != 1) return;
     final position = controller.position;
+    if (!position.hasContentDimensions) return;
     final target =
         widget.leadingExtent +
         (index * _itemExtent) -
@@ -766,33 +791,46 @@ class _MusicTrackLocatorOverlayState extends State<MusicTrackLocatorOverlay> {
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
     children: [
-      widget.child,
+      NotificationListener<ScrollMetricsNotification>(
+        onNotification: (_) {
+          _requestVisibilityUpdate();
+          return false;
+        },
+        child: widget.child,
+      ),
       PositionedDirectional(
         end: 16,
         bottom: widget.bottomInset ?? (widget.desktop ? 16 : 84),
-        child: AnimatedSwitcher(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.82, end: 1).animate(animation),
-              child: child,
-            ),
-          ),
-          child: !_visible
-              ? const SizedBox.shrink()
-              : IconButton.filledTonal(
+        child: IgnorePointer(
+          ignoring: !_visible,
+          child: ExcludeSemantics(
+            excluding: !_visible,
+            child: AnimatedOpacity(
+              opacity: _visible ? 1 : 0,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              child: AnimatedScale(
+                scale: _visible ? 1 : 0.82,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                curve: Easing.standard,
+                child: IconButton.filledTonal(
                   key: widget.buttonKey,
-                  tooltip: context.l10n.commonLocateCurrentTrack,
-                  onPressed: _locate,
+                  tooltip: _visible
+                      ? context.l10n.commonLocateCurrentTrack
+                      : null,
+                  onPressed: _visible ? _locate : null,
                   constraints: const BoxConstraints.tightFor(
                     width: 52,
                     height: 52,
                   ),
                   icon: const Icon(Icons.my_location_rounded),
                 ),
+              ),
+            ),
+          ),
         ),
       ),
     ],

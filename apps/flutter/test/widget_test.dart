@@ -5875,6 +5875,13 @@ void main() {
     expect(find.byKey(const ValueKey('playlist-track-row-1')), findsOneWidget);
     expect(find.text('Shell track'), findsOneWidget);
     expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('embedded-playlist-detail')),
+        matching: find.byKey(const ValueKey('locate-current-track')),
+      ),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('authenticated-primary-shell')),
       findsOneWidget,
     );
@@ -7559,6 +7566,13 @@ void main() {
       );
     }
     await _selectLibrarySection(tester, 'liked-songs');
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('liked-songs-page')),
+        matching: find.byKey(const ValueKey('locate-current-track')),
+      ),
+      findsOneWidget,
+    );
     final currentRowSemantics = tester
         .getSemantics(find.byKey(const ValueKey('liked-track-row-2')))
         .getSemanticsData();
