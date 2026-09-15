@@ -185,6 +185,20 @@ Catalog/Account Providers expose data plus explicit capabilities such as authent
 
 Provider code never returns Flutter widgets or presentation-specific models.
 
+Every implemented provider response crosses a strict outer-container boundary:
+HTTP/body limits, business envelopes, required roots, totals and cursor
+progression fail closed. Inside a validated collection only, a malformed row
+may be omitted when the remaining canonical identities and raw positions are
+still provable. Endpoint-specific Domain pages carry an omission count and raw
+continuation; Bridge DTOs preserve those facts, while Flutter indexes only the
+validated visible list and presents omission through one shared localized
+inline notice. Lyrics apply the same principle per original/auxiliary line.
+Credentials, authentication/security challenges, authorization-bearing media,
+confirmed writes and canonical singleton identity never use partial success.
+This is a cross-layer invariant, not a generic response wrapper; the complete
+classification is recorded in
+[HD-032](docs/research/upstream-response-integrity-audit.md).
+
 The first catalog capability is provider-neutral paged Track search. `QQMusicClient` sends one bounded anonymous `music.search.SearchCgiService/DoSearchForQQMusicDesktop` request directly to QQ Music, validates global/module codes, exact requested-page metadata, continuation, total, and the minimum Track/artist/album identity and display fields, and caps query, page size, response bytes, and timeout. Its request and response diagnostics retain neither query nor result content. `QQMusicProvider` maps these raw summaries into the same opaque provider-scoped `TrackSummary` consumed by playlist playback and does not consult or mutate credential state; raw QQ response models stop at the client boundary.
 
 The Bridge exposes one single-use `QqMusicTrackSearchPageLoadHandle` with typed page/failure output and exact run/cancel/isActive lifecycle. The opaque handle redacts its retained query, and cancellation drops the losing Provider/network future. Flutter owns a short-lived query controller with first-page loading, empty, retryable error, pagination, append failure, replacement cancellation, stale-generation suppression, clear, and disposal states. The authenticated Library surface opens Search as a local adaptive page, preserves the existing queue/playback owner, and restores focus to the Search entry on return. Selecting a result replaces and starts the existing Rust-backed queue; adding a result delegates one push without parsing its opaque identity.

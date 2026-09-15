@@ -2,28 +2,33 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: IN_PROGRESS
+  state: HUMAN_REVIEW
   acceptance_milestone: HD-032
   active_workstream: UPSTREAM_RESPONSE_INTEGRITY
-  current_task: ENDPOINT_MATRIX_AND_PARTIAL_RESILIENCE
-  next_action: NETEASE_LIKED_PLAYLIST_ROW_ISOLATION
+  current_task: UPSTREAM_RESPONSE_INTEGRITY_MACHINE_COMPLETE
+  next_action: HUMAN_REAL_ACCOUNT_PARTIAL_RESPONSE_REVIEW
 ---
 
 # Current State
 
-- **2026-09-16 HD-032 activated:** starting HEAD is
-  `6703ac564eb571005fafdb6d3598a89b245bffe2` with a clean worktree. The complete
-  implemented QQ/NetEase capability surface and the committed KuGou Track
-  Search slice are classified in
+- **2026-09-16 HD-032 machine checkpoint:** from starting HEAD
+  `6703ac564eb571005fafdb6d3598a89b245bffe2`, all 69 implemented response
+  boundaries were classified and repaired at their actual risk boundary: 47
+  collection paths isolate malformed rows with explicit omission/raw
+  progression, 2 lyric documents are line-local, and 12 security plus 8
+  singleton paths remain strict. NetEase Liked/playlist good-bad-good order,
+  search, comments, lyrics/translation, optional presentation metadata and
+  raw-cursor progression have deterministic regressions. Domain and the
+  existing Bridge carry endpoint-specific omission fields; Flutter shows one
+  shared localized, semantics-safe inline notice without shifting visible-list
+  queue indexes. Six new Rust integrity tests and seven new Flutter tests were
+  added. Rust format, 577/577 tests (27 live/Human ignored), all-target Clippy,
+  Flutter localization/format/analyze, 625/625 tests, Linux Release and Android
+  ARM64 Release all pass. No live provider request or KuGou scope expansion was
+  made; its network gate remains closed. Commits are local and no push was
+  performed. Only real-account observation of naturally malformed
+  Liked/playlist/comment/lyric data remains `HUMAN_REVIEW`; full evidence is in
   [the upstream response integrity audit](docs/research/upstream-response-integrity-audit.md).
-  Baseline source inspection found typed-array and second-stage
-  `collect::<Result<Vec<_>, _>>()` amplification sites where a single malformed
-  collection row can still kill a valid page. Container, cursor, singleton,
-  media, auth and write boundaries remain strict. Implementation begins with
-  NetEase Liked/playlist raw-cursor preservation and explicit omissions, then
-  search/comments/lyrics, QQ collection parity, Bridge/Flutter propagation and
-  the required native gates. KuGou's HD-031 identity gate and closed network
-  budget remain unchanged. No push.
 
 - **2026-09-15 KuGou identity evidence gate:** the committed public Track Search
   remains the only implemented KuGou capability. A bounded legacy mobile detail

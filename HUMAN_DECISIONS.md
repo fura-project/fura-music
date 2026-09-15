@@ -508,3 +508,13 @@ coverage, Rust/Flutter gates and Linux/Android ARM64 Release builds; real-accoun
 liked/comment/lyric acceptance remains Human review. See
 [the endpoint audit](docs/research/upstream-response-integrity-audit.md). Logical
 commits remain local; no push is authorized.
+
+**Machine checkpoint:** Completed on 2026-09-16. The 69 implemented boundaries
+retain strict containers; all 47 collection classifications now preserve valid
+rows with explicit omission/raw progression where provable, both lyric
+documents are line-local, and the 12 security plus 8 singleton boundaries stay
+strict. Domain, Bridge and Flutter propagation, localized/accessibility-safe
+partial presentation, malformed fixtures, all Rust/Flutter tests and both
+required Release builds pass. No live provider request or KuGou expansion was
+made. Only naturally occurring real-account partial-response presentation
+remains Human review.

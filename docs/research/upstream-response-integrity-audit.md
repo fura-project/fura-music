@@ -1,7 +1,7 @@
 # Upstream response integrity audit (HD-032)
 
-Date: 2026-09-16  
-Starting HEAD: `6703ac564eb571005fafdb6d3598a89b245bffe2`  
+Date: 2026-09-16
+Starting HEAD: `6703ac564eb571005fafdb6d3598a89b245bffe2`
 Scope: all currently implemented QQ Music and NetEase capabilities, plus the
 already committed KuGou Track Search slice. This is an offline, source-backed
 matrix; “live” means previously recorded protocol evidence, not a new request.
@@ -45,9 +45,11 @@ cross-provider substitution, credential relaxation or mutation ambiguity.
 
 The `Class` column lists the payload rule; every row also carries the strict
 container rule described above. “Partial” in the desired column means valid
-rows plus an explicit omitted count, never a silent shorter list.
+rows plus an explicit omitted count, never a silent shorter list. The final
+column records the baseline disposition that drove this audit; the machine
+checkpoint below records the completed outcome.
 
-| Provider | Capability | Client method | Provider mapper | Bridge surface | Flutter consumer | Class | Container / row / optional semantics | Pagination | Current → desired failure granularity | Fixture / live evidence | Status |
+| Provider | Capability | Client method | Provider mapper | Bridge surface | Flutter consumer | Class | Container / row / optional semantics | Pagination | Current → desired failure granularity | Fixture / live evidence | Baseline disposition |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | QQ | Track search | `search_tracks` | `TrackSearchProvider::search_tracks` | `api/search.rs` | Search | `TOLERANT_COLLECTION` | Exact envelope/total; omit malformed Track; drop untrusted artwork/optional Album | page + raw row count | page-wide → partial | synthetic + recorded anonymous | audit target |
 | QQ | Artist search | `search_artists` | `ArtistSearchProvider` | `api/search.rs` | Search | `TOLERANT_COLLECTION` | Exact envelope/total; omit malformed Artist; artwork optional | page + raw row count | page-wide → partial | synthetic + recorded anonymous | audit target |
@@ -155,3 +157,53 @@ rows plus an explicit omitted count, never a silent shorter list.
 6. Run the malformed corpus, robustness tests, full Rust/Flutter gates and both
    native Release builds. No new live request is planned; KuGou networking stays
    closed.
+
+## Machine checkpoint
+
+Completed on 2026-09-16 from starting HEAD
+`6703ac564eb571005fafdb6d3598a89b245bffe2`.
+
+- The matrix contains 69 implemented response boundaries: 36 QQ Music, 32
+  NetEase and the one committed KuGou Track Search Core slice. All 69 retain a
+  strict outer container. The payload classifications are 47 tolerant
+  collections, 2 tolerant text documents, 12 strict security boundaries and 8
+  strict singleton boundaries.
+- All 47 collection-classified capability paths now either isolate malformed
+  rows or preserve their already row-tolerant behavior, expose omission at the
+  Domain/Bridge boundary applicable to the committed capability, and retain
+  raw progression. No collection-classified path remains intentionally
+  page-wide merely because one display row is malformed. The 20 security and
+  singleton paths remain intentionally fail-closed.
+- NetEase Liked and playlist detail have explicit `valid A + malformed + valid
+  B` regressions. Search, album/artist/favorite/discovery/ranking/library and
+  recommendation collections preserve valid canonical rows; optional artwork
+  or nested navigation context may disappear without inventing identity.
+- Comment hot/latest rows are isolated independently, raw latest-comment
+  progression is retained, and a malformed avatar degrades only the avatar.
+  Lyrics isolate malformed lines, keep original and translation failure
+  independent, and still reject an untrustworthy original document. Media,
+  authentication, credentials, writes, singleton identity and contradictory
+  cursor/container metadata remain strict.
+- Flutter maps the omission fields without deriving them from visible length.
+  A shared English/Simplified-Chinese inline notice appears only for an
+  explicit positive omission count, announces once per newly accepted partial
+  result, and leaves queue/current/context-menu indexes based on the validated
+  visible list. Paged controllers advance over visible plus omitted raw
+  positions.
+- Six wholly new Rust malformed-integrity tests were added and existing parser
+  fixtures were expanded for malformed positions, all-malformed input,
+  optional metadata and contradictory pagination. Seven new Flutter tests
+  cover raw-offset progression, shared localization/accessibility and partial
+  Liked, playlist, Search, comments and lyrics presentation.
+- Final offline gates: 33 Rust test targets with 577 passed, 0 failed and 27
+  explicitly ignored live/Human tests; strict Rust format and all-target Clippy
+  passed. Flutter localization generation, strict formatting, analysis and all
+  625 tests passed. Linux Release and Android ARM64 Release builds succeeded.
+- No live provider request, telemetry, raw response/body/content/identity log,
+  credential relaxation, cross-provider fallback, generic response envelope or
+  new KuGou capability was introduced. KuGou networking remains closed.
+
+Only Human observation of naturally malformed real-account Liked/playlist,
+comment and lyric responses remains. Machine evidence cannot manufacture that
+provider state, so the gate is `HUMAN_REVIEW` rather than a claim of live
+acceptance.
