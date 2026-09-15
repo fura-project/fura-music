@@ -1,15 +1,32 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: UI
-  state: AWAITING_HUMAN_REVIEW
-  acceptance_milestone: M1
-  active_workstream: M4_INTERACTION_POLISH
-  current_task: M4_INTERACTION_POLISH_MACHINE_COMPLETE
-  next_action: HUMAN_INTERACTION_AND_RAPID_RESIZE_REVIEW
+  work_domain: MIXED
+  state: IN_PROGRESS
+  acceptance_milestone: HD-031
+  active_workstream: KUGOU_PUBLIC_PROVIDER
+  current_task: KUGOU_TRACK_SEARCH_AND_IDENTITY
+  next_action: IMPLEMENT_BOUNDED_KUGOU_TRACK_SEARCH
 ---
 
 # Current State
+
+- **2026-09-15 HD-031 KuGou workstream activated:** the Human authorizes a
+  third static, public/read-first KuGou Provider and restores
+  `AUTONOMOUS_DEVELOPMENT / MIXED`. Starting HEAD is
+  `83a0b1fb3122cc87e91f1117f4e0e5a276a8cea0` with a clean working tree. Current
+  provenance audit confirms MakcRe/KuGouMusicApi at `4504b5d` is the common
+  wire implementation embedded by MoeKoeMusic (`a5a9801` gitlink) and
+  EchoMusic (`4504b5d` gitlink); the GPL clients count as separate product
+  integrations but not independent protocol sources. KugouMusic.NET at
+  `334516b` is an independent modern MIT cross-check. An unsigned, anonymous
+  HTTPS observation of the legacy public Track Search returned a valid bounded
+  page with `MixSongID`, `FileHash` and `Audioid`; the modern unsigned route
+  returned a non-success envelope. The next slice is an independently written,
+  bounded Rust search client and exact identity mapping. No third-party code or
+  service was run, no account/VIP/write action occurred, and no push is
+  authorized. Existing UI review candidates remain intact and pending rather
+  than accepted or discarded.
 
 - **2026-09-15 M4 interaction-polish checkpoint:** Recent Plays' outgoing
   collapsed header now re-evaluates live width during `AnimatedSwitcher`

@@ -11,7 +11,7 @@ QQ Music users should have an open, modern, cross-platform client whose core mus
 
 ## Product positioning
 
-`fura music` remains a QQ Music-first client, not a broad multi-service aggregator. QQ Music remains first-class; NetEase Cloud Music is the second built-in formal Provider (HD-023). These two services establish real multi-Provider foundations with explicit provider-scoped identities and selection, without mixed Search, cross-service matching, or automatic source substitution. The repository and internal package names may remain `flutterustmusic`; they are implementation identifiers rather than the product display name.
+`fura music` remains a QQ Music-first client, not a broad multi-service aggregator. QQ Music remains first-class; NetEase Cloud Music is the second built-in formal Provider (HD-023), and KuGou Music is the third static public/read-first Provider authorized by HD-031. These services use explicit provider-scoped identities and selection without mixed Search, cross-service matching, shared credentials or automatic source substitution. The repository and internal package names may remain `flutterustmusic`; they are implementation identifiers rather than the product display name.
 
 ## Core experience
 
@@ -35,7 +35,8 @@ QQ Music users should have an open, modern, cross-platform client whose core mus
 Without an explicit human product decision, this project will not become:
 
 - mixed QQ/NetEase Search, cross-Provider collections or matching, automatic source substitution, or a universal music aggregator;
-- a third built-in Provider beyond QQ Music and NetEase Cloud Music;
+- a fourth built-in Provider or a dynamic Provider ecosystem beyond the three
+  explicitly authorized static services;
 - a podcast client, social network, generic media center, or download-tool collection;
 - a dynamic plugin marketplace or arbitrary-code plugin runtime.
 
@@ -48,5 +49,10 @@ HD-025 authorizes its integration through the existing product surfaces with a
 persisted QQ-default Provider selection. Access-control bypass, third-party
 unlocking, mixed Search, automatic substitution, automatic real-account
 access/writes, and shared credentials remain excluded.
+
+HD-031 authorizes a bounded KuGou public/read-first integration. It does not
+make TME services interchangeable: QQ and KuGou identities, sessions,
+entitlements and media resolvers remain isolated, and any cross-service mapping
+or fallback requires a separate Human decision.
 
 Changes to this document's product definition require an entry in `HUMAN_DECISIONS.md`.

@@ -93,6 +93,8 @@ platform diagnostics and design discovery. Common families are:
   capability evidence.
 - `netease-*.md` — NetEase authentication, protocol, Web login and media
   evidence.
+- `kugou-protocol-evidence.md` — KuGou source provenance, implementation-family
+  deduplication, TME hypothesis, capability matrix and bounded live evidence.
 - `android-*.md` and `system-playback-*.md` — Android/native playback diagnosis
   and Human runtime matrices.
 - `m3-*`, `m4-*` and `m5-*` — historical product discovery that informed the

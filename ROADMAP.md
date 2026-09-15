@@ -2,6 +2,44 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Active Core/Product Workstream — KuGou third built-in Provider (HD-031)
+
+**Goal:** add KuGou Music as a third static public/read-first Provider through
+an independent Rust direct-HTTPS implementation, exact provider-owned
+identities and truthful capability exposure.
+
+**Order:** provenance and protocol evidence → Track Search and canonical
+identity → exact Track/detail linkage → synchronized lyrics → public Playlist,
+Album and Artist reads → rankings and other evidenced public reads → direct
+standard media only if the source is normally authorized and unencrypted →
+static Provider/Bridge/Flutter integration after the Core gate is coherent.
+Each slice requires deterministic bounds, fixtures, exact routing and a
+bounded anonymous compatibility observation where safe.
+
+**Current evidence:** MakcRe is the primary wire family; MoeKoe and EchoMusic
+are two real clients using that same family and therefore do not raise the
+independent wire-source count. KugouMusic.NET independently corroborates the
+modern request/identity model; LX and historical Listen1 corroborate selected
+public catalog shapes. A one-request unsigned HTTPS observation proves the
+legacy public Track Search surface currently returns paged results and
+`MixSongID`, quality hash and audio ID fields without account/device material;
+the compared modern unsigned route rejects the request. Production must start
+from the former rather than importing client-signing constants.
+
+**Boundaries:** no authentication/private Library/mutation in the first phase;
+no Node sidecar, dynamic registry, `provider-tme`, shared identity/session,
+fuzzy mapping, cross-service fallback, official-secret or package
+impersonation, CAPTCHA/risk-control automation, VIP activity, entitlement or
+region/copyright bypass, or encrypted-media cracking. TME ownership is a
+layered research hypothesis, not an implementation assumption. Legal/public
+distribution clearance remains Human/legal review.
+
+**Exit:** continue while the exhaustive KuGou audit contains
+`REMAINING_AUTONOMOUS_WORK`. Risk-control/access/secret/encrypted-media findings
+stop only that capability and are recorded honestly. UI integration ends at
+machine evidence plus canonical candidates; visual and any future real-account
+acceptance remain Human gates. Local logical commits only; no push.
+
 ## Human Review Workstream — M4 interaction polish
 
 **Goal:** accept the current responsive interaction checkpoint without

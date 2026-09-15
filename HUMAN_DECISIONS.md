@@ -426,3 +426,57 @@ death; add background download/autoplay; automate a real account; or change
 product task/background semantics. Android notification, lock-screen,
 media-button, focus/interruption, background lifecycle and real NetEase audio
 progress remain `HUMAN_REVIEW` until recorded on a physical device.
+
+## HD-031 — Third built-in KuGou Provider, public/read-first
+
+**Status:** Accepted by explicit Human instruction on 2026-09-15.
+
+**Decision:** Add KuGou Music as Fura's third static built-in Provider through
+an independent in-process Rust implementation. Work proceeds
+`AUTONOMOUS_DEVELOPMENT / MIXED`, beginning with provenance and bounded public
+Core evidence, then Track Search, exact identity, public catalog, synchronized
+lyrics, rankings and other existing read-only Provider traits whose current
+semantics can be proved. Direct media resolution may be added only for an exact
+KuGou Track when a normally authorized, directly playable source can be
+independently established without encrypted-audio cracking, entitlement
+escalation or another service. Machine-complete Core and bounded anonymous
+compatibility evidence may then enter the existing static Bridge and Flutter
+product surfaces. Authentication, private Library and account/playlist
+mutation are not part of this first authorization.
+
+**Source and license boundary:** MakcRe/KuGouMusicApi is the current MIT
+wire-behavior reference. MoeKoeMusic (GPL-2.0) and EchoMusic (GPL-3.0) both
+embed that implementation family as a git submodule, so they are real-client
+integration/compatibility evidence but not independent wire corroboration.
+KugouMusic.NET is a modern independent MIT cross-check; LX Music Desktop is an
+Apache-2.0 public-catalog cross-check whose media URL path delegates elsewhere;
+Listen1 is a lower-weight historical MIT cross-check; and the unlicensed
+KugouMusic.rs repository is evidence-only and declares that it is based on
+KugouMusic.NET. Fura may observe behavior and independently implement bounded
+Rust requests/decoders, but must not copy, translate, vendor or structurally
+port GPL TypeScript/Electron code or run a third-party sidecar.
+
+**TME boundary:** QQ Music and KuGou Music may share group-level content or
+infrastructure, but this is a hypothesis to test per identity, rights, media,
+artwork, account, transport and catalog primitive. It does not authorize a
+`provider-tme`, shared credential/session/Track identity, fuzzy mapping or
+source fallback. QQ credentials and identities never enter KuGou code, KuGou
+credentials and identities never enter QQ code, and any future cross-service
+catalog mapping requires explicit evidence plus a separate Human decision.
+
+**Excluded:** password/SMS/account automation, CAPTCHA or risk-control
+automation, VIP claiming/trials, membership/copyright/region bypass,
+official-package or device-attestation impersonation, persistent fabricated
+hardware identity, encrypted-media cracking, cross-Provider matching or source
+substitution, runtime Provider discovery, a plugin/marketplace, hosted or
+localhost API proxy, and real-account writes. Rate limit, security verification,
+unknown access control, an official private secret or required package
+signature stops the affected capability. Logical commits remain local; no push
+is authorized.
+
+**Consequences:** This supersedes prior two-Provider and no-third-Provider
+statements only for the exact static KuGou scope above. QQ Music remains
+first-class; NetEase remains independently owned; all Provider identities,
+credentials, sessions, pagination and media resolution remain exact and
+provider-scoped. Public distribution and legal authorization remain a future
+Human/legal decision rather than a claim established by technical integration.
