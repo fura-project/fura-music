@@ -1850,6 +1850,17 @@ void main() {
           expect(target.width, greaterThanOrEqualTo(44));
           expect(target.height, greaterThanOrEqualTo(44));
         }
+        if (const bool.fromEnvironment('PLAYBACK_CONTROL_VISUAL_REVIEW')) {
+          await expectLater(
+            find.byType(MaterialApp),
+            matchesGoldenFile(
+              Uri.file(
+                '/tmp/fura-expanded-controls-'
+                '${size.width.toInt()}x${size.height.toInt()}.png',
+              ),
+            ),
+          );
+        }
         expect(tester.takeException(), isNull);
       }
     },

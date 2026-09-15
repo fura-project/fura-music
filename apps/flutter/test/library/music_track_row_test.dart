@@ -302,10 +302,24 @@ void main() {
       expect(locator, findsOneWidget);
       expect(locatorSemantics, findsOne);
       final stableLocatorElement = tester.element(locator);
+      if (const bool.fromEnvironment('LOCATOR_VISUAL_REVIEW')) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-locator-compact-offscreen.png'),
+          ),
+        );
+      }
 
       await tester.tap(locator);
-      await tester.pump(const Duration(milliseconds: 12));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      if (const bool.fromEnvironment('LOCATOR_VISUAL_REVIEW')) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-locator-compact-located.png')),
+        );
+      }
 
       tester.view.physicalSize = const Size(520, 300);
       await tester.pumpWidget(
@@ -318,6 +332,14 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 8));
       expect(tester.takeException(), isNull);
+      if (const bool.fromEnvironment('LOCATOR_VISUAL_REVIEW')) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-locator-desktop-offscreen.png'),
+          ),
+        );
+      }
 
       controller.jumpTo(controller.position.minScrollExtent);
       tester.view.physicalSize = const Size(320, 500);
@@ -335,6 +357,12 @@ void main() {
       expect(tester.element(locator), same(stableLocatorElement));
       expect(locator.hitTestable(), findsNothing);
       expect(locatorSemantics, findsNothing);
+      if (const bool.fromEnvironment('LOCATOR_VISUAL_REVIEW')) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(Uri.file('/tmp/fura-locator-visible-row.png')),
+        );
+      }
 
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await tester.pumpAndSettle();
