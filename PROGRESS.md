@@ -2,14 +2,32 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: IN_PROGRESS
+  state: BLOCKED
   acceptance_milestone: HD-031
   active_workstream: KUGOU_PUBLIC_PROVIDER
-  current_task: KUGOU_TRACK_DETAIL_AND_IDENTITY
-  next_action: INVESTIGATE_PUBLIC_TRACK_DETAIL
+  current_task: KUGOU_IDENTITY_EVIDENCE_GATE
+  next_action: HUMAN_DECISION_OR_NEW_PUBLIC_DETAIL_EVIDENCE
 ---
 
 # Current State
+
+- **2026-09-15 KuGou identity evidence gate:** the committed public Track Search
+  remains the only implemented KuGou capability. A bounded legacy mobile detail
+  observation partially linked Search `FileHash` to equal `MixSongID`, Album and
+  true Artist identities, but two strict Search-to-detail live gates failed with
+  `ResponseShapeMismatch`, including after removing the separately unproved
+  `Audioid` equality. The complete uncommitted detail client, Provider mapping
+  and Catalog advertisement were withdrawn; no permissive parser or half-
+  implementation remains. The workstream reached exactly 20 HTTPS requests
+  plus one 4 KiB HTTP artwork Range comparison, so its network budget is closed.
+  Current official public assets did not expose a closed unsigned detail route,
+  while the modern family requires still-unclassified signature and
+  device/install-shaped material. Per HD-031's identity gate, no additional
+  Artist/Album/Playlist/Lyrics/Media endpoints, Bridge surface or Flutter UI are
+  being piled onto the unresolved model. Resumption requires a scrubbed
+  structural fixture, a separately authorized evidence window, or a Human
+  classification of the modern boundary. Existing QQ Music, NetEase, Flutter
+  UI and retained build caches are unchanged. No push.
 
 - **2026-09-15 KuGou Track Search Core slice:** independent `kugou-client` and
   `provider-kugou` crates now implement one direct, unsigned, anonymous HTTPS
@@ -25,8 +43,8 @@ execution:
   test passed without logging query, body, title or identity. Bridge and Flutter
   are intentionally unchanged because Search alone is not a coherent finished
   KuGou product surface. Canonical identity remains partial until Track detail,
-  collection, lyrics and media evidence agree. Next: exact public Track detail
-  investigation. No push.
+  collection, lyrics and media evidence agree. The later detail gate did not
+  pass and is recorded separately above. No push.
 
 - **2026-09-15 HD-031 KuGou workstream activated:** the Human authorizes a
   third static, public/read-first KuGou Provider and restores

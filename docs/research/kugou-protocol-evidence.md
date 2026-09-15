@@ -54,10 +54,13 @@ products, but they add no independent wire vote.
 
 ## Bounded anonymous observation
 
-Observation date: 2026-09-15. Request count: 5. The Search requests were HTTPS,
-anonymous, read-only and single-attempt; the largest response was limited to two
-rows. The artwork comparison used two 4 KiB Range requests. No Cookie, token,
-dfid, persistent device ID, proxy, retry or response content was logged.
+Observation date: 2026-09-15. The complete workstream used exactly 20 HTTPS
+requests plus one 4 KiB HTTP artwork Range request. Every request was anonymous,
+read-only and single-attempt, with at least one second between requests in a
+multi-request gate. Search responses were limited to two rows. No Cookie, token,
+dfid, persistent device ID, proxy, retry or response content was logged. The
+HTTPS research budget is closed; no further KuGou network request is permitted
+in this workstream.
 
 1. The legacy public Track Search surface returned HTTP 200, a success envelope,
    two rows, numeric total and present `MixSongID`, `FileHash` and `Audioid`
@@ -73,10 +76,29 @@ dfid, persistent device ID, proxy, retry or response content was logged.
 4. The committed opt-in compatibility test performed exactly one additional
    unsigned Track Search request through the bounded Rust transport and passed.
    It retained and printed no query, response body, title or identity.
+5. The legacy mobile detail surface accepted the Search-owned standard
+   `FileHash` and returned an `album_audio_id` equal to Search `MixSongID`, an
+   equal standard hash, the same Album ID and true `authors[].author_id` values.
+   Anonymous media URL data was empty. An all-zero hash returned a provider
+   business error whose semantics are not independently established; it is not
+   mapped to `None` or a generic not-found result.
+6. Two extended Search-to-detail live gates rejected the independently written,
+   strict response decoder with `ResponseShapeMismatch`. Relaxing only the
+   separately unproved `Audioid` equality did not change the outcome. The entire
+   uncommitted Track-detail implementation was therefore withdrawn. No Catalog
+   capability is advertised and no permissive decoder was retained merely to
+   accept the observation.
+7. Current official public page assets did not reveal a closed, unsigned detail
+   route keyed directly by `MixSongID`. The modern detail family instead uses
+   signatures plus device/install-looking fields whose public-versus-private
+   status is unresolved. Those constants and identities were not imported,
+   fabricated or replayed.
 
 This proves only current bounded anonymous Search compatibility. It does not
 prove stable identity across catalog operations, content completeness, media
 availability, entitlement, recommendation quality or another network/region.
+The failed strict detail gates are evidence of an unresolved response contract,
+not evidence that a broader or more permissive parser would be correct.
 
 ## Capability evidence matrix
 
@@ -86,7 +108,7 @@ availability, entitlement, recommendation quality or another network/region.
 | Artist Search | `SUPPORTED_EVIDENCE` | MakcRe and KugouMusic.NET expose a direct type; live and identity proof pending. |
 | Album Search | `SUPPORTED_EVIDENCE` | MakcRe and KugouMusic.NET expose a direct type; live and pagination proof pending. |
 | Playlist Search | `SUPPORTED_EVIDENCE` | MakcRe and historical Listen1 expose direct public results; current live proof pending. |
-| Track detail | `PARTIAL_EVIDENCE` | Multiple detail/media-adjacent shapes exist; canonical `MixSongID`/hash linkage is not yet fixed. |
+| Track detail | `EXTERNAL_BLOCKED` | The legacy mobile response partially corroborates `MixSongID`/hash/Album/Artist linkage, but two strict Search-to-detail live gates failed with `ResponseShapeMismatch`; the implementation was completely withdrawn. A scrubbed structural fixture or a future bounded evidence window must explain the variance before retrying. Modern signed/device-shaped routes require separate Human classification. |
 | Playlist detail | `SUPPORTED_EVIDENCE` | Current MakcRe and real-client products expose it; identity/pagination live proof pending. |
 | Playlist Tracks | `SUPPORTED_EVIDENCE` | Current implementations expose explicit Track collections; raw cursor and unavailable-row semantics pending. |
 | Album detail | `SUPPORTED_EVIDENCE` | Current MakcRe/KugouMusic.NET evidence; exact Album identity proof pending. |
@@ -101,7 +123,7 @@ availability, entitlement, recommendation quality or another network/region.
 | Related Tracks | `PARTIAL_EVIDENCE` | Current implementation candidates exist; exact public seed semantics pending. |
 | Comments | `SUPPORTED_EVIDENCE` | MakcRe and EchoMusic product behavior expose read-only comments; independent request/pagination proof pending. |
 | Track-associated MV | `PARTIAL_EVIDENCE` | Search/detail fields and product behavior suggest an association; exact HTTPS media path pending. |
-| Media source | `CONFLICTING_EVIDENCE` | Legacy/current implementations disagree on anonymous/auth requirements; newer sources mention V5/encrypted responses. Direct unencrypted Standard source and entitlement must be proved before implementation. |
+| Media source | `HUMAN_DECISION_REQUIRED` | The observed anonymous legacy detail response carried no playable URL. Current modern routes combine signing/device-shaped inputs and newer evidence mentions V5/encrypted responses. No official secret, device impersonation, encrypted-audio cracking or entitlement bypass is permitted. |
 | Authentication | `OUT_OF_SCOPE` | Not authorized in the first phase. |
 | Account Summary | `OUT_OF_SCOPE` | Depends on a future independently authorized authentication workstream. |
 | User Playlists | `OUT_OF_SCOPE` | Private account read is not authorized. |
@@ -112,11 +134,13 @@ availability, entitlement, recommendation quality or another network/region.
 
 Search exposes quality-dependent `FileHash`/`HQFileHash`/`SQFileHash`, numeric
 `Audioid`, and `MixSongID`/`AlbumAudioID`. A quality hash cannot be the canonical
-Track identity merely because older clients used it. The current candidate is
-the provider-owned, quality-independent `MixSongID`, while the standard hash may
-remain private resolution context. Production identity is not accepted until
-Search, detail, Playlist, Album, Artist, lyrics, comments and media evidence
-show how the same recording/version is linked without title/Artist matching.
+Track identity merely because older clients used it. Search currently owns the
+provider-scoped, opaque `MixSongID`, while the standard hash remains private
+Search context rather than a public Fura identity. The legacy detail observation
+supports this candidate but the strict live decoder failed twice, so production
+identity is not accepted. Search, detail, Playlist, Album, Artist, lyrics,
+comments and media evidence must eventually link the same recording/version
+without title/Artist matching.
 
 No QQ song MID, NetEase numeric ID, title/Artist lookup or cross-service Search
 may fill an identity gap.
@@ -161,21 +185,25 @@ evidence has not met that threshold.
 | --- | --- |
 | Governance / source provenance / license audit | `DONE` |
 | TME hypothesis and exact-isolation plan | `DONE` |
-| Canonical Track identity | `PARTIAL` — Search now owns opaque `MixSongID`; cross-capability proof remains |
+| Canonical Track identity | `EXTERNAL_BLOCKED` — Search owns opaque `MixSongID`, but the strict legacy detail contract failed both live gates and the modern signed/device boundary is unresolved |
 | Bounded HTTP transport | `DONE` for the exact unsigned Search host |
 | Track Search | `DONE_CORE` — Bridge/UI integration intentionally waits for a coherent public capability slice |
-| Artist / Album / Playlist Search | `REMAINING_AUTONOMOUS_WORK` |
-| Track detail and public Playlist / Album / Artist reads | `REMAINING_AUTONOMOUS_WORK` |
-| Lyrics / Rankings / evidenced recommendations | `REMAINING_AUTONOMOUS_WORK` |
-| Related Tracks / Comments / MV | `REMAINING_AUTONOMOUS_WORK` |
-| Standard Media and dfid/device safety | `REMAINING_AUTONOMOUS_WORK` |
-| High / Lossless Media | `REMAINING_AUTONOMOUS_WORK` |
+| Artist / Album / Playlist Search | `EXTERNAL_BLOCKED` — held behind the unresolved canonical Track identity gate; do not pile up endpoints |
+| Track detail and public Playlist / Album / Artist reads | `EXTERNAL_BLOCKED` — strict legacy detail decoding failed twice; a scrubbed structural fixture or new evidence window is required |
+| Lyrics / Rankings / evidenced recommendations | `EXTERNAL_BLOCKED` — held behind the identity/detail gate |
+| Related Tracks / Comments / MV | `EXTERNAL_BLOCKED` — held behind the identity/detail gate |
+| Standard Media and dfid/device safety | `HUMAN_DECISION_REQUIRED` — anonymous legacy detail yielded no URL; modern signature/device/encrypted-source boundaries are unclassified |
+| High / Lossless Media | `NOT_SUPPORTED` — no proved ordinarily authorized direct unencrypted source and no entitlement model |
 | Authentication / Account / User Library / writes | `NOT_APPLICABLE` |
-| Provider API static routing / native singleton / Bridge | `REMAINING_AUTONOMOUS_WORK` |
-| Flutter selector / capability hiding / continuity / i18n | `REMAINING_AUTONOMOUS_WORK` |
+| Provider API static routing / native singleton / Bridge | `EXTERNAL_BLOCKED` — one Search primitive is not a coherent Provider slice |
+| Flutter selector / capability hiding / continuity / i18n | `EXTERNAL_BLOCKED` — Core gate is not coherent enough to expose truthfully |
 | Public distribution authorization | `HUMAN_DECISION_REQUIRED` |
 | Real-account acceptance | `NOT_APPLICABLE` for the public-only phase |
 
-The next autonomous slice investigates exact Track detail and identity linkage.
-The matrix must be updated after each capability instead of retroactively
-declaring the whole family implemented.
+No safe KuGou capability remains autonomous under the current identity gate and
+closed request budget. Resumption requires either a scrubbed structural fixture
+that explains the legacy detail response variance, a separately authorized new
+bounded evidence window, or a Human decision that classifies the modern public
+signing/device boundary. None of those options authorizes a private secret,
+fabricated official device, encrypted-media cracking or cross-Provider source
+fallback.

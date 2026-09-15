@@ -26,6 +26,15 @@ legacy public Track Search surface currently returns paged results and
 the compared modern unsigned route rejects the request. Production must start
 from the former rather than importing client-signing constants.
 
+The first Search Core slice is committed and fully offline-tested. The next
+strict Search-to-legacy-detail gate failed twice with
+`ResponseShapeMismatch`; its complete uncommitted implementation was withdrawn.
+The current workstream has exhausted its 20-request HTTPS ceiling. Because
+canonical Track identity is not closed, dependent catalog, lyrics, media,
+Bridge and Flutter work is held rather than accumulating unrelated endpoints.
+The modern detail family remains Human-classification work because it combines
+signatures with device/install-shaped material.
+
 **Boundaries:** no authentication/private Library/mutation in the first phase;
 no Node sidecar, dynamic registry, `provider-tme`, shared identity/session,
 fuzzy mapping, cross-service fallback, official-secret or package
@@ -34,11 +43,15 @@ region/copyright bypass, or encrypted-media cracking. TME ownership is a
 layered research hypothesis, not an implementation assumption. Legal/public
 distribution clearance remains Human/legal review.
 
-**Exit:** continue while the exhaustive KuGou audit contains
-`REMAINING_AUTONOMOUS_WORK`. Risk-control/access/secret/encrypted-media findings
-stop only that capability and are recorded honestly. UI integration ends at
-machine evidence plus canonical candidates; visual and any future real-account
-acceptance remain Human gates. Local logical commits only; no push.
+**Exit:** the current iteration is blocked at the identity evidence gate, with
+no `REMAINING_AUTONOMOUS_WORK` item that can safely bypass it. Resume only with
+a scrubbed structural fixture explaining the legacy detail variance, a newly
+authorized bounded evidence window, or a Human classification of the modern
+public signing/device boundary. Risk-control/access/secret/encrypted-media
+findings stop only that capability and are recorded honestly. UI integration
+ends at machine evidence plus canonical candidates; visual and any future
+real-account acceptance remain Human gates. Local logical commits only; no
+push.
 
 ## Human Review Workstream — M4 interaction polish
 
