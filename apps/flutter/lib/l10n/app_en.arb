@@ -215,6 +215,8 @@
   "searchAlbumHint": "Album name",
   "searchPlaylistHint": "Playlist name",
   "searchTypeLabel": "Search type",
+  "searchSuggestionSubmit": "Search “{query}”",
+  "@searchSuggestionSubmit": {"description": "Raw query action shown first in search suggestions.", "placeholders": {"query": {"type": "String"}}},
   "searchTracksType": "Tracks",
   "searchArtistsType": "Artists",
   "searchAlbumsType": "Albums",

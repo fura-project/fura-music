@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
@@ -70,7 +71,8 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   late final TrackSearchSuggestionController _suggestionController;
   late final Listenable _controllers;
   final TextEditingController _queryController = TextEditingController();
-  final FocusNode _queryFocusNode = FocusNode(debugLabel: 'track search');
+  late final FocusNode _queryFocusNode;
+  final Object _suggestionTapRegionGroup = Object();
   final Set<_SearchType> _visitedTypes = {_SearchType.tracks};
   _SearchType _searchType = _SearchType.tracks;
 
@@ -90,6 +92,10 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   @override
   void initState() {
     super.initState();
+    _queryFocusNode = FocusNode(
+      debugLabel: 'track search',
+      onKeyEvent: _handleSuggestionKeyEvent,
+    );
     _controller = TrackSearchController(widget.gateway);
     _artistController = ArtistSearchController(
       widget.artistGateway ?? const RustArtistSearchGateway(),
@@ -103,6 +109,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     _suggestionController = TrackSearchSuggestionController(
       widget.suggestionGateway,
     );
+    _queryFocusNode.addListener(_handleQueryFocus);
     _controllers = Listenable.merge([
       _controller,
       _artistController,
@@ -121,7 +128,9 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     _playlistController.dispose();
     _suggestionController.dispose();
     _queryController.dispose();
-    _queryFocusNode.dispose();
+    _queryFocusNode
+      ..removeListener(_handleQueryFocus)
+      ..dispose();
     super.dispose();
   }
 
@@ -149,6 +158,8 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                   },
                   onSubmitted: _submit,
                   onChanged: _suggestionController.updateQuery,
+                  groupId: _suggestionTapRegionGroup,
+                  onTapOutside: (_) => _suggestionController.dismiss(),
                   onClear: _clear,
                 ),
                 if (_queryFocusNode.hasFocus && _suggestionController.visible)
@@ -162,9 +173,15 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 920),
-                        child: TrackSearchSuggestionsPanel(
-                          controller: _suggestionController,
-                          onSelected: _selectSuggestion,
+                        child: TextFieldTapRegion(
+                          groupId: _suggestionTapRegionGroup,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: TrackSearchSuggestionsPanel(
+                              controller: _suggestionController,
+                              onSelected: _selectSuggestion,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -501,6 +518,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   void _selectSearchType(Set<_SearchType> selection) {
     final next = selection.single;
     if (_searchType == next) return;
+    _suggestionController.dismiss();
     final firstVisit = !_visitedTypes.contains(next);
     final currentText = _queryController.text.trim();
     setState(() {
@@ -554,6 +572,43 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     );
   }
 
+  void _handleQueryFocus() {
+    if (_queryFocusNode.hasFocus) {
+      _suggestionController.updateQuery(_queryController.text);
+    } else {
+      _suggestionController.dismiss();
+    }
+  }
+
+  KeyEventResult _handleSuggestionKeyEvent(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      return _suggestionController.moveHighlight(1)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      return _suggestionController.moveHighlight(-1)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      final query = _suggestionController.highlightedQuery;
+      if (query == null) return KeyEventResult.ignored;
+      _selectSuggestion(query);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        _suggestionController.visible) {
+      _suggestionController.dismiss();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   void _selectSuggestion(String query) {
     _replaceQueryText(query);
     _submit(query);
@@ -590,6 +645,8 @@ class _SearchField extends StatelessWidget {
     required this.hintText,
     required this.onSubmitted,
     required this.onChanged,
+    required this.groupId,
+    required this.onTapOutside,
     required this.onClear,
   });
 
@@ -600,6 +657,8 @@ class _SearchField extends StatelessWidget {
   final String hintText;
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
+  final Object groupId;
+  final TapRegionCallback onTapOutside;
   final VoidCallback onClear;
 
   @override
@@ -619,6 +678,8 @@ class _SearchField extends StatelessWidget {
             key: const ValueKey('track-search-field'),
             controller: controller,
             focusNode: focusNode,
+            groupId: groupId,
+            onTapOutside: onTapOutside,
             autofocus: true,
             textInputAction: TextInputAction.search,
             onChanged: onChanged,

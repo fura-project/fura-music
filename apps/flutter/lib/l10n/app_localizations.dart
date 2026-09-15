@@ -1215,6 +1215,12 @@ abstract class AppLocalizations {
   /// **'Search type'**
   String get searchTypeLabel;
 
+  /// Raw query action shown first in search suggestions.
+  ///
+  /// In en, this message translates to:
+  /// **'Search “{query}”'**
+  String searchSuggestionSubmit(String query);
+
   /// No description provided for @searchTracksType.
   ///
   /// In en, this message translates to:

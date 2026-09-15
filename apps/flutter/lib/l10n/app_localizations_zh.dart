@@ -630,6 +630,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchTypeLabel => '搜索类型';
 
   @override
+  String searchSuggestionSubmit(String query) {
+    return '搜索“$query”';
+  }
+
+  @override
   String get searchTracksType => '歌曲';
 
   @override

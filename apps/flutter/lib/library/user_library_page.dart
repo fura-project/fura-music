@@ -3206,13 +3206,15 @@ class _ShellSearchField extends StatefulWidget {
 }
 
 class _ShellSearchFieldState extends State<_ShellSearchField> {
-  final FocusNode _focusNode = FocusNode(debugLabel: 'shell search');
+  late final FocusNode _focusNode;
   final MenuController _menuController = MenuController();
 
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode(debugLabel: 'shell search');
     _focusNode.addListener(_handleFocus);
+    HardwareKeyboard.instance.addHandler(_handleHardwareKeyEvent);
     widget.suggestions?.addListener(_handleSuggestions);
   }
 
@@ -3228,6 +3230,7 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
   @override
   void dispose() {
     widget.suggestions?.removeListener(_handleSuggestions);
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
     _focusNode
       ..removeListener(_handleFocus)
       ..dispose();
@@ -3269,6 +3272,47 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
     widget.onSuggestionSelected?.call(query);
   }
 
+  void _handleMenuClosed() {
+    final suggestions = widget.suggestions;
+    if (suggestions?.visible ?? false) suggestions?.dismiss();
+  }
+
+  KeyEventResult _handleSuggestionKeyEvent(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final suggestions = widget.suggestions;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      return (suggestions?.moveHighlight(1) ?? false)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      return (suggestions?.moveHighlight(-1) ?? false)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      final query = suggestions?.highlightedQuery;
+      if (query == null) return KeyEventResult.ignored;
+      _selectSuggestion(query);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        (suggestions?.visible ?? false)) {
+      _menuController.close();
+      suggestions?.dismiss();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  bool _handleHardwareKeyEvent(KeyEvent event) {
+    return _focusNode.hasFocus &&
+        _handleSuggestionKeyEvent(_focusNode, event) == KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
     final suggestions = widget.suggestions;
@@ -3295,30 +3339,36 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
       ),
     );
     if (suggestions == null || !suggestions.enabled) return search;
-    return MenuAnchor(
-      controller: _menuController,
-      childFocusNode: _focusNode,
-      style: const MenuStyle(
-        padding: WidgetStatePropertyAll(EdgeInsets.zero),
-        backgroundColor: WidgetStatePropertyAll(Colors.transparent),
-        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
-        shadowColor: WidgetStatePropertyAll(Colors.transparent),
-        elevation: WidgetStatePropertyAll(0),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    return LayoutBuilder(
+      builder: (context, constraints) => MenuAnchor(
+        controller: _menuController,
+        childFocusNode: _focusNode,
+        style: MenuStyle(
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+          backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+          elevation: const WidgetStatePropertyAll(0),
+          fixedSize: WidgetStatePropertyAll(
+            Size.fromWidth(constraints.maxWidth),
+          ),
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
         ),
+        alignmentOffset: const Offset(0, 8),
+        crossAxisUnconstrained: false,
+        consumeOutsideTap: false,
+        onClose: _handleMenuClosed,
+        menuChildren: [
+          TrackSearchSuggestionsPanel(
+            controller: suggestions,
+            popup: true,
+            onSelected: _selectSuggestion,
+          ),
+        ],
+        builder: (context, controller, _) => search,
       ),
-      alignmentOffset: const Offset(0, 8),
-      crossAxisUnconstrained: false,
-      consumeOutsideTap: false,
-      menuChildren: [
-        TrackSearchSuggestionsPanel(
-          controller: suggestions,
-          popup: true,
-          onSelected: _selectSuggestion,
-        ),
-      ],
-      builder: (context, controller, _) => search,
     );
   }
 }

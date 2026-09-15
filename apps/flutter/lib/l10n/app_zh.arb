@@ -194,6 +194,7 @@
   "searchAlbumHint": "专辑名称",
   "searchPlaylistHint": "歌单名称",
   "searchTypeLabel": "搜索类型",
+  "searchSuggestionSubmit": "搜索“{query}”",
   "searchTracksType": "歌曲",
   "searchArtistsType": "歌手",
   "searchAlbumsType": "专辑",

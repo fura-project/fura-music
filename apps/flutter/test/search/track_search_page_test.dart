@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
@@ -337,15 +339,61 @@ void main() {
       find.byKey(const ValueKey('track-search-suggestions')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('track-search-suggestion-raw')),
+      findsOneWidget,
+    );
+    expect(find.text('Search “nev”'), findsOneWidget);
     expect(find.text('Nevada'), findsOneWidget);
     expect(find.text('Vicetone · Cozi Zuehlsdorff'), findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('track-search-suggestions')))
+          .width,
+      closeTo(tester.getSize(field).width, 1),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('track-search-suggestion-0'))),
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<Semantics>(
+            find
+                .descendant(
+                  of: find.byKey(const ValueKey('track-search-suggestion-0')),
+                  matching: find.byType(Semantics),
+                )
+                .first,
+          )
+          .properties
+          .selected,
+      isTrue,
+    );
     if (const bool.fromEnvironment('SEARCH_VISUAL_REVIEW')) {
-      await expectLater(
-        find.byType(TrackSearchPage),
-        matchesGoldenFile(
-          Uri.file('/tmp/flutterustmusic-search-mobile-suggestions.png'),
-        ),
-      );
+      for (final size in const [
+        Size(1440, 900),
+        Size(900, 700),
+        Size(390, 844),
+        Size(320, 700),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        await expectLater(
+          find.byType(TrackSearchPage),
+          matchesGoldenFile(
+            Uri.file(
+              '/tmp/fura-search-suggestions-'
+              '${size.width.toInt()}x${size.height.toInt()}.png',
+            ),
+          ),
+        );
+      }
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
     }
 
     await tester.tap(find.byKey(const ValueKey('track-search-suggestion-0')));
@@ -359,6 +407,220 @@ void main() {
     );
     expect(find.text('Selected result'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'suggestion keyboard navigation keeps focus and rejects replaced entries',
+    (tester) async {
+      tester.view.physicalSize = const Size(1000, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const resultTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:keyboard-result',
+        title: 'Keyboard result',
+        artistNames: ['Keyboard artist'],
+      );
+      const suggestionTrack = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:keyboard-suggestion',
+        title: 'Keyboard suggestion',
+        artistNames: ['Suggestion artist'],
+      );
+      final search = _SearchGateway(resultTrack);
+      final suggestions = _RecordingSearchGateway(
+        const TrackSearchPageResult(
+          page: 1,
+          total: 1,
+          items: [TrackSearchItem(track: suggestionTrack)],
+        ),
+      );
+      final playback = QueuePlaybackController(
+        TestPlaybackQueueGateway(),
+        TrackPlaybackController(
+          const _UnavailableMediaGateway(),
+          ForegroundPlaybackController(const _NeverAudioEngine()),
+        ),
+      );
+      addTearDown(playback.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TrackSearchPage(
+            gateway: search,
+            suggestionGateway: suggestions,
+            queuePlaybackController: playback,
+            onBack: () {},
+            onOpenAlbum: (_) {},
+            onOpenArtist: (_) {},
+            onOpenPlaylist: (_) {},
+            onSignInAgain: () {},
+          ),
+        ),
+      );
+      final field = find.byKey(const ValueKey('track-search-field'));
+      await tester.enterText(field, 'key');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pump();
+      final fieldFocus = FocusManager.instance.primaryFocus;
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(FocusManager.instance.primaryFocus, same(fieldFocus));
+      expect(
+        tester
+            .widget<Semantics>(
+              find
+                  .descendant(
+                    of: find.byKey(
+                      const ValueKey('track-search-suggestion-raw'),
+                    ),
+                    matching: find.byType(Semantics),
+                  )
+                  .first,
+            )
+            .properties
+            .selected,
+        isTrue,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(
+        tester
+            .widget<Semantics>(
+              find
+                  .descendant(
+                    of: find.byKey(const ValueKey('track-search-suggestion-0')),
+                    matching: find.byType(Semantics),
+                  )
+                  .first,
+            )
+            .properties
+            .selected,
+        isTrue,
+      );
+
+      await tester.enterText(field, 'replacement');
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('track-search-suggestion-0')),
+        findsNothing,
+      );
+      expect(find.text('Search “replacement”'), findsOneWidget);
+      expect(
+        tester
+            .widget<Semantics>(
+              find
+                  .descendant(
+                    of: find.byKey(
+                      const ValueKey('track-search-suggestion-raw'),
+                    ),
+                    matching: find.byType(Semantics),
+                  )
+                  .first,
+            )
+            .properties
+            .selected,
+        isFalse,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('track-search-suggestions')),
+        findsNothing,
+      );
+      expect(FocusManager.instance.primaryFocus, same(fieldFocus));
+
+      await tester.enterText(field, 'outside');
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('track-search-suggestions')),
+        findsOneWidget,
+      );
+      await tester.tapAt(const Offset(980, 680));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('track-search-suggestions')),
+        findsNothing,
+      );
+      await tester.enterText(field, 'raw enter');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(search.requests.last, ('raw enter', 1, 30));
+
+      await tester.enterText(field, 'key again');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(search.requests.last, ('Keyboard suggestion', 1, 30));
+      expect(
+        tester.widget<TextField>(field).controller?.text,
+        'Keyboard suggestion',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('compact suggestions localize the raw action in Chinese', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final playback = QueuePlaybackController(
+      TestPlaybackQueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: TrackSearchPage(
+          gateway: const _ResultSearchGateway(TrackSearchPageResult()),
+          suggestionGateway: const _ResultSearchGateway(
+            TrackSearchPageResult(),
+          ),
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('track-search-field')),
+      '神曼波',
+    );
+    await tester.pump();
+
+    final raw = find.byKey(const ValueKey('track-search-suggestion-raw'));
+    expect(find.text('搜索“神曼波”'), findsOneWidget);
+    expect(tester.getSize(raw).height, 48);
+    expect(find.semantics.byLabel('搜索“神曼波”'), findsOne);
+    expect(tester.takeException(), isNull);
+    if (const bool.fromEnvironment('SEARCH_VISUAL_REVIEW')) {
+      await expectLater(
+        find.byType(TrackSearchPage),
+        matchesGoldenFile(
+          Uri.file('/tmp/fura-search-suggestions-zh-390x844.png'),
+        ),
+      );
+    }
+    semantics.dispose();
   });
 
   testWidgets('desktop Track results use the common music table structure', (

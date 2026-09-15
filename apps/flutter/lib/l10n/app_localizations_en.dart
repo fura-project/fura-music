@@ -698,6 +698,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchTypeLabel => 'Search type';
 
   @override
+  String searchSuggestionSubmit(String query) {
+    return 'Search “$query”';
+  }
+
+  @override
   String get searchTracksType => 'Tracks';
 
   @override

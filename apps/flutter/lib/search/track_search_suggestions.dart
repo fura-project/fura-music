@@ -1,14 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
 
 @immutable
 class TrackSearchSuggestion {
-  const TrackSearchSuggestion({required this.query, required this.detail});
+  const TrackSearchSuggestion({
+    required this.query,
+    required this.detail,
+    this.raw = false,
+  });
 
   final String query;
   final String detail;
+  final bool raw;
 }
 
 /// Builds provider-backed query suggestions from the first bounded Track
@@ -29,15 +35,32 @@ class TrackSearchSuggestionController extends ChangeNotifier {
   Timer? _timer;
   TrackSearchPageLoadOperation? _operation;
   List<TrackSearchSuggestion> _suggestions = const [];
+  String _query = '';
+  int? _highlightedIndex;
   bool _loading = false;
   bool _dismissed = false;
   int _generation = 0;
   bool _disposed = false;
 
   List<TrackSearchSuggestion> get suggestions => _suggestions;
+  List<TrackSearchSuggestion> get entries => _query.isEmpty
+      ? const []
+      : [
+          TrackSearchSuggestion(query: _query, detail: '', raw: true),
+          ..._suggestions,
+        ];
+  int? get highlightedIndex => _highlightedIndex;
+  String? get highlightedQuery {
+    final index = _highlightedIndex;
+    final currentEntries = entries;
+    return index == null || index < 0 || index >= currentEntries.length
+        ? null
+        : currentEntries[index].query;
+  }
+
   bool get loading => _loading;
   bool get enabled => _gateway != null;
-  bool get visible => !_dismissed && (_loading || _suggestions.isNotEmpty);
+  bool get visible => !_dismissed && _query.isNotEmpty;
 
   void updateQuery(String rawQuery) {
     final query = rawQuery.trim();
@@ -47,6 +70,8 @@ class TrackSearchSuggestionController extends ChangeNotifier {
     _operation?.cancel();
     _operation = null;
     _dismissed = false;
+    _query = query;
+    _highlightedIndex = null;
     _suggestions = const [];
     _loading = false;
     _notify();
@@ -120,6 +145,27 @@ class TrackSearchSuggestionController extends ChangeNotifier {
     _notify();
   }
 
+  bool moveHighlight(int delta) {
+    final currentEntries = entries;
+    if (!visible || currentEntries.isEmpty || delta == 0) return false;
+    final current = _highlightedIndex;
+    final next = current == null
+        ? (delta > 0 ? 0 : currentEntries.length - 1)
+        : (current + delta) % currentEntries.length;
+    _highlightedIndex = next < 0 ? next + currentEntries.length : next;
+    _notify();
+    return true;
+  }
+
+  void highlight(int? index) {
+    final next = index != null && index >= 0 && index < entries.length
+        ? index
+        : null;
+    if (_highlightedIndex == next) return;
+    _highlightedIndex = next;
+    _notify();
+  }
+
   void dismiss() {
     ++_generation;
     _timer?.cancel();
@@ -128,6 +174,7 @@ class TrackSearchSuggestionController extends ChangeNotifier {
     _operation = null;
     _loading = false;
     _dismissed = true;
+    _highlightedIndex = null;
     _suggestions = const [];
     _notify();
   }
@@ -165,42 +212,42 @@ class TrackSearchSuggestionsPanel extends StatelessWidget {
   final bool popup;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) => _buildPanel(context),
+  );
+
+  Widget _buildPanel(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final entries = controller.entries;
     final content = Column(
       key: ValueKey(
         popup ? 'top-search-suggestions' : 'track-search-suggestions',
       ),
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (controller.loading)
-          const LinearProgressIndicator(
-            key: ValueKey('search-suggestions-loading'),
-            minHeight: 2,
-          ),
-        for (var index = 0; index < controller.suggestions.length; index++)
-          ListTile(
+        for (var index = 0; index < entries.length; index++) ...[
+          _TrackSearchSuggestionRow(
             key: ValueKey(
-              popup
-                  ? 'top-search-suggestion-$index'
-                  : 'track-search-suggestion-$index',
+              entries[index].raw
+                  ? (popup
+                        ? 'top-search-suggestion-raw'
+                        : 'track-search-suggestion-raw')
+                  : (popup
+                        ? 'top-search-suggestion-${index - 1}'
+                        : 'track-search-suggestion-${index - 1}'),
             ),
-            dense: true,
-            leading: const Icon(Icons.search_rounded),
-            title: Text(
-              controller.suggestions[index].query,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: controller.suggestions[index].detail.isEmpty
-                ? null
-                : Text(
-                    controller.suggestions[index].detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-            onTap: () => onSelected(controller.suggestions[index].query),
+            suggestion: entries[index],
+            highlighted: controller.highlightedIndex == index,
+            onHover: () => controller.highlight(index),
+            onSelected: () => onSelected(entries[index].query),
           ),
+          if (index == 0 && controller.loading)
+            const LinearProgressIndicator(
+              key: ValueKey('search-suggestions-loading'),
+              minHeight: 2,
+            ),
+        ],
       ],
     );
     if (!popup) {
@@ -208,7 +255,7 @@ class TrackSearchSuggestionsPanel extends StatelessWidget {
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(18),
         clipBehavior: Clip.antiAlias,
-        child: content,
+        child: SizedBox(width: double.infinity, child: content),
       );
     }
     return Material(
@@ -219,7 +266,106 @@ class TrackSearchSuggestionsPanel extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 420),
-        child: SingleChildScrollView(primary: false, child: content),
+        child: SingleChildScrollView(
+          primary: false,
+          child: SizedBox(width: double.infinity, child: content),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackSearchSuggestionRow extends StatelessWidget {
+  const _TrackSearchSuggestionRow({
+    required this.suggestion,
+    required this.highlighted,
+    required this.onHover,
+    required this.onSelected,
+    super.key,
+  });
+
+  final TrackSearchSuggestion suggestion;
+  final bool highlighted;
+  final VoidCallback onHover;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final label = suggestion.raw
+        ? context.l10n.searchSuggestionSubmit(suggestion.query)
+        : suggestion.detail.isEmpty
+        ? suggestion.query
+        : '${suggestion.query}, ${suggestion.detail}';
+    return Semantics(
+      button: true,
+      selected: highlighted,
+      label: label,
+      onTap: onSelected,
+      excludeSemantics: true,
+      child: Material(
+        color: highlighted
+            ? colors.surfaceContainerHighest
+            : Colors.transparent,
+        child: InkWell(
+          onTap: onSelected,
+          onHover: (hovered) {
+            if (hovered) onHover();
+          },
+          excludeFromSemantics: true,
+          child: SizedBox(
+            height: 48,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(
+                    suggestion.raw
+                        ? Icons.arrow_forward_rounded
+                        : Icons.search_rounded,
+                    size: 20,
+                    color: highlighted
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: suggestion.raw
+                        ? Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                suggestion.query,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              if (suggestion.detail.isNotEmpty)
+                                Text(
+                                  suggestion.detail,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

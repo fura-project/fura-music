@@ -1869,6 +1869,17 @@ void main() {
       find.byKey(const ValueKey('top-search-suggestions')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('top-search-suggestion-raw')),
+      findsOneWidget,
+    );
+    expect(find.text('Search “direct song”'), findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('top-search-suggestions')))
+          .width,
+      closeTo(tester.getSize(topSearch).width, 1),
+    );
     if (const bool.fromEnvironment('SEARCH_VISUAL_REVIEW')) {
       await expectLater(
         find.byType(MusicApp),
@@ -1877,7 +1888,38 @@ void main() {
         ),
       );
     }
-    await tester.tap(find.byKey(const ValueKey('top-search-suggestion-0')));
+    await tester.tapAt(const Offset(1100, 850));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('top-search-suggestions')), findsNothing);
+    await tester.tap(topSearch);
+    await tester.enterText(topSearch, '');
+    await tester.enterText(topSearch, 'direct song');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('top-search-suggestions')),
+      findsOneWidget,
+    );
+    final topSearchFocus = FocusManager.instance.primaryFocus;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, same(topSearchFocus));
+    expect(
+      tester
+          .widget<Semantics>(
+            find
+                .descendant(
+                  of: find.byKey(const ValueKey('top-search-suggestion-0')),
+                  matching: find.byType(Semantics),
+                )
+                .first,
+          )
+          .properties
+          .selected,
+      isTrue,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
 
     expect(search.requests, [('Direct suggested query', 1, 30)]);
