@@ -2,14 +2,28 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: BLOCKED
-  acceptance_milestone: HD-031
-  active_workstream: KUGOU_PUBLIC_PROVIDER
-  current_task: KUGOU_IDENTITY_EVIDENCE_GATE
-  next_action: HUMAN_DECISION_OR_NEW_PUBLIC_DETAIL_EVIDENCE
+  state: IN_PROGRESS
+  acceptance_milestone: HD-032
+  active_workstream: UPSTREAM_RESPONSE_INTEGRITY
+  current_task: ENDPOINT_MATRIX_AND_PARTIAL_RESILIENCE
+  next_action: NETEASE_LIKED_PLAYLIST_ROW_ISOLATION
 ---
 
 # Current State
+
+- **2026-09-16 HD-032 activated:** starting HEAD is
+  `6703ac564eb571005fafdb6d3598a89b245bffe2` with a clean worktree. The complete
+  implemented QQ/NetEase capability surface and the committed KuGou Track
+  Search slice are classified in
+  [the upstream response integrity audit](docs/research/upstream-response-integrity-audit.md).
+  Baseline source inspection found typed-array and second-stage
+  `collect::<Result<Vec<_>, _>>()` amplification sites where a single malformed
+  collection row can still kill a valid page. Container, cursor, singleton,
+  media, auth and write boundaries remain strict. Implementation begins with
+  NetEase Liked/playlist raw-cursor preservation and explicit omissions, then
+  search/comments/lyrics, QQ collection parity, Bridge/Flutter propagation and
+  the required native gates. KuGou's HD-031 identity gate and closed network
+  budget remain unchanged. No push.
 
 - **2026-09-15 KuGou identity evidence gate:** the committed public Track Search
   remains the only implemented KuGou capability. A bounded legacy mobile detail

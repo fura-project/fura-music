@@ -2,6 +2,32 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Active Core/Product Workstream — upstream response integrity (HD-032)
+
+**Goal:** keep strict trust boundaries while ensuring one malformed upstream
+collection row or auxiliary lyric line does not erase otherwise trustworthy
+QQ Music or NetEase content. KuGou participation is limited to its committed
+Track Search Core slice.
+
+**Order:** endpoint classification → NetEase Liked/playlist good-bad-good
+resilience and raw cursor tests → search/comments/lyrics → remaining QQ and
+NetEase collections → minimal Domain/Bridge omission propagation → shared,
+localized Flutter partial notice → malformed/robustness corpus → full Rust,
+Flutter, Linux Release and Android ARM64 Release gates. The exact matrix and
+policy are recorded in
+[Upstream response integrity audit](docs/research/upstream-response-integrity-audit.md).
+
+**Boundaries:** outer envelopes, totals, cursors and impossible pagination fail;
+singleton canonical identity, credentials, auth/security, media trust and write
+confirmation remain strict. No guessed data, generic response framework,
+cross-provider substitution, account automation, new KuGou capability or live
+KuGou request. A partial result is valid rows plus an explicit omitted count;
+visible row length never drives provider continuation.
+
+**Exit:** no autonomous audit/implementation/test/build work remains; only
+Human real-account acceptance of naturally malformed liked, playlist, comment
+or lyric responses may remain. Commits are local and no push is authorized.
+
 ## Active Core/Product Workstream — KuGou third built-in Provider (HD-031)
 
 **Goal:** add KuGou Music as a third static public/read-first Provider through

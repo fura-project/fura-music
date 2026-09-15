@@ -480,3 +480,31 @@ first-class; NetEase remains independently owned; all Provider identities,
 credentials, sessions, pagination and media resolution remain exact and
 provider-scoped. Public distribution and legal authorization remain a future
 Human/legal decision rather than a claim established by technical integration.
+
+## HD-032 — Upstream response integrity and partial-resilience audit
+
+**Status:** Accepted by explicit Human instruction on 2026-09-16.
+
+**Decision:** Audit every currently implemented QQ Music and NetEase response
+boundary, plus only the already committed KuGou Track Search slice, so failure
+granularity matches data risk. HTTP/body/business envelopes, required page
+metadata, cursor progression, credentials, authentication/security challenges,
+canonical singleton identity, authorization-bearing media and all write
+confirmations remain fail-closed. Inside a valid collection container, one
+isolated malformed row may be omitted only when remaining canonical identities
+and raw progression remain provable. Optional presentation fields may degrade
+without inventing data; malformed auxiliary lyric or translation lines may not
+destroy valid original lyrics. Every omission is explicit and pagination is
+based on upstream/raw positions, never the visible item count.
+
+**Boundaries:** No generic response framework, guessed identity, repaired
+business metadata, cross-provider fallback, credential/media/write relaxation,
+account automation or new capability is authorized. HD-031 remains in force:
+KuGou detail, catalog, lyrics, media, authentication, Bridge and Flutter work
+remain outside this task, and its network budget stays closed. Small private
+decoder helpers and the minimum Domain/Bridge/Flutter fields needed to carry an
+omitted count are allowed. Machine completion requires malformed fixture
+coverage, Rust/Flutter gates and Linux/Android ARM64 Release builds; real-account
+liked/comment/lyric acceptance remains Human review. See
+[the endpoint audit](docs/research/upstream-response-integrity-audit.md). Logical
+commits remain local; no push is authorized.
