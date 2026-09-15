@@ -72,17 +72,21 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   late final Listenable _controllers;
   final TextEditingController _queryController = TextEditingController();
   late final FocusNode _queryFocusNode;
-  final Object _suggestionTapRegionGroup = Object();
+  final MenuController _suggestionMenuController = MenuController();
   final Set<_SearchType> _visitedTypes = {_SearchType.tracks};
   _SearchType _searchType = _SearchType.tracks;
+  int _searchTypeTransition = 0;
 
   void submitTrackQuery(String query) {
     final normalized = query.trim();
     if (normalized.isEmpty) return;
+    _suggestionMenuController.close();
+    _suggestionController.dismiss();
     if (_searchType != _SearchType.tracks) {
       setState(() {
         _searchType = _SearchType.tracks;
         _visitedTypes.add(_SearchType.tracks);
+        _searchTypeTransition += 1;
       });
     }
     _replaceQueryText(normalized);
@@ -110,6 +114,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
       widget.suggestionGateway,
     );
     _queryFocusNode.addListener(_handleQueryFocus);
+    _suggestionController.addListener(_handleSuggestions);
     _controllers = Listenable.merge([
       _controller,
       _artistController,
@@ -126,6 +131,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     _artistController.dispose();
     _albumController.dispose();
     _playlistController.dispose();
+    _suggestionController.removeListener(_handleSuggestions);
     _suggestionController.dispose();
     _queryController.dispose();
     _queryFocusNode
@@ -158,34 +164,12 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                   },
                   onSubmitted: _submit,
                   onChanged: _suggestionController.updateQuery,
-                  groupId: _suggestionTapRegionGroup,
-                  onTapOutside: (_) => _suggestionController.dismiss(),
+                  suggestions: _suggestionController,
+                  menuController: _suggestionMenuController,
+                  onSuggestionSelected: _selectSuggestion,
+                  onMenuClosed: _handleSuggestionMenuClosed,
                   onClear: _clear,
                 ),
-                if (_queryFocusNode.hasFocus && _suggestionController.visible)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      desktop ? 48 : 20,
-                      0,
-                      desktop ? 48 : 20,
-                      12,
-                    ),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 920),
-                        child: TextFieldTapRegion(
-                          groupId: _suggestionTapRegionGroup,
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: TrackSearchSuggestionsPanel(
-                              controller: _suggestionController,
-                              onSelected: _selectSuggestion,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     desktop ? 48 : 20,
@@ -233,12 +217,18 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
-                    child: switch (_searchType) {
-                      _SearchType.tracks => _trackBody(context, desktop),
-                      _SearchType.artists => _artistBody(context, desktop),
-                      _SearchType.albums => _albumBody(context, desktop),
-                      _SearchType.playlists => _playlistBody(context, desktop),
-                    },
+                    child: KeyedSubtree(
+                      key: ValueKey('search-type-body-$_searchTypeTransition'),
+                      child: switch (_searchType) {
+                        _SearchType.tracks => _trackBody(context, desktop),
+                        _SearchType.artists => _artistBody(context, desktop),
+                        _SearchType.albums => _albumBody(context, desktop),
+                        _SearchType.playlists => _playlistBody(
+                          context,
+                          desktop,
+                        ),
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -498,6 +488,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   );
 
   void _submit(String query) {
+    _suggestionMenuController.close();
     _suggestionController.dismiss();
     switch (_searchType) {
       case _SearchType.tracks:
@@ -518,12 +509,14 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   void _selectSearchType(Set<_SearchType> selection) {
     final next = selection.single;
     if (_searchType == next) return;
+    _suggestionMenuController.close();
     _suggestionController.dismiss();
     final firstVisit = !_visitedTypes.contains(next);
     final currentText = _queryController.text.trim();
     setState(() {
       _searchType = next;
       _visitedTypes.add(next);
+      _searchTypeTransition += 1;
     });
     if (firstVisit) {
       _replaceQueryText(currentText);
@@ -547,6 +540,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
 
   void _clear() {
     _queryController.clear();
+    _suggestionMenuController.close();
     _suggestionController.dismiss();
     switch (_searchType) {
       case _SearchType.tracks:
@@ -575,9 +569,28 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   void _handleQueryFocus() {
     if (_queryFocusNode.hasFocus) {
       _suggestionController.updateQuery(_queryController.text);
-    } else {
+    } else if (!_suggestionMenuController.isOpen) {
       _suggestionController.dismiss();
     }
+  }
+
+  void _handleSuggestions() {
+    if (!mounted) return;
+    final shouldOpen =
+        _queryFocusNode.hasFocus && _suggestionController.visible;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (shouldOpen && !_suggestionMenuController.isOpen) {
+        _suggestionMenuController.open();
+      } else if (!shouldOpen && _suggestionMenuController.isOpen) {
+        _suggestionMenuController.close();
+      }
+      setState(() {});
+    });
+  }
+
+  void _handleSuggestionMenuClosed() {
+    if (_suggestionController.visible) _suggestionController.dismiss();
   }
 
   KeyEventResult _handleSuggestionKeyEvent(FocusNode _, KeyEvent event) {
@@ -603,6 +616,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     }
     if (event.logicalKey == LogicalKeyboardKey.escape &&
         _suggestionController.visible) {
+      _suggestionMenuController.close();
       _suggestionController.dismiss();
       return KeyEventResult.handled;
     }
@@ -610,6 +624,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   }
 
   void _selectSuggestion(String query) {
+    _suggestionMenuController.close();
     _replaceQueryText(query);
     _submit(query);
   }
@@ -645,8 +660,10 @@ class _SearchField extends StatelessWidget {
     required this.hintText,
     required this.onSubmitted,
     required this.onChanged,
-    required this.groupId,
-    required this.onTapOutside,
+    required this.suggestions,
+    required this.menuController,
+    required this.onSuggestionSelected,
+    required this.onMenuClosed,
     required this.onClear,
   });
 
@@ -657,8 +674,10 @@ class _SearchField extends StatelessWidget {
   final String hintText;
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
-  final Object groupId;
-  final TapRegionCallback onTapOutside;
+  final TrackSearchSuggestionController suggestions;
+  final MenuController menuController;
+  final ValueChanged<String> onSuggestionSelected;
+  final VoidCallback onMenuClosed;
   final VoidCallback onClear;
 
   @override
@@ -672,34 +691,67 @@ class _SearchField extends StatelessWidget {
     child: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 920),
-        child: ValueListenableBuilder<TextEditingValue>(
-          valueListenable: controller,
-          builder: (context, value, _) => TextField(
-            key: const ValueKey('track-search-field'),
-            controller: controller,
-            focusNode: focusNode,
-            groupId: groupId,
-            onTapOutside: onTapOutside,
-            autofocus: true,
-            textInputAction: TextInputAction.search,
-            onChanged: onChanged,
-            onSubmitted: loading ? null : onSubmitted,
-            decoration: InputDecoration(
-              hintText: hintText,
-              prefixIcon: const Icon(Icons.search_rounded),
-              suffixIcon: value.text.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: context.l10n.commonClearSearch,
-                      onPressed: onClear,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(22),
-                borderSide: BorderSide.none,
+        child: LayoutBuilder(
+          builder: (context, constraints) => MenuAnchor(
+            key: const ValueKey('track-search-suggestions-anchor'),
+            controller: menuController,
+            childFocusNode: focusNode,
+            style: MenuStyle(
+              padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+              backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+              surfaceTintColor: const WidgetStatePropertyAll(
+                Colors.transparent,
+              ),
+              shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+              elevation: const WidgetStatePropertyAll(0),
+              fixedSize: WidgetStatePropertyAll(
+                Size.fromWidth(constraints.maxWidth),
+              ),
+              shape: const WidgetStatePropertyAll(
+                RoundedRectangleBorder(borderRadius: BorderRadius.zero),
               ),
             ),
+            alignmentOffset: const Offset(0, 8),
+            crossAxisUnconstrained: false,
+            consumeOutsideTap: false,
+            onClose: onMenuClosed,
+            menuChildren: [
+              TrackSearchSuggestionsPanel(
+                controller: suggestions,
+                popup: true,
+                keyPrefix: 'track',
+                onSelected: onSuggestionSelected,
+              ),
+            ],
+            builder: (context, _, _) =>
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (context, value, _) => TextField(
+                    key: const ValueKey('track-search-field'),
+                    controller: controller,
+                    focusNode: focusNode,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    onChanged: onChanged,
+                    onSubmitted: loading ? null : onSubmitted,
+                    decoration: InputDecoration(
+                      hintText: hintText,
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: value.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: context.l10n.commonClearSearch,
+                              onPressed: onClear,
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -191,6 +192,69 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('repeated failure does not duplicate an outgoing Search body', (
+    tester,
+  ) async {
+    final search = _SequentialControlledSearchGateway();
+    final playback = QueuePlaybackController(
+      TestPlaybackQueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TrackSearchPage(
+          gateway: search,
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+
+    final field = find.byKey(const ValueKey('track-search-field'));
+    await tester.enterText(field, 'first failure');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    search.completeNext(
+      const TrackSearchPageResult(failure: SearchFailure.network),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('track-search-error')), findsOneWidget);
+
+    await tester.enterText(field, 'second failure');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byKey(const ValueKey('track-search-loading')), findsOneWidget);
+    search.completeNext(
+      const TrackSearchPageResult(failure: SearchFailure.network),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.enterText(field, 'third failure');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('track-search-loading')), findsOneWidget);
+    search.completeNext(
+      const TrackSearchPageResult(failure: SearchFailure.network),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('track-search-error')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('search result can be queued or handed to playback', (
     tester,
   ) async {
@@ -276,9 +340,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('typing shows debounced provider-backed suggestions in place', (
+  testWidgets('typing overlays debounced provider-backed suggestions', (
     tester,
   ) async {
+    await _loadSearchReviewFonts(tester);
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -314,6 +379,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        debugShowCheckedModeBanner: false,
         home: TrackSearchPage(
           gateway: search,
           suggestionGateway: suggestions,
@@ -328,6 +394,9 @@ void main() {
     );
 
     final field = find.byKey(const ValueKey('track-search-field'));
+    final selectorTop = tester.getTopLeft(
+      find.byKey(const ValueKey('search-types')),
+    );
     await tester.enterText(field, 'nev');
     await tester.pump(const Duration(milliseconds: 319));
     expect(suggestions.requests, isEmpty);
@@ -351,6 +420,10 @@ void main() {
           .getSize(find.byKey(const ValueKey('track-search-suggestions')))
           .width,
       closeTo(tester.getSize(field).width, 1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('search-types'))),
+      selectorTop,
     );
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     addTearDown(mouse.removePointer);
@@ -382,8 +455,17 @@ void main() {
       ]) {
         tester.view.physicalSize = size;
         await tester.pumpAndSettle();
+        await tester.tap(field);
+        await tester.enterText(field, 'ne');
+        await tester.enterText(field, 'nev');
+        await tester.pump(const Duration(milliseconds: 320));
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('track-search-suggestions')),
+          findsOneWidget,
+        );
         await expectLater(
-          find.byType(TrackSearchPage),
+          find.byType(MaterialApp),
           matchesGoldenFile(
             Uri.file(
               '/tmp/fura-search-suggestions-'
@@ -394,6 +476,11 @@ void main() {
       }
       tester.view.physicalSize = const Size(390, 844);
       await tester.pumpAndSettle();
+      await tester.tap(field);
+      await tester.enterText(field, 'ne');
+      await tester.enterText(field, 'nev');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pump();
     }
 
     await tester.tap(find.byKey(const ValueKey('track-search-suggestion-0')));
@@ -406,6 +493,22 @@ void main() {
       findsNothing,
     );
     expect(find.text('Selected result'), findsOneWidget);
+    final resultTop = tester.getTopLeft(
+      find.byKey(const ValueKey('track-search-result-0')),
+    );
+    await tester.tap(field);
+    await tester.enterText(field, 'another query');
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('track-search-suggestions')),
+      findsOneWidget,
+    );
+    expect(find.text('Selected result'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('track-search-result-0'))),
+      resultTop,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -534,6 +637,7 @@ void main() {
 
       await tester.enterText(field, 'outside');
       await tester.pump();
+      await tester.pump();
       expect(
         find.byKey(const ValueKey('track-search-suggestions')),
         findsOneWidget,
@@ -568,6 +672,7 @@ void main() {
   testWidgets('compact suggestions localize the raw action in Chinese', (
     tester,
   ) async {
+    await _loadSearchReviewFonts(tester);
     final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -584,6 +689,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        debugShowCheckedModeBanner: false,
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -606,6 +712,7 @@ void main() {
       '神曼波',
     );
     await tester.pump();
+    await tester.pump();
 
     final raw = find.byKey(const ValueKey('track-search-suggestion-raw'));
     expect(find.text('搜索“神曼波”'), findsOneWidget);
@@ -614,7 +721,7 @@ void main() {
     expect(tester.takeException(), isNull);
     if (const bool.fromEnvironment('SEARCH_VISUAL_REVIEW')) {
       await expectLater(
-        find.byType(TrackSearchPage),
+        find.byType(MaterialApp),
         matchesGoldenFile(
           Uri.file('/tmp/fura-search-suggestions-zh-390x844.png'),
         ),
@@ -772,6 +879,20 @@ void main() {
   });
 }
 
+Future<void> _loadSearchReviewFonts(WidgetTester tester) async {
+  const capture = bool.fromEnvironment('SEARCH_VISUAL_REVIEW');
+  const reviewFont = String.fromEnvironment('HOME_REVIEW_CJK_FONT');
+  if (!capture || reviewFont.isEmpty) return;
+  await tester.runAsync(() async {
+    await (FontLoader('Roboto')
+          ..addFont(File(reviewFont).readAsBytes().then(ByteData.sublistView)))
+        .load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+  });
+}
+
 class _SearchGateway implements TrackSearchGateway {
   _SearchGateway(this.track);
 
@@ -864,6 +985,26 @@ class _ControlledSearchGateway implements TrackSearchGateway {
     required int page,
     required int size,
   }) => _FutureSearchOperation(_completer.future);
+}
+
+class _SequentialControlledSearchGateway implements TrackSearchGateway {
+  final List<Completer<TrackSearchPageResult>> _operations = [];
+  int _completionIndex = 0;
+
+  void completeNext(TrackSearchPageResult result) {
+    _operations[_completionIndex++].complete(result);
+  }
+
+  @override
+  TrackSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) {
+    final completer = Completer<TrackSearchPageResult>();
+    _operations.add(completer);
+    return _FutureSearchOperation(completer.future);
+  }
 }
 
 class _FutureSearchOperation implements TrackSearchPageLoadOperation {

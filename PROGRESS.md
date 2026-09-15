@@ -24,8 +24,11 @@ execution:
   current-Track locator now coalesces scroll/metrics/identity changes after
   layout and keeps one stable, semantics-safe button subtree. Search follows
   the provider-neutral [Search design](docs/design/search.md): raw submission is
-  always first, derived candidates are bounded and stale-safe, and inline/Home
-  popup variants share keyboard, mouse, touch and accessibility behavior.
+  always first, derived candidates are bounded and stale-safe, and both Search
+  and Home use field-width anchored popups with shared keyboard, mouse, touch
+  and accessibility behavior. Search result state updates now remain inside one
+  stable type-owned `AnimatedSwitcher` child, so rapid repeated failures cannot
+  retain duplicate keyed error panels while type changes still animate.
 
   Compact Expanded playback follows [Now Playing design](docs/design/now-playing.md):
   a 48 dp primary action is centered between directional control clusters
@@ -34,12 +37,16 @@ execution:
   comment avatars, tonal top bar and first-play entrance remain intact.
 
   Focused interaction suites, generated localization, 256-file formatting,
-  direct Dart analysis, all 616 Flutter tests, Linux Release, Android ARM64
-  Debug/Release and desktop/compact visual matrices pass without layout
+  direct Dart analysis, all 617 Flutter tests, Linux Release, the current
+  Android ARM64 Debug build, the prior Android ARM64 Release build and
+  desktop/compact visual matrices pass without layout
   exceptions. Real Linux rapid resize/disconnect behavior, physical touch
   density, provider suggestion usefulness, IME variation and final visual/
   motion acceptance remain `HUMAN_REVIEW`. Build caches were retained; changes
-  are local and no push was performed.
+  are local and no push was performed. The separately reported large-collection
+  rapid-load `RawTooltipState` multiple-ticker and
+  `semantics.parentDataDirty` failure remains an uninvestigated machine
+  regression for a later bounded task; this checkpoint does not claim it fixed.
 
 - **2026-09-15 HD-030 Android system and NetEase playback machine pass:** the
   two failures were diagnosed independently while retaining one root

@@ -32,9 +32,10 @@ locally invented catalog names as provider results.
 - Replacing text cancels the previous operation, clears its entries and
   selection synchronously, and generation-checks late completion. A stale
   response cannot reappear under new text.
-- The dedicated Search page displays suggestions inline at exactly the field
-  width. Home displays the same panel in an anchored popup at exactly the top
-  field width; closing it does not navigate or activate content behind it.
+- The dedicated Search page and Home both display the panel in an anchored
+  popup at exactly their field width. Editing a completed query therefore
+  keeps the retained result list in place instead of replacing or shifting it;
+  closing the popup does not navigate or activate content behind it.
 - Focus loss, outside click/tap, Escape, search-type change and submission
   dismiss the panel. Returning focus may request suggestions again for the
   current text.

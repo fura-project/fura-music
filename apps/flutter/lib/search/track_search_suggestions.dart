@@ -204,12 +204,14 @@ class TrackSearchSuggestionsPanel extends StatelessWidget {
     required this.controller,
     required this.onSelected,
     this.popup = false,
+    this.keyPrefix,
     super.key,
   });
 
   final TrackSearchSuggestionController controller;
   final ValueChanged<String> onSelected;
   final bool popup;
+  final String? keyPrefix;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -220,22 +222,17 @@ class TrackSearchSuggestionsPanel extends StatelessWidget {
   Widget _buildPanel(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final entries = controller.entries;
+    final effectiveKeyPrefix = keyPrefix ?? (popup ? 'top' : 'track');
     final content = Column(
-      key: ValueKey(
-        popup ? 'top-search-suggestions' : 'track-search-suggestions',
-      ),
+      key: ValueKey('$effectiveKeyPrefix-search-suggestions'),
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var index = 0; index < entries.length; index++) ...[
           _TrackSearchSuggestionRow(
             key: ValueKey(
               entries[index].raw
-                  ? (popup
-                        ? 'top-search-suggestion-raw'
-                        : 'track-search-suggestion-raw')
-                  : (popup
-                        ? 'top-search-suggestion-${index - 1}'
-                        : 'track-search-suggestion-${index - 1}'),
+                  ? '$effectiveKeyPrefix-search-suggestion-raw'
+                  : '$effectiveKeyPrefix-search-suggestion-${index - 1}',
             ),
             suggestion: entries[index],
             highlighted: controller.highlightedIndex == index,
