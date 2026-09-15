@@ -760,11 +760,6 @@ class _HomeCompactLayout extends StatelessWidget {
                 lastOpened: lastOpenedRecommendation,
                 returnFocusNode: featuredReturnFocusNode,
               ),
-              const SizedBox(height: 24),
-              _CompactHomeActions(
-                onOpenDiscover: onOpenDiscover,
-                onOpenLibrary: onOpenLibrary,
-              ),
               const SizedBox(height: _HomeGeometry.sectionGap),
               _HomeSectionHeader(
                 titleKey: const ValueKey('home-library-heading'),
@@ -2313,81 +2308,6 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
       ),
     };
   }
-}
-
-class _CompactHomeActions extends StatelessWidget {
-  const _CompactHomeActions({
-    required this.onOpenDiscover,
-    required this.onOpenLibrary,
-  });
-
-  final VoidCallback onOpenDiscover;
-  final VoidCallback onOpenLibrary;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    key: const ValueKey('home-compact-actions'),
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      _CompactHomeAction(
-        key: const ValueKey('home-compact-open-discover'),
-        icon: Icons.explore_outlined,
-        label: context.l10n.homeDiscoverAction,
-        onPressed: onOpenDiscover,
-      ),
-      _CompactHomeAction(
-        icon: Icons.today_outlined,
-        label: context.l10n.homeDailyAction,
-        onPressed: onOpenDiscover,
-      ),
-      _CompactHomeAction(
-        icon: Icons.leaderboard_outlined,
-        label: context.l10n.homeRankingsAction,
-        onPressed: onOpenDiscover,
-      ),
-      _CompactHomeAction(
-        key: const ValueKey('home-compact-open-library'),
-        icon: Icons.favorite_border_rounded,
-        label: context.l10n.homeLikedAction,
-        onPressed: onOpenLibrary,
-      ),
-    ],
-  );
-}
-
-class _CompactHomeAction extends StatelessWidget {
-  const _CompactHomeAction({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    super.key,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 72,
-    child: Column(
-      children: [
-        IconButton.filledTonal(
-          onPressed: onPressed,
-          tooltip: label,
-          icon: Icon(icon),
-          constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-      ],
-    ),
-  );
 }
 
 class _PersonalizedTrackSection extends StatelessWidget {

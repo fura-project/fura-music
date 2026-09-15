@@ -176,9 +176,11 @@ class AuthenticatedDiscoveryDependencies {
     required this.newSongGateway,
     required this.rankingGateway,
     required this.radarGateway,
+    this.trackSuggestionGateway,
   });
 
   final TrackSearchGateway trackSearchGateway;
+  final TrackSearchGateway? trackSuggestionGateway;
   final ArtistSearchGateway artistSearchGateway;
   final AlbumSearchGateway albumSearchGateway;
   final PlaylistSearchGateway playlistSearchGateway;

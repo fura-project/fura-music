@@ -1171,5 +1171,7 @@
   "@nowPlayingEmptyTitle": {"description": "Empty state title for the expanded Now Playing page."},
   "@nowPlayingEmptyDetail": {"description": "Supporting copy for the expanded Now Playing empty state."},
   "@commentsEmptyTitle": {"description": "Empty state title for a successful response with no track comments."},
-  "@musicVideoEmptyTitle": {"description": "Empty state title when the current track has no music video."}
+  "@musicVideoEmptyTitle": {"description": "Empty state title when the current track has no music video."},
+  "commonLocateCurrentTrack": "Locate current track",
+  "@commonLocateCurrentTrack": {"description": "Tooltip for returning a scrolled music list to its currently playing row."}
 }

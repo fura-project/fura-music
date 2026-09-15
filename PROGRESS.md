@@ -1,15 +1,86 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: MIXED
+  work_domain: UI
   state: AWAITING_HUMAN_REVIEW
   acceptance_milestone: M1
-  active_workstream: ANDROID_SYSTEM_AND_NETEASE_PLAYBACK
-  current_task: HD_030_MACHINE_FIX_COMPLETE
-  next_action: HUMAN_ANDROID_RUNTIME_MATRIX
+  active_workstream: M4_COLLECTION_RESPONSIVENESS
+  current_task: M4_RECENT_PLAYS_RESIZE_OVERFLOW_REPAIRED
+  next_action: HUMAN_LINUX_RAPID_RESIZE_STABILITY_REVIEW
 ---
 
 # Current State
+
+- **2026-09-15 Recent Plays resize-transition overflow repair:** the reported
+  27 px `recent-plays-collapsed-row` overflow was traced to AnimatedSwitcher
+  retaining an outgoing desktop collapsed header while the Linux window became
+  narrow. That retained child now re-evaluates its live layout constraints and
+  switches from the established desktop one-row composition to the established
+  medium/compact two-row composition below the same 820 px page breakpoint
+  after accounting for collapsed-header insets. Playback, Refresh, Search,
+  cloud history, paging and Shell ownership are unchanged. A regression starts
+  expansion, resizes from 1440 to 520 px inside the 240 ms outgoing transition,
+  and asserts that the retained header becomes the compact column without a
+  rendering exception. The five Recent Plays Widget tests, direct Dart
+  analysis and all 607 Flutter tests pass; the narrow transition frame was
+  rendered without horizontal overflow. Flutter's local Linux embedder source
+  shows the accompanying OpenGL message is emitted after waiting 100 ms for a
+  framebuffer matching GTK's new size during resize. PID 944964 left no
+  coredump, kernel OOM, GPU Xid or journal crash evidence, so the later device
+  disconnect cannot currently be attributed to that warning. No renderer,
+  Wayland/X11 or software-GL override was added. Real rapid-resize stability and
+  the disconnect outcome remain `HUMAN_REVIEW`. Build caches were retained. No
+  push was performed; the repair is included in the current local UI
+  checkpoint.
+
+- **2026-09-15 adaptive Search, collection and compact playback pass:**
+  collection Refresh now occupies the far-right app-bar action slot after the
+  header collapses while the shared Search field remains geometrically
+  centered. Search pages use the provider-neutral `Search` heading and Track
+  results now reuse the Liked/Playlist row, table-header, Queue and compact More
+  interaction model. A bounded debounced suggestion controller derives up to
+  six related titles from the active provider's first Track-search page;
+  standalone Search renders them inline and the Home search field presents the
+  same content in an anchored popup without introducing a separate unstable
+  suggestion endpoint. The four nonfunctional compact Home shortcuts were
+  removed. Compact expanded playback controls now fit Shuffle, Previous,
+  Play/Pause, Next, Repeat, Quality and Queue into one row; Stop remains
+  available through media commands and platform controls. Playlist current
+  playback now receives the same complete selected Material surface as Liked.
+  Playlist, Liked, Album, Artist, Ranking and Search results share an
+  off-viewport current-Track locator that returns to the active row and stays
+  hidden while that row is visible. Explicit scroll controllers retain
+  short-list collapse and paging through always-scrollable physics. Generated
+  English and Simplified Chinese localization is current. Direct Dart analysis,
+  all 606 Flutter tests and `git diff --check` pass. Desktop/compact Search,
+  collapsed Playlist, compact Home and compact expanded-player review artifacts
+  were rendered without overflow; real-device gesture density, suggestion
+  usefulness and final visual acceptance remain `HUMAN_REVIEW`. Build caches
+  were retained. No commit or push.
+
+- **2026-09-15 responsive Expanded Now Playing refinement:** the wide Track
+  hero now sizes artwork from both axes and scales the complete artwork,
+  metadata and action group into short windows without adding an inner scroll
+  surface; exceptionally short bounds use the existing horizontal composition.
+  Queue and Comments now open as trailing full-height Material 3 side sheets at
+  900 px and wider, while medium dialogs and compact bottom sheets remain. The
+  route captures the artwork-derived theme, so sheets retain the current
+  Track's dynamic colors rather than reverting to the global palette. The top
+  Now Playing bar uses a restrained artwork-tonal container gradient. QQ Music
+  and NetEase comment avatars now travel through bounded client, Domain,
+  Provider, generated Bridge and Flutter presentation layers with HTTPS
+  normalization, diagnostic redaction and a local initial fallback. The
+  redundant persistent desktop `Show lyrics` action was removed; artwork and
+  Track identity still open the lyric-first expanded page. The existing single
+  first-play size/fade/vertical reveal remains active on desktop and compact
+  layouts and immediate under reduced motion. Rust format, the full workspace
+  all-target suite (560 passed, 26 explicit live-or-Human tests ignored), strict
+  all-target Clippy, targeted Dart formatting, direct full Dart analysis and all
+  602 Flutter tests and the Linux Release bundle pass. Normal desktop, short
+  desktop, compact dark and wide Queue review artifacts were rendered without
+  overflow. Final aesthetics and motion feel remain `HUMAN_REVIEW`; Android
+  runtime verification remains a separate pending gate. Build caches were
+  retained. No commit or push.
 
 - **2026-09-15 HD-030 Android system and NetEase playback machine pass:** the
   two failures were diagnosed independently while retaining one root

@@ -43,6 +43,7 @@ import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
+import 'package:flutterustmusic/search/track_search_suggestions.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/settings/settings_page.dart';
@@ -539,6 +540,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late RecommendedPlaylistController _recommendedPlaylistController;
   late NewSongController _homeNewSongController;
   late RadarController _homeRadarController;
+  late TrackSearchSuggestionController _topSearchSuggestionController;
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -616,6 +618,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     _homeNewSongController = NewSongController(_discovery.newSongGateway);
     _homeRadarController = RadarController(_discovery.radarGateway);
+    _topSearchSuggestionController = TrackSearchSuggestionController(
+      _discovery.trackSuggestionGateway,
+    );
     _homeController.addListener(_onHomeChanged);
     _homeRadarController.addListener(_onHomeChanged);
   }
@@ -640,6 +645,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _homeNewSongController.dispose();
     _homeRadarController.removeListener(_onHomeChanged);
     _homeRadarController.dispose();
+    _topSearchSuggestionController.dispose();
   }
 
   @override
@@ -1205,6 +1211,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   void _submitTopSearch(String query) {
     final normalized = query.trim();
     if (normalized.isEmpty) return;
+    _topSearchSuggestionController.dismiss();
     _selectPrimaryDestination(AuthenticatedPrimaryDestination.search);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_searchOpen) return;
@@ -1623,6 +1630,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     setState(() => _topSearchFocused = focused);
   }
 
+  void _selectTopSearchSuggestion(String query) {
+    _topSearchController.value = TextEditingValue(
+      text: query,
+      selection: TextSelection.collapsed(offset: query.length),
+    );
+    _submitTopSearch(query);
+  }
+
   void _updateDiscoverHeaderCollapsed(bool collapsed) {
     if (!mounted || collapsed == _discoverHeaderCollapsed) return;
     setState(() => _discoverHeaderCollapsed = collapsed);
@@ -1805,6 +1820,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               onOpenPlaylist: _openSearchPlaylist,
               onSignInAgain: widget.onSignInAgain,
               providerDisplayName: _providerDisplayName,
+              suggestionGateway: _discovery.trackSuggestionGateway,
               embedded: true,
             )
           else
@@ -1866,6 +1882,22 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
       final showCollectionShellControls =
           collectionDetailOpen && _collectionDetailHeaderCollapsed;
+      final collectionRefreshAction =
+          showCollectionShellControls && playlistShellAction != null
+          ? IconButton(
+              key: const ValueKey('collection-detail-shell-refresh'),
+              tooltip: playlistShellAction.refreshing
+                  ? context.l10n.libraryRefreshingPlaylist
+                  : context.l10n.libraryRefreshPlaylist,
+              onPressed: playlistShellAction.onRefresh,
+              icon: playlistShellAction.refreshing
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+            )
+          : null;
       final mainAppBar = AppBar(
         automaticallyImplyLeading: false,
         title: Stack(
@@ -1884,9 +1916,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                           AuthenticatedPrimaryDestination.discover =>
                             context.l10n.navDiscover,
                           AuthenticatedPrimaryDestination.search =>
-                            context.l10n.shellSearchProvider(
-                              _providerDisplayName,
-                            ),
+                            context.l10n.navSearch,
                           AuthenticatedPrimaryDestination.library =>
                             context.l10n.navLiked,
                           AuthenticatedPrimaryDestination.recentPlays =>
@@ -1921,24 +1951,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               onSearchSubmitted: settingsOpen
                   ? _updateSettingsSearch
                   : _submitTopSearch,
-              searchTrailing:
-                  showCollectionShellControls && playlistShellAction != null
-                  ? IconButton(
-                      key: const ValueKey('collection-detail-shell-refresh'),
-                      tooltip: playlistShellAction.refreshing
-                          ? context.l10n.libraryRefreshingPlaylist
-                          : context.l10n.libraryRefreshPlaylist,
-                      onPressed: playlistShellAction.onRefresh,
-                      icon: playlistShellAction.refreshing
-                          ? const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : const Icon(Icons.refresh_rounded),
-                    )
-                  : null,
+              searchSuggestions: settingsOpen
+                  ? null
+                  : _topSearchSuggestionController,
+              onSearchSuggestionSelected: settingsOpen
+                  ? null
+                  : _selectTopSearchSuggestion,
+              searchEndInset: collectionRefreshAction == null ? 0 : 48,
             ),
             if (showCollectionShellControls)
               Positioned.fill(
@@ -1957,6 +1976,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         titleSpacing: compactActions ? 8 : 16,
         actions: extendedSidebar
             ? [
+                ?collectionRefreshAction,
                 SizedBox(
                   key: ValueKey(
                     settingsOpen
@@ -1967,6 +1987,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 ),
               ]
             : [
+                ?collectionRefreshAction,
                 AnimatedSwitcher(
                   key: const ValueKey('shell-account-actions-transition'),
                   duration: disableAnimations
@@ -3039,8 +3060,10 @@ class _PrimaryShellTitle extends StatelessWidget {
     required this.searchController,
     required this.onSearchChanged,
     required this.onSearchSubmitted,
+    this.searchEndInset = 0,
     this.onSearchFocusChanged,
-    this.searchTrailing,
+    this.searchSuggestions,
+    this.onSearchSuggestionSelected,
     super.key,
   });
 
@@ -3053,8 +3076,10 @@ class _PrimaryShellTitle extends StatelessWidget {
   final TextEditingController searchController;
   final ValueChanged<String>? onSearchChanged;
   final ValueChanged<String> onSearchSubmitted;
+  final double searchEndInset;
   final ValueChanged<bool>? onSearchFocusChanged;
-  final Widget? searchTrailing;
+  final TrackSearchSuggestionController? searchSuggestions;
+  final ValueChanged<String>? onSearchSuggestionSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -3109,28 +3134,16 @@ class _PrimaryShellTitle extends StatelessWidget {
             child: titleContent,
           );
     if (!showSearchShortcut) return titleTransition;
-    final search = Focus(
-      skipTraversal: true,
-      onFocusChange: onSearchFocusChanged,
-      child: SearchBar(
-        key: searchKey,
-        controller: searchController,
-        onChanged: onSearchChanged,
-        onSubmitted: onSearchSubmitted,
-        textInputAction: TextInputAction.search,
-        hintText: searchHint,
-        leading: const Icon(Icons.search_rounded),
-        elevation: const WidgetStatePropertyAll(0),
-        backgroundColor: WidgetStatePropertyAll(
-          Theme.of(context).colorScheme.surfaceContainerHigh,
-        ),
-        constraints: const BoxConstraints(minHeight: 40),
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: 16),
-        ),
-      ),
+    final search = _ShellSearchField(
+      searchKey: searchKey,
+      controller: searchController,
+      hintText: searchHint,
+      onChanged: onSearchChanged,
+      onSubmitted: onSearchSubmitted,
+      onFocusChanged: onSearchFocusChanged,
+      suggestions: searchSuggestions,
+      onSuggestionSelected: onSearchSuggestionSelected,
     );
-    final trailing = searchTrailing;
     return Row(
       children: [
         titleTransition,
@@ -3148,26 +3161,164 @@ class _PrimaryShellTitle extends StatelessWidget {
             alignment: !showTitle ? Alignment.center : Alignment.centerRight,
             duration: transitionDuration,
             curve: Curves.easeInOutCubic,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: searchTrailing == null ? 448 : 560,
+            child: Transform.translate(
+              offset: Offset(
+                Directionality.of(context) == TextDirection.ltr
+                    ? searchEndInset / 2
+                    : -searchEndInset / 2,
+                0,
               ),
-              child: trailing != null
-                  ? Row(
-                      children: [
-                        // Reserve the same width on the leading side so the
-                        // search field does not move when this action appears.
-                        const SizedBox(width: 56),
-                        Expanded(child: search),
-                        const SizedBox(width: 8),
-                        SizedBox.square(dimension: 48, child: trailing),
-                      ],
-                    )
-                  : search,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 448),
+                child: search,
+              ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ShellSearchField extends StatefulWidget {
+  const _ShellSearchField({
+    required this.searchKey,
+    required this.controller,
+    required this.hintText,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.onFocusChanged,
+    required this.suggestions,
+    required this.onSuggestionSelected,
+  });
+
+  final Key searchKey;
+  final TextEditingController controller;
+  final String hintText;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String> onSubmitted;
+  final ValueChanged<bool>? onFocusChanged;
+  final TrackSearchSuggestionController? suggestions;
+  final ValueChanged<String>? onSuggestionSelected;
+
+  @override
+  State<_ShellSearchField> createState() => _ShellSearchFieldState();
+}
+
+class _ShellSearchFieldState extends State<_ShellSearchField> {
+  final FocusNode _focusNode = FocusNode(debugLabel: 'shell search');
+  final MenuController _menuController = MenuController();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocus);
+    widget.suggestions?.addListener(_handleSuggestions);
+  }
+
+  @override
+  void didUpdateWidget(_ShellSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.suggestions != widget.suggestions) {
+      oldWidget.suggestions?.removeListener(_handleSuggestions);
+      widget.suggestions?.addListener(_handleSuggestions);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.suggestions?.removeListener(_handleSuggestions);
+    _focusNode
+      ..removeListener(_handleFocus)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleFocus() {
+    widget.onFocusChanged?.call(_focusNode.hasFocus);
+    if (_focusNode.hasFocus) {
+      widget.suggestions?.updateQuery(widget.controller.text);
+    } else if (!_menuController.isOpen) {
+      widget.suggestions?.dismiss();
+    }
+  }
+
+  void _handleChanged(String value) {
+    widget.onChanged?.call(value);
+    widget.suggestions?.updateQuery(value);
+  }
+
+  void _handleSuggestions() {
+    if (!mounted) return;
+    final shouldOpen =
+        _focusNode.hasFocus && (widget.suggestions?.visible ?? false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (shouldOpen && !_menuController.isOpen) {
+        _menuController.open();
+      } else if (!shouldOpen && _menuController.isOpen) {
+        _menuController.close();
+      }
+      setState(() {});
+    });
+  }
+
+  void _selectSuggestion(String query) {
+    _menuController.close();
+    widget.suggestions?.dismiss();
+    widget.onSuggestionSelected?.call(query);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final suggestions = widget.suggestions;
+    final search = SearchBar(
+      key: widget.searchKey,
+      controller: widget.controller,
+      focusNode: _focusNode,
+      onChanged: _handleChanged,
+      onSubmitted: (query) {
+        _menuController.close();
+        suggestions?.dismiss();
+        widget.onSubmitted(query);
+      },
+      textInputAction: TextInputAction.search,
+      hintText: widget.hintText,
+      leading: const Icon(Icons.search_rounded),
+      elevation: const WidgetStatePropertyAll(0),
+      backgroundColor: WidgetStatePropertyAll(
+        Theme.of(context).colorScheme.surfaceContainerHigh,
+      ),
+      constraints: const BoxConstraints(minHeight: 40),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 16),
+      ),
+    );
+    if (suggestions == null || !suggestions.enabled) return search;
+    return MenuAnchor(
+      controller: _menuController,
+      childFocusNode: _focusNode,
+      style: const MenuStyle(
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
+        elevation: WidgetStatePropertyAll(0),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        ),
+      ),
+      alignmentOffset: const Offset(0, 8),
+      crossAxisUnconstrained: false,
+      consumeOutsideTap: false,
+      menuChildren: [
+        TrackSearchSuggestionsPanel(
+          controller: suggestions,
+          popup: true,
+          onSelected: _selectSuggestion,
+        ),
+      ],
+      builder: (context, controller, _) => search,
     );
   }
 }

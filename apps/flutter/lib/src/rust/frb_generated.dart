@@ -12519,15 +12519,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TrackCommentSummary dco_decode_track_comment_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return TrackCommentSummary(
       providerId: dco_decode_String(arr[0]),
       opaqueId: dco_decode_String(arr[1]),
       authorDisplayName: dco_decode_String(arr[2]),
-      content: dco_decode_String(arr[3]),
-      publishedAtUnixSeconds: dco_decode_u_32(arr[4]),
-      praiseCount: dco_decode_u_32(arr[5]),
+      authorAvatarUri: dco_decode_opt_String(arr[3]),
+      content: dco_decode_String(arr[4]),
+      publishedAtUnixSeconds: dco_decode_u_32(arr[5]),
+      praiseCount: dco_decode_u_32(arr[6]),
     );
   }
 
@@ -17411,6 +17412,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_providerId = sse_decode_String(deserializer);
     var var_opaqueId = sse_decode_String(deserializer);
     var var_authorDisplayName = sse_decode_String(deserializer);
+    var var_authorAvatarUri = sse_decode_opt_String(deserializer);
     var var_content = sse_decode_String(deserializer);
     var var_publishedAtUnixSeconds = sse_decode_u_32(deserializer);
     var var_praiseCount = sse_decode_u_32(deserializer);
@@ -17418,6 +17420,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       providerId: var_providerId,
       opaqueId: var_opaqueId,
       authorDisplayName: var_authorDisplayName,
+      authorAvatarUri: var_authorAvatarUri,
       content: var_content,
       publishedAtUnixSeconds: var_publishedAtUnixSeconds,
       praiseCount: var_praiseCount,
@@ -22306,6 +22309,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.providerId, serializer);
     sse_encode_String(self.opaqueId, serializer);
     sse_encode_String(self.authorDisplayName, serializer);
+    sse_encode_opt_String(self.authorAvatarUri, serializer);
     sse_encode_String(self.content, serializer);
     sse_encode_u_32(self.publishedAtUnixSeconds, serializer);
     sse_encode_u_32(self.praiseCount, serializer);

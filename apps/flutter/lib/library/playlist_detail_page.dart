@@ -179,7 +179,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       ),
     );
     if (widget.embedded) {
-      return ColoredBox(
+      return Material(
         key: const ValueKey('embedded-playlist-detail'),
         color: Theme.of(context).scaffoldBackgroundColor,
         child: body,
@@ -367,6 +367,13 @@ class _TrackCollection extends StatefulWidget {
 
 class _TrackCollectionState extends State<_TrackCollection> {
   (String, String)? _hoveredTrack;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   void _setHovered(PlaylistTrackSummary track, bool hovered) {
     final identity = (track.providerId, track.opaqueId);
@@ -401,81 +408,93 @@ class _TrackCollectionState extends State<_TrackCollection> {
             ),
           ),
         Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _clearHoverOnScroll,
-            child: ListView.separated(
-              key: const PageStorageKey<String>('playlist-detail-track-list'),
-              padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 20),
-              itemCount: widget.tracks.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 1),
-              itemBuilder: (context, index) {
-                if (index == widget.tracks.length) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Column(
-                      children: [
-                        Text(
-                          context.l10n.libraryShowingTracks(
-                            widget.tracks.length,
-                            widget.total,
-                          ),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (widget.isLoadingMore)
-                          const SizedBox.square(
-                            dimension: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2.5),
-                          )
-                        else if (widget.appendFailure != null)
-                          FilledButton.tonal(
-                            onPressed: widget.onRetryMore,
-                            child: Text(context.l10n.commonTryLoadingMoreAgain),
-                          )
-                        else if (widget.hasMore)
-                          FilledButton.tonal(
-                            onPressed: widget.onLoadMore,
-                            child: Text(context.l10n.commonLoadMore),
-                          ),
-                        if (!widget.hasMore &&
-                            !widget.isLoadingMore &&
-                            widget.appendFailure == null)
+          child: MusicTrackLocatorOverlay(
+            controller: _scrollController,
+            currentIndex: musicTrackIndexOf(widget.tracks, widget.current),
+            desktop: widget.desktop,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _clearHoverOnScroll,
+              child: ListView.separated(
+                controller: _scrollController,
+                key: const PageStorageKey<String>('playlist-detail-track-list'),
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 20),
+                itemCount: widget.tracks.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 1),
+                itemBuilder: (context, index) {
+                  if (index == widget.tracks.length) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
                           Text(
-                            context.l10n.libraryEndPlaylist,
-                            style: Theme.of(context).textTheme.labelLarge
+                            context.l10n.libraryShowingTracks(
+                              widget.tracks.length,
+                              widget.total,
+                            ),
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: Theme.of(context)
                                       .colorScheme
                                       .onSurfaceVariant,
                                 ),
                           ),
-                      ],
-                    ),
+                          const SizedBox(height: 12),
+                          if (widget.isLoadingMore)
+                            const SizedBox.square(
+                              dimension: 28,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          else if (widget.appendFailure != null)
+                            FilledButton.tonal(
+                              onPressed: widget.onRetryMore,
+                              child: Text(
+                                context.l10n.commonTryLoadingMoreAgain,
+                              ),
+                            )
+                          else if (widget.hasMore)
+                            FilledButton.tonal(
+                              onPressed: widget.onLoadMore,
+                              child: Text(context.l10n.commonLoadMore),
+                            ),
+                          if (!widget.hasMore &&
+                              !widget.isLoadingMore &&
+                              widget.appendFailure == null)
+                            Text(
+                              context.l10n.libraryEndPlaylist,
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }
+                  final track = widget.tracks[index];
+                  final identity = (track.providerId, track.opaqueId);
+                  return _TrackRow(
+                    index: index + 1,
+                    track: track,
+                    desktop: widget.desktop,
+                    current: _sameTrack(widget.current, track),
+                    hovered: _hoveredTrack == identity,
+                    onHoverChanged: (hovered) => _setHovered(track, hovered),
+                    onTap: () => widget.onTrackSelected(index),
+                    onAddToQueue: () => widget.onTrackQueued(track),
+                    onOpenAlbum:
+                        widget.onOpenAlbum == null || track.album == null
+                        ? null
+                        : () => widget.onOpenAlbum!(track.album!),
+                    onOpenArtist: widget.onOpenArtist,
                   );
-                }
-                final track = widget.tracks[index];
-                final identity = (track.providerId, track.opaqueId);
-                return _TrackRow(
-                  index: index + 1,
-                  track: track,
-                  desktop: widget.desktop,
-                  current: _sameTrack(widget.current, track),
-                  hovered: _hoveredTrack == identity,
-                  onHoverChanged: (hovered) => _setHovered(track, hovered),
-                  onTap: () => widget.onTrackSelected(index),
-                  onAddToQueue: () => widget.onTrackQueued(track),
-                  onOpenAlbum: widget.onOpenAlbum == null || track.album == null
-                      ? null
-                      : () => widget.onOpenAlbum!(track.album!),
-                  onOpenArtist: widget.onOpenArtist,
-                );
-              },
+                },
+              ),
             ),
           ),
         ),

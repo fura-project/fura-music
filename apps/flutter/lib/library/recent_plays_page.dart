@@ -499,61 +499,68 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     required bool hasSnapshot,
     required VoidCallback? onPlay,
     required VoidCallback? onRefresh,
-  }) {
-    if (desktop) {
-      return SizedBox(
-        height: 48,
-        child: Row(
-          key: const ValueKey('recent-plays-collapsed-row'),
-          children: [
-            _collapsedTitle(context),
-            const SizedBox(width: 16),
-            _collapsedCount(context, countLabel),
-            const Spacer(),
-            _recentPlayButton(onPressed: onPlay, compact: true),
-            const SizedBox(width: 8),
-            _recentRefreshButton(onPressed: onRefresh, compact: true),
-            const SizedBox(width: 16),
-            SizedBox(width: 220, child: _recentSearch(enabled: hasSnapshot)),
-            if (widget.collapsedHeaderActions case final actions?) ...[
-              const SizedBox(width: 12),
-              actions,
-            ],
-          ],
-        ),
-      );
-    }
-    return Column(
-      key: const ValueKey('recent-plays-collapsed-column'),
-      children: [
-        Row(
-          children: [
-            Flexible(child: _collapsedTitle(context)),
-            const Spacer(),
-            if (widget.collapsedHeaderActions case final actions?) ...[
-              const SizedBox(width: 12),
-              actions,
-            ],
-          ],
-        ),
-        const SizedBox(height: 8),
-        _recentSearch(enabled: hasSnapshot),
-        const SizedBox(height: 8),
-        SizedBox(
+  }) => LayoutBuilder(
+    builder: (context, constraints) {
+      // AnimatedSwitcher keeps its outgoing header alive while the window is
+      // resized. Re-evaluate the retained child's *current* constraints so a
+      // former desktop row cannot be laid out inside a newly narrow surface.
+      // The 24 px adjustment is the collapsed header's two 12 px insets.
+      final useSingleRow = desktop && constraints.maxWidth >= 820 - 24;
+      if (useSingleRow) {
+        return SizedBox(
           height: 48,
           child: Row(
+            key: const ValueKey('recent-plays-collapsed-row'),
             children: [
+              _collapsedTitle(context),
+              const SizedBox(width: 16),
               _collapsedCount(context, countLabel),
               const Spacer(),
               _recentPlayButton(onPressed: onPlay, compact: true),
               const SizedBox(width: 8),
               _recentRefreshButton(onPressed: onRefresh, compact: true),
+              const SizedBox(width: 16),
+              SizedBox(width: 220, child: _recentSearch(enabled: hasSnapshot)),
+              if (widget.collapsedHeaderActions case final actions?) ...[
+                const SizedBox(width: 12),
+                actions,
+              ],
             ],
           ),
-        ),
-      ],
-    );
-  }
+        );
+      }
+      return Column(
+        key: const ValueKey('recent-plays-collapsed-column'),
+        children: [
+          Row(
+            children: [
+              Flexible(child: _collapsedTitle(context)),
+              const Spacer(),
+              if (widget.collapsedHeaderActions case final actions?) ...[
+                const SizedBox(width: 12),
+                actions,
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          _recentSearch(enabled: hasSnapshot),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 48,
+            child: Row(
+              children: [
+                _collapsedCount(context, countLabel),
+                const Spacer(),
+                _recentPlayButton(onPressed: onPlay, compact: true),
+                const SizedBox(width: 8),
+                _recentRefreshButton(onPressed: onRefresh, compact: true),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
 
   Widget _collapsedTitle(BuildContext context) => Semantics(
     header: true,

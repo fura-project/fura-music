@@ -7,6 +7,7 @@ import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
@@ -21,6 +22,7 @@ import 'package:flutterustmusic/search/playlist_search_controller.dart';
 import 'package:flutterustmusic/search/playlist_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_controller.dart';
 import 'package:flutterustmusic/search/track_search_gateway.dart';
+import 'package:flutterustmusic/search/track_search_suggestions.dart';
 
 class TrackSearchPage extends StatefulWidget {
   const TrackSearchPage({
@@ -35,6 +37,7 @@ class TrackSearchPage extends StatefulWidget {
     this.artistGateway,
     this.albumGateway,
     this.playlistGateway,
+    this.suggestionGateway,
     this.embedded = false,
     super.key,
   });
@@ -50,6 +53,7 @@ class TrackSearchPage extends StatefulWidget {
   final ArtistSearchGateway? artistGateway;
   final AlbumSearchGateway? albumGateway;
   final PlaylistSearchGateway? playlistGateway;
+  final TrackSearchGateway? suggestionGateway;
   final bool embedded;
 
   @override
@@ -63,6 +67,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   late final ArtistSearchController _artistController;
   late final AlbumSearchController _albumController;
   late final PlaylistSearchController _playlistController;
+  late final TrackSearchSuggestionController _suggestionController;
   late final Listenable _controllers;
   final TextEditingController _queryController = TextEditingController();
   final FocusNode _queryFocusNode = FocusNode(debugLabel: 'track search');
@@ -95,11 +100,16 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     _playlistController = PlaylistSearchController(
       widget.playlistGateway ?? const RustPlaylistSearchGateway(),
     );
+    _suggestionController = TrackSearchSuggestionController(
+      widget.suggestionGateway,
+    );
     _controllers = Listenable.merge([
       _controller,
       _artistController,
       _albumController,
       _playlistController,
+      _suggestionController,
+      _queryFocusNode,
     ]);
   }
 
@@ -109,6 +119,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     _artistController.dispose();
     _albumController.dispose();
     _playlistController.dispose();
+    _suggestionController.dispose();
     _queryController.dispose();
     _queryFocusNode.dispose();
     super.dispose();
@@ -137,8 +148,27 @@ class TrackSearchPageState extends State<TrackSearchPage> {
                     _SearchType.playlists => l10n.searchPlaylistHint,
                   },
                   onSubmitted: _submit,
+                  onChanged: _suggestionController.updateQuery,
                   onClear: _clear,
                 ),
+                if (_queryFocusNode.hasFocus && _suggestionController.visible)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      desktop ? 48 : 20,
+                      0,
+                      desktop ? 48 : 20,
+                      12,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 920),
+                        child: TrackSearchSuggestionsPanel(
+                          controller: _suggestionController,
+                          onSelected: _selectSuggestion,
+                        ),
+                      ),
+                    ),
+                  ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     desktop ? 48 : 20,
@@ -209,7 +239,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: Text(l10n.searchProviderTitle(_providerName(l10n))),
+        title: Text(l10n.navSearch),
       ),
       body: body,
       bottomNavigationBar: NowPlayingBar(
@@ -230,54 +260,58 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   String _providerName(AppLocalizations l10n) =>
       widget.providerDisplayName ?? l10n.providerQqMusic;
 
-  Widget _trackBody(BuildContext context, bool desktop) =>
-      switch (_controller.stage) {
-        TrackSearchStage.idle => MusicContentStatePanel(
-          key: ValueKey('track-search-idle'),
-          icon: Icons.search_rounded,
-          title: context.l10n.searchFindTracksTitle(
-            _providerName(context.l10n),
-          ),
-          detail: context.l10n.searchTrackPrompt,
-        ),
-        TrackSearchStage.loading => MusicLoadingPanel(
-          key: ValueKey('track-search-loading'),
-          label: context.l10n.searchLoadingTracks(_providerName(context.l10n)),
-        ),
-        TrackSearchStage.empty => MusicContentStatePanel(
-          key: const ValueKey('track-search-empty'),
-          icon: Icons.search_off_rounded,
-          title: context.l10n.searchNoTracksTitle,
-          detail: context.l10n.searchNoResultsDetail,
-          action: TextButton(
-            onPressed: _focusQuery,
-            child: Text(context.l10n.searchEditAction),
-          ),
-        ),
-        TrackSearchStage.error => _searchFailure(
-          key: const ValueKey('track-search-error'),
-          detail: _trackFailureCopy(_controller.failure, context.l10n),
-          canRetry: _controller.canRetry,
-          onRetry: _controller.retry,
-          onEdit: _focusQuery,
-        ),
-        TrackSearchStage.content => _SearchResults(
-          key: const ValueKey('track-search-content'),
-          query: _controller.query,
-          items: _controller.items,
-          total: _controller.total,
-          hasMore: _controller.hasMore,
-          isLoadingMore: _controller.isLoadingMore,
-          appendFailure: _controller.appendFailure,
-          onLoadMore: _controller.loadMore,
-          onRetryMore: _controller.retryMore,
-          onPlay: _play,
-          onQueue: _queue,
-          onOpenAlbum: widget.onOpenAlbum,
-          onOpenArtist: widget.onOpenArtist,
-          desktop: desktop,
-        ),
-      };
+  Widget _trackBody(
+    BuildContext context,
+    bool desktop,
+  ) => switch (_controller.stage) {
+    TrackSearchStage.idle => MusicContentStatePanel(
+      key: ValueKey('track-search-idle'),
+      icon: Icons.search_rounded,
+      title: context.l10n.searchFindTracksTitle(_providerName(context.l10n)),
+      detail: context.l10n.searchTrackPrompt,
+    ),
+    TrackSearchStage.loading => MusicLoadingPanel(
+      key: ValueKey('track-search-loading'),
+      label: context.l10n.searchLoadingTracks(_providerName(context.l10n)),
+    ),
+    TrackSearchStage.empty => MusicContentStatePanel(
+      key: const ValueKey('track-search-empty'),
+      icon: Icons.search_off_rounded,
+      title: context.l10n.searchNoTracksTitle,
+      detail: context.l10n.searchNoResultsDetail,
+      action: TextButton(
+        onPressed: _focusQuery,
+        child: Text(context.l10n.searchEditAction),
+      ),
+    ),
+    TrackSearchStage.error => _searchFailure(
+      key: const ValueKey('track-search-error'),
+      detail: _trackFailureCopy(_controller.failure, context.l10n),
+      canRetry: _controller.canRetry,
+      onRetry: _controller.retry,
+      onEdit: _focusQuery,
+    ),
+    TrackSearchStage.content => ValueListenableBuilder(
+      valueListenable: widget.queuePlaybackController.currentTrackListenable,
+      builder: (context, current, _) => _SearchResults(
+        key: const ValueKey('track-search-content'),
+        query: _controller.query,
+        items: _controller.items,
+        total: _controller.total,
+        hasMore: _controller.hasMore,
+        isLoadingMore: _controller.isLoadingMore,
+        appendFailure: _controller.appendFailure,
+        onLoadMore: _controller.loadMore,
+        onRetryMore: _controller.retryMore,
+        onPlay: _play,
+        onQueue: _queue,
+        onOpenAlbum: widget.onOpenAlbum,
+        onOpenArtist: widget.onOpenArtist,
+        current: current,
+        desktop: desktop,
+      ),
+    ),
+  };
 
   Widget _artistBody(BuildContext context, bool desktop) =>
       switch (_artistController.stage) {
@@ -447,6 +481,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
   );
 
   void _submit(String query) {
+    _suggestionController.dismiss();
     switch (_searchType) {
       case _SearchType.tracks:
         unawaited(_controller.submit(query));
@@ -494,6 +529,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
 
   void _clear() {
     _queryController.clear();
+    _suggestionController.dismiss();
     switch (_searchType) {
       case _SearchType.tracks:
         _controller.clear();
@@ -516,6 +552,11 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     _queryController.selection = TextSelection.collapsed(
       offset: _queryController.text.length,
     );
+  }
+
+  void _selectSuggestion(String query) {
+    _replaceQueryText(query);
+    _submit(query);
   }
 
   void _play(int index) {
@@ -548,6 +589,7 @@ class _SearchField extends StatelessWidget {
     required this.loading,
     required this.hintText,
     required this.onSubmitted,
+    required this.onChanged,
     required this.onClear,
   });
 
@@ -557,6 +599,7 @@ class _SearchField extends StatelessWidget {
   final bool loading;
   final String hintText;
   final ValueChanged<String> onSubmitted;
+  final ValueChanged<String> onChanged;
   final VoidCallback onClear;
 
   @override
@@ -578,6 +621,7 @@ class _SearchField extends StatelessWidget {
             focusNode: focusNode,
             autofocus: true,
             textInputAction: TextInputAction.search,
+            onChanged: onChanged,
             onSubmitted: loading ? null : onSubmitted,
             decoration: InputDecoration(
               hintText: hintText,
@@ -602,7 +646,7 @@ class _SearchField extends StatelessWidget {
   );
 }
 
-class _SearchResults extends StatelessWidget {
+class _SearchResults extends StatefulWidget {
   const _SearchResults({
     required this.query,
     required this.items,
@@ -616,6 +660,7 @@ class _SearchResults extends StatelessWidget {
     required this.onQueue,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.current,
     required this.desktop,
     super.key,
   });
@@ -632,62 +677,136 @@ class _SearchResults extends StatelessWidget {
   final ValueChanged<PlaylistTrackSummary> onQueue;
   final ValueChanged<AlbumSummary> onOpenAlbum;
   final ValueChanged<ArtistSummary> onOpenArtist;
+  final PlaylistTrackSummary? current;
   final bool desktop;
+
+  @override
+  State<_SearchResults> createState() => _SearchResultsState();
+}
+
+class _SearchResultsState extends State<_SearchResults> {
+  final ScrollController _scrollController = ScrollController();
+  (String, String)? _hoveredTrack;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _setHovered(PlaylistTrackSummary track, bool hovered) {
+    final identity = (track.providerId, track.opaqueId);
+    if (hovered && _hoveredTrack != identity) {
+      setState(() => _hoveredTrack = identity);
+    } else if (!hovered && _hoveredTrack == identity) {
+      setState(() => _hoveredTrack = null);
+    }
+  }
+
+  bool _clearHoverOnScroll(ScrollNotification notification) {
+    if (_hoveredTrack != null && notification is ScrollUpdateNotification) {
+      setState(() => _hoveredTrack = null);
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 1120),
-      child: ListView.builder(
-        key: const PageStorageKey('track-search-results'),
-        padding: EdgeInsets.fromLTRB(
-          desktop ? 40 : 12,
-          0,
-          desktop ? 40 : 12,
-          24,
-        ),
-        itemCount: items.length + 2,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              widget.desktop ? 48 : 20,
+              8,
+              widget.desktop ? 48 : 20,
+              widget.desktop ? 8 : 12,
+            ),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
               child: Semantics(
                 header: true,
                 child: Text(
-                  context.l10n.searchResultCount(total, query),
+                  context.l10n.searchResultCount(widget.total, widget.query),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-            );
-          }
-          if (index == items.length + 1) {
-            return _SearchFooter(
-              hasMore: hasMore,
-              isLoadingMore: isLoadingMore,
-              appendFailure: appendFailure != null,
-              onLoadMore: onLoadMore,
-              onRetryMore: onRetryMore,
-            );
-          }
-          final trackIndex = index - 1;
-          final item = items[trackIndex];
-          return _SearchTrackRow(
-            track: item.track,
-            album: item.album,
-            artists: item.artists,
-            index: trackIndex,
-            desktop: desktop,
-            onPlay: () => onPlay(trackIndex),
-            onQueue: () => onQueue(item.track),
-            onOpenAlbum: item.album == null
-                ? null
-                : () => onOpenAlbum(item.album!),
-            onOpenArtist: onOpenArtist,
-          );
-        },
+            ),
+          ),
+          if (widget.desktop)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: MusicTrackTableHeader(
+                titleLabel: context.l10n.tableTitle,
+                artistLabel: context.l10n.tableArtist,
+                albumLabel: context.l10n.tableAlbum,
+                durationLabel: context.l10n.tableDuration,
+              ),
+            ),
+          Expanded(
+            child: MusicTrackLocatorOverlay(
+              controller: _scrollController,
+              currentIndex: musicTrackIndexOf(
+                widget.items.map((item) => item.track).toList(growable: false),
+                widget.current,
+              ),
+              desktop: widget.desktop,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _clearHoverOnScroll,
+                child: ListView.builder(
+                  controller: _scrollController,
+                  key: const PageStorageKey('track-search-results'),
+                  padding: EdgeInsets.fromLTRB(
+                    widget.desktop ? 40 : 12,
+                    0,
+                    widget.desktop ? 40 : 12,
+                    24,
+                  ),
+                  itemCount: widget.items.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == widget.items.length) {
+                      return _SearchFooter(
+                        hasMore: widget.hasMore,
+                        isLoadingMore: widget.isLoadingMore,
+                        appendFailure: widget.appendFailure != null,
+                        onLoadMore: widget.onLoadMore,
+                        onRetryMore: widget.onRetryMore,
+                      );
+                    }
+                    final item = widget.items[index];
+                    final identity = (
+                      item.track.providerId,
+                      item.track.opaqueId,
+                    );
+                    return _SearchTrackRow(
+                      track: item.track,
+                      album: item.album,
+                      artists: item.artists,
+                      index: index,
+                      desktop: widget.desktop,
+                      current:
+                          item.track.providerId == widget.current?.providerId &&
+                          item.track.opaqueId == widget.current?.opaqueId,
+                      hovered: _hoveredTrack == identity,
+                      onHoverChanged: (hovered) =>
+                          _setHovered(item.track, hovered),
+                      onPlay: () => widget.onPlay(index),
+                      onQueue: () => widget.onQueue(item.track),
+                      onOpenAlbum: item.album == null
+                          ? null
+                          : () => widget.onOpenAlbum(item.album!),
+                      onOpenArtist: widget.onOpenArtist,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     ),
   );
@@ -1007,13 +1126,16 @@ class _PlaylistArtwork extends StatelessWidget {
   }
 }
 
-class _SearchTrackRow extends StatelessWidget {
+class _SearchTrackRow extends StatefulWidget {
   const _SearchTrackRow({
     required this.track,
     required this.album,
     required this.artists,
     required this.index,
     required this.desktop,
+    required this.current,
+    required this.hovered,
+    required this.onHoverChanged,
     required this.onPlay,
     required this.onQueue,
     required this.onOpenAlbum,
@@ -1025,80 +1147,179 @@ class _SearchTrackRow extends StatelessWidget {
   final List<ArtistSummary> artists;
   final int index;
   final bool desktop;
+  final bool current;
+  final bool hovered;
+  final ValueChanged<bool> onHoverChanged;
   final VoidCallback onPlay;
   final VoidCallback onQueue;
   final VoidCallback? onOpenAlbum;
   final ValueChanged<ArtistSummary> onOpenArtist;
 
   @override
+  State<_SearchTrackRow> createState() => _SearchTrackRowState();
+}
+
+class _SearchTrackRowState extends State<_SearchTrackRow> {
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final artistCopy = track.artistNames.isEmpty
+    final artistCopy = widget.track.artistNames.isEmpty
         ? context.l10n.trackUnknownArtist
-        : track.artistNames.join(' · ');
-    final detail = [artistCopy, ?track.albumTitle].join(' · ');
-    return Semantics(
-      container: true,
-      child: ListTile(
-        key: ValueKey('track-search-result-$index'),
-        minTileHeight: desktop ? 68 : 72,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        leading: SizedBox.square(
-          dimension: desktop ? 48 : 52,
-          child: _TrackArtwork(uri: track.artworkUri),
-        ),
-        title: Text(
-          track.subtitle == null
-              ? track.title
-              : '${track.title} · ${track.subtitle}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),
-        onTap: onPlay,
-        trailing: Wrap(
-          spacing: 2,
+        : widget.track.artistNames.join(' · ');
+    final title = widget.track.subtitle == null
+        ? widget.track.title
+        : '${widget.track.title} · ${widget.track.subtitle}';
+    return MusicTrackRowSurface(
+      itemKey: ValueKey('track-search-result-${widget.index}'),
+      desktop: widget.desktop,
+      current: widget.current,
+      hovered: widget.hovered,
+      onHoverChanged: widget.onHoverChanged,
+      semanticLabel: context.l10n.commonTrackSemantics(artistCopy, title),
+      onTap: widget.onPlay,
+      onContextMenuRequested: (position) => unawaited(
+        position == null
+            ? _showCompactActions()
+            : _showDesktopActions(position),
+      ),
+      contentBuilder: (context, active, hovered) => MusicTrackRowContent(
+        index: widget.index + 1,
+        track: widget.track,
+        title: title,
+        desktop: widget.desktop,
+        current: widget.current,
+        active: active,
+        artistNames: artistCopy,
+        onPlay: widget.onPlay,
+        onAddToQueue: widget.onQueue,
+        onOpenAlbum: widget.onOpenAlbum,
+        onOpenArtist: widget.artists.isEmpty ? null : _openArtist,
+        onMore: () => unawaited(_showCompactActions()),
+        showInlineQueueAction: hovered,
+        queueKey: ValueKey('track-search-queue-${widget.index}'),
+        moreKey: ValueKey('track-search-more-${widget.index}'),
+        artistTooltip: widget.artists.length > 1
+            ? context.l10n.commonChooseArtist
+            : context.l10n.commonOpenArtist,
+      ),
+    );
+  }
+
+  Future<void> _showDesktopActions(Offset position) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    final action = await showMenu<MusicTrackAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        overlay.size.width - position.dx,
+        overlay.size.height - position.dy,
+      ),
+      items: _menuItems(),
+    );
+    _runAction(action);
+  }
+
+  Future<void> _showCompactActions() async {
+    final action = await showModalBottomSheet<MusicTrackAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (artists.isNotEmpty)
-              PopupMenuButton<ArtistSummary>(
-                key: ValueKey('track-search-artist-$index'),
-                tooltip: context.l10n.searchBrowseCreditedArtists,
-                onSelected: onOpenArtist,
-                itemBuilder: (context) => [
-                  for (
-                    var artistIndex = 0;
-                    artistIndex < artists.length;
-                    artistIndex++
-                  )
-                    PopupMenuItem<ArtistSummary>(
-                      key: ValueKey('track-search-artist-$index-$artistIndex'),
-                      value: artists[artistIndex],
-                      child: Text(artists[artistIndex].name),
-                    ),
-                ],
-                icon: const Icon(Icons.person_rounded),
-              ),
-            if (album != null)
-              IconButton(
-                key: ValueKey('track-search-album-$index'),
-                tooltip: context.l10n.searchOpenNamedAlbum(album!.title),
-                onPressed: onOpenAlbum,
-                icon: const Icon(Icons.album_rounded),
-              ),
-            IconButton(
-              key: ValueKey('track-search-queue-$index'),
-              tooltip: context.l10n.trackAddToQueueTooltip(track.title),
-              onPressed: onQueue,
-              icon: const Icon(Icons.playlist_add_rounded),
+            ListTile(
+              key: ValueKey('track-search-play-${widget.index}'),
+              leading: const Icon(Icons.play_arrow_rounded),
+              title: Text(context.l10n.commonPlayFromHere),
+              onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
+            ListTile(
+              key: ValueKey('track-search-add-to-queue-${widget.index}'),
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: Text(context.l10n.commonAddToQueue),
+              onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
+            ),
+            if (widget.album != null)
+              ListTile(
+                key: ValueKey('track-search-album-${widget.index}'),
+                leading: const Icon(Icons.album_rounded),
+                title: Text(context.l10n.commonOpenAlbum),
+                onTap: () => Navigator.pop(context, MusicTrackAction.openAlbum),
+              ),
+            if (widget.artists.isNotEmpty)
+              ListTile(
+                key: ValueKey('track-search-artist-${widget.index}'),
+                leading: const Icon(Icons.person_rounded),
+                title: Text(context.l10n.commonOpenArtist),
+                onTap: () =>
+                    Navigator.pop(context, MusicTrackAction.openArtist),
+              ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
+    _runAction(action);
   }
+
+  List<PopupMenuEntry<MusicTrackAction>> _menuItems() => [
+    PopupMenuItem(
+      value: MusicTrackAction.play,
+      child: ListTile(
+        leading: const Icon(Icons.play_arrow_rounded),
+        title: Text(context.l10n.commonPlayFromHere),
+      ),
+    ),
+    PopupMenuItem(
+      value: MusicTrackAction.addToQueue,
+      child: ListTile(
+        leading: const Icon(Icons.playlist_add_rounded),
+        title: Text(context.l10n.commonAddToQueue),
+      ),
+    ),
+    if (widget.album != null)
+      PopupMenuItem(
+        value: MusicTrackAction.openAlbum,
+        child: ListTile(
+          leading: const Icon(Icons.album_rounded),
+          title: Text(context.l10n.commonOpenAlbum),
+        ),
+      ),
+    if (widget.artists.isNotEmpty)
+      PopupMenuItem(
+        value: MusicTrackAction.openArtist,
+        child: ListTile(
+          leading: const Icon(Icons.person_rounded),
+          title: Text(context.l10n.commonOpenArtist),
+        ),
+      ),
+  ];
+
+  void _runAction(MusicTrackAction? action) {
+    switch (action) {
+      case MusicTrackAction.play:
+        widget.onPlay();
+      case MusicTrackAction.addToQueue:
+        widget.onQueue();
+      case MusicTrackAction.openAlbum:
+        widget.onOpenAlbum?.call();
+      case MusicTrackAction.openArtist:
+        unawaited(_openArtist());
+      case null:
+        return;
+    }
+  }
+
+  Future<void> _openArtist() => openMusicTrackArtists(
+    context: context,
+    artists: widget.artists,
+    onSelected: widget.onOpenArtist,
+    title: context.l10n.trackChooseArtistTitle,
+    detail: context.l10n.searchBrowseCreditedArtists,
+    itemKeyPrefix: 'track-search-artist-${widget.index}',
+  );
 }
 
 class _TrackArtwork extends StatelessWidget {

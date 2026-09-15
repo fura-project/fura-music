@@ -13,6 +13,7 @@ import 'package:flutterustmusic/music_video/track_music_video_engine.dart';
 import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
 import 'package:flutterustmusic/music_video/track_music_video_surface.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
+import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -185,7 +186,7 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
       colorScheme: colors,
       scaffoldBackgroundColor: colors.surface,
       appBarTheme: baseTheme.appBarTheme.copyWith(
-        backgroundColor: colors.surface,
+        backgroundColor: colors.surfaceContainerLow,
         foregroundColor: colors.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
@@ -203,34 +204,38 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
       duration: MusicMotion.stateChange,
       curve: Curves.easeOutCubic,
       child: Builder(
-        builder: (context) => Scaffold(
-          key: const ValueKey('expanded-now-playing-page'),
-          appBar: AppBar(
-            leading: IconButton(
-              key: const ValueKey('expanded-now-playing-back'),
-              tooltip: context.l10n.nowPlayingBack,
-              onPressed: widget.onBack,
-              icon: const Icon(Icons.arrow_back_rounded),
+        builder: (context) => PlaybackShortcuts(
+          controller: widget.controller,
+          child: Scaffold(
+            key: const ValueKey('expanded-now-playing-page'),
+            appBar: AppBar(
+              flexibleSpace: const _ExpandedNowPlayingTopBarBackdrop(),
+              leading: IconButton(
+                key: const ValueKey('expanded-now-playing-back'),
+                tooltip: context.l10n.nowPlayingBack,
+                onPressed: widget.onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              title: Text(context.l10n.nowPlayingTitle),
             ),
-            title: Text(context.l10n.nowPlayingTitle),
-          ),
-          body: _ExpandedNowPlayingBackdrop(
-            key: const ValueKey('expanded-now-playing-palette-ready'),
-            child: _ExpandedNowPlayingBody(
+            body: _ExpandedNowPlayingBackdrop(
+              key: const ValueKey('expanded-now-playing-palette-ready'),
+              child: _ExpandedNowPlayingBody(
+                controller: widget.controller,
+                onBack: widget.onBack,
+                onSignInAgain: widget.onSignInAgain,
+                commentsGateway: widget.commentsGateway,
+                musicVideoGateway: widget.musicVideoGateway,
+                musicVideoEngine: widget.musicVideoEngine,
+                artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
+              ),
+            ),
+            bottomNavigationBar: NowPlayingBar.expanded(
               controller: widget.controller,
-              onBack: widget.onBack,
               onSignInAgain: widget.onSignInAgain,
-              commentsGateway: widget.commentsGateway,
-              musicVideoGateway: widget.musicVideoGateway,
-              musicVideoEngine: widget.musicVideoEngine,
-              artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
+              qualityPreference: widget.qualityPreference,
+              onQualityPreferenceChanged: widget.onQualityPreferenceChanged,
             ),
-          ),
-          bottomNavigationBar: NowPlayingBar.expanded(
-            controller: widget.controller,
-            onSignInAgain: widget.onSignInAgain,
-            qualityPreference: widget.qualityPreference,
-            onQualityPreferenceChanged: widget.onQualityPreferenceChanged,
           ),
         ),
       ),
@@ -317,6 +322,35 @@ class _ExpandedNowPlayingBackdrop extends StatelessWidget {
         ),
       ),
       child: child,
+    );
+  }
+}
+
+class _ExpandedNowPlayingTopBarBackdrop extends StatelessWidget {
+  const _ExpandedNowPlayingTopBarBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = colors.brightness == Brightness.dark;
+    return DecoratedBox(
+      key: const ValueKey('expanded-now-playing-top-bar-backdrop'),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: AlignmentDirectional.centerStart,
+          end: AlignmentDirectional.centerEnd,
+          colors: [
+            Color.alphaBlend(
+              colors.primaryContainer.withValues(alpha: dark ? 0.2 : 0.3),
+              colors.surfaceContainerLow,
+            ),
+            Color.alphaBlend(
+              colors.tertiaryContainer.withValues(alpha: dark ? 0.08 : 0.14),
+              colors.surfaceContainerLow,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -562,7 +596,7 @@ class _ExpandedTrackHero extends StatelessWidget {
         : track.artistNames.join(' · ');
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (compact) {
+        if (compact || constraints.maxHeight < 360) {
           final artworkDimension = math
               .min(136.0, constraints.maxHeight - 32)
               .clamp(96.0, 136.0)
@@ -631,66 +665,98 @@ class _ExpandedTrackHero extends StatelessWidget {
           );
         }
 
+        final dense = constraints.maxHeight < 640;
+        final horizontalPadding = dense ? 20.0 : 32.0;
+        final verticalPadding = dense ? 12.0 : 24.0;
+        final reservedInformationHeight = dense ? 172.0 : 196.0;
+        final availableArtworkHeight = math.max(
+          112.0,
+          constraints.maxHeight -
+              (verticalPadding * 2) -
+              reservedInformationHeight,
+        );
         final artworkDimension = math
-            .min(constraints.maxWidth - 96, constraints.maxHeight * 0.58)
-            .clamp(160.0, 420.0)
+            .min(
+              math.min(
+                constraints.maxWidth - (horizontalPadding * 2),
+                availableArtworkHeight,
+              ),
+              420.0,
+            )
             .toDouble();
-        return Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ExpandedArtwork(
-                  track: track,
-                  dimension: artworkDimension,
-                  imageProviderBuilder: artworkImageProviderBuilder,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  track.title,
-                  key: const ValueKey('expanded-now-playing-title'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+        final contentWidth = math
+            .min(
+              constraints.maxWidth - (horizontalPadding * 2),
+              math.max(artworkDimension, 320.0),
+            )
+            .toDouble();
+        return Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          child: FittedBox(
+            key: const ValueKey('expanded-now-playing-adaptive-hero'),
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: contentWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ExpandedArtwork(
+                    track: track,
+                    dimension: artworkDimension,
+                    imageProviderBuilder: artworkImageProviderBuilder,
                   ),
-                ),
-                const SizedBox(height: 4),
-                _artistLink(context, artists, compact: false),
-                if (track.albumTitle case final albumTitle?)
+                  SizedBox(height: dense ? 12 : 24),
                   Text(
-                    albumTitle,
-                    key: const ValueKey('expanded-now-playing-album'),
-                    maxLines: 1,
+                    track.title,
+                    key: const ValueKey('expanded-now-playing-title'),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
+                    style:
+                        (dense
+                                ? theme.textTheme.headlineSmall
+                                : theme.textTheme.headlineMedium)
+                            ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                const SizedBox(height: 16),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.tonalIcon(
-                      key: const ValueKey('expanded-now-playing-mv'),
-                      onPressed: onOpenMusicVideo,
-                      icon: const Icon(Icons.music_video_outlined),
-                      label: const Text('MV'),
+                  const SizedBox(height: 4),
+                  _artistLink(context, artists, compact: false),
+                  if (track.albumTitle case final albumTitle?)
+                    Text(
+                      albumTitle,
+                      key: const ValueKey('expanded-now-playing-album'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
-                    OutlinedButton.icon(
-                      key: const ValueKey('expanded-now-playing-comments'),
-                      onPressed: onOpenComments,
-                      icon: const Icon(Icons.mode_comment_outlined),
-                      label: Text(context.l10n.nowPlayingComments),
-                    ),
-                  ],
-                ),
-              ],
+                  SizedBox(height: dense ? 10 : 16),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonalIcon(
+                        key: const ValueKey('expanded-now-playing-mv'),
+                        onPressed: onOpenMusicVideo,
+                        icon: const Icon(Icons.music_video_outlined),
+                        label: const Text('MV'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('expanded-now-playing-comments'),
+                        onPressed: onOpenComments,
+                        icon: const Icon(Icons.mode_comment_outlined),
+                        label: Text(context.l10n.nowPlayingComments),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );

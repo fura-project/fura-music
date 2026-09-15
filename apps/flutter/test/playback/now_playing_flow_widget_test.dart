@@ -871,7 +871,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('desktop shortcuts remain active while queue dialog has focus', (
+  testWidgets('desktop shortcuts remain active while queue sheet has focus', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1000, 800);
@@ -893,7 +893,11 @@ void main() {
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(Dialog), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('playback-queue-wide-side-sheet')),
+      findsOneWidget,
+    );
+    expect(find.byType(Dialog), findsNothing);
     expect(FocusManager.instance.primaryFocus?.skipTraversal, isTrue);
     await _sendControlShortcut(tester, LogicalKeyboardKey.arrowRight);
     expect(_nowPlayingTitle(tester), 'Second track');
@@ -936,7 +940,7 @@ void main() {
     expect(find.text('Add to queue'), findsOneWidget);
   });
 
-  testWidgets('desktop shortcuts remain active in lyrics and volume dialogs', (
+  testWidgets('desktop shortcuts remain active in expanded lyrics and volume', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1000, 800);
@@ -961,19 +965,28 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Show lyrics'));
+    expect(find.byTooltip('Show lyrics'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
     await tester.pumpAndSettle();
-    expect(find.byType(Dialog), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-page')),
+      findsOneWidget,
+    );
     await _sendControlShortcut(tester, LogicalKeyboardKey.arrowRight);
-    expect(_nowPlayingTitle(tester), 'Second track');
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('expanded-now-playing-title')),
+          )
+          .data,
+      'Second track',
+    );
 
-    await tester.tap(find.byTooltip('Close lyrics'));
-    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Volume'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('volume-slider')), findsOneWidget);
     await _sendControlShortcut(tester, LogicalKeyboardKey.arrowLeft);
-    expect(_nowPlayingTitle(tester), 'First track');
+    expect(find.text('First track'), findsWidgets);
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
     await tester.pumpAndSettle();
     expect(find.textContaining('Paused'), findsOneWidget);
@@ -1007,9 +1020,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Resume'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Volume'));
-    await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-control-row')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Volume'), findsNothing);
+    expect(find.byTooltip('Stop'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaPlayPause);
     await tester.pumpAndSettle();
     expect(find.byTooltip('Pause'), findsOneWidget);
@@ -1365,7 +1381,11 @@ void main() {
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(Dialog), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('playback-queue-wide-side-sheet')),
+      findsOneWidget,
+    );
+    expect(find.byType(Dialog), findsNothing);
     expect(find.text('Fixture artist · Fixture album'), findsNWidgets(2));
     expect(find.byKey(const ValueKey('queue-duration-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('queue-duration-1')), findsOneWidget);
@@ -1532,7 +1552,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(session.seekPositions, [1000]);
 
-    await tester.tap(find.byTooltip('Stop'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.mediaStop);
     await tester.pumpAndSettle();
     expect(
       tester
@@ -1545,7 +1565,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('wide lyric dialog follows completion to the next track', (
+  testWidgets('wide expanded lyrics follow completion to the next track', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 900);
@@ -1570,10 +1590,14 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Show lyrics'));
+    expect(find.byTooltip('Show lyrics'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(Dialog), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-page')),
+      findsOneWidget,
+    );
     expect(find.text('First synchronized line'), findsOneWidget);
     expect(
       tester
@@ -1670,8 +1694,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Stop'), findsOneWidget);
-    expect(find.byTooltip('Volume'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expanded-now-playing-compact-control-row')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Stop'), findsNothing);
+    expect(find.byTooltip('Volume'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -1748,7 +1776,13 @@ void main() {
         _ImmediateCommentOperation(
           TrackCommentPageResult(
             total: 1,
-            latestComments: [_comment('wide', 'A wide comment')],
+            latestComments: [
+              _comment(
+                'wide',
+                'A wide comment',
+                avatarUri: 'https://example.invalid/avatar.jpg',
+              ),
+            ],
           ),
         ),
       ]);
@@ -1791,12 +1825,33 @@ void main() {
 
       tester.view.physicalSize = const Size(1100, 844);
       await tester.pumpAndSettle();
+      final pageColors = Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('expanded-now-playing-artwork-backdrop')),
+        ),
+      ).colorScheme;
       await tester.tap(
         find.byKey(const ValueKey('expanded-now-playing-comments')),
       );
       await tester.pumpAndSettle();
+      final sideSheet = find.byKey(
+        const ValueKey('track-comments-wide-side-sheet'),
+      );
+      expect(sideSheet, findsOneWidget);
       expect(
         find.byKey(const ValueKey('track-comments-wide-surface')),
+        findsNothing,
+      );
+      expect(tester.getRect(sideSheet).right, 1088);
+      expect(
+        Theme.of(tester.element(sideSheet)).colorScheme.primary,
+        pageColors.primary,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('track-comment-avatar')),
+          matching: find.byType(Image),
+        ),
         findsOneWidget,
       );
       expect(find.text('A wide comment'), findsOneWidget);
@@ -2241,14 +2296,16 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
   );
 }
 
-TrackCommentSummary _comment(String id, String content) => TrackCommentSummary(
-  providerId: 'qq-music',
-  opaqueId: 'comment:$id',
-  authorDisplayName: 'Author $id',
-  content: content,
-  publishedAtUnixSeconds: 1700000000,
-  praiseCount: 8,
-);
+TrackCommentSummary _comment(String id, String content, {String? avatarUri}) =>
+    TrackCommentSummary(
+      providerId: 'qq-music',
+      opaqueId: 'comment:$id',
+      authorDisplayName: 'Author $id',
+      authorAvatarUri: avatarUri,
+      content: content,
+      publishedAtUnixSeconds: 1700000000,
+      praiseCount: 8,
+    );
 
 class _FakeCommentGateway implements TrackCommentGateway {
   _FakeCommentGateway(this.operations);

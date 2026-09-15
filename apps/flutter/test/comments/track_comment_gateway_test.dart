@@ -23,6 +23,10 @@ void main() {
     expect(result.hasMore, isTrue);
     expect(result.hotComments.single.opaqueId, 'comment:hot');
     expect(result.latestComments.single.content, 'Latest content');
+    expect(
+      result.latestComments.single.authorAvatarUri,
+      'https://example.invalid/avatar.jpg',
+    );
     expect(() => result.hotComments.clear(), throwsUnsupportedError);
     expect(() => result.latestComments.clear(), throwsUnsupportedError);
   });
@@ -162,6 +166,7 @@ bridge.TrackCommentSummary _bridgeComment(
   providerId: 'qq-music',
   opaqueId: 'comment:$id',
   authorDisplayName: author,
+  authorAvatarUri: 'https://example.invalid/avatar.jpg',
   content: content,
   publishedAtUnixSeconds: 1700000000,
   praiseCount: 7,

@@ -261,6 +261,13 @@ class _RankingTracks extends StatefulWidget {
 
 class _RankingTracksState extends State<_RankingTracks> {
   (String, String)? _hoveredTrack;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   bool _handleScroll(ScrollNotification notification) {
     if (_hoveredTrack != null && notification is ScrollUpdateNotification) {
@@ -298,79 +305,88 @@ class _RankingTracksState extends State<_RankingTracks> {
                 ),
               ),
             Expanded(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: _handleScroll,
-                child: ListView.separated(
-                  key: const PageStorageKey('ranking-tracks'),
-                  padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
-                  itemCount: widget.tracks.length + 1,
-                  separatorBuilder: (_, _) => const SizedBox(height: 1),
-                  itemBuilder: (context, index) {
-                    if (index == widget.tracks.length) {
-                      return _RankingFooter(
-                        shown: widget.tracks.length,
-                        total: widget.total,
-                        hasMore: widget.hasMore,
-                        isLoadingMore: widget.isLoadingMore,
-                        appendFailure: widget.appendFailure,
-                        onLoadMore: widget.onLoadMore,
-                        onRetryMore: widget.onRetryMore,
+              child: MusicTrackLocatorOverlay(
+                controller: _scrollController,
+                currentIndex: musicTrackIndexOf(widget.tracks, widget.current),
+                desktop: widget.desktop,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _handleScroll,
+                  child: ListView.separated(
+                    controller: _scrollController,
+                    key: const PageStorageKey('ranking-tracks'),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
+                    itemCount: widget.tracks.length + 1,
+                    separatorBuilder: (_, _) => const SizedBox(height: 1),
+                    itemBuilder: (context, index) {
+                      if (index == widget.tracks.length) {
+                        return _RankingFooter(
+                          shown: widget.tracks.length,
+                          total: widget.total,
+                          hasMore: widget.hasMore,
+                          isLoadingMore: widget.isLoadingMore,
+                          appendFailure: widget.appendFailure,
+                          onLoadMore: widget.onLoadMore,
+                          onRetryMore: widget.onRetryMore,
+                        );
+                      }
+                      final track = widget.tracks[index];
+                      final identity = (track.providerId, track.opaqueId);
+                      final selected =
+                          widget.current?.providerId == track.providerId &&
+                          widget.current?.opaqueId == track.opaqueId;
+                      final artists = track.artistNames.isEmpty
+                          ? context.l10n.trackUnknownArtist
+                          : track.artistNames.join(' / ');
+                      return MusicTrackRowSurface(
+                        key: ValueKey(
+                          'ranking-track-state-${track.providerId}-${track.opaqueId}',
+                        ),
+                        itemKey: ValueKey('ranking-track-$index'),
+                        desktop: widget.desktop,
+                        current: selected,
+                        hovered: _hoveredTrack == identity,
+                        onHoverChanged: (hovered) =>
+                            _setHovered(track, hovered),
+                        semanticLabel: context.l10n.commonTrackSemantics(
+                          artists,
+                          track.title,
+                        ),
+                        onTap: () => widget.onPlay(index),
+                        onContextMenuRequested: (_) =>
+                            unawaited(_showActions(track, index)),
+                        contentBuilder: (context, active, hovered) =>
+                            MusicTrackRowContent(
+                              index: index + 1,
+                              track: track,
+                              desktop: widget.desktop,
+                              current: selected,
+                              active: active,
+                              artistNames: artists,
+                              onPlay: () => widget.onPlay(index),
+                              onAddToQueue: () => widget.onQueue(track),
+                              onOpenAlbum:
+                                  widget.onOpenAlbum == null ||
+                                      track.album == null
+                                  ? null
+                                  : () => widget.onOpenAlbum!(track.album!),
+                              onOpenArtist:
+                                  widget.onOpenArtist == null ||
+                                      track.artists.isEmpty
+                                  ? null
+                                  : () => _openArtist(track),
+                              onMore: () =>
+                                  unawaited(_showActions(track, index)),
+                              showInlineQueueAction: hovered,
+                              queueKey: ValueKey('ranking-queue-$index'),
+                              moreKey: ValueKey('ranking-context-$index'),
+                              artistTooltip: track.artists.length > 1
+                                  ? context.l10n.commonChooseArtist
+                                  : context.l10n.commonOpenArtist,
+                            ),
                       );
-                    }
-                    final track = widget.tracks[index];
-                    final identity = (track.providerId, track.opaqueId);
-                    final selected =
-                        widget.current?.providerId == track.providerId &&
-                        widget.current?.opaqueId == track.opaqueId;
-                    final artists = track.artistNames.isEmpty
-                        ? context.l10n.trackUnknownArtist
-                        : track.artistNames.join(' / ');
-                    return MusicTrackRowSurface(
-                      key: ValueKey(
-                        'ranking-track-state-${track.providerId}-${track.opaqueId}',
-                      ),
-                      itemKey: ValueKey('ranking-track-$index'),
-                      desktop: widget.desktop,
-                      current: selected,
-                      hovered: _hoveredTrack == identity,
-                      onHoverChanged: (hovered) => _setHovered(track, hovered),
-                      semanticLabel: context.l10n.commonTrackSemantics(
-                        artists,
-                        track.title,
-                      ),
-                      onTap: () => widget.onPlay(index),
-                      onContextMenuRequested: (_) =>
-                          unawaited(_showActions(track, index)),
-                      contentBuilder: (context, active, hovered) =>
-                          MusicTrackRowContent(
-                            index: index + 1,
-                            track: track,
-                            desktop: widget.desktop,
-                            current: selected,
-                            active: active,
-                            artistNames: artists,
-                            onPlay: () => widget.onPlay(index),
-                            onAddToQueue: () => widget.onQueue(track),
-                            onOpenAlbum:
-                                widget.onOpenAlbum == null ||
-                                    track.album == null
-                                ? null
-                                : () => widget.onOpenAlbum!(track.album!),
-                            onOpenArtist:
-                                widget.onOpenArtist == null ||
-                                    track.artists.isEmpty
-                                ? null
-                                : () => _openArtist(track),
-                            onMore: () => unawaited(_showActions(track, index)),
-                            showInlineQueueAction: hovered,
-                            queueKey: ValueKey('ranking-queue-$index'),
-                            moreKey: ValueKey('ranking-context-$index'),
-                            artistTooltip: track.artists.length > 1
-                                ? context.l10n.commonChooseArtist
-                                : context.l10n.commonOpenArtist,
-                          ),
-                    );
-                  },
+                    },
+                  ),
                 ),
               ),
             ),

@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -176,6 +178,100 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(selected, artists[1]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('current compact row uses the shared selected surface', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 160);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Material(
+            child: MusicTrackRowSurface(
+              itemKey: const ValueKey('current-row'),
+              desktop: false,
+              current: true,
+              semanticLabel: 'Current Interactive Track',
+              onTap: () {},
+              contentBuilder: (context, active, hovered) =>
+                  MusicTrackRowContent(
+                    index: 1,
+                    track: track,
+                    desktop: false,
+                    current: true,
+                    active: active,
+                    artistNames: 'First Artist',
+                    onPlay: () {},
+                    onAddToQueue: () {},
+                    onMore: () {},
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final row = find.byKey(const ValueKey('current-row'));
+    final ink = tester.widget<Ink>(
+      find.descendant(of: row, matching: find.byType(Ink)),
+    );
+    expect(
+      (ink.decoration as BoxDecoration).color,
+      Theme.of(tester.element(row)).colorScheme.surfaceContainerHigh,
+    );
+    expect(
+      tester.getSemantics(row).flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('locator appears offscreen and returns to the current row', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 300);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MusicTrackLocatorOverlay(
+            controller: controller,
+            currentIndex: 20,
+            desktop: false,
+            child: ListView.builder(
+              controller: controller,
+              itemExtent: 65,
+              itemCount: 30,
+              itemBuilder: (context, index) => SizedBox(
+                key: ValueKey('locator-row-$index'),
+                child: Text('Track ${index + 1}'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final locator = find.byKey(const ValueKey('locate-current-track'));
+    expect(locator, findsOneWidget);
+    await tester.tap(locator);
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, greaterThan(1000));
+    expect(find.byKey(const ValueKey('locator-row-20')), findsOneWidget);
+    expect(locator, findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

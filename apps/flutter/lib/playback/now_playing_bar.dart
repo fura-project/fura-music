@@ -7,7 +7,6 @@ import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
-import 'package:flutterustmusic/lyrics/lyric_panel.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -399,11 +398,6 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
                       actualQuality: playback.resolvedQuality,
                       onChanged: onChanged,
                     ),
-                if (controller.lyrics != null)
-                  _LyricsButton(
-                    controller: controller,
-                    onSignInAgain: onSignInAgain,
-                  ),
                 _VolumeButton(controller: controller),
                 _QueueButton(controller: controller),
               ],
@@ -479,6 +473,8 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                     authenticationFailure,
                     onSignInAgain,
                     prominentPrimary: true,
+                    includeStop: constraints.maxWidth >= 600,
+                    buttonSize: constraints.maxWidth < 600 ? 44 : 48,
                   );
                   final utilities = <Widget>[
                     if (qualityPreference case final preference?)
@@ -487,26 +483,31 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                           preference: preference,
                           actualQuality: playback.resolvedQuality,
                           onChanged: onChanged,
+                          dimension: constraints.maxWidth < 600 ? 44 : 48,
                         ),
-                    _VolumeButton(controller: controller),
-                    _QueueButton(controller: controller),
+                    if (constraints.maxWidth >= 600)
+                      _VolumeButton(controller: controller),
+                    _QueueButton(
+                      controller: controller,
+                      dimension: constraints.maxWidth < 600 ? 44 : 48,
+                    ),
                   ];
                   if (constraints.maxWidth < 600) {
-                    return Column(
+                    return SizedBox(
                       key: const ValueKey(
                         'expanded-now-playing-compact-controls',
                       ),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          children: transport,
+                      height: 56,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          key: const ValueKey(
+                            'expanded-now-playing-compact-control-row',
+                          ),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [...transport, ...utilities],
                         ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: utilities,
-                        ),
-                      ],
+                      ),
                     );
                   }
                   return SizedBox(
@@ -544,11 +545,13 @@ class _PlaybackQualityButton extends StatefulWidget {
     required this.preference,
     required this.actualQuality,
     required this.onChanged,
+    this.dimension = 48,
   });
 
   final AppPlaybackQualityPreference preference;
   final PlaybackAudioQuality? actualQuality;
   final PlaybackQualityPreferenceChanged onChanged;
+  final double dimension;
 
   @override
   State<_PlaybackQualityButton> createState() => _PlaybackQualityButtonState();
@@ -594,7 +597,7 @@ class _PlaybackQualityButtonState extends State<_PlaybackQualityButton> {
             ),
         ],
         child: SizedBox.square(
-          dimension: 48,
+          dimension: widget.dimension,
           child: Center(
             child: _saving
                 ? const SizedBox.square(
@@ -622,6 +625,8 @@ List<Widget> _transportControls(
   VoidCallback onSignInAgain, {
   bool prominentPrimary = false,
   double prominentPrimarySize = 56,
+  bool includeStop = true,
+  double buttonSize = 48,
 }) {
   final playback = controller.playback;
   final primaryAction = authenticationFailure
@@ -654,13 +659,18 @@ List<Widget> _transportControls(
           icon: Icon(_primaryIcon(playback.stage)),
         );
   return [
-    _ShuffleButton(controller: controller),
+    _ShuffleButton(controller: controller, dimension: buttonSize),
     IconButton(
       key: const ValueKey('now-playing-previous'),
       tooltip: context.l10n.playbackPrevious,
       onPressed: !authenticationFailure && controller.hasPrevious
           ? () => unawaited(controller.rewind())
           : null,
+      constraints: BoxConstraints.tightFor(
+        width: buttonSize,
+        height: buttonSize,
+      ),
+      padding: EdgeInsets.zero,
       icon: const Icon(Icons.skip_previous_rounded),
     ),
     primaryAction,
@@ -670,10 +680,15 @@ List<Widget> _transportControls(
       onPressed: !authenticationFailure && controller.hasNext
           ? () => unawaited(controller.advance())
           : null,
+      constraints: BoxConstraints.tightFor(
+        width: buttonSize,
+        height: buttonSize,
+      ),
+      padding: EdgeInsets.zero,
       icon: const Icon(Icons.skip_next_rounded),
     ),
-    _RepeatButton(controller: controller),
-    if (_canStop(playback.stage))
+    _RepeatButton(controller: controller, dimension: buttonSize),
+    if (includeStop && _canStop(playback.stage))
       IconButton(
         key: const ValueKey('now-playing-stop'),
         tooltip: context.l10n.playbackStop,
@@ -684,9 +699,10 @@ List<Widget> _transportControls(
 }
 
 class _ShuffleButton extends StatelessWidget {
-  const _ShuffleButton({required this.controller});
+  const _ShuffleButton({required this.controller, this.dimension = 48});
 
   final QueuePlaybackController controller;
+  final double dimension;
 
   @override
   Widget build(BuildContext context) {
@@ -704,6 +720,11 @@ class _ShuffleButton extends StatelessWidget {
         tooltip: label,
         isSelected: enabled,
         onPressed: () => unawaited(controller.toggleShuffle()),
+        constraints: BoxConstraints.tightFor(
+          width: dimension,
+          height: dimension,
+        ),
+        padding: EdgeInsets.zero,
         icon: const Icon(Icons.shuffle_rounded),
         selectedIcon: const Icon(Icons.shuffle_rounded),
       ),
@@ -712,9 +733,10 @@ class _ShuffleButton extends StatelessWidget {
 }
 
 class _RepeatButton extends StatelessWidget {
-  const _RepeatButton({required this.controller});
+  const _RepeatButton({required this.controller, this.dimension = 48});
 
   final QueuePlaybackController controller;
+  final double dimension;
 
   @override
   Widget build(BuildContext context) {
@@ -734,6 +756,11 @@ class _RepeatButton extends StatelessWidget {
         tooltip: label,
         isSelected: mode != PlaybackRepeatMode.off,
         onPressed: () => unawaited(controller.cycleRepeatMode()),
+        constraints: BoxConstraints.tightFor(
+          width: dimension,
+          height: dimension,
+        ),
+        padding: EdgeInsets.zero,
         icon: const Icon(Icons.repeat_rounded),
         selectedIcon: Icon(
           mode == PlaybackRepeatMode.one
@@ -1122,15 +1149,18 @@ class _TrackInfo extends StatelessWidget {
 }
 
 class _QueueButton extends StatelessWidget {
-  const _QueueButton({required this.controller});
+  const _QueueButton({required this.controller, this.dimension = 48});
 
   final QueuePlaybackController controller;
+  final double dimension;
 
   @override
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('now-playing-show-queue'),
     tooltip: context.l10n.playbackShowQueue,
     onPressed: () => unawaited(showPlaybackQueue(context, controller)),
+    constraints: BoxConstraints.tightFor(width: dimension, height: dimension),
+    padding: EdgeInsets.zero,
     icon: const Icon(Icons.queue_music_rounded),
   );
 }
@@ -1258,30 +1288,6 @@ class _VolumePanelState extends State<_VolumePanel> {
       setState(() => _preview = null);
     }());
   }
-}
-
-class _LyricsButton extends StatelessWidget {
-  const _LyricsButton({required this.controller, required this.onSignInAgain});
-
-  final QueuePlaybackController controller;
-  final VoidCallback onSignInAgain;
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-    key: const ValueKey('now-playing-show-lyrics'),
-    tooltip: context.l10n.playbackShowLyrics,
-    onPressed: () => showLyrics(
-      context,
-      controller.lyrics!,
-      onSignInAgain,
-      playbackState: controller.playback,
-      canSeek: () => controller.playback.canSeek,
-      onSeek: controller.playback.seekToMs,
-      modalContentWrapper: (child) =>
-          PlaybackShortcuts(controller: controller, child: child),
-    ),
-    icon: const Icon(Icons.lyrics_outlined),
-  );
 }
 
 class _NowPlayingArtwork extends StatelessWidget {

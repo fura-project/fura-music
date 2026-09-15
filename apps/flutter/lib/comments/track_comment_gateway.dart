@@ -7,6 +7,7 @@ class TrackCommentSummary {
     required this.providerId,
     required this.opaqueId,
     required this.authorDisplayName,
+    this.authorAvatarUri,
     required this.content,
     required this.publishedAtUnixSeconds,
     required this.praiseCount,
@@ -15,6 +16,7 @@ class TrackCommentSummary {
   final String providerId;
   final String opaqueId;
   final String authorDisplayName;
+  final String? authorAvatarUri;
   final String content;
   final int publishedAtUnixSeconds;
   final int praiseCount;
@@ -181,6 +183,7 @@ List<TrackCommentSummary>? _mapComments(
         providerId: comment.providerId,
         opaqueId: comment.opaqueId,
         authorDisplayName: comment.authorDisplayName,
+        authorAvatarUri: comment.authorAvatarUri,
         content: comment.content,
         publishedAtUnixSeconds: comment.publishedAtUnixSeconds,
         praiseCount: comment.praiseCount,

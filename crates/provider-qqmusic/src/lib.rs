@@ -2746,6 +2746,9 @@ fn map_comment(comment: &QqMusicTrackComment) -> Result<TrackComment, CommentsEr
         comment.published_at_unix_seconds(),
         comment.praise_count(),
     )
+    .map(|comment_domain| {
+        comment_domain.with_author_avatar_uri(comment.author_avatar_uri().map(str::to_owned))
+    })
     .map_err(|_| CommentsError::InvalidResponse)
 }
 
@@ -4477,6 +4480,7 @@ mod tests {
             "hot_comment": {"commentlist": [{
                 "commentid": "91001",
                 "nick": "Synthetic hot author",
+                "avatarurl": "http://thirdqq.qlogo.cn/g?b=qq&nk=fixture",
                 "rootcommentcontent": "Synthetic hot comment",
                 "praisenum": 41,
                 "time": 1_700_000_001
@@ -4486,6 +4490,7 @@ mod tests {
                 "commentlist": [{
                     "commentid": 92001,
                     "nick": "Synthetic latest author",
+                    "avatarurl": "http://thirdqq.qlogo.cn/g?b=qq&nk=fixture",
                     "rootcommentcontent": "Synthetic latest comment",
                     "praisenum": 7,
                     "time": 1_700_000_002
@@ -4510,9 +4515,14 @@ mod tests {
             page.latest_comments()[0].author_display_name(),
             "Synthetic latest author"
         );
+        assert_eq!(
+            page.latest_comments()[0].author_avatar_uri(),
+            Some("https://thirdqq.qlogo.cn/g?b=qq&nk=fixture")
+        );
         let debug = format!("{page:?} {:?}", page.latest_comments()[0]);
         assert!(!debug.contains("Synthetic latest"));
         assert!(!debug.contains("92001"));
+        assert!(!debug.contains("thirdqq.qlogo.cn"));
     }
 
     #[tokio::test]

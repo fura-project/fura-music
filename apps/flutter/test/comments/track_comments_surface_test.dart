@@ -22,6 +22,7 @@ void main() {
           _comment(
             'one',
             'A long synthetic comment that wraps safely at compact width.',
+            avatarUri: 'https://example.invalid/avatar.jpg',
           ),
         ],
       ),
@@ -51,6 +52,13 @@ void main() {
     );
     expect(find.text('Newest'), findsOneWidget);
     expect(find.textContaining('wraps safely'), findsOneWidget);
+    final avatarImage = tester.widget<Image>(
+      find.descendant(
+        of: find.byKey(const ValueKey('track-comment-avatar')),
+        matching: find.byType(Image),
+      ),
+    );
+    expect((avatarImage.image as NetworkImage).url, endsWith('/avatar.jpg'));
     expect(find.text('1'), findsOneWidget);
     expect(gateway.requests, [(0, 20), (0, 20)]);
     expect(tester.takeException(), isNull);
@@ -87,14 +95,16 @@ const _track = PlaylistTrackSummary(
   artistNames: ['Synthetic Artist'],
 );
 
-TrackCommentSummary _comment(String id, String content) => TrackCommentSummary(
-  providerId: 'qq-music',
-  opaqueId: 'comment:$id',
-  authorDisplayName: 'Synthetic author with a long name',
-  content: content,
-  publishedAtUnixSeconds: 1700000000,
-  praiseCount: 5,
-);
+TrackCommentSummary _comment(String id, String content, {String? avatarUri}) =>
+    TrackCommentSummary(
+      providerId: 'qq-music',
+      opaqueId: 'comment:$id',
+      authorDisplayName: 'Synthetic author with a long name',
+      authorAvatarUri: avatarUri,
+      content: content,
+      publishedAtUnixSeconds: 1700000000,
+      praiseCount: 5,
+    );
 
 class _ScriptedGateway implements TrackCommentGateway {
   _ScriptedGateway(this.results);

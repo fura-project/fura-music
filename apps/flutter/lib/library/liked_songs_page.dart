@@ -1188,6 +1188,13 @@ class _LikedTrackCollection extends StatefulWidget {
 
 class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
   (String, String)? _hoveredTrack;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   void _setHovered(PlaylistTrackSummary track, bool hovered) {
     final identity = (track.providerId, track.opaqueId);
@@ -1216,51 +1223,59 @@ class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
             child: const _LikedTrackTableHeader(),
           ),
         Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _clearHoverOnScroll,
-            child: ListView.separated(
-              key: const PageStorageKey<String>('liked-songs-track-list'),
-              padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 20),
-              itemCount: widget.tracks.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 1),
-              itemBuilder: (context, index) {
-                if (index == widget.tracks.length) {
-                  return _LikedTrackFooter(
-                    processedCount: widget.processedCount,
-                    availableTrackCount: widget.availableTrackCount,
-                    omittedTrackCount: widget.omittedTrackCount,
-                    total: widget.total,
-                    hasMore: widget.hasMore,
-                    loading: widget.isLoadingMore,
-                    loadingAll: widget.isLoadingAll,
-                    searching: widget.searching,
-                    matchCount: widget.tracks.length,
-                    approximateMatchCount: widget.approximateMatchCount,
-                    failure: widget.appendFailure,
-                    onLoadMore: widget.onLoadMore,
-                    onRetry: widget.onRetryMore,
+          child: MusicTrackLocatorOverlay(
+            controller: _scrollController,
+            currentIndex: musicTrackIndexOf(widget.tracks, widget.current),
+            desktop: widget.desktop,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _clearHoverOnScroll,
+              child: ListView.separated(
+                controller: _scrollController,
+                key: const PageStorageKey<String>('liked-songs-track-list'),
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 20),
+                itemCount: widget.tracks.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 1),
+                itemBuilder: (context, index) {
+                  if (index == widget.tracks.length) {
+                    return _LikedTrackFooter(
+                      processedCount: widget.processedCount,
+                      availableTrackCount: widget.availableTrackCount,
+                      omittedTrackCount: widget.omittedTrackCount,
+                      total: widget.total,
+                      hasMore: widget.hasMore,
+                      loading: widget.isLoadingMore,
+                      loadingAll: widget.isLoadingAll,
+                      searching: widget.searching,
+                      matchCount: widget.tracks.length,
+                      approximateMatchCount: widget.approximateMatchCount,
+                      failure: widget.appendFailure,
+                      onLoadMore: widget.onLoadMore,
+                      onRetry: widget.onRetryMore,
+                    );
+                  }
+                  final track = widget.tracks[index];
+                  final identity = (track.providerId, track.opaqueId);
+                  return _LikedTrackRow(
+                    key: ValueKey(
+                      'liked-track-state-${identity.$1}-${identity.$2}',
+                    ),
+                    index: index + 1,
+                    track: track,
+                    desktop: widget.desktop,
+                    current: _sameTrack(widget.current, track),
+                    hovered: _hoveredTrack == identity,
+                    onHoverChanged: (hovered) => _setHovered(track, hovered),
+                    onPlay: () => widget.onTrackSelected(index),
+                    onAddToQueue: () => widget.onTrackQueued(track),
+                    onOpenAlbum:
+                        widget.onOpenAlbum == null || track.album == null
+                        ? null
+                        : () => widget.onOpenAlbum!(track.album!),
+                    onOpenArtist: widget.onOpenArtist,
                   );
-                }
-                final track = widget.tracks[index];
-                final identity = (track.providerId, track.opaqueId);
-                return _LikedTrackRow(
-                  key: ValueKey(
-                    'liked-track-state-${identity.$1}-${identity.$2}',
-                  ),
-                  index: index + 1,
-                  track: track,
-                  desktop: widget.desktop,
-                  current: _sameTrack(widget.current, track),
-                  hovered: _hoveredTrack == identity,
-                  onHoverChanged: (hovered) => _setHovered(track, hovered),
-                  onPlay: () => widget.onTrackSelected(index),
-                  onAddToQueue: () => widget.onTrackQueued(track),
-                  onOpenAlbum: widget.onOpenAlbum == null || track.album == null
-                      ? null
-                      : () => widget.onOpenAlbum!(track.album!),
-                  onOpenArtist: widget.onOpenArtist,
-                );
-              },
+                },
+              ),
             ),
           ),
         ),

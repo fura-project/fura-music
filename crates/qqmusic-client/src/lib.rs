@@ -215,7 +215,10 @@ fn normalized_https_image_uri(value: Option<String>) -> Option<String> {
 }
 
 fn is_evidenced_qq_image_host(host: &str) -> bool {
-    matches!(host, "qpic.y.qq.com" | "p.qpic.cn" | "y.gtimg.cn")
+    matches!(
+        host,
+        "qpic.y.qq.com" | "p.qpic.cn" | "y.gtimg.cn" | "thirdqq.qlogo.cn"
+    )
 }
 
 #[cfg(test)]
@@ -244,6 +247,10 @@ mod tests {
         assert_eq!(
             normalized_https_image_uri(Some("//y.gtimg.cn/music/photo_new/fixture.jpg?n=1".into())),
             Some("https://y.gtimg.cn/music/photo_new/fixture.jpg?n=1".into())
+        );
+        assert_eq!(
+            normalized_https_image_uri(Some("http://thirdqq.qlogo.cn/g?b=qq&nk=fixture".into())),
+            Some("https://thirdqq.qlogo.cn/g?b=qq&nk=fixture".into())
         );
         assert_eq!(
             normalized_https_image_uri(Some("https://example.invalid/cover.jpg".into())),

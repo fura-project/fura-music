@@ -910,5 +910,6 @@
   "playbackQualityLossless": "SQ",
   "playbackQualitySummaryStandard": "标准音质",
   "playbackQualitySummaryHigh": "高品质",
-  "playbackQualitySummaryLossless": "SQ 无损音质"
+  "playbackQualitySummaryLossless": "SQ 无损音质",
+  "commonLocateCurrentTrack": "定位当前歌曲"
 }

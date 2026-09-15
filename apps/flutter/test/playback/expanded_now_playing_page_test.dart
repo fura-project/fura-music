@@ -126,6 +126,11 @@ void main() {
         find.byKey(const ValueKey('expanded-now-playing-lyrics-surface')),
         findsOneWidget,
       );
+      final topBar = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('expanded-now-playing-top-bar-backdrop')),
+      );
+      final topBarGradient = (topBar.decoration as BoxDecoration).gradient!;
+      expect(topBarGradient.colors.toSet(), hasLength(greaterThan(1)));
       expect(find.text('Take me hand'), findsWidgets);
       expect(find.text('I feel love is born again'), findsOneWidget);
       expect(find.text('爱再次诞生'), findsOneWidget);
@@ -138,6 +143,29 @@ void main() {
           ),
         );
       }
+
+      await tester.tap(find.byTooltip('Show queue'));
+      await tester.pumpAndSettle();
+      final queueSheet = find.byKey(
+        const ValueKey('playback-queue-wide-side-sheet'),
+      );
+      expect(queueSheet, findsOneWidget);
+      expect(tester.getRect(queueSheet).right, 1088);
+      expect(
+        Theme.of(tester.element(queueSheet)).colorScheme.primary,
+        lightColors.primary,
+      );
+      expect(find.byType(Dialog), findsNothing);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/flutterustmusic-now-playing-queue-sheet.png'),
+          ),
+        );
+      }
+      await tester.tap(find.byTooltip('Close queue'));
+      await tester.pumpAndSettle();
 
       await pumpPage(size: const Size(390, 844), brightness: Brightness.dark);
       final darkColors = Theme.of(
@@ -172,6 +200,68 @@ void main() {
       controller.dispose();
     },
   );
+
+  testWidgets('wide hero scales into a short window without nested scrolling', (
+    tester,
+  ) async {
+    const captureReviewImages = bool.fromEnvironment(
+      'NOW_PLAYING_VISUAL_REVIEW',
+    );
+    tester.view.physicalSize = const Size(1100, 560);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _controller();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: MusicMaterialTheme.light(),
+        home: ExpandedNowPlayingPage(
+          controller: controller,
+          onBack: () {},
+          onSignInAgain: () {},
+          artworkImageProviderBuilder: (_) => _artwork(),
+          artworkColorSchemeLoader:
+              ({required provider, required brightness}) async =>
+                  ColorScheme.fromSeed(
+                    seedColor: const Color(0xff7b5b30),
+                    brightness: brightness,
+                  ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final hero = find.byKey(
+      const ValueKey('expanded-now-playing-adaptive-hero'),
+    );
+    expect(hero, findsOneWidget);
+    expect(
+      find.descendant(of: hero, matching: find.byType(Scrollable)),
+      findsNothing,
+    );
+    final wideLayoutRect = tester.getRect(
+      find.byKey(const ValueKey('expanded-now-playing-wide-layout')),
+    );
+    final commentsRect = tester.getRect(
+      find.byKey(const ValueKey('expanded-now-playing-comments')),
+    );
+    expect(wideLayoutRect.contains(commentsRect.bottomCenter), isTrue);
+    expect(tester.takeException(), isNull);
+
+    if (captureReviewImages) {
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-now-playing-desktop-short.png'),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
 
   testWidgets('falls back to the app scheme when artwork colors fail', (
     tester,

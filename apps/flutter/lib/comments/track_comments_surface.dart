@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/adaptive_side_sheet.dart';
+import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/comments/track_comment_controller.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
@@ -19,7 +21,8 @@ Future<void> showTrackCommentsSurface({
   required PlaylistTrackSummary track,
   required QueuePlaybackController playbackController,
 }) async {
-  final compact = MediaQuery.sizeOf(context).width < 600;
+  final width = MediaQuery.sizeOf(context).width;
+  final compact = width < 600;
   Widget content(BuildContext modalContext) => PlaybackShortcuts(
     controller: playbackController,
     child: TrackCommentsPanel(
@@ -39,6 +42,22 @@ Future<void> showTrackCommentsSurface({
         key: const ValueKey('track-comments-compact-surface'),
         height: MediaQuery.sizeOf(modalContext).height * 0.88,
         child: content(modalContext),
+      ),
+    );
+    return;
+  }
+  if (width >= 900) {
+    await showAdaptiveSideSheet<void>(
+      context: context,
+      surfaceKey: const ValueKey('track-comments-wide-side-sheet'),
+      width: 620,
+      builder: (sheetContext) => PlaybackShortcuts(
+        controller: playbackController,
+        child: TrackCommentsPanel(
+          gateway: gateway,
+          track: track,
+          onClose: () => Navigator.of(sheetContext).pop(),
+        ),
       ),
     );
     return;
@@ -308,10 +327,9 @@ class _CommentItem extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: colors.secondaryContainer,
-              foregroundColor: colors.onSecondaryContainer,
-              child: Text(authorInitial.toUpperCase()),
+            _CommentAvatar(
+              authorInitial: authorInitial,
+              artworkUri: comment.authorAvatarUri,
             ),
             const SizedBox(width: MusicSpacing.contentGap),
             Expanded(
@@ -360,6 +378,47 @@ class _CommentItem extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CommentAvatar extends StatelessWidget {
+  const _CommentAvatar({required this.authorInitial, required this.artworkUri});
+
+  final String authorInitial;
+  final String? artworkUri;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final fallback = ColoredBox(
+      color: colors.secondaryContainer,
+      child: Center(
+        child: Text(
+          authorInitial.toUpperCase(),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(color: colors.onSecondaryContainer),
+        ),
+      ),
+    );
+    final uri = artworkUri;
+    return SizedBox.square(
+      key: const ValueKey('track-comment-avatar'),
+      dimension: 40,
+      child: ClipOval(
+        child: uri == null
+            ? fallback
+            : Image.network(
+                uri,
+                headers: musicArtworkRequestHeaders(uri),
+                fit: BoxFit.cover,
+                excludeFromSemantics: true,
+                gaplessPlayback: true,
+                loadingBuilder: (context, child, progress) =>
+                    progress == null ? child : fallback,
+                errorBuilder: musicArtworkErrorBuilder(uri, fallback),
+              ),
       ),
     );
   }

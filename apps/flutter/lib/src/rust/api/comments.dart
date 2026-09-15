@@ -84,6 +84,7 @@ class TrackCommentSummary {
   final String providerId;
   final String opaqueId;
   final String authorDisplayName;
+  final String? authorAvatarUri;
   final String content;
   final int publishedAtUnixSeconds;
   final int praiseCount;
@@ -92,6 +93,7 @@ class TrackCommentSummary {
     required this.providerId,
     required this.opaqueId,
     required this.authorDisplayName,
+    this.authorAvatarUri,
     required this.content,
     required this.publishedAtUnixSeconds,
     required this.praiseCount,
@@ -102,6 +104,7 @@ class TrackCommentSummary {
       providerId.hashCode ^
       opaqueId.hashCode ^
       authorDisplayName.hashCode ^
+      authorAvatarUri.hashCode ^
       content.hashCode ^
       publishedAtUnixSeconds.hashCode ^
       praiseCount.hashCode;
@@ -114,6 +117,7 @@ class TrackCommentSummary {
           providerId == other.providerId &&
           opaqueId == other.opaqueId &&
           authorDisplayName == other.authorDisplayName &&
+          authorAvatarUri == other.authorAvatarUri &&
           content == other.content &&
           publishedAtUnixSeconds == other.publishedAtUnixSeconds &&
           praiseCount == other.praiseCount;

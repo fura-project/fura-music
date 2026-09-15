@@ -148,6 +148,7 @@ MusicProviderDependencies _buildProviderDependencies({
 }) {
   final providerId = provider.providerId;
   final qqMusic = provider == AppMusicProvider.qqMusic;
+  final trackSearchGateway = RustTrackSearchGateway(providerId: providerId);
   return MusicProviderDependencies(
     authenticationGateway: authenticationGateway,
     home: AuthenticatedHomeDependencies(
@@ -195,7 +196,8 @@ MusicProviderDependencies _buildProviderDependencies({
           : null,
     ),
     discovery: AuthenticatedDiscoveryDependencies(
-      trackSearchGateway: RustTrackSearchGateway(providerId: providerId),
+      trackSearchGateway: trackSearchGateway,
+      trackSuggestionGateway: trackSearchGateway,
       artistSearchGateway: RustArtistSearchGateway(providerId: providerId),
       albumSearchGateway: RustAlbumSearchGateway(providerId: providerId),
       playlistSearchGateway: RustPlaylistSearchGateway(providerId: providerId),

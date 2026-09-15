@@ -21,6 +21,8 @@ pub struct Comment {
 #[derive(Clone, Deserialize)]
 pub struct CommentUser {
     pub nickname: String,
+    #[serde(default, rename = "avatarUrl")]
+    pub avatar: Option<String>,
 }
 
 impl Comment {

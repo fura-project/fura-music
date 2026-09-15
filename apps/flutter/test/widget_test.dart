@@ -584,6 +584,65 @@ void main() {
   );
 
   testWidgets(
+    'recent plays retained collapsed header adapts during a narrow resize',
+    (tester) async {
+      const capture = bool.fromEnvironment('RECENT_PLAYS_VISUAL_REVIEW');
+      await _loadRecentReviewFonts(tester);
+      tester.view.physicalSize = const Size(1440, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          recentPlaysGateway: _SyntheticRecentPlaysGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-recent-plays')));
+      await tester.pumpAndSettle();
+
+      final scrollFinder = find.byKey(
+        const PageStorageKey('recent-plays-tracks'),
+      );
+      final scroll = tester.widget<CustomScrollView>(scrollFinder).controller!;
+      scroll.jumpTo(180);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('recent-plays-collapsed-row')),
+        findsOneWidget,
+      );
+
+      // Start expanding so AnimatedSwitcher retains the desktop collapsed row,
+      // then resize before its 240 ms outgoing transition has completed.
+      await tester.drag(scrollFinder, const Offset(0, 500));
+      await tester.pump();
+      tester.view.physicalSize = const Size(520, 844);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('recent-plays-collapsed-column')),
+        findsOneWidget,
+      );
+      if (capture) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-recent-plays-narrow-resize-transition.png'),
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'recent plays collapse supports dark reduced motion and short windows',
     (tester) async {
       const capture = bool.fromEnvironment('RECENT_PLAYS_VISUAL_REVIEW');
@@ -1749,7 +1808,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('top search edits in place before opening Track results', (
+  testWidgets('top search suggests in place before opening Track results', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 900);
@@ -1769,6 +1828,19 @@ void main() {
         items: [TrackSearchItem(track: resultTrack)],
       ),
     );
+    const suggestionTrack = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:top-search:suggestion',
+      title: 'Direct suggested query',
+      artistNames: ['Suggestion artist'],
+    );
+    final suggestions = _WidgetSearchGateway(
+      const TrackSearchPageResult(
+        page: 1,
+        total: 1,
+        items: [TrackSearchItem(track: suggestionTrack)],
+      ),
+    );
 
     await tester.pumpWidget(
       MusicApp(
@@ -1779,6 +1851,7 @@ void main() {
         ),
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
         searchGateway: search,
+        searchSuggestionGateway: suggestions,
       ),
     );
     await tester.pumpAndSettle();
@@ -1788,11 +1861,26 @@ void main() {
     await tester.tap(topSearch);
     await tester.pump();
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
-    await tester.enterText(topSearch, 'direct song query');
-    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.enterText(topSearch, 'direct song');
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pump();
+    expect(suggestions.requests, [('direct song', 1, 8)]);
+    expect(
+      find.byKey(const ValueKey('top-search-suggestions')),
+      findsOneWidget,
+    );
+    if (const bool.fromEnvironment('SEARCH_VISUAL_REVIEW')) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-home-search-suggestions.png'),
+        ),
+      );
+    }
+    await tester.tap(find.byKey(const ValueKey('top-search-suggestion-0')));
     await tester.pumpAndSettle();
 
-    expect(search.requests, [('direct song query', 1, 30)]);
+    expect(search.requests, [('Direct suggested query', 1, 30)]);
     expect(find.byKey(const ValueKey('track-search-content')), findsOneWidget);
     expect(find.text('Top search result'), findsOneWidget);
     expect(
@@ -1804,7 +1892,7 @@ void main() {
           .widget<TextField>(find.byKey(const ValueKey('track-search-field')))
           .controller
           ?.text,
-      'direct song query',
+      'Direct suggested query',
     );
   });
 
@@ -2495,7 +2583,10 @@ void main() {
     final searchEntry = find.byKey(const ValueKey('open-track-search'));
     await tester.tap(searchEntry);
     await tester.pumpAndSettle();
-    expect(find.text('Search QQ Music'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('shell-top-bar-title-Search')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('track-search-field')), findsOneWidget);
 
     final handled = await tester.binding.handlePopRoute();
@@ -2631,10 +2722,7 @@ void main() {
             .height,
         256,
       );
-      expect(
-        find.byKey(const ValueKey('home-compact-actions')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('home-compact-actions')), findsNothing);
       expect(tester.takeException(), isNull);
 
       final personalizedTrack = find.byKey(
@@ -2986,7 +3074,10 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
 
-    expect(find.text('Search QQ Music'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('shell-top-bar-title-Search')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('track-search-field')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -4369,6 +4460,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(search.requests, [('album query', 1, 30)]);
 
+    await tester.tap(find.byKey(const ValueKey('track-search-more-0')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('track-search-album-0')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('album-content')), findsOneWidget);
@@ -4442,6 +4535,8 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('track-search-more-0')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('track-search-artist-0-1')));
@@ -4929,7 +5024,11 @@ void main() {
       expect(find.byKey(const ValueKey('now-playing-title')), findsNothing);
       expect(find.byTooltip('Close lyrics'), findsNothing);
       expect(find.byTooltip('Show lyrics'), findsNothing);
-      expect(find.byTooltip('Volume'), findsOneWidget);
+      expect(find.byTooltip('Volume'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('expanded-now-playing-compact-control-row')),
+        findsOneWidget,
+      );
       expect(find.byTooltip('Show queue'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('now-playing-open-expanded')),
@@ -5526,9 +5625,9 @@ void main() {
     );
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
+    await tester.tap(find.byKey(const ValueKey('track-search-more-0')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('track-search-artist-0-0')));
+    await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('artist-content')), findsOneWidget);
     expect(artistAlbums.requests, isEmpty);
@@ -5816,6 +5915,14 @@ void main() {
       tester.getCenter(find.byKey(const ValueKey('top-search-shortcut'))),
       expandedSearchCenter,
     );
+    final refreshRect = tester.getRect(
+      find.byKey(const ValueKey('collection-detail-shell-refresh')),
+    );
+    final searchRect = tester.getRect(
+      find.byKey(const ValueKey('top-search-shortcut')),
+    );
+    expect(refreshRect.left, greaterThan(searchRect.right));
+    expect(refreshRect.right, greaterThan(tester.view.physicalSize.width - 64));
     await tester.tap(
       find.byKey(const ValueKey('collection-detail-shell-refresh')),
     );

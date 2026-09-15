@@ -62,6 +62,7 @@ class MusicApp extends StatefulWidget {
     LyricGateway? lyricGateway,
     PlaybackQueueGateway? playbackQueueGateway,
     TrackSearchGateway? searchGateway,
+    TrackSearchGateway? searchSuggestionGateway,
     ArtistSearchGateway? artistSearchGateway,
     AlbumSearchGateway? albumSearchGateway,
     PlaylistSearchGateway? playlistSearchGateway,
@@ -181,6 +182,7 @@ class MusicApp extends StatefulWidget {
       ),
       discovery: AuthenticatedDiscoveryDependencies(
         trackSearchGateway: searchGateway ?? const RustTrackSearchGateway(),
+        trackSuggestionGateway: searchSuggestionGateway,
         artistSearchGateway:
             artistSearchGateway ?? const RustArtistSearchGateway(),
         albumSearchGateway:

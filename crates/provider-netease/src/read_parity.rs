@@ -57,6 +57,7 @@ impl<T: Transport> TrackCommentsProvider for NeteaseProvider<T> {
             .await
             .map_err(comments_error)?;
         let map = |comment: netease_client::Comment| {
+            let author_avatar_uri = netease_client::artwork(comment.user.avatar).ok().flatten();
             TrackComment::new(
                 TrackCommentId::new(provider_id(), comment.id.to_string())
                     .map_err(|_| CommentsError::InvalidResponse)?,
@@ -65,6 +66,7 @@ impl<T: Transport> TrackCommentsProvider for NeteaseProvider<T> {
                 comment.time / 1000,
                 comment.praise_count,
             )
+            .map(|comment_domain| comment_domain.with_author_avatar_uri(author_avatar_uri))
             .map_err(|_| CommentsError::InvalidResponse)
         };
         Ok(TrackCommentsPage::new(

@@ -67,7 +67,10 @@ fn comment(id: u64) -> Value {
         "content":"Comment",
         "time":1_700_000_000_000_u64 + id,
         "likedCount":3,
-        "user":{"nickname":"Listener"}
+        "user":{
+            "nickname":"Listener",
+            "avatarUrl":"http://p1.music.126.net/avatar.jpg"
+        }
     })
 }
 
@@ -109,6 +112,10 @@ async fn comments_keep_true_hot_and_latest_paging_without_identity_leakage() {
     assert_eq!(
         first.latest_comments()[0].published_at_unix_seconds(),
         1_700_000_000
+    );
+    assert_eq!(
+        first.latest_comments()[0].author_avatar_uri(),
+        Some("https://p1.music.126.net/avatar.jpg")
     );
     assert!(first.has_more());
     assert!(!format!("{first:?}").contains("Listener"));

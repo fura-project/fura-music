@@ -3143,6 +3143,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get playbackQualitySummaryLossless => 'SQ 无损音质';
+
+  @override
+  String get commonLocateCurrentTrack => '定位当前歌曲';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).

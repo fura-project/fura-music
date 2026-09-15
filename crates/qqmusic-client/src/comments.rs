@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use crate::{HttpRequest, HttpTransport, QqMusicClient};
+use crate::{HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
 const COMMENTS_URL: &str = "https://c.y.qq.com/base/fcgi-bin/fcg_global_comment_h5.fcg";
 const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
@@ -149,6 +149,7 @@ where
 pub struct QqMusicTrackComment {
     comment_id: String,
     author_display_name: String,
+    author_avatar_uri: Option<String>,
     content: String,
     published_at_unix_seconds: u64,
     praise_count: u64,
@@ -163,6 +164,11 @@ impl QqMusicTrackComment {
     #[must_use]
     pub fn author_display_name(&self) -> &str {
         &self.author_display_name
+    }
+
+    #[must_use]
+    pub fn author_avatar_uri(&self) -> Option<&str> {
+        self.author_avatar_uri.as_deref()
     }
 
     #[must_use]
@@ -187,6 +193,7 @@ impl fmt::Debug for QqMusicTrackComment {
             .debug_struct("QqMusicTrackComment")
             .field("comment_id", &"[REDACTED]")
             .field("author_display_name", &"[REDACTED]")
+            .field("has_author_avatar", &self.author_avatar_uri.is_some())
             .field("content", &"[REDACTED]")
             .field("published_at_unix_seconds", &self.published_at_unix_seconds)
             .field("praise_count", &self.praise_count)
@@ -326,6 +333,7 @@ struct RawCommentGroup {
 struct RawComment {
     commentid: Option<FlexibleCommentId>,
     nick: Option<String>,
+    avatarurl: Option<String>,
     rootcommentcontent: Option<String>,
     middlecommentcontent: Option<Vec<RawSubComment>>,
     praisenum: Option<FlexibleUnsigned>,
@@ -528,6 +536,7 @@ fn map_comment<E>(
     Ok(Some(QqMusicTrackComment {
         comment_id,
         author_display_name,
+        author_avatar_uri: normalized_https_image_uri(raw.avatarurl),
         content,
         published_at_unix_seconds,
         praise_count,
@@ -581,6 +590,7 @@ mod tests {
         json!({
             "commentid": id,
             "nick": author,
+            "avatarurl": "http://thirdqq.qlogo.cn/g?b=qq&nk=fixture",
             "rootcommentcontent": content,
             "time": time,
             "praisenum": praise
@@ -618,9 +628,16 @@ mod tests {
         );
         assert_eq!(page.latest_comments()[0].content(), "Fixture latest text");
         assert_eq!(
+            page.latest_comments()[0].author_avatar_uri(),
+            Some("https://thirdqq.qlogo.cn/g?b=qq&nk=fixture")
+        );
+        assert_eq!(
             page.latest_comments()[0].published_at_unix_seconds(),
             1_700_000_002
         );
+        let debug = format!("{:?}", page.latest_comments()[0]);
+        assert!(debug.contains("has_author_avatar: true"));
+        assert!(!debug.contains("thirdqq.qlogo.cn"));
 
         let request = &client.transport().requests.lock().expect("request lock")[0];
         assert_eq!(request.method(), HttpMethod::Get);

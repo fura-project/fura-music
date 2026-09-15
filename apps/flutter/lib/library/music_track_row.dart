@@ -663,6 +663,155 @@ class MusicTrackArtwork extends StatelessWidget {
   }
 }
 
+/// Overlays a locate-current-Track action only while the current row is
+/// outside the visible portion of a fixed-density music list.
+class MusicTrackLocatorOverlay extends StatefulWidget {
+  const MusicTrackLocatorOverlay({
+    required this.controller,
+    required this.currentIndex,
+    required this.desktop,
+    required this.child,
+    this.leadingExtent = 0,
+    this.bottomInset,
+    this.buttonKey = const ValueKey('locate-current-track'),
+    super.key,
+  });
+
+  final ScrollController controller;
+  final int? currentIndex;
+  final bool desktop;
+  final Widget child;
+  final double leadingExtent;
+  final double? bottomInset;
+  final Key buttonKey;
+
+  @override
+  State<MusicTrackLocatorOverlay> createState() =>
+      _MusicTrackLocatorOverlayState();
+}
+
+class _MusicTrackLocatorOverlayState extends State<MusicTrackLocatorOverlay> {
+  bool _visible = false;
+
+  double get _itemExtent => widget.desktop ? 57 : 65;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_updateVisibility);
+    _scheduleUpdate();
+  }
+
+  @override
+  void didUpdateWidget(MusicTrackLocatorOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_updateVisibility);
+      widget.controller.addListener(_updateVisibility);
+    }
+    _scheduleUpdate();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_updateVisibility);
+    super.dispose();
+  }
+
+  void _scheduleUpdate() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) _updateVisibility();
+  });
+
+  void _updateVisibility() {
+    final index = widget.currentIndex;
+    final controller = widget.controller;
+    var visible = false;
+    if (index != null && controller.hasClients) {
+      final position = controller.position;
+      final rowStart = widget.leadingExtent + (index * _itemExtent);
+      final rowEnd = rowStart + _itemExtent;
+      final viewportStart = position.pixels;
+      final viewportEnd = viewportStart + position.viewportDimension;
+      visible = rowEnd < viewportStart || rowStart > viewportEnd;
+    }
+    if (_visible != visible) setState(() => _visible = visible);
+  }
+
+  void _locate() {
+    final index = widget.currentIndex;
+    final controller = widget.controller;
+    if (index == null || !controller.hasClients) return;
+    final position = controller.position;
+    final target =
+        widget.leadingExtent +
+        (index * _itemExtent) -
+        (position.viewportDimension * 0.28);
+    final offset = target.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (reduceMotion) {
+      controller.jumpTo(offset);
+      return;
+    }
+    controller.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 360),
+      curve: Easing.emphasizedDecelerate,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      widget.child,
+      PositionedDirectional(
+        end: 16,
+        bottom: widget.bottomInset ?? (widget.desktop ? 16 : 84),
+        child: AnimatedSwitcher(
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.82, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: !_visible
+              ? const SizedBox.shrink()
+              : IconButton.filledTonal(
+                  key: widget.buttonKey,
+                  tooltip: context.l10n.commonLocateCurrentTrack,
+                  onPressed: _locate,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 52,
+                    height: 52,
+                  ),
+                  icon: const Icon(Icons.my_location_rounded),
+                ),
+        ),
+      ),
+    ],
+  );
+}
+
+int? musicTrackIndexOf(
+  List<PlaylistTrackSummary> tracks,
+  PlaylistTrackSummary? current,
+) {
+  if (current == null) return null;
+  final index = tracks.indexWhere(
+    (track) =>
+        track.providerId == current.providerId &&
+        track.opaqueId == current.opaqueId,
+  );
+  return index < 0 ? null : index;
+}
+
 String formatTrackDuration(int? seconds) {
   if (seconds == null || seconds < 0) return '--:--';
   final minutes = seconds ~/ 60;

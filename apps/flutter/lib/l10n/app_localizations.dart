@@ -5534,6 +5534,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'SQ lossless quality'**
   String get playbackQualitySummaryLossless;
+
+  /// Tooltip for returning a scrolled music list to its currently playing row.
+  ///
+  /// In en, this message translates to:
+  /// **'Locate current track'**
+  String get commonLocateCurrentTrack;
 }
 
 class _AppLocalizationsDelegate

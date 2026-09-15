@@ -1600,6 +1600,7 @@ pub enum TrackCommentField {
 pub struct TrackComment {
     id: TrackCommentId,
     author_display_name: String,
+    author_avatar_uri: Option<String>,
     content: String,
     published_at_unix_seconds: u64,
     praise_count: u64,
@@ -1636,6 +1637,7 @@ impl TrackComment {
         Ok(Self {
             id,
             author_display_name,
+            author_avatar_uri: None,
             content,
             published_at_unix_seconds,
             praise_count,
@@ -1650,6 +1652,17 @@ impl TrackComment {
     #[must_use]
     pub fn author_display_name(&self) -> &str {
         &self.author_display_name
+    }
+
+    #[must_use]
+    pub fn with_author_avatar_uri(mut self, author_avatar_uri: Option<String>) -> Self {
+        self.author_avatar_uri = author_avatar_uri.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    #[must_use]
+    pub fn author_avatar_uri(&self) -> Option<&str> {
+        self.author_avatar_uri.as_deref()
     }
 
     #[must_use]
@@ -1674,6 +1687,7 @@ impl fmt::Debug for TrackComment {
             .debug_struct("TrackComment")
             .field("id", &self.id)
             .field("author_display_name", &"[REDACTED]")
+            .field("has_author_avatar", &self.author_avatar_uri.is_some())
             .field("content", &"[REDACTED]")
             .field("published_at_unix_seconds", &self.published_at_unix_seconds)
             .field("praise_count", &self.praise_count)
@@ -2977,7 +2991,8 @@ mod tests {
             1_700_000_001,
             42,
         )
-        .expect("comment");
+        .expect("comment")
+        .with_author_avatar_uri(Some("https://example.invalid/private-avatar.jpg".into()));
         let page = TrackCommentsPage::new(0, 2, true, vec![comment.clone()], vec![comment]);
 
         assert_eq!(
@@ -2990,6 +3005,10 @@ mod tests {
             1_700_000_001
         );
         assert_eq!(page.latest_comments()[0].praise_count(), 42);
+        assert_eq!(
+            page.latest_comments()[0].author_avatar_uri(),
+            Some("https://example.invalid/private-avatar.jpg")
+        );
         assert_eq!(page.offset(), 0);
         assert_eq!(page.total(), 2);
         assert!(page.has_more());
@@ -2997,6 +3016,8 @@ mod tests {
         for private in ["must-not-leak", "private-41001"] {
             assert!(!debug.contains(private));
         }
+        assert!(debug.contains("has_author_avatar: true"));
+        assert!(!debug.contains("private-avatar.jpg"));
     }
 
     #[test]

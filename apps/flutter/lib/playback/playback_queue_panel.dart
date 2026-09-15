@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/adaptive_side_sheet.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
@@ -14,9 +15,10 @@ import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 Future<void> showPlaybackQueue(
   BuildContext context,
   QueuePlaybackController controller,
-) {
-  if (MediaQuery.sizeOf(context).width < 600) {
-    return showModalBottomSheet<void>(
+) async {
+  final width = MediaQuery.sizeOf(context).width;
+  if (width < 600) {
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -31,8 +33,23 @@ Future<void> showPlaybackQueue(
         ),
       ),
     );
+    return;
   }
-  return showDialog<void>(
+  if (width >= 900) {
+    await showAdaptiveSideSheet<void>(
+      context: context,
+      surfaceKey: const ValueKey('playback-queue-wide-side-sheet'),
+      builder: (sheetContext) => PlaybackShortcuts(
+        controller: controller,
+        child: PlaybackQueuePanel(
+          controller: controller,
+          onClose: () => Navigator.of(sheetContext).pop(),
+        ),
+      ),
+    );
+    return;
+  }
+  await showDialog<void>(
     context: context,
     builder: (context) => Dialog(
       child: ConstrainedBox(

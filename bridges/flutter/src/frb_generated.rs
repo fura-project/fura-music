@@ -13317,6 +13317,7 @@ impl SseDecode for crate::api::comments::TrackCommentSummary {
         let mut var_providerId = <String>::sse_decode(deserializer);
         let mut var_opaqueId = <String>::sse_decode(deserializer);
         let mut var_authorDisplayName = <String>::sse_decode(deserializer);
+        let mut var_authorAvatarUri = <Option<String>>::sse_decode(deserializer);
         let mut var_content = <String>::sse_decode(deserializer);
         let mut var_publishedAtUnixSeconds = <u32>::sse_decode(deserializer);
         let mut var_praiseCount = <u32>::sse_decode(deserializer);
@@ -13324,6 +13325,7 @@ impl SseDecode for crate::api::comments::TrackCommentSummary {
             provider_id: var_providerId,
             opaque_id: var_opaqueId,
             author_display_name: var_authorDisplayName,
+            author_avatar_uri: var_authorAvatarUri,
             content: var_content,
             published_at_unix_seconds: var_publishedAtUnixSeconds,
             praise_count: var_praiseCount,
@@ -17357,6 +17359,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::comments::TrackCommentSummary
             self.provider_id.into_into_dart().into_dart(),
             self.opaque_id.into_into_dart().into_dart(),
             self.author_display_name.into_into_dart().into_dart(),
+            self.author_avatar_uri.into_into_dart().into_dart(),
             self.content.into_into_dart().into_dart(),
             self.published_at_unix_seconds.into_into_dart().into_dart(),
             self.praise_count.into_into_dart().into_dart(),
@@ -21123,6 +21126,7 @@ impl SseEncode for crate::api::comments::TrackCommentSummary {
         <String>::sse_encode(self.provider_id, serializer);
         <String>::sse_encode(self.opaque_id, serializer);
         <String>::sse_encode(self.author_display_name, serializer);
+        <Option<String>>::sse_encode(self.author_avatar_uri, serializer);
         <String>::sse_encode(self.content, serializer);
         <u32>::sse_encode(self.published_at_unix_seconds, serializer);
         <u32>::sse_encode(self.praise_count, serializer);

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
+import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_locale.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -191,6 +192,10 @@ void main() {
   testWidgets('search result can be queued or handed to playback', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     const track = PlaylistTrackSummary(
       providerId: 'qq-music',
       opaqueId: 'track:41001:0:searchMid:-',
@@ -236,16 +241,21 @@ void main() {
 
     expect(search.requests, [('search words', 1, 30)]);
     expect(find.text('Search result'), findsOneWidget);
-    expect(find.text('Search artist · Search album'), findsOneWidget);
+    expect(find.text('Search artist'), findsOneWidget);
+    expect(find.text('Search album'), findsOneWidget);
     expect(find.text(_en.searchResultCount(1, 'search words')), findsOneWidget);
 
+    await tester.tap(find.byKey(const ValueKey('track-search-more-0')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('track-search-artist-0')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('track-search-artist-0-1')));
     await tester.pumpAndSettle();
     expect(openedArtist?.name, 'Second artist');
 
-    await tester.tap(find.byKey(const ValueKey('track-search-queue-0')));
+    await tester.tap(find.byKey(const ValueKey('track-search-more-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('track-search-add-to-queue-0')));
     await tester.pumpAndSettle();
     expect(queue.pushedTracks, [track]);
     expect(find.text('Added to queue'), findsOneWidget);
@@ -255,6 +265,152 @@ void main() {
     expect(queue.replacedTracks, [track]);
     expect(queue.replacedIndex, 0);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('typing shows debounced provider-backed suggestions in place', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const resultTrack = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:search-result',
+      title: 'Selected result',
+      artistNames: ['Result artist'],
+    );
+    const suggestionTrack = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:search-suggestion',
+      title: 'Nevada',
+      artistNames: ['Vicetone', 'Cozi Zuehlsdorff'],
+    );
+    final search = _SearchGateway(resultTrack);
+    final suggestions = _RecordingSearchGateway(
+      const TrackSearchPageResult(
+        page: 1,
+        total: 1,
+        items: [TrackSearchItem(track: suggestionTrack)],
+      ),
+    );
+    final playback = QueuePlaybackController(
+      TestPlaybackQueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TrackSearchPage(
+          gateway: search,
+          suggestionGateway: suggestions,
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+
+    final field = find.byKey(const ValueKey('track-search-field'));
+    await tester.enterText(field, 'nev');
+    await tester.pump(const Duration(milliseconds: 319));
+    expect(suggestions.requests, isEmpty);
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+
+    expect(suggestions.requests, [('nev', 1, 8)]);
+    expect(
+      find.byKey(const ValueKey('track-search-suggestions')),
+      findsOneWidget,
+    );
+    expect(find.text('Nevada'), findsOneWidget);
+    expect(find.text('Vicetone · Cozi Zuehlsdorff'), findsOneWidget);
+    if (const bool.fromEnvironment('SEARCH_VISUAL_REVIEW')) {
+      await expectLater(
+        find.byType(TrackSearchPage),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-search-mobile-suggestions.png'),
+        ),
+      );
+    }
+
+    await tester.tap(find.byKey(const ValueKey('track-search-suggestion-0')));
+    await tester.pumpAndSettle();
+
+    expect(search.requests, [('Nevada', 1, 30)]);
+    expect(tester.widget<TextField>(field).controller?.text, 'Nevada');
+    expect(
+      find.byKey(const ValueKey('track-search-suggestions')),
+      findsNothing,
+    );
+    expect(find.text('Selected result'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desktop Track results use the common music table structure', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const track = PlaylistTrackSummary(
+      providerId: 'qq-music',
+      opaqueId: 'track:desktop-table',
+      title: 'Desktop table result',
+      artistNames: ['Desktop artist'],
+      albumTitle: 'Desktop album',
+      durationSeconds: 204,
+    );
+    final playback = QueuePlaybackController(
+      TestPlaybackQueueGateway(),
+      TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(const _NeverAudioEngine()),
+      ),
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TrackSearchPage(
+          gateway: _SearchGateway(track),
+          queuePlaybackController: playback,
+          onBack: () {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          onOpenPlaylist: (_) {},
+          onSignInAgain: () {},
+        ),
+      ),
+    );
+    final field = find.byKey(const ValueKey('track-search-field'));
+    await tester.enterText(field, 'desktop query');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MusicTrackTableHeader), findsOneWidget);
+    expect(find.byType(MusicTrackRowSurface), findsOneWidget);
+    expect(find.text('Desktop artist'), findsOneWidget);
+    expect(find.text('Desktop album'), findsOneWidget);
+    expect(find.text('3:24'), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-search-more-0')), findsNothing);
+    expect(tester.takeException(), isNull);
+    if (const bool.fromEnvironment('SEARCH_VISUAL_REVIEW')) {
+      await expectLater(
+        find.byType(TrackSearchPage),
+        matchesGoldenFile(
+          Uri.file('/tmp/flutterustmusic-search-desktop-results.png'),
+        ),
+      );
+    }
   });
 
   testWidgets('Tracks, Artists, and Albums preserve independent Search state', (
@@ -409,6 +565,23 @@ class _ResultSearchGateway implements TrackSearchGateway {
     required int page,
     required int size,
   }) => _SearchOperation(result);
+}
+
+class _RecordingSearchGateway implements TrackSearchGateway {
+  _RecordingSearchGateway(this.result);
+
+  final TrackSearchPageResult result;
+  final List<(String, int, int)> requests = [];
+
+  @override
+  TrackSearchPageLoadOperation beginLoad({
+    required String query,
+    required int page,
+    required int size,
+  }) {
+    requests.add((query, page, size));
+    return _SearchOperation(result);
+  }
 }
 
 class _ControlledSearchGateway implements TrackSearchGateway {

@@ -3444,4 +3444,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get playbackQualitySummaryLossless => 'SQ lossless quality';
+
+  @override
+  String get commonLocateCurrentTrack => 'Locate current track';
 }

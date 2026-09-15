@@ -23,6 +23,7 @@ pub struct TrackCommentSummary {
     pub provider_id: String,
     pub opaque_id: String,
     pub author_display_name: String,
+    pub author_avatar_uri: Option<String>,
     pub content: String,
     pub published_at_unix_seconds: u32,
     pub praise_count: u32,
@@ -35,6 +36,7 @@ impl fmt::Debug for TrackCommentSummary {
             .field("provider_id", &self.provider_id)
             .field("opaque_id", &"[REDACTED]")
             .field("author_display_name", &"[REDACTED]")
+            .field("has_author_avatar", &self.author_avatar_uri.is_some())
             .field("content", &"[REDACTED]")
             .field("published_at_unix_seconds", &self.published_at_unix_seconds)
             .field("praise_count", &self.praise_count)
@@ -198,6 +200,7 @@ fn bridge_comment(comment: &TrackComment) -> Result<TrackCommentSummary, ()> {
         provider_id: comment.id().provider().as_str().to_owned(),
         opaque_id: comment.id().opaque().to_owned(),
         author_display_name: comment.author_display_name().to_owned(),
+        author_avatar_uri: comment.author_avatar_uri().map(str::to_owned),
         content: comment.content().to_owned(),
         published_at_unix_seconds: u32::try_from(comment.published_at_unix_seconds())
             .map_err(|_| ())?,
@@ -247,6 +250,7 @@ mod tests {
             praise,
         )
         .expect("comment")
+        .with_author_avatar_uri(Some("https://example.invalid/private-avatar.jpg".into()))
     }
 
     #[test]
@@ -275,10 +279,15 @@ mod tests {
         assert!(mapped.has_more);
         assert_eq!(mapped.hot_comments[0].opaque_id, "comment:91001");
         assert_eq!(mapped.latest_comments[0].praise_count, 7);
+        assert_eq!(
+            mapped.latest_comments[0].author_avatar_uri.as_deref(),
+            Some("https://example.invalid/private-avatar.jpg")
+        );
         let debug = format!("{mapped:?} {:?}", mapped.latest_comments[0]);
         for private in ["must-not-leak", "private-", "91001", "92001"] {
             assert!(!debug.contains(private));
         }
+        assert!(!debug.contains("private-avatar.jpg"));
     }
 
     #[test]
