@@ -33,11 +33,13 @@ execution:
   coverage. The prior artwork-responsive hero, dynamic-color side sheets,
   comment avatars, tonal top bar and first-play entrance remain intact.
 
-  Focused interaction suites and desktop/compact visual matrices pass without
-  layout exceptions. Real Linux rapid resize/disconnect behavior, physical
-  touch density, provider suggestion usefulness, IME variation and final
-  visual/motion acceptance remain `HUMAN_REVIEW`. Build caches were retained;
-  changes are local and no push was performed.
+  Focused interaction suites, generated localization, 256-file formatting,
+  direct Dart analysis, all 616 Flutter tests, Linux Release, Android ARM64
+  Debug/Release and desktop/compact visual matrices pass without layout
+  exceptions. Real Linux rapid resize/disconnect behavior, physical touch
+  density, provider suggestion usefulness, IME variation and final visual/
+  motion acceptance remain `HUMAN_REVIEW`. Build caches were retained; changes
+  are local and no push was performed.
 
 - **2026-09-15 HD-030 Android system and NetEase playback machine pass:** the
   two failures were diagnosed independently while retaining one root
