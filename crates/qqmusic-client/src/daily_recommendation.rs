@@ -3,6 +3,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::credential::is_credential_rejection_code;
 use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
@@ -298,6 +299,42 @@ pub struct QqMusicPersonalizedPlaylist {
     artwork_uri: Option<String>,
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicPersonalizedPlaylistsCollection {
+    playlists: Vec<QqMusicPersonalizedPlaylist>,
+    omitted_playlist_count: u32,
+}
+
+impl QqMusicPersonalizedPlaylistsCollection {
+    #[must_use]
+    pub fn playlists(&self) -> &[QqMusicPersonalizedPlaylist] {
+        &self.playlists
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+}
+
+impl fmt::Debug for QqMusicPersonalizedPlaylistsCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicPersonalizedPlaylistsCollection")
+            .field("playlist_count", &self.playlists.len())
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for QqMusicPersonalizedPlaylistsCollection {
+    type Target = [QqMusicPersonalizedPlaylist];
+
+    fn deref(&self) -> &Self::Target {
+        &self.playlists
+    }
+}
+
 impl QqMusicPersonalizedPlaylist {
     #[must_use]
     pub const fn playlist_id(&self) -> u64 {
@@ -405,7 +442,8 @@ where
     pub async fn personalized_playlists(
         &self,
         credential: &Credential,
-    ) -> Result<Vec<QqMusicPersonalizedPlaylist>, QqMusicPersonalizedPlaylistsError<T::Error>> {
+    ) -> Result<QqMusicPersonalizedPlaylistsCollection, QqMusicPersonalizedPlaylistsError<T::Error>>
+    {
         let body = serde_json::to_vec(&DailyRecommendationRequest::new(credential))
             .map_err(|_| QqMusicPersonalizedPlaylistsError::Serialize)?;
         let response = self
@@ -538,7 +576,7 @@ struct RawShelf {
 #[derive(Deserialize)]
 struct RawNiche {
     #[serde(rename = "v_card")]
-    cards: Option<Vec<RawCard>>,
+    cards: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -610,7 +648,9 @@ fn map_response<E>(
             let cards = niche
                 .cards
                 .ok_or(QqMusicDailyRecommendationError::InvalidFeed)?;
-            for card in cards {
+            for value in cards {
+                let card = serde_json::from_value::<RawCard>(value)
+                    .map_err(|_| QqMusicDailyRecommendationError::InvalidFeed)?;
                 if !is_daily_playlist_card(&card) {
                     continue;
                 }
@@ -626,7 +666,7 @@ fn map_response<E>(
 
 fn map_personalized_response<E>(
     envelope: DailyRecommendationResponse,
-) -> Result<Vec<QqMusicPersonalizedPlaylist>, QqMusicPersonalizedPlaylistsError<E>> {
+) -> Result<QqMusicPersonalizedPlaylistsCollection, QqMusicPersonalizedPlaylistsError<E>> {
     let global_code = envelope
         .code
         .ok_or(QqMusicPersonalizedPlaylistsError::MissingGlobalCode)?;
@@ -683,32 +723,46 @@ fn map_personalized_response<E>(
         }
     }
     let Some(shelf) = matching_shelf else {
-        return Ok(Vec::new());
+        return Ok(QqMusicPersonalizedPlaylistsCollection {
+            playlists: Vec::new(),
+            omitted_playlist_count: 0,
+        });
     };
     let niches = shelf
         .niches
         .ok_or(QqMusicPersonalizedPlaylistsError::InvalidFeed)?;
     let mut playlist_ids = HashSet::new();
     let mut playlists = Vec::new();
+    let mut omitted_playlist_count = 0_u32;
     for niche in niches {
         let cards = niche
             .cards
             .ok_or(QqMusicPersonalizedPlaylistsError::InvalidFeed)?;
-        for card in cards {
+        for value in cards {
+            let Ok(card) = serde_json::from_value::<RawCard>(value) else {
+                omitted_playlist_count = omitted_playlist_count.saturating_add(1);
+                continue;
+            };
             if card.jumptype != Some(DAILY_PLAYLIST_JUMP_TYPE) {
                 continue;
             }
             if playlists.len() == MAX_PERSONALIZED_PLAYLISTS {
                 return Err(QqMusicPersonalizedPlaylistsError::TooManyPlaylists);
             }
-            let playlist = map_personalized_playlist(&card)?;
+            let Ok(playlist) = map_personalized_playlist::<E>(&card) else {
+                omitted_playlist_count = omitted_playlist_count.saturating_add(1);
+                continue;
+            };
             if !playlist_ids.insert(playlist.playlist_id()) {
                 return Err(QqMusicPersonalizedPlaylistsError::DuplicatePlaylistId);
             }
             playlists.push(playlist);
         }
     }
-    Ok(playlists)
+    Ok(QqMusicPersonalizedPlaylistsCollection {
+        playlists,
+        omitted_playlist_count,
+    })
 }
 
 fn is_daily_playlist_card(card: &RawCard) -> bool {
@@ -787,7 +841,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        DailyRecommendationField, PersonalizedPlaylistField, QqMusicDailyRecommendationError,
+        DailyRecommendationField, QqMusicDailyRecommendationError,
         QqMusicPersonalizedPlaylistsError,
     };
     use crate::{
@@ -1061,17 +1115,14 @@ mod tests {
         );
         assert_eq!(with_insecure_artwork[2].artwork_uri(), None);
 
-        let invalid = QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&[
+        let partial = QqMusicClient::new(DailyTransport::new(&personalized_feed_json(&[
             personalized_card("not-a-number", "Private invalid"),
         ])))
         .personalized_playlists(&credential())
-        .await;
-        assert!(matches!(
-            invalid,
-            Err(QqMusicPersonalizedPlaylistsError::InvalidPlaylist {
-                field: PersonalizedPlaylistField::PlaylistId
-            })
-        ));
+        .await
+        .expect("invalid collection row is omitted");
+        assert!(partial.is_empty());
+        assert_eq!(partial.omitted_playlist_count(), 1);
     }
 
     #[tokio::test]

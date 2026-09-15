@@ -50,8 +50,10 @@ pub enum QqMusicNewAlbumPageLoadFailure {
 pub struct QqMusicNewAlbumPageLoad {
     pub region: QqMusicNewAlbumRegion,
     pub offset: u32,
+    pub next_offset: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_release_count: u32,
     pub releases: Vec<CatalogNewAlbumRelease>,
     pub failure: Option<QqMusicNewAlbumPageLoadFailure>,
 }
@@ -62,8 +64,10 @@ impl fmt::Debug for QqMusicNewAlbumPageLoad {
             .debug_struct("QqMusicNewAlbumPageLoad")
             .field("region", &self.region)
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_release_count", &self.omitted_release_count)
             .field("release_count", &self.releases.len())
             .field("failure", &self.failure)
             .finish()
@@ -183,8 +187,10 @@ fn map_load(
         Ok(page) => QqMusicNewAlbumPageLoad {
             region: bridge_region(page.region()),
             offset: page.offset(),
+            next_offset: page.next_offset(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_release_count: page.omitted_release_count(),
             releases: page
                 .releases()
                 .iter()
@@ -222,8 +228,10 @@ const fn failed_load(
     QqMusicNewAlbumPageLoad {
         region,
         offset: 0,
+        next_offset: 0,
         total: 0,
         has_more: false,
+        omitted_release_count: 0,
         releases: Vec::new(),
         failure: Some(failure),
     }

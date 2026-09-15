@@ -1,7 +1,8 @@
 use super::{NeteaseProvider, playlist, provider_id, song};
 use music_domain::{
-    AccountSummary, PlaylistId, PlaylistOwnership, PlaylistPurpose, PlaylistSummary,
-    PlaylistTracksPage, TrackSummary,
+    AccountSummary, DailyTracksCollection, OwnedPlaylistsCollection,
+    PersonalizedPlaylistsCollection, PersonalizedTracksCollection, PlaylistId, PlaylistOwnership,
+    PlaylistPurpose, PlaylistSummary, PlaylistTracksPage, UserPlaylistsCollection,
 };
 use netease_client::{
     Credential, Error, MediaQuality, NeteaseClient, QrKey, QrPoll, SmsLoginChallenge, Transport,
@@ -632,20 +633,23 @@ impl<T: Transport> QrAuthenticationSession for NeteaseQrSession<T> {
 }
 impl<T: Transport> UserPlaylistsProvider for NeteaseProvider<T> {
     type Error = UserLibraryError;
-    async fn user_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
+    async fn user_playlists(&self) -> Result<UserPlaylistsCollection, Self::Error> {
         let (g, c, user) = self.auth.snapshot().map_err(library_error)?;
         let mut offset = 0;
         let mut rows = Vec::new();
         let mut seen = std::collections::HashSet::new();
         let mut liked_id = None;
+        let mut omitted = 0_u32;
         for _ in 0..10 {
             let page = self
                 .auth
                 .run(g, self.client.user_playlists(&c, user, offset, 100))
                 .await
                 .map_err(library_error)?;
-            offset +=
-                u32::try_from(page.items.len()).map_err(|_| UserLibraryError::InvalidResponse)?;
+            offset = page.next;
+            omitted = omitted
+                .checked_add(page.omitted)
+                .ok_or(UserLibraryError::InvalidResponse)?;
             for p in page.items {
                 if !seen.insert(p.playlist.id) {
                     return Err(UserLibraryError::InvalidResponse);
@@ -690,7 +694,7 @@ impl<T: Transport> UserPlaylistsProvider for NeteaseProvider<T> {
                     return Err(UserLibraryError::Replaced);
                 }
                 state.liked_playlist = liked_id;
-                return Ok(rows);
+                return Ok(UserPlaylistsCollection::new(rows, omitted));
             }
         }
         Err(UserLibraryError::InvalidResponse)
@@ -698,13 +702,17 @@ impl<T: Transport> UserPlaylistsProvider for NeteaseProvider<T> {
 }
 impl<T: Transport> OwnedPlaylistsProvider for NeteaseProvider<T> {
     type Error = UserLibraryError;
-    async fn owned_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
-        Ok(self
-            .user_playlists()
-            .await?
-            .into_iter()
-            .filter(|p| p.ownership() == PlaylistOwnership::Owned)
-            .collect())
+    async fn owned_playlists(&self) -> Result<OwnedPlaylistsCollection, Self::Error> {
+        let collection = self.user_playlists().await?;
+        Ok(OwnedPlaylistsCollection::new(
+            collection
+                .playlists()
+                .iter()
+                .filter(|playlist| playlist.ownership() == PlaylistOwnership::Owned)
+                .cloned()
+                .collect(),
+            collection.omitted_playlist_count(),
+        ))
     }
 }
 impl<T: Transport> NeteaseProvider<T> {
@@ -819,7 +827,7 @@ impl<T: Transport> NeteaseProvider<T> {
 }
 impl<T: Transport> PersonalizedTracksProvider for NeteaseProvider<T> {
     type Error = PersonalizedTracksError;
-    async fn personalized_tracks(&self) -> Result<Vec<TrackSummary>, Self::Error> {
+    async fn personalized_tracks(&self) -> Result<PersonalizedTracksCollection, Self::Error> {
         let map = |e| match library_error(e) {
             UserLibraryError::AuthenticationRequired => {
                 PersonalizedTracksError::AuthenticationRequired
@@ -831,19 +839,32 @@ impl<T: Transport> PersonalizedTracksProvider for NeteaseProvider<T> {
             UserLibraryError::Replaced => PersonalizedTracksError::Replaced,
         };
         let (g, c, _) = self.auth.snapshot().map_err(map)?;
-        self.auth
+        let source = self
+            .auth
             .run(g, self.client.personal_fm(&c))
             .await
-            .map_err(map)?
-            .into_iter()
-            .map(song)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| map(e.into()))
+            .map_err(map)?;
+        let mut omitted = source.omitted;
+        let mut tracks = Vec::with_capacity(source.items.len());
+        for item in source.items {
+            match song(item) {
+                Ok(track) => tracks.push(track),
+                Err(error) => match error {
+                    Error::ResponseShapeMismatch | Error::ResponseBound => {
+                        omitted = omitted
+                            .checked_add(1)
+                            .ok_or(map(Error::ResponseBound.into()))?;
+                    }
+                    other => return Err(map(other.into())),
+                },
+            }
+        }
+        Ok(PersonalizedTracksCollection::new(tracks, omitted))
     }
 }
 impl<T: Transport> DailyTracksProvider for NeteaseProvider<T> {
     type Error = DailyRecommendationError;
-    async fn daily_tracks(&self) -> Result<Vec<TrackSummary>, Self::Error> {
+    async fn daily_tracks(&self) -> Result<DailyTracksCollection, Self::Error> {
         let map = |e| match library_error(e) {
             UserLibraryError::AuthenticationRequired => {
                 DailyRecommendationError::AuthenticationRequired
@@ -855,14 +876,27 @@ impl<T: Transport> DailyTracksProvider for NeteaseProvider<T> {
             UserLibraryError::Replaced => DailyRecommendationError::Replaced,
         };
         let (g, c, _) = self.auth.snapshot().map_err(map)?;
-        self.auth
+        let source = self
+            .auth
             .run(g, self.client.daily_tracks(&c))
             .await
-            .map_err(map)?
-            .into_iter()
-            .map(song)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| map(e.into()))
+            .map_err(map)?;
+        let mut omitted = source.omitted;
+        let mut tracks = Vec::with_capacity(source.items.len());
+        for item in source.items {
+            match song(item) {
+                Ok(track) => tracks.push(track),
+                Err(error) => match error {
+                    Error::ResponseShapeMismatch | Error::ResponseBound => {
+                        omitted = omitted
+                            .checked_add(1)
+                            .ok_or(map(Error::ResponseBound.into()))?;
+                    }
+                    other => return Err(map(other.into())),
+                },
+            }
+        }
+        Ok(DailyTracksCollection::new(tracks, omitted))
     }
 }
 
@@ -897,7 +931,7 @@ impl<T: Transport> NeteaseProvider<T> {
 
 impl<T: Transport> provider_api::PersonalizedPlaylistsProvider for NeteaseProvider<T> {
     type Error = provider_api::PersonalizedPlaylistsError;
-    async fn personalized_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
+    async fn personalized_playlists(&self) -> Result<PersonalizedPlaylistsCollection, Self::Error> {
         use provider_api::PersonalizedPlaylistsError as E;
         let map = |e| match library_error(e) {
             UserLibraryError::AuthenticationRequired => E::AuthenticationRequired,
@@ -908,14 +942,27 @@ impl<T: Transport> provider_api::PersonalizedPlaylistsProvider for NeteaseProvid
             UserLibraryError::Replaced => E::Replaced,
         };
         let (g, c, _) = self.auth.snapshot().map_err(map)?;
-        self.auth
+        let source = self
+            .auth
             .run(g, self.client.personalized_playlists(&c))
             .await
-            .map_err(map)?
-            .into_iter()
-            .map(playlist)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| map(e.into()))
+            .map_err(map)?;
+        let mut omitted = source.omitted;
+        let mut playlists = Vec::with_capacity(source.items.len());
+        for item in source.items {
+            match playlist(item) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(error) => match error {
+                    Error::ResponseShapeMismatch | Error::ResponseBound => {
+                        omitted = omitted
+                            .checked_add(1)
+                            .ok_or(map(Error::ResponseBound.into()))?;
+                    }
+                    other => return Err(map(other.into())),
+                },
+            }
+        }
+        Ok(PersonalizedPlaylistsCollection::new(playlists, omitted))
     }
 }
 macro_rules! favorite_page {

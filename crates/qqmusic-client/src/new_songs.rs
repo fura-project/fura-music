@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicArtistSummary, QqMusicClient,
@@ -180,6 +181,7 @@ where
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicNewSongCollection {
     category: QqMusicNewSongCategory,
+    omitted_track_count: u32,
     tracks: Vec<QqMusicTrackSummary>,
 }
 
@@ -187,6 +189,11 @@ impl QqMusicNewSongCollection {
     #[must_use]
     pub const fn category(&self) -> QqMusicNewSongCategory {
         self.category
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -200,6 +207,7 @@ impl fmt::Debug for QqMusicNewSongCollection {
         formatter
             .debug_struct("QqMusicNewSongCollection")
             .field("category", &self.category)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -308,7 +316,7 @@ struct NewSongsResult {
 struct NewSongsData {
     #[serde(rename = "type")]
     category: Option<u8>,
-    songlist: Option<Vec<RawNewSongTrack>>,
+    songlist: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -321,9 +329,9 @@ struct RawNewSongTrack {
     #[serde(rename = "type")]
     song_type: Option<u32>,
     interval: Option<u32>,
-    singer: Option<Vec<RawNewSongArtist>>,
-    album: Option<RawNewSongAlbum>,
-    file: Option<RawNewSongFile>,
+    singer: Option<Value>,
+    album: Option<Value>,
+    file: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -378,13 +386,31 @@ fn map_response<E>(
             count: raw_tracks.len(),
         });
     }
-    let tracks = raw_tracks
-        .into_iter()
-        .enumerate()
-        .map(|(index, track)| map_track(track, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    let mut omitted_track_count = 0_u32;
+    for (index, value) in raw_tracks.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawNewSongTrack>(value)
+            .map_err(|_| QqMusicNewSongsError::InvalidTrack {
+                index,
+                field: NewSongTrackField::TrackId,
+            })
+            .and_then(|track| map_track(track, index));
+        match mapped {
+            Ok(track) => tracks.push(track),
+            Err(
+                QqMusicNewSongsError::InvalidTrack { .. }
+                | QqMusicNewSongsError::InvalidArtist { .. },
+            ) => {
+                omitted_track_count = omitted_track_count
+                    .checked_add(1)
+                    .ok_or(QqMusicNewSongsError::TooManyTracks { count: MAX_TRACKS })?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicNewSongCollection {
         category: requested_category,
+        omitted_track_count,
         tracks,
     })
 }
@@ -404,14 +430,13 @@ fn map_track<E>(
         index,
         field: NewSongTrackField::SongMid,
     })?;
-    let file_media_mid = match raw.file.and_then(|file| file.media_mid) {
+    let file_media_mid = match raw
+        .file
+        .and_then(|file| serde_json::from_value::<RawNewSongFile>(file).ok())
+        .and_then(|file| file.media_mid)
+    {
         Some(value) if value.trim().is_empty() => None,
-        Some(value) => Some(
-            safe_mid(Some(value)).ok_or(QqMusicNewSongsError::InvalidTrack {
-                index,
-                field: NewSongTrackField::FileMediaMid,
-            })?,
-        ),
+        Some(value) => safe_mid(Some(value)),
         None => None,
     };
     let title = nonblank(raw.title).or_else(|| nonblank(raw.name)).ok_or(
@@ -424,32 +449,31 @@ fn map_track<E>(
         index,
         field: NewSongTrackField::SongType,
     })?;
-    let raw_artists = raw.singer.ok_or(QqMusicNewSongsError::InvalidTrack {
-        index,
-        field: NewSongTrackField::Artists,
-    })?;
-    let artists = raw_artists
+    let artists = raw
+        .singer
+        .and_then(|artists| artists.as_array().cloned())
+        .unwrap_or_default()
         .into_iter()
-        .enumerate()
-        .map(|(artist_index, artist)| {
-            let name = nonblank(artist.name).ok_or(QqMusicNewSongsError::InvalidArtist {
-                track_index: index,
-                artist_index,
-            })?;
-            Ok(QqMusicArtistSummary::new(
+        .filter_map(|value| {
+            let artist = serde_json::from_value::<RawNewSongArtist>(value).ok()?;
+            let name = nonblank(artist.name)?;
+            Some(QqMusicArtistSummary::new(
                 artist.id.filter(|value| *value != 0),
                 safe_mid(artist.mid),
                 name,
             ))
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    let album = raw.album.map(|album| {
-        QqMusicAlbumSummary::new(
-            album.id.filter(|value| *value != 0),
-            safe_mid(album.mid).or_else(|| safe_mid(album.pmid)),
-            nonblank(album.title).or_else(|| nonblank(album.name)),
-        )
-    });
+        .collect();
+    let album = raw
+        .album
+        .and_then(|album| serde_json::from_value::<RawNewSongAlbum>(album).ok())
+        .map(|album| {
+            QqMusicAlbumSummary::new(
+                album.id.filter(|value| *value != 0),
+                safe_mid(album.mid).or_else(|| safe_mid(album.pmid)),
+                nonblank(album.title).or_else(|| nonblank(album.name)),
+            )
+        });
     Ok(QqMusicTrackSummary::new(
         track_id,
         song_mid,
@@ -481,7 +505,7 @@ mod tests {
 
     use crate::{HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient};
 
-    use super::{MUSICU_URL, NewSongTrackField, QqMusicNewSongCategory, QqMusicNewSongsError};
+    use super::{MUSICU_URL, QqMusicNewSongCategory, QqMusicNewSongsError};
 
     struct NewSongsTransport {
         response: HttpResponse,
@@ -584,21 +608,16 @@ mod tests {
             })
         ));
 
-        let invalid = QqMusicClient::new(NewSongsTransport::new(&response_json(
+        let partial = QqMusicClient::new(NewSongsTransport::new(&response_json(
             5,
             &[track_json(0, "privateMid", "must-not-leak")],
         )))
         .new_songs(QqMusicNewSongCategory::Latest)
         .await
-        .expect_err("invalid Track");
-        assert!(matches!(
-            invalid,
-            QqMusicNewSongsError::InvalidTrack {
-                index: 0,
-                field: NewSongTrackField::TrackId
-            }
-        ));
-        let debug = format!("{invalid:?} {invalid}");
+        .expect("malformed collection row must be isolated");
+        assert!(partial.tracks().is_empty());
+        assert_eq!(partial.omitted_track_count(), 1);
+        let debug = format!("{partial:?}");
         assert!(!debug.contains("privateMid"));
         assert!(!debug.contains("must-not-leak"));
     }

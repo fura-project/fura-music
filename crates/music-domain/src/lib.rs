@@ -2072,6 +2072,324 @@ impl fmt::Debug for RadarTrackPage {
     }
 }
 
+/// One bounded whole-response personalized Playlist collection. Feed layout
+/// and provider-specific ranking remain behind the owning Provider.
+#[derive(Clone, Eq, PartialEq)]
+pub struct PersonalizedPlaylistsCollection {
+    playlists: Vec<PlaylistSummary>,
+    omitted_playlist_count: u32,
+}
+
+impl PersonalizedPlaylistsCollection {
+    #[must_use]
+    pub const fn new(playlists: Vec<PlaylistSummary>, omitted_playlist_count: u32) -> Self {
+        Self {
+            playlists,
+            omitted_playlist_count,
+        }
+    }
+
+    #[must_use]
+    pub fn playlists(&self) -> &[PlaylistSummary] {
+        &self.playlists
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+}
+
+impl fmt::Debug for PersonalizedPlaylistsCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PersonalizedPlaylistsCollection")
+            .field("playlist_count", &self.playlists.len())
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for PersonalizedPlaylistsCollection {
+    type Target = [PlaylistSummary];
+
+    fn deref(&self) -> &Self::Target {
+        &self.playlists
+    }
+}
+
+/// One bounded whole-response personalized Track collection.
+#[derive(Clone, Eq, PartialEq)]
+pub struct PersonalizedTracksCollection {
+    tracks: Vec<TrackSummary>,
+    omitted_track_count: u32,
+}
+
+impl PersonalizedTracksCollection {
+    #[must_use]
+    pub const fn new(tracks: Vec<TrackSummary>, omitted_track_count: u32) -> Self {
+        Self {
+            tracks,
+            omitted_track_count,
+        }
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
+    }
+}
+
+impl fmt::Debug for PersonalizedTracksCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PersonalizedTracksCollection")
+            .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for PersonalizedTracksCollection {
+    type Target = [TrackSummary];
+
+    fn deref(&self) -> &Self::Target {
+        &self.tracks
+    }
+}
+
+/// One bounded whole-response daily Track collection.
+#[derive(Clone, Eq, PartialEq)]
+pub struct DailyTracksCollection {
+    tracks: Vec<TrackSummary>,
+    omitted_track_count: u32,
+}
+
+impl DailyTracksCollection {
+    #[must_use]
+    pub const fn new(tracks: Vec<TrackSummary>, omitted_track_count: u32) -> Self {
+        Self {
+            tracks,
+            omitted_track_count,
+        }
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
+    }
+}
+
+impl fmt::Debug for DailyTracksCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DailyTracksCollection")
+            .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for DailyTracksCollection {
+    type Target = [TrackSummary];
+
+    fn deref(&self) -> &Self::Target {
+        &self.tracks
+    }
+}
+
+/// One bounded Track collection related to an exact seed Track.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RelatedTracksCollection {
+    tracks: Vec<TrackSummary>,
+    omitted_track_count: u32,
+}
+
+impl RelatedTracksCollection {
+    #[must_use]
+    pub const fn new(tracks: Vec<TrackSummary>, omitted_track_count: u32) -> Self {
+        Self {
+            tracks,
+            omitted_track_count,
+        }
+    }
+
+    #[must_use]
+    pub fn tracks(&self) -> &[TrackSummary] {
+        &self.tracks
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
+    }
+}
+
+impl fmt::Debug for RelatedTracksCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RelatedTracksCollection")
+            .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for RelatedTracksCollection {
+    type Target = [TrackSummary];
+
+    fn deref(&self) -> &Self::Target {
+        &self.tracks
+    }
+}
+
+/// One bounded ranking-group collection. The omitted count describes invalid
+/// ranking entries whose surrounding group remained trustworthy.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RankingGroupsCollection {
+    groups: Vec<RankingGroup>,
+    omitted_ranking_count: u32,
+}
+
+impl RankingGroupsCollection {
+    #[must_use]
+    pub const fn new(groups: Vec<RankingGroup>, omitted_ranking_count: u32) -> Self {
+        Self {
+            groups,
+            omitted_ranking_count,
+        }
+    }
+
+    #[must_use]
+    pub fn groups(&self) -> &[RankingGroup] {
+        &self.groups
+    }
+
+    #[must_use]
+    pub const fn omitted_ranking_count(&self) -> u32 {
+        self.omitted_ranking_count
+    }
+}
+
+impl fmt::Debug for RankingGroupsCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RankingGroupsCollection")
+            .field("group_count", &self.groups.len())
+            .field("omitted_ranking_count", &self.omitted_ranking_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for RankingGroupsCollection {
+    type Target = [RankingGroup];
+
+    fn deref(&self) -> &Self::Target {
+        &self.groups
+    }
+}
+
+/// One bounded whole-response collection of playlists owned by the active
+/// account.
+#[derive(Clone, Eq, PartialEq)]
+pub struct OwnedPlaylistsCollection {
+    playlists: Vec<PlaylistSummary>,
+    omitted_playlist_count: u32,
+}
+
+impl OwnedPlaylistsCollection {
+    #[must_use]
+    pub const fn new(playlists: Vec<PlaylistSummary>, omitted_playlist_count: u32) -> Self {
+        Self {
+            playlists,
+            omitted_playlist_count,
+        }
+    }
+
+    #[must_use]
+    pub fn playlists(&self) -> &[PlaylistSummary] {
+        &self.playlists
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+}
+
+impl fmt::Debug for OwnedPlaylistsCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OwnedPlaylistsCollection")
+            .field("playlist_count", &self.playlists.len())
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for OwnedPlaylistsCollection {
+    type Target = [PlaylistSummary];
+
+    fn deref(&self) -> &Self::Target {
+        &self.playlists
+    }
+}
+
+/// One complete, provider-owned playlist collection for the active account.
+#[derive(Clone, Eq, PartialEq)]
+pub struct UserPlaylistsCollection {
+    playlists: Vec<PlaylistSummary>,
+    omitted_playlist_count: u32,
+}
+
+impl UserPlaylistsCollection {
+    #[must_use]
+    pub const fn new(playlists: Vec<PlaylistSummary>, omitted_playlist_count: u32) -> Self {
+        Self {
+            playlists,
+            omitted_playlist_count,
+        }
+    }
+
+    #[must_use]
+    pub fn playlists(&self) -> &[PlaylistSummary] {
+        &self.playlists
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+}
+
+impl fmt::Debug for UserPlaylistsCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("UserPlaylistsCollection")
+            .field("playlist_count", &self.playlists.len())
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for UserPlaylistsCollection {
+    type Target = [PlaylistSummary];
+
+    fn deref(&self) -> &Self::Target {
+        &self.playlists
+    }
+}
+
 /// One bounded page of the current Track list for a ranking. The owning
 /// Provider decides what "current" means and how the opaque ranking routes.
 #[derive(Clone, Eq, PartialEq)]

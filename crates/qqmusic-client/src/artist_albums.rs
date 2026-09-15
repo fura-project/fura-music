@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicClient};
 
@@ -139,8 +140,10 @@ where
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicArtistAlbumPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_album_count: u32,
     albums: Vec<QqMusicAlbumSummary>,
 }
 
@@ -153,6 +156,16 @@ impl QqMusicArtistAlbumPage {
     #[must_use]
     pub const fn total(&self) -> u32 {
         self.total
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_album_count(&self) -> u32 {
+        self.omitted_album_count
     }
 
     #[must_use]
@@ -171,8 +184,10 @@ impl fmt::Debug for QqMusicArtistAlbumPage {
         formatter
             .debug_struct("QqMusicArtistAlbumPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_album_count", &self.omitted_album_count)
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -297,7 +312,7 @@ struct ArtistAlbumsData {
     artist_mid: Option<String>,
     total: Option<u32>,
     #[serde(rename = "albumList")]
-    albums: Option<Vec<RawArtistAlbum>>,
+    albums: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -362,15 +377,31 @@ fn map_response<E>(
     if has_more && raw_albums.is_empty() {
         return Err(QqMusicArtistAlbumsError::InvalidPagination);
     }
-    let albums = raw_albums
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_album(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut albums = Vec::with_capacity(raw_albums.len());
+    let mut omitted_album_count = 0_u32;
+    for (index, value) in raw_albums.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawArtistAlbum>(value)
+            .map_err(|_| QqMusicArtistAlbumsError::InvalidAlbum {
+                index,
+                field: ArtistAlbumField::AlbumId,
+            })
+            .and_then(|raw| map_album(raw, index));
+        match mapped {
+            Ok(album) => albums.push(album),
+            Err(QqMusicArtistAlbumsError::InvalidAlbum { .. }) => {
+                omitted_album_count = omitted_album_count
+                    .checked_add(1)
+                    .ok_or(QqMusicArtistAlbumsError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicArtistAlbumPage {
         offset: requested_offset,
+        next_offset: end,
         total,
         has_more,
+        omitted_album_count,
         albums,
     })
 }
@@ -423,7 +454,7 @@ mod tests {
 
     use crate::{HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient};
 
-    use super::{ArtistAlbumField, QqMusicArtistAlbumsError};
+    use super::QqMusicArtistAlbumsError;
 
     struct ArtistAlbumsTransport {
         response: HttpResponse,
@@ -545,7 +576,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_mismatched_identity_invalid_pagination_and_album_shape() {
+    async fn rejects_mismatched_identity_and_invalid_pagination_but_omits_bad_rows() {
         let mismatch = QqMusicClient::new(ArtistAlbumsTransport::new(&response(
             &json!([]),
             0,
@@ -574,18 +605,14 @@ mod tests {
             1,
             "fixtureArtistMid",
         )));
-        let error = invalid_album
+        let page = invalid_album
             .artist_albums("fixtureArtistMid", 0, 5)
             .await
-            .expect_err("invalid Album");
-        assert!(matches!(
-            error,
-            QqMusicArtistAlbumsError::InvalidAlbum {
-                index: 0,
-                field: ArtistAlbumField::AlbumMid
-            }
-        ));
-        let debug = format!("{error:?}");
+            .expect("a malformed collection row must not discard the page");
+        assert!(page.albums().is_empty());
+        assert_eq!(page.omitted_album_count(), 1);
+        assert_eq!(page.next_offset(), 1);
+        let debug = format!("{page:?}");
         assert!(!debug.contains("unsafe/mid"));
         assert!(!debug.contains("private"));
     }

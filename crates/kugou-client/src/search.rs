@@ -1,5 +1,6 @@
 use crate::{Error, KuGouClient, MAX_RESPONSE_BYTES, Request, Transport};
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashSet;
 
 const SEARCH_ENDPOINT: &str = "https://songsearch.kugou.com/song_search_v2";
@@ -52,6 +53,7 @@ pub struct SearchPage {
     pub page: u32,
     pub total: u32,
     pub more: bool,
+    pub omitted_item_count: u32,
 }
 
 impl std::fmt::Debug for SearchPage {
@@ -62,6 +64,7 @@ impl std::fmt::Debug for SearchPage {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("more", &self.more)
+            .field("omitted_item_count", &self.omitted_item_count)
             .finish_non_exhaustive()
     }
 }
@@ -79,7 +82,7 @@ struct SearchData {
     pagesize: u32,
     size: u32,
     total: u32,
-    lists: Vec<RawTrack>,
+    lists: Vec<Value>,
 }
 
 #[derive(Deserialize)]
@@ -222,18 +225,30 @@ fn decode_page(
 
     let mut identities = HashSet::with_capacity(data.lists.len());
     let mut items = Vec::with_capacity(data.lists.len());
-    for raw in data.lists {
-        let item = decode_track(raw)?;
-        if !identities.insert(item.mix_song_id.clone()) {
-            return Err(Error::ResponseShapeMismatch);
+    let mut omitted_item_count = 0_u32;
+    for value in data.lists {
+        let item = serde_json::from_value::<RawTrack>(value)
+            .map_err(|_| Error::ResponseShapeMismatch)
+            .and_then(decode_track);
+        match item {
+            Ok(item) => {
+                if !identities.insert(item.mix_song_id.clone()) {
+                    return Err(Error::ResponseShapeMismatch);
+                }
+                items.push(item);
+            }
+            Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                omitted_item_count = omitted_item_count.saturating_add(1);
+            }
+            Err(error) => return Err(error),
         }
-        items.push(item);
     }
     Ok(SearchPage {
         items,
         page: requested_page,
         total: data.total,
         more,
+        omitted_item_count,
     })
 }
 
@@ -293,12 +308,13 @@ fn decode_track(raw: RawTrack) -> Result<SearchTrack, Error> {
     {
         None
     } else {
-        numeric_identity(&album_id)?;
-        text(&album_title)?;
-        Some(Album {
-            id: album_id,
-            title: album_title,
-        })
+        numeric_identity(&album_id)
+            .and_then(|()| text(&album_title))
+            .ok()
+            .map(|()| Album {
+                id: album_id,
+                title: album_title,
+            })
     };
 
     Ok(SearchTrack {
@@ -308,7 +324,7 @@ fn decode_track(raw: RawTrack) -> Result<SearchTrack, Error> {
         title,
         artists,
         album,
-        artwork: artwork(raw.artwork)?,
+        artwork: artwork(raw.artwork).ok().flatten(),
         duration_seconds: raw.duration_seconds,
     })
 }

@@ -5,12 +5,14 @@ use std::future::Future;
 
 use music_domain::{
     AccountSummary, AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage,
-    ArtistId, ArtistSearchPage, ArtistTracksPage, AudioQuality, FavoriteAlbumsPage,
-    FavoriteArtistsPage, MusicVideo, NewAlbumRegion, NewAlbumReleasesPage, NewSongCategory,
-    NewSongCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage,
-    ProviderId, RadarTrackPage, RankingGroup, RankingId, RankingTracksPage,
-    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyrics, TrackCommentsPage, TrackId,
-    TrackSearchPage, TrackSummary,
+    ArtistId, ArtistSearchPage, ArtistTracksPage, AudioQuality, DailyTracksCollection,
+    FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, NewAlbumRegion, NewAlbumReleasesPage,
+    NewSongCategory, NewSongCollection, OwnedPlaylistsCollection, PersonalizedPlaylistsCollection,
+    PersonalizedTracksCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
+    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroupsCollection, RankingId,
+    RankingTracksPage, RecommendedPlaylistsPage, RelatedTracksCollection, ResolvedMediaSource,
+    SynchronizedLyrics, TrackCommentsPage, TrackId, TrackSearchPage, TrackSummary,
+    UserPlaylistsCollection,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -426,7 +428,7 @@ pub trait PersonalizedPlaylistsProvider: MusicProvider + Sync {
 
     fn personalized_playlists(
         &self,
-    ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<PersonalizedPlaylistsCollection, Self::Error>> + Send;
 }
 
 /// Provider-neutral authenticated bounded personalized Track summaries.
@@ -437,14 +439,16 @@ pub trait PersonalizedTracksProvider: MusicProvider + Sync {
 
     fn personalized_tracks(
         &self,
-    ) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<PersonalizedTracksCollection, Self::Error>> + Send;
 }
 
 /// A daily authenticated Track collection for services that do not expose a daily Playlist.
 /// It never invents a catalog Playlist identity for a transient recommendation batch.
 pub trait DailyTracksProvider: MusicProvider + Sync {
     type Error;
-    fn daily_tracks(&self) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
+    fn daily_tracks(
+        &self,
+    ) -> impl Future<Output = Result<DailyTracksCollection, Self::Error>> + Send;
 }
 
 /// Provider-neutral bounded Tracks related to one exact seed Track. The
@@ -455,7 +459,7 @@ pub trait RelatedTracksProvider: MusicProvider + Sync {
     fn related_tracks(
         &self,
         seed: TrackId,
-    ) -> impl Future<Output = Result<Vec<TrackSummary>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<RelatedTracksCollection, Self::Error>> + Send;
 }
 
 /// Provider-neutral page-numbered QQ-native Radar Track recommendations.
@@ -474,8 +478,9 @@ pub trait RadarRecommendationsProvider: MusicProvider + Sync {
 pub trait RankingsProvider: MusicProvider + Sync {
     type Error;
 
-    fn ranking_groups(&self)
-    -> impl Future<Output = Result<Vec<RankingGroup>, Self::Error>> + Send;
+    fn ranking_groups(
+        &self,
+    ) -> impl Future<Output = Result<RankingGroupsCollection, Self::Error>> + Send;
 
     fn ranking_tracks(
         &self,
@@ -972,7 +977,7 @@ pub trait OwnedPlaylistsProvider: MusicProvider + Sync {
 
     fn owned_playlists(
         &self,
-    ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<OwnedPlaylistsCollection, Self::Error>> + Send;
 }
 
 /// Complete provider-owned playlist collection for the current user. The
@@ -982,7 +987,7 @@ pub trait UserPlaylistsProvider: MusicProvider + Sync {
 
     fn user_playlists(
         &self,
-    ) -> impl Future<Output = Result<Vec<PlaylistSummary>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<UserPlaylistsCollection, Self::Error>> + Send;
 }
 
 /// Provider-neutral paged favorite-Album collection for the current account.

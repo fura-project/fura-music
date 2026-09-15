@@ -1,9 +1,10 @@
 use super::{NeteaseProvider, album, artist, collection_song, playlist, provider_id, song};
 use music_domain::{
     AlbumDetails, AlbumId, AlbumTracksPage, ArtistAlbumsPage, ArtistId, ArtistTracksPage,
-    AudioFormat, AudioQuality, PlaylistId, PlaylistTracksPage, RankingGroup, RankingId,
-    RankingSummary, RankingTracksPage, RecommendedPlaylistsPage, ResolvedMediaSource,
-    SynchronizedLyricLine, SynchronizedLyrics, TrackId, TrackSummary,
+    AudioFormat, AudioQuality, PlaylistId, PlaylistTracksPage, RankingGroup,
+    RankingGroupsCollection, RankingId, RankingSummary, RankingTracksPage,
+    RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
+    TrackId, TrackSummary,
 };
 use netease_client::{Error, MediaFormat, MediaQuality, Transport};
 use provider_api::{
@@ -230,40 +231,61 @@ impl<T: Transport> RecommendedPlaylistsProvider for NeteaseProvider<T> {
             CatalogError::InvalidResponse => RecommendationError::InvalidResponse,
             CatalogError::ServiceUnavailable => RecommendationError::ServiceUnavailable,
         };
-        let p = self
-            .client
-            .recommendations(size)
-            .await
-            .map_err(map)?
-            .into_iter()
-            .map(playlist)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(map)?;
-        Ok(RecommendedPlaylistsPage::new(0, false, p))
+        let source = self.client.recommendations(size).await.map_err(map)?;
+        let raw_count = u32::try_from(source.items.len())
+            .ok()
+            .and_then(|count| count.checked_add(source.omitted))
+            .ok_or(RecommendationError::InvalidResponse)?;
+        let mut omitted = source.omitted;
+        let mut playlists = Vec::with_capacity(source.items.len());
+        for row in source.items {
+            match playlist(row) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(RecommendationError::InvalidResponse)?;
+                }
+                Err(error) => return Err(map(error)),
+            }
+        }
+        Ok(RecommendedPlaylistsPage::new(0, false, playlists).with_integrity(raw_count, omitted))
     }
 }
 impl<T: Transport> RankingsProvider for NeteaseProvider<T> {
     type Error = CatalogError;
-    async fn ranking_groups(&self) -> Result<Vec<RankingGroup>, Self::Error> {
+    async fn ranking_groups(&self) -> Result<RankingGroupsCollection, Self::Error> {
         let rows = self.client.rankings().await.map_err(catalog_error)?;
-        if rows.is_empty() {
-            return Ok(vec![]);
+        if rows.items.is_empty() {
+            return Ok(RankingGroupsCollection::new(vec![], rows.omitted));
         }
-        let rankings = rows
-            .into_iter()
-            .map(|p| {
+        let mut omitted = rows.omitted;
+        let mut rankings = Vec::with_capacity(rows.items.len());
+        for p in rows.items {
+            let mapped = (|| {
                 let id = RankingId::new(provider_id(), p.id.to_string())
                     .map_err(|_| CatalogError::InvalidResponse)?;
                 Ok(RankingSummary::new(id, p.name)
                     .map_err(|_| CatalogError::InvalidResponse)?
                     .with_artwork_uri(netease_client::artwork(p.artwork).map_err(catalog_error)?)
                     .with_track_count(Some(p.track_count)))
-            })
-            .collect::<Result<Vec<_>, CatalogError>>()?;
-        Ok(vec![
-            RankingGroup::new("NetEase Cloud Music", rankings)
-                .map_err(|_| CatalogError::InvalidResponse)?,
-        ])
+            })();
+            match mapped {
+                Ok(ranking) => rankings.push(ranking),
+                Err(CatalogError::InvalidResponse) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        if rankings.is_empty() {
+            return Err(CatalogError::InvalidResponse);
+        }
+        let group = RankingGroup::new("NetEase Cloud Music", rankings)
+            .map_err(|_| CatalogError::InvalidResponse)?;
+        Ok(RankingGroupsCollection::new(vec![group], omitted))
     }
     async fn ranking_tracks(
         &self,
@@ -319,6 +341,7 @@ impl<T: Transport> LyricsProvider for NeteaseProvider<T> {
             }
             _ => LyricsError::ServiceUnavailable,
         })?;
+        let omitted_line_count = lyrics.omitted_line_count;
         let mut lines = Vec::new();
         for line in lyrics.lines {
             lines.push(
@@ -327,7 +350,9 @@ impl<T: Transport> LyricsProvider for NeteaseProvider<T> {
                     .with_translation(line.translation),
             );
         }
-        SynchronizedLyrics::new(id, lines).map_err(|_| LyricsError::InvalidResponse)
+        SynchronizedLyrics::new(id, lines)
+            .map(|lyrics| lyrics.with_omitted_line_count(omitted_line_count))
+            .map_err(|_| LyricsError::InvalidResponse)
     }
 }
 /// Borrowed resolver shares the exact Provider's client/session lifetime.

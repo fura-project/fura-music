@@ -676,7 +676,7 @@ async fn liked_collection_above_the_old_ceiling_pages_by_raw_identity() {
     ]);
     p.import_credential(&credential()).unwrap();
     p.verify_pending_credential().await.unwrap();
-    let playlist = p.user_playlists().await.unwrap().remove(0);
+    let playlist = p.user_playlists().await.unwrap().playlists()[0].clone();
     let page = p
         .playlist_tracks_page(playlist.id().clone(), 1000, 1)
         .await
@@ -688,6 +688,46 @@ async fn liked_collection_above_the_old_ceiling_pages_by_raw_identity() {
     assert_eq!(calls.load(Ordering::SeqCst), 4);
     assert_eq!(authenticated_calls.load(Ordering::SeqCst), 4);
 }
+
+#[tokio::test]
+async fn liked_collection_good_bad_good_keeps_valid_order_and_raw_cursor() {
+    let playlist =
+        json!({"id":4,"name":"Liked","trackCount":3,"specialType":5,"creator":{"userId":42}});
+    let mut malformed = sized_song(5);
+    malformed.as_object_mut().unwrap().remove("name");
+    let (provider, calls, authenticated_calls) = provider(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Json(
+            json!({"code":200,"playlist":{"id":4,"name":"Liked","trackCount":3,"trackIds":[{"id":1},{"id":5},{"id":7}]}}),
+        ),
+        Reply::Json(json!({
+            "code": 200,
+            "songs": [song(), malformed, sized_song(7)]
+        })),
+    ]);
+    provider.import_credential(&credential()).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    let liked = provider.user_playlists().await.unwrap().playlists()[0].clone();
+
+    let page = provider
+        .playlist_tracks_page(liked.id().clone(), 0, 3)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        page.tracks()
+            .iter()
+            .map(|track| track.id().opaque())
+            .collect::<Vec<_>>(),
+        ["1", "7"]
+    );
+    assert_eq!((page.next_offset(), page.omitted_track_count()), (3, 1));
+    assert!(!page.has_more());
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 4);
+}
+
 #[tokio::test]
 async fn authenticated_media_rejection_clears_session_without_source_substitution() {
     let (p, c, a) = provider(vec![

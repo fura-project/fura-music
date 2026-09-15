@@ -30,6 +30,7 @@ pub enum QqMusicNewSongsLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicNewSongsLoad {
     pub category: QqMusicNewSongCategory,
+    pub omitted_track_count: u32,
     pub tracks: Vec<LibraryTrackSummary>,
     pub failure: Option<QqMusicNewSongsLoadFailure>,
 }
@@ -39,6 +40,7 @@ impl fmt::Debug for QqMusicNewSongsLoad {
         formatter
             .debug_struct("QqMusicNewSongsLoad")
             .field("category", &self.category)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .field("failure", &self.failure)
             .finish()
@@ -156,6 +158,7 @@ fn map_load(
     match result {
         Ok(collection) => QqMusicNewSongsLoad {
             category: bridge_category(collection.category()),
+            omitted_track_count: collection.omitted_track_count(),
             tracks: collection
                 .tracks()
                 .iter()
@@ -173,6 +176,7 @@ const fn failed_load(
 ) -> QqMusicNewSongsLoad {
     QqMusicNewSongsLoad {
         category,
+        omitted_track_count: 0,
         tracks: Vec::new(),
         failure: Some(failure),
     }

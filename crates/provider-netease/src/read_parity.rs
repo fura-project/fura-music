@@ -1,8 +1,8 @@
 use super::{NeteaseProvider, album, artist, provider_id, song};
 use music_domain::{
     MusicVideo, MusicVideoId, MusicVideoQuality, MusicVideoSource, NewAlbumRegion, NewAlbumRelease,
-    NewAlbumReleasesPage, NewSongCategory, NewSongCollection, TrackComment, TrackCommentId,
-    TrackCommentsPage, TrackId, TrackSummary,
+    NewAlbumReleasesPage, NewSongCategory, NewSongCollection, RelatedTracksCollection,
+    TrackComment, TrackCommentId, TrackCommentsPage, TrackId,
 };
 use netease_client::{Error, NewAlbumArea, NewSongArea, Transport};
 use provider_api::{
@@ -108,17 +108,28 @@ impl<T: Transport> TrackCommentsProvider for NeteaseProvider<T> {
 impl<T: Transport> RelatedTracksProvider for NeteaseProvider<T> {
     type Error = RelatedTracksError;
 
-    async fn related_tracks(&self, seed: TrackId) -> Result<Vec<TrackSummary>, Self::Error> {
+    async fn related_tracks(&self, seed: TrackId) -> Result<RelatedTracksCollection, Self::Error> {
         let seed =
             super::catalog::identity(seed.provider(), seed.opaque()).map_err(related_error)?;
-        self.client
+        let source = self
+            .client
             .related_tracks(seed)
             .await
-            .map_err(related_error)?
-            .into_iter()
-            .map(song)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(related_error)
+            .map_err(related_error)?;
+        let mut omitted = source.omitted;
+        let mut tracks = Vec::with_capacity(source.items.len());
+        for item in source.items {
+            match song(item) {
+                Ok(track) => tracks.push(track),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(RelatedTracksError::InvalidResponse)?;
+                }
+                Err(error) => return Err(related_error(error)),
+            }
+        }
+        Ok(RelatedTracksCollection::new(tracks, omitted))
     }
 }
 
@@ -137,16 +148,25 @@ impl<T: Transport> NewSongsProvider for NeteaseProvider<T> {
                 return Err(CatalogError::InvalidResponse);
             }
         };
-        let tracks = self
+        let source = self
             .client
             .new_songs(area)
             .await
-            .map_err(super::catalog::catalog_error)?
-            .into_iter()
-            .map(song)
-            .collect::<Result<Vec<_>, _>>()
             .map_err(super::catalog::catalog_error)?;
-        Ok(NewSongCollection::new(category, tracks))
+        let mut omitted = source.omitted;
+        let mut tracks = Vec::with_capacity(source.items.len());
+        for item in source.items {
+            match song(item) {
+                Ok(track) => tracks.push(track),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+                Err(error) => return Err(super::catalog::catalog_error(error)),
+            }
+        }
+        Ok(NewSongCollection::new(category, tracks).with_omitted_track_count(omitted))
     }
 }
 

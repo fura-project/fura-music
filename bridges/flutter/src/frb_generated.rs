@@ -11792,6 +11792,7 @@ impl SseDecode for crate::api::search::QqMusicAlbumSearchPageLoad {
         let mut var_page = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedAlbumCount = <u32>::sse_decode(deserializer);
         let mut var_albums =
             <Vec<crate::api::album::CatalogAlbumSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -11802,6 +11803,7 @@ impl SseDecode for crate::api::search::QqMusicAlbumSearchPageLoad {
             page: var_page,
             total: var_total,
             has_more: var_hasMore,
+            omitted_album_count: var_omittedAlbumCount,
             albums: var_albums,
             failure: var_failure,
         };
@@ -11831,16 +11833,20 @@ impl SseDecode for crate::api::album::QqMusicAlbumTrackPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
         let mut var_failure =
             <Option<crate::api::album::QqMusicAlbumTrackPageLoadFailure>>::sse_decode(deserializer);
         return crate::api::album::QqMusicAlbumTrackPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_track_count: var_omittedTrackCount,
             tracks: var_tracks,
             failure: var_failure,
         };
@@ -11870,8 +11876,10 @@ impl SseDecode for crate::api::artist::QqMusicArtistAlbumPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedAlbumCount = <u32>::sse_decode(deserializer);
         let mut var_albums =
             <Vec<crate::api::album::CatalogAlbumSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -11880,8 +11888,10 @@ impl SseDecode for crate::api::artist::QqMusicArtistAlbumPageLoad {
             );
         return crate::api::artist::QqMusicArtistAlbumPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_album_count: var_omittedAlbumCount,
             albums: var_albums,
             failure: var_failure,
         };
@@ -11913,6 +11923,7 @@ impl SseDecode for crate::api::search::QqMusicArtistSearchPageLoad {
         let mut var_page = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedArtistCount = <u32>::sse_decode(deserializer);
         let mut var_artists =
             <Vec<crate::api::artist::CatalogArtistSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -11923,6 +11934,7 @@ impl SseDecode for crate::api::search::QqMusicArtistSearchPageLoad {
             page: var_page,
             total: var_total,
             has_more: var_hasMore,
+            omitted_artist_count: var_omittedArtistCount,
             artists: var_artists,
             failure: var_failure,
         };
@@ -11952,8 +11964,10 @@ impl SseDecode for crate::api::artist::QqMusicArtistTrackPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -11962,8 +11976,10 @@ impl SseDecode for crate::api::artist::QqMusicArtistTrackPageLoad {
             );
         return crate::api::artist::QqMusicArtistTrackPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_track_count: var_omittedTrackCount,
             tracks: var_tracks,
             failure: var_failure,
         };
@@ -12186,12 +12202,14 @@ impl SseDecode for crate::api::recommendations::QqMusicDailyRecommendationLoad {
             <Option<crate::api::library::LibraryPlaylistSummary>>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_failure = <Option<
             crate::api::recommendations::QqMusicDailyRecommendationLoadFailure,
         >>::sse_decode(deserializer);
         return crate::api::recommendations::QqMusicDailyRecommendationLoad {
             playlist: var_playlist,
             tracks: var_tracks,
+            omitted_track_count: var_omittedTrackCount,
             failure: var_failure,
         };
     }
@@ -12296,8 +12314,10 @@ impl SseDecode for crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedAlbumCount = <u32>::sse_decode(deserializer);
         let mut var_albums =
             <Vec<crate::api::album::CatalogAlbumSummary>>::sse_decode(deserializer);
         let mut var_failure = <Option<
@@ -12305,8 +12325,10 @@ impl SseDecode for crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoad {
         >>::sse_decode(deserializer);
         return crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_album_count: var_omittedAlbumCount,
             albums: var_albums,
             failure: var_failure,
         };
@@ -12336,8 +12358,10 @@ impl SseDecode for crate::api::favorite_artists::QqMusicFavoriteArtistPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedArtistCount = <u32>::sse_decode(deserializer);
         let mut var_artists =
             <Vec<crate::api::artist::CatalogArtistSummary>>::sse_decode(deserializer);
         let mut var_failure = <Option<
@@ -12345,8 +12369,10 @@ impl SseDecode for crate::api::favorite_artists::QqMusicFavoriteArtistPageLoad {
         >>::sse_decode(deserializer);
         return crate::api::favorite_artists::QqMusicFavoriteArtistPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_artist_count: var_omittedArtistCount,
             artists: var_artists,
             failure: var_failure,
         };
@@ -12412,8 +12438,10 @@ impl SseDecode for crate::api::new_albums::QqMusicNewAlbumPageLoad {
         let mut var_region =
             <crate::api::new_albums::QqMusicNewAlbumRegion>::sse_decode(deserializer);
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedReleaseCount = <u32>::sse_decode(deserializer);
         let mut var_releases =
             <Vec<crate::api::new_albums::CatalogNewAlbumRelease>>::sse_decode(deserializer);
         let mut var_failure =
@@ -12423,8 +12451,10 @@ impl SseDecode for crate::api::new_albums::QqMusicNewAlbumPageLoad {
         return crate::api::new_albums::QqMusicNewAlbumPageLoad {
             region: var_region,
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_release_count: var_omittedReleaseCount,
             releases: var_releases,
             failure: var_failure,
         };
@@ -12487,12 +12517,14 @@ impl SseDecode for crate::api::new_songs::QqMusicNewSongsLoad {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_category =
             <crate::api::new_songs::QqMusicNewSongCategory>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
         let mut var_failure =
             <Option<crate::api::new_songs::QqMusicNewSongsLoadFailure>>::sse_decode(deserializer);
         return crate::api::new_songs::QqMusicNewSongsLoad {
             category: var_category,
+            omitted_track_count: var_omittedTrackCount,
             tracks: var_tracks,
             failure: var_failure,
         };
@@ -12520,11 +12552,13 @@ impl SseDecode for crate::api::recommendations::QqMusicPersonalizedPlaylistsLoad
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_playlists =
             <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_decode(deserializer);
+        let mut var_omittedPlaylistCount = <u32>::sse_decode(deserializer);
         let mut var_failure = <Option<
             crate::api::recommendations::QqMusicPersonalizedPlaylistsLoadFailure,
         >>::sse_decode(deserializer);
         return crate::api::recommendations::QqMusicPersonalizedPlaylistsLoad {
             playlists: var_playlists,
+            omitted_playlist_count: var_omittedPlaylistCount,
             failure: var_failure,
         };
     }
@@ -12554,11 +12588,13 @@ impl SseDecode for crate::api::recommendations::QqMusicPersonalizedTracksLoad {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_failure = <Option<
             crate::api::recommendations::QqMusicPersonalizedTracksLoadFailure,
         >>::sse_decode(deserializer);
         return crate::api::recommendations::QqMusicPersonalizedTracksLoad {
             tracks: var_tracks,
+            omitted_track_count: var_omittedTrackCount,
             failure: var_failure,
         };
     }
@@ -12660,6 +12696,7 @@ impl SseDecode for crate::api::search::QqMusicPlaylistSearchPageLoad {
         let mut var_page = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedPlaylistCount = <u32>::sse_decode(deserializer);
         let mut var_playlists =
             <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -12670,6 +12707,7 @@ impl SseDecode for crate::api::search::QqMusicPlaylistSearchPageLoad {
             page: var_page,
             total: var_total,
             has_more: var_hasMore,
+            omitted_playlist_count: var_omittedPlaylistCount,
             playlists: var_playlists,
             failure: var_failure,
         };
@@ -12908,6 +12946,7 @@ impl SseDecode for crate::api::recommendations::QqMusicRadarTrackPageLoad {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_page = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -12917,6 +12956,7 @@ impl SseDecode for crate::api::recommendations::QqMusicRadarTrackPageLoad {
         return crate::api::recommendations::QqMusicRadarTrackPageLoad {
             page: var_page,
             has_more: var_hasMore,
+            omitted_track_count: var_omittedTrackCount,
             tracks: var_tracks,
             failure: var_failure,
         };
@@ -12947,10 +12987,12 @@ impl SseDecode for crate::api::rankings::QqMusicRankingGroupLoad {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_groups =
             <Vec<crate::api::rankings::CatalogRankingGroup>>::sse_decode(deserializer);
+        let mut var_omittedRankingCount = <u32>::sse_decode(deserializer);
         let mut var_failure =
             <Option<crate::api::rankings::QqMusicRankingLoadFailure>>::sse_decode(deserializer);
         return crate::api::rankings::QqMusicRankingGroupLoad {
             groups: var_groups,
+            omitted_ranking_count: var_omittedRankingCount,
             failure: var_failure,
         };
     }
@@ -12978,8 +13020,10 @@ impl SseDecode for crate::api::rankings::QqMusicRankingTrackPageLoad {
         let mut var_ranking =
             <Option<crate::api::rankings::CatalogRankingSummary>>::sse_decode(deserializer);
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -12987,8 +13031,10 @@ impl SseDecode for crate::api::rankings::QqMusicRankingTrackPageLoad {
         return crate::api::rankings::QqMusicRankingTrackPageLoad {
             ranking: var_ranking,
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_track_count: var_omittedTrackCount,
             tracks: var_tracks,
             failure: var_failure,
         };
@@ -12999,7 +13045,9 @@ impl SseDecode for crate::api::recommendations::QqMusicRecommendedPlaylistPageLo
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedPlaylistCount = <u32>::sse_decode(deserializer);
         let mut var_playlists =
             <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_decode(deserializer);
         let mut var_failure = <Option<
@@ -13007,7 +13055,9 @@ impl SseDecode for crate::api::recommendations::QqMusicRecommendedPlaylistPageLo
         >>::sse_decode(deserializer);
         return crate::api::recommendations::QqMusicRecommendedPlaylistPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             has_more: var_hasMore,
+            omitted_playlist_count: var_omittedPlaylistCount,
             playlists: var_playlists,
             failure: var_failure,
         };
@@ -13035,12 +13085,14 @@ impl SseDecode for crate::api::recommendations::QqMusicRelatedTracksLoad {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
+        let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
         let mut var_failure =
             <Option<crate::api::recommendations::QqMusicRelatedTracksLoadFailure>>::sse_decode(
                 deserializer,
             );
         return crate::api::recommendations::QqMusicRelatedTracksLoad {
             tracks: var_tracks,
+            omitted_track_count: var_omittedTrackCount,
             failure: var_failure,
         };
     }
@@ -13092,7 +13144,11 @@ impl SseDecode for crate::api::lyrics::QqMusicSynchronizedLyrics {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_lines =
             <Vec<crate::api::lyrics::QqMusicSynchronizedLyricLine>>::sse_decode(deserializer);
-        return crate::api::lyrics::QqMusicSynchronizedLyrics { lines: var_lines };
+        let mut var_omittedLineCount = <u32>::sse_decode(deserializer);
+        return crate::api::lyrics::QqMusicSynchronizedLyrics {
+            lines: var_lines,
+            omitted_line_count: var_omittedLineCount,
+        };
     }
 }
 
@@ -13114,8 +13170,11 @@ impl SseDecode for crate::api::comments::QqMusicTrackCommentPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_nextOffset = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedHotCommentCount = <u32>::sse_decode(deserializer);
+        let mut var_omittedLatestCommentCount = <u32>::sse_decode(deserializer);
         let mut var_hotComments =
             <Vec<crate::api::comments::TrackCommentSummary>>::sse_decode(deserializer);
         let mut var_latestComments =
@@ -13126,8 +13185,11 @@ impl SseDecode for crate::api::comments::QqMusicTrackCommentPageLoad {
             );
         return crate::api::comments::QqMusicTrackCommentPageLoad {
             offset: var_offset,
+            next_offset: var_nextOffset,
             total: var_total,
             has_more: var_hasMore,
+            omitted_hot_comment_count: var_omittedHotCommentCount,
+            omitted_latest_comment_count: var_omittedLatestCommentCount,
             hot_comments: var_hotComments,
             latest_comments: var_latestComments,
             failure: var_failure,
@@ -13224,6 +13286,7 @@ impl SseDecode for crate::api::search::QqMusicTrackSearchPageLoad {
         let mut var_page = <u32>::sse_decode(deserializer);
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
+        let mut var_omittedItemCount = <u32>::sse_decode(deserializer);
         let mut var_items =
             <Vec<crate::api::search::QqMusicTrackSearchItem>>::sse_decode(deserializer);
         let mut var_failure =
@@ -13234,6 +13297,7 @@ impl SseDecode for crate::api::search::QqMusicTrackSearchPageLoad {
             page: var_page,
             total: var_total,
             has_more: var_hasMore,
+            omitted_item_count: var_omittedItemCount,
             items: var_items,
             failure: var_failure,
         };
@@ -13264,10 +13328,12 @@ impl SseDecode for crate::api::library::QqMusicUserPlaylistLoad {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_playlists =
             <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_decode(deserializer);
+        let mut var_omittedPlaylistCount = <u32>::sse_decode(deserializer);
         let mut var_failure =
             <Option<crate::api::library::QqMusicUserPlaylistLoadFailure>>::sse_decode(deserializer);
         return crate::api::library::QqMusicUserPlaylistLoad {
             playlists: var_playlists,
+            omitted_playlist_count: var_omittedPlaylistCount,
             failure: var_failure,
         };
     }
@@ -15259,6 +15325,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::search::QqMusicAlbumSearchPag
             self.page.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_album_count.into_into_dart().into_dart(),
             self.albums.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -15306,8 +15373,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::album::QqMusicAlbumTrackPageL
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.tracks.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -15355,8 +15424,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::artist::QqMusicArtistAlbumPag
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_album_count.into_into_dart().into_dart(),
             self.albums.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -15406,6 +15477,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::search::QqMusicArtistSearchPa
             self.page.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_artist_count.into_into_dart().into_dart(),
             self.artists.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -15453,8 +15525,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::artist::QqMusicArtistTrackPag
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.tracks.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -15770,6 +15844,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::recommendations::QqMusicDaily
         [
             self.playlist.into_into_dart().into_dart(),
             self.tracks.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -15919,8 +15994,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::favorite_albums::QqMusicFavor
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_album_count.into_into_dart().into_dart(),
             self.albums.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -15975,8 +16052,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::favorite_artists::QqMusicFavo
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_artist_count.into_into_dart().into_dart(),
             self.artists.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16082,8 +16161,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::new_albums::QqMusicNewAlbumPa
         [
             self.region.into_into_dart().into_dart(),
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_release_count.into_into_dart().into_dart(),
             self.releases.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16181,6 +16262,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::new_songs::QqMusicNewSongsLoa
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.category.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.tracks.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16230,6 +16312,7 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.playlists.into_into_dart().into_dart(),
+            self.omitted_playlist_count.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -16286,6 +16369,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::recommendations::QqMusicPerso
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.tracks.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -16451,6 +16535,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::search::QqMusicPlaylistSearch
             self.page.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_playlist_count.into_into_dart().into_dart(),
             self.playlists.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16798,6 +16883,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::recommendations::QqMusicRadar
         [
             self.page.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.tracks.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16851,6 +16937,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::rankings::QqMusicRankingGroup
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.groups.into_into_dart().into_dart(),
+            self.omitted_ranking_count.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -16898,8 +16985,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::rankings::QqMusicRankingTrack
         [
             self.ranking.into_into_dart().into_dart(),
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.tracks.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16924,7 +17013,9 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_playlist_count.into_into_dart().into_dart(),
             self.playlists.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16980,6 +17071,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::recommendations::QqMusicRelat
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.tracks.into_into_dart().into_dart(),
+            self.omitted_track_count.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -17052,7 +17144,11 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::lyrics::QqMusicSynchronizedLy
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::lyrics::QqMusicSynchronizedLyrics {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.lines.into_into_dart().into_dart()].into_dart()
+        [
+            self.lines.into_into_dart().into_dart(),
+            self.omitted_line_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -17093,8 +17189,13 @@ impl flutter_rust_bridge::IntoDart for crate::api::comments::QqMusicTrackComment
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.offset.into_into_dart().into_dart(),
+            self.next_offset.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_hot_comment_count.into_into_dart().into_dart(),
+            self.omitted_latest_comment_count
+                .into_into_dart()
+                .into_dart(),
             self.hot_comments.into_into_dart().into_dart(),
             self.latest_comments.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
@@ -17238,6 +17339,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::search::QqMusicTrackSearchPag
             self.page.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
+            self.omitted_item_count.into_into_dart().into_dart(),
             self.items.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -17285,6 +17387,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::library::QqMusicUserPlaylistL
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.playlists.into_into_dart().into_dart(),
+            self.omitted_playlist_count.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -19828,6 +19931,7 @@ impl SseEncode for crate::api::search::QqMusicAlbumSearchPageLoad {
         <u32>::sse_encode(self.page, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_album_count, serializer);
         <Vec<crate::api::album::CatalogAlbumSummary>>::sse_encode(self.albums, serializer);
         <Option<crate::api::search::QqMusicAlbumSearchPageLoadFailure>>::sse_encode(
             self.failure,
@@ -19860,8 +19964,10 @@ impl SseEncode for crate::api::album::QqMusicAlbumTrackPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
         <Option<crate::api::album::QqMusicAlbumTrackPageLoadFailure>>::sse_encode(
             self.failure,
@@ -19894,8 +20000,10 @@ impl SseEncode for crate::api::artist::QqMusicArtistAlbumPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_album_count, serializer);
         <Vec<crate::api::album::CatalogAlbumSummary>>::sse_encode(self.albums, serializer);
         <Option<crate::api::artist::QqMusicArtistAlbumPageLoadFailure>>::sse_encode(
             self.failure,
@@ -19930,6 +20038,7 @@ impl SseEncode for crate::api::search::QqMusicArtistSearchPageLoad {
         <u32>::sse_encode(self.page, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_artist_count, serializer);
         <Vec<crate::api::artist::CatalogArtistSummary>>::sse_encode(self.artists, serializer);
         <Option<crate::api::search::QqMusicArtistSearchPageLoadFailure>>::sse_encode(
             self.failure,
@@ -19962,8 +20071,10 @@ impl SseEncode for crate::api::artist::QqMusicArtistTrackPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
         <Option<crate::api::artist::QqMusicArtistTrackPageLoadFailure>>::sse_encode(
             self.failure,
@@ -20166,6 +20277,7 @@ impl SseEncode for crate::api::recommendations::QqMusicDailyRecommendationLoad {
             serializer,
         );
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Option<crate::api::recommendations::QqMusicDailyRecommendationLoadFailure>>::sse_encode(
             self.failure,
             serializer,
@@ -20256,8 +20368,10 @@ impl SseEncode for crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_album_count, serializer);
         <Vec<crate::api::album::CatalogAlbumSummary>>::sse_encode(self.albums, serializer);
         <Option<crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoadFailure>>::sse_encode(
             self.failure,
@@ -20286,8 +20400,10 @@ impl SseEncode for crate::api::favorite_artists::QqMusicFavoriteArtistPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_artist_count, serializer);
         <Vec<crate::api::artist::CatalogArtistSummary>>::sse_encode(self.artists, serializer);
         <Option<crate::api::favorite_artists::QqMusicFavoriteArtistPageLoadFailure>>::sse_encode(
             self.failure,
@@ -20352,8 +20468,10 @@ impl SseEncode for crate::api::new_albums::QqMusicNewAlbumPageLoad {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::new_albums::QqMusicNewAlbumRegion>::sse_encode(self.region, serializer);
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_release_count, serializer);
         <Vec<crate::api::new_albums::CatalogNewAlbumRelease>>::sse_encode(
             self.releases,
             serializer,
@@ -20429,6 +20547,7 @@ impl SseEncode for crate::api::new_songs::QqMusicNewSongsLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::new_songs::QqMusicNewSongCategory>::sse_encode(self.category, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
         <Option<crate::api::new_songs::QqMusicNewSongsLoadFailure>>::sse_encode(
             self.failure,
@@ -20461,6 +20580,7 @@ impl SseEncode for crate::api::recommendations::QqMusicPersonalizedPlaylistsLoad
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_encode(self.playlists, serializer);
+        <u32>::sse_encode(self.omitted_playlist_count, serializer);
         <Option<crate::api::recommendations::QqMusicPersonalizedPlaylistsLoadFailure>>::sse_encode(
             self.failure,
             serializer,
@@ -20488,6 +20608,7 @@ impl SseEncode for crate::api::recommendations::QqMusicPersonalizedTracksLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Option<crate::api::recommendations::QqMusicPersonalizedTracksLoadFailure>>::sse_encode(
             self.failure,
             serializer,
@@ -20576,6 +20697,7 @@ impl SseEncode for crate::api::search::QqMusicPlaylistSearchPageLoad {
         <u32>::sse_encode(self.page, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_playlist_count, serializer);
         <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_encode(self.playlists, serializer);
         <Option<crate::api::search::QqMusicPlaylistSearchPageLoadFailure>>::sse_encode(
             self.failure,
@@ -20802,6 +20924,7 @@ impl SseEncode for crate::api::recommendations::QqMusicRadarTrackPageLoad {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.page, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
         <Option<crate::api::recommendations::QqMusicRadarTrackPageLoadFailure>>::sse_encode(
             self.failure,
@@ -20830,6 +20953,7 @@ impl SseEncode for crate::api::rankings::QqMusicRankingGroupLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::rankings::CatalogRankingGroup>>::sse_encode(self.groups, serializer);
+        <u32>::sse_encode(self.omitted_ranking_count, serializer);
         <Option<crate::api::rankings::QqMusicRankingLoadFailure>>::sse_encode(
             self.failure,
             serializer,
@@ -20862,8 +20986,10 @@ impl SseEncode for crate::api::rankings::QqMusicRankingTrackPageLoad {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<crate::api::rankings::CatalogRankingSummary>>::sse_encode(self.ranking, serializer);
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
         <Option<crate::api::rankings::QqMusicRankingLoadFailure>>::sse_encode(
             self.failure,
@@ -20876,7 +21002,9 @@ impl SseEncode for crate::api::recommendations::QqMusicRecommendedPlaylistPageLo
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_playlist_count, serializer);
         <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_encode(self.playlists, serializer);
         <Option<crate::api::recommendations::QqMusicRecommendedPlaylistPageLoadFailure>>::sse_encode(self.failure, serializer);
     }
@@ -20899,6 +21027,7 @@ impl SseEncode for crate::api::recommendations::QqMusicRelatedTracksLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
+        <u32>::sse_encode(self.omitted_track_count, serializer);
         <Option<crate::api::recommendations::QqMusicRelatedTracksLoadFailure>>::sse_encode(
             self.failure,
             serializer,
@@ -20936,6 +21065,7 @@ impl SseEncode for crate::api::lyrics::QqMusicSynchronizedLyrics {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::lyrics::QqMusicSynchronizedLyricLine>>::sse_encode(self.lines, serializer);
+        <u32>::sse_encode(self.omitted_line_count, serializer);
     }
 }
 
@@ -20952,8 +21082,11 @@ impl SseEncode for crate::api::comments::QqMusicTrackCommentPageLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.next_offset, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_hot_comment_count, serializer);
+        <u32>::sse_encode(self.omitted_latest_comment_count, serializer);
         <Vec<crate::api::comments::TrackCommentSummary>>::sse_encode(self.hot_comments, serializer);
         <Vec<crate::api::comments::TrackCommentSummary>>::sse_encode(
             self.latest_comments,
@@ -21048,6 +21181,7 @@ impl SseEncode for crate::api::search::QqMusicTrackSearchPageLoad {
         <u32>::sse_encode(self.page, serializer);
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+        <u32>::sse_encode(self.omitted_item_count, serializer);
         <Vec<crate::api::search::QqMusicTrackSearchItem>>::sse_encode(self.items, serializer);
         <Option<crate::api::search::QqMusicTrackSearchPageLoadFailure>>::sse_encode(
             self.failure,
@@ -21080,6 +21214,7 @@ impl SseEncode for crate::api::library::QqMusicUserPlaylistLoad {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::library::LibraryPlaylistSummary>>::sse_encode(self.playlists, serializer);
+        <u32>::sse_encode(self.omitted_playlist_count, serializer);
         <Option<crate::api::library::QqMusicUserPlaylistLoadFailure>>::sse_encode(
             self.failure,
             serializer,

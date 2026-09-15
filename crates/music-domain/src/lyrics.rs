@@ -205,6 +205,7 @@ impl fmt::Debug for SynchronizedLyricLine {
 pub struct SynchronizedLyrics {
     track_id: TrackId,
     lines: Vec<SynchronizedLyricLine>,
+    omitted_line_count: u32,
 }
 
 impl SynchronizedLyrics {
@@ -219,7 +220,18 @@ impl SynchronizedLyrics {
         if lines.is_empty() {
             return Err(InvalidSynchronizedLyrics);
         }
-        Ok(Self { track_id, lines })
+        Ok(Self {
+            track_id,
+            lines,
+            omitted_line_count: 0,
+        })
+    }
+
+    /// Records source lines that were independently malformed and omitted.
+    #[must_use]
+    pub const fn with_omitted_line_count(mut self, omitted_line_count: u32) -> Self {
+        self.omitted_line_count = omitted_line_count;
+        self
     }
 
     #[must_use]
@@ -230,6 +242,11 @@ impl SynchronizedLyrics {
     #[must_use]
     pub fn lines(&self) -> &[SynchronizedLyricLine] {
         &self.lines
+    }
+
+    #[must_use]
+    pub const fn omitted_line_count(&self) -> u32 {
+        self.omitted_line_count
     }
 
     #[must_use]
@@ -244,6 +261,7 @@ impl fmt::Debug for SynchronizedLyrics {
             .debug_struct("SynchronizedLyrics")
             .field("track_id", &self.track_id)
             .field("line_count", &self.lines.len())
+            .field("omitted_line_count", &self.omitted_line_count)
             .field("has_word_timing", &self.has_word_timing())
             .finish()
     }

@@ -60,6 +60,7 @@ pub enum QqMusicRankingLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicRankingGroupLoad {
     pub groups: Vec<CatalogRankingGroup>,
+    pub omitted_ranking_count: u32,
     pub failure: Option<QqMusicRankingLoadFailure>,
 }
 
@@ -68,6 +69,7 @@ impl fmt::Debug for QqMusicRankingGroupLoad {
         formatter
             .debug_struct("QqMusicRankingGroupLoad")
             .field("group_count", &self.groups.len())
+            .field("omitted_ranking_count", &self.omitted_ranking_count)
             .field("failure", &self.failure)
             .finish()
     }
@@ -151,8 +153,10 @@ pub fn begin_qq_music_ranking_group_load(provider_id: String) -> QqMusicRankingG
 pub struct QqMusicRankingTrackPageLoad {
     pub ranking: Option<CatalogRankingSummary>,
     pub offset: u32,
+    pub next_offset: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_track_count: u32,
     pub tracks: Vec<LibraryTrackSummary>,
     pub failure: Option<QqMusicRankingLoadFailure>,
 }
@@ -163,8 +167,10 @@ impl fmt::Debug for QqMusicRankingTrackPageLoad {
             .debug_struct("QqMusicRankingTrackPageLoad")
             .field("has_ranking", &self.ranking.is_some())
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .field("failure", &self.failure)
             .finish()
@@ -280,11 +286,12 @@ fn bridge_ranking_summary(ranking: &music_domain::RankingSummary) -> CatalogRank
 }
 
 fn map_group_load(
-    result: Result<Vec<music_domain::RankingGroup>, CatalogError>,
+    result: Result<music_domain::RankingGroupsCollection, CatalogError>,
 ) -> QqMusicRankingGroupLoad {
     match result {
-        Ok(groups) => QqMusicRankingGroupLoad {
-            groups: groups
+        Ok(collection) => QqMusicRankingGroupLoad {
+            groups: collection
+                .groups()
                 .iter()
                 .map(|group| CatalogRankingGroup {
                     title: group.title().to_owned(),
@@ -295,6 +302,7 @@ fn map_group_load(
                         .collect(),
                 })
                 .collect(),
+            omitted_ranking_count: collection.omitted_ranking_count(),
             failure: None,
         },
         Err(error) => failed_group_load(map_error(error)),
@@ -308,8 +316,10 @@ fn map_track_load(
         Ok(page) => QqMusicRankingTrackPageLoad {
             ranking: Some(bridge_ranking_summary(page.ranking())),
             offset: page.offset(),
+            next_offset: page.next_offset(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_track_count: page.omitted_track_count(),
             tracks: page.tracks().iter().map(bridge_track_summary).collect(),
             failure: None,
         },
@@ -320,6 +330,7 @@ fn map_track_load(
 const fn failed_group_load(failure: QqMusicRankingLoadFailure) -> QqMusicRankingGroupLoad {
     QqMusicRankingGroupLoad {
         groups: Vec::new(),
+        omitted_ranking_count: 0,
         failure: Some(failure),
     }
 }
@@ -328,8 +339,10 @@ const fn failed_track_load(failure: QqMusicRankingLoadFailure) -> QqMusicRanking
     QqMusicRankingTrackPageLoad {
         ranking: None,
         offset: 0,
+        next_offset: 0,
         total: 0,
         has_more: false,
+        omitted_track_count: 0,
         tracks: Vec::new(),
         failure: Some(failure),
     }
@@ -346,8 +359,8 @@ const fn map_error(error: CatalogError) -> QqMusicRankingLoadFailure {
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        ProviderId, RankingGroup, RankingId, RankingSummary, RankingTracksPage, TrackId,
-        TrackSummary,
+        ProviderId, RankingGroup, RankingGroupsCollection, RankingId, RankingSummary,
+        RankingTracksPage, TrackId, TrackSummary,
     };
     use provider_api::CatalogError;
 
@@ -372,11 +385,13 @@ mod tests {
 
     #[test]
     fn maps_groups_and_track_pages_without_exposing_content() {
-        let groups = map_group_load(Ok(vec![
-            RankingGroup::new("must-not-leak-group", vec![ranking()]).expect("group"),
-        ]));
+        let groups = map_group_load(Ok(RankingGroupsCollection::new(
+            vec![RankingGroup::new("must-not-leak-group", vec![ranking()]).expect("group")],
+            1,
+        )));
         assert!(groups.failure.is_none());
         assert_eq!(groups.groups.len(), 1);
+        assert_eq!(groups.omitted_ranking_count, 1);
         assert_eq!(groups.groups[0].rankings.len(), 1);
 
         let track = TrackSummary::new(

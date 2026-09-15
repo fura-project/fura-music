@@ -137,15 +137,14 @@ async fn valid_empty_is_distinct_from_missing_shape_and_unknown_code() {
 }
 
 #[tokio::test]
-async fn malformed_duplicate_and_out_of_window_rows_stop() {
+async fn malformed_rows_are_omitted_but_duplicates_and_windows_stay_strict() {
     for field in ["MixSongID", "FileHash", "Audioid", "Duration"] {
         let mut row = track("123");
         row.as_object_mut().unwrap().remove(field);
         let (client, _) = fixture_client(vec![Ok(response(&page(&[row], 1, 1, 1)))]);
-        assert_eq!(
-            client.search_tracks("fixture", 1, 1).await.unwrap_err(),
-            Error::ResponseShapeMismatch
-        );
+        let result = client.search_tracks("fixture", 1, 1).await.unwrap();
+        assert!(result.items.is_empty());
+        assert_eq!(result.omitted_item_count, 1);
     }
     let (client, _) = fixture_client(vec![Ok(response(&page(
         &[track("123"), track("123")],
@@ -202,10 +201,28 @@ async fn input_content_type_status_and_artwork_are_strict() {
     let mut row = track("123");
     row["Image"] = json!("http://example.invalid/art.jpg");
     let (client, _) = fixture_client(vec![Ok(response(&page(&[row], 1, 1, 1)))]);
-    assert_eq!(
-        client.search_tracks("fixture", 1, 1).await.unwrap_err(),
-        Error::ResponseShapeMismatch
-    );
+    let result = client.search_tracks("fixture", 1, 1).await.unwrap();
+    assert_eq!(result.items.len(), 1);
+    assert_eq!(result.items[0].artwork, None);
+    assert_eq!(result.omitted_item_count, 0);
+}
+
+#[tokio::test]
+async fn good_bad_good_rows_preserve_order_and_report_omission() {
+    let mut malformed = track("124");
+    malformed.as_object_mut().unwrap().remove("FileHash");
+    let (client, _) = fixture_client(vec![Ok(response(&page(
+        &[track("123"), malformed, track("125")],
+        3,
+        1,
+        3,
+    )))]);
+
+    let result = client.search_tracks("fixture", 1, 3).await.unwrap();
+    assert_eq!(result.items.len(), 2);
+    assert_eq!(result.items[0].mix_song_id, "123");
+    assert_eq!(result.items[1].mix_song_id, "125");
+    assert_eq!(result.omitted_item_count, 1);
 }
 
 #[tokio::test]

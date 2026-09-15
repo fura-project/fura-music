@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
@@ -176,7 +177,9 @@ impl fmt::Debug for QqMusicRecommendedPlaylist {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicRecommendedPlaylistsPage {
     offset: u32,
+    next_offset: u32,
     has_more: bool,
+    omitted_playlist_count: u32,
     playlists: Vec<QqMusicRecommendedPlaylist>,
 }
 
@@ -187,8 +190,18 @@ impl QqMusicRecommendedPlaylistsPage {
     }
 
     #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
     }
 
     #[must_use]
@@ -202,7 +215,9 @@ impl fmt::Debug for QqMusicRecommendedPlaylistsPage {
         formatter
             .debug_struct("QqMusicRecommendedPlaylistsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())
             .finish()
     }
@@ -331,7 +346,7 @@ struct RecommendedPlaylistsResult {
 #[derive(Deserialize)]
 struct RecommendedPlaylistsData {
     #[serde(rename = "List")]
-    playlists: Option<Vec<RawRecommendedItem>>,
+    playlists: Option<Vec<Value>>,
     #[serde(rename = "HasMore")]
     has_more: Option<bool>,
 }
@@ -411,14 +426,33 @@ fn map_response<E>(
     if count > requested_size || (has_more && count == 0) || offset.checked_add(count).is_none() {
         return Err(QqMusicRecommendedPlaylistsError::InvalidPagination);
     }
-    let playlists = raw_playlists
-        .into_iter()
-        .enumerate()
-        .map(|(index, item)| map_playlist(item, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let next_offset = offset
+        .checked_add(count)
+        .ok_or(QqMusicRecommendedPlaylistsError::InvalidPagination)?;
+    let mut playlists = Vec::with_capacity(raw_playlists.len());
+    let mut omitted_playlist_count = 0_u32;
+    for (index, value) in raw_playlists.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawRecommendedItem>(value)
+            .map_err(|_| QqMusicRecommendedPlaylistsError::InvalidPlaylist {
+                index,
+                field: RecommendedPlaylistField::Wrapper,
+            })
+            .and_then(|item| map_playlist(item, index));
+        match mapped {
+            Ok(playlist) => playlists.push(playlist),
+            Err(QqMusicRecommendedPlaylistsError::InvalidPlaylist { .. }) => {
+                omitted_playlist_count = omitted_playlist_count
+                    .checked_add(1)
+                    .ok_or(QqMusicRecommendedPlaylistsError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicRecommendedPlaylistsPage {
         offset,
+        next_offset,
         has_more,
+        omitted_playlist_count,
         playlists,
     })
 }
@@ -568,11 +602,14 @@ mod tests {
                 "HasMore": false
             }}
         })));
-        let error = client
+        let partial = client
             .recommended_playlists(0, 10)
             .await
-            .expect_err("invalid playlist");
-        assert!(!format!("{error:?} {error}").contains("must-not-leak"));
+            .expect("malformed collection row must be isolated");
+        assert!(partial.playlists().is_empty());
+        assert_eq!(partial.omitted_playlist_count(), 1);
+        assert_eq!(partial.next_offset(), 1);
+        assert!(!format!("{partial:?}").contains("must-not-leak"));
 
         let client = QqMusicClient::new(RecommendationTransport::new(&json!({
             "code": 0,

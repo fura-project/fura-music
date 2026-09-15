@@ -190,8 +190,10 @@ pub enum QqMusicAlbumTrackPageLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicAlbumTrackPageLoad {
     pub offset: u32,
+    pub next_offset: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_track_count: u32,
     pub tracks: Vec<LibraryTrackSummary>,
     pub failure: Option<QqMusicAlbumTrackPageLoadFailure>,
 }
@@ -201,8 +203,10 @@ impl fmt::Debug for QqMusicAlbumTrackPageLoad {
         formatter
             .debug_struct("QqMusicAlbumTrackPageLoad")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .field("failure", &self.failure)
             .finish()
@@ -312,8 +316,10 @@ fn map_load(
     match result {
         Ok(page) => QqMusicAlbumTrackPageLoad {
             offset: page.offset(),
+            next_offset: page.next_offset(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_track_count: page.omitted_track_count(),
             tracks: page.tracks().iter().map(bridge_track_summary).collect(),
             failure: None,
         },
@@ -365,8 +371,10 @@ const fn map_details_error(error: CatalogError) -> QqMusicAlbumDetailsLoadFailur
 const fn failed_load(failure: QqMusicAlbumTrackPageLoadFailure) -> QqMusicAlbumTrackPageLoad {
     QqMusicAlbumTrackPageLoad {
         offset: 0,
+        next_offset: 0,
         total: 0,
         has_more: false,
+        omitted_track_count: 0,
         tracks: Vec::new(),
         failure: Some(failure),
     }

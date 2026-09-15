@@ -23,8 +23,10 @@ pub enum QqMusicFavoriteArtistPageLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicFavoriteArtistPageLoad {
     pub offset: u32,
+    pub next_offset: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_artist_count: u32,
     pub artists: Vec<CatalogArtistSummary>,
     pub failure: Option<QqMusicFavoriteArtistPageLoadFailure>,
 }
@@ -34,8 +36,10 @@ impl fmt::Debug for QqMusicFavoriteArtistPageLoad {
         formatter
             .debug_struct("QqMusicFavoriteArtistPageLoad")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_artist_count", &self.omitted_artist_count)
             .field("artist_count", &self.artists.len())
             .field("failure", &self.failure)
             .finish()
@@ -134,8 +138,10 @@ fn map_load(
     match result {
         Ok(page) => QqMusicFavoriteArtistPageLoad {
             offset: page.offset(),
+            next_offset: page.next_offset(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_artist_count: page.omitted_artist_count(),
             artists: page.artists().iter().map(bridge_artist_summary).collect(),
             failure: None,
         },
@@ -148,8 +154,10 @@ const fn failed_load(
 ) -> QqMusicFavoriteArtistPageLoad {
     QqMusicFavoriteArtistPageLoad {
         offset: 0,
+        next_offset: 0,
         total: 0,
         has_more: false,
+        omitted_artist_count: 0,
         artists: Vec::new(),
         failure: Some(failure),
     }

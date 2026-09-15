@@ -303,6 +303,7 @@ pub struct QqMusicLyrics {
     original: Vec<QqMusicTimedLyricLine>,
     translation: Vec<QqMusicAuxiliaryLyricLine>,
     romanization: Vec<QqMusicAuxiliaryLyricLine>,
+    omitted_line_count: u32,
 }
 
 impl QqMusicLyrics {
@@ -320,6 +321,11 @@ impl QqMusicLyrics {
     pub fn romanization(&self) -> &[QqMusicAuxiliaryLyricLine] {
         &self.romanization
     }
+
+    #[must_use]
+    pub const fn omitted_line_count(&self) -> u32 {
+        self.omitted_line_count
+    }
 }
 
 impl fmt::Debug for QqMusicLyrics {
@@ -329,6 +335,7 @@ impl fmt::Debug for QqMusicLyrics {
             .field("original_line_count", &self.original.len())
             .field("translation_line_count", &self.translation.len())
             .field("romanization_line_count", &self.romanization.len())
+            .field("omitted_line_count", &self.omitted_line_count)
             .finish()
     }
 }
@@ -389,8 +396,8 @@ where
             }
 
             let original_text = decrypt_track(&encrypted_original, QqMusicLyricTrack::Original)?;
-            let original = match data.qrc {
-                Some(1) => parse_qrc_xml(&original_text),
+            let (original, omitted_original) = match data.qrc {
+                Some(1) => parse_qrc_xml_with_integrity(&original_text),
                 Some(0) => parse_original_lrc(&original_text),
                 _ => {
                     return Err(invalid_document(
@@ -403,13 +410,25 @@ where
             if original.is_empty() {
                 return Err(QqMusicLyricsError::Unavailable);
             }
-            let translation = parse_optional_auxiliary(data.trans, QqMusicLyricTrack::Translation);
-            let romanization = parse_optional_auxiliary(data.roma, QqMusicLyricTrack::Romanization);
+            let (translation, omitted_translation) =
+                parse_optional_auxiliary(data.trans, QqMusicLyricTrack::Translation);
+            let (romanization, omitted_romanization) =
+                parse_optional_auxiliary(data.roma, QqMusicLyricTrack::Romanization);
+            let omitted_line_count = omitted_original
+                .checked_add(omitted_translation)
+                .and_then(|count| count.checked_add(omitted_romanization))
+                .ok_or_else(|| {
+                    invalid_document(
+                        QqMusicLyricTrack::Original,
+                        QqMusicLyricDocumentField::SafetyLimit,
+                    )
+                })?;
 
             Ok(QqMusicLyrics {
                 original,
                 translation,
                 romanization,
+                omitted_line_count,
             })
         }
         .await;
@@ -454,31 +473,31 @@ fn decrypt_track<E>(
 fn parse_optional_auxiliary(
     ciphertext: Option<String>,
     track: QqMusicLyricTrack,
-) -> Vec<QqMusicAuxiliaryLyricLine> {
+) -> (Vec<QqMusicAuxiliaryLyricLine>, u32) {
     let Some(ciphertext) = ciphertext.filter(|value| !value.is_empty()) else {
-        return Vec::new();
+        return (Vec::new(), 0);
     };
     let parsed = decrypt_cloud_qrc(&ciphertext)
         .map_err(|_| QqMusicLyricDocumentField::Ciphertext)
-        .and_then(|plaintext| parse_auxiliary_document(&plaintext));
+        .and_then(|plaintext| parse_auxiliary_document_with_integrity(&plaintext));
     match parsed {
-        Ok(lines) if !lines.is_empty() => lines,
+        Ok(result) if !result.0.is_empty() => result,
         Ok(_) => {
             lyric_debug_optional(track, QqMusicLyricDocumentField::LyricContent);
-            Vec::new()
+            (Vec::new(), 0)
         }
         Err(field) => {
             lyric_debug_optional(track, field);
-            Vec::new()
+            (Vec::new(), 0)
         }
     }
 }
 
 fn parse_original_lrc(
     document: &str,
-) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDocumentField> {
-    parse_lrc(document).map(|lines| {
-        lines
+) -> Result<(Vec<QqMusicTimedLyricLine>, u32), QqMusicLyricDocumentField> {
+    parse_lrc_with_integrity(document).map(|(lines, omitted)| {
+        let lines = lines
             .into_iter()
             .map(|line| QqMusicTimedLyricLine {
                 text: line.text,
@@ -486,29 +505,42 @@ fn parse_original_lrc(
                 duration_ms: 0,
                 segments: Vec::new(),
             })
-            .collect()
+            .collect();
+        (lines, omitted)
     })
 }
 
+#[cfg(test)]
 fn parse_auxiliary_document(
     document: &str,
 ) -> Result<Vec<QqMusicAuxiliaryLyricLine>, QqMusicLyricDocumentField> {
-    let lrc = parse_lrc(document)?;
+    parse_auxiliary_document_with_integrity(document).map(|(lines, _)| lines)
+}
+
+fn parse_auxiliary_document_with_integrity(
+    document: &str,
+) -> Result<(Vec<QqMusicAuxiliaryLyricLine>, u32), QqMusicLyricDocumentField> {
+    let (lrc, omitted_lrc) = parse_lrc_with_integrity(document)?;
     if !lrc.is_empty() {
-        return Ok(lrc);
+        return Ok((lrc, omitted_lrc));
     }
-    let qrc = if document.trim_start().starts_with('<') {
-        parse_qrc_xml(document)?
+    let (timed_lines, omitted_timed_lines) = if document.trim_start().starts_with('<') {
+        parse_qrc_xml_with_integrity(document)?
     } else {
-        parse_qrc_content(document)?
+        parse_qrc_content_with_integrity(document)?
     };
-    Ok(qrc
-        .into_iter()
-        .map(|line| QqMusicAuxiliaryLyricLine {
-            text: line.text,
-            start_ms: line.start_ms,
-        })
-        .collect())
+    Ok((
+        timed_lines
+            .into_iter()
+            .map(|line| QqMusicAuxiliaryLyricLine {
+                text: line.text,
+                start_ms: line.start_ms,
+            })
+            .collect(),
+        omitted_lrc
+            .checked_add(omitted_timed_lines)
+            .ok_or(QqMusicLyricDocumentField::SafetyLimit)?,
+    ))
 }
 
 fn lyric_debug_result<E>(result: &Result<QqMusicLyrics, QqMusicLyricsError<E>>) {
@@ -517,10 +549,11 @@ fn lyric_debug_result<E>(result: &Result<QqMusicLyrics, QqMusicLyricsError<E>>) 
     }
     match result {
         Ok(lyrics) => eprintln!(
-            "[fura][qq-lyrics] outcome=success original_lines={} translation_lines={} romanization_lines={}",
+            "[fura][qq-lyrics] outcome=success original_lines={} translation_lines={} romanization_lines={} omitted_lines={}",
             lyrics.original.len(),
             lyrics.translation.len(),
             lyrics.romanization.len(),
+            lyrics.omitted_line_count,
         ),
         Err(error) => eprintln!(
             "[fura][qq-lyrics] outcome=failure stage={}",
@@ -542,20 +575,27 @@ fn invalid_document<E>(
     QqMusicLyricsError::InvalidDocument { track, field }
 }
 
+#[cfg(test)]
 fn parse_qrc_xml(xml: &str) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDocumentField> {
-    match parse_qrc_xml_strict(xml) {
+    parse_qrc_xml_with_integrity(xml).map(|(lines, _)| lines)
+}
+
+fn parse_qrc_xml_with_integrity(
+    xml: &str,
+) -> Result<(Vec<QqMusicTimedLyricLine>, u32), QqMusicLyricDocumentField> {
+    match parse_qrc_xml_strict_with_integrity(xml) {
         Err(QqMusicLyricDocumentField::Xml) => {
             let content = extract_qq_pseudo_xml_lyric_content(xml)?;
             lyric_debug_pseudo_xml(&content);
-            parse_qrc_content(&content)
+            parse_qrc_content_with_integrity(&content)
         }
         result => result,
     }
 }
 
-fn parse_qrc_xml_strict(
+fn parse_qrc_xml_strict_with_integrity(
     xml: &str,
-) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDocumentField> {
+) -> Result<(Vec<QqMusicTimedLyricLine>, u32), QqMusicLyricDocumentField> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
     loop {
@@ -564,7 +604,7 @@ fn parse_qrc_xml_strict(
                 if element.name().as_ref() == "Lyric_1" =>
             {
                 if let Some(content) = lyric_content(&element)? {
-                    return parse_qrc_content(&content);
+                    return parse_qrc_content_with_integrity(&content);
                 }
             }
             Ok(Event::Eof) => return Err(QqMusicLyricDocumentField::LyricContent),
@@ -627,9 +667,9 @@ fn extract_qq_pseudo_xml_lyric_content(xml: &str) -> Result<String, QqMusicLyric
     let mut skeleton = String::with_capacity(xml.len() - content.len());
     skeleton.push_str(&xml[..content_start]);
     skeleton.push_str(&xml[content_end..]);
-    match parse_qrc_xml_strict(&skeleton) {
-        Ok(lines) if lines.is_empty() => {}
-        Ok(lines) => {
+    match parse_qrc_xml_strict_with_integrity(&skeleton) {
+        Ok((lines, _)) if lines.is_empty() => {}
+        Ok((lines, _)) => {
             if std::env::var_os("FURA_QQ_LYRIC_DEBUG").is_some() {
                 eprintln!(
                     "[fura][qq-lyrics] qrc_xml_stage=pseudo_xml_skeleton unexpected_lines={}",
@@ -762,20 +802,33 @@ fn lyric_content(element: &BytesStart<'_>) -> Result<Option<String>, QqMusicLyri
         .flatten())
 }
 
-fn parse_qrc_content(
+fn parse_qrc_content_with_integrity(
     content: &str,
-) -> Result<Vec<QqMusicTimedLyricLine>, QqMusicLyricDocumentField> {
+) -> Result<(Vec<QqMusicTimedLyricLine>, u32), QqMusicLyricDocumentField> {
     let mut lines = Vec::new();
     let mut segment_count = 0_usize;
+    let mut omitted_line_count = 0_u32;
     let mut current = find_pair_tag(content, 0, b'[', b']');
     while let Some((tag_start, body_start, start_ms, duration_ms)) = current {
         let next = find_pair_tag(content, body_start, b'[', b']');
         let body_end = next.map_or(content.len(), |(start, _, _, _)| start);
         let body = content[body_start..body_end].trim_matches(['\r', '\n']);
-        start_ms
+        let parsed = start_ms
             .checked_add(duration_ms)
-            .ok_or(QqMusicLyricDocumentField::Timing)?;
-        let (text, segments) = parse_qrc_segments(body)?;
+            .ok_or(QqMusicLyricDocumentField::Timing)
+            .and_then(|_| parse_qrc_segments(body));
+        let (text, segments) = match parsed {
+            Ok(parsed) => parsed,
+            Err(QqMusicLyricDocumentField::Timing) => {
+                omitted_line_count = omitted_line_count
+                    .checked_add(1)
+                    .ok_or(QqMusicLyricDocumentField::SafetyLimit)?;
+                current = next;
+                let _ = tag_start;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         segment_count = segment_count
             .checked_add(segments.len())
             .ok_or(QqMusicLyricDocumentField::SafetyLimit)?;
@@ -791,7 +844,7 @@ fn parse_qrc_content(
         current = next;
         let _ = tag_start;
     }
-    Ok(lines)
+    Ok((lines, omitted_line_count))
 }
 
 fn parse_qrc_segments(
@@ -854,25 +907,49 @@ fn parse_u32_pair(value: &str) -> Option<(u32, u32)> {
     Some((first.parse().ok()?, second.parse().ok()?))
 }
 
+#[cfg(test)]
 fn parse_lrc(document: &str) -> Result<Vec<QqMusicAuxiliaryLyricLine>, QqMusicLyricDocumentField> {
+    parse_lrc_with_integrity(document).map(|(lines, _)| lines)
+}
+
+fn parse_lrc_with_integrity(
+    document: &str,
+) -> Result<(Vec<QqMusicAuxiliaryLyricLine>, u32), QqMusicLyricDocumentField> {
     let mut lines = Vec::new();
+    let mut omitted_line_count = 0_u32;
     for raw_line in document.lines() {
         let mut cursor = 0_usize;
         let mut starts = Vec::new();
+        let mut malformed = false;
         while raw_line.as_bytes().get(cursor) == Some(&b'[') {
             let Some(relative_end) = raw_line.as_bytes()[cursor + 1..]
                 .iter()
                 .position(|byte| *byte == b']')
             else {
-                return Err(QqMusicLyricDocumentField::Timing);
+                malformed = true;
+                break;
             };
             let end = cursor + 1 + relative_end;
-            match parse_lrc_timestamp(&raw_line[cursor + 1..end])? {
-                Some(start_ms) => starts.push(start_ms),
-                None if starts.is_empty() => break,
-                None => return Err(QqMusicLyricDocumentField::Timing),
+            match parse_lrc_timestamp(&raw_line[cursor + 1..end]) {
+                Err(QqMusicLyricDocumentField::Timing) => {
+                    malformed = true;
+                    break;
+                }
+                Err(error) => return Err(error),
+                Ok(Some(start_ms)) => starts.push(start_ms),
+                Ok(None) if starts.is_empty() => break,
+                Ok(None) => {
+                    malformed = true;
+                    break;
+                }
             }
             cursor = end + 1;
+        }
+        if malformed {
+            omitted_line_count = omitted_line_count
+                .checked_add(1)
+                .ok_or(QqMusicLyricDocumentField::SafetyLimit)?;
+            continue;
         }
         if starts.is_empty() {
             continue;
@@ -888,7 +965,7 @@ fn parse_lrc(document: &str) -> Result<Vec<QqMusicAuxiliaryLyricLine>, QqMusicLy
             });
         }
     }
-    Ok(lines)
+    Ok((lines, omitted_line_count))
 }
 
 fn parse_lrc_timestamp(value: &str) -> Result<Option<u32>, QqMusicLyricDocumentField> {

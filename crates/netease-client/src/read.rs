@@ -48,6 +48,16 @@ pub struct CommentsPage {
     pub omitted_latest: u32,
 }
 
+pub struct RelatedTracks {
+    pub items: Vec<Song>,
+    pub omitted: u32,
+}
+
+pub struct NewSongs {
+    pub items: Vec<Song>,
+    pub omitted: u32,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NewSongArea {
     All,
@@ -170,7 +180,7 @@ impl<T: Transport> NeteaseClient<T> {
     ///
     /// # Errors
     /// Invalid seeds, duplicate/seed rows, oversized data and upstream failures stop.
-    pub async fn related_tracks(&self, seed: u64) -> Result<Vec<Song>, Error> {
+    pub async fn related_tracks(&self, seed: u64) -> Result<RelatedTracks, Error> {
         id(seed)?;
         let (value, _) = self
             .request(
@@ -180,17 +190,12 @@ impl<T: Transport> NeteaseClient<T> {
                 None,
             )
             .await?;
-        let items: Vec<Song> = decode(
-            value
-                .get("songs")
-                .cloned()
-                .ok_or(Error::ResponseShapeMismatch)?,
+        let (items, omitted) = decode_song_collection(
+            value.get("songs").ok_or(Error::ResponseShapeMismatch)?,
+            MAX_RELATED_TRACKS,
+            Some(seed),
         )?;
-        if items.len() > MAX_RELATED_TRACKS {
-            return Err(Error::ResponseBound);
-        }
-        validate_songs(&items, Some(seed))?;
-        Ok(items)
+        Ok(RelatedTracks { items, omitted })
     }
 
     /// One bounded whole-response new-song category. The upstream operation
@@ -198,7 +203,7 @@ impl<T: Transport> NeteaseClient<T> {
     ///
     /// # Errors
     /// Malformed/duplicate/oversized rows and upstream failures stop.
-    pub async fn new_songs(&self, area: NewSongArea) -> Result<Vec<Song>, Error> {
+    pub async fn new_songs(&self, area: NewSongArea) -> Result<NewSongs, Error> {
         let (value, _) = self
             .request(
                 "/api/v1/discovery/new/songs",
@@ -207,17 +212,12 @@ impl<T: Transport> NeteaseClient<T> {
                 None,
             )
             .await?;
-        let items: Vec<Song> = decode(
-            value
-                .get("data")
-                .cloned()
-                .ok_or(Error::ResponseShapeMismatch)?,
+        let (items, omitted) = decode_song_collection(
+            value.get("data").ok_or(Error::ResponseShapeMismatch)?,
+            MAX_NEW_SONGS,
+            None,
         )?;
-        if items.len() > MAX_NEW_SONGS {
-            return Err(Error::ResponseBound);
-        }
-        validate_songs(&items, None)?;
-        Ok(items)
+        Ok(NewSongs { items, omitted })
     }
 
     /// One true offset page of new Album releases for a protocol-native area.
@@ -318,13 +318,31 @@ fn decode_comments(value: &Value, maximum: usize) -> Result<(Vec<Comment>, u32),
     Ok((items, omitted))
 }
 
-fn validate_songs(items: &[Song], excluded: Option<u64>) -> Result<(), Error> {
+fn decode_song_collection(
+    value: &Value,
+    maximum: usize,
+    excluded: Option<u64>,
+) -> Result<(Vec<Song>, u32), Error> {
+    let rows = value.as_array().ok_or(Error::ResponseShapeMismatch)?;
+    if rows.len() > maximum {
+        return Err(Error::ResponseBound);
+    }
+    let mut items = Vec::with_capacity(rows.len());
     let mut seen = std::collections::HashSet::new();
-    for item in items {
-        item.validate()?;
+    let mut omitted = 0_u32;
+    for row in rows {
+        let item = match crate::catalog::collection_song(row) {
+            Ok(item) => item,
+            Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         if Some(item.id) == excluded || !seen.insert(item.id) {
             return Err(Error::ResponseShapeMismatch);
         }
+        items.push(item);
     }
-    Ok(())
+    Ok((items, omitted))
 }

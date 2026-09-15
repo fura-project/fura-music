@@ -77,6 +77,7 @@ pub enum QqMusicUserPlaylistLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicUserPlaylistLoad {
     pub playlists: Vec<LibraryPlaylistSummary>,
+    pub omitted_playlist_count: u32,
     pub failure: Option<QqMusicUserPlaylistLoadFailure>,
 }
 
@@ -85,6 +86,7 @@ impl fmt::Debug for QqMusicUserPlaylistLoad {
         formatter
             .debug_struct("QqMusicUserPlaylistLoad")
             .field("playlist_count", &self.playlists.len())
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("failure", &self.failure)
             .finish()
     }
@@ -168,11 +170,16 @@ pub fn begin_qq_music_user_playlist_load(provider_id: String) -> QqMusicUserPlay
 }
 
 fn map_load(
-    result: Result<Vec<music_domain::PlaylistSummary>, UserLibraryError>,
+    result: Result<music_domain::UserPlaylistsCollection, UserLibraryError>,
 ) -> QqMusicUserPlaylistLoad {
     match result {
-        Ok(playlists) => QqMusicUserPlaylistLoad {
-            playlists: playlists.iter().map(bridge_playlist_summary).collect(),
+        Ok(collection) => QqMusicUserPlaylistLoad {
+            playlists: collection
+                .playlists()
+                .iter()
+                .map(bridge_playlist_summary)
+                .collect(),
+            omitted_playlist_count: collection.omitted_playlist_count(),
             failure: None,
         },
         Err(error) => failed_load(map_error(error)),
@@ -182,6 +189,7 @@ fn map_load(
 const fn failed_load(failure: QqMusicUserPlaylistLoadFailure) -> QqMusicUserPlaylistLoad {
     QqMusicUserPlaylistLoad {
         playlists: Vec::new(),
+        omitted_playlist_count: 0,
         failure: Some(failure),
     }
 }
@@ -580,6 +588,7 @@ mod tests {
     use music_domain::{
         AlbumId, AlbumSummary, ArtistId, ArtistSummary, PlaylistId, PlaylistOwnership,
         PlaylistPurpose, PlaylistSummary, PlaylistTracksPage, ProviderId, TrackId, TrackSummary,
+        UserPlaylistsCollection,
     };
     use provider_api::UserLibraryError;
 
@@ -611,9 +620,10 @@ mod tests {
             .expect("favorite summary")
             .with_ownership(PlaylistOwnership::Saved);
 
-        let mapped = map_load(Ok(vec![summary, favorite]));
+        let mapped = map_load(Ok(UserPlaylistsCollection::new(vec![summary, favorite], 1)));
 
         assert_eq!(mapped.playlists.len(), 2);
+        assert_eq!(mapped.omitted_playlist_count, 1);
         assert_eq!(mapped.playlists[0].provider_id, "qq-music");
         assert_eq!(mapped.playlists[0].opaque_id, "owned:7001:201");
         assert_eq!(mapped.playlists[0].title, "must-not-leak");

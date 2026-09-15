@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::Deserialize;
+use serde_json::Value;
 
 use crate::{Credential, HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicClient};
 
@@ -148,8 +149,10 @@ where
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicFavoriteAlbumsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_album_count: u32,
     albums: Vec<QqMusicAlbumSummary>,
 }
 
@@ -157,6 +160,11 @@ impl QqMusicFavoriteAlbumsPage {
     #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
     }
 
     #[must_use]
@@ -170,6 +178,11 @@ impl QqMusicFavoriteAlbumsPage {
     }
 
     #[must_use]
+    pub const fn omitted_album_count(&self) -> u32 {
+        self.omitted_album_count
+    }
+
+    #[must_use]
     pub fn albums(&self) -> &[QqMusicAlbumSummary] {
         &self.albums
     }
@@ -180,8 +193,10 @@ impl fmt::Debug for QqMusicFavoriteAlbumsPage {
         formatter
             .debug_struct("QqMusicFavoriteAlbumsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_album_count", &self.omitted_album_count)
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -247,7 +262,7 @@ struct FavoriteAlbumsResponse {
 
 #[derive(Deserialize)]
 struct FavoriteAlbumsData {
-    albumlist: Option<Vec<RawFavoriteAlbum>>,
+    albumlist: Option<Vec<Value>>,
     totalalbum: Option<u32>,
     has_more: Option<RawHasMore>,
 }
@@ -323,15 +338,31 @@ fn map_response<E>(
     {
         return Err(QqMusicFavoriteAlbumsError::InvalidPagination);
     }
-    let albums = raw_albums
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_album(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut albums = Vec::with_capacity(raw_albums.len());
+    let mut omitted_album_count = 0_u32;
+    for (index, value) in raw_albums.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawFavoriteAlbum>(value)
+            .map_err(|_| QqMusicFavoriteAlbumsError::InvalidAlbum {
+                index,
+                field: FavoriteAlbumField::AlbumId,
+            })
+            .and_then(|album| map_album(album, index));
+        match mapped {
+            Ok(album) => albums.push(album),
+            Err(QqMusicFavoriteAlbumsError::InvalidAlbum { .. }) => {
+                omitted_album_count = omitted_album_count
+                    .checked_add(1)
+                    .ok_or(QqMusicFavoriteAlbumsError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicFavoriteAlbumsPage {
         offset,
+        next_offset: page_end,
         total,
         has_more,
+        omitted_album_count,
         albums,
     })
 }
@@ -379,7 +410,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{FAVORITE_ALBUMS_URL, FavoriteAlbumField, QqMusicFavoriteAlbumsError};
+    use super::{FAVORITE_ALBUMS_URL, QqMusicFavoriteAlbumsError};
     use crate::{
         Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
@@ -558,12 +589,12 @@ mod tests {
             1,
             &json!(0),
         )));
-        assert_eq!(
-            invalid.favorite_albums(&credential(), 0, 20).await,
-            Err(QqMusicFavoriteAlbumsError::InvalidAlbum {
-                index: 0,
-                field: FavoriteAlbumField::AlbumMid
-            })
-        );
+        let partial = invalid
+            .favorite_albums(&credential(), 0, 20)
+            .await
+            .expect("malformed collection row must be isolated");
+        assert!(partial.albums().is_empty());
+        assert_eq!(partial.omitted_album_count(), 1);
+        assert_eq!(partial.next_offset(), 1);
     }
 }

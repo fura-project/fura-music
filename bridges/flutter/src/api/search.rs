@@ -48,6 +48,7 @@ pub struct QqMusicTrackSearchPageLoad {
     pub page: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_item_count: u32,
     pub items: Vec<QqMusicTrackSearchItem>,
     pub failure: Option<QqMusicTrackSearchPageLoadFailure>,
 }
@@ -59,6 +60,7 @@ impl fmt::Debug for QqMusicTrackSearchPageLoad {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_item_count", &self.omitted_item_count)
             .field("item_count", &self.items.len())
             .field("failure", &self.failure)
             .finish()
@@ -185,6 +187,7 @@ fn map_load(
             page: page.page(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_item_count: page.omitted_item_count(),
             items: page
                 .items()
                 .iter()
@@ -205,6 +208,7 @@ const fn failed_load(failure: QqMusicTrackSearchPageLoadFailure) -> QqMusicTrack
         page: 0,
         total: 0,
         has_more: false,
+        omitted_item_count: 0,
         items: Vec::new(),
         failure: Some(failure),
     }
@@ -233,6 +237,7 @@ pub struct QqMusicArtistSearchPageLoad {
     pub page: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_artist_count: u32,
     pub artists: Vec<CatalogArtistSummary>,
     pub failure: Option<QqMusicArtistSearchPageLoadFailure>,
 }
@@ -244,6 +249,7 @@ impl fmt::Debug for QqMusicArtistSearchPageLoad {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_artist_count", &self.omitted_artist_count)
             .field("artist_count", &self.artists.len())
             .field("failure", &self.failure)
             .finish()
@@ -372,6 +378,7 @@ fn map_artist_load(
             page: page.page(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_artist_count: page.omitted_artist_count(),
             artists: page.artists().iter().map(bridge_artist_summary).collect(),
             failure: None,
         },
@@ -386,6 +393,7 @@ const fn failed_artist_load(
         page: 0,
         total: 0,
         has_more: false,
+        omitted_artist_count: 0,
         artists: Vec::new(),
         failure: Some(failure),
     }
@@ -414,6 +422,7 @@ pub struct QqMusicAlbumSearchPageLoad {
     pub page: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_album_count: u32,
     pub albums: Vec<CatalogAlbumSummary>,
     pub failure: Option<QqMusicAlbumSearchPageLoadFailure>,
 }
@@ -425,6 +434,7 @@ impl fmt::Debug for QqMusicAlbumSearchPageLoad {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_album_count", &self.omitted_album_count)
             .field("album_count", &self.albums.len())
             .field("failure", &self.failure)
             .finish()
@@ -553,6 +563,7 @@ fn map_album_load(
             page: page.page(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_album_count: page.omitted_album_count(),
             albums: page.albums().iter().map(bridge_album_summary).collect(),
             failure: None,
         },
@@ -567,6 +578,7 @@ const fn failed_album_load(
         page: 0,
         total: 0,
         has_more: false,
+        omitted_album_count: 0,
         albums: Vec::new(),
         failure: Some(failure),
     }
@@ -595,6 +607,7 @@ pub struct QqMusicPlaylistSearchPageLoad {
     pub page: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_playlist_count: u32,
     pub playlists: Vec<LibraryPlaylistSummary>,
     pub failure: Option<QqMusicPlaylistSearchPageLoadFailure>,
 }
@@ -606,6 +619,7 @@ impl fmt::Debug for QqMusicPlaylistSearchPageLoad {
             .field("page", &self.page)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())
             .field("failure", &self.failure)
             .finish()
@@ -736,6 +750,7 @@ fn map_playlist_load(
             page: page.page(),
             total: page.total(),
             has_more: page.has_more(),
+            omitted_playlist_count: page.omitted_playlist_count(),
             playlists: page
                 .playlists()
                 .iter()
@@ -754,6 +769,7 @@ const fn failed_playlist_load(
         page: 0,
         total: 0,
         has_more: false,
+        omitted_playlist_count: 0,
         playlists: Vec::new(),
         failure: Some(failure),
     }

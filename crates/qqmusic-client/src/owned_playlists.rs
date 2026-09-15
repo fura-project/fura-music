@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::credential::is_credential_rejection_code;
 use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
@@ -173,12 +174,18 @@ impl fmt::Debug for QqMusicOwnedPlaylist {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicOwnedPlaylists {
     playlists: Vec<QqMusicOwnedPlaylist>,
+    omitted_playlist_count: u32,
 }
 
 impl QqMusicOwnedPlaylists {
     #[must_use]
     pub fn playlists(&self) -> &[QqMusicOwnedPlaylist] {
         &self.playlists
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
     }
 }
 
@@ -187,6 +194,7 @@ impl fmt::Debug for QqMusicOwnedPlaylists {
         formatter
             .debug_struct("QqMusicOwnedPlaylists")
             .field("playlist_count", &self.playlists.len())
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .finish()
     }
 }
@@ -323,7 +331,7 @@ struct OwnedPlaylistsResult {
 #[derive(Deserialize)]
 struct OwnedPlaylistsData {
     #[serde(rename = "v_playlist")]
-    playlists: Option<Vec<RawOwnedPlaylist>>,
+    playlists: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -377,34 +385,28 @@ fn map_response<E>(
         .playlists
         .ok_or(QqMusicOwnedPlaylistsError::MissingPlaylists)?;
     let mut playlists = Vec::with_capacity(raw_playlists.len());
-    for (index, raw) in raw_playlists.into_iter().enumerate() {
-        let playlist_id = raw.tid.filter(|value| *value != 0).ok_or(
-            QqMusicOwnedPlaylistsError::InvalidPlaylist {
-                index,
-                field: OwnedPlaylistField::PlaylistId,
-            },
-        )?;
-        let directory_id = raw.directory_id.filter(|value| *value != 0).ok_or(
-            QqMusicOwnedPlaylistsError::InvalidPlaylist {
-                index,
-                field: OwnedPlaylistField::DirectoryId,
-            },
-        )?;
-        let name = raw.name.filter(|value| !value.trim().is_empty()).ok_or(
-            QqMusicOwnedPlaylistsError::InvalidPlaylist {
-                index,
-                field: OwnedPlaylistField::Name,
-            },
-        )?;
-        playlists.push(QqMusicOwnedPlaylist {
-            playlist_id,
-            directory_id,
-            name,
-            cover_url: normalized_https_image_uri(raw.cover_url),
-            track_count: raw.track_count,
-        });
+    let mut omitted_playlist_count = 0_u32;
+    for value in raw_playlists {
+        let mapped = serde_json::from_value::<RawOwnedPlaylist>(value)
+            .ok()
+            .and_then(|raw| {
+                Some(QqMusicOwnedPlaylist {
+                    playlist_id: raw.tid.filter(|value| *value != 0)?,
+                    directory_id: raw.directory_id.filter(|value| *value != 0)?,
+                    name: raw.name.filter(|value| !value.trim().is_empty())?,
+                    cover_url: normalized_https_image_uri(raw.cover_url),
+                    track_count: raw.track_count,
+                })
+            });
+        match mapped {
+            Some(playlist) => playlists.push(playlist),
+            None => omitted_playlist_count = omitted_playlist_count.saturating_add(1),
+        }
     }
-    Ok(QqMusicOwnedPlaylists { playlists })
+    Ok(QqMusicOwnedPlaylists {
+        playlists,
+        omitted_playlist_count,
+    })
 }
 
 #[cfg(test)]
@@ -416,7 +418,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{OwnedPlaylistField, QqMusicOwnedPlaylistsError};
+    use super::QqMusicOwnedPlaylistsError;
     use crate::{
         Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
@@ -532,7 +534,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_missing_identity_fields_without_leaking_playlist_content() {
+    async fn omits_missing_identity_fields_without_leaking_playlist_content() {
         let client = QqMusicClient::new(FakeTransport::new(&json!({
             "code": 0,
             "music.musicasset.PlaylistBaseRead": {
@@ -546,18 +548,13 @@ mod tests {
             }
         })));
 
-        let error = client
+        let collection = client
             .owned_playlists(&credential())
             .await
-            .expect_err("missing playlist ID must fail");
-        assert!(matches!(
-            error,
-            QqMusicOwnedPlaylistsError::InvalidPlaylist {
-                index: 0,
-                field: OwnedPlaylistField::PlaylistId,
-            }
-        ));
-        assert!(!format!("{error:?}").contains("must-not-leak"));
+            .expect("missing playlist identity is omitted");
+        assert!(collection.playlists().is_empty());
+        assert_eq!(collection.omitted_playlist_count(), 1);
+        assert!(!format!("{collection:?}").contains("must-not-leak"));
     }
 
     #[tokio::test]

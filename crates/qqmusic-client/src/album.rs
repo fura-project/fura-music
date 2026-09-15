@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicArtistSummary, QqMusicClient,
@@ -165,8 +166,10 @@ where
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicAlbumTrackPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<QqMusicTrackSummary>,
 }
 
@@ -179,6 +182,16 @@ impl QqMusicAlbumTrackPage {
     #[must_use]
     pub const fn total(&self) -> u32 {
         self.total
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -197,8 +210,10 @@ impl fmt::Debug for QqMusicAlbumTrackPage {
         formatter
             .debug_struct("QqMusicAlbumTrackPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -342,7 +357,7 @@ struct AlbumTracksData {
     #[serde(rename = "totalNum")]
     total: Option<u32>,
     #[serde(rename = "songList")]
-    tracks: Option<Vec<RawAlbumTrackWrapper>>,
+    tracks: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -361,9 +376,9 @@ struct RawAlbumTrack {
     #[serde(rename = "type")]
     song_type: Option<u32>,
     interval: Option<u32>,
-    singer: Option<Vec<RawArtist>>,
-    album: Option<RawAlbum>,
-    file: Option<RawFile>,
+    singer: Option<Value>,
+    album: Option<Value>,
+    file: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -433,21 +448,40 @@ fn map_response<E>(
     if has_more && raw_tracks.is_empty() {
         return Err(QqMusicAlbumTracksError::InvalidPagination);
     }
-    let tracks = raw_tracks
-        .into_iter()
-        .enumerate()
-        .map(|(index, wrapper)| {
-            let raw = wrapper.track.ok_or(QqMusicAlbumTracksError::InvalidTrack {
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    let mut omitted_track_count = 0_u32;
+    for (index, value) in raw_tracks.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawAlbumTrackWrapper>(value)
+            .map_err(|_| QqMusicAlbumTracksError::InvalidTrack {
                 index,
                 field: AlbumTrackField::Wrapper,
-            })?;
-            map_track(raw, index)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+            })
+            .and_then(|wrapper| {
+                wrapper.track.ok_or(QqMusicAlbumTracksError::InvalidTrack {
+                    index,
+                    field: AlbumTrackField::Wrapper,
+                })
+            })
+            .and_then(|raw| map_track(raw, index));
+        match mapped {
+            Ok(track) => tracks.push(track),
+            Err(
+                QqMusicAlbumTracksError::InvalidTrack { .. }
+                | QqMusicAlbumTracksError::InvalidArtist { .. },
+            ) => {
+                omitted_track_count = omitted_track_count
+                    .checked_add(1)
+                    .ok_or(QqMusicAlbumTracksError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicAlbumTrackPage {
         offset,
+        next_offset: end,
         total,
         has_more,
+        omitted_track_count,
         tracks,
     })
 }
@@ -470,7 +504,11 @@ fn map_track<E>(
                 index,
                 field: AlbumTrackField::SongMid,
             })?;
-    let file_media_mid = match raw.file.and_then(|file| file.media_mid) {
+    let file_media_mid = match raw
+        .file
+        .and_then(|file| serde_json::from_value::<RawFile>(file).ok())
+        .and_then(|file| file.media_mid)
+    {
         Some(value) if value.trim().is_empty() => None,
         Some(value) if safe_mid(&value) => Some(value),
         Some(_) => {
@@ -491,32 +529,31 @@ fn map_track<E>(
         index,
         field: AlbumTrackField::SongType,
     })?;
-    let raw_artists = raw.singer.ok_or(QqMusicAlbumTracksError::InvalidTrack {
-        index,
-        field: AlbumTrackField::Artists,
-    })?;
-    let artists = raw_artists
+    let artists = raw
+        .singer
+        .and_then(|artists| artists.as_array().cloned())
+        .unwrap_or_default()
         .into_iter()
-        .enumerate()
-        .map(|(artist_index, artist)| {
-            let name = nonblank(artist.name).ok_or(QqMusicAlbumTracksError::InvalidArtist {
-                track_index: index,
-                artist_index,
-            })?;
-            Ok(QqMusicArtistSummary::new(
+        .filter_map(|value| {
+            let artist = serde_json::from_value::<RawArtist>(value).ok()?;
+            let name = nonblank(artist.name)?;
+            Some(QqMusicArtistSummary::new(
                 artist.id.filter(|value| *value != 0),
                 nonblank(artist.mid),
                 name,
             ))
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    let album = raw.album.map(|album| {
-        QqMusicAlbumSummary::new(
-            album.id.filter(|value| *value != 0),
-            nonblank(album.mid).or_else(|| nonblank(album.pmid)),
-            nonblank(album.title).or_else(|| nonblank(album.name)),
-        )
-    });
+        .collect();
+    let album = raw
+        .album
+        .and_then(|album| serde_json::from_value::<RawAlbum>(album).ok())
+        .map(|album| {
+            QqMusicAlbumSummary::new(
+                album.id.filter(|value| *value != 0),
+                nonblank(album.mid).or_else(|| nonblank(album.pmid)),
+                nonblank(album.title).or_else(|| nonblank(album.name)),
+            )
+        });
     Ok(QqMusicTrackSummary::new(
         track_id,
         song_mid,

@@ -9,12 +9,13 @@ use music_domain::{
     ArtistAlbumsPage, ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat,
     AudioQuality, FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, MusicVideoId,
     MusicVideoQuality, MusicVideoSource, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage,
-    NewSongCategory, NewSongCollection, PlaylistId, PlaylistOwnership, PlaylistPurpose,
+    NewSongCategory, NewSongCollection, OwnedPlaylistsCollection, PersonalizedPlaylistsCollection,
+    PersonalizedTracksCollection, PlaylistId, PlaylistOwnership, PlaylistPurpose,
     PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
-    RankingGroup, RankingId, RankingSummary, RankingTracksPage, RecommendedPlaylistsPage,
-    ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics, TimedLyricSegment,
-    TrackComment, TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem, TrackSearchPage,
-    TrackSummary,
+    RankingGroup, RankingGroupsCollection, RankingId, RankingSummary, RankingTracksPage,
+    RecommendedPlaylistsPage, RelatedTracksCollection, ResolvedMediaSource, SynchronizedLyricLine,
+    SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage,
+    TrackId, TrackSearchItem, TrackSearchPage, TrackSummary, UserPlaylistsCollection,
 };
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
@@ -838,18 +839,22 @@ where
         let catalog_mid = parse_album_mid(&requested_id)?;
         let response = self.client().album_tracks(catalog_mid, offset, size).await;
         let page = response.as_ref().map_err(map_album_tracks_error)?;
-        let tracks = page
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| CatalogError::InvalidResponse)?;
-        Ok(AlbumTracksPage::new(
-            page.offset(),
-            page.total(),
-            page.has_more(),
-            tracks,
-        ))
+        let mut omitted = page.omitted_track_count();
+        let mut tracks = Vec::with_capacity(page.tracks().len());
+        for track in page.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(
+            AlbumTracksPage::new(page.offset(), page.total(), page.has_more(), tracks)
+                .with_integrity(page.next_offset(), omitted),
+        )
     }
 }
 
@@ -908,18 +913,22 @@ where
             }
         };
         let page = response.as_ref().map_err(map_artist_tracks_error)?;
-        let tracks = page
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| CatalogError::InvalidResponse)?;
-        Ok(ArtistTracksPage::new(
-            page.offset(),
-            page.total(),
-            page.has_more(),
-            tracks,
-        ))
+        let mut omitted = page.omitted_track_count();
+        let mut tracks = Vec::with_capacity(page.tracks().len());
+        for track in page.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(
+            ArtistTracksPage::new(page.offset(), page.total(), page.has_more(), tracks)
+                .with_integrity(page.next_offset(), omitted),
+        )
     }
 }
 
@@ -938,18 +947,22 @@ where
         let (_, artist_mid) = parse_artist_identity(&requested_id)?;
         let response = self.client().artist_albums(artist_mid, offset, size).await;
         let page = response.as_ref().map_err(map_artist_albums_error)?;
-        let albums = page
-            .albums()
-            .iter()
-            .map(map_album_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| CatalogError::InvalidResponse)?;
-        Ok(ArtistAlbumsPage::new(
-            page.offset(),
-            page.total(),
-            page.has_more(),
-            albums,
-        ))
+        let mut omitted = page.omitted_album_count();
+        let mut albums = Vec::with_capacity(page.albums().len());
+        for album in page.albums() {
+            match map_album_summary(album) {
+                Ok(album) => albums.push(album),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(
+            ArtistAlbumsPage::new(page.offset(), page.total(), page.has_more(), albums)
+                .with_integrity(page.next_offset(), omitted),
+        )
     }
 }
 
@@ -970,31 +983,34 @@ where
             .new_album_releases(map_new_album_region(region), offset, size)
             .await;
         let page = response.as_ref().map_err(map_new_albums_error)?;
-        let releases = page
-            .releases()
-            .iter()
-            .map(|release| {
-                let album = map_album_summary(release.album())?;
-                let artists = release
-                    .artists()
-                    .iter()
-                    .map(map_artist_summary)
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(NewAlbumRelease::new(
+        let mut omitted = page.omitted_release_count();
+        let mut releases = Vec::with_capacity(page.releases().len());
+        for release in page.releases() {
+            match map_album_summary(release.album()) {
+                Ok(album) => releases.push(NewAlbumRelease::new(
                     album,
-                    artists,
+                    release
+                        .artists()
+                        .iter()
+                        .filter_map(|artist| map_artist_summary(artist).ok())
+                        .collect(),
                     release.release_date().map(str::to_owned),
-                ))
-            })
-            .collect::<Result<Vec<_>, ()>>()
-            .map_err(|()| CatalogError::InvalidResponse)?;
+                )),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+            }
+        }
         Ok(NewAlbumReleasesPage::new(
             region,
             page.offset(),
             page.total(),
             page.has_more(),
             releases,
-        ))
+        )
+        .with_integrity(page.next_offset(), omitted))
     }
 }
 
@@ -1010,13 +1026,19 @@ where
             .new_songs(map_new_song_category(category))
             .await;
         let collection = response.as_ref().map_err(map_new_songs_error)?;
-        let tracks = collection
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| CatalogError::InvalidResponse)?;
-        Ok(NewSongCollection::new(category, tracks))
+        let mut omitted = collection.omitted_track_count();
+        let mut tracks = Vec::with_capacity(collection.tracks().len());
+        for track in collection.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(NewSongCollection::new(category, tracks).with_omitted_track_count(omitted))
     }
 }
 
@@ -1033,16 +1055,23 @@ where
     ) -> Result<RecommendedPlaylistsPage, Self::Error> {
         let response = self.client().recommended_playlists(offset, size).await;
         let page = response.as_ref().map_err(map_recommendations_error)?;
-        let playlists = page
-            .playlists()
-            .iter()
-            .map(map_recommended_playlist)
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(RecommendedPlaylistsPage::new(
-            page.offset(),
-            page.has_more(),
-            playlists,
-        ))
+        let mut omitted = page.omitted_playlist_count();
+        let mut playlists = Vec::with_capacity(page.playlists().len());
+        for playlist in page.playlists() {
+            match map_recommended_playlist(playlist) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(RecommendationError::InvalidResponse) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(RecommendationError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(
+            RecommendedPlaylistsPage::new(page.offset(), page.has_more(), playlists)
+                .with_integrity(page.next_offset(), omitted),
+        )
     }
 }
 
@@ -1077,7 +1106,7 @@ where
 {
     type Error = PersonalizedPlaylistsError;
 
-    async fn personalized_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
+    async fn personalized_playlists(&self) -> Result<PersonalizedPlaylistsCollection, Self::Error> {
         let candidate = self.authenticated_personalized_playlists_credential()?;
         let response = self.client().personalized_playlists(&candidate).await;
         self.finish_personalized_playlists_await(
@@ -1087,12 +1116,23 @@ where
                 Err(QqMusicPersonalizedPlaylistsError::Rejected { .. })
             ),
         )?;
-        response
+        let collection = response
             .as_ref()
-            .map_err(map_personalized_playlists_error)?
-            .iter()
-            .map(map_personalized_playlist)
-            .collect()
+            .map_err(map_personalized_playlists_error)?;
+        let mut omitted = collection.omitted_playlist_count();
+        let mut playlists = Vec::with_capacity(collection.playlists().len());
+        for playlist in collection.playlists() {
+            match map_personalized_playlist(playlist) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(PersonalizedPlaylistsError::InvalidResponse) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(PersonalizedPlaylistsError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(PersonalizedPlaylistsCollection::new(playlists, omitted))
     }
 }
 
@@ -1102,7 +1142,7 @@ where
 {
     type Error = PersonalizedTracksError;
 
-    async fn personalized_tracks(&self) -> Result<Vec<TrackSummary>, Self::Error> {
+    async fn personalized_tracks(&self) -> Result<PersonalizedTracksCollection, Self::Error> {
         let candidate = self.authenticated_personalized_tracks_credential()?;
         let response = self.client().personalized_tracks(&candidate).await;
         self.finish_personalized_tracks_await(
@@ -1112,14 +1152,20 @@ where
                 Err(QqMusicPersonalizedTracksError::Rejected { .. })
             ),
         )?;
-        response
-            .as_ref()
-            .map_err(map_personalized_tracks_error)?
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| PersonalizedTracksError::InvalidResponse)
+        let collection = response.as_ref().map_err(map_personalized_tracks_error)?;
+        let mut omitted = collection.omitted_track_count();
+        let mut tracks = Vec::with_capacity(collection.tracks().len());
+        for track in collection.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(PersonalizedTracksError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(PersonalizedTracksCollection::new(tracks, omitted))
     }
 }
 
@@ -1129,20 +1175,25 @@ where
 {
     type Error = RelatedTracksError;
 
-    async fn related_tracks(&self, seed: TrackId) -> Result<Vec<TrackSummary>, Self::Error> {
+    async fn related_tracks(&self, seed: TrackId) -> Result<RelatedTracksCollection, Self::Error> {
         let identity =
             parse_track_identity(&seed).map_err(|()| RelatedTracksError::InvalidTrack)?;
         let song_id = identity.song_id.ok_or(RelatedTracksError::InvalidTrack)?;
-        self.client()
-            .related_tracks(song_id)
-            .await
-            .as_ref()
-            .map_err(map_related_tracks_error)?
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| RelatedTracksError::InvalidResponse)
+        let result = self.client().related_tracks(song_id).await;
+        let response = result.as_ref().map_err(map_related_tracks_error)?;
+        let mut omitted = response.omitted_track_count();
+        let mut tracks = Vec::with_capacity(response.tracks().len());
+        for track in response.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(RelatedTracksError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(RelatedTracksCollection::new(tracks, omitted))
     }
 }
 
@@ -1160,13 +1211,20 @@ where
             matches!(response, Err(QqMusicRadarError::Rejected { .. })),
         )?;
         let page = response.as_ref().map_err(map_radar_error)?;
-        let tracks = page
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| RadarRecommendationError::InvalidResponse)?;
-        Ok(RadarTrackPage::new(page.page(), page.has_more(), tracks))
+        let mut omitted = page.omitted_track_count();
+        let mut tracks = Vec::with_capacity(page.tracks().len());
+        for track in page.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(RadarRecommendationError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(RadarTrackPage::new(page.page(), page.has_more(), tracks)
+            .with_omitted_track_count(omitted))
     }
 }
 
@@ -1176,11 +1234,12 @@ where
 {
     type Error = CatalogError;
 
-    async fn ranking_groups(&self) -> Result<Vec<RankingGroup>, Self::Error> {
+    async fn ranking_groups(&self) -> Result<RankingGroupsCollection, Self::Error> {
         let response = self.client().ranking_groups().await;
-        response
+        let collection = response.as_ref().map_err(map_rankings_error)?;
+        let groups = collection
+            .groups()
             .as_ref()
-            .map_err(map_rankings_error)?
             .iter()
             .map(|group| {
                 let rankings = group
@@ -1191,7 +1250,11 @@ where
                 RankingGroup::new(group.title(), rankings)
                     .map_err(|_| CatalogError::InvalidResponse)
             })
-            .collect()
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(RankingGroupsCollection::new(
+            groups,
+            collection.omitted_ranking_count(),
+        ))
     }
 
     async fn ranking_tracks(
@@ -1204,19 +1267,26 @@ where
         let response = self.client().ranking_tracks(top_id, offset, size).await;
         let page = response.as_ref().map_err(map_rankings_error)?;
         let ranking = map_ranking_summary(page.ranking())?;
-        let tracks = page
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| CatalogError::InvalidResponse)?;
+        let mut omitted = page.omitted_track_count();
+        let mut tracks = Vec::with_capacity(page.tracks().len());
+        for track in page.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(CatalogError::InvalidResponse)?;
+                }
+            }
+        }
         Ok(RankingTracksPage::new(
             ranking,
             page.offset(),
             page.total(),
             page.has_more(),
             tracks,
-        ))
+        )
+        .with_raw_cursor(page.next_offset(), omitted))
     }
 }
 
@@ -1226,7 +1296,7 @@ where
 {
     type Error = UserLibraryError;
 
-    async fn owned_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
+    async fn owned_playlists(&self) -> Result<OwnedPlaylistsCollection, Self::Error> {
         let candidate = self.authenticated_credential()?;
 
         let response = self.client().owned_playlists(&candidate).await;
@@ -1234,16 +1304,21 @@ where
             &candidate,
             matches!(response, Err(QqMusicOwnedPlaylistsError::Rejected { .. })),
         )?;
-        response
-            .as_ref()
-            .map_err(map_owned_playlists_error)
-            .and_then(|playlists| {
-                playlists
-                    .playlists()
-                    .iter()
-                    .map(map_owned_playlist)
-                    .collect::<Result<Vec<_>, _>>()
-            })
+        let collection = response.as_ref().map_err(map_owned_playlists_error)?;
+        let mut omitted = collection.omitted_playlist_count();
+        let mut playlists = Vec::with_capacity(collection.playlists().len());
+        for playlist in collection.playlists() {
+            match map_owned_playlist(playlist) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(UserLibraryError::InvalidResponse) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(UserLibraryError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(OwnedPlaylistsCollection::new(playlists, omitted))
     }
 }
 
@@ -1253,7 +1328,7 @@ where
 {
     type Error = UserLibraryError;
 
-    async fn user_playlists(&self) -> Result<Vec<PlaylistSummary>, Self::Error> {
+    async fn user_playlists(&self) -> Result<UserPlaylistsCollection, Self::Error> {
         let candidate = self.authenticated_credential()?;
         if candidate
             .session_secrets()
@@ -1272,11 +1347,20 @@ where
             ),
         )?;
         let owned = owned_response.as_ref().map_err(map_owned_playlists_error)?;
+        let mut omitted = owned.omitted_playlist_count();
         let mut seen = HashSet::with_capacity(owned.playlists().len());
         let mut playlists = Vec::with_capacity(owned.playlists().len());
         for playlist in owned.playlists() {
             seen.insert(playlist.playlist_id());
-            playlists.push(map_owned_playlist(playlist)?);
+            match map_owned_playlist(playlist) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(UserLibraryError::InvalidResponse) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(UserLibraryError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
         }
 
         let mut offset = 0_u32;
@@ -1295,22 +1379,29 @@ where
             let page = favorite_response
                 .as_ref()
                 .map_err(map_favorite_playlists_error)?;
-            let page_length = u32::try_from(page.playlists().len())
-                .map_err(|_| UserLibraryError::InvalidResponse)?;
+            omitted = omitted
+                .checked_add(page.omitted_playlist_count())
+                .ok_or(UserLibraryError::InvalidResponse)?;
             for playlist in page.playlists() {
                 if seen.insert(playlist.playlist_id()) {
-                    playlists.push(map_favorite_playlist(playlist)?);
+                    match map_favorite_playlist(playlist) {
+                        Ok(playlist) => playlists.push(playlist),
+                        Err(UserLibraryError::InvalidResponse) => {
+                            omitted = omitted
+                                .checked_add(1)
+                                .ok_or(UserLibraryError::InvalidResponse)?;
+                        }
+                        Err(error) => return Err(error),
+                    }
                 }
             }
             if !page.has_more() {
-                return Ok(playlists);
+                return Ok(UserPlaylistsCollection::new(playlists, omitted));
             }
-            if page_length == 0 {
+            if page.next_offset() <= offset {
                 return Err(UserLibraryError::InvalidResponse);
             }
-            offset = offset
-                .checked_add(page_length)
-                .ok_or(UserLibraryError::InvalidResponse)?;
+            offset = page.next_offset();
         }
 
         Err(UserLibraryError::InvalidResponse)
@@ -1338,18 +1429,22 @@ where
             matches!(response, Err(QqMusicFavoriteAlbumsError::Rejected { .. })),
         )?;
         let page = response.as_ref().map_err(map_favorite_albums_error)?;
-        let albums = page
-            .albums()
-            .iter()
-            .map(map_album_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| UserLibraryError::InvalidResponse)?;
-        Ok(FavoriteAlbumsPage::new(
-            page.offset(),
-            page.total(),
-            page.has_more(),
-            albums,
-        ))
+        let mut omitted = page.omitted_album_count();
+        let mut albums = Vec::with_capacity(page.albums().len());
+        for album in page.albums() {
+            match map_album_summary(album) {
+                Ok(album) => albums.push(album),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(UserLibraryError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(
+            FavoriteAlbumsPage::new(page.offset(), page.total(), page.has_more(), albums)
+                .with_integrity(page.next_offset(), omitted),
+        )
     }
 }
 
@@ -1374,18 +1469,22 @@ where
             matches!(response, Err(QqMusicFavoriteArtistsError::Rejected { .. })),
         )?;
         let page = response.as_ref().map_err(map_favorite_artists_error)?;
-        let artists = page
-            .artists()
-            .iter()
-            .map(map_favorite_artist_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| UserLibraryError::InvalidResponse)?;
-        Ok(FavoriteArtistsPage::new(
-            page.offset(),
-            page.total(),
-            page.has_more(),
-            artists,
-        ))
+        let mut omitted = page.omitted_artist_count();
+        let mut artists = Vec::with_capacity(page.artists().len());
+        for artist in page.artists() {
+            match map_favorite_artist_summary(artist) {
+                Ok(artist) => artists.push(artist),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(UserLibraryError::InvalidResponse)?;
+                }
+            }
+        }
+        Ok(
+            FavoriteArtistsPage::new(page.offset(), page.total(), page.has_more(), artists)
+                .with_integrity(page.next_offset(), omitted),
+        )
     }
 }
 
@@ -1440,18 +1539,24 @@ where
         {
             return Err(UserLibraryError::InvalidResponse);
         }
-        let tracks = page
-            .tracks()
-            .iter()
-            .map(map_track_summary)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|()| UserLibraryError::InvalidResponse)?;
+        let mut omitted = page.omitted_track_count();
+        let mut tracks = Vec::with_capacity(page.tracks().len());
+        for track in page.tracks() {
+            match map_track_summary(track) {
+                Ok(track) => tracks.push(track),
+                Err(()) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(UserLibraryError::InvalidResponse)?;
+                }
+            }
+        }
         Ok(PlaylistTracksPage::new_with_cursor(
             page.offset(),
             page.next_offset(),
             page.total(),
             page.has_more(),
-            page.omitted_track_count(),
+            omitted,
             tracks,
         ))
     }
@@ -1833,23 +1938,38 @@ where
         let song_id = route.song_id.ok_or(CommentsError::InvalidResponse)?;
         let response = self.client().track_comments(song_id, offset, size).await;
         let page = response.as_ref().map_err(map_comments_error)?;
-        let hot_comments = page
-            .hot_comments()
-            .iter()
-            .map(map_comment)
-            .collect::<Result<Vec<_>, _>>()?;
-        let latest_comments = page
-            .latest_comments()
-            .iter()
-            .map(map_comment)
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut omitted_hot = page.omitted_hot_comment_count();
+        let mut hot_comments = Vec::with_capacity(page.hot_comments().len());
+        for comment in page.hot_comments() {
+            match map_comment(comment) {
+                Ok(comment) => hot_comments.push(comment),
+                Err(_) => {
+                    omitted_hot = omitted_hot
+                        .checked_add(1)
+                        .ok_or(CommentsError::InvalidResponse)?;
+                }
+            }
+        }
+        let mut omitted_latest = page.omitted_latest_comment_count();
+        let mut latest_comments = Vec::with_capacity(page.latest_comments().len());
+        for comment in page.latest_comments() {
+            match map_comment(comment) {
+                Ok(comment) => latest_comments.push(comment),
+                Err(_) => {
+                    omitted_latest = omitted_latest
+                        .checked_add(1)
+                        .ok_or(CommentsError::InvalidResponse)?;
+                }
+            }
+        }
         Ok(TrackCommentsPage::new(
             page.offset(),
             page.total(),
             page.has_more(),
             hot_comments,
             latest_comments,
-        ))
+        )
+        .with_integrity(page.next_offset(), omitted_hot, omitted_latest))
     }
 }
 
@@ -2792,22 +2912,18 @@ fn map_lyrics(
             .iter()
             .map(|line| (line.start_ms(), line.text())),
     );
-    let lines = lyrics
-        .original()
-        .iter()
-        .map(|line| {
-            let segments = line
-                .segments()
-                .iter()
-                .map(|segment| {
-                    TimedLyricSegment::new(
-                        segment.text(),
-                        segment.start_ms(),
-                        segment.duration_ms(),
-                    )
+    let mut lines = Vec::with_capacity(lyrics.original().len());
+    let mut omitted_line_count = lyrics.omitted_line_count();
+    for line in lyrics.original() {
+        let segments = line
+            .segments()
+            .iter()
+            .map(|segment| {
+                TimedLyricSegment::new(segment.text(), segment.start_ms(), segment.duration_ms())
                     .map_err(|_| LyricsError::InvalidResponse)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            })
+            .collect::<Result<Vec<_>, _>>();
+        let mapped = segments.and_then(|segments| {
             SynchronizedLyricLine::new(line.text(), line.start_ms(), line.duration_ms(), segments)
                 .map(|mapped| {
                     mapped
@@ -2815,9 +2931,20 @@ fn map_lyrics(
                         .with_romanization(auxiliary_at(&romanizations, line.start_ms()))
                 })
                 .map_err(|_| LyricsError::InvalidResponse)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    SynchronizedLyrics::new(track_id, lines).map_err(|_| LyricsError::InvalidResponse)
+        });
+        match mapped {
+            Ok(line) => lines.push(line),
+            Err(LyricsError::InvalidResponse) => {
+                omitted_line_count = omitted_line_count
+                    .checked_add(1)
+                    .ok_or(LyricsError::InvalidResponse)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    SynchronizedLyrics::new(track_id, lines)
+        .map(|lyrics| lyrics.with_omitted_line_count(omitted_line_count))
+        .map_err(|_| LyricsError::InvalidResponse)
 }
 
 fn unique_auxiliary_by_start<'a>(
@@ -2877,6 +3004,7 @@ fn map_favorite_playlists_error<E>(error: &QqMusicFavoritePlaylistsError<E>) -> 
         | QqMusicFavoritePlaylistsError::MissingTotal
         | QqMusicFavoritePlaylistsError::MissingHasMore
         | QqMusicFavoritePlaylistsError::InvalidHasMore
+        | QqMusicFavoritePlaylistsError::InvalidPagination
         | QqMusicFavoritePlaylistsError::InvalidPlaylist { .. } => {
             UserLibraryError::InvalidResponse
         }

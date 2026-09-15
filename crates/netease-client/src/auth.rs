@@ -490,7 +490,21 @@ pub struct Creator {
 }
 pub struct UserPlaylistPage {
     pub items: Vec<UserPlaylist>,
+    pub next: u32,
     pub more: bool,
+    pub omitted: u32,
+}
+pub struct DailyTracks {
+    pub items: Vec<Song>,
+    pub omitted: u32,
+}
+pub struct PersonalFmTracks {
+    pub items: Vec<Song>,
+    pub omitted: u32,
+}
+pub struct PersonalizedPlaylists {
+    pub items: Vec<Playlist>,
+    pub omitted: u32,
 }
 impl<T: Transport> NeteaseClient<T> {
     async fn mobile_login_request(
@@ -793,20 +807,39 @@ impl<T: Transport> NeteaseClient<T> {
                 Some(&credential.cookie()),
             )
             .await?;
-        let items: Vec<UserPlaylist> = decode(
-            v.get("playlist")
-                .cloned()
-                .ok_or(Error::ResponseShapeMismatch)?,
-        )?;
+        let rows = v
+            .get("playlist")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
         let more: bool = decode(v.get("more").cloned().ok_or(Error::ResponseShapeMismatch)?)?;
-        if items.len() > size as usize || (more && items.is_empty()) {
+        if rows.len() > size as usize || (more && rows.is_empty()) {
             return Err(Error::ResponseShapeMismatch);
         }
-        for p in &items {
-            p.playlist.validate()?;
-            id(p.creator.id)?;
+        let next = offset
+            .checked_add(u32::try_from(rows.len()).map_err(|_| Error::ResponseBound)?)
+            .ok_or(Error::ResponseBound)?;
+        let mut items = Vec::with_capacity(rows.len());
+        let mut omitted = 0_u32;
+        for row in rows {
+            let mapped = decode::<UserPlaylist>(row.clone()).and_then(|item| {
+                item.playlist.validate()?;
+                id(item.creator.id)?;
+                Ok(item)
+            });
+            match mapped {
+                Ok(item) => items.push(item),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error),
+            }
         }
-        Ok(UserPlaylistPage { items, more })
+        Ok(UserPlaylistPage {
+            items,
+            next,
+            more,
+            omitted,
+        })
     }
     /// Unordered liked identities for membership checks only. Display order
     /// comes from the real Liked playlist's ordered `trackIds` table.
@@ -837,7 +870,7 @@ impl<T: Transport> NeteaseClient<T> {
     }
     /// # Errors
     /// Bounded authenticated daily songs; there is no invented playlist identity.
-    pub async fn daily_tracks(&self, credential: &Credential) -> Result<Vec<Song>, Error> {
+    pub async fn daily_tracks(&self, credential: &Credential) -> Result<DailyTracks, Error> {
         let (v, _) = self
             .request(
                 "/api/v3/discovery/recommend/songs",
@@ -846,22 +879,16 @@ impl<T: Transport> NeteaseClient<T> {
                 Some(&credential.cookie()),
             )
             .await?;
-        let songs: Vec<Song> = decode(
+        let (items, omitted) = decode_song_rows(
             v.pointer("/data/dailySongs")
-                .cloned()
                 .ok_or(Error::ResponseShapeMismatch)?,
+            100,
         )?;
-        if songs.len() > 100 {
-            return Err(Error::ResponseBound);
-        }
-        for s in &songs {
-            s.validate()?;
-        }
-        Ok(songs)
+        Ok(DailyTracks { items, omitted })
     }
     /// # Errors
     /// One Personal FM batch only; no autoplay/feedback or hidden continuation.
-    pub async fn personal_fm(&self, credential: &Credential) -> Result<Vec<Song>, Error> {
+    pub async fn personal_fm(&self, credential: &Credential) -> Result<PersonalFmTracks, Error> {
         let (v, _) = self
             .request(
                 "/api/v1/radio/get",
@@ -870,15 +897,29 @@ impl<T: Transport> NeteaseClient<T> {
                 Some(&credential.cookie()),
             )
             .await?;
-        let songs: Vec<Song> = decode(v.get("data").cloned().ok_or(Error::ResponseShapeMismatch)?)?;
-        if songs.len() > 10 {
-            return Err(Error::ResponseBound);
-        }
-        for s in &songs {
-            s.validate()?;
-        }
-        Ok(songs)
+        let (items, omitted) =
+            decode_song_rows(v.get("data").ok_or(Error::ResponseShapeMismatch)?, 10)?;
+        Ok(PersonalFmTracks { items, omitted })
     }
+}
+
+fn decode_song_rows(value: &Value, maximum: usize) -> Result<(Vec<Song>, u32), Error> {
+    let rows = value.as_array().ok_or(Error::ResponseShapeMismatch)?;
+    if rows.len() > maximum {
+        return Err(Error::ResponseBound);
+    }
+    let mut items = Vec::with_capacity(rows.len());
+    let mut omitted = 0_u32;
+    for row in rows {
+        match crate::catalog::collection_song(row) {
+            Ok(item) => items.push(item),
+            Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok((items, omitted))
 }
 
 #[cfg(test)]
@@ -1215,7 +1256,7 @@ impl<T: Transport> NeteaseClient<T> {
     pub async fn personalized_playlists(
         &self,
         credential: &Credential,
-    ) -> Result<Vec<Playlist>, Error> {
+    ) -> Result<PersonalizedPlaylists, Error> {
         let (v, _) = self
             .request(
                 "/api/v1/discovery/recommend/resource",
@@ -1224,18 +1265,25 @@ impl<T: Transport> NeteaseClient<T> {
                 Some(&credential.cookie()),
             )
             .await?;
-        let items: Vec<Playlist> = decode(
-            v.get("recommend")
-                .cloned()
-                .ok_or(Error::ResponseShapeMismatch)?,
-        )?;
-        if items.len() > 100 {
+        let rows = v
+            .get("recommend")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        if rows.len() > 100 {
             return Err(Error::ResponseBound);
         }
-        for p in &items {
-            p.validate()?;
+        let mut items = Vec::with_capacity(rows.len());
+        let mut omitted = 0_u32;
+        for row in rows {
+            match crate::catalog::collection_playlist(row) {
+                Ok(item) => items.push(item),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error),
+            }
         }
-        Ok(items)
+        Ok(PersonalizedPlaylists { items, omitted })
     }
     /// # Errors
     /// One bounded favorite-Album page; missing totals and contradictory continuation stop.

@@ -75,6 +75,7 @@ async fn descriptor_and_search_are_truthful_and_provider_scoped() {
         .unwrap();
     assert!(page.has_more());
     assert_eq!(page.total(), 2);
+    assert_eq!(page.omitted_item_count(), 0);
     let item = &page.items()[0];
     assert_eq!(item.track().id().provider(), &provider_id());
     assert_eq!(item.track().id().opaque(), "123");

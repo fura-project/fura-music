@@ -61,6 +61,30 @@ pub struct Page<T> {
     pub more: bool,
     pub omitted: u32,
 }
+pub struct RankingsCollection {
+    pub items: Vec<Playlist>,
+    pub omitted: u32,
+}
+pub struct RecommendationsCollection {
+    pub items: Vec<Playlist>,
+    pub omitted: u32,
+}
+
+impl std::ops::Deref for RankingsCollection {
+    type Target = [Playlist];
+
+    fn deref(&self) -> &Self::Target {
+        &self.items
+    }
+}
+
+impl std::ops::Deref for RecommendationsCollection {
+    type Target = [Playlist];
+
+    fn deref(&self) -> &Self::Target {
+        &self.items
+    }
+}
 #[derive(Clone, Copy)]
 pub enum SearchKind {
     Tracks,
@@ -329,7 +353,7 @@ fn collection_artists(value: Option<&Value>) -> Result<Vec<Artist>, Error> {
 /// Decode one Track row in a collection context. Canonical Track identity and
 /// title stay strict; malformed nested navigation/presentation data is dropped
 /// instead of being promoted into an invented identity.
-pub(crate) fn collection_song(value: Value) -> Result<Song, Error> {
+pub(crate) fn collection_song(value: &Value) -> Result<Song, Error> {
     let object = value.as_object().ok_or(Error::ResponseShapeMismatch)?;
     let song_id = object
         .get("id")
@@ -514,7 +538,7 @@ impl<T: Transport> NeteaseClient<T> {
         let mut items = Vec::with_capacity(page.items.len());
         let mut omitted = 0_u32;
         for value in page.items {
-            match collection_song(value) {
+            match collection_song(&value) {
                 Ok(item) => items.push(item),
                 Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
                     omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
@@ -608,6 +632,10 @@ impl<T: Transport> NeteaseClient<T> {
 
     /// Collection-only detail decode. Canonical valid rows are returned while
     /// malformed rows remain observable as missing selected identities.
+    ///
+    /// # Errors
+    /// Rejects invalid/duplicate IDs, oversized responses, unrelated returned
+    /// IDs, malformed outer containers, or upstream failures.
     pub async fn authenticated_collection_songs(
         &self,
         credential: &Credential,
@@ -684,7 +712,7 @@ impl<T: Transport> NeteaseClient<T> {
         let mut songs = Vec::with_capacity(rows.len());
         let mut seen = std::collections::HashSet::new();
         for row in rows {
-            let Ok(song) = collection_song(row.clone()) else {
+            let Ok(song) = collection_song(row) else {
                 continue;
             };
             if !unique.contains(&song.id) || !seen.insert(song.id) {
@@ -820,7 +848,7 @@ impl<T: Transport> NeteaseClient<T> {
         let mut seen = std::collections::HashSet::new();
         let mut omitted = 0_u32;
         for row in song_rows {
-            let song = collection_song(row.clone()).ok().filter(|song| {
+            let song = collection_song(row).ok().filter(|song| {
                 (!song.album.has_catalog_identity() || song.album.id == album)
                     && seen.insert(song.id)
             });
@@ -864,7 +892,7 @@ impl<T: Transport> NeteaseClient<T> {
         let mut items = Vec::with_capacity(rows.len());
         let mut omitted = 0_u32;
         for row in rows {
-            match collection_song(row.clone()) {
+            match collection_song(row) {
                 Ok(song) => items.push(song),
                 Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
                     omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
@@ -942,22 +970,34 @@ impl<T: Transport> NeteaseClient<T> {
     }
     /// # Errors
     /// Rejects missing/oversized ranking lists or malformed summary fields.
-    pub async fn rankings(&self) -> Result<Vec<Playlist>, Error> {
+    pub async fn rankings(&self) -> Result<RankingsCollection, Error> {
         let (v, _) = self.request("/api/toplist", json!({}), false, None).await?;
-        let items: Vec<Playlist> =
-            decode(v.get("list").cloned().ok_or(Error::ResponseShapeMismatch)?)?;
-        if items.len() > 100 {
+        let rows = v
+            .get("list")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        if rows.len() > 100 {
             return Err(Error::ResponseBound);
         }
-        for p in &items {
-            p.validate()?;
+        let mut items = Vec::with_capacity(rows.len());
+        let mut omitted = 0_u32;
+        let mut seen = std::collections::HashSet::new();
+        for row in rows {
+            match collection_playlist(row) {
+                Ok(item) if seen.insert(item.id) => items.push(item),
+                Ok(_) => return Err(Error::ResponseShapeMismatch),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error),
+            }
         }
-        Ok(items)
+        Ok(RankingsCollection { items, omitted })
     }
     /// One bounded, unpaged public recommendation sample.
     /// # Errors
     /// Rejects invalid bounds, malformed or oversized output and upstream failures.
-    pub async fn recommendations(&self, size: u32) -> Result<Vec<Playlist>, Error> {
+    pub async fn recommendations(&self, size: u32) -> Result<RecommendationsCollection, Error> {
         bounds(0, size)?;
         let (v, _) = self
             .request(
@@ -967,18 +1007,25 @@ impl<T: Transport> NeteaseClient<T> {
                 None,
             )
             .await?;
-        let items: Vec<Playlist> = decode(
-            v.get("result")
-                .cloned()
-                .ok_or(Error::ResponseShapeMismatch)?,
-        )?;
-        if items.len() > size as usize {
+        let rows = v
+            .get("result")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        if rows.len() > size as usize {
             return Err(Error::ResponseBound);
         }
-        for p in &items {
-            p.validate()?;
+        let mut items = Vec::with_capacity(rows.len());
+        let mut omitted = 0_u32;
+        for row in rows {
+            match collection_playlist(row) {
+                Ok(item) => items.push(item),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(Error::ResponseBound)?;
+                }
+                Err(error) => return Err(error),
+            }
         }
-        Ok(items)
+        Ok(RecommendationsCollection { items, omitted })
     }
 }
 pub(crate) fn check_page(

@@ -47,8 +47,11 @@ impl fmt::Debug for TrackCommentSummary {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicTrackCommentPageLoad {
     pub offset: u32,
+    pub next_offset: u32,
     pub total: u32,
     pub has_more: bool,
+    pub omitted_hot_comment_count: u32,
+    pub omitted_latest_comment_count: u32,
     pub hot_comments: Vec<TrackCommentSummary>,
     pub latest_comments: Vec<TrackCommentSummary>,
     pub failure: Option<QqMusicTrackCommentPageLoadFailure>,
@@ -59,8 +62,14 @@ impl fmt::Debug for QqMusicTrackCommentPageLoad {
         formatter
             .debug_struct("QqMusicTrackCommentPageLoad")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_hot_comment_count", &self.omitted_hot_comment_count)
+            .field(
+                "omitted_latest_comment_count",
+                &self.omitted_latest_comment_count,
+            )
             .field("hot_comment_count", &self.hot_comments.len())
             .field("latest_comment_count", &self.latest_comments.len())
             .field("failure", &self.failure)
@@ -187,8 +196,11 @@ fn map_load(result: Result<TrackCommentsPage, CommentsError>) -> QqMusicTrackCom
     };
     QqMusicTrackCommentPageLoad {
         offset: page.offset(),
+        next_offset: page.next_offset(),
         total: page.total(),
         has_more: page.has_more(),
+        omitted_hot_comment_count: page.omitted_hot_comment_count(),
+        omitted_latest_comment_count: page.omitted_latest_comment_count(),
         hot_comments,
         latest_comments,
         failure: None,
@@ -211,8 +223,11 @@ fn bridge_comment(comment: &TrackComment) -> Result<TrackCommentSummary, ()> {
 const fn failed_load(failure: QqMusicTrackCommentPageLoadFailure) -> QqMusicTrackCommentPageLoad {
     QqMusicTrackCommentPageLoad {
         offset: 0,
+        next_offset: 0,
         total: 0,
         has_more: false,
+        omitted_hot_comment_count: 0,
+        omitted_latest_comment_count: 0,
         hot_comments: Vec::new(),
         latest_comments: Vec::new(),
         failure: Some(failure),

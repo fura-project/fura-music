@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicArtistSummary, QqMusicClient,
@@ -262,6 +263,42 @@ pub struct QqMusicRankingGroup {
     rankings: Vec<QqMusicRankingSummary>,
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicRankingGroupsCollection {
+    groups: Vec<QqMusicRankingGroup>,
+    omitted_ranking_count: u32,
+}
+
+impl QqMusicRankingGroupsCollection {
+    #[must_use]
+    pub fn groups(&self) -> &[QqMusicRankingGroup] {
+        &self.groups
+    }
+
+    #[must_use]
+    pub const fn omitted_ranking_count(&self) -> u32 {
+        self.omitted_ranking_count
+    }
+}
+
+impl fmt::Debug for QqMusicRankingGroupsCollection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRankingGroupsCollection")
+            .field("group_count", &self.groups.len())
+            .field("omitted_ranking_count", &self.omitted_ranking_count)
+            .finish()
+    }
+}
+
+impl std::ops::Deref for QqMusicRankingGroupsCollection {
+    type Target = [QqMusicRankingGroup];
+
+    fn deref(&self) -> &Self::Target {
+        &self.groups
+    }
+}
+
 impl QqMusicRankingGroup {
     #[must_use]
     pub fn title(&self) -> &str {
@@ -288,8 +325,10 @@ impl fmt::Debug for QqMusicRankingGroup {
 pub struct QqMusicRankingTrackPage {
     ranking: QqMusicRankingSummary,
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_track_count: u32,
     tracks: Vec<QqMusicTrackSummary>,
 }
 
@@ -305,6 +344,11 @@ impl QqMusicRankingTrackPage {
     }
 
     #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
     pub const fn total(&self) -> u32 {
         self.total
     }
@@ -312,6 +356,11 @@ impl QqMusicRankingTrackPage {
     #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 
     #[must_use]
@@ -326,8 +375,10 @@ impl fmt::Debug for QqMusicRankingTrackPage {
             .debug_struct("QqMusicRankingTrackPage")
             .field("ranking", &self.ranking)
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -345,7 +396,7 @@ where
     /// failures distinct without retaining editorial content.
     pub async fn ranking_groups(
         &self,
-    ) -> Result<Vec<QqMusicRankingGroup>, QqMusicRankingsError<T::Error>> {
+    ) -> Result<QqMusicRankingGroupsCollection, QqMusicRankingsError<T::Error>> {
         let body = serde_json::to_vec(&RankingListRequest::new())
             .map_err(|_| QqMusicRankingsError::Serialize)?;
         let response = self
@@ -496,7 +547,7 @@ struct RankingListData {
 struct RawRankingGroup {
     #[serde(rename = "groupName")]
     title: Option<String>,
-    toplist: Option<Vec<RawRankingSummary>>,
+    toplist: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -516,7 +567,7 @@ struct RankingDetailResult {
 struct RankingDetailData {
     data: Option<RawRankingSummary>,
     #[serde(rename = "songInfoList")]
-    tracks: Option<Vec<RawRankingTrack>>,
+    tracks: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -543,9 +594,9 @@ struct RawRankingTrack {
     #[serde(rename = "type")]
     song_type: Option<u32>,
     interval: Option<u32>,
-    singer: Option<Vec<RawArtist>>,
-    album: Option<RawAlbum>,
-    file: Option<RawFile>,
+    singer: Option<Value>,
+    album: Option<Value>,
+    file: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -571,31 +622,35 @@ struct RawAlbum {
 
 fn map_list_response<E>(
     envelope: RankingListResponse,
-) -> Result<Vec<QqMusicRankingGroup>, QqMusicRankingsError<E>> {
+) -> Result<QqMusicRankingGroupsCollection, QqMusicRankingsError<E>> {
     let data = checked_list_data(envelope)?;
-    data.group
-        .ok_or(QqMusicRankingsError::MissingGroups)?
-        .into_iter()
-        .enumerate()
-        .map(|(group_index, raw)| {
-            let title = nonblank(raw.title).ok_or(QqMusicRankingsError::InvalidGroup {
-                index: group_index,
-                field: RankingGroupField::Title,
-            })?;
-            let raw_rankings = raw.toplist.ok_or(QqMusicRankingsError::InvalidGroup {
+    let raw_groups = data.group.ok_or(QqMusicRankingsError::MissingGroups)?;
+    let mut groups = Vec::with_capacity(raw_groups.len());
+    let mut omitted_ranking_count = 0_u32;
+    for (group_index, raw) in raw_groups.into_iter().enumerate() {
+        let title = nonblank(raw.title).ok_or(QqMusicRankingsError::InvalidGroup {
+            index: group_index,
+            field: RankingGroupField::Title,
+        })?;
+        let raw_rankings = raw.toplist.ok_or(QqMusicRankingsError::InvalidGroup {
+            index: group_index,
+            field: RankingGroupField::Rankings,
+        })?;
+        if raw_rankings.is_empty() {
+            return Err(QqMusicRankingsError::InvalidGroup {
                 index: group_index,
                 field: RankingGroupField::Rankings,
-            })?;
-            if raw_rankings.is_empty() {
-                return Err(QqMusicRankingsError::InvalidGroup {
-                    index: group_index,
-                    field: RankingGroupField::Rankings,
-                });
-            }
-            let rankings = raw_rankings
-                .into_iter()
-                .enumerate()
-                .map(|(ranking_index, ranking)| {
+            });
+        }
+        let mut rankings = Vec::with_capacity(raw_rankings.len());
+        for (ranking_index, value) in raw_rankings.into_iter().enumerate() {
+            let mapped = serde_json::from_value::<RawRankingSummary>(value)
+                .map_err(|_| QqMusicRankingsError::InvalidRanking {
+                    group_index,
+                    ranking_index,
+                    field: RankingField::Id,
+                })
+                .and_then(|ranking| {
                     map_ranking_summary(ranking).map_err(|field| {
                         QqMusicRankingsError::InvalidRanking {
                             group_index,
@@ -603,11 +658,29 @@ fn map_list_response<E>(
                             field,
                         }
                     })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(QqMusicRankingGroup { title, rankings })
-        })
-        .collect()
+                });
+            match mapped {
+                Ok(ranking) => rankings.push(ranking),
+                Err(QqMusicRankingsError::InvalidRanking { .. }) => {
+                    omitted_ranking_count = omitted_ranking_count
+                        .checked_add(1)
+                        .ok_or(QqMusicRankingsError::InvalidPagination)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        if rankings.is_empty() {
+            return Err(QqMusicRankingsError::InvalidGroup {
+                index: group_index,
+                field: RankingGroupField::Rankings,
+            });
+        }
+        groups.push(QqMusicRankingGroup { title, rankings });
+    }
+    Ok(QqMusicRankingGroupsCollection {
+        groups,
+        omitted_ranking_count,
+    })
 }
 
 fn checked_list_data<E>(
@@ -676,16 +749,35 @@ fn map_detail_response<E>(
     if has_more && raw_tracks.is_empty() {
         return Err(QqMusicRankingsError::InvalidPagination);
     }
-    let tracks = raw_tracks
-        .into_iter()
-        .enumerate()
-        .map(|(index, track)| map_track(track, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    let mut omitted_track_count = 0_u32;
+    for (index, value) in raw_tracks.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawRankingTrack>(value)
+            .map_err(|_| QqMusicRankingsError::InvalidTrack {
+                index,
+                field: RankingTrackField::TrackId,
+            })
+            .and_then(|track| map_track(track, index));
+        match mapped {
+            Ok(track) => tracks.push(track),
+            Err(
+                QqMusicRankingsError::InvalidTrack { .. }
+                | QqMusicRankingsError::InvalidArtist { .. },
+            ) => {
+                omitted_track_count = omitted_track_count
+                    .checked_add(1)
+                    .ok_or(QqMusicRankingsError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicRankingTrackPage {
         ranking,
         offset: requested_offset,
+        next_offset: end,
         total,
         has_more,
+        omitted_track_count,
         tracks,
     })
 }
@@ -721,14 +813,13 @@ fn map_track<E>(
         index,
         field: RankingTrackField::SongMid,
     })?;
-    let file_media_mid = match raw.file.and_then(|file| file.media_mid) {
+    let file_media_mid = match raw
+        .file
+        .and_then(|file| serde_json::from_value::<RawFile>(file).ok())
+        .and_then(|file| file.media_mid)
+    {
         Some(value) if value.trim().is_empty() => None,
-        Some(value) => Some(
-            safe_mid(Some(value)).ok_or(QqMusicRankingsError::InvalidTrack {
-                index,
-                field: RankingTrackField::FileMediaMid,
-            })?,
-        ),
+        Some(value) => safe_mid(Some(value)),
         None => None,
     };
     let title = nonblank(raw.title).or_else(|| nonblank(raw.name)).ok_or(
@@ -741,32 +832,31 @@ fn map_track<E>(
         index,
         field: RankingTrackField::SongType,
     })?;
-    let raw_artists = raw.singer.ok_or(QqMusicRankingsError::InvalidTrack {
-        index,
-        field: RankingTrackField::Artists,
-    })?;
-    let artists = raw_artists
+    let artists = raw
+        .singer
+        .and_then(|artists| artists.as_array().cloned())
+        .unwrap_or_default()
         .into_iter()
-        .enumerate()
-        .map(|(artist_index, artist)| {
-            let name = nonblank(artist.name).ok_or(QqMusicRankingsError::InvalidArtist {
-                track_index: index,
-                artist_index,
-            })?;
-            Ok(QqMusicArtistSummary::new(
+        .filter_map(|value| {
+            let artist = serde_json::from_value::<RawArtist>(value).ok()?;
+            let name = nonblank(artist.name)?;
+            Some(QqMusicArtistSummary::new(
                 artist.id.filter(|value| *value != 0),
                 nonblank(artist.mid),
                 name,
             ))
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    let album = raw.album.map(|album| {
-        QqMusicAlbumSummary::new(
-            album.id.filter(|value| *value != 0),
-            nonblank(album.mid).or_else(|| nonblank(album.pmid)),
-            nonblank(album.title).or_else(|| nonblank(album.name)),
-        )
-    });
+        .collect();
+    let album = raw
+        .album
+        .and_then(|album| serde_json::from_value::<RawAlbum>(album).ok())
+        .map(|album| {
+            QqMusicAlbumSummary::new(
+                album.id.filter(|value| *value != 0),
+                nonblank(album.mid).or_else(|| nonblank(album.pmid)),
+                nonblank(album.title).or_else(|| nonblank(album.name)),
+            )
+        });
     Ok(QqMusicTrackSummary::new(
         track_id,
         song_mid,
@@ -984,22 +1074,18 @@ mod tests {
             "type": 0,
             "singer": []
         }]);
-        let error = QqMusicClient::new(RankingTransport::new(&ranking_detail_json(
+        let page = QqMusicClient::new(RankingTransport::new(&ranking_detail_json(
             62001,
             1,
             &invalid_track,
         )))
         .ranking_tracks(62001, 0, 5)
         .await
-        .expect_err("invalid Track MID");
-        assert!(matches!(
-            error,
-            QqMusicRankingsError::InvalidTrack {
-                field: RankingTrackField::SongMid,
-                ..
-            }
-        ));
-        assert!(!format!("{error:?} {error}").contains("must-not-leak"));
+        .expect("invalid ranking track is omitted");
+        assert!(page.tracks().is_empty());
+        assert_eq!(page.next_offset(), 1);
+        assert_eq!(page.omitted_track_count(), 1);
+        assert!(!format!("{page:?}").contains("must-not-leak"));
     }
 
     fn ranking_list_json() -> Value {

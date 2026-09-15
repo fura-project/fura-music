@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::credential::is_credential_rejection_code;
 use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
@@ -41,6 +42,7 @@ pub enum QqMusicFavoritePlaylistsError<E> {
     MissingTotal,
     MissingHasMore,
     InvalidHasMore,
+    InvalidPagination,
     InvalidPlaylist {
         index: usize,
         field: FavoritePlaylistField,
@@ -79,6 +81,7 @@ impl<E> fmt::Debug for QqMusicFavoritePlaylistsError<E> {
             Self::MissingTotal => formatter.write_str("MissingTotal"),
             Self::MissingHasMore => formatter.write_str("MissingHasMore"),
             Self::InvalidHasMore => formatter.write_str("InvalidHasMore"),
+            Self::InvalidPagination => formatter.write_str("InvalidPagination"),
             Self::InvalidPlaylist { index, field } => formatter
                 .debug_struct("InvalidPlaylist")
                 .field("index", index)
@@ -135,6 +138,9 @@ impl<E> fmt::Display for QqMusicFavoritePlaylistsError<E> {
             }
             Self::InvalidHasMore => {
                 formatter.write_str("favorite-playlist continuation flag is invalid")
+            }
+            Self::InvalidPagination => {
+                formatter.write_str("favorite-playlist pagination is invalid")
             }
             Self::InvalidPlaylist { index, field } => {
                 write!(
@@ -203,8 +209,10 @@ impl fmt::Debug for QqMusicFavoritePlaylist {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicFavoritePlaylistsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_playlist_count: u32,
     playlists: Vec<QqMusicFavoritePlaylist>,
 }
 
@@ -212,6 +220,11 @@ impl QqMusicFavoritePlaylistsPage {
     #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
     }
 
     #[must_use]
@@ -225,6 +238,11 @@ impl QqMusicFavoritePlaylistsPage {
     }
 
     #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+
+    #[must_use]
     pub fn playlists(&self) -> &[QqMusicFavoritePlaylist] {
         &self.playlists
     }
@@ -235,8 +253,10 @@ impl fmt::Debug for QqMusicFavoritePlaylistsPage {
         formatter
             .debug_struct("QqMusicFavoritePlaylistsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())
             .finish()
     }
@@ -394,7 +414,7 @@ struct FavoritePlaylistsResult {
 #[derive(Deserialize)]
 struct FavoritePlaylistsData {
     #[serde(rename = "v_list")]
-    playlists: Option<Vec<RawFavoritePlaylist>>,
+    playlists: Option<Vec<Value>>,
     total: Option<u32>,
     hasmore: Option<RawHasMore>,
 }
@@ -477,32 +497,36 @@ fn map_response<E>(
         .ok_or(QqMusicFavoritePlaylistsError::MissingHasMore)?
         .value()
         .ok_or(QqMusicFavoritePlaylistsError::InvalidHasMore)?;
+    let raw_count = u32::try_from(raw_playlists.len())
+        .map_err(|_| QqMusicFavoritePlaylistsError::InvalidPagination)?;
+    let next_offset = offset
+        .checked_add(raw_count)
+        .ok_or(QqMusicFavoritePlaylistsError::InvalidPagination)?;
     let mut playlists = Vec::with_capacity(raw_playlists.len());
-    for (index, raw) in raw_playlists.into_iter().enumerate() {
-        let playlist_id = raw.id.filter(|value| *value != 0).ok_or(
-            QqMusicFavoritePlaylistsError::InvalidPlaylist {
-                index,
-                field: FavoritePlaylistField::PlaylistId,
-            },
-        )?;
-        let name = raw.title.filter(|value| !value.trim().is_empty()).ok_or(
-            QqMusicFavoritePlaylistsError::InvalidPlaylist {
-                index,
-                field: FavoritePlaylistField::Name,
-            },
-        )?;
-        playlists.push(QqMusicFavoritePlaylist {
-            playlist_id,
-            name,
-            cover_url: normalized_https_image_uri(raw.cover_url),
-            track_count: raw.track_count,
-        });
+    let mut omitted_playlist_count = 0_u32;
+    for value in raw_playlists {
+        let mapped = serde_json::from_value::<RawFavoritePlaylist>(value)
+            .ok()
+            .and_then(|raw| {
+                Some(QqMusicFavoritePlaylist {
+                    playlist_id: raw.id.filter(|value| *value != 0)?,
+                    name: raw.title.filter(|value| !value.trim().is_empty())?,
+                    cover_url: normalized_https_image_uri(raw.cover_url),
+                    track_count: raw.track_count,
+                })
+            });
+        match mapped {
+            Some(playlist) => playlists.push(playlist),
+            None => omitted_playlist_count = omitted_playlist_count.saturating_add(1),
+        }
     }
 
     Ok(QqMusicFavoritePlaylistsPage {
         offset,
+        next_offset,
         total,
         has_more,
+        omitted_playlist_count,
         playlists,
     })
 }
@@ -516,7 +540,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{FavoritePlaylistField, QqMusicFavoritePlaylistsError};
+    use super::QqMusicFavoritePlaylistsError;
     use crate::{
         Credential, CredentialSessionSecrets, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
         LoginType, QqMusicClient,
@@ -708,7 +732,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_invalid_rows_without_leaking_playlist_content() {
+    async fn omits_invalid_rows_without_leaking_playlist_content() {
         let client = QqMusicClient::new(FakeTransport::new([json!({
             "code": 0,
             "music.musicasset.PlaylistFavRead": {
@@ -721,17 +745,13 @@ mod tests {
             }
         })]));
 
-        let error = client
+        let page = client
             .favorite_playlists_page(&credential(), 0, 100)
             .await
-            .expect_err("zero playlist identity must fail");
-        assert!(matches!(
-            error,
-            QqMusicFavoritePlaylistsError::InvalidPlaylist {
-                index: 0,
-                field: FavoritePlaylistField::PlaylistId,
-            }
-        ));
-        assert!(!format!("{error:?}").contains("must-not-leak"));
+            .expect("zero playlist identity is omitted");
+        assert!(page.playlists().is_empty());
+        assert_eq!(page.next_offset(), 1);
+        assert_eq!(page.omitted_playlist_count(), 1);
+        assert!(!format!("{page:?}").contains("must-not-leak"));
     }
 }

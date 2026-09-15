@@ -114,17 +114,20 @@ impl<T: Transport> TrackSearchProvider for KuGouProvider<T> {
             .search_tracks(&query, page, size)
             .await
             .map_err(map_error)?;
-        let items = page_result
-            .items
-            .into_iter()
-            .map(map_track)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(map_error)?;
-        Ok(TrackSearchPage::new(
-            page_result.page,
-            page_result.total,
-            page_result.more,
-            items,
-        ))
+        let mut omitted = page_result.omitted_item_count;
+        let mut items = Vec::with_capacity(page_result.items.len());
+        for source in page_result.items {
+            match map_track(source) {
+                Ok(item) => items.push(item),
+                Err(Error::ResponseShapeMismatch | Error::ResponseBound) => {
+                    omitted = omitted.checked_add(1).ok_or(SearchError::InvalidResponse)?;
+                }
+                Err(error) => return Err(map_error(error)),
+            }
+        }
+        Ok(
+            TrackSearchPage::new(page_result.page, page_result.total, page_result.more, items)
+                .with_omitted_item_count(omitted),
+        )
     }
 }

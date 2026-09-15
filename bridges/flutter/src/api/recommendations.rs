@@ -27,7 +27,9 @@ pub enum QqMusicRecommendedPlaylistPageLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicRecommendedPlaylistPageLoad {
     pub offset: u32,
+    pub next_offset: u32,
     pub has_more: bool,
+    pub omitted_playlist_count: u32,
     pub playlists: Vec<LibraryPlaylistSummary>,
     pub failure: Option<QqMusicRecommendedPlaylistPageLoadFailure>,
 }
@@ -37,7 +39,9 @@ impl fmt::Debug for QqMusicRecommendedPlaylistPageLoad {
         formatter
             .debug_struct("QqMusicRecommendedPlaylistPageLoad")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())
             .field("failure", &self.failure)
             .finish()
@@ -136,7 +140,9 @@ fn map_load(
     match result {
         Ok(page) => QqMusicRecommendedPlaylistPageLoad {
             offset: page.offset(),
+            next_offset: page.next_offset(),
             has_more: page.has_more(),
+            omitted_playlist_count: page.omitted_playlist_count(),
             playlists: page
                 .playlists()
                 .iter()
@@ -153,7 +159,9 @@ const fn failed_load(
 ) -> QqMusicRecommendedPlaylistPageLoad {
     QqMusicRecommendedPlaylistPageLoad {
         offset: 0,
+        next_offset: 0,
         has_more: false,
+        omitted_playlist_count: 0,
         playlists: Vec::new(),
         failure: Some(failure),
     }
@@ -188,6 +196,7 @@ pub enum QqMusicDailyRecommendationLoadFailure {
 pub struct QqMusicDailyRecommendationLoad {
     pub playlist: Option<LibraryPlaylistSummary>,
     pub tracks: Vec<LibraryTrackSummary>,
+    pub omitted_track_count: u32,
     pub failure: Option<QqMusicDailyRecommendationLoadFailure>,
 }
 
@@ -197,6 +206,7 @@ impl fmt::Debug for QqMusicDailyRecommendationLoad {
             .debug_struct("QqMusicDailyRecommendationLoad")
             .field("has_playlist", &self.playlist.is_some())
             .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("failure", &self.failure)
             .finish()
     }
@@ -308,6 +318,7 @@ fn map_daily_load(
         Ok(playlist) => QqMusicDailyRecommendationLoad {
             playlist: playlist.as_ref().map(bridge_playlist_summary),
             tracks: Vec::new(),
+            omitted_track_count: 0,
             failure: None,
         },
         Err(error) => failed_daily_load(map_daily_error(error)),
@@ -315,12 +326,17 @@ fn map_daily_load(
 }
 
 fn map_daily_tracks_load(
-    result: Result<Vec<music_domain::TrackSummary>, DailyRecommendationError>,
+    result: Result<music_domain::DailyTracksCollection, DailyRecommendationError>,
 ) -> QqMusicDailyRecommendationLoad {
     match result {
-        Ok(tracks) => QqMusicDailyRecommendationLoad {
+        Ok(collection) => QqMusicDailyRecommendationLoad {
             playlist: None,
-            tracks: tracks.iter().map(bridge_track_summary).collect(),
+            tracks: collection
+                .tracks()
+                .iter()
+                .map(bridge_track_summary)
+                .collect(),
+            omitted_track_count: collection.omitted_track_count(),
             failure: None,
         },
         Err(error) => failed_daily_load(map_daily_error(error)),
@@ -333,6 +349,7 @@ const fn failed_daily_load(
     QqMusicDailyRecommendationLoad {
         playlist: None,
         tracks: Vec::new(),
+        omitted_track_count: 0,
         failure: Some(failure),
     }
 }
@@ -372,6 +389,7 @@ pub enum QqMusicPersonalizedPlaylistsLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicPersonalizedPlaylistsLoad {
     pub playlists: Vec<LibraryPlaylistSummary>,
+    pub omitted_playlist_count: u32,
     pub failure: Option<QqMusicPersonalizedPlaylistsLoadFailure>,
 }
 
@@ -380,6 +398,7 @@ impl fmt::Debug for QqMusicPersonalizedPlaylistsLoad {
         formatter
             .debug_struct("QqMusicPersonalizedPlaylistsLoad")
             .field("playlist_count", &self.playlists.len())
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("failure", &self.failure)
             .finish()
     }
@@ -474,11 +493,16 @@ pub fn begin_qq_music_personalized_playlists_load(
 }
 
 fn map_personalized_playlists_load(
-    result: Result<Vec<music_domain::PlaylistSummary>, PersonalizedPlaylistsError>,
+    result: Result<music_domain::PersonalizedPlaylistsCollection, PersonalizedPlaylistsError>,
 ) -> QqMusicPersonalizedPlaylistsLoad {
     match result {
-        Ok(playlists) => QqMusicPersonalizedPlaylistsLoad {
-            playlists: playlists.iter().map(bridge_playlist_summary).collect(),
+        Ok(collection) => QqMusicPersonalizedPlaylistsLoad {
+            playlists: collection
+                .playlists()
+                .iter()
+                .map(bridge_playlist_summary)
+                .collect(),
+            omitted_playlist_count: collection.omitted_playlist_count(),
             failure: None,
         },
         Err(error) => failed_personalized_playlists_load(map_personalized_playlists_error(error)),
@@ -490,6 +514,7 @@ const fn failed_personalized_playlists_load(
 ) -> QqMusicPersonalizedPlaylistsLoad {
     QqMusicPersonalizedPlaylistsLoad {
         playlists: Vec::new(),
+        omitted_playlist_count: 0,
         failure: Some(failure),
     }
 }
@@ -531,6 +556,7 @@ pub enum QqMusicPersonalizedTracksLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicPersonalizedTracksLoad {
     pub tracks: Vec<LibraryTrackSummary>,
+    pub omitted_track_count: u32,
     pub failure: Option<QqMusicPersonalizedTracksLoadFailure>,
 }
 
@@ -539,6 +565,7 @@ impl fmt::Debug for QqMusicPersonalizedTracksLoad {
         formatter
             .debug_struct("QqMusicPersonalizedTracksLoad")
             .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("failure", &self.failure)
             .finish()
     }
@@ -631,11 +658,16 @@ pub fn begin_qq_music_personalized_tracks_load(
 }
 
 fn map_personalized_tracks_load(
-    result: Result<Vec<music_domain::TrackSummary>, PersonalizedTracksError>,
+    result: Result<music_domain::PersonalizedTracksCollection, PersonalizedTracksError>,
 ) -> QqMusicPersonalizedTracksLoad {
     match result {
-        Ok(tracks) => QqMusicPersonalizedTracksLoad {
-            tracks: tracks.iter().map(bridge_track_summary).collect(),
+        Ok(collection) => QqMusicPersonalizedTracksLoad {
+            tracks: collection
+                .tracks()
+                .iter()
+                .map(bridge_track_summary)
+                .collect(),
+            omitted_track_count: collection.omitted_track_count(),
             failure: None,
         },
         Err(error) => failed_personalized_tracks_load(map_personalized_tracks_error(error)),
@@ -647,6 +679,7 @@ const fn failed_personalized_tracks_load(
 ) -> QqMusicPersonalizedTracksLoad {
     QqMusicPersonalizedTracksLoad {
         tracks: Vec::new(),
+        omitted_track_count: 0,
         failure: Some(failure),
     }
 }
@@ -686,6 +719,7 @@ pub enum QqMusicRelatedTracksLoadFailure {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicRelatedTracksLoad {
     pub tracks: Vec<LibraryTrackSummary>,
+    pub omitted_track_count: u32,
     pub failure: Option<QqMusicRelatedTracksLoadFailure>,
 }
 
@@ -694,6 +728,7 @@ impl fmt::Debug for QqMusicRelatedTracksLoad {
         formatter
             .debug_struct("QqMusicRelatedTracksLoad")
             .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("failure", &self.failure)
             .finish()
     }
@@ -788,11 +823,16 @@ pub fn begin_qq_music_related_tracks_load(
 }
 
 fn map_related_tracks_load(
-    result: Result<Vec<music_domain::TrackSummary>, RelatedTracksError>,
+    result: Result<music_domain::RelatedTracksCollection, RelatedTracksError>,
 ) -> QqMusicRelatedTracksLoad {
     match result {
-        Ok(tracks) => QqMusicRelatedTracksLoad {
-            tracks: tracks.iter().map(bridge_track_summary).collect(),
+        Ok(collection) => QqMusicRelatedTracksLoad {
+            tracks: collection
+                .tracks()
+                .iter()
+                .map(bridge_track_summary)
+                .collect(),
+            omitted_track_count: collection.omitted_track_count(),
             failure: None,
         },
         Err(error) => failed_related_tracks_load(map_related_tracks_error(error)),
@@ -804,6 +844,7 @@ const fn failed_related_tracks_load(
 ) -> QqMusicRelatedTracksLoad {
     QqMusicRelatedTracksLoad {
         tracks: Vec::new(),
+        omitted_track_count: 0,
         failure: Some(failure),
     }
 }
@@ -836,6 +877,7 @@ pub enum QqMusicRadarTrackPageLoadFailure {
 pub struct QqMusicRadarTrackPageLoad {
     pub page: u32,
     pub has_more: bool,
+    pub omitted_track_count: u32,
     pub tracks: Vec<LibraryTrackSummary>,
     pub failure: Option<QqMusicRadarTrackPageLoadFailure>,
 }
@@ -846,6 +888,7 @@ impl fmt::Debug for QqMusicRadarTrackPageLoad {
             .debug_struct("QqMusicRadarTrackPageLoad")
             .field("page", &self.page)
             .field("has_more", &self.has_more)
+            .field("omitted_track_count", &self.omitted_track_count)
             .field("track_count", &self.tracks.len())
             .field("failure", &self.failure)
             .finish()
@@ -935,6 +978,7 @@ fn map_radar_load(
         Ok(page) => QqMusicRadarTrackPageLoad {
             page: page.page(),
             has_more: page.has_more(),
+            omitted_track_count: page.omitted_track_count(),
             tracks: page.tracks().iter().map(bridge_track_summary).collect(),
             failure: None,
         },
@@ -946,6 +990,7 @@ const fn failed_radar_load(failure: QqMusicRadarTrackPageLoadFailure) -> QqMusic
     QqMusicRadarTrackPageLoad {
         page: 0,
         has_more: false,
+        omitted_track_count: 0,
         tracks: Vec::new(),
         failure: Some(failure),
     }
@@ -1213,11 +1258,13 @@ mod tests {
             vec!["private-daily-artist".into()],
         )
         .expect("Track");
-        let mapped = map_daily_tracks_load(Ok(vec![track]));
+        let mapped =
+            map_daily_tracks_load(Ok(music_domain::DailyTracksCollection::new(vec![track], 1)));
 
         assert!(mapped.failure.is_none());
         assert!(mapped.playlist.is_none());
         assert_eq!(mapped.tracks.len(), 1);
+        assert_eq!(mapped.omitted_track_count, 1);
         assert_eq!(mapped.tracks[0].provider_id, "netease-cloud-music");
         let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
         for private in [
@@ -1228,7 +1275,8 @@ mod tests {
             assert!(!debug.contains(private));
         }
 
-        let empty = map_daily_tracks_load(Ok(Vec::new()));
+        let empty =
+            map_daily_tracks_load(Ok(music_domain::DailyTracksCollection::new(Vec::new(), 0)));
         assert!(empty.failure.is_none());
         assert!(empty.playlist.is_none());
         assert!(empty.tracks.is_empty());
@@ -1245,14 +1293,19 @@ mod tests {
             "must-not-leak-personalized",
         )
         .expect("Playlist summary");
-        let mapped = map_personalized_playlists_load(Ok(vec![playlist]));
+        let mapped = map_personalized_playlists_load(Ok(
+            music_domain::PersonalizedPlaylistsCollection::new(vec![playlist], 1),
+        ));
         assert!(mapped.failure.is_none());
         assert_eq!(mapped.playlists.len(), 1);
+        assert_eq!(mapped.omitted_playlist_count, 1);
         let debug = format!("{mapped:?} {:?}", mapped.playlists[0]);
         assert!(!debug.contains("must-not-leak-personalized"));
         assert!(!debug.contains("91001"));
 
-        let empty = map_personalized_playlists_load(Ok(Vec::new()));
+        let empty = map_personalized_playlists_load(Ok(
+            music_domain::PersonalizedPlaylistsCollection::new(Vec::new(), 0),
+        ));
         assert!(empty.playlists.is_empty());
         assert!(empty.failure.is_none());
     }
@@ -1297,10 +1350,13 @@ mod tests {
             vec!["private-artist".into()],
         )
         .expect("Track");
-        let mapped = map_personalized_tracks_load(Ok(vec![track]));
+        let mapped = map_personalized_tracks_load(Ok(
+            music_domain::PersonalizedTracksCollection::new(vec![track], 1),
+        ));
 
         assert!(mapped.failure.is_none());
         assert_eq!(mapped.tracks.len(), 1);
+        assert_eq!(mapped.omitted_track_count, 1);
         let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
         for private in [
             "must-not-leak-personalized-track",
@@ -1311,7 +1367,9 @@ mod tests {
             assert!(!debug.contains(private));
         }
 
-        let empty = map_personalized_tracks_load(Ok(Vec::new()));
+        let empty = map_personalized_tracks_load(Ok(
+            music_domain::PersonalizedTracksCollection::new(Vec::new(), 0),
+        ));
         assert!(empty.failure.is_none());
         assert!(empty.tracks.is_empty());
     }
@@ -1328,10 +1386,14 @@ mod tests {
             vec!["private-related-artist".into()],
         )
         .expect("Track");
-        let mapped = map_related_tracks_load(Ok(vec![track]));
+        let mapped = map_related_tracks_load(Ok(music_domain::RelatedTracksCollection::new(
+            vec![track],
+            1,
+        )));
 
         assert!(mapped.failure.is_none());
         assert_eq!(mapped.tracks.len(), 1);
+        assert_eq!(mapped.omitted_track_count, 1);
         let debug = format!("{mapped:?} {:?}", mapped.tracks[0]);
         for private in [
             "must-not-leak-related-track",
@@ -1342,7 +1404,10 @@ mod tests {
             assert!(!debug.contains(private));
         }
 
-        let empty = map_related_tracks_load(Ok(Vec::new()));
+        let empty = map_related_tracks_load(Ok(music_domain::RelatedTracksCollection::new(
+            Vec::new(),
+            0,
+        )));
         assert!(empty.failure.is_none());
         assert!(empty.tracks.is_empty());
     }

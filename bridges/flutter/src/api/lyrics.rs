@@ -53,6 +53,7 @@ impl fmt::Debug for QqMusicSynchronizedLyricLine {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicSynchronizedLyrics {
     pub lines: Vec<QqMusicSynchronizedLyricLine>,
+    pub omitted_line_count: u32,
 }
 
 impl fmt::Debug for QqMusicSynchronizedLyrics {
@@ -60,6 +61,7 @@ impl fmt::Debug for QqMusicSynchronizedLyrics {
         formatter
             .debug_struct("QqMusicSynchronizedLyrics")
             .field("line_count", &self.lines.len())
+            .field("omitted_line_count", &self.omitted_line_count)
             .field(
                 "has_word_timing",
                 &self.lines.iter().any(|line| !line.segments.is_empty()),
@@ -194,6 +196,7 @@ fn map_load(result: Result<SynchronizedLyrics, LyricsError>) -> QqMusicLyricLoad
     match result {
         Ok(lyrics) => QqMusicLyricLoad {
             lyrics: Some(QqMusicSynchronizedLyrics {
+                omitted_line_count: lyrics.omitted_line_count(),
                 lines: lyrics
                     .lines()
                     .iter()

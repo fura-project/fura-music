@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::credential::is_credential_rejection_code;
 use crate::{Credential, HttpRequest, HttpTransport, QqMusicArtistSummary, QqMusicClient};
@@ -161,8 +162,10 @@ where
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicFavoriteArtistsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_artist_count: u32,
     artists: Vec<QqMusicArtistSummary>,
 }
 
@@ -170,6 +173,11 @@ impl QqMusicFavoriteArtistsPage {
     #[must_use]
     pub const fn offset(&self) -> u32 {
         self.offset
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
     }
 
     #[must_use]
@@ -183,6 +191,11 @@ impl QqMusicFavoriteArtistsPage {
     }
 
     #[must_use]
+    pub const fn omitted_artist_count(&self) -> u32 {
+        self.omitted_artist_count
+    }
+
+    #[must_use]
     pub fn artists(&self) -> &[QqMusicArtistSummary] {
         &self.artists
     }
@@ -193,8 +206,10 @@ impl fmt::Debug for QqMusicFavoriteArtistsPage {
         formatter
             .debug_struct("QqMusicFavoriteArtistsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_artist_count", &self.omitted_artist_count)
             .field("artist_count", &self.artists.len())
             .finish()
     }
@@ -336,7 +351,7 @@ struct FavoriteArtistsData {
     #[serde(rename = "Total")]
     total: Option<u32>,
     #[serde(rename = "List")]
-    artists: Option<Vec<RawFavoriteArtist>>,
+    artists: Option<Vec<Value>>,
     #[serde(rename = "HasMore")]
     has_more: Option<RawHasMore>,
 }
@@ -421,15 +436,31 @@ fn map_response<E>(
     {
         return Err(QqMusicFavoriteArtistsError::InvalidPagination);
     }
-    let artists = raw_artists
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_artist(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut artists = Vec::with_capacity(raw_artists.len());
+    let mut omitted_artist_count = 0_u32;
+    for (index, value) in raw_artists.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawFavoriteArtist>(value)
+            .map_err(|_| QqMusicFavoriteArtistsError::InvalidArtist {
+                index,
+                field: FavoriteArtistField::ArtistMid,
+            })
+            .and_then(|artist| map_artist(artist, index));
+        match mapped {
+            Ok(artist) => artists.push(artist),
+            Err(QqMusicFavoriteArtistsError::InvalidArtist { .. }) => {
+                omitted_artist_count = omitted_artist_count
+                    .checked_add(1)
+                    .ok_or(QqMusicFavoriteArtistsError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicFavoriteArtistsPage {
         offset,
+        next_offset: page_end,
         total,
         has_more,
+        omitted_artist_count,
         artists,
     })
 }
@@ -467,7 +498,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{FavoriteArtistField, MUSICU_URL, QqMusicFavoriteArtistsError};
+    use super::{MUSICU_URL, QqMusicFavoriteArtistsError};
     use crate::{
         Credential, CredentialSessionSecrets, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
         LoginType, QqMusicClient,
@@ -628,12 +659,12 @@ mod tests {
             1,
             &json!(0),
         )));
-        assert_eq!(
-            invalid.favorite_artists(&credential(), 0, 20).await,
-            Err(QqMusicFavoriteArtistsError::InvalidArtist {
-                index: 0,
-                field: FavoriteArtistField::ArtistMid
-            })
-        );
+        let partial = invalid
+            .favorite_artists(&credential(), 0, 20)
+            .await
+            .expect("malformed collection row must be isolated");
+        assert!(partial.artists().is_empty());
+        assert_eq!(partial.omitted_artist_count(), 1);
+        assert_eq!(partial.next_offset(), 1);
     }
 }

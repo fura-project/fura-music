@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{HttpRequest, HttpTransport, QqMusicAlbumSummary, QqMusicArtistSummary, QqMusicClient};
 
@@ -213,8 +214,10 @@ impl fmt::Debug for QqMusicNewAlbumRelease {
 pub struct QqMusicNewAlbumPage {
     area: QqMusicNewAlbumArea,
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_release_count: u32,
     releases: Vec<QqMusicNewAlbumRelease>,
 }
 
@@ -230,6 +233,11 @@ impl QqMusicNewAlbumPage {
     }
 
     #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
     pub const fn total(&self) -> u32 {
         self.total
     }
@@ -237,6 +245,11 @@ impl QqMusicNewAlbumPage {
     #[must_use]
     pub const fn has_more(&self) -> bool {
         self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_release_count(&self) -> u32 {
+        self.omitted_release_count
     }
 
     #[must_use]
@@ -251,8 +264,10 @@ impl fmt::Debug for QqMusicNewAlbumPage {
             .debug_struct("QqMusicNewAlbumPage")
             .field("area", &self.area)
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_release_count", &self.omitted_release_count)
             .field("release_count", &self.releases.len())
             .finish()
     }
@@ -370,7 +385,7 @@ struct NewAlbumsResult {
 #[derive(Deserialize)]
 struct NewAlbumsData {
     total: Option<u32>,
-    albums: Option<Vec<RawNewAlbum>>,
+    albums: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -379,7 +394,7 @@ struct RawNewAlbum {
     mid: Option<String>,
     #[serde(alias = "title")]
     name: Option<String>,
-    singers: Option<Vec<RawNewAlbumArtist>>,
+    singers: Option<Value>,
     release_time: Option<String>,
 }
 
@@ -433,16 +448,35 @@ fn map_response<E>(
     if has_more && raw_albums.is_empty() {
         return Err(QqMusicNewAlbumsError::InvalidPagination);
     }
-    let releases = raw_albums
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_release(raw, index))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut releases = Vec::with_capacity(raw_albums.len());
+    let mut omitted_release_count = 0_u32;
+    for (index, value) in raw_albums.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawNewAlbum>(value)
+            .map_err(|_| QqMusicNewAlbumsError::InvalidAlbum {
+                index,
+                field: NewAlbumField::AlbumId,
+            })
+            .and_then(|raw| map_release(raw, index));
+        match mapped {
+            Ok(release) => releases.push(release),
+            Err(
+                QqMusicNewAlbumsError::InvalidAlbum { .. }
+                | QqMusicNewAlbumsError::InvalidArtist { .. },
+            ) => {
+                omitted_release_count = omitted_release_count
+                    .checked_add(1)
+                    .ok_or(QqMusicNewAlbumsError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(QqMusicNewAlbumPage {
         area,
         offset: requested_offset,
+        next_offset: end,
         total,
         has_more,
+        omitted_release_count,
         releases,
     })
 }
@@ -468,11 +502,15 @@ fn map_release<E>(
     })?;
     let artists = raw
         .singers
+        .and_then(|artists| artists.as_array().cloned())
         .unwrap_or_default()
         .into_iter()
         .enumerate()
-        .map(|(artist_index, artist)| map_artist(artist, album_index, artist_index))
-        .collect::<Result<Vec<_>, _>>()?;
+        .filter_map(|(artist_index, value)| {
+            let artist = serde_json::from_value::<RawNewAlbumArtist>(value).ok()?;
+            map_artist::<E>(artist, album_index, artist_index).ok()
+        })
+        .collect();
     Ok(QqMusicNewAlbumRelease {
         album: QqMusicAlbumSummary::new(
             Some(numeric_album_id),
@@ -536,7 +574,7 @@ mod tests {
 
     use crate::{HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient};
 
-    use super::{NewAlbumField, QqMusicNewAlbumArea, QqMusicNewAlbumsError};
+    use super::{QqMusicNewAlbumArea, QqMusicNewAlbumsError};
 
     struct NewAlbumsTransport {
         response: HttpResponse,
@@ -677,23 +715,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_invalid_album_and_artist_without_content_diagnostics() {
+    async fn isolates_invalid_album_and_drops_invalid_optional_artist_navigation() {
         let invalid_album = QqMusicClient::new(NewAlbumsTransport::new(&response(
             &json!([{"id": 43001, "mid": "unsafe/mid", "name": "private", "singers": []}]),
             1,
         )));
-        let error = invalid_album
+        let page = invalid_album
             .new_album_releases(QqMusicNewAlbumArea::HongKongTaiwan, 0, 5)
             .await
-            .expect_err("invalid Album");
-        assert!(matches!(
-            error,
-            QqMusicNewAlbumsError::InvalidAlbum {
-                index: 0,
-                field: NewAlbumField::AlbumMid
-            }
-        ));
-        assert!(!format!("{error:?}").contains("unsafe/mid"));
+            .expect("malformed release row must be isolated");
+        assert!(page.releases().is_empty());
+        assert_eq!(page.omitted_release_count(), 1);
+        assert_eq!(page.next_offset(), 1);
+        assert!(!format!("{page:?}").contains("unsafe/mid"));
 
         let invalid_artist = QqMusicClient::new(NewAlbumsTransport::new(&response(
             &json!([{
@@ -704,19 +738,14 @@ mod tests {
             }]),
             1,
         )));
-        let error = invalid_artist
+        let page = invalid_artist
             .new_album_releases(QqMusicNewAlbumArea::MainlandChina, 0, 5)
             .await
-            .expect_err("invalid Artist");
-        assert!(matches!(
-            error,
-            QqMusicNewAlbumsError::InvalidArtist {
-                album_index: 0,
-                artist_index: 0,
-                field: NewAlbumField::ArtistId
-            }
-        ));
-        let debug = format!("{error:?}");
+            .expect("optional malformed Artist navigation must degrade");
+        assert_eq!(page.releases().len(), 1);
+        assert!(page.releases()[0].artists().is_empty());
+        assert_eq!(page.omitted_release_count(), 0);
+        let debug = format!("{page:?}");
         assert!(!debug.contains("private album"));
         assert!(!debug.contains("private artist"));
     }

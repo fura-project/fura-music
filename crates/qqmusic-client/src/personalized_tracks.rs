@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::credential::is_credential_rejection_code;
 use crate::{
@@ -323,17 +324,24 @@ where
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicPersonalizedTracks {
     tracks: Vec<QqMusicTrackSummary>,
+    omitted_track_count: u32,
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicRelatedTracks {
     tracks: Vec<QqMusicTrackSummary>,
+    omitted_track_count: u32,
 }
 
 impl QqMusicRelatedTracks {
     #[must_use]
     pub fn tracks(&self) -> &[QqMusicTrackSummary] {
         &self.tracks
+    }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
     }
 }
 
@@ -342,6 +350,7 @@ impl fmt::Debug for QqMusicRelatedTracks {
         formatter
             .debug_struct("QqMusicRelatedTracks")
             .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
             .finish()
     }
 }
@@ -351,6 +360,11 @@ impl QqMusicPersonalizedTracks {
     pub fn tracks(&self) -> &[QqMusicTrackSummary] {
         &self.tracks
     }
+
+    #[must_use]
+    pub const fn omitted_track_count(&self) -> u32 {
+        self.omitted_track_count
+    }
 }
 
 impl fmt::Debug for QqMusicPersonalizedTracks {
@@ -358,6 +372,7 @@ impl fmt::Debug for QqMusicPersonalizedTracks {
         formatter
             .debug_struct("QqMusicPersonalizedTracks")
             .field("track_count", &self.tracks.len())
+            .field("omitted_track_count", &self.omitted_track_count)
             .finish()
     }
 }
@@ -582,7 +597,7 @@ struct PersonalizedTracksResult {
 
 #[derive(Deserialize)]
 struct PersonalizedTracksData {
-    tracks: Option<Vec<RawPersonalizedTrack>>,
+    tracks: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -636,7 +651,7 @@ struct RelatedTracksResult {
 #[derive(Deserialize)]
 struct RelatedTracksData {
     #[serde(rename = "songInfoList")]
-    tracks: Option<Vec<RawPersonalizedTrack>>,
+    tracks: Option<Vec<Value>>,
 }
 
 fn related_request_sign(data: &str) -> Result<String, ()> {
@@ -700,24 +715,17 @@ fn map_response<E>(
             count: raw_tracks.len(),
         });
     }
-    let tracks = raw_tracks
-        .into_iter()
-        .enumerate()
-        .map(|(index, track)| {
-            map_track(track, index).map_err(|error| match error {
-                TrackMappingError::InvalidTrack { index, field } => {
-                    QqMusicPersonalizedTracksError::InvalidTrack { index, field }
-                }
-                TrackMappingError::InvalidArtist {
-                    track_index,
-                    artist_index,
-                } => QqMusicPersonalizedTracksError::InvalidArtist {
-                    track_index,
-                    artist_index,
-                },
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut omitted_track_count = 0_u32;
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    for (index, value) in raw_tracks.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawPersonalizedTrack>(value)
+            .ok()
+            .and_then(|track| retain_valid_track(map_track(track, index)));
+        match mapped {
+            Some(track) => tracks.push(track),
+            None => omitted_track_count = omitted_track_count.saturating_add(1),
+        }
+    }
     let mut track_ids = HashSet::new();
     let mut song_mids = HashSet::new();
     for track in &tracks {
@@ -725,7 +733,10 @@ fn map_response<E>(
             return Err(QqMusicPersonalizedTracksError::DuplicateTrackIdentity);
         }
     }
-    Ok(QqMusicPersonalizedTracks { tracks })
+    Ok(QqMusicPersonalizedTracks {
+        tracks,
+        omitted_track_count,
+    })
 }
 
 fn map_related_response<E>(
@@ -757,24 +768,17 @@ fn map_related_response<E>(
         });
     }
 
-    let tracks = raw_tracks
-        .into_iter()
-        .enumerate()
-        .map(|(index, track)| {
-            map_track(track, index).map_err(|error| match error {
-                TrackMappingError::InvalidTrack { index, field } => {
-                    QqMusicRelatedTracksError::InvalidTrack { index, field }
-                }
-                TrackMappingError::InvalidArtist {
-                    track_index,
-                    artist_index,
-                } => QqMusicRelatedTracksError::InvalidArtist {
-                    track_index,
-                    artist_index,
-                },
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut omitted_track_count = 0_u32;
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    for (index, value) in raw_tracks.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawPersonalizedTrack>(value)
+            .ok()
+            .and_then(|track| retain_valid_track(map_track(track, index)));
+        match mapped {
+            Some(track) => tracks.push(track),
+            None => omitted_track_count = omitted_track_count.saturating_add(1),
+        }
+    }
     let mut track_ids = HashSet::new();
     let mut song_mids = HashSet::new();
     for track in &tracks {
@@ -782,7 +786,10 @@ fn map_related_response<E>(
             return Err(QqMusicRelatedTracksError::DuplicateTrackIdentity);
         }
     }
-    Ok(QqMusicRelatedTracks { tracks })
+    Ok(QqMusicRelatedTracks {
+        tracks,
+        omitted_track_count,
+    })
 }
 
 enum TrackMappingError {
@@ -794,6 +801,25 @@ enum TrackMappingError {
         track_index: usize,
         artist_index: usize,
     },
+}
+
+fn retain_valid_track(
+    result: Result<QqMusicTrackSummary, TrackMappingError>,
+) -> Option<QqMusicTrackSummary> {
+    match result {
+        Ok(track) => Some(track),
+        Err(TrackMappingError::InvalidTrack { index, field }) => {
+            let _ = (index, field);
+            None
+        }
+        Err(TrackMappingError::InvalidArtist {
+            track_index,
+            artist_index,
+        }) => {
+            let _ = (track_index, artist_index);
+            None
+        }
+    }
 }
 
 fn map_track(
@@ -891,8 +917,7 @@ mod tests {
     };
 
     use super::{
-        MUSICU_URL, PersonalizedTrackField, QqMusicPersonalizedTracksError,
-        QqMusicRelatedTracksError, REQUESTED_TRACKS,
+        MUSICU_URL, QqMusicPersonalizedTracksError, QqMusicRelatedTracksError, REQUESTED_TRACKS,
     };
 
     struct PersonalizedTracksTransport {
@@ -1021,19 +1046,15 @@ mod tests {
             })
         ));
 
-        let invalid = QqMusicClient::new(PersonalizedTracksTransport::new(&response_json(&[
+        let partial = QqMusicClient::new(PersonalizedTracksTransport::new(&response_json(&[
             track_json(0, "privateMid", "must-not-leak"),
         ])))
         .personalized_tracks(&credential())
-        .await;
-        assert!(matches!(
-            invalid,
-            Err(QqMusicPersonalizedTracksError::InvalidTrack {
-                index: 0,
-                field: PersonalizedTrackField::TrackId
-            })
-        ));
-        let debug = format!("{invalid:?}");
+        .await
+        .expect("invalid collection row is omitted");
+        assert!(partial.tracks().is_empty());
+        assert_eq!(partial.omitted_track_count(), 1);
+        let debug = format!("{partial:?}");
         assert!(!debug.contains("privateMid"));
         assert!(!debug.contains("must-not-leak"));
     }

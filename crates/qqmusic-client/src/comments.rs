@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::Deserialize;
+use serde_json::Value;
 
 use crate::{HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
@@ -204,8 +205,11 @@ impl fmt::Debug for QqMusicTrackComment {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicTrackCommentsPage {
     offset: u32,
+    next_offset: u32,
     total: u32,
     has_more: bool,
+    omitted_hot_comment_count: u32,
+    omitted_latest_comment_count: u32,
     hot_comments: Vec<QqMusicTrackComment>,
     latest_comments: Vec<QqMusicTrackComment>,
 }
@@ -219,6 +223,21 @@ impl QqMusicTrackCommentsPage {
     #[must_use]
     pub const fn total(&self) -> u32 {
         self.total
+    }
+
+    #[must_use]
+    pub const fn next_offset(&self) -> u32 {
+        self.next_offset
+    }
+
+    #[must_use]
+    pub const fn omitted_hot_comment_count(&self) -> u32 {
+        self.omitted_hot_comment_count
+    }
+
+    #[must_use]
+    pub const fn omitted_latest_comment_count(&self) -> u32 {
+        self.omitted_latest_comment_count
     }
 
     #[must_use]
@@ -242,8 +261,14 @@ impl fmt::Debug for QqMusicTrackCommentsPage {
         formatter
             .debug_struct("QqMusicTrackCommentsPage")
             .field("offset", &self.offset)
+            .field("next_offset", &self.next_offset)
             .field("total", &self.total)
             .field("has_more", &self.has_more)
+            .field("omitted_hot_comment_count", &self.omitted_hot_comment_count)
+            .field(
+                "omitted_latest_comment_count",
+                &self.omitted_latest_comment_count,
+            )
             .field("hot_comment_count", &self.hot_comments.len())
             .field("latest_comment_count", &self.latest_comments.len())
             .finish()
@@ -326,7 +351,7 @@ struct LegacyCommentResponse {
 #[derive(Deserialize)]
 struct RawCommentGroup {
     commenttotal: Option<FlexibleUnsigned>,
-    commentlist: Option<Vec<RawComment>>,
+    commentlist: Option<Vec<Value>>,
 }
 
 #[derive(Deserialize)]
@@ -424,31 +449,51 @@ fn map_response<E>(
     if raw_hot.len() > MAX_HOT_COMMENTS {
         return Err(QqMusicTrackCommentsError::InvalidPagination);
     }
-    let hot_comments = raw_hot
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_comment(raw, CommentSection::Hot, index))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-    let latest_comments = raw_latest
-        .into_iter()
-        .enumerate()
-        .map(|(index, raw)| map_comment(raw, CommentSection::Latest, index))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect();
+    let (hot_comments, omitted_hot_comment_count) = map_comment_rows(raw_hot, CommentSection::Hot)?;
+    let (latest_comments, omitted_latest_comment_count) =
+        map_comment_rows(raw_latest, CommentSection::Latest)?;
     let (total, has_more) =
         normalize_pagination(reported_total, offset, requested_size, raw_latest_count)?;
+    let next_offset = offset
+        .checked_add(raw_latest_count)
+        .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
     Ok(QqMusicTrackCommentsPage {
         offset,
+        next_offset,
         total,
         has_more,
+        omitted_hot_comment_count,
+        omitted_latest_comment_count,
         hot_comments,
         latest_comments,
     })
+}
+
+fn map_comment_rows<E>(
+    rows: Vec<Value>,
+    section: CommentSection,
+) -> Result<(Vec<QqMusicTrackComment>, u32), QqMusicTrackCommentsError<E>> {
+    let mut comments = Vec::with_capacity(rows.len());
+    let mut omitted = 0_u32;
+    for (index, value) in rows.into_iter().enumerate() {
+        let mapped = serde_json::from_value::<RawComment>(value)
+            .map_err(|_| QqMusicTrackCommentsError::InvalidComment {
+                section,
+                index,
+                field: CommentField::Id,
+            })
+            .and_then(|raw| map_comment(raw, section, index));
+        match mapped {
+            Ok(Some(comment)) => comments.push(comment),
+            Ok(None) | Err(QqMusicTrackCommentsError::InvalidComment { .. }) => {
+                omitted = omitted
+                    .checked_add(1)
+                    .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok((comments, omitted))
 }
 
 fn normalize_pagination<E>(
@@ -551,8 +596,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        CommentField, CommentSection, MAX_CONTENT_BYTES, MAX_RESPONSE_BYTES,
-        QqMusicTrackCommentsError, REQUEST_TIMEOUT,
+        MAX_CONTENT_BYTES, MAX_RESPONSE_BYTES, QqMusicTrackCommentsError, REQUEST_TIMEOUT,
     };
     use crate::{HttpMethod, HttpRequest, HttpResponse, HttpTransport, QqMusicClient};
 
@@ -987,19 +1031,14 @@ mod tests {
                 )]
             }
         })));
-        let error = invalid
+        let partial = invalid
             .track_comments(41001, 0, 20)
             .await
-            .expect_err("oversized content");
-        assert!(matches!(
-            error,
-            QqMusicTrackCommentsError::InvalidComment {
-                section: CommentSection::Latest,
-                index: 0,
-                field: CommentField::Content
-            }
-        ));
-        let debug = format!("{error:?} {error}");
+            .expect("oversized row is isolated");
+        assert!(partial.latest_comments().is_empty());
+        assert_eq!(partial.omitted_latest_comment_count(), 1);
+        assert_eq!(partial.next_offset(), 1);
+        let debug = format!("{partial:?}");
         assert!(!debug.contains("must-not-leak"));
         assert!(!debug.contains("41001"));
     }
