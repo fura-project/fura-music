@@ -214,7 +214,9 @@ class _Gateway implements PlaylistDetailGateway {
   void complete(int request, int offset) => results[request].complete(
     PlaylistTrackPageResult(
       offset: offset,
+      nextOffset: offset + 100,
       total: 1000,
+      hasMore: offset + 100 < 1000,
       tracks: List.generate(
         100,
         (index) => PlaylistTrackSummary(

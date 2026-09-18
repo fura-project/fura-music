@@ -23,7 +23,11 @@ void main() {
         FavoriteAlbumPageResult(failure: FavoriteAlbumFailure.network),
       ),
       const _ImmediateOperation(
-        FavoriteAlbumPageResult(total: 1, albums: [first]),
+        FavoriteAlbumPageResult(
+          continuationOffset: 1,
+          total: 1,
+          albums: [first],
+        ),
       ),
     ]);
     final controller = FavoriteAlbumController(gateway);
@@ -45,11 +49,17 @@ void main() {
       final controller = FavoriteAlbumController(
         _ScriptedGateway([
           const _ImmediateOperation(
-            FavoriteAlbumPageResult(total: 3, hasMore: true, albums: [first]),
+            FavoriteAlbumPageResult(
+              continuationOffset: 1,
+              total: 3,
+              hasMore: true,
+              albums: [first],
+            ),
           ),
           const _ImmediateOperation(
             FavoriteAlbumPageResult(
               offset: 1,
+              continuationOffset: 3,
               total: 3,
               albums: [first, second],
             ),
@@ -64,7 +74,12 @@ void main() {
       final failing = FavoriteAlbumController(
         _ScriptedGateway([
           const _ImmediateOperation(
-            FavoriteAlbumPageResult(total: 2, hasMore: true, albums: [first]),
+            FavoriteAlbumPageResult(
+              continuationOffset: 1,
+              total: 2,
+              hasMore: true,
+              albums: [first],
+            ),
           ),
           const _ImmediateOperation(
             FavoriteAlbumPageResult(failure: FavoriteAlbumFailure.network),
@@ -85,7 +100,12 @@ void main() {
     final controller = FavoriteAlbumController(
       _ScriptedGateway([
         const _ImmediateOperation(
-          FavoriteAlbumPageResult(total: 2, hasMore: true, albums: [first]),
+          FavoriteAlbumPageResult(
+            continuationOffset: 1,
+            total: 2,
+            hasMore: true,
+            albums: [first],
+          ),
         ),
         const _ImmediateOperation(
           FavoriteAlbumPageResult(
@@ -109,7 +129,11 @@ void main() {
     final gateway = _ScriptedGateway([
       firstOperation,
       const _ImmediateOperation(
-        FavoriteAlbumPageResult(total: 1, albums: [second]),
+        FavoriteAlbumPageResult(
+          continuationOffset: 1,
+          total: 1,
+          albums: [second],
+        ),
       ),
     ]);
     final controller = FavoriteAlbumController(gateway);
@@ -120,7 +144,11 @@ void main() {
     await replacement;
     expect(firstOperation.cancelCalls, 1);
     firstResult.complete(
-      const FavoriteAlbumPageResult(total: 1, albums: [first]),
+      const FavoriteAlbumPageResult(
+        continuationOffset: 1,
+        total: 1,
+        albums: [first],
+      ),
     );
     await firstLoad;
     expect(controller.albums, [second]);

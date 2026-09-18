@@ -127,6 +127,29 @@ impl PlaybackQueueHandle {
     }
 
     #[flutter_rust_bridge::frb(sync)]
+    pub fn extend_and_advance_from_terminal(
+        &self,
+        tracks: Vec<LibraryTrackSummary>,
+    ) -> PlaybackQueueUpdate {
+        // Convert the whole batch before locking or mutating the authoritative
+        // queue. One invalid candidate therefore cannot leave a partial tail.
+        let tracks = match tracks
+            .into_iter()
+            .map(domain_track_summary)
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(tracks) => tracks,
+            Err(()) => return failed(PlaybackQueueFailure::InvalidTrack),
+        };
+        self.with_queue(move |queue| {
+            queue
+                .extend_and_advance_from_terminal(tracks)
+                .map_err(map_position_error)?;
+            Ok(true)
+        })
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
     pub fn select(&self, index: u32) -> PlaybackQueueUpdate {
         self.with_queue(|queue| queue.select(index as usize).map_err(map_position_error))
     }
@@ -402,6 +425,24 @@ mod tests {
         let cleared = queue.clear();
         assert!(cleared.playback_requested);
         assert!(cleared.snapshot.expect("cleared").tracks.is_empty());
+    }
+
+    #[test]
+    fn terminal_extension_is_one_atomic_playback_transition() {
+        let queue = queue_with_three();
+        queue.select(2);
+
+        let update = queue.extend_and_advance_from_terminal(vec![track("next"), track("later")]);
+        assert!(update.playback_requested);
+        let snapshot = update.snapshot.expect("continued");
+        assert_eq!(snapshot.tracks.len(), 5);
+        assert_eq!(snapshot.current_index, Some(3));
+        assert_eq!(snapshot.tracks[3].opaque_id, "next");
+
+        let before = queue.snapshot().snapshot.expect("before invalid");
+        let invalid = queue.extend_and_advance_from_terminal(vec![track("too-early")]);
+        assert_eq!(invalid.failure, Some(PlaybackQueueFailure::InvalidPosition));
+        assert_eq!(queue.snapshot().snapshot.expect("unchanged"), before);
     }
 
     #[test]

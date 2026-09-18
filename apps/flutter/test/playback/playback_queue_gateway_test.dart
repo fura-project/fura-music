@@ -296,6 +296,11 @@ class _FakeBridge implements PlaybackQueueBridge {
   ) => _next;
 
   @override
+  bridge_queue.PlaybackQueueUpdate extendAndAdvanceFromTerminal(
+    List<bridge_library.LibraryTrackSummary> tracks,
+  ) => _next;
+
+  @override
   bridge_queue.PlaybackQueueUpdate select(int index) => _next;
 
   @override
@@ -345,6 +350,11 @@ class _ThrowingBridge implements PlaybackQueueBridge {
   @override
   bridge_queue.PlaybackQueueUpdate push(
     bridge_library.LibraryTrackSummary track,
+  ) => _throw();
+
+  @override
+  bridge_queue.PlaybackQueueUpdate extendAndAdvanceFromTerminal(
+    List<bridge_library.LibraryTrackSummary> tracks,
   ) => _throw();
 
   @override

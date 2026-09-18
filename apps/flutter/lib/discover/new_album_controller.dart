@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 
 enum NewAlbumStage { loading, content, empty, error }
 
@@ -83,7 +84,7 @@ class NewAlbumController extends ChangeNotifier {
     if (_validPage(result, expectedRegion: expectedRegion, expectedOffset: 0)) {
       _releases = List.unmodifiable(result.releases);
       _total = result.total;
-      _nextOffset = result.releases.length + result.omittedReleaseCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedReleaseCount = result.omittedReleaseCount;
       if (result.omittedReleaseCount > 0) _partialResultRevision += 1;
@@ -135,8 +136,7 @@ class NewAlbumController extends ChangeNotifier {
       );
       _releases = List.unmodifiable([..._releases, ...additions]);
       _total = result.total;
-      _nextOffset =
-          expectedOffset + result.releases.length + result.omittedReleaseCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedReleaseCount += result.omittedReleaseCount;
       if (result.omittedReleaseCount > 0) _partialResultRevision += 1;
@@ -162,14 +162,14 @@ class NewAlbumController extends ChangeNotifier {
       result.failure == null &&
       result.region == expectedRegion &&
       result.offset == expectedOffset &&
-      result.omittedReleaseCount >= 0 &&
-      result.total >=
-          expectedOffset +
-              result.releases.length +
-              result.omittedReleaseCount &&
-      (!result.hasMore ||
-          result.releases.isNotEmpty ||
-          result.omittedReleaseCount > 0);
+      isValidRawOffsetPage(
+        offset: expectedOffset,
+        continuationOffset: result.continuationOffset,
+        total: result.total,
+        hasMore: result.hasMore,
+        visibleCount: result.releases.length,
+        omittedCount: result.omittedReleaseCount,
+      );
 
   bool _isRetryable(NewAlbumFailure? failure) =>
       failure == NewAlbumFailure.coreUnavailable ||

@@ -78,6 +78,7 @@ void main() {
           const _ImmediateTrackOperation(
             RankingTrackPageResult(
               ranking: ranking,
+              continuationOffset: 1,
               total: 3,
               hasMore: true,
               tracks: [first],
@@ -90,6 +91,7 @@ void main() {
             RankingTrackPageResult(
               ranking: ranking,
               offset: 1,
+              continuationOffset: 3,
               total: 3,
               tracks: [first, second],
             ),
@@ -122,7 +124,12 @@ void main() {
       trackOperations: [
         pending,
         const _ImmediateTrackOperation(
-          RankingTrackPageResult(ranking: ranking, total: 1, tracks: [second]),
+          RankingTrackPageResult(
+            ranking: ranking,
+            continuationOffset: 1,
+            total: 1,
+            tracks: [second],
+          ),
         ),
       ],
     );
@@ -134,7 +141,12 @@ void main() {
     expect(pending.cancelCalls, 1);
     expect(controller.tracks, [second]);
     late.complete(
-      const RankingTrackPageResult(ranking: ranking, total: 1, tracks: [first]),
+      const RankingTrackPageResult(
+        ranking: ranking,
+        continuationOffset: 1,
+        total: 1,
+        tracks: [first],
+      ),
     );
     await firstLoad;
     expect(controller.tracks, [second]);

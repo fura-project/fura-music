@@ -31,7 +31,12 @@ void main() {
           ArtistAlbumPageResult(failure: ArtistAlbumFailure.network),
         ),
         const _ImmediateOperation(
-          ArtistAlbumPageResult(offset: 0, total: 1, albums: [firstAlbum]),
+          ArtistAlbumPageResult(
+            offset: 0,
+            continuationOffset: 1,
+            total: 1,
+            albums: [firstAlbum],
+          ),
         ),
       ]);
       final controller = ArtistAlbumController(artist, gateway);
@@ -54,7 +59,9 @@ void main() {
   test('separates an empty page from invalid pagination', () async {
     final empty = ArtistAlbumController(
       artist,
-      _ScriptedGateway([const _ImmediateOperation(ArtistAlbumPageResult())]),
+      _ScriptedGateway([
+        const _ImmediateOperation(ArtistAlbumPageResult(continuationOffset: 0)),
+      ]),
     );
     await empty.load();
     expect(empty.stage, ArtistAlbumStage.empty);
@@ -82,6 +89,7 @@ void main() {
         const _ImmediateOperation(
           ArtistAlbumPageResult(
             offset: 0,
+            continuationOffset: 1,
             total: 3,
             hasMore: true,
             albums: [firstAlbum],
@@ -90,6 +98,7 @@ void main() {
         const _ImmediateOperation(
           ArtistAlbumPageResult(
             offset: 1,
+            continuationOffset: 3,
             total: 3,
             albums: [firstAlbum, secondAlbum],
           ),
@@ -104,6 +113,7 @@ void main() {
         const _ImmediateOperation(
           ArtistAlbumPageResult(
             offset: 0,
+            continuationOffset: 1,
             total: 2,
             hasMore: true,
             albums: [firstAlbum],
@@ -131,7 +141,12 @@ void main() {
     final gateway = _ScriptedGateway([
       firstOperation,
       const _ImmediateOperation(
-        ArtistAlbumPageResult(offset: 0, total: 1, albums: [secondAlbum]),
+        ArtistAlbumPageResult(
+          offset: 0,
+          continuationOffset: 1,
+          total: 1,
+          albums: [secondAlbum],
+        ),
       ),
     ]);
     final controller = ArtistAlbumController(artist, gateway);
@@ -141,7 +156,12 @@ void main() {
     await controller.load();
     expect(firstOperation.cancelCalls, 1);
     firstResult.complete(
-      const ArtistAlbumPageResult(offset: 0, total: 1, albums: [firstAlbum]),
+      const ArtistAlbumPageResult(
+        offset: 0,
+        continuationOffset: 1,
+        total: 1,
+        albums: [firstAlbum],
+      ),
     );
     await firstLoad;
     expect(controller.albums, [secondAlbum]);

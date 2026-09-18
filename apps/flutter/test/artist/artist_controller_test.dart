@@ -30,7 +30,12 @@ void main() {
         ArtistTrackPageResult(failure: ArtistTrackFailure.network),
       ),
       const _ImmediateOperation(
-        ArtistTrackPageResult(offset: 0, total: 1, tracks: [firstTrack]),
+        ArtistTrackPageResult(
+          offset: 0,
+          continuationOffset: 1,
+          total: 1,
+          tracks: [firstTrack],
+        ),
       ),
     ]);
     final controller = ArtistController(artist, gateway);
@@ -51,6 +56,7 @@ void main() {
       const _ImmediateOperation(
         ArtistTrackPageResult(
           offset: 0,
+          continuationOffset: 1,
           total: 3,
           hasMore: true,
           tracks: [firstTrack],
@@ -59,6 +65,7 @@ void main() {
       const _ImmediateOperation(
         ArtistTrackPageResult(
           offset: 1,
+          continuationOffset: 3,
           total: 3,
           tracks: [firstTrack, secondTrack],
         ),
@@ -73,6 +80,7 @@ void main() {
       const _ImmediateOperation(
         ArtistTrackPageResult(
           offset: 0,
+          continuationOffset: 1,
           total: 2,
           hasMore: true,
           tracks: [firstTrack],
@@ -99,7 +107,12 @@ void main() {
     final gateway = _ScriptedGateway([
       firstOperation,
       const _ImmediateOperation(
-        ArtistTrackPageResult(offset: 0, total: 1, tracks: [secondTrack]),
+        ArtistTrackPageResult(
+          offset: 0,
+          continuationOffset: 1,
+          total: 1,
+          tracks: [secondTrack],
+        ),
       ),
     ]);
     final controller = ArtistController(artist, gateway);
@@ -109,7 +122,12 @@ void main() {
     await controller.load();
     expect(firstOperation.cancelCalls, 1);
     firstResult.complete(
-      const ArtistTrackPageResult(offset: 0, total: 1, tracks: [firstTrack]),
+      const ArtistTrackPageResult(
+        offset: 0,
+        continuationOffset: 1,
+        total: 1,
+        tracks: [firstTrack],
+      ),
     );
     await firstLoad;
     expect(controller.tracks, [secondTrack]);

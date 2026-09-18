@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 
 enum FavoriteArtistStage {
   loading,
@@ -78,7 +79,7 @@ class FavoriteArtistController extends ChangeNotifier {
     if (_validPage(result, expectedOffset: 0)) {
       _artists = List.unmodifiable(result.artists);
       _total = result.total;
-      _nextOffset = result.artists.length + result.omittedArtistCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedArtistCount = result.omittedArtistCount;
       if (result.omittedArtistCount > 0) _partialResultRevision += 1;
@@ -120,8 +121,7 @@ class FavoriteArtistController extends ChangeNotifier {
       );
       _artists = List.unmodifiable([..._artists, ...additions]);
       _total = result.total;
-      _nextOffset =
-          expectedOffset + result.artists.length + result.omittedArtistCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedArtistCount += result.omittedArtistCount;
       if (result.omittedArtistCount > 0) _partialResultRevision += 1;
@@ -152,16 +152,16 @@ class FavoriteArtistController extends ChangeNotifier {
     FavoriteArtistPageResult result, {
     required int expectedOffset,
   }) {
-    final pageEnd =
-        expectedOffset + result.artists.length + result.omittedArtistCount;
     return result.failure == null &&
         result.offset == expectedOffset &&
-        result.omittedArtistCount >= 0 &&
-        pageEnd <= result.total &&
-        (result.hasMore
-            ? (result.artists.isNotEmpty || result.omittedArtistCount > 0) &&
-                  pageEnd < result.total
-            : pageEnd == result.total);
+        isValidRawOffsetPage(
+          offset: expectedOffset,
+          continuationOffset: result.continuationOffset,
+          total: result.total,
+          hasMore: result.hasMore,
+          visibleCount: result.artists.length,
+          omittedCount: result.omittedArtistCount,
+        );
   }
 
   void _applyInitialFailure(FavoriteArtistFailure failure) {

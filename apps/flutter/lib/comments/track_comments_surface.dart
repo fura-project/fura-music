@@ -13,6 +13,7 @@ import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
@@ -259,51 +260,72 @@ class _CommentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[];
-    if (omittedCommentCount > 0) {
-      children.add(
-        PartialResultsNotice(
-          omittedCount: omittedCommentCount,
-          resultRevision: partialResultRevision,
+    final noticeCount = omittedCommentCount > 0 ? 1 : 0;
+    final hotHeadingCount = hotComments.isNotEmpty ? 1 : 0;
+    final latestHeadingCount = latestComments.isNotEmpty ? 1 : 0;
+    final itemCount =
+        noticeCount +
+        hotHeadingCount +
+        hotComments.length +
+        latestHeadingCount +
+        latestComments.length +
+        1;
+    return BoundedViewportPageDemand(
+      enabled: canLoadMore,
+      onDemand: onLoadMore,
+      child: ListView.builder(
+        key: const PageStorageKey<String>('track-comments-list'),
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          MusicSpacing.pageCompact,
+          MusicSpacing.contentGap,
+          MusicSpacing.pageCompact,
+          MusicSpacing.page,
         ),
-      );
-    }
-    if (hotComments.isNotEmpty) {
-      children.add(_SectionHeading(title: context.l10n.commentsHot));
-      children.addAll(
-        hotComments.map(
-          (comment) => _CommentItem(comment: comment, section: 'hot'),
-        ),
-      );
-    }
-    if (latestComments.isNotEmpty) {
-      children.add(_SectionHeading(title: context.l10n.commentsNewest));
-      children.addAll(
-        latestComments.map(
-          (comment) => _CommentItem(comment: comment, section: 'latest'),
-        ),
-      );
-    }
-    children.add(
-      _CommentFooter(
-        isLoading: isLoadingMore,
-        failure: appendFailure,
-        canLoadMore: canLoadMore,
-        canRetry: canRetryMore,
-        onLoadMore: onLoadMore,
-        onRetry: onRetryMore,
-        providerDisplayName: providerDisplayName,
+        itemCount: itemCount,
+        itemBuilder: (context, rawIndex) {
+          var index = rawIndex;
+          if (noticeCount == 1) {
+            if (index == 0) {
+              return PartialResultsNotice(
+                omittedCount: omittedCommentCount,
+                resultRevision: partialResultRevision,
+              );
+            }
+            index -= 1;
+          }
+          if (hotHeadingCount == 1) {
+            if (index == 0) {
+              return _SectionHeading(title: context.l10n.commentsHot);
+            }
+            index -= 1;
+          }
+          if (index < hotComments.length) {
+            return _CommentItem(comment: hotComments[index], section: 'hot');
+          }
+          index -= hotComments.length;
+          if (latestHeadingCount == 1) {
+            if (index == 0) {
+              return _SectionHeading(title: context.l10n.commentsNewest);
+            }
+            index -= 1;
+          }
+          if (index < latestComments.length) {
+            return _CommentItem(
+              comment: latestComments[index],
+              section: 'latest',
+            );
+          }
+          return _CommentFooter(
+            isLoading: isLoadingMore,
+            failure: appendFailure,
+            canLoadMore: canLoadMore,
+            canRetry: canRetryMore,
+            onLoadMore: onLoadMore,
+            onRetry: onRetryMore,
+            providerDisplayName: providerDisplayName,
+          );
+        },
       ),
-    );
-    return ListView(
-      key: const PageStorageKey<String>('track-comments-list'),
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        MusicSpacing.pageCompact,
-        MusicSpacing.contentGap,
-        MusicSpacing.pageCompact,
-        MusicSpacing.page,
-      ),
-      children: children,
     );
   }
 }

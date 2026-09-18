@@ -7063,7 +7063,9 @@ void main() {
       );
       PlaylistTrackPageResult page(int offset) => PlaylistTrackPageResult(
         offset: offset,
+        nextOffset: offset + 100,
         total: 200,
+        hasMore: offset == 0,
         tracks: List.generate(
           100,
           (index) => PlaylistTrackSummary(
@@ -7315,13 +7317,8 @@ void main() {
         failure: UserLibraryFailure.serviceUnavailable,
       ),
       const PlaylistTrackPageResult(
-        failure: UserLibraryFailure.serviceUnavailable,
-      ),
-      const PlaylistTrackPageResult(
-        failure: UserLibraryFailure.serviceUnavailable,
-      ),
-      const PlaylistTrackPageResult(
         offset: 1,
+        nextOffset: 2,
         total: 2,
         tracks: [
           PlaylistTrackSummary(
@@ -7357,14 +7354,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(_en.likedSearchInterruptedTitle), findsOneWidget);
-    expect(detail.requests.map((request) => request.offset), [0, 1, 1, 1]);
+    expect(detail.requests.map((request) => request.offset), [0, 1]);
 
     await tester.tap(find.text(_en.likedContinueSearch));
     await tester.pumpAndSettle();
 
     expect(find.text('Found after retry'), findsOneWidget);
     expect(find.text(_en.likedSearchInterruptedTitle), findsNothing);
-    expect(detail.requests.map((request) => request.offset), [0, 1, 1, 1, 1]);
+    expect(detail.requests.map((request) => request.offset), [0, 1, 1]);
     expect(
       find.text(_en.likedSearchCompleteStatus(_en.likedExactResults(1), 2)),
       findsOneWidget,
@@ -10513,6 +10510,143 @@ class _WidgetSearchGateway implements TrackSearchGateway {
   }
 }
 
+AlbumTrackPageResult _withAlbumContinuation(AlbumTrackPageResult result) =>
+    result.continuationOffset >= 0
+    ? result
+    : AlbumTrackPageResult(
+        offset: result.offset,
+        continuationOffset:
+            result.offset + result.tracks.length + result.omittedTrackCount,
+        total: result.total,
+        hasMore: result.hasMore,
+        tracks: result.tracks,
+        omittedTrackCount: result.omittedTrackCount,
+        failure: result.failure,
+      );
+
+ArtistTrackPageResult _withArtistTrackContinuation(
+  ArtistTrackPageResult result,
+) => result.continuationOffset >= 0
+    ? result
+    : ArtistTrackPageResult(
+        offset: result.offset,
+        continuationOffset:
+            result.offset + result.tracks.length + result.omittedTrackCount,
+        total: result.total,
+        hasMore: result.hasMore,
+        tracks: result.tracks,
+        omittedTrackCount: result.omittedTrackCount,
+        failure: result.failure,
+      );
+
+ArtistAlbumPageResult _withArtistAlbumContinuation(
+  ArtistAlbumPageResult result,
+) => result.continuationOffset >= 0
+    ? result
+    : ArtistAlbumPageResult(
+        offset: result.offset,
+        continuationOffset:
+            result.offset + result.albums.length + result.omittedAlbumCount,
+        total: result.total,
+        hasMore: result.hasMore,
+        albums: result.albums,
+        omittedAlbumCount: result.omittedAlbumCount,
+        failure: result.failure,
+      );
+
+RecommendedPlaylistPageResult _withRecommendationContinuation(
+  RecommendedPlaylistPageResult result,
+) => result.continuationOffset >= 0
+    ? result
+    : RecommendedPlaylistPageResult(
+        offset: result.offset,
+        continuationOffset:
+            result.offset +
+            result.playlists.length +
+            result.omittedPlaylistCount,
+        hasMore: result.hasMore,
+        playlists: result.playlists,
+        omittedPlaylistCount: result.omittedPlaylistCount,
+        failure: result.failure,
+      );
+
+NewAlbumPageResult _withNewAlbumContinuation(NewAlbumPageResult result) =>
+    result.continuationOffset >= 0
+    ? result
+    : NewAlbumPageResult(
+        region: result.region,
+        offset: result.offset,
+        continuationOffset:
+            result.offset + result.releases.length + result.omittedReleaseCount,
+        total: result.total,
+        hasMore: result.hasMore,
+        releases: result.releases,
+        omittedReleaseCount: result.omittedReleaseCount,
+        failure: result.failure,
+      );
+
+FavoriteAlbumPageResult _withFavoriteAlbumContinuation(
+  FavoriteAlbumPageResult result,
+) => result.continuationOffset >= 0
+    ? result
+    : FavoriteAlbumPageResult(
+        offset: result.offset,
+        continuationOffset:
+            result.offset + result.albums.length + result.omittedAlbumCount,
+        total: result.total,
+        hasMore: result.hasMore,
+        albums: result.albums,
+        omittedAlbumCount: result.omittedAlbumCount,
+        failure: result.failure,
+      );
+
+FavoriteArtistPageResult _withFavoriteArtistContinuation(
+  FavoriteArtistPageResult result,
+) => result.continuationOffset >= 0
+    ? result
+    : FavoriteArtistPageResult(
+        offset: result.offset,
+        continuationOffset:
+            result.offset + result.artists.length + result.omittedArtistCount,
+        total: result.total,
+        hasMore: result.hasMore,
+        artists: result.artists,
+        omittedArtistCount: result.omittedArtistCount,
+        failure: result.failure,
+      );
+
+RankingTrackPageResult _withRankingContinuation(
+  RankingTrackPageResult result,
+) => result.continuationOffset >= 0
+    ? result
+    : RankingTrackPageResult(
+        ranking: result.ranking,
+        offset: result.offset,
+        continuationOffset:
+            result.offset + result.tracks.length + result.omittedTrackCount,
+        total: result.total,
+        hasMore: result.hasMore,
+        tracks: result.tracks,
+        omittedTrackCount: result.omittedTrackCount,
+        failure: result.failure,
+      );
+
+PlaylistTrackPageResult _withPlaylistContinuation(
+  PlaylistTrackPageResult result,
+) => result.nextOffset >= 0
+    ? result
+    : PlaylistTrackPageResult(
+        offset: result.offset,
+        nextOffset:
+            result.offset + result.tracks.length + result.omittedTrackCount,
+        total: result.total,
+        totalIsExact: result.totalIsExact,
+        hasMore: result.hasMore,
+        omittedTrackCount: result.omittedTrackCount,
+        tracks: result.tracks,
+        failure: result.failure,
+      );
+
 class _WidgetSearchOperation implements TrackSearchPageLoadOperation {
   const _WidgetSearchOperation(this.result);
 
@@ -10665,7 +10799,7 @@ class _WidgetAlbumOperation implements AlbumTrackPageLoadOperation {
   bool cancel() => true;
 
   @override
-  Future<AlbumTrackPageResult> run() async => result;
+  Future<AlbumTrackPageResult> run() async => _withAlbumContinuation(result);
 }
 
 class _WidgetArtistGateway implements ArtistTrackGateway {
@@ -10694,7 +10828,8 @@ class _WidgetArtistOperation implements ArtistTrackPageLoadOperation {
   bool cancel() => true;
 
   @override
-  Future<ArtistTrackPageResult> run() async => result;
+  Future<ArtistTrackPageResult> run() async =>
+      _withArtistTrackContinuation(result);
 }
 
 class _WidgetArtistAlbumGateway implements ArtistAlbumGateway {
@@ -10723,7 +10858,8 @@ class _WidgetArtistAlbumOperation implements ArtistAlbumPageLoadOperation {
   bool cancel() => true;
 
   @override
-  Future<ArtistAlbumPageResult> run() async => result;
+  Future<ArtistAlbumPageResult> run() async =>
+      _withArtistAlbumContinuation(result);
 }
 
 class _WidgetAccountSummaryGateway implements AccountSummaryGateway {
@@ -10880,7 +11016,8 @@ class _WidgetRecommendedPlaylistOperation
   bool cancel() => true;
 
   @override
-  Future<RecommendedPlaylistPageResult> run() async => result;
+  Future<RecommendedPlaylistPageResult> run() async =>
+      _withRecommendationContinuation(result);
 }
 
 class _ControlledWidgetRecommendedPlaylistGateway
@@ -10907,7 +11044,8 @@ class _FutureWidgetRecommendedPlaylistOperation
   bool cancel() => true;
 
   @override
-  Future<RecommendedPlaylistPageResult> run() => result;
+  Future<RecommendedPlaylistPageResult> run() async =>
+      _withRecommendationContinuation(await result);
 }
 
 class _WidgetNewAlbumGateway implements NewAlbumGateway {
@@ -10936,7 +11074,7 @@ class _WidgetNewAlbumOperation implements NewAlbumPageLoadOperation {
   bool cancel() => true;
 
   @override
-  Future<NewAlbumPageResult> run() async => result;
+  Future<NewAlbumPageResult> run() async => _withNewAlbumContinuation(result);
 }
 
 class _WidgetNewSongGateway implements NewSongGateway {
@@ -11018,7 +11156,8 @@ class _WidgetFavoriteAlbumOperation implements FavoriteAlbumPageLoadOperation {
   bool cancel() => true;
 
   @override
-  Future<FavoriteAlbumPageResult> run() async => result;
+  Future<FavoriteAlbumPageResult> run() async =>
+      _withFavoriteAlbumContinuation(result);
 }
 
 class _ControlledWidgetFavoriteAlbumGateway implements FavoriteAlbumGateway {
@@ -11043,7 +11182,8 @@ class _FutureWidgetFavoriteAlbumOperation
   bool cancel() => true;
 
   @override
-  Future<FavoriteAlbumPageResult> run() => result;
+  Future<FavoriteAlbumPageResult> run() async =>
+      _withFavoriteAlbumContinuation(await result);
 }
 
 class _ScriptedWidgetFavoriteAlbumGateway implements FavoriteAlbumGateway {
@@ -11089,7 +11229,8 @@ class _WidgetFavoriteArtistOperation
   bool cancel() => true;
 
   @override
-  Future<FavoriteArtistPageResult> run() async => result;
+  Future<FavoriteArtistPageResult> run() async =>
+      _withFavoriteArtistContinuation(result);
 }
 
 class _WidgetRadarGateway implements RadarGateway {
@@ -11281,6 +11422,11 @@ class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
   }
 
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
   PlaybackQueueResult replace({
     required List<PlaylistTrackSummary> tracks,
     required int? currentIndex,
@@ -11383,7 +11529,8 @@ class _WidgetRankingTrackOperation implements RankingTrackPageLoadOperation {
   @override
   bool cancel() => true;
   @override
-  Future<RankingTrackPageResult> run() async => result;
+  Future<RankingTrackPageResult> run() async =>
+      _withRankingContinuation(result);
 }
 
 class _DetailRequest {
@@ -11419,7 +11566,8 @@ class _WidgetDetailOperation implements PlaylistTrackPageLoadOperation {
   bool cancel() => true;
 
   @override
-  Future<PlaylistTrackPageResult> run() async => result;
+  Future<PlaylistTrackPageResult> run() async =>
+      _withPlaylistContinuation(result);
 }
 
 class _DeferredWidgetDetailGateway implements PlaylistDetailGateway {
@@ -11449,7 +11597,8 @@ class _DeferredWidgetDetailOperation implements PlaylistTrackPageLoadOperation {
   bool cancel() => true;
 
   @override
-  Future<PlaylistTrackPageResult> run() => result;
+  Future<PlaylistTrackPageResult> run() async =>
+      _withPlaylistContinuation(await result);
 }
 
 class _WidgetStartOperation implements LoginStartOperation {

@@ -17,6 +17,7 @@ import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 
 class ArtistPage extends StatefulWidget {
@@ -372,10 +373,27 @@ class _ArtistAlbums extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 1120),
-      child: CustomScrollView(
-        key: const PageStorageKey('artist-albums'),
-        slivers: [
-          if (omittedAlbumCount > 0)
+      child: BoundedViewportPageDemand(
+        enabled: hasMore && !isLoadingMore && appendFailure == null,
+        onDemand: onLoadMore,
+        child: CustomScrollView(
+          key: const PageStorageKey('artist-albums'),
+          slivers: [
+            if (omittedAlbumCount > 0)
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  desktop ? 40 : 12,
+                  0,
+                  desktop ? 40 : 12,
+                  8,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: PartialResultsNotice(
+                    omittedCount: omittedAlbumCount,
+                    resultRevision: partialResultRevision,
+                  ),
+                ),
+              ),
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 desktop ? 40 : 12,
@@ -383,55 +401,42 @@ class _ArtistAlbums extends StatelessWidget {
                 desktop ? 40 : 12,
                 8,
               ),
-              sliver: SliverToBoxAdapter(
-                child: PartialResultsNotice(
-                  omittedCount: omittedAlbumCount,
-                  resultRevision: partialResultRevision,
-                ),
+              sliver: desktop
+                  ? SliverGrid.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 220,
+                            mainAxisExtent: 262,
+                            mainAxisSpacing: 16,
+                            crossAxisSpacing: 16,
+                          ),
+                      itemCount: albums.length,
+                      itemBuilder: (context, index) => _ArtistAlbumCard(
+                        key: ValueKey('artist-album-$index'),
+                        album: albums[index],
+                        onOpen: onOpen,
+                      ),
+                    )
+                  : SliverList.builder(
+                      itemCount: albums.length,
+                      itemBuilder: (context, index) => _ArtistAlbumTile(
+                        key: ValueKey('artist-album-$index'),
+                        album: albums[index],
+                        onOpen: onOpen,
+                      ),
+                    ),
+            ),
+            SliverToBoxAdapter(
+              child: _ArtistAlbumFooter(
+                hasMore: hasMore,
+                isLoadingMore: isLoadingMore,
+                appendFailure: appendFailure,
+                onLoadMore: onLoadMore,
+                onRetryMore: onRetryMore,
               ),
             ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              desktop ? 40 : 12,
-              0,
-              desktop ? 40 : 12,
-              8,
-            ),
-            sliver: desktop
-                ? SliverGrid.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 220,
-                          mainAxisExtent: 262,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 16,
-                        ),
-                    itemCount: albums.length,
-                    itemBuilder: (context, index) => _ArtistAlbumCard(
-                      key: ValueKey('artist-album-$index'),
-                      album: albums[index],
-                      onOpen: onOpen,
-                    ),
-                  )
-                : SliverList.builder(
-                    itemCount: albums.length,
-                    itemBuilder: (context, index) => _ArtistAlbumTile(
-                      key: ValueKey('artist-album-$index'),
-                      album: albums[index],
-                      onOpen: onOpen,
-                    ),
-                  ),
-          ),
-          SliverToBoxAdapter(
-            child: _ArtistAlbumFooter(
-              hasMore: hasMore,
-              isLoadingMore: isLoadingMore,
-              appendFailure: appendFailure,
-              onLoadMore: onLoadMore,
-              onRetryMore: onRetryMore,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
@@ -672,73 +677,85 @@ class _ArtistTracksState extends State<_ArtistTracks> {
                 controller: _scrollController,
                 currentIndex: musicTrackIndexOf(widget.tracks, widget.current),
                 desktop: widget.desktop,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: _handleScroll,
-                  child: ListView.separated(
-                    controller: _scrollController,
-                    key: const PageStorageKey('artist-tracks'),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
-                    itemCount: widget.tracks.length + 1,
-                    separatorBuilder: (_, _) => const SizedBox(height: 1),
-                    itemBuilder: (context, index) {
-                      if (index == widget.tracks.length) {
-                        return _ArtistFooter(
-                          hasMore: widget.hasMore,
-                          isLoadingMore: widget.isLoadingMore,
-                          appendFailure: widget.appendFailure,
-                          onLoadMore: widget.onLoadMore,
-                          onRetryMore: widget.onRetryMore,
+                child: BoundedViewportPageDemand(
+                  enabled:
+                      widget.hasMore &&
+                      !widget.isLoadingMore &&
+                      widget.appendFailure == null,
+                  onDemand: widget.onLoadMore,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleScroll,
+                    child: ListView.separated(
+                      controller: _scrollController,
+                      key: const PageStorageKey('artist-tracks'),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        0,
+                        horizontal,
+                        24,
+                      ),
+                      itemCount: widget.tracks.length + 1,
+                      separatorBuilder: (_, _) => const SizedBox(height: 1),
+                      itemBuilder: (context, index) {
+                        if (index == widget.tracks.length) {
+                          return _ArtistFooter(
+                            hasMore: widget.hasMore,
+                            isLoadingMore: widget.isLoadingMore,
+                            appendFailure: widget.appendFailure,
+                            onLoadMore: widget.onLoadMore,
+                            onRetryMore: widget.onRetryMore,
+                          );
+                        }
+                        final track = widget.tracks[index];
+                        final identity = (track.providerId, track.opaqueId);
+                        final selected =
+                            widget.current?.providerId == track.providerId &&
+                            widget.current?.opaqueId == track.opaqueId;
+                        final artists = track.artistNames.isEmpty
+                            ? context.l10n.trackUnknownArtist
+                            : track.artistNames.join(' / ');
+                        final canOpenAlbum =
+                            widget.onOpenAlbum != null && track.album != null;
+                        return MusicTrackRowSurface(
+                          key: ValueKey(
+                            'artist-track-state-${track.providerId}-${track.opaqueId}',
+                          ),
+                          itemKey: ValueKey('artist-track-$index'),
+                          desktop: widget.desktop,
+                          current: selected,
+                          hovered: _hoveredTrack == identity,
+                          onHoverChanged: (hovered) =>
+                              _setHovered(track, hovered),
+                          semanticLabel: context.l10n.commonTrackSemantics(
+                            artists,
+                            track.title,
+                          ),
+                          onTap: () => widget.onPlay(index),
+                          onContextMenuRequested: (_) =>
+                              unawaited(_showActions(track, index)),
+                          contentBuilder: (context, active, hovered) =>
+                              MusicTrackRowContent(
+                                index: index + 1,
+                                track: track,
+                                desktop: widget.desktop,
+                                current: selected,
+                                active: active,
+                                artistNames: artists,
+                                onPlay: () => widget.onPlay(index),
+                                onAddToQueue: () => widget.onQueue(track),
+                                onOpenAlbum: canOpenAlbum
+                                    ? () => widget.onOpenAlbum!(track.album!)
+                                    : null,
+                                onMore: () =>
+                                    unawaited(_showActions(track, index)),
+                                showInlineQueueAction: hovered,
+                                queueKey: ValueKey('artist-queue-$index'),
+                                moreKey: ValueKey('artist-context-$index'),
+                              ),
                         );
-                      }
-                      final track = widget.tracks[index];
-                      final identity = (track.providerId, track.opaqueId);
-                      final selected =
-                          widget.current?.providerId == track.providerId &&
-                          widget.current?.opaqueId == track.opaqueId;
-                      final artists = track.artistNames.isEmpty
-                          ? context.l10n.trackUnknownArtist
-                          : track.artistNames.join(' / ');
-                      final canOpenAlbum =
-                          widget.onOpenAlbum != null && track.album != null;
-                      return MusicTrackRowSurface(
-                        key: ValueKey(
-                          'artist-track-state-${track.providerId}-${track.opaqueId}',
-                        ),
-                        itemKey: ValueKey('artist-track-$index'),
-                        desktop: widget.desktop,
-                        current: selected,
-                        hovered: _hoveredTrack == identity,
-                        onHoverChanged: (hovered) =>
-                            _setHovered(track, hovered),
-                        semanticLabel: context.l10n.commonTrackSemantics(
-                          artists,
-                          track.title,
-                        ),
-                        onTap: () => widget.onPlay(index),
-                        onContextMenuRequested: (_) =>
-                            unawaited(_showActions(track, index)),
-                        contentBuilder: (context, active, hovered) =>
-                            MusicTrackRowContent(
-                              index: index + 1,
-                              track: track,
-                              desktop: widget.desktop,
-                              current: selected,
-                              active: active,
-                              artistNames: artists,
-                              onPlay: () => widget.onPlay(index),
-                              onAddToQueue: () => widget.onQueue(track),
-                              onOpenAlbum: canOpenAlbum
-                                  ? () => widget.onOpenAlbum!(track.album!)
-                                  : null,
-                              onMore: () =>
-                                  unawaited(_showActions(track, index)),
-                              showInlineQueueAction: hovered,
-                              queueKey: ValueKey('artist-queue-$index'),
-                              moreKey: ValueKey('artist-context-$index'),
-                            ),
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ),
               ),

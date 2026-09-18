@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 
 enum RecommendedPlaylistStage { loading, content, empty, error }
 
@@ -79,7 +80,7 @@ class RecommendedPlaylistController extends ChangeNotifier {
 
     if (_validPage(result, expectedOffset: 0)) {
       _playlists = List.unmodifiable(result.playlists);
-      _nextOffset = result.playlists.length + result.omittedPlaylistCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedPlaylistCount = result.omittedPlaylistCount;
       if (result.omittedPlaylistCount > 0) _partialResultRevision += 1;
@@ -120,10 +121,7 @@ class RecommendedPlaylistController extends ChangeNotifier {
             seen.add('${playlist.providerId}\u0000${playlist.opaqueId}'),
       );
       _playlists = List.unmodifiable([..._playlists, ...additions]);
-      _nextOffset =
-          expectedOffset +
-          result.playlists.length +
-          result.omittedPlaylistCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedPlaylistCount += result.omittedPlaylistCount;
       if (result.omittedPlaylistCount > 0) _partialResultRevision += 1;
@@ -148,10 +146,13 @@ class RecommendedPlaylistController extends ChangeNotifier {
   }) =>
       result.failure == null &&
       result.offset == expectedOffset &&
-      result.omittedPlaylistCount >= 0 &&
-      (!result.hasMore ||
-          result.playlists.isNotEmpty ||
-          result.omittedPlaylistCount > 0);
+      isValidRawOffsetPage(
+        offset: expectedOffset,
+        continuationOffset: result.continuationOffset,
+        hasMore: result.hasMore,
+        visibleCount: result.playlists.length,
+        omittedCount: result.omittedPlaylistCount,
+      );
 
   bool _isRetryable(RecommendedPlaylistFailure? failure) =>
       failure == RecommendedPlaylistFailure.coreUnavailable ||

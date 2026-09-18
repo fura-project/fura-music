@@ -24,6 +24,10 @@ abstract class PlaybackQueueHandle implements RustOpaqueInterface {
 
   PlaybackQueueUpdate completeCurrent();
 
+  PlaybackQueueUpdate extendAndAdvanceFromTerminal({
+    required List<LibraryTrackSummary> tracks,
+  });
+
   PlaybackQueueUpdate push({required LibraryTrackSummary track});
 
   PlaybackQueueUpdate remove({required int index});

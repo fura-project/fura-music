@@ -117,6 +117,59 @@ void main() {
     expect(find.byKey(const ValueKey('track-comments-error')), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('near-end scrolling requests exactly one next comment page', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = _ScriptedGateway([
+      TrackCommentPageResult(
+        nextOffset: 20,
+        total: 21,
+        hasMore: true,
+        latestComments: List.generate(
+          20,
+          (index) => _comment(
+            'page-one-$index',
+            'Synthetic viewport comment $index with enough text for a row.',
+          ),
+        ),
+      ),
+      TrackCommentPageResult(
+        offset: 20,
+        nextOffset: 21,
+        total: 21,
+        latestComments: [_comment('page-two', 'Loaded from the next page')],
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: MusicMaterialTheme.light(),
+        home: Scaffold(
+          body: TrackCommentsPanel(
+            gateway: gateway,
+            track: _track,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(
+      const PageStorageKey<String>('track-comments-list'),
+    );
+    await tester.fling(list, const Offset(0, -2400), 5000);
+    await tester.pumpAndSettle();
+
+    expect(gateway.requests, [(0, 20), (20, 20)]);
+    expect(find.text('Loaded from the next page'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 const _track = PlaylistTrackSummary(

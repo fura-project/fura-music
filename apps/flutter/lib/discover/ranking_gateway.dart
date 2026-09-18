@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/rankings.dart' as bridge;
 
 class RankingSummary {
@@ -52,6 +53,7 @@ class RankingTrackPageResult {
   const RankingTrackPageResult({
     this.ranking,
     this.offset = 0,
+    this.continuationOffset = -1,
     this.total = 0,
     this.hasMore = false,
     this.tracks = const [],
@@ -61,6 +63,7 @@ class RankingTrackPageResult {
 
   final RankingSummary? ranking;
   final int offset;
+  final int continuationOffset;
   final int total;
   final bool hasMore;
   final List<PlaylistTrackSummary> tracks;
@@ -238,16 +241,17 @@ RankingTrackPageResult mapBridgeRankingTrackPage(
     return RankingTrackPageResult(failure: mapBridgeRankingFailure(failure));
   }
   final ranking = result.ranking == null ? null : _mapSummary(result.ranking!);
-  final rawCount = result.tracks.length + result.omittedTrackCount;
   if (ranking == null ||
       ranking.providerId != expected.providerId ||
       ranking.opaqueId != expected.opaqueId ||
-      result.offset < 0 ||
-      result.total < 0 ||
-      result.omittedTrackCount < 0 ||
-      result.nextOffset != result.offset + rawCount ||
-      result.nextOffset > result.total ||
-      (result.hasMore && rawCount == 0)) {
+      !isValidRawOffsetPage(
+        offset: result.offset,
+        continuationOffset: result.nextOffset,
+        total: result.total,
+        hasMore: result.hasMore,
+        visibleCount: result.tracks.length,
+        omittedCount: result.omittedTrackCount,
+      )) {
     return const RankingTrackPageResult(
       failure: RankingFailure.invalidResponse,
     );
@@ -265,6 +269,7 @@ RankingTrackPageResult mapBridgeRankingTrackPage(
   return RankingTrackPageResult(
     ranking: ranking,
     offset: result.offset,
+    continuationOffset: result.nextOffset,
     total: result.total,
     hasMore: result.hasMore,
     tracks: List.unmodifiable(tracks),

@@ -12,6 +12,7 @@ import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 
 class RecentPlaysPage extends StatefulWidget {
   const RecentPlaysPage({
@@ -130,6 +131,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   void _updateSearch() {
     final query = normalizePlaylistSearchText(_search.text);
     if (_query == query) return;
+    _controller?.cancelSearchScan();
     setState(() => _query = query);
     if (query.isEmpty) {
       _controller?.cancelLoadAll();
@@ -146,7 +148,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
         _query.isEmpty ||
         controller == null ||
         controller.isRefreshing ||
-        controller.isLoadingAll ||
+        controller.searchScanStage != CollectionSearchScanStage.idle ||
         controller.stage != PlaylistDetailStage.content ||
         !controller.hasMore ||
         controller.appendFailure != null ||
@@ -160,9 +162,25 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           widget.active &&
           _query.isNotEmpty &&
           identical(controller, _controller)) {
-        unawaited(controller.loadAll());
+        unawaited(_requestSearchWindow());
       }
     });
+  }
+
+  Future<void> _requestSearchWindow({bool retryInterrupted = false}) {
+    final controller = _controller;
+    if (controller == null || _query.isEmpty) return Future.value();
+    return controller.requestSearchWindow(
+      hasEnoughMatches: () {
+        final tracks = controller.tracks;
+        if (!identical(tracks, _indexedTracks)) {
+          _index.update(tracks);
+          _indexedTracks = tracks;
+        }
+        return _index.search(_query).tracks.length >= 20;
+      },
+      retryInterrupted: retryInterrupted,
+    );
   }
 
   @override
@@ -279,10 +297,20 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                   ),
                   child: controller == null
                       ? scrollView
-                      : PlaylistScrollPrefetch(
-                          controller: controller,
-                          enabled: widget.active && _query.isEmpty,
-                          child: scrollView,
+                      : BoundedViewportPageDemand(
+                          enabled:
+                              widget.active &&
+                              _query.isNotEmpty &&
+                              controller.hasMore &&
+                              controller.appendFailure == null,
+                          generation: _query,
+                          onDemand: _requestSearchWindow,
+                          onRetreat: controller.cancelSearchScan,
+                          child: PlaylistScrollPrefetch(
+                            controller: controller,
+                            enabled: widget.active && _query.isEmpty,
+                            child: scrollView,
+                          ),
                         ),
                 ),
               ),
@@ -756,11 +784,12 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                     children: [
                       if (tracks.isEmpty)
                         Text(
-                          controller.isLoadingAll
+                          controller.isScanningSearch
                               ? context.l10n.recentSearchingAll
                               : context.l10n.recentNoMatch,
                         ),
-                      if (controller.isLoadingMore || controller.isLoadingAll)
+                      if (controller.isLoadingMore ||
+                          controller.isScanningSearch)
                         const Padding(
                           padding: EdgeInsets.all(12),
                           child: LinearProgressIndicator(),
@@ -771,13 +800,19 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                           onPressed: controller.canRetryMore
                               ? () => _query.isEmpty
                                     ? controller.retryMore()
-                                    : unawaited(controller.loadAll())
+                                    : unawaited(
+                                        _requestSearchWindow(
+                                          retryInterrupted: true,
+                                        ),
+                                      )
                               : null,
                           child: Text(context.l10n.recentContinueLoading),
                         ),
                       ] else if (controller.hasMore)
                         TextButton(
-                          onPressed: controller.loadMore,
+                          onPressed: _query.isEmpty
+                              ? controller.loadMore
+                              : _requestSearchWindow,
                           child: Text(context.l10n.commonLoadMore),
                         ),
                     ],

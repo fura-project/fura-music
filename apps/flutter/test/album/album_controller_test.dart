@@ -30,7 +30,12 @@ void main() {
         AlbumTrackPageResult(failure: AlbumTrackFailure.network),
       ),
       const _ImmediateOperation(
-        AlbumTrackPageResult(offset: 0, total: 1, tracks: [firstTrack]),
+        AlbumTrackPageResult(
+          offset: 0,
+          continuationOffset: 1,
+          total: 1,
+          tracks: [firstTrack],
+        ),
       ),
     ]);
     final controller = AlbumController(album, gateway);
@@ -55,6 +60,7 @@ void main() {
         const _ImmediateOperation(
           AlbumTrackPageResult(
             offset: 0,
+            continuationOffset: 1,
             total: 3,
             hasMore: true,
             tracks: [firstTrack],
@@ -63,6 +69,7 @@ void main() {
         const _ImmediateOperation(
           AlbumTrackPageResult(
             offset: 1,
+            continuationOffset: 3,
             total: 3,
             tracks: [firstTrack, secondTrack],
           ),
@@ -79,6 +86,7 @@ void main() {
         const _ImmediateOperation(
           AlbumTrackPageResult(
             offset: 0,
+            continuationOffset: 1,
             total: 2,
             hasMore: true,
             tracks: [firstTrack],
@@ -105,6 +113,7 @@ void main() {
       const _ImmediateOperation(
         AlbumTrackPageResult(
           offset: 0,
+          continuationOffset: 2,
           total: 3,
           hasMore: true,
           omittedTrackCount: 1,
@@ -112,7 +121,12 @@ void main() {
         ),
       ),
       const _ImmediateOperation(
-        AlbumTrackPageResult(offset: 2, total: 3, tracks: [secondTrack]),
+        AlbumTrackPageResult(
+          offset: 2,
+          continuationOffset: 3,
+          total: 3,
+          tracks: [secondTrack],
+        ),
       ),
     ]);
     final controller = AlbumController(album, gateway);
@@ -136,7 +150,12 @@ void main() {
       final gateway = _ScriptedGateway([
         firstOperation,
         const _ImmediateOperation(
-          AlbumTrackPageResult(offset: 0, total: 1, tracks: [secondTrack]),
+          AlbumTrackPageResult(
+            offset: 0,
+            continuationOffset: 1,
+            total: 1,
+            tracks: [secondTrack],
+          ),
         ),
       ]);
       final controller = AlbumController(album, gateway);
@@ -147,7 +166,12 @@ void main() {
       expect(firstOperation.cancelCalls, 1);
       expect(controller.tracks, [secondTrack]);
       firstResult.complete(
-        const AlbumTrackPageResult(offset: 0, total: 1, tracks: [firstTrack]),
+        const AlbumTrackPageResult(
+          offset: 0,
+          continuationOffset: 1,
+          total: 1,
+          tracks: [firstTrack],
+        ),
       );
       await firstLoad;
       expect(controller.tracks, [secondTrack]);

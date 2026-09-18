@@ -155,6 +155,8 @@ class MusicApp extends StatefulWidget {
         credentialVault: fallbackCredentialVault,
       );
     }
+    final resolvedRelatedTracksGateway =
+        relatedTracksGateway ?? const RustRelatedTracksGateway();
     final configuredProvider = MusicProviderDependencies(
       authenticationGateway: authenticationGateway,
       home: AuthenticatedHomeDependencies(
@@ -163,8 +165,7 @@ class MusicApp extends StatefulWidget {
         dailyRecommendationGateway: dailyRecommendationGateway,
         personalizedPlaylistsGateway: personalizedPlaylistsGateway,
         personalizedTracksGateway: personalizedTracksGateway,
-        relatedTracksGateway:
-            relatedTracksGateway ?? const RustRelatedTracksGateway(),
+        relatedTracksGateway: resolvedRelatedTracksGateway,
       ),
       library: AuthenticatedLibraryDependencies(
         recentPlaysGateway: recentPlaysGateway,
@@ -209,6 +210,7 @@ class MusicApp extends StatefulWidget {
           mediaResolutionGateway: mediaResolutionGateway,
           lyricGateway: lyricGateway,
           audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
+          relatedTracksGateway: resolvedRelatedTracksGateway,
         );
     return MusicApp._(
       bootstrap: bootstrap,

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/favorite_artists.dart' as bridge;
 
 enum FavoriteArtistFailure {
@@ -19,6 +20,7 @@ enum FavoriteArtistFailure {
 class FavoriteArtistPageResult {
   const FavoriteArtistPageResult({
     this.offset = 0,
+    this.continuationOffset = -1,
     this.total = 0,
     this.hasMore = false,
     this.artists = const [],
@@ -27,6 +29,7 @@ class FavoriteArtistPageResult {
   });
 
   final int offset;
+  final int continuationOffset;
   final int total;
   final bool hasMore;
   final List<ArtistSummary> artists;
@@ -156,17 +159,14 @@ FavoriteArtistPageResult mapBridgeFavoriteArtistPage(
       failure: mapBridgeFavoriteArtistFailure(failure),
     );
   }
-  final pageEnd =
-      result.offset + result.artists.length + result.omittedArtistCount;
-  if (result.offset < 0 ||
-      result.total < 0 ||
-      result.omittedArtistCount < 0 ||
-      result.nextOffset != pageEnd ||
-      pageEnd > result.total ||
-      (result.hasMore &&
-          (result.artists.isEmpty && result.omittedArtistCount == 0 ||
-              pageEnd >= result.total)) ||
-      (!result.hasMore && pageEnd != result.total)) {
+  if (!isValidRawOffsetPage(
+    offset: result.offset,
+    continuationOffset: result.nextOffset,
+    total: result.total,
+    hasMore: result.hasMore,
+    visibleCount: result.artists.length,
+    omittedCount: result.omittedArtistCount,
+  )) {
     return const FavoriteArtistPageResult(
       failure: FavoriteArtistFailure.invalidResponse,
     );
@@ -192,6 +192,7 @@ FavoriteArtistPageResult mapBridgeFavoriteArtistPage(
   }
   return FavoriteArtistPageResult(
     offset: result.offset,
+    continuationOffset: result.nextOffset,
     total: result.total,
     hasMore: result.hasMore,
     artists: List.unmodifiable(artists),

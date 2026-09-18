@@ -24,7 +24,10 @@ void main() {
         ),
       ),
       const _ImmediateOperation(
-        RecommendedPlaylistPageResult(playlists: [first]),
+        RecommendedPlaylistPageResult(
+          continuationOffset: 1,
+          playlists: [first],
+        ),
       ),
     ]);
     final controller = RecommendedPlaylistController(gateway);
@@ -57,12 +60,17 @@ void main() {
       const _ImmediateOperation(
         RecommendedPlaylistPageResult(
           offset: 0,
+          continuationOffset: 1,
           hasMore: true,
           playlists: [first],
         ),
       ),
       const _ImmediateOperation(
-        RecommendedPlaylistPageResult(offset: 1, playlists: [first, second]),
+        RecommendedPlaylistPageResult(
+          offset: 1,
+          continuationOffset: 3,
+          playlists: [first, second],
+        ),
       ),
     ]);
     final controller = RecommendedPlaylistController(gateway);
@@ -80,6 +88,7 @@ void main() {
       const _ImmediateOperation(
         RecommendedPlaylistPageResult(
           offset: 0,
+          continuationOffset: 1,
           hasMore: true,
           playlists: [first],
         ),
@@ -90,7 +99,11 @@ void main() {
         ),
       ),
       const _ImmediateOperation(
-        RecommendedPlaylistPageResult(offset: 1, playlists: [second]),
+        RecommendedPlaylistPageResult(
+          offset: 1,
+          continuationOffset: 2,
+          playlists: [second],
+        ),
       ),
     ]);
     final controller = RecommendedPlaylistController(gateway);
@@ -116,7 +129,10 @@ void main() {
       final gateway = _ScriptedGateway([
         firstOperation,
         const _ImmediateOperation(
-          RecommendedPlaylistPageResult(playlists: [second]),
+          RecommendedPlaylistPageResult(
+            continuationOffset: 1,
+            playlists: [second],
+          ),
         ),
       ]);
       final controller = RecommendedPlaylistController(gateway);
@@ -127,7 +143,10 @@ void main() {
       expect(firstOperation.cancelCalls, 1);
       expect(controller.playlists, [second]);
       firstResult.complete(
-        const RecommendedPlaylistPageResult(playlists: [first]),
+        const RecommendedPlaylistPageResult(
+          continuationOffset: 1,
+          playlists: [first],
+        ),
       );
       await firstLoad;
       expect(controller.playlists, [second]);

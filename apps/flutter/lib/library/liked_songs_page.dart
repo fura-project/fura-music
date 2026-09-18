@@ -17,6 +17,7 @@ import 'package:flutterustmusic/library/playlist_track_search_index.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 class LikedSongsPage extends StatefulWidget {
@@ -111,6 +112,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   void _updateQuery() {
     final query = normalizePlaylistSearchText(_searchController.text);
     if (query == _query) return;
+    _controller?.cancelSearchScan();
     setState(() => _query = query);
     if (query.isEmpty) {
       _controller?.cancelLoadAll();
@@ -127,7 +129,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
         controller == null ||
         controller.isRefreshing ||
         controller.stage != PlaylistDetailStage.content ||
-        controller.isLoadingAll ||
+        controller.searchScanStage != CollectionSearchScanStage.idle ||
         controller.appendFailure != null ||
         !controller.hasMore ||
         _searchLoadScheduled) {
@@ -141,8 +143,24 @@ class _LikedSongsPageState extends State<LikedSongsPage>
           _section != _LikedCollectionSection.songs) {
         return;
       }
-      unawaited(controller.loadAll());
+      unawaited(_requestSearchWindow());
     });
+  }
+
+  Future<void> _requestSearchWindow({bool retryInterrupted = false}) {
+    final controller = _controller;
+    if (controller == null || _query.isEmpty) return Future.value();
+    return controller.requestSearchWindow(
+      hasEnoughMatches: () {
+        final tracks = controller.tracks;
+        if (!identical(tracks, _indexedTrackSource)) {
+          _trackSearchIndex.update(tracks);
+          _indexedTrackSource = tracks;
+        }
+        return _trackSearchIndex.search(_query).tracks.length >= 20;
+      },
+      retryInterrupted: retryInterrupted,
+    );
   }
 
   PlaylistTrackSearchResult get _trackSearchResult {
@@ -378,37 +396,47 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       PlaylistDetailStage.content when tracks.isEmpty => _searchEmpty(
         controller,
       ),
-      PlaylistDetailStage.content => PlaylistScrollPrefetch(
-        controller: controller,
-        enabled: _query.isEmpty && _section == _LikedCollectionSection.songs,
-        child: ValueListenableBuilder<PlaylistTrackSummary?>(
-          valueListenable:
-              widget.queuePlaybackController.currentTrackListenable,
-          builder: (context, current, _) => _LikedTrackCollection(
-            tracks: tracks,
-            processedCount: controller.processedCount,
-            availableTrackCount: controller.tracks.length,
-            omittedTrackCount: controller.omittedTrackCount,
-            partialResultRevision: controller.partialResultRevision,
-            total: controller.total,
-            hasMore: controller.hasMore,
-            isLoadingMore: controller.isLoadingMore,
-            isLoadingAll: controller.isLoadingAll,
-            searching: _query.isNotEmpty,
-            approximateMatchCount: approximateMatchCount,
-            appendFailure: controller.appendFailure,
-            desktop: desktop,
-            current: current,
-            onLoadMore: controller.loadMore,
-            onRetryMore: _query.isEmpty
-                ? controller.retryMore
-                : () => unawaited(controller.loadAll()),
-            onTrackSelected: (index) => unawaited(
-              widget.queuePlaybackController.replaceAndPlay(tracks, index),
+      PlaylistDetailStage.content => BoundedViewportPageDemand(
+        enabled:
+            _query.isNotEmpty &&
+            controller.hasMore &&
+            controller.appendFailure == null,
+        generation: _query,
+        onDemand: _requestSearchWindow,
+        onRetreat: controller.cancelSearchScan,
+        child: PlaylistScrollPrefetch(
+          controller: controller,
+          enabled: _query.isEmpty && _section == _LikedCollectionSection.songs,
+          child: ValueListenableBuilder<PlaylistTrackSummary?>(
+            valueListenable:
+                widget.queuePlaybackController.currentTrackListenable,
+            builder: (context, current, _) => _LikedTrackCollection(
+              tracks: tracks,
+              processedCount: controller.processedCount,
+              availableTrackCount: controller.tracks.length,
+              omittedTrackCount: controller.omittedTrackCount,
+              partialResultRevision: controller.partialResultRevision,
+              total: controller.total,
+              hasMore: controller.hasMore,
+              isLoadingMore: controller.isLoadingMore,
+              isLoadingAll: controller.isScanningSearch,
+              searching: _query.isNotEmpty,
+              approximateMatchCount: approximateMatchCount,
+              appendFailure: controller.appendFailure,
+              desktop: desktop,
+              current: current,
+              onLoadMore: controller.loadMore,
+              onRetryMore: _query.isEmpty
+                  ? controller.retryMore
+                  : () =>
+                        unawaited(_requestSearchWindow(retryInterrupted: true)),
+              onTrackSelected: (index) => unawaited(
+                widget.queuePlaybackController.replaceAndPlay(tracks, index),
+              ),
+              onTrackQueued: _addToQueue,
+              onOpenAlbum: widget.onOpenAlbum,
+              onOpenArtist: widget.onOpenArtist,
             ),
-            onTrackQueued: _addToQueue,
-            onOpenAlbum: widget.onOpenAlbum,
-            onOpenArtist: widget.onOpenArtist,
           ),
         ),
       ),
@@ -440,9 +468,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
 
   Widget _searchEmpty(PlaylistDetailController controller) {
     final l10n = context.l10n;
-    final stillSearching =
-        controller.isLoadingAll ||
-        (controller.hasMore && controller.appendFailure == null);
+    final stillSearching = controller.isScanningSearch;
     final failure = controller.appendFailure;
     final omittedSuffix = controller.omittedTrackCount == 0
         ? ''
@@ -469,10 +495,12 @@ class _LikedSongsPageState extends State<LikedSongsPage>
               controller.processedCount,
               controller.total,
             ),
-      action: failure == null
+      action: failure == null && !controller.hasMore
           ? null
           : FilledButton.tonal(
-              onPressed: () => unawaited(controller.loadAll()),
+              onPressed: () => unawaited(
+                _requestSearchWindow(retryInterrupted: failure != null),
+              ),
               child: Text(l10n.likedContinueSearch),
             ),
     );

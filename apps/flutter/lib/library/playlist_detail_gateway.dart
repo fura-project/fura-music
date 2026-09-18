@@ -34,7 +34,7 @@ class PlaylistTrackSummary {
 class PlaylistTrackPageResult {
   const PlaylistTrackPageResult({
     this.offset = 0,
-    this.nextOffset,
+    this.nextOffset = -1,
     this.total = 0,
     this.totalIsExact = true,
     this.hasMore = false,
@@ -44,15 +44,13 @@ class PlaylistTrackPageResult {
   });
 
   final int offset;
-  final int? nextOffset;
+  final int nextOffset;
   final int total;
   final bool totalIsExact;
   final bool hasMore;
   final int omittedTrackCount;
   final List<PlaylistTrackSummary> tracks;
   final UserLibraryFailure? failure;
-
-  int get continuationOffset => nextOffset ?? offset + tracks.length;
 }
 
 abstract interface class PlaylistDetailGateway {

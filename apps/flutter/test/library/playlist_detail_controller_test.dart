@@ -171,7 +171,7 @@ void main() {
   });
 
   test(
-    'continues when total proves a premature has-more flag is false',
+    'does not invent continuation when provider has-more is false',
     () async {
       final gateway = _FakeDetailGateway();
       final controller = PlaylistDetailController(playlist, gateway);
@@ -182,16 +182,11 @@ void main() {
       );
       await first;
 
-      expect(controller.hasMore, isTrue);
-      final more = controller.loadMore();
-      gateway.complete(
-        1,
-        PlaylistTrackPageResult(offset: 1, total: 2, tracks: _tracks(1, 1)),
-      );
-      await more;
-
-      expect(gateway.requests.map((request) => request.offset), [0, 1]);
-      expect(controller.tracks, hasLength(2));
+      expect(controller.stage, PlaylistDetailStage.error);
+      expect(controller.failure, UserLibraryFailure.invalidResponse);
+      await controller.loadMore();
+      expect(gateway.requests.map((request) => request.offset), [0]);
+      expect(controller.tracks, isEmpty);
       expect(controller.hasMore, isFalse);
       controller.dispose();
     },
@@ -431,7 +426,7 @@ void main() {
     final initial = controller.load();
     gateway.complete(
       0,
-      PlaylistTrackPageResult(total: 3, tracks: _tracks(0, 1)),
+      PlaylistTrackPageResult(total: 3, hasMore: true, tracks: _tracks(0, 1)),
     );
     await initial;
 
@@ -717,7 +712,11 @@ void main() {
       final initial = controller.load();
       gateway.complete(
         0,
-        PlaylistTrackPageResult(total: 1000, tracks: _tracks(0, 100)),
+        PlaylistTrackPageResult(
+          total: 1000,
+          hasMore: true,
+          tracks: _tracks(0, 100),
+        ),
       );
       await initial;
     }
@@ -728,6 +727,7 @@ void main() {
         PlaylistTrackPageResult(
           offset: offset,
           total: 1000,
+          hasMore: offset + count < 1000,
           tracks: _tracks(offset, count),
         ),
       );
@@ -781,6 +781,7 @@ void main() {
             nextOffset: 103,
             omittedTrackCount: 2,
             total: 1000,
+            hasMore: true,
           ),
         );
         await _flushTasks();
@@ -915,6 +916,156 @@ void main() {
     });
   });
 
+  group('bounded collection search', () {
+    test('one demand window fetches at most two raw pages', () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(
+        playlist,
+        gateway,
+        loadAllPageInterval: Duration.zero,
+      );
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        PlaylistTrackPageResult(
+          nextOffset: 100,
+          total: 1000,
+          hasMore: true,
+          tracks: _tracks(0, 100),
+        ),
+      );
+      await initial;
+
+      final search = controller.requestSearchWindow(
+        hasEnoughMatches: () => false,
+      );
+      gateway.complete(
+        1,
+        PlaylistTrackPageResult(
+          offset: 100,
+          nextOffset: 200,
+          total: 1000,
+          hasMore: true,
+          tracks: _tracks(100, 100),
+        ),
+      );
+      await _flushTasks();
+      gateway.complete(
+        2,
+        PlaylistTrackPageResult(
+          offset: 200,
+          nextOffset: 300,
+          total: 1000,
+          hasMore: true,
+          tracks: _tracks(200, 100),
+        ),
+      );
+      await search;
+
+      expect(gateway.requests.map((request) => request.offset), [0, 100, 200]);
+      expect(controller.searchScanStage, CollectionSearchScanStage.paused);
+      expect(controller.processedCount, 300);
+      controller.dispose();
+    });
+
+    test('dedup never changes the provider continuation cursor', () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(playlist, gateway);
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        PlaylistTrackPageResult(
+          nextOffset: 100,
+          total: 300,
+          hasMore: true,
+          tracks: _tracks(0, 100),
+        ),
+      );
+      await initial;
+
+      final more = controller.loadMore();
+      gateway.complete(
+        1,
+        PlaylistTrackPageResult(
+          offset: 100,
+          nextOffset: 200,
+          total: 300,
+          hasMore: true,
+          tracks: _tracks(99, 100),
+        ),
+      );
+      await more;
+
+      expect(controller.tracks, hasLength(199));
+      expect(controller.processedCount, 200);
+      final next = controller.loadMore();
+      expect(gateway.requests.last.offset, 200);
+      gateway.complete(
+        2,
+        PlaylistTrackPageResult(
+          offset: 200,
+          nextOffset: 300,
+          total: 300,
+          tracks: _tracks(200, 100),
+        ),
+      );
+      await next;
+      controller.dispose();
+    });
+
+    test('an in-flight browse page counts against the search window', () async {
+      final gateway = _FakeDetailGateway();
+      final controller = PlaylistDetailController(
+        playlist,
+        gateway,
+        loadAllPageInterval: Duration.zero,
+      );
+      final initial = controller.load();
+      gateway.complete(
+        0,
+        PlaylistTrackPageResult(
+          nextOffset: 100,
+          total: 1000,
+          hasMore: true,
+          tracks: _tracks(0, 100),
+        ),
+      );
+      await initial;
+
+      controller.prefetchTo(150);
+      expect(gateway.requests.map((request) => request.offset), [0, 100]);
+      final search = controller.requestSearchWindow(
+        hasEnoughMatches: () => false,
+      );
+      gateway.complete(
+        1,
+        PlaylistTrackPageResult(
+          offset: 100,
+          nextOffset: 200,
+          total: 1000,
+          hasMore: true,
+          tracks: _tracks(100, 100),
+        ),
+      );
+      await _flushTasks();
+      gateway.complete(
+        2,
+        PlaylistTrackPageResult(
+          offset: 200,
+          nextOffset: 300,
+          total: 1000,
+          hasMore: true,
+          tracks: _tracks(200, 100),
+        ),
+      );
+      await search;
+
+      expect(gateway.requests.map((request) => request.offset), [0, 100, 200]);
+      expect(controller.searchScanStage, CollectionSearchScanStage.paused);
+      controller.dispose();
+    });
+  });
+
   test('maps credential rejection to a sign-in state', () async {
     final gateway = _FakeDetailGateway();
     final controller = PlaylistDetailController(playlist, gateway);
@@ -972,7 +1123,23 @@ class _FakeDetailGateway implements PlaylistDetailGateway {
   }
 
   void complete(int index, PlaylistTrackPageResult result) {
-    _results[index].complete(result);
+    // Legacy fixtures describe the synthetic raw window with their explicit
+    // row and omission counts. Production results must always carry the
+    // Provider-owned next offset; strict cursor tests pass it directly.
+    final completed = result.nextOffset >= 0
+        ? result
+        : PlaylistTrackPageResult(
+            offset: result.offset,
+            nextOffset:
+                result.offset + result.tracks.length + result.omittedTrackCount,
+            total: result.total,
+            totalIsExact: result.totalIsExact,
+            hasMore: result.hasMore,
+            omittedTrackCount: result.omittedTrackCount,
+            tracks: result.tracks,
+            failure: result.failure,
+          );
+    _results[index].complete(completed);
   }
 }
 

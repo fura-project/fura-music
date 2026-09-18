@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge;
 
 export 'package:flutterustmusic/catalog/catalog_models.dart' show AlbumSummary;
@@ -17,6 +18,7 @@ enum AlbumTrackFailure {
 class AlbumTrackPageResult {
   const AlbumTrackPageResult({
     this.offset = 0,
+    this.continuationOffset = -1,
     this.total = 0,
     this.hasMore = false,
     this.tracks = const [],
@@ -25,6 +27,7 @@ class AlbumTrackPageResult {
   });
 
   final int offset;
+  final int continuationOffset;
   final int total;
   final bool hasMore;
   final List<PlaylistTrackSummary> tracks;
@@ -118,13 +121,14 @@ AlbumTrackPageResult mapBridgeAlbumTrackPage(
     }
     return AlbumTrackPageResult(failure: mapBridgeAlbumTrackFailure(failure));
   }
-  final rawCount = result.tracks.length + result.omittedTrackCount;
-  if (result.offset < 0 ||
-      result.total < 0 ||
-      result.omittedTrackCount < 0 ||
-      result.nextOffset != result.offset + rawCount ||
-      result.offset + rawCount > result.total ||
-      (result.hasMore && rawCount == 0)) {
+  if (!isValidRawOffsetPage(
+    offset: result.offset,
+    continuationOffset: result.nextOffset,
+    total: result.total,
+    hasMore: result.hasMore,
+    visibleCount: result.tracks.length,
+    omittedCount: result.omittedTrackCount,
+  )) {
     return const AlbumTrackPageResult(
       failure: AlbumTrackFailure.invalidResponse,
     );
@@ -141,6 +145,7 @@ AlbumTrackPageResult mapBridgeAlbumTrackPage(
   }
   return AlbumTrackPageResult(
     offset: result.offset,
+    continuationOffset: result.nextOffset,
     total: result.total,
     hasMore: result.hasMore,
     tracks: List.unmodifiable(tracks),

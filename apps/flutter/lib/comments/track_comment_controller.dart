@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 
 enum TrackCommentStage { loading, content, empty, error }
 
@@ -44,7 +45,10 @@ class TrackCommentController extends ChangeNotifier {
   bool get canRetry =>
       _stage == TrackCommentStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
-      _stage == TrackCommentStage.content && _hasMore && !_isLoadingMore;
+      _stage == TrackCommentStage.content &&
+      _hasMore &&
+      !_isLoadingMore &&
+      _appendFailure == null;
   bool get canRetryMore =>
       _stage == TrackCommentStage.content &&
       !_isLoadingMore &&
@@ -154,15 +158,18 @@ class TrackCommentController extends ChangeNotifier {
     required int expectedOffset,
     required bool firstPage,
   }) {
-    final consumedCount = result.nextOffset - expectedOffset;
     return result.failure == null &&
         result.offset == expectedOffset &&
-        result.nextOffset >= expectedOffset &&
-        result.nextOffset <= result.total &&
         result.omittedHotCommentCount >= 0 &&
         result.omittedLatestCommentCount >= 0 &&
-        result.latestComments.length + result.omittedLatestCommentCount <=
-            consumedCount &&
+        isValidRawOffsetPage(
+          offset: expectedOffset,
+          continuationOffset: result.nextOffset,
+          hasMore: result.hasMore,
+          visibleCount: result.latestComments.length,
+          omittedCount: result.omittedLatestCommentCount,
+          total: result.total,
+        ) &&
         (firstPage ||
             (result.hotComments.isEmpty &&
                 result.omittedHotCommentCount == 0)) &&

@@ -24,6 +24,7 @@ import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 class RecommendedPlaylistsPage extends StatefulWidget {
@@ -962,48 +963,53 @@ class _NewAlbumCollection extends StatelessWidget {
           constraints: const BoxConstraints(
             maxWidth: MusicSizes.contentMaxWidth,
           ),
-          child: CustomScrollView(
-            key: PageStorageKey<String>('new-album-grid-${region.name}'),
-            slivers: [
-              if (omittedReleaseCount > 0)
+          child: BoundedViewportPageDemand(
+            enabled: hasMore && !isLoadingMore && appendFailure == null,
+            generation: region,
+            onDemand: onLoadMore,
+            child: CustomScrollView(
+              key: PageStorageKey<String>('new-album-grid-${region.name}'),
+              slivers: [
+                if (omittedReleaseCount > 0)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
+                    sliver: SliverToBoxAdapter(
+                      child: PartialResultsNotice(
+                        omittedCount: omittedReleaseCount,
+                        resultRevision: partialResultRevision,
+                      ),
+                    ),
+                  ),
                 SliverPadding(
-                  padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 8),
-                  sliver: SliverToBoxAdapter(
-                    child: PartialResultsNotice(
-                      omittedCount: omittedReleaseCount,
-                      resultRevision: partialResultRevision,
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  sliver: SliverGrid.builder(
+                    gridDelegate: desktop
+                        ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 180,
+                            mainAxisExtent: 228,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 20,
+                          )
+                        : const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisExtent: 226,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 16,
+                          ),
+                    itemCount: releases.length,
+                    itemBuilder: (context, index) => _NewAlbumCard(
+                      key: ValueKey('new-album-$index'),
+                      release: releases[index],
+                      onTap: () => onSelected(releases[index]),
                     ),
                   ),
                 ),
-              SliverPadding(
-                padding: EdgeInsets.symmetric(horizontal: horizontal),
-                sliver: SliverGrid.builder(
-                  gridDelegate: desktop
-                      ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 180,
-                          mainAxisExtent: 228,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 20,
-                        )
-                      : const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisExtent: 226,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 16,
-                        ),
-                  itemCount: releases.length,
-                  itemBuilder: (context, index) => _NewAlbumCard(
-                    key: ValueKey('new-album-$index'),
-                    release: releases[index],
-                    onTap: () => onSelected(releases[index]),
-                  ),
+                SliverPadding(
+                  padding: EdgeInsets.only(bottom: bottomPadding),
+                  sliver: SliverToBoxAdapter(child: footer),
                 ),
-              ),
-              SliverPadding(
-                padding: EdgeInsets.only(bottom: bottomPadding),
-                sliver: SliverToBoxAdapter(child: footer),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -1932,48 +1938,52 @@ class _RecommendationCollection extends StatelessWidget {
       final horizontal = desktop
           ? MusicSpacing.pageWide
           : MusicSpacing.pageCompact;
-      return CustomScrollView(
-        key: const PageStorageKey<String>('recommended-playlist-grid'),
-        slivers: [
-          if (omittedPlaylistCount > 0)
+      return BoundedViewportPageDemand(
+        enabled: hasMore && !isLoadingMore && appendFailure == null,
+        onDemand: onLoadMore,
+        child: CustomScrollView(
+          key: const PageStorageKey<String>('recommended-playlist-grid'),
+          slivers: [
+            if (omittedPlaylistCount > 0)
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
+                sliver: SliverToBoxAdapter(
+                  child: PartialResultsNotice(
+                    omittedCount: omittedPlaylistCount,
+                    resultRevision: partialResultRevision,
+                  ),
+                ),
+              ),
             SliverPadding(
               padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
-              sliver: SliverToBoxAdapter(
-                child: PartialResultsNotice(
-                  omittedCount: omittedPlaylistCount,
-                  resultRevision: partialResultRevision,
+              sliver: SliverGrid.builder(
+                gridDelegate: desktop
+                    ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 180,
+                        mainAxisExtent: 228,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 20,
+                      )
+                    : const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisExtent: 226,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 16,
+                      ),
+                itemCount: playlists.length,
+                itemBuilder: (context, index) => _RecommendationGridItem(
+                  key: ValueKey('recommendations-item-$index'),
+                  playlist: playlists[index],
+                  onTap: () => onSelected(playlists[index]),
                 ),
               ),
             ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
-            sliver: SliverGrid.builder(
-              gridDelegate: desktop
-                  ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 180,
-                      mainAxisExtent: 228,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 20,
-                    )
-                  : const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisExtent: 226,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 16,
-                    ),
-              itemCount: playlists.length,
-              itemBuilder: (context, index) => _RecommendationGridItem(
-                key: ValueKey('recommendations-item-$index'),
-                playlist: playlists[index],
-                onTap: () => onSelected(playlists[index]),
-              ),
+            SliverPadding(
+              padding: EdgeInsets.only(bottom: bottomPadding),
+              sliver: SliverToBoxAdapter(child: footer),
             ),
-          ),
-          SliverPadding(
-            padding: EdgeInsets.only(bottom: bottomPadding),
-            sliver: SliverToBoxAdapter(child: footer),
-          ),
-        ],
+          ],
+        ),
       );
     },
   );

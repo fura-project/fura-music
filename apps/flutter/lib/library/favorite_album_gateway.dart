@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/favorite_albums.dart' as bridge;
 
 enum FavoriteAlbumFailure {
@@ -19,6 +20,7 @@ enum FavoriteAlbumFailure {
 class FavoriteAlbumPageResult {
   const FavoriteAlbumPageResult({
     this.offset = 0,
+    this.continuationOffset = -1,
     this.total = 0,
     this.hasMore = false,
     this.albums = const [],
@@ -27,6 +29,7 @@ class FavoriteAlbumPageResult {
   });
 
   final int offset;
+  final int continuationOffset;
   final int total;
   final bool hasMore;
   final List<AlbumSummary> albums;
@@ -156,17 +159,14 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
       failure: mapBridgeFavoriteAlbumFailure(failure),
     );
   }
-  final pageEnd =
-      result.offset + result.albums.length + result.omittedAlbumCount;
-  if (result.offset < 0 ||
-      result.total < 0 ||
-      result.omittedAlbumCount < 0 ||
-      result.nextOffset != pageEnd ||
-      pageEnd > result.total ||
-      (result.hasMore &&
-          (result.albums.isEmpty && result.omittedAlbumCount == 0 ||
-              pageEnd >= result.total)) ||
-      (!result.hasMore && pageEnd != result.total)) {
+  if (!isValidRawOffsetPage(
+    offset: result.offset,
+    continuationOffset: result.nextOffset,
+    total: result.total,
+    hasMore: result.hasMore,
+    visibleCount: result.albums.length,
+    omittedCount: result.omittedAlbumCount,
+  )) {
     return const FavoriteAlbumPageResult(
       failure: FavoriteAlbumFailure.invalidResponse,
     );
@@ -192,6 +192,7 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
   }
   return FavoriteAlbumPageResult(
     offset: result.offset,
+    continuationOffset: result.nextOffset,
     total: result.total,
     hasMore: result.hasMore,
     albums: List.unmodifiable(albums),

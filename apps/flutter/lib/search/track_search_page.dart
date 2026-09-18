@@ -16,6 +16,7 @@ import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/navigation/music_section_selector.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/search/album_search_controller.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_controller.dart';
@@ -898,53 +899,62 @@ class _SearchResultsState extends State<_SearchResults> {
                 desktop: widget.desktop,
                 includesSeparator: false,
               ),
-              child: NotificationListener<ScrollNotification>(
-                onNotification: _clearHoverOnScroll,
-                child: ListView.builder(
-                  controller: _scrollController,
-                  key: const PageStorageKey('track-search-results'),
-                  padding: EdgeInsets.fromLTRB(
-                    widget.desktop ? 40 : 12,
-                    0,
-                    widget.desktop ? 40 : 12,
-                    24,
-                  ),
-                  itemCount: widget.items.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == widget.items.length) {
-                      return _SearchFooter(
-                        hasMore: widget.hasMore,
-                        isLoadingMore: widget.isLoadingMore,
-                        appendFailure: widget.appendFailure != null,
-                        onLoadMore: widget.onLoadMore,
-                        onRetryMore: widget.onRetryMore,
+              child: BoundedViewportPageDemand(
+                enabled:
+                    widget.hasMore &&
+                    !widget.isLoadingMore &&
+                    widget.appendFailure == null,
+                generation: widget.query,
+                onDemand: widget.onLoadMore,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _clearHoverOnScroll,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    key: const PageStorageKey('track-search-results'),
+                    padding: EdgeInsets.fromLTRB(
+                      widget.desktop ? 40 : 12,
+                      0,
+                      widget.desktop ? 40 : 12,
+                      24,
+                    ),
+                    itemCount: widget.items.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == widget.items.length) {
+                        return _SearchFooter(
+                          hasMore: widget.hasMore,
+                          isLoadingMore: widget.isLoadingMore,
+                          appendFailure: widget.appendFailure != null,
+                          onLoadMore: widget.onLoadMore,
+                          onRetryMore: widget.onRetryMore,
+                        );
+                      }
+                      final item = widget.items[index];
+                      final identity = (
+                        item.track.providerId,
+                        item.track.opaqueId,
                       );
-                    }
-                    final item = widget.items[index];
-                    final identity = (
-                      item.track.providerId,
-                      item.track.opaqueId,
-                    );
-                    return _SearchTrackRow(
-                      track: item.track,
-                      album: item.album,
-                      artists: item.artists,
-                      index: index,
-                      desktop: widget.desktop,
-                      current:
-                          item.track.providerId == widget.current?.providerId &&
-                          item.track.opaqueId == widget.current?.opaqueId,
-                      hovered: _hoveredTrack == identity,
-                      onHoverChanged: (hovered) =>
-                          _setHovered(item.track, hovered),
-                      onPlay: () => widget.onPlay(index),
-                      onQueue: () => widget.onQueue(item.track),
-                      onOpenAlbum: item.album == null
-                          ? null
-                          : () => widget.onOpenAlbum(item.album!),
-                      onOpenArtist: widget.onOpenArtist,
-                    );
-                  },
+                      return _SearchTrackRow(
+                        track: item.track,
+                        album: item.album,
+                        artists: item.artists,
+                        index: index,
+                        desktop: widget.desktop,
+                        current:
+                            item.track.providerId ==
+                                widget.current?.providerId &&
+                            item.track.opaqueId == widget.current?.opaqueId,
+                        hovered: _hoveredTrack == identity,
+                        onHoverChanged: (hovered) =>
+                            _setHovered(item.track, hovered),
+                        onPlay: () => widget.onPlay(index),
+                        onQueue: () => widget.onQueue(item.track),
+                        onOpenAlbum: item.album == null
+                            ? null
+                            : () => widget.onOpenAlbum(item.album!),
+                        onOpenArtist: widget.onOpenArtist,
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -989,76 +999,81 @@ class _ArtistSearchResults extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 920),
-      child: ListView.builder(
-        key: const PageStorageKey('artist-search-results'),
-        padding: EdgeInsets.fromLTRB(
-          desktop ? 40 : 12,
-          0,
-          desktop ? 40 : 12,
-          24,
-        ),
-        itemCount: artists.length + 2,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
-                  child: Semantics(
-                    header: true,
-                    child: Text(
-                      context.l10n.searchArtistResultCount(total, query),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                if (omittedCount > 0)
+      child: BoundedViewportPageDemand(
+        enabled: hasMore && !isLoadingMore && !appendFailure,
+        generation: query,
+        onDemand: onLoadMore,
+        child: ListView.builder(
+          key: const PageStorageKey('artist-search-results'),
+          padding: EdgeInsets.fromLTRB(
+            desktop ? 40 : 12,
+            0,
+            desktop ? 40 : 12,
+            24,
+          ),
+          itemCount: artists.length + 2,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Column(
+                children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
-                    child: PartialResultsNotice(
-                      omittedCount: omittedCount,
-                      resultRevision: partialResultRevision,
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        context.l10n.searchArtistResultCount(total, query),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
-              ],
+                  if (omittedCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
+                      child: PartialResultsNotice(
+                        omittedCount: omittedCount,
+                        resultRevision: partialResultRevision,
+                      ),
+                    ),
+                ],
+              );
+            }
+            if (index == artists.length + 1) {
+              return _SearchFooter(
+                hasMore: hasMore,
+                isLoadingMore: isLoadingMore,
+                appendFailure: appendFailure,
+                onLoadMore: onLoadMore,
+                onRetryMore: onRetryMore,
+              );
+            }
+            final artistIndex = index - 1;
+            final artist = artists[artistIndex];
+            return ListTile(
+              key: ValueKey('artist-search-result-$artistIndex'),
+              minTileHeight: desktop ? 68 : 72,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              leading: SizedBox.square(
+                dimension: desktop ? 48 : 52,
+                child: ArtistArtwork(uri: artist.artworkUri, iconSize: 24),
+              ),
+              title: Text(
+                artist.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(context.l10n.searchArtistResultType),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => onOpenArtist(artist),
             );
-          }
-          if (index == artists.length + 1) {
-            return _SearchFooter(
-              hasMore: hasMore,
-              isLoadingMore: isLoadingMore,
-              appendFailure: appendFailure,
-              onLoadMore: onLoadMore,
-              onRetryMore: onRetryMore,
-            );
-          }
-          final artistIndex = index - 1;
-          final artist = artists[artistIndex];
-          return ListTile(
-            key: ValueKey('artist-search-result-$artistIndex'),
-            minTileHeight: desktop ? 68 : 72,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            leading: SizedBox.square(
-              dimension: desktop ? 48 : 52,
-              child: ArtistArtwork(uri: artist.artworkUri, iconSize: 24),
-            ),
-            title: Text(
-              artist.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(context.l10n.searchArtistResultType),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => onOpenArtist(artist),
-          );
-        },
+          },
+        ),
       ),
     ),
   );
@@ -1098,76 +1113,81 @@ class _AlbumSearchResults extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 920),
-      child: ListView.builder(
-        key: const PageStorageKey('album-search-results'),
-        padding: EdgeInsets.fromLTRB(
-          desktop ? 40 : 12,
-          0,
-          desktop ? 40 : 12,
-          24,
-        ),
-        itemCount: albums.length + 2,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
-                  child: Semantics(
-                    header: true,
-                    child: Text(
-                      context.l10n.searchAlbumResultCount(total, query),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                if (omittedCount > 0)
+      child: BoundedViewportPageDemand(
+        enabled: hasMore && !isLoadingMore && !appendFailure,
+        generation: query,
+        onDemand: onLoadMore,
+        child: ListView.builder(
+          key: const PageStorageKey('album-search-results'),
+          padding: EdgeInsets.fromLTRB(
+            desktop ? 40 : 12,
+            0,
+            desktop ? 40 : 12,
+            24,
+          ),
+          itemCount: albums.length + 2,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Column(
+                children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
-                    child: PartialResultsNotice(
-                      omittedCount: omittedCount,
-                      resultRevision: partialResultRevision,
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        context.l10n.searchAlbumResultCount(total, query),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
-              ],
+                  if (omittedCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
+                      child: PartialResultsNotice(
+                        omittedCount: omittedCount,
+                        resultRevision: partialResultRevision,
+                      ),
+                    ),
+                ],
+              );
+            }
+            if (index == albums.length + 1) {
+              return _SearchFooter(
+                hasMore: hasMore,
+                isLoadingMore: isLoadingMore,
+                appendFailure: appendFailure,
+                onLoadMore: onLoadMore,
+                onRetryMore: onRetryMore,
+              );
+            }
+            final albumIndex = index - 1;
+            final album = albums[albumIndex];
+            return ListTile(
+              key: ValueKey('album-search-result-$albumIndex'),
+              minTileHeight: desktop ? 68 : 72,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              leading: SizedBox.square(
+                dimension: desktop ? 48 : 52,
+                child: _TrackArtwork(uri: album.artworkUri),
+              ),
+              title: Text(
+                album.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(context.l10n.searchAlbumResultType),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => onOpenAlbum(album),
             );
-          }
-          if (index == albums.length + 1) {
-            return _SearchFooter(
-              hasMore: hasMore,
-              isLoadingMore: isLoadingMore,
-              appendFailure: appendFailure,
-              onLoadMore: onLoadMore,
-              onRetryMore: onRetryMore,
-            );
-          }
-          final albumIndex = index - 1;
-          final album = albums[albumIndex];
-          return ListTile(
-            key: ValueKey('album-search-result-$albumIndex'),
-            minTileHeight: desktop ? 68 : 72,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            leading: SizedBox.square(
-              dimension: desktop ? 48 : 52,
-              child: _TrackArtwork(uri: album.artworkUri),
-            ),
-            title: Text(
-              album.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(context.l10n.searchAlbumResultType),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => onOpenAlbum(album),
-          );
-        },
+          },
+        ),
       ),
     ),
   );
@@ -1207,78 +1227,83 @@ class _PlaylistSearchResults extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 920),
-      child: ListView.builder(
-        key: const PageStorageKey('playlist-search-results'),
-        padding: EdgeInsets.fromLTRB(
-          desktop ? 40 : 12,
-          0,
-          desktop ? 40 : 12,
-          24,
-        ),
-        itemCount: playlists.length + 2,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
-                  child: Semantics(
-                    header: true,
-                    child: Text(
-                      context.l10n.searchPlaylistResultCount(total, query),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                if (omittedCount > 0)
+      child: BoundedViewportPageDemand(
+        enabled: hasMore && !isLoadingMore && !appendFailure,
+        generation: query,
+        onDemand: onLoadMore,
+        child: ListView.builder(
+          key: const PageStorageKey('playlist-search-results'),
+          padding: EdgeInsets.fromLTRB(
+            desktop ? 40 : 12,
+            0,
+            desktop ? 40 : 12,
+            24,
+          ),
+          itemCount: playlists.length + 2,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Column(
+                children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
-                    child: PartialResultsNotice(
-                      omittedCount: omittedCount,
-                      resultRevision: partialResultRevision,
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        context.l10n.searchPlaylistResultCount(total, query),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
-              ],
+                  if (omittedCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
+                      child: PartialResultsNotice(
+                        omittedCount: omittedCount,
+                        resultRevision: partialResultRevision,
+                      ),
+                    ),
+                ],
+              );
+            }
+            if (index == playlists.length + 1) {
+              return _SearchFooter(
+                hasMore: hasMore,
+                isLoadingMore: isLoadingMore,
+                appendFailure: appendFailure,
+                onLoadMore: onLoadMore,
+                onRetryMore: onRetryMore,
+              );
+            }
+            final playlistIndex = index - 1;
+            final playlist = playlists[playlistIndex];
+            return ListTile(
+              key: ValueKey('playlist-search-result-$playlistIndex'),
+              minTileHeight: desktop ? 68 : 72,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              leading: SizedBox.square(
+                dimension: desktop ? 48 : 52,
+                child: _PlaylistArtwork(uri: playlist.artworkUri),
+              ),
+              title: Text(
+                playlist.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              subtitle: playlist.trackCount == null
+                  ? Text(context.l10n.searchPlaylistResultType)
+                  : Text(context.l10n.trackCount(playlist.trackCount!)),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => onOpenPlaylist(playlist),
             );
-          }
-          if (index == playlists.length + 1) {
-            return _SearchFooter(
-              hasMore: hasMore,
-              isLoadingMore: isLoadingMore,
-              appendFailure: appendFailure,
-              onLoadMore: onLoadMore,
-              onRetryMore: onRetryMore,
-            );
-          }
-          final playlistIndex = index - 1;
-          final playlist = playlists[playlistIndex];
-          return ListTile(
-            key: ValueKey('playlist-search-result-$playlistIndex'),
-            minTileHeight: desktop ? 68 : 72,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            leading: SizedBox.square(
-              dimension: desktop ? 48 : 52,
-              child: _PlaylistArtwork(uri: playlist.artworkUri),
-            ),
-            title: Text(
-              playlist.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            subtitle: playlist.trackCount == null
-                ? Text(context.l10n.searchPlaylistResultType)
-                : Text(context.l10n.trackCount(playlist.trackCount!)),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => onOpenPlaylist(playlist),
-          );
-        },
+          },
+        ),
       ),
     ),
   );

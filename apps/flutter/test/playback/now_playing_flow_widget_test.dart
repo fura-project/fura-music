@@ -2471,6 +2471,11 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
   }
 
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
   PlaybackQueueResult remove(int index) {
     final override = nextRemoveResult;
     nextRemoveResult = null;
@@ -2676,6 +2681,7 @@ class _DetailOperation implements PlaylistTrackPageLoadOperation {
 
   @override
   Future<PlaylistTrackPageResult> run() async => PlaylistTrackPageResult(
+    nextOffset: 2,
     total: 2,
     tracks: [
       PlaylistTrackSummary(

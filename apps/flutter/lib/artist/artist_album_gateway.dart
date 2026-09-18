@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/artist.dart' as bridge;
 
 enum ArtistAlbumFailure {
@@ -15,6 +16,7 @@ enum ArtistAlbumFailure {
 class ArtistAlbumPageResult {
   const ArtistAlbumPageResult({
     this.offset = 0,
+    this.continuationOffset = -1,
     this.total = 0,
     this.hasMore = false,
     this.albums = const [],
@@ -23,6 +25,7 @@ class ArtistAlbumPageResult {
   });
 
   final int offset;
+  final int continuationOffset;
   final int total;
   final bool hasMore;
   final List<AlbumSummary> albums;
@@ -117,13 +120,14 @@ ArtistAlbumPageResult mapBridgeArtistAlbumPage(
     }
     return ArtistAlbumPageResult(failure: mapBridgeArtistAlbumFailure(failure));
   }
-  final rawCount = result.albums.length + result.omittedAlbumCount;
-  if (result.offset < 0 ||
-      result.total < 0 ||
-      result.omittedAlbumCount < 0 ||
-      result.nextOffset != result.offset + rawCount ||
-      result.offset + rawCount > result.total ||
-      (result.hasMore && rawCount == 0)) {
+  if (!isValidRawOffsetPage(
+    offset: result.offset,
+    continuationOffset: result.nextOffset,
+    total: result.total,
+    hasMore: result.hasMore,
+    visibleCount: result.albums.length,
+    omittedCount: result.omittedAlbumCount,
+  )) {
     return const ArtistAlbumPageResult(
       failure: ArtistAlbumFailure.invalidResponse,
     );
@@ -149,6 +153,7 @@ ArtistAlbumPageResult mapBridgeArtistAlbumPage(
   }
   return ArtistAlbumPageResult(
     offset: result.offset,
+    continuationOffset: result.nextOffset,
     total: result.total,
     hasMore: result.hasMore,
     albums: List.unmodifiable(albums),

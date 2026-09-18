@@ -263,7 +263,12 @@ class _AlbumGateway implements AlbumTrackGateway {
     required int offset,
     required int size,
   }) => _AlbumOperation(
-    AlbumTrackPageResult(offset: offset, total: 1, tracks: [track]),
+    AlbumTrackPageResult(
+      offset: offset,
+      continuationOffset: 1,
+      total: 1,
+      tracks: [track],
+    ),
   );
 }
 

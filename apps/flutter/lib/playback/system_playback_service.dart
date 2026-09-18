@@ -6,6 +6,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -204,6 +205,7 @@ QueuePlaybackController createAppPlaybackController({
   required MediaResolutionGateway mediaResolutionGateway,
   required LyricGateway lyricGateway,
   required ForegroundAudioEngine audioEngine,
+  RelatedTracksGateway? relatedTracksGateway,
 }) => QueuePlaybackController(
   playbackQueueGateway,
   TrackPlaybackController(
@@ -211,6 +213,7 @@ QueuePlaybackController createAppPlaybackController({
     ForegroundPlaybackController(audioEngine),
   ),
   lyrics: LyricController(lyricGateway),
+  relatedTracksGateway: relatedTracksGateway,
 );
 
 AppPlaybackHost createForegroundAppPlaybackHost({
@@ -218,12 +221,14 @@ AppPlaybackHost createForegroundAppPlaybackHost({
   required MediaResolutionGateway mediaResolutionGateway,
   required LyricGateway lyricGateway,
   required ForegroundAudioEngine audioEngine,
+  RelatedTracksGateway? relatedTracksGateway,
 }) => ForegroundAppPlaybackHost(
   createAppPlaybackController(
     playbackQueueGateway: playbackQueueGateway,
     mediaResolutionGateway: mediaResolutionGateway,
     lyricGateway: lyricGateway,
     audioEngine: audioEngine,
+    relatedTracksGateway: relatedTracksGateway,
   ),
 );
 
@@ -255,6 +260,7 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
   required MediaResolutionGateway mediaResolutionGateway,
   required LyricGateway lyricGateway,
   required ForegroundAudioEngine audioEngine,
+  RelatedTracksGateway? relatedTracksGateway,
   @visibleForTesting
   ProjectAudioServiceInitializer audioServiceInitializer =
       _initializeProjectAudioService,
@@ -270,6 +276,7 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     mediaResolutionGateway: mediaResolutionGateway,
     lyricGateway: lyricGateway,
     audioEngine: audioEngine,
+    relatedTracksGateway: relatedTracksGateway,
   );
   final effectivePlatform = platform ?? defaultTargetPlatform;
 

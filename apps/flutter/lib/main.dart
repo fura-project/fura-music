@@ -103,6 +103,7 @@ Future<void> main(List<String> arguments) async {
       MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
     },
     systemMediaEdge: playbackStack.systemMediaEdge,
+    relatedTracksGateway: const RustRelatedTracksGateway(),
   );
 
   // Keep AudioService initialization ahead of account restoration. Android can

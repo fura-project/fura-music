@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 
 enum FavoriteAlbumStage {
   loading,
@@ -78,7 +79,7 @@ class FavoriteAlbumController extends ChangeNotifier {
     if (_validPage(result, expectedOffset: 0)) {
       _albums = List.unmodifiable(result.albums);
       _total = result.total;
-      _nextOffset = result.albums.length + result.omittedAlbumCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedAlbumCount = result.omittedAlbumCount;
       if (result.omittedAlbumCount > 0) _partialResultRevision += 1;
@@ -120,8 +121,7 @@ class FavoriteAlbumController extends ChangeNotifier {
       );
       _albums = List.unmodifiable([..._albums, ...additions]);
       _total = result.total;
-      _nextOffset =
-          expectedOffset + result.albums.length + result.omittedAlbumCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedAlbumCount += result.omittedAlbumCount;
       if (result.omittedAlbumCount > 0) _partialResultRevision += 1;
@@ -152,16 +152,16 @@ class FavoriteAlbumController extends ChangeNotifier {
     FavoriteAlbumPageResult result, {
     required int expectedOffset,
   }) {
-    final pageEnd =
-        expectedOffset + result.albums.length + result.omittedAlbumCount;
     return result.failure == null &&
         result.offset == expectedOffset &&
-        result.omittedAlbumCount >= 0 &&
-        pageEnd <= result.total &&
-        (result.hasMore
-            ? (result.albums.isNotEmpty || result.omittedAlbumCount > 0) &&
-                  pageEnd < result.total
-            : pageEnd == result.total);
+        isValidRawOffsetPage(
+          offset: expectedOffset,
+          continuationOffset: result.continuationOffset,
+          total: result.total,
+          hasMore: result.hasMore,
+          visibleCount: result.albums.length,
+          omittedCount: result.omittedAlbumCount,
+        );
   }
 
   void _applyInitialFailure(FavoriteAlbumFailure failure) {

@@ -23,7 +23,11 @@ void main() {
         FavoriteArtistPageResult(failure: FavoriteArtistFailure.network),
       ),
       const _ImmediateOperation(
-        FavoriteArtistPageResult(total: 1, artists: [first]),
+        FavoriteArtistPageResult(
+          continuationOffset: 1,
+          total: 1,
+          artists: [first],
+        ),
       ),
     ]);
     final controller = FavoriteArtistController(gateway);
@@ -45,11 +49,17 @@ void main() {
       final controller = FavoriteArtistController(
         _ScriptedGateway([
           const _ImmediateOperation(
-            FavoriteArtistPageResult(total: 3, hasMore: true, artists: [first]),
+            FavoriteArtistPageResult(
+              continuationOffset: 1,
+              total: 3,
+              hasMore: true,
+              artists: [first],
+            ),
           ),
           const _ImmediateOperation(
             FavoriteArtistPageResult(
               offset: 1,
+              continuationOffset: 3,
               total: 3,
               artists: [first, second],
             ),
@@ -64,7 +74,12 @@ void main() {
       final failing = FavoriteArtistController(
         _ScriptedGateway([
           const _ImmediateOperation(
-            FavoriteArtistPageResult(total: 2, hasMore: true, artists: [first]),
+            FavoriteArtistPageResult(
+              continuationOffset: 1,
+              total: 2,
+              hasMore: true,
+              artists: [first],
+            ),
           ),
           const _ImmediateOperation(
             FavoriteArtistPageResult(failure: FavoriteArtistFailure.network),
@@ -85,7 +100,12 @@ void main() {
     final controller = FavoriteArtistController(
       _ScriptedGateway([
         const _ImmediateOperation(
-          FavoriteArtistPageResult(total: 2, hasMore: true, artists: [first]),
+          FavoriteArtistPageResult(
+            continuationOffset: 1,
+            total: 2,
+            hasMore: true,
+            artists: [first],
+          ),
         ),
         const _ImmediateOperation(
           FavoriteArtistPageResult(
@@ -109,7 +129,11 @@ void main() {
     final gateway = _ScriptedGateway([
       firstOperation,
       const _ImmediateOperation(
-        FavoriteArtistPageResult(total: 1, artists: [second]),
+        FavoriteArtistPageResult(
+          continuationOffset: 1,
+          total: 1,
+          artists: [second],
+        ),
       ),
     ]);
     final controller = FavoriteArtistController(gateway);
@@ -120,7 +144,11 @@ void main() {
     await replacement;
     expect(firstOperation.cancelCalls, 1);
     firstResult.complete(
-      const FavoriteArtistPageResult(total: 1, artists: [first]),
+      const FavoriteArtistPageResult(
+        continuationOffset: 1,
+        total: 1,
+        artists: [first],
+      ),
     );
     await firstLoad;
     expect(controller.artists, [second]);

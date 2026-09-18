@@ -10,6 +10,7 @@ import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -287,39 +288,45 @@ class _AlbumCollection extends StatelessWidget {
                 const SizedBox(height: 8),
               ],
               Expanded(
-                child: desktop
-                    ? GridView.builder(
-                        key: const PageStorageKey<String>(
-                          'favorite-album-grid',
-                        ),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 220,
-                              mainAxisExtent: 255,
-                              crossAxisSpacing: 24,
-                              mainAxisSpacing: 28,
-                            ),
-                        itemCount: albums.length + 1,
-                        itemBuilder: (context, index) => index == albums.length
-                            ? footer
-                            : _AlbumGridItem(
-                                album: albums[index],
-                                onTap: () => onOpenAlbum(albums[index]),
+                child: BoundedViewportPageDemand(
+                  enabled: canLoadMore,
+                  onDemand: onLoadMore,
+                  child: desktop
+                      ? GridView.builder(
+                          key: const PageStorageKey<String>(
+                            'favorite-album-grid',
+                          ),
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 220,
+                                mainAxisExtent: 255,
+                                crossAxisSpacing: 24,
+                                mainAxisSpacing: 28,
                               ),
-                      )
-                    : ListView.separated(
-                        key: const PageStorageKey<String>(
-                          'favorite-album-list',
+                          itemCount: albums.length + 1,
+                          itemBuilder: (context, index) =>
+                              index == albums.length
+                              ? footer
+                              : _AlbumGridItem(
+                                  album: albums[index],
+                                  onTap: () => onOpenAlbum(albums[index]),
+                                ),
+                        )
+                      : ListView.separated(
+                          key: const PageStorageKey<String>(
+                            'favorite-album-list',
+                          ),
+                          itemCount: albums.length + 1,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) =>
+                              index == albums.length
+                              ? footer
+                              : _AlbumListItem(
+                                  album: albums[index],
+                                  onTap: () => onOpenAlbum(albums[index]),
+                                ),
                         ),
-                        itemCount: albums.length + 1,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => index == albums.length
-                            ? footer
-                            : _AlbumListItem(
-                                album: albums[index],
-                                onTap: () => onOpenAlbum(albums[index]),
-                              ),
-                      ),
+                ),
               ),
             ],
           ),

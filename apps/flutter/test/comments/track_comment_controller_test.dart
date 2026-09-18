@@ -210,6 +210,70 @@ void main() {
       controller.dispose();
     },
   );
+
+  test('rapid append demand stays single-flight', () async {
+    final append = _PendingOperation();
+    final gateway = _ScriptedGateway([
+      _PendingOperation.completed(
+        TrackCommentPageResult(
+          nextOffset: 20,
+          total: 21,
+          hasMore: true,
+          omittedLatestCommentCount: 19,
+          latestComments: [_comment('one')],
+        ),
+      ),
+      append,
+    ]);
+    final controller = TrackCommentController(gateway, _track);
+    await controller.load();
+
+    final firstDemand = controller.loadMore();
+    final repeatedDemand = controller.loadMore();
+    expect(gateway.requests, [(0, 20), (20, 20)]);
+    append.complete(
+      TrackCommentPageResult(
+        offset: 20,
+        nextOffset: 21,
+        total: 21,
+        latestComments: [_comment('two')],
+      ),
+    );
+    await Future.wait([firstDemand, repeatedDemand]);
+    expect(controller.latestComments, hasLength(2));
+    controller.dispose();
+  });
+
+  test('later pages cannot repeat hot-comment sections', () async {
+    final gateway = _ScriptedGateway([
+      _PendingOperation.completed(
+        TrackCommentPageResult(
+          nextOffset: 1,
+          total: 2,
+          hasMore: true,
+          hotComments: [_comment('hot')],
+          latestComments: [_comment('one')],
+        ),
+      ),
+      _PendingOperation.completed(
+        TrackCommentPageResult(
+          offset: 1,
+          nextOffset: 2,
+          total: 2,
+          hotComments: [_comment('repeated-hot')],
+          latestComments: [_comment('two')],
+        ),
+      ),
+    ]);
+    final controller = TrackCommentController(gateway, _track);
+    await controller.load();
+    await controller.loadMore();
+
+    expect(controller.appendFailure, TrackCommentFailure.invalidResponse);
+    expect(controller.hotComments.single.opaqueId, 'comment:hot');
+    expect(controller.latestComments.single.opaqueId, 'comment:one');
+    controller.dispose();
+  });
 }
 
 const _track = PlaylistTrackSummary(

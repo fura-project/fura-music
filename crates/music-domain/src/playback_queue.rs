@@ -254,6 +254,42 @@ impl PlaybackQueue {
         became_current
     }
 
+    /// Atomically appends a prepared continuation batch and selects its first
+    /// entry. This is deliberately narrower than `push`: it is valid only at
+    /// the terminal position of sequential, repeat-off playback. Provider
+    /// fetching and candidate filtering remain outside the Domain queue.
+    ///
+    /// Validation happens before mutation, so every failure leaves both the
+    /// ordered entries and current position unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidPlaybackQueue::EmptyContinuation`] for an empty batch,
+    /// or [`InvalidPlaybackQueue::ContinuationRequiresTerminal`] unless the
+    /// queue is at a sequential, repeat-off terminal position.
+    pub fn extend_and_advance_from_terminal(
+        &mut self,
+        tracks: Vec<TrackSummary>,
+    ) -> Result<(), InvalidPlaybackQueue> {
+        if tracks.is_empty() {
+            return Err(InvalidPlaybackQueue::EmptyContinuation);
+        }
+        let Some(current) = self.current_index else {
+            return Err(InvalidPlaybackQueue::ContinuationRequiresTerminal);
+        };
+        if self.order != PlaybackOrder::Sequential
+            || self.repeat_mode != PlaybackRepeatMode::Off
+            || current + 1 != self.tracks.len()
+        {
+            return Err(InvalidPlaybackQueue::ContinuationRequiresTerminal);
+        }
+        let first_appended = self.tracks.len();
+        self.tracks.extend(tracks);
+        self.current_index = Some(first_appended);
+        self.rebuild_shuffle_cycle();
+        Ok(())
+    }
+
     /// Removes one exact position.
     ///
     /// Removing the current item selects its successor when present, otherwise
@@ -424,6 +460,8 @@ pub enum InvalidPlaybackQueue {
     MissingCurrent,
     UnexpectedCurrent { index: usize },
     CurrentOutOfBounds { index: usize, len: usize },
+    EmptyContinuation,
+    ContinuationRequiresTerminal,
 }
 
 impl fmt::Display for InvalidPlaybackQueue {
@@ -439,6 +477,12 @@ impl fmt::Display for InvalidPlaybackQueue {
             Self::CurrentOutOfBounds { index, len } => write!(
                 formatter,
                 "playback queue position {index} is outside {len} entries"
+            ),
+            Self::EmptyContinuation => {
+                formatter.write_str("playback queue continuation cannot be empty")
+            }
+            Self::ContinuationRequiresTerminal => formatter.write_str(
+                "playback queue continuation requires sequential repeat-off terminal state",
             ),
         }
     }
@@ -504,6 +548,50 @@ mod tests {
         assert_eq!(queue.len(), 3);
         assert_eq!(queue.current_index(), Some(2));
         assert_eq!(queue.tracks()[0].id(), queue.tracks()[2].id());
+    }
+
+    #[test]
+    fn terminal_continuation_extends_and_advances_once() {
+        let mut queue =
+            PlaybackQueue::try_new(vec![track("one"), track("terminal")], Some(1)).expect("queue");
+
+        queue
+            .extend_and_advance_from_terminal(vec![track("next"), track("later")])
+            .expect("terminal continuation");
+
+        assert_eq!(queue.len(), 4);
+        assert_eq!(queue.current_index(), Some(2));
+        assert_eq!(queue.current().expect("current").title(), "next");
+        assert!(queue.has_next());
+    }
+
+    #[test]
+    fn invalid_terminal_continuation_is_atomic() {
+        let mut queue =
+            PlaybackQueue::try_new(vec![track("one"), track("two")], Some(0)).expect("queue");
+        let original = queue.clone();
+
+        assert_eq!(
+            queue.extend_and_advance_from_terminal(vec![track("next")]),
+            Err(InvalidPlaybackQueue::ContinuationRequiresTerminal)
+        );
+        assert_eq!(queue, original);
+
+        queue.select(1).expect("terminal");
+        let original = queue.clone();
+        assert_eq!(
+            queue.extend_and_advance_from_terminal(Vec::new()),
+            Err(InvalidPlaybackQueue::EmptyContinuation)
+        );
+        assert_eq!(queue, original);
+
+        queue.set_repeat_mode(PlaybackRepeatMode::All);
+        let original = queue.clone();
+        assert_eq!(
+            queue.extend_and_advance_from_terminal(vec![track("next")]),
+            Err(InvalidPlaybackQueue::ContinuationRequiresTerminal)
+        );
+        assert_eq!(queue, original);
     }
 
     #[test]

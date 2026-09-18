@@ -80,6 +80,9 @@ abstract interface class PlaybackQueueGateway {
   });
 
   PlaybackQueueResult push(PlaylistTrackSummary track);
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  );
   PlaybackQueueResult select(int index);
   PlaybackQueueResult advance();
   PlaybackQueueResult rewind();
@@ -100,6 +103,9 @@ abstract interface class PlaybackQueueBridge {
 
   bridge_queue.PlaybackQueueUpdate push(
     bridge_library.LibraryTrackSummary track,
+  );
+  bridge_queue.PlaybackQueueUpdate extendAndAdvanceFromTerminal(
+    List<bridge_library.LibraryTrackSummary> tracks,
   );
   bridge_queue.PlaybackQueueUpdate select(int index);
   bridge_queue.PlaybackQueueUpdate advance();
@@ -141,6 +147,15 @@ class RustPlaybackQueueGateway implements PlaybackQueueGateway {
   @override
   PlaybackQueueResult push(PlaylistTrackSummary track) =>
       _invoke(() => _resolvedBridge.push(_bridgeTrack(track)));
+
+  @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => _invoke(
+    () => _resolvedBridge.extendAndAdvanceFromTerminal(
+      tracks.map(_bridgeTrack).toList(growable: false),
+    ),
+  );
 
   @override
   PlaybackQueueResult select(int index) =>
@@ -211,6 +226,11 @@ class _RustPlaybackQueueBridge implements PlaybackQueueBridge {
   bridge_queue.PlaybackQueueUpdate push(
     bridge_library.LibraryTrackSummary track,
   ) => _handle.push(track: track);
+
+  @override
+  bridge_queue.PlaybackQueueUpdate extendAndAdvanceFromTerminal(
+    List<bridge_library.LibraryTrackSummary> tracks,
+  ) => _handle.extendAndAdvanceFromTerminal(tracks: tracks);
 
   @override
   bridge_queue.PlaybackQueueUpdate select(int index) =>

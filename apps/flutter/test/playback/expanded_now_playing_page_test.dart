@@ -492,6 +492,11 @@ class _QueueGateway implements PlaybackQueueGateway {
       PlaybackQueueResult(snapshot: _snapshot);
 
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
   PlaybackQueueResult remove(int index) =>
       PlaybackQueueResult(snapshot: _snapshot);
 

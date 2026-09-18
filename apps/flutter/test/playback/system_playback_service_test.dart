@@ -460,6 +460,15 @@ class _MemoryQueueGateway implements PlaybackQueueGateway {
   );
 
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => _update(
+    [..._snapshot.tracks, ...tracks],
+    _snapshot.tracks.length,
+    playbackRequested: true,
+  );
+
+  @override
   PlaybackQueueResult remove(int index) {
     final tracks = [..._snapshot.tracks]..removeAt(index);
     if (tracks.isEmpty) return _update(const [], null, playbackRequested: true);

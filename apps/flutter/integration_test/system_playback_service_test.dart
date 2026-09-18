@@ -134,6 +134,11 @@ class _MemoryQueueGateway implements PlaybackQueueGateway {
   PlaybackQueueResult push(PlaylistTrackSummary track) => snapshot();
 
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => snapshot();
+
+  @override
   PlaybackQueueResult select(int index) => snapshot();
 
   @override

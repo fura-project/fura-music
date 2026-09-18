@@ -263,7 +263,12 @@ class _ArtistGateway implements ArtistTrackGateway {
     required int offset,
     required int size,
   }) => _ArtistOperation(
-    ArtistTrackPageResult(offset: offset, total: 1, tracks: [track]),
+    ArtistTrackPageResult(
+      offset: offset,
+      continuationOffset: 1,
+      total: 1,
+      tracks: [track],
+    ),
   );
 }
 
@@ -292,6 +297,7 @@ class _ArtistListGateway implements ArtistTrackGateway {
   }) => _ArtistOperation(
     ArtistTrackPageResult(
       offset: offset,
+      continuationOffset: tracks.length,
       total: tracks.length,
       tracks: tracks.skip(offset).take(size).toList(growable: false),
     ),
@@ -312,7 +318,12 @@ class _ArtistAlbumGateway implements ArtistAlbumGateway {
   }) {
     requests.add((artist, offset, size));
     return _ArtistAlbumOperation(
-      ArtistAlbumPageResult(offset: offset, total: 1, albums: [album]),
+      ArtistAlbumPageResult(
+        offset: offset,
+        continuationOffset: 1,
+        total: 1,
+        albums: [album],
+      ),
     );
   }
 }

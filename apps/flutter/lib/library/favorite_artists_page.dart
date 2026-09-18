@@ -10,6 +10,7 @@ import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -266,41 +267,47 @@ class _ArtistCollection extends StatelessWidget {
                 const SizedBox(height: 8),
               ],
               Expanded(
-                child: desktop
-                    ? GridView.builder(
-                        key: const PageStorageKey<String>(
-                          'favorite-artist-grid',
-                        ),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 220,
-                              mainAxisExtent: 210,
-                              crossAxisSpacing: 24,
-                              mainAxisSpacing: 28,
-                            ),
-                        itemCount: artists.length + 1,
-                        itemBuilder: (context, index) => index == artists.length
-                            ? footer
-                            : _ArtistGridItem(
-                                index: index,
-                                artist: artists[index],
-                                onTap: () => onOpenArtist(artists[index]),
+                child: BoundedViewportPageDemand(
+                  enabled: canLoadMore,
+                  onDemand: onLoadMore,
+                  child: desktop
+                      ? GridView.builder(
+                          key: const PageStorageKey<String>(
+                            'favorite-artist-grid',
+                          ),
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 220,
+                                mainAxisExtent: 210,
+                                crossAxisSpacing: 24,
+                                mainAxisSpacing: 28,
                               ),
-                      )
-                    : ListView.separated(
-                        key: const PageStorageKey<String>(
-                          'favorite-artist-list',
+                          itemCount: artists.length + 1,
+                          itemBuilder: (context, index) =>
+                              index == artists.length
+                              ? footer
+                              : _ArtistGridItem(
+                                  index: index,
+                                  artist: artists[index],
+                                  onTap: () => onOpenArtist(artists[index]),
+                                ),
+                        )
+                      : ListView.separated(
+                          key: const PageStorageKey<String>(
+                            'favorite-artist-list',
+                          ),
+                          itemCount: artists.length + 1,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) =>
+                              index == artists.length
+                              ? footer
+                              : _ArtistListItem(
+                                  index: index,
+                                  artist: artists[index],
+                                  onTap: () => onOpenArtist(artists[index]),
+                                ),
                         ),
-                        itemCount: artists.length + 1,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => index == artists.length
-                            ? footer
-                            : _ArtistListItem(
-                                index: index,
-                                artist: artists[index],
-                                onTap: () => onOpenArtist(artists[index]),
-                              ),
-                      ),
+                ),
               ),
             ],
           ),

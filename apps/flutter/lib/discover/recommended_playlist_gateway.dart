@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart' as bridge;
 
 class RecommendedPlaylistSummary {
@@ -38,6 +39,7 @@ enum RecommendedPlaylistFailure {
 class RecommendedPlaylistPageResult {
   const RecommendedPlaylistPageResult({
     this.offset = 0,
+    this.continuationOffset = -1,
     this.hasMore = false,
     this.playlists = const [],
     this.omittedPlaylistCount = 0,
@@ -45,6 +47,7 @@ class RecommendedPlaylistPageResult {
   });
 
   final int offset;
+  final int continuationOffset;
   final bool hasMore;
   final List<RecommendedPlaylistSummary> playlists;
   final int omittedPlaylistCount;
@@ -136,11 +139,13 @@ RecommendedPlaylistPageResult mapBridgeRecommendedPlaylistPage(
       failure: mapBridgeRecommendedPlaylistFailure(failure),
     );
   }
-  final rawCount = result.playlists.length + result.omittedPlaylistCount;
-  if (result.offset < 0 ||
-      result.omittedPlaylistCount < 0 ||
-      result.nextOffset != result.offset + rawCount ||
-      (result.hasMore && rawCount == 0)) {
+  if (!isValidRawOffsetPage(
+    offset: result.offset,
+    continuationOffset: result.nextOffset,
+    hasMore: result.hasMore,
+    visibleCount: result.playlists.length,
+    omittedCount: result.omittedPlaylistCount,
+  )) {
     return const RecommendedPlaylistPageResult(
       failure: RecommendedPlaylistFailure.invalidResponse,
     );
@@ -168,6 +173,7 @@ RecommendedPlaylistPageResult mapBridgeRecommendedPlaylistPage(
   }
   return RecommendedPlaylistPageResult(
     offset: result.offset,
+    continuationOffset: result.nextOffset,
     hasMore: result.hasMore,
     playlists: List.unmodifiable(playlists),
     omittedPlaylistCount: result.omittedPlaylistCount,

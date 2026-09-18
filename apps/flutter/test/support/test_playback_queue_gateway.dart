@@ -34,6 +34,15 @@ class TestPlaybackQueueGateway implements PlaybackQueueGateway {
   }
 
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) {
+    final first = _snapshot.tracks.length;
+    _snapshot = _queueSnapshot([..._snapshot.tracks, ...tracks], first);
+    return PlaybackQueueResult(snapshot: _snapshot, playbackRequested: true);
+  }
+
+  @override
   PlaybackQueueResult advance() => PlaybackQueueResult(snapshot: _snapshot);
 
   @override

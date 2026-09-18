@@ -1,13 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
+enum RoamStage { idle, loading, continued, unsupported, empty, failed }
+
 class QueuePlaybackController extends ChangeNotifier {
-  QueuePlaybackController(this._gateway, this._playback, {this.lyrics}) {
+  QueuePlaybackController(
+    this._gateway,
+    this._playback, {
+    this.lyrics,
+    RelatedTracksGateway? relatedTracksGateway,
+  }) : // The public named parameter cannot use a library-private name.
+       // ignore: prefer_initializing_formals
+       _relatedTracksGateway = relatedTracksGateway {
     _playback.addListener(_onPlaybackChanged);
     lyrics?.addListener(_onLyricsChanged);
     _accept(_gateway.snapshot());
@@ -17,6 +27,7 @@ class QueuePlaybackController extends ChangeNotifier {
   final PlaybackQueueGateway _gateway;
   final TrackPlaybackController _playback;
   final LyricController? lyrics;
+  final RelatedTracksGateway? _relatedTracksGateway;
 
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
   final ValueNotifier<PlaylistTrackSummary?> _currentTrack = ValueNotifier(
@@ -26,6 +37,10 @@ class QueuePlaybackController extends ChangeNotifier {
   bool _completionHandled = false;
   bool _disposed = false;
   String? _lyricTrackKey;
+  bool _roamEnabled = false;
+  RoamStage _roamStage = RoamStage.idle;
+  RelatedTracksLoadOperation? _roamOperation;
+  int _roamGeneration = 0;
 
   PlaybackQueueSnapshot get snapshot => _snapshot;
 
@@ -43,28 +58,60 @@ class QueuePlaybackController extends ChangeNotifier {
   bool get hasNext => _snapshot.hasNext;
   PlaybackOrder get order => _snapshot.order;
   PlaybackRepeatMode get repeatMode => _snapshot.repeatMode;
+  bool get roamEnabled => _roamEnabled;
+  bool get roamEffective =>
+      _roamEnabled &&
+      _relatedTracksGateway != null &&
+      _snapshot.order == PlaybackOrder.sequential &&
+      _snapshot.repeatMode == PlaybackRepeatMode.off &&
+      switch (_snapshot.current) {
+        final current? => supportsRelatedTracksProvider(current.providerId),
+        null => false,
+      };
+  RoamStage get roamStage => _roamStage;
+
+  void setRoamEnabled(bool enabled) {
+    if (_disposed || enabled == _roamEnabled) return;
+    _roamEnabled = enabled;
+    _invalidateRoam();
+    if (!_disposed) notifyListeners();
+  }
 
   Future<void> replaceAndPlay(
     List<PlaylistTrackSummary> tracks,
     int currentIndex,
-  ) => _apply(
-    _gateway.replace(tracks: tracks, currentIndex: currentIndex),
-    playChangedCurrent: true,
-  );
+  ) {
+    _invalidateRoam();
+    return _apply(
+      _gateway.replace(tracks: tracks, currentIndex: currentIndex),
+      playChangedCurrent: true,
+    );
+  }
 
-  Future<void> push(PlaylistTrackSummary track) =>
-      _apply(_gateway.push(track), playChangedCurrent: true);
+  Future<void> push(PlaylistTrackSummary track) {
+    _invalidateRoam();
+    return _apply(_gateway.push(track), playChangedCurrent: true);
+  }
 
-  Future<void> select(int index) =>
-      _apply(_gateway.select(index), playChangedCurrent: true);
+  Future<void> select(int index) {
+    _invalidateRoam();
+    return _apply(_gateway.select(index), playChangedCurrent: true);
+  }
 
-  Future<void> advance() =>
-      _apply(_gateway.advance(), playChangedCurrent: true);
+  Future<void> advance() {
+    _invalidateRoam();
+    return _apply(_gateway.advance(), playChangedCurrent: true);
+  }
 
-  Future<void> rewind() => _apply(_gateway.rewind(), playChangedCurrent: true);
+  Future<void> rewind() {
+    _invalidateRoam();
+    return _apply(_gateway.rewind(), playChangedCurrent: true);
+  }
 
-  Future<void> setOrder(PlaybackOrder order) =>
-      _apply(_gateway.setOrder(order), playChangedCurrent: false);
+  Future<void> setOrder(PlaybackOrder order) {
+    _invalidateRoam();
+    return _apply(_gateway.setOrder(order), playChangedCurrent: false);
+  }
 
   Future<void> toggleShuffle() => setOrder(
     order == PlaybackOrder.shuffle
@@ -72,8 +119,13 @@ class QueuePlaybackController extends ChangeNotifier {
         : PlaybackOrder.shuffle,
   );
 
-  Future<void> setRepeatMode(PlaybackRepeatMode repeatMode) =>
-      _apply(_gateway.setRepeatMode(repeatMode), playChangedCurrent: false);
+  Future<void> setRepeatMode(PlaybackRepeatMode repeatMode) {
+    _invalidateRoam();
+    return _apply(
+      _gateway.setRepeatMode(repeatMode),
+      playChangedCurrent: false,
+    );
+  }
 
   Future<void> cycleRepeatMode() => setRepeatMode(switch (repeatMode) {
     PlaybackRepeatMode.off => PlaybackRepeatMode.all,
@@ -81,10 +133,15 @@ class QueuePlaybackController extends ChangeNotifier {
     PlaybackRepeatMode.one => PlaybackRepeatMode.off,
   });
 
-  Future<void> remove(int index) =>
-      _apply(_gateway.remove(index), playChangedCurrent: true);
+  Future<void> remove(int index) {
+    _invalidateRoam();
+    return _apply(_gateway.remove(index), playChangedCurrent: true);
+  }
 
-  Future<void> clear() => _apply(_gateway.clear(), playChangedCurrent: true);
+  Future<void> clear() {
+    _invalidateRoam();
+    return _apply(_gateway.clear(), playChangedCurrent: true);
+  }
 
   /// Re-resolves the current Track after an explicit playback-quality change.
   /// Active playback keeps its approximate position and paused/playing state;
@@ -116,8 +173,136 @@ class QueuePlaybackController extends ChangeNotifier {
     if (remainPaused && _playback.canPause) await _playback.pause();
   }
 
-  Future<void> _completeCurrent() =>
-      _apply(_gateway.completeCurrent(), playChangedCurrent: true);
+  Future<void> _completeCurrent() async {
+    final result = _gateway.completeCurrent();
+    if (_disposed || !_accept(result)) return;
+    if (result.playbackRequested) {
+      _completionHandled = false;
+      final current = _snapshot.current;
+      if (current == null) {
+        await _playback.stop();
+      } else {
+        await _playback.playTrack(current);
+      }
+      return;
+    }
+    await _continueRoamFromTerminal();
+  }
+
+  Future<void> _continueRoamFromTerminal() async {
+    final gateway = _relatedTracksGateway;
+    final seed = _snapshot.current;
+    if (!_roamEnabled ||
+        gateway == null ||
+        seed == null ||
+        _snapshot.hasNext ||
+        _snapshot.order != PlaybackOrder.sequential ||
+        _snapshot.repeatMode != PlaybackRepeatMode.off) {
+      return;
+    }
+    if (!supportsRelatedTracksProvider(seed.providerId)) {
+      _roamStage = RoamStage.unsupported;
+      notifyListeners();
+      return;
+    }
+
+    final generation = ++_roamGeneration;
+    final seedKey = _trackKey(seed);
+    final expectedLength = _snapshot.tracks.length;
+    late final RelatedTracksLoadOperation operation;
+    try {
+      operation = gateway.beginLoad(seed);
+    } on Object {
+      if (_roamIsCurrent(generation, seedKey, expectedLength)) {
+        _roamStage = RoamStage.failed;
+        notifyListeners();
+      }
+      return;
+    }
+    _roamOperation = operation;
+    _roamStage = RoamStage.loading;
+    notifyListeners();
+
+    late final RelatedTracksResult result;
+    try {
+      result = await operation.run();
+    } on Object {
+      if (identical(_roamOperation, operation)) _roamOperation = null;
+      if (_roamIsCurrent(generation, seedKey, expectedLength)) {
+        _roamStage = RoamStage.failed;
+        notifyListeners();
+      }
+      return;
+    }
+    if (identical(_roamOperation, operation)) _roamOperation = null;
+    if (!_roamIsCurrent(generation, seedKey, expectedLength)) return;
+    if (result.failure != null) {
+      _roamStage = RoamStage.failed;
+      notifyListeners();
+      return;
+    }
+    if (result.tracks.any((track) => track.providerId != seed.providerId)) {
+      _roamStage = RoamStage.failed;
+      notifyListeners();
+      return;
+    }
+
+    final identities = _snapshot.tracks.map(_trackKey).toSet();
+    final additions = <PlaylistTrackSummary>[];
+    for (final candidate in result.tracks) {
+      if (identities.add(_trackKey(candidate))) additions.add(candidate);
+    }
+    if (additions.isEmpty) {
+      _roamStage = RoamStage.empty;
+      notifyListeners();
+      return;
+    }
+
+    late final PlaybackQueueResult update;
+    try {
+      update = _gateway.extendAndAdvanceFromTerminal(additions);
+    } on Object {
+      if (_roamIsCurrent(generation, seedKey, expectedLength)) {
+        _roamStage = RoamStage.failed;
+        notifyListeners();
+      }
+      return;
+    }
+    if (!_roamIsCurrent(generation, seedKey, expectedLength) ||
+        !_accept(update) ||
+        !update.playbackRequested) {
+      if (!_disposed && generation == _roamGeneration) {
+        _roamStage = RoamStage.failed;
+        notifyListeners();
+      }
+      return;
+    }
+    _roamStage = RoamStage.continued;
+    _completionHandled = false;
+    notifyListeners();
+    final current = _snapshot.current;
+    if (current != null) await _playback.playTrack(current);
+  }
+
+  bool _roamIsCurrent(int generation, String seedKey, int expectedLength) =>
+      !_disposed &&
+      generation == _roamGeneration &&
+      _roamEnabled &&
+      _snapshot.order == PlaybackOrder.sequential &&
+      _snapshot.repeatMode == PlaybackRepeatMode.off &&
+      !_snapshot.hasNext &&
+      _snapshot.tracks.length == expectedLength &&
+      switch (_snapshot.current) {
+        final current? => _trackKey(current) == seedKey,
+        null => false,
+      };
+
+  void _invalidateRoam() {
+    ++_roamGeneration;
+    _roamOperation?.cancel();
+    _roamOperation = null;
+    _roamStage = RoamStage.idle;
+  }
 
   Future<void> _apply(
     PlaybackQueueResult result, {
@@ -192,6 +377,7 @@ class QueuePlaybackController extends ChangeNotifier {
   void dispose() {
     if (!_disposed) {
       _disposed = true;
+      _invalidateRoam();
       _playback.removeListener(_onPlaybackChanged);
       lyrics?.removeListener(_onLyricsChanged);
       lyrics?.dispose();
@@ -205,3 +391,6 @@ class QueuePlaybackController extends ChangeNotifier {
 bool _sameTrack(PlaylistTrackSummary? first, PlaylistTrackSummary? second) =>
     first?.providerId == second?.providerId &&
     first?.opaqueId == second?.opaqueId;
+
+String _trackKey(PlaylistTrackSummary track) =>
+    '${track.providerId}\u0000${track.opaqueId}';

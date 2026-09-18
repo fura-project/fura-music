@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/new_albums.dart' as bridge;
 
 enum NewAlbumRegion {
@@ -37,6 +38,7 @@ class NewAlbumPageResult {
   const NewAlbumPageResult({
     required this.region,
     this.offset = 0,
+    this.continuationOffset = -1,
     this.total = 0,
     this.hasMore = false,
     this.releases = const [],
@@ -46,6 +48,7 @@ class NewAlbumPageResult {
 
   final NewAlbumRegion region;
   final int offset;
+  final int continuationOffset;
   final int total;
   final bool hasMore;
   final List<NewAlbumRelease> releases;
@@ -158,13 +161,14 @@ NewAlbumPageResult mapBridgeNewAlbumPage(
       failure: mapBridgeNewAlbumFailure(failure),
     );
   }
-  final rawCount = result.releases.length + result.omittedReleaseCount;
-  if (result.offset < 0 ||
-      result.total < 0 ||
-      result.omittedReleaseCount < 0 ||
-      result.nextOffset != result.offset + rawCount ||
-      result.nextOffset > result.total ||
-      (result.hasMore && rawCount == 0)) {
+  if (!isValidRawOffsetPage(
+    offset: result.offset,
+    continuationOffset: result.nextOffset,
+    total: result.total,
+    hasMore: result.hasMore,
+    visibleCount: result.releases.length,
+    omittedCount: result.omittedReleaseCount,
+  )) {
     return NewAlbumPageResult(
       region: region,
       failure: NewAlbumFailure.invalidResponse,
@@ -220,6 +224,7 @@ NewAlbumPageResult mapBridgeNewAlbumPage(
   return NewAlbumPageResult(
     region: region,
     offset: result.offset,
+    continuationOffset: result.nextOffset,
     total: result.total,
     hasMore: result.hasMore,
     releases: List.unmodifiable(releases),

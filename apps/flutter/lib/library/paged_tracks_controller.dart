@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 
 enum PlaylistDetailStage {
   loading,
@@ -12,6 +13,8 @@ enum PlaylistDetailStage {
   authenticationRequired,
   credentialRejected,
 }
+
+enum CollectionSearchScanStage { idle, scanning, paused, complete, interrupted }
 
 /// Shared ordered track-page loader for playlists and account collections.
 /// A page supplies the operation factory; collection identity stays outside.
@@ -54,6 +57,9 @@ class PagedTracksController extends ChangeNotifier {
   int _generation = 0;
   Completer<void>? _appendPump;
   bool _manualPageRequested = false;
+  int _searchPageBudget = 0;
+  bool Function()? _searchHasEnoughMatches;
+  CollectionSearchScanStage _searchScanStage = CollectionSearchScanStage.idle;
   int _prefetchTarget = 0;
   int _prefetchPages = 0;
   Duration _estimatedPageLatency = const Duration(milliseconds: 350);
@@ -70,6 +76,9 @@ class PagedTracksController extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
   bool get isLoadingAll => _isLoadingAll;
+  bool get isScanningSearch =>
+      _searchScanStage == CollectionSearchScanStage.scanning;
+  CollectionSearchScanStage get searchScanStage => _searchScanStage;
   bool get isLoading => _operation != null;
   bool get isRefreshing => _isRefreshing;
   Duration get estimatedPageLatency => _estimatedPageLatency;
@@ -101,6 +110,7 @@ class PagedTracksController extends ChangeNotifier {
     final generation = ++_generation;
     _appendPump = null;
     _manualPageRequested = false;
+    cancelSearchScan(notify: false);
     cancelPrefetch();
     _isLoadingAll = false;
     _operation?.cancel();
@@ -128,8 +138,8 @@ class PagedTracksController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
 
     _isRefreshing = false;
-    final nextOffset = result.continuationOffset;
-    final hasMore = _pageHasMore(result, nextOffset);
+    final nextOffset = result.nextOffset;
+    final hasMore = _pageHasMore(result);
     final validSuccess =
         result.failure == null &&
         result.offset == 0 &&
@@ -144,7 +154,7 @@ class PagedTracksController extends ChangeNotifier {
       _omittedTrackCount = result.omittedTrackCount;
       if (result.omittedTrackCount > 0) _partialResultRevision += 1;
       _failure = null;
-      _stage = _tracks.isEmpty
+      _stage = _tracks.isEmpty && result.omittedTrackCount == 0 && !hasMore
           ? PlaylistDetailStage.empty
           : PlaylistDetailStage.content;
     } else if (preserveSnapshot &&
@@ -215,9 +225,63 @@ class PagedTracksController extends ChangeNotifier {
     _prefetchPages = 0;
   }
 
+  /// Supplies one bounded unit of search demand over the already ordered
+  /// collection. Loaded pages remain reusable when the query changes. The
+  /// caller decides whether enough matches are visible; one request can fetch
+  /// at most [maxPages] raw provider pages and never drains the collection.
+  Future<void> requestSearchWindow({
+    required bool Function() hasEnoughMatches,
+    int maxPages = 2,
+    bool retryInterrupted = false,
+  }) {
+    if (_disposed || maxPages <= 0) return Future.value();
+    _searchHasEnoughMatches = hasEnoughMatches;
+    cancelPrefetch();
+    if (hasEnoughMatches()) {
+      _searchPageBudget = 0;
+      _searchScanStage = CollectionSearchScanStage.paused;
+      _notify();
+      return Future.value();
+    }
+    if (_appendFailure != null && !retryInterrupted) {
+      _searchPageBudget = 0;
+      _searchScanStage = CollectionSearchScanStage.interrupted;
+      _notify();
+      return Future.value();
+    }
+    if (!_hasMore || _stage != PlaylistDetailStage.content) {
+      _searchPageBudget = 0;
+      _searchScanStage = CollectionSearchScanStage.complete;
+      _notify();
+      return Future.value();
+    }
+    // A browse/manual page that is already in flight contributes to this
+    // demand window once its rows reach the shared local index. Do not grant
+    // two additional pages on top of it.
+    _searchPageBudget = (maxPages - (_isLoadingMore ? 1 : 0)).clamp(0, 2);
+    _searchScanStage = CollectionSearchScanStage.scanning;
+    final future = _ensureAppendPump();
+    _notify();
+    return future;
+  }
+
+  /// Stops future search pages without cancelling an in-flight transport page.
+  /// That page remains part of the reusable ordered snapshot when it finishes.
+  void cancelSearchScan({bool notify = true}) {
+    final changed =
+        _searchPageBudget != 0 ||
+        _searchHasEnoughMatches != null ||
+        _searchScanStage == CollectionSearchScanStage.scanning;
+    _searchPageBudget = 0;
+    _searchHasEnoughMatches = null;
+    _searchScanStage = CollectionSearchScanStage.idle;
+    if (changed && notify) _notify();
+  }
+
   bool get _wantsAppend =>
       _isLoadingAll ||
       _manualPageRequested ||
+      (_searchPageBudget > 0 && !(_searchHasEnoughMatches?.call() ?? false)) ||
       (_prefetchPages > 0 && _tracks.length < _prefetchTarget);
 
   Future<void> _loadNextPage() async {
@@ -236,8 +300,8 @@ class PagedTracksController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
     _isLoadingMore = false;
 
-    final pageEnd = result.continuationOffset;
-    final hasMore = _pageHasMore(result, pageEnd);
+    final pageEnd = result.nextOffset;
+    final hasMore = _pageHasMore(result);
     if (result.failure == null &&
         result.offset == expectedOffset &&
         _validPage(result, pageEnd, hasMore)) {
@@ -293,6 +357,7 @@ class PagedTracksController extends ChangeNotifier {
         _stage != PlaylistDetailStage.content) {
       return Future.value();
     }
+    cancelSearchScan(notify: false);
     _isLoadingAll = true;
     cancelPrefetch();
     final future = _ensureAppendPump();
@@ -324,10 +389,15 @@ class PagedTracksController extends ChangeNotifier {
         (canLoadMore || canRetryMore)) {
       _manualPageRequested = false;
       if (_prefetchPages > 0) --_prefetchPages;
+      if (_searchPageBudget > 0) --_searchPageBudget;
       await _loadNextPage();
       if (!_isCurrent(generation)) break;
       final appendFailure = _appendFailure;
       if (appendFailure != null) {
+        if (_searchScanStage == CollectionSearchScanStage.scanning) {
+          _searchScanStage = CollectionSearchScanStage.interrupted;
+          _searchPageBudget = 0;
+        }
         if (_isLoadingAll &&
             _isTransientForAutomaticRetry(appendFailure) &&
             retryIndex < transientRetryDelays.length) {
@@ -337,6 +407,17 @@ class PagedTracksController extends ChangeNotifier {
           continue;
         }
         break;
+      }
+      if (_searchScanStage == CollectionSearchScanStage.scanning) {
+        if (_searchHasEnoughMatches?.call() ?? false) {
+          _searchPageBudget = 0;
+          _searchScanStage = CollectionSearchScanStage.paused;
+        } else if (!_hasMore) {
+          _searchPageBudget = 0;
+          _searchScanStage = CollectionSearchScanStage.complete;
+        } else if (_searchPageBudget == 0) {
+          _searchScanStage = CollectionSearchScanStage.paused;
+        }
       }
       retryIndex = 0;
       if (_wantsAppend && canLoadMore && nextPageInterval > Duration.zero) {
@@ -350,6 +431,11 @@ class PagedTracksController extends ChangeNotifier {
       _manualPageRequested = false;
       cancelPrefetch();
       _isLoadingAll = false;
+      if (_searchScanStage == CollectionSearchScanStage.scanning) {
+        _searchScanStage = _hasMore
+            ? CollectionSearchScanStage.paused
+            : CollectionSearchScanStage.complete;
+      }
       _notify();
     }
     pump.complete();
@@ -394,21 +480,22 @@ class PagedTracksController extends ChangeNotifier {
       failure == UserLibraryFailure.network ||
       failure == UserLibraryFailure.serviceUnavailable;
 
-  bool _pageHasMore(PlaylistTrackPageResult result, int pageEnd) =>
-      result.hasMore || pageEnd < result.total;
+  bool _pageHasMore(PlaylistTrackPageResult result) => result.hasMore;
 
   bool _validPage(
     PlaylistTrackPageResult result,
     int nextOffset,
     bool hasMore,
   ) {
-    final consumedCount = nextOffset - result.offset;
-    return result.total >= 0 &&
-        result.omittedTrackCount >= 0 &&
-        consumedCount >= 0 &&
-        nextOffset <= result.total &&
-        result.tracks.length + result.omittedTrackCount <= consumedCount &&
-        (!hasMore || nextOffset > result.offset);
+    if (result.total < 0) return false;
+    return isValidRawOffsetPage(
+      offset: result.offset,
+      continuationOffset: nextOffset,
+      hasMore: hasMore,
+      visibleCount: result.tracks.length,
+      omittedCount: result.omittedTrackCount,
+      total: result.totalIsExact ? result.total : null,
+    );
   }
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
@@ -429,6 +516,7 @@ class PagedTracksController extends ChangeNotifier {
     _disposed = true;
     ++_generation;
     cancelPrefetch();
+    cancelSearchScan(notify: false);
     _operation?.cancel();
     _operation = null;
     _isRefreshing = false;

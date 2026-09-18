@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -416,6 +417,334 @@ void main() {
       controller.dispose();
     },
   );
+
+  test(
+    'roam extends terminal queue atomically and starts first candidate',
+    () async {
+      const related = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'related',
+        title: 'Related track',
+        artistNames: ['Artist'],
+      );
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          _result([first], 0),
+        ],
+        extensionResults: [
+          _result([first, related], 1, changed: true),
+        ],
+      );
+      final relatedGateway = _RelatedGateway([
+        const RelatedTracksResult(tracks: [related]),
+      ]);
+      final firstSession = _FakeAudioSession();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'related']),
+        _FakeAudioEngine([firstSession, _FakeAudioSession()]),
+        relatedTracksGateway: relatedGateway,
+      );
+      controller.setRoamEnabled(true);
+
+      await controller.replaceAndPlay([first], 0);
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      await _flush();
+
+      expect(relatedGateway.seeds, [first]);
+      expect(queue.extensionCalls, 1);
+      expect(controller.current, related);
+      expect(controller.roamStage, RoamStage.continued);
+      expect(controller.playback.stage, TrackPlaybackStage.playing);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'roam respects repeat, shuffle, next-item, and provider boundaries',
+    () async {
+      const unsupported = PlaylistTrackSummary(
+        providerId: 'local',
+        opaqueId: 'local',
+        title: 'Local track',
+        artistNames: ['Artist'],
+      );
+      final relatedGateway = _RelatedGateway(const []);
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first, second], 0, changed: true),
+          _result([first], 0, changed: true, order: PlaybackOrder.shuffle),
+          _result(
+            [first],
+            0,
+            changed: true,
+            repeatMode: PlaybackRepeatMode.one,
+          ),
+          _result([unsupported], 0, changed: true),
+        ],
+        completionResults: [
+          _result([first, second], 1, changed: true),
+          _result([first], 0, order: PlaybackOrder.shuffle),
+          _result(
+            [first],
+            0,
+            changed: true,
+            repeatMode: PlaybackRepeatMode.one,
+          ),
+          _result([unsupported], 0),
+        ],
+      );
+      final sessions = List.generate(7, (_) => _FakeAudioSession());
+      final audio = _FakeAudioEngine(sessions);
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(List.generate(7, (index) => 'key-$index')),
+        audio,
+        relatedTracksGateway: relatedGateway,
+      );
+      controller.setRoamEnabled(true);
+
+      for (var index = 0; index < 4; index++) {
+        final tracks = switch (index) {
+          0 => [first, second],
+          1 || 2 => [first],
+          _ => [unsupported],
+        };
+        await controller.replaceAndPlay(tracks, 0);
+        sessions[audio._next - 1].emit(ForegroundAudioState.completed);
+        await _flush();
+      }
+
+      expect(relatedGateway.seeds, isEmpty);
+      expect(controller.roamStage, RoamStage.unsupported);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'roam filters exact duplicates and rejects foreign-provider output',
+    () async {
+      const foreign = PlaylistTrackSummary(
+        providerId: 'netease-cloud-music',
+        opaqueId: 'foreign',
+        title: 'Foreign',
+        artistNames: ['Artist'],
+      );
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          _result([first], 0),
+          _result([first], 0),
+        ],
+      );
+      final relatedGateway = _RelatedGateway([
+        const RelatedTracksResult(tracks: [first]),
+        const RelatedTracksResult(tracks: [foreign]),
+      ]);
+      final firstSession = _FakeAudioSession();
+      final secondSession = _FakeAudioSession();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['one', 'two']),
+        _FakeAudioEngine([firstSession, secondSession]),
+        relatedTracksGateway: relatedGateway,
+      );
+      controller.setRoamEnabled(true);
+
+      await controller.replaceAndPlay([first], 0);
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(controller.roamStage, RoamStage.empty);
+      expect(queue.extensionCalls, 0);
+
+      await controller.replaceAndPlay([first], 0);
+      secondSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(controller.roamStage, RoamStage.failed);
+      expect(queue.extensionCalls, 0);
+      expect(controller.tracks, [first]);
+      controller.dispose();
+    },
+  );
+
+  test('queue replacement cancels and suppresses late roam result', () async {
+    final late = Completer<RelatedTracksResult>();
+    final operation = _ControlledRelatedOperation(late.future);
+    final relatedGateway = _RelatedGateway.controlled(operation);
+    final queue = _ScriptedQueueGateway(
+      replaceResults: [
+        _result([first], 0, changed: true),
+        _result([second], 0, changed: true),
+      ],
+      completionResults: [
+        _result([first], 0),
+      ],
+    );
+    final session = _FakeAudioSession();
+    final controller = _controller(
+      queue,
+      _FakeMediaGateway(['first', 'second']),
+      _FakeAudioEngine([session, _FakeAudioSession()]),
+      relatedTracksGateway: relatedGateway,
+    );
+    controller.setRoamEnabled(true);
+
+    await controller.replaceAndPlay([first], 0);
+    session.emit(ForegroundAudioState.completed);
+    await _flush();
+    expect(controller.roamStage, RoamStage.loading);
+    await controller.replaceAndPlay([second], 0);
+    expect(operation.cancelCalls, 1);
+    late.complete(const RelatedTracksResult(tracks: [third]));
+    await _flush();
+
+    expect(queue.extensionCalls, 0);
+    expect(controller.current, second);
+    expect(controller.roamStage, RoamStage.idle);
+    controller.dispose();
+  });
+
+  test(
+    'roam stays inactive by default and failures keep the queue intact',
+    () async {
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          _result([first], 0),
+          _result([first], 0),
+        ],
+      );
+      final relatedGateway = _RelatedGateway([
+        const RelatedTracksResult(failure: RelatedTracksFailure.network),
+      ]);
+      final firstSession = _FakeAudioSession();
+      final secondSession = _FakeAudioSession();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'first-again']),
+        _FakeAudioEngine([firstSession, secondSession]),
+        relatedTracksGateway: relatedGateway,
+      );
+
+      await controller.replaceAndPlay([first], 0);
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(relatedGateway.seeds, isEmpty);
+      expect(controller.roamStage, RoamStage.idle);
+
+      controller.setRoamEnabled(true);
+      await controller.replaceAndPlay([first], 0);
+      secondSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(relatedGateway.seeds, [first]);
+      expect(controller.roamStage, RoamStage.failed);
+      expect(controller.tracks, [first]);
+      expect(queue.extensionCalls, 0);
+      controller.dispose();
+    },
+  );
+
+  test('disabling or disposing cancels an in-flight roam request', () async {
+    Future<void> exercise({required bool dispose}) async {
+      final late = Completer<RelatedTracksResult>();
+      final operation = _ControlledRelatedOperation(late.future);
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          _result([first], 0),
+        ],
+      );
+      final session = _FakeAudioSession();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first']),
+        _FakeAudioEngine([session]),
+        relatedTracksGateway: _RelatedGateway.controlled(operation),
+      );
+      controller.setRoamEnabled(true);
+      await controller.replaceAndPlay([first], 0);
+      session.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(controller.roamStage, RoamStage.loading);
+
+      if (dispose) {
+        controller.dispose();
+      } else {
+        controller.setRoamEnabled(false);
+        expect(controller.roamStage, RoamStage.idle);
+      }
+      expect(operation.cancelCalls, 1);
+      late.complete(const RelatedTracksResult(tracks: [second]));
+      await _flush();
+      expect(queue.extensionCalls, 0);
+      if (!dispose) controller.dispose();
+    }
+
+    await exercise(dispose: false);
+    await exercise(dispose: true);
+  });
+
+  test(
+    'roam requests another bounded batch only at the next terminal',
+    () async {
+      final firstSession = _FakeAudioSession();
+      final secondSession = _FakeAudioSession();
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          _result([first], 0),
+          _result([first, second], 1),
+        ],
+        extensionResults: [
+          _result([first, second], 1, changed: true),
+          _result([first, second, third], 2, changed: true),
+        ],
+      );
+      final relatedGateway = _RelatedGateway([
+        const RelatedTracksResult(tracks: [second]),
+        const RelatedTracksResult(tracks: [third]),
+      ]);
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'second', 'third']),
+        _FakeAudioEngine([firstSession, secondSession, _FakeAudioSession()]),
+        relatedTracksGateway: relatedGateway,
+      );
+      controller.setRoamEnabled(true);
+
+      await controller.replaceAndPlay([first], 0);
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      await _flush();
+      expect(relatedGateway.seeds, [first]);
+      expect(queue.extensionCalls, 1);
+      expect(controller.current, second);
+
+      await _flush();
+      expect(relatedGateway.seeds, [first]);
+      secondSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      await _flush();
+      expect(relatedGateway.seeds, [first, second]);
+      expect(queue.extensionCalls, 2);
+      expect(controller.current, third);
+      controller.dispose();
+    },
+  );
 }
 
 const first = PlaylistTrackSummary(
@@ -465,10 +794,12 @@ QueuePlaybackController _controller(
   MediaResolutionGateway media,
   ForegroundAudioEngine audio, {
   LyricController? lyrics,
+  RelatedTracksGateway? relatedTracksGateway,
 }) => QueuePlaybackController(
   gateway,
   TrackPlaybackController(media, ForegroundPlaybackController(audio)),
   lyrics: lyrics,
+  relatedTracksGateway: relatedTracksGateway,
 );
 
 Future<void> _flush() async {
@@ -484,6 +815,7 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
     this.orderResults = const [],
     this.repeatResults = const [],
     this.completionResults = const [],
+    this.extensionResults = const [],
     this.removeResults = const [],
     this.clearResults = const [],
   });
@@ -494,6 +826,7 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
   final List<PlaybackQueueResult> orderResults;
   final List<PlaybackQueueResult> repeatResults;
   final List<PlaybackQueueResult> completionResults;
+  final List<PlaybackQueueResult> extensionResults;
   final List<PlaybackQueueResult> removeResults;
   final List<PlaybackQueueResult> clearResults;
   int _replace = 0;
@@ -502,10 +835,12 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
   int _order = 0;
   int _repeat = 0;
   int _completion = 0;
+  int _extension = 0;
   int _remove = 0;
   int _clear = 0;
 
   int get completionCalls => _completion;
+  int get extensionCalls => _extension;
 
   @override
   PlaybackQueueResult snapshot() => _result(const [], null);
@@ -543,7 +878,57 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
       throw StateError('not scripted');
 
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => extensionResults[_extension++];
+
+  @override
   PlaybackQueueResult select(int index) => throw StateError('not scripted');
+}
+
+class _RelatedGateway implements RelatedTracksGateway {
+  _RelatedGateway(List<RelatedTracksResult> results)
+    : _results = results.map(_ImmediateRelatedOperation.new).toList();
+
+  _RelatedGateway.controlled(RelatedTracksLoadOperation operation)
+    : _results = [operation];
+
+  final List<RelatedTracksLoadOperation> _results;
+  final List<PlaylistTrackSummary> seeds = [];
+
+  @override
+  RelatedTracksLoadOperation beginLoad(PlaylistTrackSummary seed) {
+    seeds.add(seed);
+    return _results.removeAt(0);
+  }
+}
+
+class _ImmediateRelatedOperation implements RelatedTracksLoadOperation {
+  const _ImmediateRelatedOperation(this.result);
+
+  final RelatedTracksResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<RelatedTracksResult> run() async => result;
+}
+
+class _ControlledRelatedOperation implements RelatedTracksLoadOperation {
+  _ControlledRelatedOperation(this.result);
+
+  final Future<RelatedTracksResult> result;
+  int cancelCalls = 0;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<RelatedTracksResult> run() => result;
 }
 
 class _FakeMediaGateway implements MediaResolutionGateway {

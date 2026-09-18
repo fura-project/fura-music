@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 enum RankingGroupStage { loading, content, empty, error }
@@ -151,7 +152,7 @@ class RankingTrackController extends ChangeNotifier {
       _ranking = result.ranking!;
       _tracks = List.unmodifiable(result.tracks);
       _total = result.total;
-      _nextOffset = result.tracks.length + result.omittedTrackCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedTrackCount = result.omittedTrackCount;
       if (result.omittedTrackCount > 0) _partialResultRevision += 1;
@@ -194,8 +195,7 @@ class RankingTrackController extends ChangeNotifier {
       );
       _tracks = List.unmodifiable([..._tracks, ...additions]);
       _total = result.total;
-      _nextOffset =
-          expectedOffset + result.tracks.length + result.omittedTrackCount;
+      _nextOffset = result.continuationOffset;
       _hasMore = result.hasMore;
       _omittedTrackCount += result.omittedTrackCount;
       if (result.omittedTrackCount > 0) _partialResultRevision += 1;
@@ -222,12 +222,14 @@ class RankingTrackController extends ChangeNotifier {
       result.ranking!.providerId == _ranking.providerId &&
       result.ranking!.opaqueId == _ranking.opaqueId &&
       result.offset == expectedOffset &&
-      result.omittedTrackCount >= 0 &&
-      result.total >=
-          expectedOffset + result.tracks.length + result.omittedTrackCount &&
-      (!result.hasMore ||
-          result.tracks.isNotEmpty ||
-          result.omittedTrackCount > 0);
+      isValidRawOffsetPage(
+        offset: expectedOffset,
+        continuationOffset: result.continuationOffset,
+        total: result.total,
+        hasMore: result.hasMore,
+        visibleCount: result.tracks.length,
+        omittedCount: result.omittedTrackCount,
+      );
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 

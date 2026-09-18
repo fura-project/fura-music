@@ -34,6 +34,7 @@ void main() {
       const _ImmediateOperation(
         NewAlbumPageResult(
           region: NewAlbumRegion.mainlandChina,
+          continuationOffset: 1,
           total: 1,
           releases: [first],
         ),
@@ -62,6 +63,7 @@ void main() {
         const _ImmediateOperation(
           NewAlbumPageResult(
             region: NewAlbumRegion.mainlandChina,
+            continuationOffset: 1,
             total: 3,
             hasMore: true,
             releases: [first],
@@ -71,6 +73,7 @@ void main() {
           NewAlbumPageResult(
             region: NewAlbumRegion.mainlandChina,
             offset: 1,
+            continuationOffset: 3,
             total: 3,
             releases: [first, second],
           ),
@@ -95,6 +98,7 @@ void main() {
           const _ImmediateOperation(
             NewAlbumPageResult(
               region: NewAlbumRegion.mainlandChina,
+              continuationOffset: 1,
               total: 2,
               hasMore: true,
               releases: [first],
@@ -126,6 +130,7 @@ void main() {
       const _ImmediateOperation(
         NewAlbumPageResult(
           region: NewAlbumRegion.japan,
+          continuationOffset: 1,
           total: 1,
           releases: [second],
         ),
@@ -141,6 +146,7 @@ void main() {
     firstResult.complete(
       const NewAlbumPageResult(
         region: NewAlbumRegion.mainlandChina,
+        continuationOffset: 1,
         total: 1,
         releases: [first],
       ),

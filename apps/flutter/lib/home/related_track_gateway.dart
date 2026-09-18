@@ -33,6 +33,9 @@ abstract interface class RelatedTracksLoadOperation {
   bool cancel();
 }
 
+bool supportsRelatedTracksProvider(String providerId) =>
+    providerId == 'qq-music' || providerId == 'netease-cloud-music';
+
 typedef RelatedTracksLoadOperationFactory = RelatedTracksLoadOperation Function(
   PlaylistTrackSummary seed,
 );

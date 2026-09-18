@@ -3,7 +3,7 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/paged_tracks_controller.dart';
 
 export 'package:flutterustmusic/library/paged_tracks_controller.dart'
-    show PlaylistDetailStage;
+    show CollectionSearchScanStage, PlaylistDetailStage;
 
 /// Playlist identity adapter over the common track-page scheduler.
 class PlaylistDetailController extends PagedTracksController {

@@ -267,6 +267,10 @@ class _QueueGateway implements PlaybackQueueGateway {
   PlaybackQueueResult push(PlaylistTrackSummary track) =>
       throw UnimplementedError();
   @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) => throw UnimplementedError();
+  @override
   PlaybackQueueResult select(int index) => throw UnimplementedError();
   @override
   PlaybackQueueResult advance() => throw UnimplementedError();
