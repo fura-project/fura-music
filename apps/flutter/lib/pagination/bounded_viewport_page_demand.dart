@@ -32,20 +32,60 @@ class BoundedViewportPageDemand extends StatefulWidget {
 
 class _BoundedViewportPageDemandState extends State<BoundedViewportPageDemand> {
   bool _armed = true;
+  int _dispatchEpoch = 0;
+  int? _scheduledEpoch;
+  bool _pendingDemand = false;
+  bool _pendingRetreat = false;
 
   @override
   void didUpdateWidget(BoundedViewportPageDemand oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!oldWidget.enabled && widget.enabled ||
-        oldWidget.generation != widget.generation) {
+    if (oldWidget.generation != widget.generation) {
+      _invalidatePendingDispatch();
       _armed = true;
+    } else if (oldWidget.enabled && !widget.enabled) {
+      // Loading and other temporary disable states invalidate work recorded in
+      // the previous frame, but do not grant another approach when re-enabled.
+      _invalidatePendingDispatch();
     }
   }
 
+  void _invalidatePendingDispatch() {
+    _dispatchEpoch += 1;
+    _scheduledEpoch = null;
+    _pendingDemand = false;
+    _pendingRetreat = false;
+  }
+
+  void _scheduleDispatch({bool demand = false, bool retreat = false}) {
+    _pendingDemand = _pendingDemand || demand;
+    _pendingRetreat = _pendingRetreat || retreat;
+    final epoch = _dispatchEpoch;
+    if (_scheduledEpoch == epoch) return;
+    _scheduledEpoch = epoch;
+    final generation = widget.generation;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          epoch != _dispatchEpoch ||
+          generation != widget.generation) {
+        return;
+      }
+      if (_scheduledEpoch == epoch) _scheduledEpoch = null;
+      final dispatchRetreat = _pendingRetreat;
+      final dispatchDemand = _pendingDemand;
+      _pendingRetreat = false;
+      _pendingDemand = false;
+
+      if (!widget.enabled) return;
+      if (dispatchRetreat) widget.onRetreat?.call();
+      if (dispatchDemand && mounted) {
+        unawaited(Future<void>.sync(widget.onDemand));
+      }
+    });
+  }
+
   bool _onScroll(ScrollNotification notification) {
-    if (!widget.enabled ||
-        notification.depth != 0 ||
-        notification.metrics.axis != Axis.vertical) {
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
       return false;
     }
     final delta = switch (notification) {
@@ -55,7 +95,8 @@ class _BoundedViewportPageDemandState extends State<BoundedViewportPageDemand> {
     };
     if (delta < 0) {
       _armed = true;
-      widget.onRetreat?.call();
+      _pendingDemand = false;
+      if (widget.enabled) _scheduleDispatch(retreat: true);
       return false;
     }
     if (delta <= 0) return false;
@@ -63,10 +104,13 @@ class _BoundedViewportPageDemandState extends State<BoundedViewportPageDemand> {
     final threshold =
         notification.metrics.viewportDimension * widget.thresholdViewports;
     if (notification.metrics.extentAfter > threshold * 1.5) {
+      _pendingDemand = false;
       _armed = true;
-    } else if (_armed && notification.metrics.extentAfter <= threshold) {
+    } else if (widget.enabled &&
+        _armed &&
+        notification.metrics.extentAfter <= threshold) {
       _armed = false;
-      unawaited(Future<void>.sync(widget.onDemand));
+      _scheduleDispatch(demand: true);
     }
     return false;
   }
@@ -77,4 +121,10 @@ class _BoundedViewportPageDemandState extends State<BoundedViewportPageDemand> {
         onNotification: _onScroll,
         child: widget.child,
       );
+
+  @override
+  void dispose() {
+    _invalidatePendingDispatch();
+    super.dispose();
+  }
 }

@@ -425,10 +425,10 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
     final playback = controller.playback;
     if (playback.canResume) {
       _logCommand('play', accepted: true, reason: 'resume');
-      await playback.resume();
+      await controller.playCurrent();
     } else if (playback.canActivate) {
       _logCommand('play', accepted: true, reason: 'activate-current');
-      await playback.activate();
+      await controller.playCurrent();
     } else {
       _logCommand('play', accepted: false, reason: 'no-playable-current');
     }
@@ -455,14 +455,13 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
       _logCommand('stop', accepted: false, reason: 'host-closed');
       return;
     }
-    final playback = controller.playback;
     _logCommand(
       'stop',
       accepted: controller.current != null,
       reason: controller.current == null ? 'empty-queue' : 'current-present',
     );
     if (controller.current != null) {
-      await playback.stop();
+      await controller.stop();
     }
   }
 

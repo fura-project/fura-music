@@ -41,6 +41,7 @@ class QueuePlaybackController extends ChangeNotifier {
   RoamStage _roamStage = RoamStage.idle;
   RelatedTracksLoadOperation? _roamOperation;
   int _roamGeneration = 0;
+  int _terminalIntentEpoch = 0;
 
   PlaybackQueueSnapshot get snapshot => _snapshot;
 
@@ -143,6 +144,33 @@ class QueuePlaybackController extends ChangeNotifier {
     return _apply(_gateway.clear(), playChangedCurrent: true);
   }
 
+  /// Applies the current Track's play/pause/retry action through the Queue
+  /// owner so an explicit user or system Play intent wins over pending Roam.
+  Future<void> activateCurrent() {
+    if (_disposed) return Future.value();
+    _invalidateRoam();
+    return _playback.activate();
+  }
+
+  /// Applies an idempotent system Play intent through the Queue owner. Unlike
+  /// [activateCurrent], an already playing Track is not toggled to pause.
+  Future<void> playCurrent() {
+    if (_disposed) return Future.value();
+    _invalidateRoam();
+    if (_playback.canResume) return _playback.resume();
+    if (_playback.stage == TrackPlaybackStage.playing) return Future.value();
+    return _playback.activate();
+  }
+
+  /// Stops foreground playback through the Queue owner. The Queue contents
+  /// remain intact, but a pending terminal continuation is synchronously stale
+  /// before the audio engine begins its asynchronous stop tail.
+  Future<void> stop() {
+    if (_disposed) return Future.value();
+    _invalidateRoam();
+    return _playback.stop();
+  }
+
   /// Re-resolves the current Track after an explicit playback-quality change.
   /// Active playback keeps its approximate position and paused/playing state;
   /// an idle, stopped, completed, or failed Track uses the new preference only
@@ -173,7 +201,7 @@ class QueuePlaybackController extends ChangeNotifier {
     if (remainPaused && _playback.canPause) await _playback.pause();
   }
 
-  Future<void> _completeCurrent() async {
+  Future<void> _completeCurrent(int terminalToken) async {
     final result = _gateway.completeCurrent();
     if (_disposed || !_accept(result)) return;
     if (result.playbackRequested) {
@@ -186,10 +214,10 @@ class QueuePlaybackController extends ChangeNotifier {
       }
       return;
     }
-    await _continueRoamFromTerminal();
+    await _continueRoamFromTerminal(terminalToken);
   }
 
-  Future<void> _continueRoamFromTerminal() async {
+  Future<void> _continueRoamFromTerminal(int terminalToken) async {
     final gateway = _relatedTracksGateway;
     final seed = _snapshot.current;
     if (!_roamEnabled ||
@@ -213,7 +241,7 @@ class QueuePlaybackController extends ChangeNotifier {
     try {
       operation = gateway.beginLoad(seed);
     } on Object {
-      if (_roamIsCurrent(generation, seedKey, expectedLength)) {
+      if (_roamIsCurrent(generation, terminalToken, seedKey, expectedLength)) {
         _roamStage = RoamStage.failed;
         notifyListeners();
       }
@@ -228,14 +256,16 @@ class QueuePlaybackController extends ChangeNotifier {
       result = await operation.run();
     } on Object {
       if (identical(_roamOperation, operation)) _roamOperation = null;
-      if (_roamIsCurrent(generation, seedKey, expectedLength)) {
+      if (_roamIsCurrent(generation, terminalToken, seedKey, expectedLength)) {
         _roamStage = RoamStage.failed;
         notifyListeners();
       }
       return;
     }
     if (identical(_roamOperation, operation)) _roamOperation = null;
-    if (!_roamIsCurrent(generation, seedKey, expectedLength)) return;
+    if (!_roamIsCurrent(generation, terminalToken, seedKey, expectedLength)) {
+      return;
+    }
     if (result.failure != null) {
       _roamStage = RoamStage.failed;
       notifyListeners();
@@ -262,13 +292,13 @@ class QueuePlaybackController extends ChangeNotifier {
     try {
       update = _gateway.extendAndAdvanceFromTerminal(additions);
     } on Object {
-      if (_roamIsCurrent(generation, seedKey, expectedLength)) {
+      if (_roamIsCurrent(generation, terminalToken, seedKey, expectedLength)) {
         _roamStage = RoamStage.failed;
         notifyListeners();
       }
       return;
     }
-    if (!_roamIsCurrent(generation, seedKey, expectedLength) ||
+    if (!_roamIsCurrent(generation, terminalToken, seedKey, expectedLength) ||
         !_accept(update) ||
         !update.playbackRequested) {
       if (!_disposed && generation == _roamGeneration) {
@@ -284,10 +314,17 @@ class QueuePlaybackController extends ChangeNotifier {
     if (current != null) await _playback.playTrack(current);
   }
 
-  bool _roamIsCurrent(int generation, String seedKey, int expectedLength) =>
+  bool _roamIsCurrent(
+    int generation,
+    int terminalToken,
+    String seedKey,
+    int expectedLength,
+  ) =>
       !_disposed &&
       generation == _roamGeneration &&
+      terminalToken == _terminalIntentEpoch &&
       _roamEnabled &&
+      _playback.stage == TrackPlaybackStage.completed &&
       _snapshot.order == PlaybackOrder.sequential &&
       _snapshot.repeatMode == PlaybackRepeatMode.off &&
       !_snapshot.hasNext &&
@@ -299,6 +336,7 @@ class QueuePlaybackController extends ChangeNotifier {
 
   void _invalidateRoam() {
     ++_roamGeneration;
+    ++_terminalIntentEpoch;
     _roamOperation?.cancel();
     _roamOperation = null;
     _roamStage = RoamStage.idle;
@@ -341,12 +379,17 @@ class QueuePlaybackController extends ChangeNotifier {
 
   void _onPlaybackChanged() {
     if (_disposed) return;
+    if (_playback.stage != TrackPlaybackStage.completed &&
+        _roamOperation != null) {
+      _invalidateRoam();
+    }
     lyrics?.updatePositionMs(_playback.positionMs);
     notifyListeners();
     if (_playback.stage == TrackPlaybackStage.completed) {
       if (!_completionHandled) {
         _completionHandled = true;
-        unawaited(_completeCurrent());
+        final terminalToken = ++_terminalIntentEpoch;
+        unawaited(_completeCurrent(terminalToken));
       }
     } else {
       _completionHandled = false;

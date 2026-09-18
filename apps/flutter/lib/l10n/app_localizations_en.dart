@@ -1055,6 +1055,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discoverCurrentRanking => 'Current ranking';
 
   @override
+  String discoverRankingIssue(Object period) {
+    return 'Issue: $period';
+  }
+
+  @override
   String get discoverAlbumType => 'Album';
 
   @override
@@ -2065,6 +2070,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get recentPlayTooltip => 'Play recently played';
+
+  @override
+  String recentPlayLoaded(Object count) {
+    return 'Play $count loaded tracks';
+  }
+
+  @override
+  String recentPlayFiltered(Object count) {
+    return 'Play $count filtered results';
+  }
 
   @override
   String get recentRefreshTooltip => 'Refresh recently played';
@@ -3363,6 +3378,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsColorSourceSystemDescription =>
       'Use wallpaper or OS accent colors where supported. The current music service palette is used as a fallback.';
+
+  @override
+  String get settingsColorSourceSystemAvailable =>
+      'System colors are available; this preview uses the current system palette.';
+
+  @override
+  String get settingsColorSourceSystemUnavailable =>
+      'System colors are unavailable; the music service brand fallback is shown.';
 
   @override
   String get settingsColorSourceSystemSummary => 'System colors';

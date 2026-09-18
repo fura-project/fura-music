@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -13,6 +14,7 @@ import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/home/home_controller.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
+import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
@@ -26,7 +28,7 @@ abstract final class _HomeGeometry {
   static const double sectionGap = 32;
   static const double itemGap = 16;
   static const double wideHeroHeight = 280;
-  static const double compactHeroHeight = 256;
+  static const double compactHeroHeight = 208;
   static const double compactShelfWidth = 136;
   static const double wideShelfMinWidth = 136;
   static const double wideShelfMaxWidth = 164;
@@ -36,6 +38,18 @@ abstract final class _HomeGeometry {
   static const BorderRadius artworkRadius = BorderRadius.all(
     Radius.circular(8),
   );
+}
+
+double _compactHeroHeight(BuildContext context) {
+  final scaledBody = MediaQuery.textScalerOf(context).scale(16);
+  final extra = ((scaledBody - 16).clamp(0, 32) * 3).toDouble();
+  return _HomeGeometry.compactHeroHeight + extra;
+}
+
+double _compactActionCardHeight(BuildContext context) {
+  final scaledLabel = MediaQuery.textScalerOf(context).scale(14);
+  final extra = ((scaledLabel - 14).clamp(0, 28) * 4).toDouble();
+  return 88 + extra;
 }
 
 class HomePage extends StatefulWidget {
@@ -52,6 +66,8 @@ class HomePage extends StatefulWidget {
     required this.onOpenDiscover,
     required this.onOpenLibrary,
     required this.onOpenRecommendation,
+    this.onOpenTrackAlbum,
+    this.onOpenTrackArtist,
     this.providerDisplayName,
     this.lastOpenedRecommendation,
     this.recommendationReturnFocusNode,
@@ -74,6 +90,8 @@ class HomePage extends StatefulWidget {
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
+  final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
+  final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final String? providerDisplayName;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
@@ -95,6 +113,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late DateTime _lastRefresh;
   bool _returnToShelf = false;
   bool _refreshing = false;
+  bool _refreshingPlaylists = false;
   bool _foreground = true;
   DateTime? _spotlightDay;
   String? _spotlightIdentity;
@@ -223,6 +242,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
     } finally {
       if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _refreshPlaylistShelf() async {
+    if (!mounted || _refreshingPlaylists) return;
+    setState(() => _refreshingPlaylists = true);
+    try {
+      if (widget.authenticated) {
+        await widget.homeController.refreshPersonalizedPlaylists();
+      } else {
+        await widget.recommendationController.load();
+      }
+    } finally {
+      if (mounted) setState(() => _refreshingPlaylists = false);
     }
   }
 
@@ -357,11 +390,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final bottomContentPadding =
+                constraints.maxWidth < 640 &&
+                    widget.queuePlaybackController.current != null
+                ? 104.0
+                : 24.0;
             if (constraints.maxWidth < _HomeGeometry.compactBreakpoint) {
               return _HomeCompactLayout(
-                onRefresh: _refreshing
-                    ? null
-                    : () => unawaited(_refresh(manual: true)),
+                onRefresh: _refreshPlaylistShelf,
+                refreshingPlaylists: _refreshingPlaylists,
+                bottomContentPadding: bottomContentPadding,
                 homeController: widget.homeController,
                 recommendationController: widget.recommendationController,
                 newSongController: widget.newSongController,
@@ -385,6 +423,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 onOpenDiscover: widget.onOpenDiscover,
                 onOpenLibrary: widget.onOpenLibrary,
                 onOpenRecommendation: _openShelf,
+                onOpenTrackAlbum: widget.onOpenTrackAlbum,
+                onOpenTrackArtist: widget.onOpenTrackArtist,
                 onOpenFeatured: _openFeatured,
                 featuredReturnFocusNode: _returnToShelf
                     ? null
@@ -396,9 +436,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               );
             }
             return _HomeWideLayout(
-              onRefresh: _refreshing
-                  ? null
-                  : () => unawaited(_refresh(manual: true)),
+              onRefresh: _refreshPlaylistShelf,
+              refreshingPlaylists: _refreshingPlaylists,
+              bottomContentPadding: bottomContentPadding,
               homeController: widget.homeController,
               recommendationController: widget.recommendationController,
               newSongController: widget.newSongController,
@@ -421,6 +461,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               onOpenDiscover: widget.onOpenDiscover,
               onOpenLibrary: widget.onOpenLibrary,
               onOpenRecommendation: _openShelf,
+              onOpenTrackAlbum: widget.onOpenTrackAlbum,
+              onOpenTrackArtist: widget.onOpenTrackArtist,
               onOpenFeatured: _openFeatured,
               featuredReturnFocusNode: _returnToShelf
                   ? null
@@ -463,6 +505,8 @@ class _HomeWideLayout extends StatelessWidget {
     required this.onOpenFeatured,
     required this.featuredReturnFocusNode,
     required this.onRefresh,
+    required this.refreshingPlaylists,
+    required this.bottomContentPadding,
     required this.homeController,
     required this.recommendationController,
     required this.newSongController,
@@ -484,12 +528,16 @@ class _HomeWideLayout extends StatelessWidget {
     required this.onOpenDiscover,
     required this.onOpenLibrary,
     required this.onOpenRecommendation,
+    required this.onOpenTrackAlbum,
+    required this.onOpenTrackArtist,
     required this.lastOpenedRecommendation,
     required this.recommendationReturnFocusNode,
   });
 
   final HomeController homeController;
-  final VoidCallback? onRefresh;
+  final VoidCallback onRefresh;
+  final bool refreshingPlaylists;
+  final double bottomContentPadding;
   final ValueChanged<RecommendedPlaylistSummary> onOpenFeatured;
   final FocusNode? featuredReturnFocusNode;
   final RecommendedPlaylistController recommendationController;
@@ -512,17 +560,19 @@ class _HomeWideLayout extends StatelessWidget {
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
+  final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
+  final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const PageStorageKey('home-scroll'),
-    padding: const EdgeInsets.fromLTRB(
+    padding: EdgeInsets.fromLTRB(
       _HomeGeometry.widePadding,
       _HomeGeometry.widePadding,
       _HomeGeometry.widePadding,
-      128,
+      bottomContentPadding,
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,10 +608,11 @@ class _HomeWideLayout extends StatelessWidget {
               ? context.l10n.homePlaylistTreasures
               : context.l10n.homePopularPlaylists,
           actionKey: const ValueKey('home-refresh-recommendations'),
-          actionLabel: onRefresh == null
+          actionLabel: refreshingPlaylists
               ? context.l10n.homeRefreshing
               : context.l10n.commonRefresh,
-          onAction: onRefresh,
+          onAction: refreshingPlaylists ? null : onRefresh,
+          actionLoading: refreshingPlaylists,
         ),
         const SizedBox(height: _HomeGeometry.itemGap),
         if (authenticated)
@@ -599,6 +650,8 @@ class _HomeWideLayout extends StatelessWidget {
             queueController: queuePlaybackController,
             compact: false,
             personalFm: personalFmEnabled,
+            onOpenAlbum: onOpenTrackAlbum,
+            onOpenArtist: onOpenTrackArtist,
           )
         else
           _NewSongSection(
@@ -607,6 +660,8 @@ class _HomeWideLayout extends StatelessWidget {
             compact: false,
             authenticated: false,
             providerDisplayName: providerDisplayName,
+            onOpenAlbum: onOpenTrackAlbum,
+            onOpenArtist: onOpenTrackArtist,
           ),
         if (authenticated) ...[
           const SizedBox(height: _HomeGeometry.sectionGap),
@@ -621,6 +676,8 @@ class _HomeWideLayout extends StatelessWidget {
             compact: false,
             authenticated: true,
             providerDisplayName: providerDisplayName,
+            onOpenAlbum: onOpenTrackAlbum,
+            onOpenArtist: onOpenTrackArtist,
           ),
           const SizedBox(height: _HomeGeometry.sectionGap),
           _HomeSectionHeader(
@@ -657,6 +714,8 @@ class _HomeWideLayout extends StatelessWidget {
           controller: homeController,
           queueController: queuePlaybackController,
           compact: false,
+          onOpenAlbum: onOpenTrackAlbum,
+          onOpenArtist: onOpenTrackArtist,
         ),
       ],
     ),
@@ -668,6 +727,8 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.onOpenFeatured,
     required this.featuredReturnFocusNode,
     required this.onRefresh,
+    required this.refreshingPlaylists,
+    required this.bottomContentPadding,
     required this.homeController,
     required this.recommendationController,
     required this.newSongController,
@@ -689,12 +750,16 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.onOpenDiscover,
     required this.onOpenLibrary,
     required this.onOpenRecommendation,
+    required this.onOpenTrackAlbum,
+    required this.onOpenTrackArtist,
     required this.lastOpenedRecommendation,
     required this.recommendationReturnFocusNode,
   });
 
   final HomeController homeController;
-  final VoidCallback? onRefresh;
+  final VoidCallback onRefresh;
+  final bool refreshingPlaylists;
+  final double bottomContentPadding;
   final ValueChanged<RecommendedPlaylistSummary> onOpenFeatured;
   final FocusNode? featuredReturnFocusNode;
   final RecommendedPlaylistController recommendationController;
@@ -717,13 +782,15 @@ class _HomeCompactLayout extends StatelessWidget {
   final VoidCallback onOpenDiscover;
   final VoidCallback onOpenLibrary;
   final ValueChanged<RecommendedPlaylistSummary> onOpenRecommendation;
+  final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
+  final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const PageStorageKey('home-scroll'),
-    padding: const EdgeInsets.only(bottom: 140),
+    padding: EdgeInsets.only(bottom: bottomContentPadding),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -768,10 +835,11 @@ class _HomeCompactLayout extends StatelessWidget {
                     ? context.l10n.homePlaylistTreasures
                     : context.l10n.homePopularPlaylists,
                 actionKey: const ValueKey('home-refresh-recommendations'),
-                actionLabel: onRefresh == null
+                actionLabel: refreshingPlaylists
                     ? context.l10n.homeRefreshing
                     : context.l10n.commonRefresh,
-                onAction: onRefresh,
+                onAction: refreshingPlaylists ? null : onRefresh,
+                actionLoading: refreshingPlaylists,
                 compact: true,
               ),
               const SizedBox(height: _HomeGeometry.itemGap),
@@ -811,6 +879,8 @@ class _HomeCompactLayout extends StatelessWidget {
                   queueController: queuePlaybackController,
                   compact: true,
                   personalFm: personalFmEnabled,
+                  onOpenAlbum: onOpenTrackAlbum,
+                  onOpenArtist: onOpenTrackArtist,
                 )
               else
                 _NewSongSection(
@@ -819,6 +889,8 @@ class _HomeCompactLayout extends StatelessWidget {
                   compact: true,
                   authenticated: false,
                   providerDisplayName: providerDisplayName,
+                  onOpenAlbum: onOpenTrackAlbum,
+                  onOpenArtist: onOpenTrackArtist,
                 ),
               if (authenticated) ...[
                 const SizedBox(height: _HomeGeometry.sectionGap),
@@ -834,6 +906,8 @@ class _HomeCompactLayout extends StatelessWidget {
                   compact: true,
                   authenticated: true,
                   providerDisplayName: providerDisplayName,
+                  onOpenAlbum: onOpenTrackAlbum,
+                  onOpenArtist: onOpenTrackArtist,
                 ),
                 const SizedBox(height: _HomeGeometry.sectionGap),
                 _HomeSectionHeader(
@@ -875,6 +949,8 @@ class _HomeCompactLayout extends StatelessWidget {
                 controller: homeController,
                 queueController: queuePlaybackController,
                 compact: true,
+                onOpenAlbum: onOpenTrackAlbum,
+                onOpenArtist: onOpenTrackArtist,
               ),
             ],
           ),
@@ -904,6 +980,7 @@ class _HomeSectionHeader extends StatelessWidget {
     this.actionKey,
     this.actionLabel,
     this.onAction,
+    this.actionLoading = false,
   });
 
   final Key titleKey;
@@ -912,6 +989,7 @@ class _HomeSectionHeader extends StatelessWidget {
   final Key? actionKey;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool actionLoading;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -931,12 +1009,24 @@ class _HomeSectionHeader extends StatelessWidget {
           ),
         ),
       ),
-      if (onAction != null) ...[
+      if (actionLabel != null) ...[
         const SizedBox(width: MusicSpacing.itemGap),
         TextButton(
           key: actionKey,
           onPressed: onAction,
-          child: Text(actionLabel!),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (actionLoading) ...[
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(actionLabel!),
+            ],
+          ),
         ),
       ],
     ],
@@ -1154,7 +1244,7 @@ class _DailyRecommendationContent extends StatelessWidget {
         eyebrow: authenticated
             ? context.l10n.homeForYouEyebrow
             : context.l10n.homePublicSpotlightEyebrow,
-        height: compact ? _HomeGeometry.compactHeroHeight : null,
+        height: compact ? _compactHeroHeight(context) : null,
         itemKey: const ValueKey('home-recommendation-0'),
         onSelected: onSelected,
         focusNode: _focusMatches(playlist) ? returnFocusNode : null,
@@ -1404,50 +1494,60 @@ class _TrackRecommendationCard extends StatelessWidget {
         button: true,
         label: semanticsLabel,
         onTap: onPlay,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _HomeArtwork(
-                    uri: track.artworkUri,
-                    placeholderIcon: placeholderIcon,
-                    radius: _HomeGeometry.heroRadius,
-                  ),
-                  Positioned.fill(
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: InkWell(
-                        key: itemKey,
-                        borderRadius: _HomeGeometry.heroRadius,
-                        onTap: onPlay,
+        child: Material(
+          color: colors.surfaceContainerLow,
+          borderRadius: _HomeGeometry.heroRadius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: itemKey,
+            onTap: onPlay,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: _compactActionCardHeight(context),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Row(
+                  children: [
+                    SizedBox.square(
+                      dimension: 52,
+                      child: _HomeArtwork(
+                        uri: track.artworkUri,
+                        placeholderIcon: placeholderIcon,
+                        radius: _HomeGeometry.artworkRadius,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            track.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: colors.primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              track.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -1908,54 +2008,64 @@ class _CompactRecommendationCard extends StatelessWidget {
     button: true,
     label: _recommendationSemanticLabel(context.l10n, playlist),
     onTap: () => onSelected(playlist),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AspectRatio(
-          aspectRatio: 1,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _HomeArtwork(
-                uri: playlist.artworkUri,
-                placeholderIcon: Icons.queue_music_rounded,
-                radius: _HomeGeometry.heroRadius,
-              ),
-              Positioned.fill(
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    key: itemKey,
-                    focusNode: focusNode,
-                    borderRadius: _HomeGeometry.heroRadius,
-                    onTap: () => onSelected(playlist),
+    child: Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: _HomeGeometry.heroRadius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: itemKey,
+        focusNode: focusNode,
+        onTap: () => onSelected(playlist),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: _compactActionCardHeight(context),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 52,
+                  child: _HomeArtwork(
+                    uri: playlist.artworkUri,
+                    placeholderIcon: Icons.queue_music_rounded,
+                    radius: _HomeGeometry.artworkRadius,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (eyebrow != null) ...[
-          Text(
-            eyebrow!,
-            key: eyebrowKey,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w700,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (eyebrow != null) ...[
+                        Text(
+                          eyebrow!,
+                          key: eyebrowKey,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 2),
+                      ],
+                      Text(
+                        playlist.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-        ],
-        Text(
-          playlist.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleSmall,
         ),
-      ],
+      ),
     ),
   );
 }
@@ -2003,34 +2113,49 @@ class _RecommendationSlotState extends StatelessWidget {
       return Semantics(
         label: context.l10n.commonAnnouncement(detail, title),
         liveRegion: onRetry != null,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Material(
-                color: colors.surfaceContainerLow,
-                borderRadius: _HomeGeometry.heroRadius,
-                child: Center(child: action ?? icon),
+        child: Material(
+          color: colors.surfaceContainerLow,
+          borderRadius: _HomeGeometry.heroRadius,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: _compactActionCardHeight(context),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 44,
+                    child: Center(child: action ?? icon),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          key: headingKey,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          detail,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              key: headingKey,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              detail,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: colors.onSurfaceVariant),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -2083,7 +2208,7 @@ class _RecommendationSlotState extends StatelessWidget {
       label: context.l10n.commonAnnouncement(detail, title),
       liveRegion: onRetry != null,
       child: compact && featured
-          ? SizedBox(height: _HomeGeometry.compactHeroHeight, child: content)
+          ? SizedBox(height: _compactHeroHeight(context), child: content)
           : content,
     );
   }
@@ -2194,6 +2319,8 @@ class _NewSongSection extends StatelessWidget {
     required this.compact,
     required this.authenticated,
     required this.providerDisplayName,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
   });
 
   final NewSongController controller;
@@ -2201,6 +2328,8 @@ class _NewSongSection extends StatelessWidget {
   final bool compact;
   final bool authenticated;
   final String providerDisplayName;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) {
@@ -2254,6 +2383,8 @@ class _NewSongSection extends StatelessWidget {
           itemKeyPrefix: authenticated
               ? 'home-new-song'
               : 'home-guest-new-song',
+          onOpenAlbum: onOpenAlbum,
+          onOpenArtist: onOpenArtist,
         ),
       ),
     };
@@ -2345,12 +2476,16 @@ class _PersonalizedTrackSection extends StatelessWidget {
     required this.queueController,
     required this.compact,
     required this.personalFm,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
   });
 
   final HomeController controller;
   final QueuePlaybackController queueController;
   final bool compact;
   final bool personalFm;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) {
@@ -2394,6 +2529,8 @@ class _PersonalizedTrackSection extends StatelessWidget {
           compact: compact,
           sectionKey: const ValueKey('home-personalized-tracks'),
           itemKeyPrefix: 'home-personalized-track',
+          onOpenAlbum: onOpenAlbum,
+          onOpenArtist: onOpenArtist,
         ),
       ),
     };
@@ -2405,11 +2542,15 @@ class _RelatedTrackSection extends StatelessWidget {
     required this.controller,
     required this.queueController,
     required this.compact,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
   });
 
   final HomeController controller;
   final QueuePlaybackController queueController;
   final bool compact;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) {
@@ -2479,6 +2620,8 @@ class _RelatedTrackSection extends StatelessWidget {
               compact: compact,
               sectionKey: const ValueKey('home-related-tracks'),
               itemKeyPrefix: 'home-related-track',
+              onOpenAlbum: onOpenAlbum,
+              onOpenArtist: onOpenArtist,
             ),
           ],
         ),
@@ -2522,6 +2665,8 @@ class _HomeTrackContent extends StatelessWidget {
     required this.compact,
     required this.sectionKey,
     required this.itemKeyPrefix,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
   });
 
   final List<PlaylistTrackSummary> tracks;
@@ -2529,6 +2674,8 @@ class _HomeTrackContent extends StatelessWidget {
   final bool compact;
   final Key sectionKey;
   final String itemKeyPrefix;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -2548,12 +2695,17 @@ class _HomeTrackContent extends StatelessWidget {
               child: _HomeTrackTile(
                 itemKey: ValueKey('$itemKeyPrefix-${index + 1}'),
                 queueKey: ValueKey('$itemKeyPrefix-queue-${index + 1}'),
+                moreKey: ValueKey('$itemKeyPrefix-more-${index + 1}'),
                 track: tracks[index],
                 position: index + 1,
                 compact: compact,
                 playing: _sameTrack(queueController.current, tracks[index]),
                 onPlay: () => queueController.replaceAndPlay(tracks, index),
-                onQueue: () => queueController.push(tracks[index]),
+                onQueue: () => unawaited(
+                  _queueHomeTrack(context, queueController, tracks[index]),
+                ),
+                onOpenAlbum: onOpenAlbum,
+                onOpenArtist: onOpenArtist,
               ),
             ),
         ],
@@ -2566,22 +2718,28 @@ class _HomeTrackTile extends StatelessWidget {
   const _HomeTrackTile({
     required this.itemKey,
     required this.queueKey,
+    required this.moreKey,
     required this.track,
     required this.position,
     required this.compact,
     required this.playing,
     required this.onPlay,
     required this.onQueue,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
   });
 
   final Key itemKey;
   final Key queueKey;
+  final Key moreKey;
   final PlaylistTrackSummary track;
   final int position;
   final bool compact;
   final bool playing;
   final VoidCallback onPlay;
   final VoidCallback onQueue;
+  final ValueChanged<AlbumSummary>? onOpenAlbum;
+  final ValueChanged<ArtistSummary>? onOpenArtist;
 
   @override
   Widget build(BuildContext context) {
@@ -2589,6 +2747,17 @@ class _HomeTrackTile extends StatelessWidget {
     final artists = track.artistNames.isEmpty
         ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
+    void showActions([Offset? position]) => unawaited(
+      _showHomeTrackActions(
+        context: context,
+        position: position,
+        track: track,
+        onPlay: onPlay,
+        onQueue: onQueue,
+        onOpenAlbum: onOpenAlbum,
+        onOpenArtist: onOpenArtist,
+      ),
+    );
     return SizedBox(
       height: _HomeGeometry.trackRowHeight,
       child: Semantics(
@@ -2602,6 +2771,9 @@ class _HomeTrackTile extends StatelessWidget {
           child: InkWell(
             key: itemKey,
             onTap: onPlay,
+            onLongPress: () => showActions(),
+            onSecondaryTapDown: (details) =>
+                showActions(details.globalPosition),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
@@ -2671,8 +2843,19 @@ class _HomeTrackTile extends StatelessWidget {
                     icon: const Icon(Icons.playlist_add_rounded),
                     iconSize: 20,
                     constraints: const BoxConstraints.tightFor(
-                      width: 40,
-                      height: 40,
+                      width: 48,
+                      height: 48,
+                    ),
+                  ),
+                  IconButton(
+                    key: moreKey,
+                    onPressed: showActions,
+                    tooltip: context.l10n.commonMoreActions,
+                    icon: const Icon(Icons.more_horiz_rounded),
+                    iconSize: 20,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 48,
+                      height: 48,
                     ),
                   ),
                 ],
@@ -2682,6 +2865,114 @@ class _HomeTrackTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> _queueHomeTrack(
+  BuildContext context,
+  QueuePlaybackController controller,
+  PlaylistTrackSummary track,
+) async {
+  await controller.push(track);
+  if (!context.mounted) return;
+  final message = controller.failure == null
+      ? context.l10n.queueAddedMessage
+      : context.l10n.queueUpdateFailureMessage;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
+}
+
+Future<void> _showHomeTrackActions({
+  required BuildContext context,
+  required Offset? position,
+  required PlaylistTrackSummary track,
+  required VoidCallback onPlay,
+  required VoidCallback onQueue,
+  required ValueChanged<AlbumSummary>? onOpenAlbum,
+  required ValueChanged<ArtistSummary>? onOpenArtist,
+}) async {
+  final canOpenAlbum = onOpenAlbum != null && track.album != null;
+  final canOpenArtist = onOpenArtist != null && track.artists.isNotEmpty;
+  final compact = MediaQuery.sizeOf(context).width < 600;
+  final action = compact || position == null
+      ? await showModalBottomSheet<MusicTrackAction>(
+          context: context,
+          showDragHandle: true,
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.play_arrow_rounded),
+                  title: Text(context.l10n.commonPlayFromHere),
+                  onTap: () => Navigator.pop(context, MusicTrackAction.play),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.playlist_add_rounded),
+                  title: Text(context.l10n.commonAddToQueue),
+                  onTap: () =>
+                      Navigator.pop(context, MusicTrackAction.addToQueue),
+                ),
+                if (canOpenAlbum)
+                  ListTile(
+                    leading: const Icon(Icons.album_outlined),
+                    title: Text(context.l10n.commonOpenAlbum),
+                    onTap: () =>
+                        Navigator.pop(context, MusicTrackAction.openAlbum),
+                  ),
+                if (canOpenArtist)
+                  ListTile(
+                    leading: const Icon(Icons.person_outline_rounded),
+                    title: Text(context.l10n.commonOpenArtist),
+                    onTap: () =>
+                        Navigator.pop(context, MusicTrackAction.openArtist),
+                  ),
+              ],
+            ),
+          ),
+        )
+      : await showMenu<MusicTrackAction>(
+          context: context,
+          position: RelativeRect.fromLTRB(position.dx, position.dy, 0, 0),
+          items: [
+            PopupMenuItem(
+              value: MusicTrackAction.play,
+              child: Text(context.l10n.commonPlayFromHere),
+            ),
+            PopupMenuItem(
+              value: MusicTrackAction.addToQueue,
+              child: Text(context.l10n.commonAddToQueue),
+            ),
+            if (canOpenAlbum)
+              PopupMenuItem(
+                value: MusicTrackAction.openAlbum,
+                child: Text(context.l10n.commonOpenAlbum),
+              ),
+            if (canOpenArtist)
+              PopupMenuItem(
+                value: MusicTrackAction.openArtist,
+                child: Text(context.l10n.commonOpenArtist),
+              ),
+          ],
+        );
+  if (!context.mounted) return;
+  switch (action) {
+    case MusicTrackAction.play:
+      onPlay();
+    case MusicTrackAction.addToQueue:
+      onQueue();
+    case MusicTrackAction.openAlbum:
+      if (track.album case final album?) onOpenAlbum?.call(album);
+    case MusicTrackAction.openArtist:
+      await openMusicTrackArtists(
+        context: context,
+        artists: track.artists,
+        onSelected: onOpenArtist,
+        itemKeyPrefix: 'home-track-artist',
+      );
+    case null:
+      break;
   }
 }
 
@@ -2873,9 +3164,8 @@ class _PlaylistShelfState<T> extends State<_PlaylistShelf<T>> {
           (cardWidth + _HomeGeometry.itemGap) * widget.items.length -
               _HomeGeometry.itemGap >
           constraints.maxWidth + 0.5;
-      return Column(
+      return Stack(
         key: widget.layoutKey,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           SizedBox(
             height: cardWidth + MediaQuery.textScalerOf(context).scale(48) + 12,
@@ -2923,30 +3213,39 @@ class _PlaylistShelfState<T> extends State<_PlaylistShelf<T>> {
             ),
           ),
           if (overflowing && !widget.compact)
-            ListenableBuilder(
-              listenable: _scroll,
-              builder: (context, _) => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: context.l10n.homePreviousPlaylists,
-                    onPressed: _scroll.hasClients && _scroll.offset > 0.5
-                        ? () => _move(-constraints.maxWidth * 0.8)
-                        : null,
-                    icon: const Icon(Icons.chevron_left_rounded),
+            PositionedDirectional(
+              top: 8,
+              end: 8,
+              child: ListenableBuilder(
+                listenable: _scroll,
+                builder: (context, _) => Material(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh
+                      .withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(24),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: context.l10n.homePreviousPlaylists,
+                        onPressed: _scroll.hasClients && _scroll.offset > 0.5
+                            ? () => _move(-constraints.maxWidth * 0.8)
+                            : null,
+                        icon: const Icon(Icons.chevron_left_rounded),
+                      ),
+                      IconButton(
+                        tooltip: context.l10n.homeNextPlaylists,
+                        onPressed:
+                            !_scroll.hasClients ||
+                                !_scroll.position.hasContentDimensions ||
+                                _scroll.offset <
+                                    _scroll.position.maxScrollExtent - 0.5
+                            ? () => _move(constraints.maxWidth * 0.8)
+                            : null,
+                        icon: const Icon(Icons.chevron_right_rounded),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: context.l10n.homeNextPlaylists,
-                    onPressed:
-                        !_scroll.hasClients ||
-                            !_scroll.position.hasContentDimensions ||
-                            _scroll.offset <
-                                _scroll.position.maxScrollExtent - 0.5
-                        ? () => _move(constraints.maxWidth * 0.8)
-                        : null,
-                    icon: const Icon(Icons.chevron_right_rounded),
-                  ),
-                ],
+                ),
               ),
             ),
         ],
@@ -2985,42 +3284,35 @@ class _PlaylistArtworkCard<T> extends StatelessWidget {
       button: true,
       label: semanticLabel(item),
       onTap: () => onSelected(item),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _HomeArtwork(
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          focusNode: focusNode,
+          borderRadius: _HomeGeometry.artworkRadius,
+          onTap: () => onSelected(item),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                key: itemKey,
+                aspectRatio: 1,
+                child: _HomeArtwork(
                   uri: artworkUri(item),
                   placeholderIcon: placeholderIcon,
                   radius: _HomeGeometry.artworkRadius,
                 ),
-                Positioned.fill(
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: InkWell(
-                      key: itemKey,
-                      focusNode: focusNode,
-                      borderRadius: _HomeGeometry.artworkRadius,
-                      onTap: () => onSelected(item),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title(item),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            title(item),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
-          ),
-        ],
+        ),
       ),
     ),
   );

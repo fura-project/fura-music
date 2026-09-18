@@ -295,7 +295,7 @@ class _CompactNowPlayingBar extends StatelessWidget {
                     key: const ValueKey('now-playing-primary-action'),
                     tooltip: _primaryTooltip(context.l10n, playback.stage),
                     onPressed: playback.canActivate
-                        ? () => unawaited(playback.activate())
+                        ? () => unawaited(controller.activateCurrent())
                         : null,
                     constraints: const BoxConstraints.tightFor(
                       width: 42,
@@ -1215,7 +1215,7 @@ List<Widget> _transportControls(
           key: const ValueKey('now-playing-primary-action'),
           tooltip: _primaryTooltip(context.l10n, playback.stage),
           onPressed: playback.canActivate
-              ? () => unawaited(playback.activate())
+              ? () => unawaited(controller.activateCurrent())
               : null,
           style: IconButton.styleFrom(
             minimumSize: Size.square(prominentPrimarySize),
@@ -1229,7 +1229,7 @@ List<Widget> _transportControls(
           key: const ValueKey('now-playing-primary-action'),
           tooltip: _primaryTooltip(context.l10n, playback.stage),
           onPressed: playback.canActivate
-              ? () => unawaited(playback.activate())
+              ? () => unawaited(controller.activateCurrent())
               : null,
           icon: Icon(_primaryIcon(playback.stage)),
         );
@@ -1267,7 +1267,7 @@ List<Widget> _transportControls(
       IconButton(
         key: const ValueKey('now-playing-stop'),
         tooltip: context.l10n.playbackStop,
-        onPressed: () => unawaited(playback.stop()),
+        onPressed: () => unawaited(controller.stop()),
         icon: const Icon(Icons.stop_rounded),
       ),
   ];

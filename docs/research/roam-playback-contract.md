@@ -87,6 +87,21 @@ the existing playback stop/Queue clear path and therefore invalidates Roam as a
 Queue mutation. A late result cannot append to a replacement Queue or start
 playback.
 
+Explicit activate-current, idempotent system Play and stop commands are also
+Queue-controller commands. Now Playing, keyboard/media shortcuts, AudioService
+and Flutter Media Session call those entries rather than operating
+`TrackPlaybackController` directly. Each entry synchronously invalidates Roam
+before beginning the lower controller's asynchronous activation/resume or stop
+tail, so a known user/system intent cannot race a Related Tracks completion.
+
+Every natural terminal completion also receives a monotonically increasing
+terminal-intent token. Before `extendAndAdvanceFromTerminal`, acceptance now
+requires both that exact token and `TrackPlaybackStage.completed`, in addition
+to the captured Queue generation, seed, length, order, repeat, terminal
+position and enabled state. A playback-stage departure while Related Tracks is
+pending invalidates the operation as defense in depth, including any caller
+that accidentally bypasses a public Queue command.
+
 The typed stages are:
 
 - `idle`: no request, or an earlier request was invalidated;

@@ -150,6 +150,9 @@ class HomeController extends ChangeNotifier {
   void retryDaily() => unawaited(_loadDaily());
   void retryPersonalizedPlaylists() => unawaited(_loadPersonalizedPlaylists());
   void retryPersonalizedTracks() => unawaited(_loadPersonalizedTracks());
+
+  /// Refreshes only the playlist shelf owned by Home's playlist section.
+  Future<void> refreshPersonalizedPlaylists() => _loadPersonalizedPlaylists();
   void retryRelatedTracks() {
     final seed = _relatedSeed;
     if (seed != null) unawaited(_loadRelatedTracks(seed));

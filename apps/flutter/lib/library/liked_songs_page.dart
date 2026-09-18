@@ -71,6 +71,8 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   bool _albumsVisited = false;
   bool _headerCollapsed = false;
   bool _userReturningToHeader = false;
+  bool? _pendingHeaderCollapsed;
+  bool _headerUpdateScheduled = false;
   bool _searchLoadScheduled = false;
   final PlaylistTrackSearchIndex _trackSearchIndex = PlaylistTrackSearchIndex();
   List<PlaylistTrackSummary>? _indexedTrackSource;
@@ -212,19 +214,34 @@ class _LikedSongsPageState extends State<LikedSongsPage>
         _userReturningToHeader = false;
       }
     }
+    final effectiveCollapsed = _pendingHeaderCollapsed ?? _headerCollapsed;
     final returnedToHeader =
-        _headerCollapsed &&
+        effectiveCollapsed &&
         _userReturningToHeader &&
         notification.metrics.pixels <= 4;
     if (returnedToHeader) _userReturningToHeader = false;
-    final collapse = _headerCollapsed
+    final collapse = effectiveCollapsed
         ? !returnedToHeader
         : notification.metrics.pixels > 56;
-    _setHeaderCollapsed(collapse);
+    _scheduleHeaderCollapsed(collapse);
     return false;
   }
 
+  void _scheduleHeaderCollapsed(bool collapsed) {
+    _pendingHeaderCollapsed = collapsed;
+    if (_headerUpdateScheduled) return;
+    _headerUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _headerUpdateScheduled = false;
+      if (!mounted) return;
+      final pending = _pendingHeaderCollapsed;
+      _pendingHeaderCollapsed = null;
+      if (pending != null) _setHeaderCollapsed(pending);
+    });
+  }
+
   void _setHeaderCollapsed(bool collapsed) {
+    _pendingHeaderCollapsed = null;
     if (collapsed == _headerCollapsed) return;
     if (!collapsed) _userReturningToHeader = false;
     setState(() => _headerCollapsed = collapsed);
@@ -1221,6 +1238,9 @@ class _LikedTrackCollection extends StatefulWidget {
 class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
   (String, String)? _hoveredTrack;
   final ScrollController _scrollController = ScrollController();
+  int _hoverRevision = 0;
+  int? _pendingHoverClearRevision;
+  bool _hoverClearScheduled = false;
 
   @override
   void dispose() {
@@ -1231,17 +1251,37 @@ class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
   void _setHovered(PlaylistTrackSummary track, bool hovered) {
     final identity = (track.providerId, track.opaqueId);
     if (hovered) {
-      if (_hoveredTrack != identity) setState(() => _hoveredTrack = identity);
+      if (_hoveredTrack != identity) {
+        _hoverRevision += 1;
+        setState(() => _hoveredTrack = identity);
+      }
     } else if (_hoveredTrack == identity) {
+      _hoverRevision += 1;
       setState(() => _hoveredTrack = null);
     }
   }
 
   bool _clearHoverOnScroll(ScrollNotification notification) {
     if (_hoveredTrack != null && notification is ScrollUpdateNotification) {
-      setState(() => _hoveredTrack = null);
+      _scheduleHoverClear();
     }
     return false;
+  }
+
+  void _scheduleHoverClear() {
+    _pendingHoverClearRevision = _hoverRevision;
+    if (_hoverClearScheduled) return;
+    _hoverClearScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hoverClearScheduled = false;
+      if (!mounted) return;
+      final revision = _pendingHoverClearRevision;
+      _pendingHoverClearRevision = null;
+      if (_hoveredTrack != null && revision == _hoverRevision) {
+        _hoverRevision += 1;
+        setState(() => _hoveredTrack = null);
+      }
+    });
   }
 
   @override

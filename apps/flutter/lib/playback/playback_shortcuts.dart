@@ -36,7 +36,7 @@ class PlaybackShortcuts extends StatelessWidget {
 
   void _activatePlayback() {
     final playback = controller.playback;
-    if (playback.canActivate) unawaited(playback.activate());
+    if (playback.canActivate) unawaited(controller.activateCurrent());
   }
 
   void _rewindPlayback() {
@@ -54,6 +54,6 @@ class PlaybackShortcuts extends StatelessWidget {
   }
 
   void _stopPlayback() {
-    if (controller.current != null) unawaited(controller.playback.stop());
+    if (controller.current != null) unawaited(controller.stop());
   }
 }

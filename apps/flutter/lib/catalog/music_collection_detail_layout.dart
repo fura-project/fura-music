@@ -45,6 +45,34 @@ class _MusicCollectionDetailLayoutState
 
   double _progress = 0;
   bool _reportedCollapsed = false;
+  double? _pendingProgress;
+  bool? _pendingCollapsed;
+  bool _headerUpdateScheduled = false;
+
+  void _scheduleHeaderUpdate(double progress, bool collapsed) {
+    _pendingProgress = progress;
+    _pendingCollapsed = collapsed;
+    if (_headerUpdateScheduled) return;
+    _headerUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _headerUpdateScheduled = false;
+      if (!mounted) return;
+      final nextProgress = _pendingProgress;
+      final nextCollapsed = _pendingCollapsed;
+      _pendingProgress = null;
+      _pendingCollapsed = null;
+      if (nextProgress == null || nextCollapsed == null) return;
+      if ((nextProgress - _progress).abs() < 0.002 &&
+          nextCollapsed == _reportedCollapsed) {
+        return;
+      }
+      setState(() {
+        _progress = nextProgress;
+        _reportedCollapsed = nextCollapsed;
+      });
+      widget.onHeaderCollapsedChanged?.call(nextCollapsed);
+    });
+  }
 
   bool _handleScroll(ScrollNotification notification) {
     if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
@@ -64,12 +92,11 @@ class _MusicCollectionDetailLayoutState
       1.0,
     );
     final collapsed = next >= _musicCollectionShellHandoffProgress;
-    if ((next - _progress).abs() >= 0.002 || collapsed != _reportedCollapsed) {
-      setState(() {
-        _progress = next;
-        _reportedCollapsed = collapsed;
-      });
-      widget.onHeaderCollapsedChanged?.call(collapsed);
+    final baselineProgress = _pendingProgress ?? _progress;
+    final baselineCollapsed = _pendingCollapsed ?? _reportedCollapsed;
+    if ((next - baselineProgress).abs() >= 0.002 ||
+        collapsed != baselineCollapsed) {
+      _scheduleHeaderUpdate(next, collapsed);
     }
     return false;
   }

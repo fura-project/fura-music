@@ -70,9 +70,47 @@ never the visible count.
 `BoundedViewportPageDemand` is a small presentation-neutral notification
 adapter used only where the existing controller already owns pagination. A
 downward approach within about 1.25 viewports emits one demand and disarms until
-the user retreats or the query generation changes. It does not loop, retry, or
-own transport. Controllers remain the single-flight, failure, retry,
-continuation, cancellation, and stale-generation owners.
+the user retreats, leaves the threshold by a sufficient margin, or the query
+generation changes. Temporary loading state is not a retreat: `enabled: false
+-> true` never rearms the same approach, including when an advancing Provider
+page is all omitted, heavily deduplicated, short, or otherwise adds no visible
+extent. A real retreat observed while temporarily disabled still records a new
+approach window, but cannot dispatch a callback until the adapter is enabled.
+It does not loop, retry, or own transport. Controllers remain the
+single-flight, failure, retry, continuation, cancellation, and
+stale-generation owners.
+
+Scroll and layout-derived notifications obey one frame-phase invariant:
+notification handling may update only private sampling, approach and pending
+dispatch records. It must not synchronously call a presentation callback that
+can `setState`, `notifyListeners`, start an append pump, or otherwise dirty
+layout/semantics. Such work is coalesced after the current frame and revalidated
+against mount state, enabled state, controller/generation identity, and a local
+dispatch epoch. Disable, replacement, generation change, upward cancellation,
+or disposal invalidates old pending work.
+
+The 2026-09-18 follow-up audit classified every repository
+`ScrollNotification`/`ScrollMetricsNotification` path:
+
+| Path | Prior frame-phase behavior | Result |
+|---|---|---|
+| `BoundedViewportPageDemand` | called `onDemand` and `onRetreat` from the notification; loading re-enable also rearmed | fixed with post-frame coalescing, epoch cancellation and approach-owned rearm |
+| `PlaylistScrollPrefetch` | called `prefetchTo`, which can synchronously notify before its first await | fixed with maximum-target coalescing and mounted/enabled/controller/epoch revalidation; synchronous `cancelPrefetch` remains safe because it only clears private counters and never notifies |
+| Radar specialized prefetch | called Radar `prefetchTo` synchronously | fixed with the same deferred target ownership while retaining Radar's page size and two-page bound |
+| Collection header collapse (`MusicCollectionDetailLayout`, Liked, Recent, Discover) | synchronously rebuilt the header and sometimes its Shell owner | fixed by coalescing the latest collapse/progress value after frame |
+| Track-row hover clearing (Album, Artist, Ranking, Search, Playlist, Liked) | synchronously rebuilt hover presentation during scroll | fixed with post-frame revision checks so a newer pointer state wins |
+| lyric manual-follow cancellation | synchronously rebuilt the follow control from `UserScrollNotification` | fixed with a post-frame attempt token |
+| current-Track locator | already coalesced controller and metrics changes through one post-frame visibility update | safe; unchanged |
+| Home horizontal shelf metrics | already scheduled its presentation refresh post-frame | safe; unchanged |
+
+Flutter dispatches scroll notifications after build/layout for the current
+frame. The former direct controller calls could enter `_loadNextPage`, set its
+loading fields and `notifyListeners()` before the first `await`; direct header
+and hover handlers called `setState()` in the same phase. Either route could
+mark render/layout/semantics data dirty after layout but before semantics flush,
+which made `!childSemantics.renderObject._needsLayout` and related
+`semantics.parentDataDirty` assertions reachable under rapid scrolling and
+semantics-enabled frames.
 
 The adapter is connected to Comments; Track, Artist, Album, and Playlist Search;
 Favorite Albums and Artists; Album and Artist lists; Rankings; New Albums; and

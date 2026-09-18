@@ -945,6 +945,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discoverCurrentRanking => '当前排行榜';
 
   @override
+  String discoverRankingIssue(Object period) {
+    return '期次：$period';
+  }
+
+  @override
   String get discoverAlbumType => '专辑';
 
   @override
@@ -1873,6 +1878,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get recentPlayTooltip => '播放最近播放';
+
+  @override
+  String recentPlayLoaded(Object count) {
+    return '播放已加载的 $count 首歌曲';
+  }
+
+  @override
+  String recentPlayFiltered(Object count) {
+    return '播放 $count 条筛选结果';
+  }
 
   @override
   String get recentRefreshTooltip => '刷新最近播放';
@@ -3071,6 +3086,12 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get settingsColorSourceSystemDescription =>
       '在受支持的设备上使用壁纸或系统强调色；不可用时回退到当前音乐服务的印象色。';
+
+  @override
+  String get settingsColorSourceSystemAvailable => '系统取色可用；此预览来自当前系统调色板。';
+
+  @override
+  String get settingsColorSourceSystemUnavailable => '系统取色不可用；当前显示音乐服务品牌回退色。';
 
   @override
   String get settingsColorSourceSystemSummary => '系统动态色';

@@ -1,15 +1,83 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: MIXED
+  work_domain: UI
   state: HUMAN_REVIEW
   acceptance_milestone: HD-035
-  active_workstream: LONG_LIST_CONTINUATION_AND_ROAM
-  current_task: LONG_LIST_AND_ROAM_MACHINE_COMPLETE
-  next_action: HUMAN_LONG_COLLECTION_INTERACTION_REVIEW
+  active_workstream: UI_PRACTICALITY_AND_WIRING
+  current_task: HD_035_UI_PRACTICALITY_CANDIDATE
+  next_action: HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
+
+- **2026-09-18 HD-035 UI practicality and wiring candidate:** starting local
+  HEAD and the live `origin/main` ref were both
+  `37c6cba3e59e3bec75005a4e9591b1fc1fa78886`; the intentional dirty
+  frame-phase/Roam correctness work below was retained in place. Home's local
+  treasure action now refreshes only its owned shelf and stays disabled and
+  visibly pending in place; public Playlist "See all" targets the retained
+  Discover/Playlists destination exactly; Playlist, recommendation and Album
+  cards have one truthful whole-card primary action. Compact Home gives its
+  hero and Daily/Radar actions less fixed prominence, shelf navigation occupies
+  the shelf edge rather than another row, player spacing follows actual player
+  presence, and preview Track actions reuse Queue, Album, Artist and compact
+  context behavior with explicit Queue feedback. Discover now has one shared
+  content boundary, adaptive recommendation/New Album/Ranking grids, stable
+  square Album art with independent metadata, an all-category compact New Song
+  menu with a stable current-category Play action, and one bounded manual Radar
+  continuation alongside the existing deferred prefetch. Settings receives the
+  single app-owned dynamic-color candidate and labels real system availability
+  versus brand fallback. Recent Plays says whether it will play loaded or
+  filtered Tracks without loading the Provider total, while retaining exact or
+  approximate totals, raw progress and omissions. Shared Track-row semantics
+  keep the row as primary Play without excluding independent Queue, More,
+  Album or Artist actions; mobile Queue/More targets are 48 dp and keyboard,
+  right-click and long-press paths remain intact. Search's existing typed tabs,
+  suggestions, states, pagination and catalog routes were audited and did not
+  require a speculative redesign. Responsive regressions cover the requested
+  320--1440 widths and every named breakpoint edge, long titles, enlarged text,
+  loading/empty/content/current-Track states and semantics actions. Canonical
+  Home, Discover and Settings desktop/mobile renders show no synthetic-fixture
+  overflow or geometry break, but typography, real artwork density, platform
+  pointer feel and actual system palette still require Human visual review.
+  Dart formatting (269 files), Dart analysis, all 688 Flutter tests, Rust
+  formatting, all 588 workspace/all-target tests (27 explicit live/Human tests
+  ignored), strict all-target Clippy and `git diff --check` pass. No Provider,
+  Rust Queue, typed continuation, bounded Search, cache, commit or push was
+  changed.
+
+- **2026-09-18 HD-035 frame-phase and Roam race correctness follow-up:**
+  starting local HEAD and `origin/main` were both
+  `37c6cba3e59e3bec75005a4e9591b1fc1fa78886`. Every audited scroll/layout
+  notification now limits the notification frame to private sampling and
+  pending intent: bounded viewport demand, shared Playlist prefetch, Radar
+  prefetch, collection header collapse, Track-row hover clearing and lyric
+  manual-follow cancellation commit presentation/controller mutation only
+  after the frame, with coalescing and the applicable mounted, epoch,
+  generation, enabled and controller checks. Existing current-Track locator
+  and Home shelf metrics were already post-frame safe and remain unchanged.
+  A viewport approach stays disarmed across temporary loading disable/re-enable
+  and zero-visible, all-omitted, heavily deduplicated or short appends; only an
+  observed retreat, sufficient threshold departure or generation change
+  rearms it. Queue-level activate-current and stop commands synchronously
+  invalidate pending Roam before any asynchronous playback tail, all UI and
+  system media Play/Stop routes use them, and a captured terminal-intent token
+  plus completed-stage check rejects late Related Tracks before the existing
+  single atomic Rust append-and-advance. Semantics-enabled rapid fling,
+  pointer/hover, resize, rebuild/layout, prefetch/append and UI/system
+  Play/Stop races are covered alongside the existing Queue mutation
+  cancellation matrix. Dart formatting (269 files), Dart analysis, all 682
+  Flutter tests, Rust formatting, all 588 workspace/all-target tests (27
+  explicit live/Human tests ignored) and strict all-target Clippy pass. No
+  framework semantics/layout assertion remained, so an upstream Flutter
+  reproduction was not warranted. No live Provider call, build, cache clean,
+  Rust Queue redesign, UI polish, feature expansion, commit or push occurred.
+  Real Linux rapid-wheel/resize and physical touch/semantics observation remain
+  optional Human confidence checks, not substitutes for or blockers to this
+  correctness proof; see
+  [the continuation audit](docs/research/long-list-continuation-audit.md) and
+  [the Roam contract](docs/research/roam-playback-contract.md).
 
 - **2026-09-18 HD-035 long-list continuation and Roam checkpoint:** from
   starting HEAD `7e6b931ebe67fa9ebabfa8e697fa96eca36a6c4f`, every audited

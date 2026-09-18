@@ -158,9 +158,9 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
         case 'play':
           final playback = _controller.playback;
           if (playback.canResume) {
-            await playback.resume();
+            await _controller.playCurrent();
           } else if (playback.canActivate) {
-            await playback.activate();
+            await _controller.playCurrent();
           }
         case 'pause':
           if (_controller.playback.canPause) {
@@ -168,7 +168,7 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
           }
         case 'stop':
           if (_controller.current != null) {
-            await _controller.playback.stop();
+            await _controller.stop();
           }
         case 'skipToNext':
           if (!_controller.playback.requiresAuthentication &&

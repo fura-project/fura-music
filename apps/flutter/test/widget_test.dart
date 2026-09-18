@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui'
-    show Clip, Locale, PointerDeviceKind, SemanticsAction, Size, Tristate;
+    show Clip, Locale, PointerDeviceKind, Rect, SemanticsAction, Size, Tristate;
 
 import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart'
@@ -18,8 +18,11 @@ import 'package:flutter/material.dart'
         BuildContext,
         Color,
         ColorScheme,
+        Colors,
+        CircularProgressIndicator,
         CustomScrollView,
         Divider,
+        EdgeInsets,
         FadeTransition,
         FilledButton,
         Focus,
@@ -49,12 +52,14 @@ import 'package:flutter/material.dart'
         SearchBar,
         SegmentedButton,
         Semantics,
+        SingleChildScrollView,
         SizedBox,
         State,
         StatefulWidget,
         TabBar,
         TabIndicatorAnimation,
         Text,
+        TextButton,
         TextField,
         TextInputAction,
         Theme,
@@ -114,6 +119,7 @@ import 'package:flutterustmusic/search/track_search_gateway.dart';
 import 'package:flutterustmusic/search/track_search_page.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
+import 'package:flutterustmusic/settings/settings_page.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
@@ -360,6 +366,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(source.offsets, [0]);
       expect(find.text(_en.recentSongsTab(250)), findsOneWidget);
+      expect(find.text(_en.recentPlayLoaded(100)), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('recent-plays-track-0')),
@@ -539,6 +546,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(source.offsets, [0, 100, 200]);
+      expect(find.text(_en.recentPlayFiltered(1)), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('recent-plays-track-0')),
@@ -855,6 +863,132 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Home playlist refresh remains stable and only reloads its owned shelf',
+    (tester) async {
+      const initialPlaylists = PersonalizedPlaylistsResult(
+        playlists: [
+          RecommendedPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'owned:home:1',
+            title: 'Initial Home shelf',
+          ),
+        ],
+      );
+      const refreshedPlaylists = PersonalizedPlaylistsResult(
+        playlists: [
+          RecommendedPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'owned:home:2',
+            title: 'Refreshed Home shelf',
+          ),
+        ],
+      );
+      final pendingRefresh = Completer<PersonalizedPlaylistsResult>();
+      final personalized = _ScriptedWidgetPersonalizedPlaylistsGateway([
+        Future.value(initialPlaylists),
+        pendingRefresh.future,
+      ]);
+      final public = _WidgetRecommendedPlaylistGateway(
+        const RecommendedPlaylistPageResult(
+          playlists: [
+            RecommendedPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'catalog:home:1',
+              title: 'Unrelated public shelf',
+            ),
+          ],
+        ),
+      );
+      final songsGateway = _WidgetNewSongGateway({
+        NewSongCategory.latest: const NewSongResult(
+          category: NewSongCategory.latest,
+        ),
+      });
+      final home = HomeController(
+        const _WidgetAccountSummaryGateway(AccountSummaryLoadResult()),
+        const _WidgetDailyRecommendationGateway(DailyRecommendationResult()),
+        personalized,
+        const _WidgetPersonalizedTracksGateway(PersonalizedTracksResult()),
+        _WidgetRelatedTracksGateway(const RelatedTracksResult()),
+      );
+      final recommendations = RecommendedPlaylistController(public);
+      final songs = NewSongController(songsGateway);
+      final radar = RadarController(
+        _WidgetRadarGateway(const RadarTrackPageResult(page: 1)),
+      );
+      final playback = TrackPlaybackController(
+        const _UnavailableMediaGateway(),
+        ForegroundPlaybackController(AudioplayersForegroundAudioEngine()),
+      );
+      final queue = QueuePlaybackController(
+        _WidgetPlaybackQueueGateway(),
+        playback,
+      );
+      addTearDown(() {
+        queue.dispose();
+        radar.dispose();
+        songs.dispose();
+        recommendations.dispose();
+        home.dispose();
+      });
+      await Future.wait([home.load(), recommendations.load(), songs.load()]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: HomePage(
+              homeController: home,
+              recommendationController: recommendations,
+              newSongController: songs,
+              radarController: radar,
+              radarEnabled: false,
+              queuePlaybackController: queue,
+              authenticated: true,
+              onOpenDiscover: () {},
+              onOpenLibrary: () {},
+              onOpenRecommendation: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Initial Home shelf'), findsWidgets);
+      expect(personalized.requests, 1);
+      expect(public.requests, [(0, 20)]);
+      expect(songsGateway.requests, [NewSongCategory.latest]);
+
+      final refresh = find.byKey(
+        const ValueKey('home-refresh-recommendations'),
+      );
+      await tester.ensureVisible(refresh);
+      await tester.tap(refresh);
+      await tester.pump();
+
+      expect(refresh, findsOneWidget);
+      expect(tester.widget<TextButton>(refresh).onPressed, isNull);
+      expect(
+        find.descendant(
+          of: refresh,
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(_en.homeRefreshing), findsOneWidget);
+      expect(personalized.requests, 2);
+      expect(public.requests, [(0, 20)]);
+      expect(songsGateway.requests, [NewSongCategory.latest]);
+
+      pendingRefresh.complete(refreshedPlaylists);
+      await tester.pumpAndSettle();
+      expect(find.text('Refreshed Home shelf'), findsWidgets);
+      expect(tester.widget<TextButton>(refresh).onPressed, isNotNull);
+      expect(find.text(_en.homeRefreshing), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets('keeps the main shell visible while sign-in uses a dialog', (
     tester,
   ) async {
@@ -1053,6 +1187,16 @@ void main() {
         expect(
           find.byKey(const ValueKey('home-personalized-tracks-sign-in')),
           findsNothing,
+        );
+        expect(
+          (tester
+                      .widget<SingleChildScrollView>(
+                        find.byKey(const PageStorageKey('home-scroll')),
+                      )
+                      .padding
+                  as EdgeInsets)
+              .bottom,
+          24,
         );
         expect(tester.takeException(), isNull);
         return queue;
@@ -2602,8 +2746,12 @@ void main() {
       'last Home recommendation',
     );
 
-    final personalEntry = find.byKey(const ValueKey('home-library-playlist-0'));
-    await tester.ensureVisible(personalEntry);
+    final personalShelf = find.byKey(const ValueKey('home-library-shelf'));
+    final personalEntry = find.descendant(
+      of: personalShelf,
+      matching: find.text('Home personal playlist'),
+    );
+    await tester.ensureVisible(personalShelf);
     await tester.pumpAndSettle();
     await tester.tap(personalEntry);
     await tester.pumpAndSettle();
@@ -2738,6 +2886,11 @@ void main() {
           recentListeningFactory: () => _WidgetRecentListening(homeTrack),
           searchGateway: search,
           recommendedPlaylistGateway: recommendations,
+          newSongGateway: _WidgetNewSongGateway({
+            NewSongCategory.latest: const NewSongResult(
+              category: NewSongCategory.latest,
+            ),
+          }),
           playbackQueueGateway: queue,
           mediaResolutionGateway: const _UnavailableMediaGateway(),
           lyricGateway: const _WidgetLyricGateway(),
@@ -2778,7 +2931,7 @@ void main() {
         tester
             .getRect(find.byKey(const ValueKey('home-recommendation-0')))
             .height,
-        256,
+        208,
       );
       expect(find.byKey(const ValueKey('home-compact-actions')), findsNothing);
       expect(tester.takeException(), isNull);
@@ -2788,6 +2941,16 @@ void main() {
       );
       await tester.ensureVisible(personalizedTrack);
       await tester.pumpAndSettle();
+      final queueAction = find.byKey(
+        const ValueKey('home-personalized-track-queue-1'),
+      );
+      expect(tester.getSize(queueAction), const Size.square(48));
+      await tester.tap(queueAction);
+      await tester.pumpAndSettle();
+      expect(queue.pushed, [homeTrack]);
+      expect(find.text(_en.queueAddedMessage), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
       await tester.tap(personalizedTrack);
       await tester.pumpAndSettle();
       expect(
@@ -2795,6 +2958,16 @@ void main() {
             .getSize(find.byKey(const ValueKey('now-playing-compact-layout')))
             .height,
         68,
+      );
+      expect(
+        (tester
+                    .widget<SingleChildScrollView>(
+                      find.byKey(const PageStorageKey('home-scroll')),
+                    )
+                    .padding
+                as EdgeInsets)
+            .bottom,
+        104,
       );
       expect(queue.replacements.single.$1, [homeTrack]);
       expect(relatedSeeds.single.opaqueId, homeTrack.opaqueId);
@@ -2858,6 +3031,28 @@ void main() {
             .height,
         68,
       );
+
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-new-songs',
+      );
+      expect(find.byKey(const ValueKey('new-songs-empty')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('primary-home-destination')));
+      await tester.pumpAndSettle();
+      final seeAllPlaylists = find.byKey(
+        const ValueKey('home-open-more-recommendations'),
+      );
+      await tester.ensureVisible(seeAllPlaylists);
+      await tester.tap(seeAllPlaylists);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('recommendations-content')),
+        findsOneWidget,
+      );
+      expect(find.text('Retained discovery result'), findsOneWidget);
+      expect(find.byKey(const ValueKey('new-songs-content')), findsNothing);
+      expect(recommendations.requests, [(0, 20), (0, 20)]);
 
       tester.view.physicalSize = const Size(1100, 760);
       await tester.pumpAndSettle();
@@ -3044,6 +3239,69 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'compact New Songs exposes every category and keeps Play stable while loading',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final newSongs = _TransitionWidgetNewSongGateway();
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+            const RecommendedPlaylistPageResult(),
+          ),
+          newSongGateway: newSongs,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      await _selectAdaptiveSection(
+        tester,
+        control: 'discover-type-selector',
+        item: 'discover-type-new-songs',
+      );
+
+      final categoryMenu = find.byKey(
+        const ValueKey('new-song-category-selector'),
+      );
+      final play = find.byKey(const ValueKey('new-songs-play-all'));
+      expect(categoryMenu, findsOneWidget);
+      expect(play, findsOneWidget);
+      await tester.tap(categoryMenu);
+      await tester.pumpAndSettle();
+      for (final category in NewSongCategory.values) {
+        expect(
+          find.byKey(ValueKey('new-song-category-${category.name}')),
+          findsOneWidget,
+        );
+      }
+
+      await tester.tap(find.byKey(const ValueKey('new-song-category-western')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const ValueKey('new-songs-loading')), findsOneWidget);
+      expect(play, findsOneWidget);
+      expect(tester.widget<FilledButton>(play).onPressed, isNull);
+      expect(tester.getSize(play).height, greaterThanOrEqualTo(48));
+
+      newSongs.western.complete(
+        const NewSongResult(category: NewSongCategory.western),
+      );
+      await tester.pumpAndSettle();
+      expect(play, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Radar rejection keeps one live region and sign-in recovery', (
     tester,
   ) async {
@@ -3193,11 +3451,16 @@ void main() {
       expect(find.text('Synthetic discovery'), findsOneWidget);
       expect(recommendations.requests, [(0, 20), (0, 20)]);
       expect(find.byType(GridView), findsNothing);
+      final compactRecommendation = tester.getSize(
+        find.byKey(const ValueKey('recommendations-item-0')),
+      );
       expect(
-        tester
-            .getSize(find.byKey(const ValueKey('recommendations-item-0')))
-            .height,
-        226,
+        compactRecommendation.height,
+        greaterThan(compactRecommendation.width),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('recommendations-artwork-0'))),
+        Size.square(compactRecommendation.width),
       );
 
       tester.view.physicalSize = const Size(1000, 700);
@@ -3206,16 +3469,21 @@ void main() {
         find.byKey(const PageStorageKey<String>('recommended-playlist-grid')),
         findsOneWidget,
       );
+      final mediumRecommendation = tester.getSize(
+        find.byKey(const ValueKey('recommendations-item-0')),
+      );
       expect(
-        tester
-            .getSize(find.byKey(const ValueKey('recommendations-item-0')))
-            .height,
-        228,
+        mediumRecommendation.height,
+        greaterThan(mediumRecommendation.width),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('recommendations-artwork-0'))),
+        Size.square(mediumRecommendation.width),
       );
       expect(find.text('Synthetic discovery'), findsOneWidget);
       expect(recommendations.requests, [(0, 20), (0, 20)]);
 
-      await tester.tap(find.byKey(const ValueKey('recommendations-item-0')));
+      await tester.tap(find.text('Synthetic discovery'));
       await tester.pumpAndSettle();
       expect(find.text('Recommended track'), findsOneWidget);
       expect(
@@ -3245,6 +3513,71 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Discover content remains bounded across critical widths', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.physicalSize = const Size(320, 900);
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(
+            playlists: [
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:responsive',
+                title: 'Responsive discovery card with a long title',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+    await tester.pumpAndSettle();
+
+    for (final width in <double>[
+      320,
+      390,
+      520,
+      599,
+      600,
+      639,
+      640,
+      759,
+      760,
+      819,
+      820,
+      839,
+      840,
+      1099,
+      1100,
+      1440,
+    ]) {
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pumpAndSettle();
+      final item = tester.getRect(
+        find.byKey(const ValueKey('recommendations-item-0')),
+      );
+      expect(item.left, greaterThanOrEqualTo(0));
+      expect(item.right, lessThanOrEqualTo(width));
+      expect(
+        find.byKey(const ValueKey('recommendations-content')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull, reason: 'width $width');
+    }
+  });
 
   testWidgets(
     'canonical Discover header, grid, and player overlay are coherent',
@@ -3440,9 +3773,14 @@ void main() {
         find.byKey(const ValueKey('discover-type-selector')),
         findsOneWidget,
       );
+      final recommendationCard = tester.getSize(
+        find.byKey(const ValueKey('recommendations-item-0')),
+      );
+      expect(recommendationCard.width, 169);
+      expect(recommendationCard.height, greaterThan(recommendationCard.width));
       expect(
-        tester.getSize(find.byKey(const ValueKey('recommendations-item-0'))),
-        const Size(169, 226),
+        tester.getSize(find.byKey(const ValueKey('recommendations-artwork-0'))),
+        const Size.square(169),
       );
       expect(
         find.byKey(const ValueKey('compact-player-overlay-shell')),
@@ -3540,6 +3878,8 @@ void main() {
 
       await tester.drag(discoverGrid, const Offset(0, -220));
       await tester.pump();
+      // Scroll-derived header state is committed after the notification frame.
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 80));
       final transitioningShellTitle = find.byKey(
         const ValueKey('shell-top-bar-title-Discover'),
@@ -3611,11 +3951,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('open-recommendations')));
       await tester.pumpAndSettle();
+      final desktopRecommendation = tester.getSize(
+        find.byKey(const ValueKey('recommendations-item-0')),
+      );
       expect(
-        tester
-            .getSize(find.byKey(const ValueKey('recommendations-item-0')))
-            .height,
-        228,
+        desktopRecommendation.height,
+        greaterThan(desktopRecommendation.width),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('recommendations-artwork-0'))),
+        Size.square(desktopRecommendation.width),
       );
       if (captureReviewImages) {
         await expectLater(
@@ -3691,6 +4036,18 @@ void main() {
         period: 'fixture-period',
         trackCount: 1,
       );
+      const rankingTwo = RankingSummary(
+        providerId: 'qq-music',
+        opaqueId: 'ranking:62002',
+        title: 'Synthetic ranking two',
+        period: 'fixture-period-2',
+      );
+      const rankingThree = RankingSummary(
+        providerId: 'qq-music',
+        opaqueId: 'ranking:62003',
+        title: 'Synthetic ranking three',
+        period: 'fixture-period-3',
+      );
       const track = PlaylistTrackSummary(
         providerId: 'qq-music',
         opaqueId: 'track:41001:0:fixtureMid:-',
@@ -3700,7 +4057,10 @@ void main() {
       final rankings = _WidgetRankingGateway(
         const RankingGroupResult(
           groups: [
-            RankingGroup(title: 'Synthetic charts', rankings: [ranking]),
+            RankingGroup(
+              title: 'Synthetic charts',
+              rankings: [ranking, rankingTwo, rankingThree],
+            ),
           ],
         ),
         const RankingTrackPageResult(
@@ -3738,7 +4098,42 @@ void main() {
       expect(find.byKey(const ValueKey('rankings-content')), findsOneWidget);
       expect(find.text('Synthetic charts'), findsOneWidget);
       expect(find.text('Synthetic ranking'), findsOneWidget);
+      expect(
+        find.text(_en.discoverRankingIssue('fixture-period')),
+        findsOneWidget,
+      );
       expect(rankings.groupLoads, 1);
+
+      Rect rankingRect(String id) =>
+          tester.getRect(find.byKey(ValueKey('ranking-$id')));
+      final wideFirst = rankingRect('ranking:62001');
+      final wideSecond = rankingRect('ranking:62002');
+      final wideThird = rankingRect('ranking:62003');
+      expect(wideSecond.top, closeTo(wideFirst.top, 0.1));
+      expect(wideThird.top, closeTo(wideFirst.top, 0.1));
+
+      tester.view.physicalSize = const Size(1100, 900);
+      await tester.pumpAndSettle();
+      final mediumFirst = rankingRect('ranking:62001');
+      final mediumSecond = rankingRect('ranking:62002');
+      final mediumThird = rankingRect('ranking:62003');
+      expect(mediumSecond.top, closeTo(mediumFirst.top, 0.1));
+      expect(mediumThird.top, greaterThan(mediumFirst.bottom));
+
+      tester.view.physicalSize = const Size(759, 900);
+      await tester.pumpAndSettle();
+      expect(
+        rankingRect('ranking:62002').top,
+        greaterThan(rankingRect('ranking:62001').bottom),
+      );
+      expect(
+        rankingRect('ranking:62003').top,
+        greaterThan(rankingRect('ranking:62002').bottom),
+      );
+      expect(tester.takeException(), isNull);
+
+      tester.view.physicalSize = const Size(1440, 900);
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('ranking-ranking:62001')));
       await tester.pumpAndSettle();
@@ -3951,6 +4346,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(radar.pages, [1, 1, 2]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Radar manual continuation requests exactly one bounded page', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    List<PlaylistTrackSummary> tracks(String page, int count) => List.generate(
+      count,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:manual-$page-$index',
+        title: 'Manual Radar $page track $index',
+        artistNames: const ['Radar artist'],
+      ),
+    );
+    final radar = _ScriptedWidgetRadarGateway([
+      RadarTrackPageResult(page: 1, tracks: tracks('home', 1)),
+      RadarTrackPageResult(page: 1, hasMore: true, tracks: tracks('first', 1)),
+      RadarTrackPageResult(page: 2, hasMore: true, tracks: tracks('second', 1)),
+      RadarTrackPageResult(page: 3, hasMore: true, tracks: tracks('third', 1)),
+      RadarTrackPageResult(page: 4, tracks: tracks('fourth', 1)),
+    ]);
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+        recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(),
+        ),
+        radarGateway: radar,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+    await tester.pumpAndSettle();
+    await _selectAdaptiveSection(
+      tester,
+      control: 'discover-type-selector',
+      item: 'discover-type-radar',
+    );
+
+    expect(radar.pages, [1, 1, 2, 3]);
+    final loadMore = find.byKey(const ValueKey('radar-load-more'));
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+    expect(radar.pages, [1, 1, 2, 3, 4]);
+    expect(find.text('Manual Radar fourth track 0'), findsOneWidget);
+    expect(find.byKey(const ValueKey('radar-load-more')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -4258,6 +4709,21 @@ void main() {
         ],
         releaseDate: '2026-08-26',
       );
+      const longRelease = NewAlbumRelease(
+        album: AlbumSummary(
+          providerId: 'qq-music',
+          opaqueId: 'album:43002:fixtureLongAlbumMid',
+          title:
+              'A deliberately long second album title that occupies two lines',
+        ),
+        artists: [
+          ArtistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'artist:42002:fixtureLongArtistMid',
+            name: 'A very long independent artist collective name',
+          ),
+        ],
+      );
       const track = PlaylistTrackSummary(
         providerId: 'qq-music',
         opaqueId: 'track:41001:0:fixtureTrackMid:-',
@@ -4267,8 +4733,8 @@ void main() {
       final newAlbums = _WidgetNewAlbumGateway(
         const NewAlbumPageResult(
           region: NewAlbumRegion.mainlandChina,
-          total: 1,
-          releases: [release],
+          total: 2,
+          releases: [release, longRelease],
         ),
       );
       final albumTracks = _WidgetAlbumGateway(
@@ -4310,7 +4776,34 @@ void main() {
       expect(find.textContaining('Fresh Artist'), findsOneWidget);
       expect(newAlbums.requests, [(NewAlbumRegion.mainlandChina, 0, 20)]);
 
-      await tester.tap(find.byKey(const ValueKey('new-album-0')));
+      final desktopArtwork0 = tester.getSize(
+        find.byKey(const ValueKey('new-album-artwork-0')),
+      );
+      final desktopArtwork1 = tester.getSize(
+        find.byKey(const ValueKey('new-album-artwork-1')),
+      );
+      expect(desktopArtwork0.width, closeTo(desktopArtwork0.height, 0.1));
+      expect(desktopArtwork1, desktopArtwork0);
+
+      tester.view.physicalSize = const Size(390, 844);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      final compactArtwork0 = tester.getSize(
+        find.byKey(const ValueKey('new-album-artwork-0')),
+      );
+      final compactArtwork1 = tester.getSize(
+        find.byKey(const ValueKey('new-album-artwork-1')),
+      );
+      expect(compactArtwork0.width, closeTo(compactArtwork0.height, 0.1));
+      expect(compactArtwork1, compactArtwork0);
+      expect(tester.takeException(), isNull);
+
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Fresh Album'));
       await tester.pumpAndSettle();
       expect(find.text('Fresh Track'), findsOneWidget);
       expect(
@@ -4438,6 +4931,12 @@ void main() {
       final japanCategory = find.byKey(
         const ValueKey('new-song-category-japan'),
       );
+      if (japanCategory.evaluate().isEmpty) {
+        await tester.tap(
+          find.byKey(const ValueKey('new-song-category-selector')),
+        );
+        await tester.pumpAndSettle();
+      }
       await tester.ensureVisible(japanCategory);
       await tester.tap(japanCategory);
       await tester.pumpAndSettle();
@@ -6277,7 +6776,10 @@ void main() {
     tester.view.physicalSize = const Size(1000, 700);
     await tester.pumpAndSettle();
     final firstRow = find.byKey(const ValueKey('playlist-track-row-1'));
-    tester.widget<InkWell>(firstRow).focusNode?.requestFocus();
+    final firstRowInk = find
+        .descendant(of: firstRow, matching: find.byType(InkWell))
+        .first;
+    tester.widget<InkWell>(firstRowInk).focusNode?.requestFocus();
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
     await tester.pumpAndSettle();
@@ -7110,7 +7612,7 @@ void main() {
       expect(detail.requests.map((request) => request.offset), [0, 100]);
       // Let the existing expanded/collapsed header transition remove its
       // outgoing search field while the network page remains deliberately pending.
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('liked-songs-search')),
         'Prefetch row 150',
@@ -7938,6 +8440,8 @@ void main() {
       const Offset(0, -180),
     );
     await tester.pump();
+    // The scroll notification records intent; presentation changes next frame.
+    await tester.pump();
     expect(
       find.byKey(const ValueKey('liked-songs-collapsed-header')),
       findsOneWidget,
@@ -8012,6 +8516,71 @@ void main() {
       isNot(ColorScheme.fromSeed(seedColor: accent).primary),
     );
   });
+
+  testWidgets(
+    'Settings distinguishes a system palette from the explicit brand fallback',
+    (tester) async {
+      final writes = <AppSettings>[];
+      const settings = AppSettings(
+        theme: AppThemePreference.light,
+        colorSource: AppColorSourcePreference.system,
+      );
+
+      Widget page(ColorScheme? systemScheme) => MaterialApp(
+        locale: englishAppLocale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        ),
+        home: Scaffold(
+          body: SettingsPage(
+            settings: settings,
+            embedded: true,
+            showToolbar: false,
+            systemLightColorScheme: systemScheme,
+            onBack: () {},
+            onCompactSectionSelected: (_) {},
+            onSettingsChanged: (next) async {
+              writes.add(next);
+              return AppSettingsWriteResult.saved;
+            },
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        page(ColorScheme.fromSeed(seedColor: const Color(0xFF6750A4))),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-system-colors-available')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-system-colors-unavailable')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('settings-color-source-brand')),
+      );
+      await tester.pumpAndSettle();
+      expect(writes, hasLength(1));
+      expect(writes.single.colorSource, AppColorSourcePreference.brand);
+
+      await tester.pumpWidget(page(null));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-system-colors-unavailable')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-system-colors-available')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'keeps the complete playlist sidebar clipped with pinned settings',
@@ -10929,6 +11498,33 @@ class _WidgetPersonalizedPlaylistsOperation
 
   @override
   Future<PersonalizedPlaylistsResult> run() async => result;
+}
+
+class _ScriptedWidgetPersonalizedPlaylistsGateway
+    implements PersonalizedPlaylistsGateway {
+  _ScriptedWidgetPersonalizedPlaylistsGateway(this.results);
+
+  final List<Future<PersonalizedPlaylistsResult>> results;
+  int requests = 0;
+
+  @override
+  PersonalizedPlaylistsLoadOperation beginLoad() {
+    final index = requests++;
+    return _FutureWidgetPersonalizedPlaylistsOperation(results[index]);
+  }
+}
+
+class _FutureWidgetPersonalizedPlaylistsOperation
+    implements PersonalizedPlaylistsLoadOperation {
+  const _FutureWidgetPersonalizedPlaylistsOperation(this.result);
+
+  final Future<PersonalizedPlaylistsResult> result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PersonalizedPlaylistsResult> run() => result;
 }
 
 class _WidgetPersonalizedTracksGateway implements PersonalizedTracksGateway {

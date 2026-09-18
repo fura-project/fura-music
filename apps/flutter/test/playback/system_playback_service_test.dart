@@ -5,6 +5,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_media_session/flutter_media_session.dart' as fms;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -121,6 +122,16 @@ void main() {
       handler.close();
       controller.dispose();
     },
+  );
+
+  test(
+    'terminal pending roam cannot override a system Play command',
+    () => _exercisePendingRoamSystemCommand(stop: false),
+  );
+
+  test(
+    'terminal pending roam cannot override a system Stop command',
+    () => _exercisePendingRoamSystemCommand(stop: true),
   );
 
   test('page listeners can detach without disabling system commands', () async {
@@ -395,17 +406,64 @@ const second = PlaylistTrackSummary(
   durationSeconds: 240,
 );
 
-QueuePlaybackController _controller({_FakeAudioEngine? audio}) =>
-    QueuePlaybackController(
-      _MemoryQueueGateway(),
-      TrackPlaybackController(
-        const _MediaGateway(),
-        ForegroundPlaybackController(audio ?? _FakeAudioEngine()),
-      ),
-    );
+Future<void> _exercisePendingRoamSystemCommand({required bool stop}) async {
+  final late = Completer<RelatedTracksResult>();
+  final operation = _ControlledRelatedOperation(late.future);
+  final queue = _MemoryQueueGateway();
+  final audio = _FakeAudioEngine();
+  final controller = _controller(
+    audio: audio,
+    queue: queue,
+    relatedTracksGateway: _ControlledRelatedGateway(operation),
+  );
+  final handler = ProjectSystemAudioHandler(controller);
+  controller.setRoamEnabled(true);
+
+  await controller.replaceAndPlay(const [first], 0);
+  audio.sessions.single.emit(ForegroundAudioState.completed);
+  await _waitUntil(() => controller.roamStage == RoamStage.loading);
+
+  if (stop) {
+    await handler.stop();
+    expect(controller.playback.stage, TrackPlaybackStage.stopped);
+  } else {
+    await handler.play();
+    expect(controller.playback.stage, TrackPlaybackStage.playing);
+  }
+  expect(operation.cancelCalls, 1);
+  expect(controller.roamStage, RoamStage.idle);
+
+  late.complete(const RelatedTracksResult(tracks: [second]));
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+  expect(queue.extensionCalls, 0);
+  expect(controller.tracks, const [first]);
+  expect(controller.current, first);
+  expect(
+    controller.playback.stage,
+    stop ? TrackPlaybackStage.stopped : TrackPlaybackStage.playing,
+  );
+
+  handler.close();
+  controller.dispose();
+}
+
+QueuePlaybackController _controller({
+  _FakeAudioEngine? audio,
+  _MemoryQueueGateway? queue,
+  RelatedTracksGateway? relatedTracksGateway,
+}) => QueuePlaybackController(
+  queue ?? _MemoryQueueGateway(),
+  TrackPlaybackController(
+    const _MediaGateway(),
+    ForegroundPlaybackController(audio ?? _FakeAudioEngine()),
+  ),
+  relatedTracksGateway: relatedTracksGateway,
+);
 
 class _MemoryQueueGateway implements PlaybackQueueGateway {
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
+  int extensionCalls = 0;
 
   @override
   PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
@@ -462,11 +520,14 @@ class _MemoryQueueGateway implements PlaybackQueueGateway {
   @override
   PlaybackQueueResult extendAndAdvanceFromTerminal(
     List<PlaylistTrackSummary> tracks,
-  ) => _update(
-    [..._snapshot.tracks, ...tracks],
-    _snapshot.tracks.length,
-    playbackRequested: true,
-  );
+  ) {
+    extensionCalls += 1;
+    return _update(
+      [..._snapshot.tracks, ...tracks],
+      _snapshot.tracks.length,
+      playbackRequested: true,
+    );
+  }
 
   @override
   PlaybackQueueResult remove(int index) {
@@ -613,6 +674,33 @@ class _FakeAudioSession implements ForegroundAudioSession {
     await _failures.close();
     await _positions.close();
   }
+
+  void emit(ForegroundAudioState state) => _states.add(state);
+}
+
+class _ControlledRelatedGateway implements RelatedTracksGateway {
+  const _ControlledRelatedGateway(this.operation);
+
+  final RelatedTracksLoadOperation operation;
+
+  @override
+  RelatedTracksLoadOperation beginLoad(PlaylistTrackSummary seed) => operation;
+}
+
+class _ControlledRelatedOperation implements RelatedTracksLoadOperation {
+  _ControlledRelatedOperation(this.result);
+
+  final Future<RelatedTracksResult> result;
+  int cancelCalls = 0;
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<RelatedTracksResult> run() => result;
 }
 
 class _NeverLyricGateway implements LyricGateway {

@@ -52,6 +52,7 @@ void main() {
       const Offset(0, -66),
     );
     await tester.pump();
+    await tester.pump();
     final intermediateArtwork = tester.getSize(
       find.byKey(const ValueKey('collection-detail-artwork')),
     );
@@ -61,6 +62,7 @@ void main() {
       find.byKey(const ValueKey('adaptive-track-list')),
       const Offset(0, -80),
     );
+    await tester.pump();
     await tester.pump();
     final collapsedArtwork = tester.getSize(
       find.byKey(const ValueKey('collection-detail-artwork')),
@@ -176,6 +178,7 @@ void main() {
         find.byKey(const ValueKey('medium-track-list')),
         const Offset(0, -80),
       );
+      await tester.pump();
       await tester.pump();
 
       expect(handoffs, contains(true));

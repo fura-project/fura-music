@@ -68,6 +68,8 @@ class UserLibraryPage extends StatefulWidget {
     required this.onRequestSignIn,
     required this.onSignInAgain,
     required this.onSignOut,
+    this.systemLightColorScheme,
+    this.systemDarkColorScheme,
     super.key,
   });
 
@@ -83,6 +85,8 @@ class UserLibraryPage extends StatefulWidget {
   final VoidCallback onRequestSignIn;
   final VoidCallback onSignInAgain;
   final Future<CredentialSignOutResult> Function() onSignOut;
+  final ColorScheme? systemLightColorScheme;
+  final ColorScheme? systemDarkColorScheme;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -542,6 +546,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late NewSongController _homeNewSongController;
   late RadarController _homeRadarController;
   late TrackSearchSuggestionController _topSearchSuggestionController;
+  final DiscoverNavigationController _discoverNavigationController =
+      DiscoverNavigationController();
   final FocusNode _playlistReturnFocusNode = FocusNode(
     debugLabel: 'last opened playlist',
   );
@@ -765,6 +771,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _backShortcutFallbackFocusNode.dispose();
     _topSearchController.dispose();
     _settingsSearchController.dispose();
+    _discoverNavigationController.dispose();
     super.dispose();
   }
 
@@ -892,6 +899,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     searchQuery: _settingsSearchQuery,
     embedded: embedded,
     showToolbar: showToolbar,
+    systemLightColorScheme: widget.systemLightColorScheme,
+    systemDarkColorScheme: widget.systemDarkColorScheme,
   );
 
   Widget _buildPlaylistRoute(
@@ -1782,11 +1791,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 destination == AuthenticatedPrimaryDestination.home &&
                 embeddedShellRoute == null &&
                 !_overlayPageActive,
-            onOpenDiscover: () => _selectPrimaryDestination(
-              AuthenticatedPrimaryDestination.discover,
-            ),
+            onOpenDiscover: () {
+              _discoverNavigationController.show(DiscoverDestination.playlists);
+              _selectPrimaryDestination(
+                AuthenticatedPrimaryDestination.discover,
+              );
+            },
             onOpenLibrary: _openLikedSongs,
             onOpenRecommendation: _openHomeRecommendation,
+            onOpenTrackAlbum: _openTrackContextAlbum,
+            onOpenTrackArtist: _openTrackContextArtist,
             lastOpenedRecommendation: _lastOpenedHomeRecommendation,
             recommendationReturnFocusNode: _homeRecommendationReturnFocusNode,
           ),
@@ -1819,6 +1833,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 onSignInAgain: widget.onSignInAgain,
                 providerDisplayName: _providerDisplayName,
                 onHeaderCollapsedChanged: _updateDiscoverHeaderCollapsed,
+                navigationController: _discoverNavigationController,
                 embedded: true,
               ),
             )
@@ -2515,7 +2530,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
     setState(() => _signingOut = true);
     final signOut = widget.onSignOut();
-    await _queuePlaybackController.playback.stop();
+    await _queuePlaybackController.stop();
     final result = await signOut;
     if (!mounted) return;
     setState(() => _signingOut = false);

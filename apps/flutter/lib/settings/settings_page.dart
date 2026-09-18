@@ -114,6 +114,8 @@ class SettingsPage extends StatefulWidget {
     this.searchQuery = '',
     this.embedded = false,
     this.showToolbar = true,
+    this.systemLightColorScheme,
+    this.systemDarkColorScheme,
     super.key,
   });
 
@@ -128,6 +130,8 @@ class SettingsPage extends StatefulWidget {
   final String searchQuery;
   final bool embedded;
   final bool showToolbar;
+  final ColorScheme? systemLightColorScheme;
+  final ColorScheme? systemDarkColorScheme;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -420,16 +424,59 @@ class _SettingsPageState extends State<SettingsPage> {
         ignoring: _saving,
         child: Column(
           children: [
-            RadioListTile<AppColorSourcePreference>(
-              key: const ValueKey('settings-color-source-system'),
-              value: AppColorSourcePreference.system,
-              secondary: _ColorSourcePreview(
-                icon: Icons.wallpaper_rounded,
-                background: Theme.of(context).colorScheme.tertiaryContainer,
-                foreground: Theme.of(context).colorScheme.onTertiaryContainer,
-              ),
-              title: Text(context.l10n.settingsColorSourceSystem),
-              subtitle: Text(context.l10n.settingsColorSourceSystemDescription),
+            Builder(
+              builder: (context) {
+                final brightness = Theme.of(context).brightness;
+                final systemScheme = brightness == Brightness.dark
+                    ? widget.systemDarkColorScheme
+                    : widget.systemLightColorScheme;
+                final brandFallback = ColorScheme.fromSeed(
+                  seedColor: MusicMaterialTheme.brandSeedFor(
+                    widget.settings.musicProvider,
+                  ),
+                  brightness: brightness,
+                  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+                );
+                final preview = systemScheme ?? brandFallback;
+                return RadioListTile<AppColorSourcePreference>(
+                  key: const ValueKey('settings-color-source-system'),
+                  value: AppColorSourcePreference.system,
+                  secondary: _ColorSourcePreview(
+                    icon: systemScheme == null
+                        ? Icons.wallpaper_outlined
+                        : Icons.wallpaper_rounded,
+                    background: preview.primaryContainer,
+                    foreground: preview.onPrimaryContainer,
+                  ),
+                  title: Text(context.l10n.settingsColorSourceSystem),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.l10n.settingsColorSourceSystemDescription),
+                      const SizedBox(height: 4),
+                      Text(
+                        systemScheme == null
+                            ? context.l10n.settingsColorSourceSystemUnavailable
+                            : context.l10n.settingsColorSourceSystemAvailable,
+                        key: ValueKey(
+                          systemScheme == null
+                              ? 'settings-system-colors-unavailable'
+                              : 'settings-system-colors-available',
+                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: systemScheme == null
+                                  ? Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant
+                                  : Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
             Builder(
               builder: (context) {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
@@ -27,6 +28,24 @@ import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
+enum DiscoverDestination { playlists, rankings, radar, newAlbums, newSongs }
+
+/// Issues explicit navigation commands to the retained Discover page.
+///
+/// This is deliberately a command rather than a selected-value notifier: a
+/// Home "See all" action must still navigate to Playlists after the user has
+/// changed tabs locally, even when the last external command was Playlists.
+class DiscoverNavigationController extends ChangeNotifier {
+  DiscoverDestination _destination = DiscoverDestination.playlists;
+
+  DiscoverDestination get destination => _destination;
+
+  void show(DiscoverDestination destination) {
+    _destination = destination;
+    notifyListeners();
+  }
+}
+
 class RecommendedPlaylistsPage extends StatefulWidget {
   const RecommendedPlaylistsPage({
     required this.gateway,
@@ -48,6 +67,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
     this.onOpenTrackAlbum,
     this.onOpenTrackArtist,
     this.onHeaderCollapsedChanged,
+    this.navigationController,
     this.embedded = false,
     super.key,
   }) : assert(supportedNewAlbumRegions.length > 0),
@@ -72,6 +92,7 @@ class RecommendedPlaylistsPage extends StatefulWidget {
   final ValueChanged<AlbumSummary>? onOpenTrackAlbum;
   final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
+  final DiscoverNavigationController? navigationController;
   final bool embedded;
 
   @override
@@ -91,6 +112,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
   _DiscoverType _type = _DiscoverType.playlists;
   bool _headerCollapsed = false;
   bool _userReturningToHeader = false;
+  bool? _pendingHeaderCollapsed;
+  bool _headerUpdateScheduled = false;
   bool _rankingsVisited = false;
   bool _radarVisited = false;
   bool _newAlbumsVisited = false;
@@ -131,11 +154,13 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       maxInitialPrefetchPages: 2,
     );
     _tabController = TabController(length: _types.length, vsync: this);
+    widget.navigationController?.addListener(_handleNavigationCommand);
     if (_ownsPlaylistController) unawaited(_controller.load());
   }
 
   @override
   void dispose() {
+    widget.navigationController?.removeListener(_handleNavigationCommand);
     if (_ownsPlaylistController) _controller.dispose();
     _newAlbumController.dispose();
     _newSongController.dispose();
@@ -143,6 +168,27 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     _radarController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(RecommendedPlaylistsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.navigationController != widget.navigationController) {
+      oldWidget.navigationController?.removeListener(_handleNavigationCommand);
+      widget.navigationController?.addListener(_handleNavigationCommand);
+    }
+  }
+
+  void _handleNavigationCommand() {
+    final destination = widget.navigationController?.destination;
+    if (destination == null) return;
+    _selectType(switch (destination) {
+      DiscoverDestination.playlists => _DiscoverType.playlists,
+      DiscoverDestination.rankings => _DiscoverType.rankings,
+      DiscoverDestination.radar => _DiscoverType.radar,
+      DiscoverDestination.newAlbums => _DiscoverType.newAlbums,
+      DiscoverDestination.newSongs => _DiscoverType.newSongs,
+    });
   }
 
   @override
@@ -161,7 +207,6 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
         ]),
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= 820;
             final compactPlayerVisible =
                 constraints.maxWidth < 640 &&
                 widget.queuePlaybackController.current != null;
@@ -170,7 +215,6 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
               key: const ValueKey('discover-page-scroll'),
               children: [
                 _DiscoverHeader(
-                  desktop: desktop,
                   collapsed: _headerCollapsed,
                   subtitle: widget.radarEnabled
                       ? l10n.discoverSubtitleWithRadar(provider)
@@ -336,6 +380,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       appendFailure: _radarController.appendFailure,
       canRetryMore: _radarController.canRetryMore,
       onRetryMore: _radarController.retryMore,
+      onLoadMore: () => unawaited(_radarController.loadMore()),
       onReload: () => unawaited(_radarController.load()),
       onSignInAgain: widget.onSignInAgain,
       onPlay: _playRadar,
@@ -555,19 +600,34 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
         _userReturningToHeader = false;
       }
     }
+    final effectiveCollapsed = _pendingHeaderCollapsed ?? _headerCollapsed;
     final returnedToHeader =
-        _headerCollapsed &&
+        effectiveCollapsed &&
         _userReturningToHeader &&
         notification.metrics.pixels <= 4;
     if (returnedToHeader) _userReturningToHeader = false;
-    final collapse = _headerCollapsed
+    final collapse = effectiveCollapsed
         ? !returnedToHeader
         : notification.metrics.pixels > 48;
-    _setHeaderCollapsed(collapse);
+    _scheduleHeaderCollapsed(collapse);
     return false;
   }
 
+  void _scheduleHeaderCollapsed(bool collapsed) {
+    _pendingHeaderCollapsed = collapsed;
+    if (_headerUpdateScheduled) return;
+    _headerUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _headerUpdateScheduled = false;
+      if (!mounted) return;
+      final pending = _pendingHeaderCollapsed;
+      _pendingHeaderCollapsed = null;
+      if (pending != null) _setHeaderCollapsed(pending);
+    });
+  }
+
   void _setHeaderCollapsed(bool collapsed) {
+    _pendingHeaderCollapsed = null;
     if (collapsed == _headerCollapsed) return;
     if (!collapsed) _userReturningToHeader = false;
     setState(() => _headerCollapsed = collapsed);
@@ -577,24 +637,45 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
 
 enum _DiscoverType { playlists, rankings, radar, newAlbums, newSongs }
 
+double _discoverHorizontal(double width) =>
+    width >= 760 ? MusicSpacing.pageWide : MusicSpacing.pageCompact;
+
+class _DiscoverContentBoundary extends StatelessWidget {
+  const _DiscoverContentBoundary({required this.child, this.vertical = 0});
+
+  final Widget child;
+  final double vertical;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: MusicSizes.contentMaxWidth),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: _discoverHorizontal(constraints.maxWidth),
+            vertical: vertical,
+          ),
+          child: child,
+        ),
+      ),
+    ),
+  );
+}
+
 class _DiscoverHeader extends StatelessWidget {
   const _DiscoverHeader({
-    required this.desktop,
     required this.collapsed,
     required this.subtitle,
     required this.tabs,
   });
 
-  final bool desktop;
   final bool collapsed;
   final String subtitle;
   final Widget tabs;
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = desktop
-        ? MusicSpacing.pageWide
-        : MusicSpacing.pageCompact;
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : MusicMotion.stateChange;
@@ -603,29 +684,28 @@ class _DiscoverHeader extends StatelessWidget {
       tween: Tween<double>(begin: collapsed ? 0 : 1, end: collapsed ? 0 : 1),
       duration: duration,
       curve: Curves.easeInOutCubic,
-      builder: (context, progress, _) => Padding(
-        key: ValueKey(
-          collapsed ? 'discover-collapsed-header' : 'discover-expanded-header',
-        ),
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          2 + (14 * progress),
-          0,
-          2 + (4 * progress),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRect(
-              child: Align(
-                alignment: Alignment.topLeft,
-                heightFactor: progress,
-                child: Opacity(
-                  opacity: progress,
-                  child: Transform.translate(
-                    offset: Offset(0, -8 * (1 - progress)),
-                    child: Padding(
-                      padding: EdgeInsets.only(right: horizontal),
+      builder: (context, progress, _) => _DiscoverContentBoundary(
+        child: Padding(
+          key: ValueKey(
+            collapsed
+                ? 'discover-collapsed-header'
+                : 'discover-expanded-header',
+          ),
+          padding: EdgeInsets.only(
+            top: 2 + (14 * progress),
+            bottom: 2 + (4 * progress),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRect(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  heightFactor: progress,
+                  child: Opacity(
+                    opacity: progress,
+                    child: Transform.translate(
+                      offset: Offset(0, -8 * (1 - progress)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -655,9 +735,9 @@ class _DiscoverHeader extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-            tabs,
-          ],
+              tabs,
+            ],
+          ),
         ),
       ),
     );
@@ -727,32 +807,98 @@ class _NewSongShell extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: _NewSongCategoryPicker(
-                category: category,
-                categories: categories,
-                onSelected: onCategorySelected,
-                padding: EdgeInsets.zero,
-              ),
-            ),
-            const SizedBox(width: 16),
-            FilledButton.icon(
-              key: const ValueKey('new-songs-play-all'),
-              onPressed: onPlay,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: Text(context.l10n.commonPlay),
-            ),
-          ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact = constraints.maxWidth < 600;
+      final categoryLabel = newSongCategoryLabel(context.l10n, category);
+      final play = Tooltip(
+        message: '${context.l10n.commonPlay}: $categoryLabel',
+        child: FilledButton.icon(
+          key: const ValueKey('new-songs-play-all'),
+          onPressed: onPlay,
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: Text(context.l10n.commonPlay),
+        ),
+      );
+      return Column(
+        children: [
+          _DiscoverContentBoundary(
+            vertical: 4,
+            child: compact
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: _NewSongCategoryMenu(
+                          category: category,
+                          categories: categories,
+                          onSelected: onCategorySelected,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      play,
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _NewSongCategoryPicker(
+                          category: category,
+                          categories: categories,
+                          onSelected: onCategorySelected,
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      play,
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(child: child),
+        ],
+      );
+    },
+  );
+}
+
+class _NewSongCategoryMenu extends StatelessWidget {
+  const _NewSongCategoryMenu({
+    required this.category,
+    required this.categories,
+    required this.onSelected,
+  });
+
+  final NewSongCategory category;
+  final List<NewSongCategory> categories;
+  final ValueChanged<NewSongCategory> onSelected;
+
+  @override
+  Widget build(BuildContext context) => MenuAnchor(
+    key: const ValueKey('new-song-category-selector'),
+    menuChildren: [
+      for (final value in categories)
+        MenuItemButton(
+          key: ValueKey('new-song-category-${value.name}'),
+          leadingIcon: value == category
+              ? const Icon(Icons.check_rounded)
+              : const SizedBox(width: 24),
+          onPressed: () => onSelected(value),
+          child: Text(newSongCategoryLabel(context.l10n, value)),
+        ),
+    ],
+    builder: (context, controller, _) => OutlinedButton.icon(
+      onPressed: () =>
+          controller.isOpen ? controller.close() : controller.open(),
+      icon: const Icon(Icons.tune_rounded),
+      label: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          newSongCategoryLabel(context.l10n, category),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
-      Expanded(child: child),
-    ],
+    ),
   );
 }
 
@@ -906,11 +1052,15 @@ class _NewAlbumShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      _NewAlbumRegionPicker(
-        region: region,
-        regions: regions,
-        onSelected: onRegionSelected,
+      _DiscoverContentBoundary(
+        vertical: 4,
+        child: _NewAlbumRegionPicker(
+          region: region,
+          regions: regions,
+          onSelected: onRegionSelected,
+        ),
       ),
+      const SizedBox(height: 4),
       Expanded(child: child),
     ],
   );
@@ -958,6 +1108,19 @@ class _NewAlbumCollection extends StatelessWidget {
       final horizontal = desktop
           ? MusicSpacing.pageWide
           : MusicSpacing.pageCompact;
+      final contentWidth = math.min(
+        constraints.maxWidth,
+        MusicSizes.contentMaxWidth,
+      );
+      final availableWidth = math.max(0.0, contentWidth - horizontal * 2);
+      final spacing = desktop ? 16.0 : 12.0;
+      final columns = desktop
+          ? ((availableWidth + spacing) / (180 + spacing)).floor().clamp(1, 6)
+          : 2;
+      final artworkExtent =
+          (availableWidth - spacing * (columns - 1)) / columns;
+      final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final itemExtent = artworkExtent + 8 + (76 * textScale);
       return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(
@@ -983,22 +1146,16 @@ class _NewAlbumCollection extends StatelessWidget {
                 SliverPadding(
                   padding: EdgeInsets.symmetric(horizontal: horizontal),
                   sliver: SliverGrid.builder(
-                    gridDelegate: desktop
-                        ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 180,
-                            mainAxisExtent: 228,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 20,
-                          )
-                        : const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisExtent: 226,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 16,
-                          ),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisExtent: itemExtent,
+                      crossAxisSpacing: spacing,
+                      mainAxisSpacing: desktop ? 20 : 16,
+                    ),
                     itemCount: releases.length,
                     itemBuilder: (context, index) => _NewAlbumCard(
                       key: ValueKey('new-album-$index'),
+                      artworkKey: ValueKey('new-album-artwork-$index'),
                       release: releases[index],
                       onTap: () => onSelected(releases[index]),
                     ),
@@ -1031,7 +1188,7 @@ class _NewAlbumRegionPicker extends StatelessWidget {
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const ValueKey('new-album-region-selector'),
     scrollDirection: Axis.horizontal,
-    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+    padding: EdgeInsets.zero,
     child: SegmentedButton<NewAlbumRegion>(
       segments: [
         for (final value in regions)
@@ -1059,9 +1216,15 @@ ButtonStyle _compactSegmentedButtonStyle() => SegmentedButton.styleFrom(
 );
 
 class _NewAlbumCard extends StatelessWidget {
-  const _NewAlbumCard({required this.release, required this.onTap, super.key});
+  const _NewAlbumCard({
+    required this.release,
+    required this.artworkKey,
+    required this.onTap,
+    super.key,
+  });
 
   final NewAlbumRelease release;
+  final Key artworkKey;
   final VoidCallback onTap;
 
   @override
@@ -1070,43 +1233,50 @@ class _NewAlbumCard extends StatelessWidget {
     label: _newAlbumSemanticLabel(context.l10n, release),
     excludeSemantics: true,
     onTap: onTap,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _NewAlbumArtwork(uri: release.album.artworkUri),
-              Positioned.fill(
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: onTap,
-                  ),
+    child: Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              key: artworkKey,
+              aspectRatio: 1,
+              child: _NewAlbumArtwork(uri: release.album.artworkUri),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              release.album.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _newAlbumArtistLine(context.l10n, release),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (release.releaseDate case final date?) ...[
+              const SizedBox(height: 2),
+              Text(
+                date,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
-          ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          release.album.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          _newAlbumDetails(context.l10n, release),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-      ],
+      ),
     ),
   );
 }
@@ -1195,6 +1365,11 @@ String _newAlbumDetails(AppLocalizations l10n, NewAlbumRelease release) {
   return details.isEmpty ? l10n.discoverAlbumType : details.join(' · ');
 }
 
+String _newAlbumArtistLine(AppLocalizations l10n, NewAlbumRelease release) =>
+    release.artists.isEmpty
+    ? l10n.discoverAlbumType
+    : release.artists.map((artist) => artist.name).join(' · ');
+
 String _newAlbumSemanticLabel(AppLocalizations l10n, NewAlbumRelease release) =>
     '${release.album.title}, ${_newAlbumDetails(l10n, release)}';
 
@@ -1252,19 +1427,31 @@ class _RankingCollection extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 if (desktop)
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final ranking in group.rankings)
-                        SizedBox(
-                          width: 344,
-                          child: _RankingTile(
-                            ranking: ranking,
-                            onTap: () => onSelected(ranking),
-                          ),
-                        ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      const spacing = 12.0;
+                      final columns =
+                          ((constraints.maxWidth + spacing) / (320 + spacing))
+                              .floor()
+                              .clamp(1, 3);
+                      final tileWidth =
+                          (constraints.maxWidth - spacing * (columns - 1)) /
+                          columns;
+                      return Wrap(
+                        spacing: spacing,
+                        runSpacing: spacing,
+                        children: [
+                          for (final ranking in group.rankings)
+                            SizedBox(
+                              width: tileWidth,
+                              child: _RankingTile(
+                                ranking: ranking,
+                                onTap: () => onSelected(ranking),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   )
                 else
                   for (final ranking in group.rankings)
@@ -1294,7 +1481,9 @@ class _RankingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final details = <String>[];
-    if (ranking.period case final period?) details.add(period);
+    if (ranking.period case final period?) {
+      details.add(context.l10n.discoverRankingIssue(period));
+    }
     if (ranking.trackCount case final count?) {
       details.add(context.l10n.trackCount(count));
     }
@@ -1340,7 +1529,11 @@ class _RankingTile extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          ranking.period ?? context.l10n.discoverCurrentRanking,
+                          ranking.period == null
+                              ? context.l10n.discoverCurrentRanking
+                              : context.l10n.discoverRankingIssue(
+                                  ranking.period!,
+                                ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
@@ -1629,6 +1822,7 @@ class _RadarCollection extends StatefulWidget {
     required this.appendFailure,
     required this.canRetryMore,
     required this.onRetryMore,
+    required this.onLoadMore,
     required this.onReload,
     required this.onSignInAgain,
     required this.onPlay,
@@ -1649,6 +1843,7 @@ class _RadarCollection extends StatefulWidget {
   final RadarFailure? appendFailure;
   final bool canRetryMore;
   final VoidCallback onRetryMore;
+  final VoidCallback onLoadMore;
   final VoidCallback onReload;
   final VoidCallback onSignInAgain;
   final ValueChanged<int> onPlay;
@@ -1664,12 +1859,52 @@ class _RadarCollection extends StatefulWidget {
 
 class _RadarCollectionState extends State<_RadarCollection> {
   final _prefetchPolicy = PlaylistPrefetchPolicy();
+  int _prefetchDispatchEpoch = 0;
+  int? _scheduledPrefetchEpoch;
+  int? _pendingPrefetchTarget;
+
+  bool get _prefetchEnabled =>
+      widget.hasMore && !widget.isLoadingMore && widget.appendFailure == null;
+
+  void _invalidatePendingPrefetch() {
+    _prefetchDispatchEpoch += 1;
+    _scheduledPrefetchEpoch = null;
+    _pendingPrefetchTarget = null;
+  }
+
+  void _schedulePrefetch(int target) {
+    _pendingPrefetchTarget = math.max(_pendingPrefetchTarget ?? 0, target);
+    final epoch = _prefetchDispatchEpoch;
+    if (_scheduledPrefetchEpoch == epoch) return;
+    _scheduledPrefetchEpoch = epoch;
+    final controller = widget.controller;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          epoch != _prefetchDispatchEpoch ||
+          !_prefetchEnabled ||
+          !identical(widget.controller, controller)) {
+        return;
+      }
+      if (_scheduledPrefetchEpoch == epoch) _scheduledPrefetchEpoch = null;
+      final target = _pendingPrefetchTarget;
+      _pendingPrefetchTarget = null;
+      if (target != null) controller.prefetchTo(target);
+    });
+  }
 
   @override
   void didUpdateWidget(_RadarCollection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
+      _invalidatePendingPrefetch();
       oldWidget.controller.cancelPrefetch();
+      _prefetchPolicy.reset();
+    } else if ((oldWidget.hasMore &&
+            !oldWidget.isLoadingMore &&
+            oldWidget.appendFailure == null) &&
+        !_prefetchEnabled) {
+      _invalidatePendingPrefetch();
+      widget.controller.cancelPrefetch();
       _prefetchPolicy.reset();
     }
   }
@@ -1688,11 +1923,12 @@ class _RadarCollectionState extends State<_RadarCollection> {
       _ => 0.0,
     };
     if (delta < 0) {
+      _invalidatePendingPrefetch();
       widget.controller.cancelPrefetch();
       _prefetchPolicy.reset();
     } else if (delta > 0) {
       final metrics = notification.metrics;
-      widget.controller.prefetchTo(
+      _schedulePrefetch(
         _prefetchPolicy.targetTrackCount(
           loadedCount: widget.tracks.length,
           extentAfter: metrics.extentAfter,
@@ -1712,6 +1948,7 @@ class _RadarCollectionState extends State<_RadarCollection> {
 
   @override
   void dispose() {
+    _invalidatePendingPrefetch();
     widget.controller.cancelPrefetch();
     super.dispose();
   }
@@ -1813,6 +2050,7 @@ class _RadarCollectionState extends State<_RadarCollection> {
                       appendFailure: widget.appendFailure,
                       canRetryMore: widget.canRetryMore,
                       onRetryMore: widget.onRetryMore,
+                      onLoadMore: widget.onLoadMore,
                       onReload: widget.onReload,
                       onSignInAgain: widget.onSignInAgain,
                     ),
@@ -1834,6 +2072,7 @@ class _RadarFooter extends StatelessWidget {
     required this.appendFailure,
     required this.canRetryMore,
     required this.onRetryMore,
+    required this.onLoadMore,
     required this.onReload,
     required this.onSignInAgain,
   });
@@ -1843,6 +2082,7 @@ class _RadarFooter extends StatelessWidget {
   final RadarFailure? appendFailure;
   final bool canRetryMore;
   final VoidCallback onRetryMore;
+  final VoidCallback onLoadMore;
   final VoidCallback onReload;
   final VoidCallback onSignInAgain;
 
@@ -1880,12 +2120,10 @@ class _RadarFooter extends StatelessWidget {
                     ?.copyWith(color: Theme.of(context).colorScheme.error),
               )
             : hasMore
-            ? Text(
-                context.l10n.commonScrollToLoadMore,
-                key: const ValueKey('radar-auto-load-more'),
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+            ? FilledButton.tonal(
+                key: const ValueKey('radar-load-more'),
+                onPressed: onLoadMore,
+                child: Text(context.l10n.commonLoadMore),
               )
             : Text(
                 context.l10n.discoverEndRadar,
@@ -1938,51 +2176,65 @@ class _RecommendationCollection extends StatelessWidget {
       final horizontal = desktop
           ? MusicSpacing.pageWide
           : MusicSpacing.pageCompact;
-      return BoundedViewportPageDemand(
-        enabled: hasMore && !isLoadingMore && appendFailure == null,
-        onDemand: onLoadMore,
-        child: CustomScrollView(
-          key: const PageStorageKey<String>('recommended-playlist-grid'),
-          slivers: [
-            if (omittedPlaylistCount > 0)
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
-                sliver: SliverToBoxAdapter(
-                  child: PartialResultsNotice(
-                    omittedCount: omittedPlaylistCount,
-                    resultRevision: partialResultRevision,
+      final contentWidth = math.min(
+        constraints.maxWidth,
+        MusicSizes.contentMaxWidth,
+      );
+      final availableWidth = math.max(0.0, contentWidth - horizontal * 2);
+      final spacing = desktop ? 16.0 : 12.0;
+      final columns = desktop
+          ? ((availableWidth + spacing) / (180 + spacing)).floor().clamp(1, 6)
+          : 2;
+      final artworkExtent =
+          (availableWidth - spacing * (columns - 1)) / columns;
+      final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final itemExtent = artworkExtent + 8 + (58 * textScale);
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: MusicSizes.contentMaxWidth,
+          ),
+          child: BoundedViewportPageDemand(
+            enabled: hasMore && !isLoadingMore && appendFailure == null,
+            onDemand: onLoadMore,
+            child: CustomScrollView(
+              key: const PageStorageKey<String>('recommended-playlist-grid'),
+              slivers: [
+                if (omittedPlaylistCount > 0)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
+                    sliver: SliverToBoxAdapter(
+                      child: PartialResultsNotice(
+                        omittedCount: omittedPlaylistCount,
+                        resultRevision: partialResultRevision,
+                      ),
+                    ),
+                  ),
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
+                  sliver: SliverGrid.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisExtent: itemExtent,
+                      crossAxisSpacing: spacing,
+                      mainAxisSpacing: desktop ? 20 : 16,
+                    ),
+                    itemCount: playlists.length,
+                    itemBuilder: (context, index) => _RecommendationGridItem(
+                      key: ValueKey('recommendations-item-$index'),
+                      artworkKey: ValueKey('recommendations-artwork-$index'),
+                      playlist: playlists[index],
+                      onTap: () => onSelected(playlists[index]),
+                    ),
                   ),
                 ),
-              ),
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
-              sliver: SliverGrid.builder(
-                gridDelegate: desktop
-                    ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 180,
-                        mainAxisExtent: 228,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 20,
-                      )
-                    : const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisExtent: 226,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 16,
-                      ),
-                itemCount: playlists.length,
-                itemBuilder: (context, index) => _RecommendationGridItem(
-                  key: ValueKey('recommendations-item-$index'),
-                  playlist: playlists[index],
-                  onTap: () => onSelected(playlists[index]),
+                SliverPadding(
+                  padding: EdgeInsets.only(bottom: bottomPadding),
+                  sliver: SliverToBoxAdapter(child: footer),
                 ),
-              ),
+              ],
             ),
-            SliverPadding(
-              padding: EdgeInsets.only(bottom: bottomPadding),
-              sliver: SliverToBoxAdapter(child: footer),
-            ),
-          ],
+          ),
         ),
       );
     },
@@ -1992,11 +2244,13 @@ class _RecommendationCollection extends StatelessWidget {
 class _RecommendationGridItem extends StatelessWidget {
   const _RecommendationGridItem({
     required this.playlist,
+    required this.artworkKey,
     required this.onTap,
     super.key,
   });
 
   final RecommendedPlaylistSummary playlist;
+  final Key artworkKey;
   final VoidCallback onTap;
 
   @override
@@ -2005,45 +2259,41 @@ class _RecommendationGridItem extends StatelessWidget {
     label: _semanticLabel(context.l10n, playlist),
     excludeSemantics: true,
     onTap: onTap,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _RecommendationArtwork(uri: playlist.artworkUri),
-              Positioned.fill(
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: onTap,
-                  ),
-                ),
+    child: Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              key: artworkKey,
+              aspectRatio: 1,
+              child: _RecommendationArtwork(uri: playlist.artworkUri),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              playlist.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              playlist.trackCount != null
+                  ? context.l10n.trackCount(playlist.trackCount!)
+                  : context.l10n.discoverMusicServicePlaylist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          playlist.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          playlist.trackCount != null
-              ? context.l10n.trackCount(playlist.trackCount!)
-              : context.l10n.discoverMusicServicePlaylist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-      ],
+      ),
     ),
   );
 }

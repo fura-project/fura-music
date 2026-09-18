@@ -326,6 +326,8 @@ class _MusicAppState extends State<MusicApp> {
           settings: settings,
           onSettingsChanged: _updateSettings,
           initialCredentialRestore: provider.initialCredentialRestore,
+          systemLightColorScheme: lightDynamic,
+          systemDarkColorScheme: darkDynamic,
         ),
       );
     }
@@ -350,6 +352,8 @@ class LoginPage extends StatefulWidget {
     required this.settings,
     required this.onSettingsChanged,
     required this.initialCredentialRestore,
+    this.systemLightColorScheme,
+    this.systemDarkColorScheme,
     super.key,
   });
 
@@ -365,6 +369,8 @@ class LoginPage extends StatefulWidget {
   final Future<AppSettingsWriteResult> Function(AppSettings settings)
   onSettingsChanged;
   final CredentialRestoreResult initialCredentialRestore;
+  final ColorScheme? systemLightColorScheme;
+  final ColorScheme? systemDarkColorScheme;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -499,6 +505,8 @@ class _LoginPageState extends State<LoginPage> {
           onRequestSignIn: _requestSignIn,
           onSignInAgain: _requestSignInAgain,
           onSignOut: _controller.signOut,
+          systemLightColorScheme: widget.systemLightColorScheme,
+          systemDarkColorScheme: widget.systemDarkColorScheme,
         );
       },
     );

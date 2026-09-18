@@ -1037,8 +1037,14 @@ void main() {
       media: _FakeMediaGateway(const []),
       audio: _FakeAudioEngine(const []),
     );
-    final first = find.byKey(const ValueKey('playlist-track-row-1'));
-    final second = find.byKey(const ValueKey('playlist-track-row-2'));
+    final firstRow = find.byKey(const ValueKey('playlist-track-row-1'));
+    final secondRow = find.byKey(const ValueKey('playlist-track-row-2'));
+    final first = find
+        .descendant(of: firstRow, matching: find.byType(InkWell))
+        .first;
+    final second = find
+        .descendant(of: secondRow, matching: find.byType(InkWell))
+        .first;
 
     for (var attempt = 0; attempt < 20; attempt += 1) {
       if (tester.widget<InkWell>(first).focusNode?.hasFocus ?? false) break;

@@ -274,6 +274,8 @@ class _LyricContentState extends State<_LyricContent> {
   int? _lastActiveLineIndex;
   int _followAttempt = 0;
   bool _following = true;
+  bool _stopFollowingScheduled = false;
+  int? _pendingStopFollowingAttempt;
 
   @override
   void didUpdateWidget(_LyricContent oldWidget) {
@@ -386,13 +388,27 @@ class _LyricContentState extends State<_LyricContent> {
 
   bool _onUserScroll(UserScrollNotification notification) {
     if (_following && notification.direction != ScrollDirection.idle) {
-      _followAttempt += 1;
-      setState(() => _following = false);
+      final attempt = ++_followAttempt;
+      _pendingStopFollowingAttempt = attempt;
+      if (!_stopFollowingScheduled) {
+        _stopFollowingScheduled = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _stopFollowingScheduled = false;
+          if (!mounted ||
+              _pendingStopFollowingAttempt != _followAttempt ||
+              !_following) {
+            return;
+          }
+          _pendingStopFollowingAttempt = null;
+          setState(() => _following = false);
+        });
+      }
     }
     return false;
   }
 
   void _resumeFollowing() {
+    _pendingStopFollowingAttempt = null;
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
     setState(() => _following = true);
     if (activeLineIndex != null) {

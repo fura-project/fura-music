@@ -622,6 +622,9 @@ class _ArtistTracks extends StatefulWidget {
 class _ArtistTracksState extends State<_ArtistTracks> {
   (String, String)? _hoveredTrack;
   final ScrollController _scrollController = ScrollController();
+  int _hoverRevision = 0;
+  int? _pendingHoverClearRevision;
+  bool _hoverClearScheduled = false;
 
   @override
   void dispose() {
@@ -632,17 +635,35 @@ class _ArtistTracksState extends State<_ArtistTracks> {
   void _setHovered(PlaylistTrackSummary track, bool hovered) {
     final identity = (track.providerId, track.opaqueId);
     if (hovered && _hoveredTrack != identity) {
+      _hoverRevision += 1;
       setState(() => _hoveredTrack = identity);
     } else if (!hovered && _hoveredTrack == identity) {
+      _hoverRevision += 1;
       setState(() => _hoveredTrack = null);
     }
   }
 
   bool _handleScroll(ScrollNotification notification) {
     if (_hoveredTrack != null && notification is ScrollUpdateNotification) {
-      setState(() => _hoveredTrack = null);
+      _scheduleHoverClear();
     }
     return false;
+  }
+
+  void _scheduleHoverClear() {
+    _pendingHoverClearRevision = _hoverRevision;
+    if (_hoverClearScheduled) return;
+    _hoverClearScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hoverClearScheduled = false;
+      if (!mounted) return;
+      final revision = _pendingHoverClearRevision;
+      _pendingHoverClearRevision = null;
+      if (_hoveredTrack != null && revision == _hoverRevision) {
+        _hoverRevision += 1;
+        setState(() => _hoveredTrack = null);
+      }
+    });
   }
 
   @override

@@ -54,6 +54,8 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   final _scroll = ScrollController();
   bool _headerCollapsed = false;
   bool _userReturningToHeader = false;
+  bool? _pendingHeaderCollapsed;
+  bool _headerUpdateScheduled = false;
   final _index = PlaylistTrackSearchIndex();
   List<PlaylistTrackSummary>? _indexedTracks;
   String _query = '';
@@ -99,7 +101,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     if (notification.metrics.axis != Axis.vertical) return false;
     if (!widget.active) return false;
     if (!canCollapse) {
-      _setHeaderCollapsed(false);
+      _scheduleHeaderCollapsed(false);
       return false;
     }
     if (notification is UserScrollNotification) {
@@ -109,19 +111,34 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
         _userReturningToHeader = false;
       }
     }
+    final effectiveCollapsed = _pendingHeaderCollapsed ?? _headerCollapsed;
     final returnedToHeader =
-        _headerCollapsed &&
+        effectiveCollapsed &&
         _userReturningToHeader &&
         notification.metrics.pixels <= 4;
     if (returnedToHeader) _userReturningToHeader = false;
-    final collapse = _headerCollapsed
+    final collapse = effectiveCollapsed
         ? !returnedToHeader
         : notification.metrics.pixels > 56;
-    _setHeaderCollapsed(collapse);
+    _scheduleHeaderCollapsed(collapse);
     return false;
   }
 
+  void _scheduleHeaderCollapsed(bool collapsed) {
+    _pendingHeaderCollapsed = collapsed;
+    if (_headerUpdateScheduled) return;
+    _headerUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _headerUpdateScheduled = false;
+      if (!mounted) return;
+      final pending = _pendingHeaderCollapsed;
+      _pendingHeaderCollapsed = null;
+      if (pending != null) _setHeaderCollapsed(pending);
+    });
+  }
+
   void _setHeaderCollapsed(bool collapsed) {
+    _pendingHeaderCollapsed = null;
     if (collapsed == _headerCollapsed) return;
     if (!collapsed) _userReturningToHeader = false;
     setState(() => _headerCollapsed = collapsed);
@@ -361,6 +378,9 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     final play = tracks.isEmpty
         ? null
         : () => unawaited(widget.playback.replaceAndPlay(tracks, 0));
+    final playLabel = _query.isEmpty
+        ? l10n.recentPlayLoaded(tracks.length)
+        : l10n.recentPlayFiltered(tracks.length);
     final refresh = controller == null || controller.isLoading
         ? null
         : controller.refresh;
@@ -412,6 +432,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                       countLabel: collapsedCountLabel,
                       hasSnapshot: hasSnapshot,
                       onPlay: play,
+                      playLabel: playLabel,
                       onRefresh: refresh,
                     )
                   : _expandedControls(
@@ -423,6 +444,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                       processedLabel: processedLabel,
                       hasSnapshot: hasSnapshot,
                       onPlay: play,
+                      playLabel: playLabel,
                       onRefresh: refresh,
                     ),
             ),
@@ -468,6 +490,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     required String? processedLabel,
     required bool hasSnapshot,
     required VoidCallback? onPlay,
+    required String playLabel,
     required VoidCallback? onRefresh,
   }) {
     final theme = Theme.of(context);
@@ -513,7 +536,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            _recentPlayButton(onPressed: onPlay),
+            _recentPlayButton(onPressed: onPlay, label: playLabel),
             _recentRefreshButton(onPressed: onRefresh),
             SizedBox(
               width: desktop ? 300 : availableWidth - 2 * padding,
@@ -531,6 +554,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     required String countLabel,
     required bool hasSnapshot,
     required VoidCallback? onPlay,
+    required String playLabel,
     required VoidCallback? onRefresh,
   }) => LayoutBuilder(
     builder: (context, constraints) {
@@ -549,7 +573,11 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
               const SizedBox(width: 16),
               _collapsedCount(context, countLabel),
               const Spacer(),
-              _recentPlayButton(onPressed: onPlay, compact: true),
+              _recentPlayButton(
+                onPressed: onPlay,
+                label: playLabel,
+                compact: true,
+              ),
               const SizedBox(width: 8),
               _recentRefreshButton(onPressed: onRefresh, compact: true),
               const SizedBox(width: 16),
@@ -586,7 +614,11 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
               children: [
                 _collapsedCount(context, countLabel),
                 const Spacer(),
-                _recentPlayButton(onPressed: onPlay, compact: true),
+                _recentPlayButton(
+                  onPressed: onPlay,
+                  label: playLabel,
+                  compact: true,
+                ),
                 const SizedBox(width: 8),
                 _recentRefreshButton(onPressed: onRefresh, compact: true),
               ],
@@ -635,13 +667,13 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
 
   Widget _recentPlayButton({
     required VoidCallback? onPressed,
+    required String label,
     bool compact = false,
   }) {
-    final l10n = context.l10n;
     return compact
         ? IconButton.filled(
             key: const ValueKey('recent-plays-play'),
-            tooltip: l10n.recentPlayTooltip,
+            tooltip: label,
             onPressed: onPressed,
             icon: const Icon(Icons.play_arrow_rounded),
           )
@@ -649,7 +681,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
             key: const ValueKey('recent-plays-play'),
             onPressed: onPressed,
             icon: const Icon(Icons.play_arrow_rounded),
-            label: Text(l10n.commonPlay),
+            label: Text(label),
           );
   }
 

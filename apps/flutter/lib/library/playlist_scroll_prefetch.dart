@@ -71,13 +71,48 @@ class PlaylistScrollPrefetch extends StatefulWidget {
 
 class _PlaylistScrollPrefetchState extends State<PlaylistScrollPrefetch> {
   final _policy = PlaylistPrefetchPolicy();
+  int _dispatchEpoch = 0;
+  int? _scheduledEpoch;
+  int? _pendingTarget;
+
+  void _invalidatePendingDispatch() {
+    _dispatchEpoch += 1;
+    _scheduledEpoch = null;
+    _pendingTarget = null;
+  }
+
+  void _schedulePrefetch(int target) {
+    _pendingTarget = math.max(_pendingTarget ?? 0, target);
+    final epoch = _dispatchEpoch;
+    if (_scheduledEpoch == epoch) return;
+    _scheduledEpoch = epoch;
+    final controller = widget.controller;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          epoch != _dispatchEpoch ||
+          !widget.enabled ||
+          !identical(widget.controller, controller)) {
+        return;
+      }
+      if (_scheduledEpoch == epoch) _scheduledEpoch = null;
+      final target = _pendingTarget;
+      _pendingTarget = null;
+      if (target != null) controller.prefetchTo(target);
+    });
+  }
 
   @override
   void didUpdateWidget(PlaylistScrollPrefetch oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller ||
-        oldWidget.enabled != widget.enabled) {
+    if (oldWidget.controller != widget.controller) {
+      _invalidatePendingDispatch();
       oldWidget.controller.cancelPrefetch();
+      _policy.reset();
+    } else if (oldWidget.enabled && !widget.enabled) {
+      _invalidatePendingDispatch();
+      widget.controller.cancelPrefetch();
+      _policy.reset();
+    } else if (!oldWidget.enabled && widget.enabled) {
       _policy.reset();
     }
   }
@@ -98,11 +133,12 @@ class _PlaylistScrollPrefetchState extends State<PlaylistScrollPrefetch> {
       _ => 0.0,
     };
     if (delta < 0) {
+      _invalidatePendingDispatch();
       widget.controller.cancelPrefetch();
       _policy.reset();
     } else if (delta > 0) {
       final metrics = notification.metrics;
-      widget.controller.prefetchTo(
+      _schedulePrefetch(
         _policy.targetTrackCount(
           loadedCount: widget.controller.tracks.length,
           extentAfter: metrics.extentAfter,
@@ -128,6 +164,7 @@ class _PlaylistScrollPrefetchState extends State<PlaylistScrollPrefetch> {
 
   @override
   void dispose() {
+    _invalidatePendingDispatch();
     widget.controller.cancelPrefetch();
     super.dispose();
   }

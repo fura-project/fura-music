@@ -226,11 +226,12 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
                   _showKeyboardMenu,
             },
       child: Semantics(
+        key: widget.itemKey,
         label: widget.semanticLabel,
         container: true,
+        explicitChildNodes: true,
         button: true,
         selected: widget.current,
-        excludeSemantics: true,
         onTap: widget.onTap,
         onLongPress: !widget.desktop && widget.onContextMenuRequested != null
             ? () => widget.onContextMenuRequested!(null)
@@ -239,7 +240,7 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
           onEnter: (_) => _handleHoverChanged(true),
           onExit: (_) => _handleHoverChanged(false),
           child: InkWell(
-            key: widget.itemKey,
+            excludeFromSemantics: true,
             focusNode: _focusNode,
             borderRadius: BorderRadius.circular(10),
             onTap: () {
@@ -397,32 +398,40 @@ class MusicTrackRowContent extends StatelessWidget {
         SizedBox(
           width: 40,
           child: Center(
-            child: current
-                ? Icon(Icons.equalizer_rounded, size: 18, color: colors.primary)
-                : active
-                ? ExcludeFocus(
-                    child: IconButton(
-                      tooltip: resolvedPlayTooltip,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 32,
-                        height: 32,
+            child: ExcludeSemantics(
+              child: current
+                  ? Icon(
+                      Icons.equalizer_rounded,
+                      size: 18,
+                      color: colors.primary,
+                    )
+                  : active
+                  ? ExcludeSemantics(
+                      child: ExcludeFocus(
+                        child: IconButton(
+                          tooltip: resolvedPlayTooltip,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 32,
+                            height: 32,
+                          ),
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            foregroundColor: colors.primary,
+                            hoverColor: colors.primary.withValues(alpha: 0.12),
+                            focusColor: colors.primary.withValues(alpha: 0.12),
+                          ),
+                          onPressed: onPlay,
+                          icon: const Icon(Icons.play_arrow_rounded, size: 19),
+                        ),
                       ),
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                      style: IconButton.styleFrom(
-                        foregroundColor: colors.primary,
-                        hoverColor: colors.primary.withValues(alpha: 0.12),
-                        focusColor: colors.primary.withValues(alpha: 0.12),
-                      ),
-                      onPressed: onPlay,
-                      icon: const Icon(Icons.play_arrow_rounded, size: 19),
+                    )
+                  : Text(
+                      '$index',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: colors.onSurfaceVariant),
                     ),
-                  )
-                : Text(
-                    '$index',
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: colors.onSurfaceVariant),
-                  ),
+            ),
           ),
         ),
         Expanded(
@@ -431,17 +440,21 @@ class MusicTrackRowContent extends StatelessWidget {
             children: [
               SizedBox.square(
                 dimension: 40,
-                child: MusicTrackArtwork(uri: track.artworkUri),
+                child: ExcludeSemantics(
+                  child: MusicTrackArtwork(uri: track.artworkUri),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  title ?? track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: current ? colors.primary : colors.onSurface,
-                    fontWeight: current ? FontWeight.w600 : FontWeight.w500,
+                child: ExcludeSemantics(
+                  child: Text(
+                    title ?? track.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: current ? colors.primary : colors.onSurface,
+                      fontWeight: current ? FontWeight.w600 : FontWeight.w500,
+                    ),
                   ),
                 ),
               ),
@@ -492,24 +505,28 @@ class MusicTrackRowContent extends StatelessWidget {
     children: [
       SizedBox(
         width: 26,
-        child: current
-            ? Icon(
-                Icons.equalizer_rounded,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              )
-            : Text(
-                '$index',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+        child: ExcludeSemantics(
+          child: current
+              ? Icon(
+                  Icons.equalizer_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                )
+              : Text(
+                  '$index',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
+        ),
       ),
       const SizedBox(width: 8),
       SizedBox.square(
         dimension: 48,
-        child: MusicTrackArtwork(uri: track.artworkUri),
+        child: ExcludeSemantics(
+          child: MusicTrackArtwork(uri: track.artworkUri),
+        ),
       ),
       const SizedBox(width: 12),
       Expanded(
@@ -517,13 +534,15 @@ class MusicTrackRowContent extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title ?? track.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: current ? Theme.of(context).colorScheme.primary : null,
-                fontWeight: FontWeight.w600,
+            ExcludeSemantics(
+              child: Text(
+                title ?? track.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: current ? Theme.of(context).colorScheme.primary : null,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const SizedBox(height: 3),
@@ -554,10 +573,12 @@ class MusicTrackRowContent extends StatelessWidget {
             icon: const Icon(Icons.playlist_add_rounded, size: 20),
           ),
         ),
-      Text(
-        formatTrackDuration(track.durationSeconds),
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ExcludeSemantics(
+        child: Text(
+          formatTrackDuration(track.durationSeconds),
+          style: Theme.of(context).textTheme.labelSmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
       ),
       ExcludeFocus(
         child: IconButton(
@@ -578,13 +599,15 @@ class MusicTrackMetadataText extends StatelessWidget {
   final TextAlign? alignment;
 
   @override
-  Widget build(BuildContext context) => Text(
-    value,
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    textAlign: alignment,
-    style: Theme.of(context).textTheme.bodySmall
-        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: alignment,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    ),
   );
 }
 

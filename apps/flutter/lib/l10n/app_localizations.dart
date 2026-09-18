@@ -1749,6 +1749,12 @@ abstract class AppLocalizations {
   /// **'Current ranking'**
   String get discoverCurrentRanking;
 
+  /// Labels an opaque provider ranking period without interpreting it as a calendar week.
+  ///
+  /// In en, this message translates to:
+  /// **'Issue: {period}'**
+  String discoverRankingIssue(Object period);
+
   /// No description provided for @discoverAlbumType.
   ///
   /// In en, this message translates to:
@@ -3360,6 +3366,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Play recently played'**
   String get recentPlayTooltip;
+
+  /// Play action for only the recent tracks currently loaded in memory.
+  ///
+  /// In en, this message translates to:
+  /// **'Play {count} loaded tracks'**
+  String recentPlayLoaded(Object count);
+
+  /// Play action for the currently visible recent-search results.
+  ///
+  /// In en, this message translates to:
+  /// **'Play {count} filtered results'**
+  String recentPlayFiltered(Object count);
 
   /// Tooltip and accessibility name for refreshing recently played records.
   ///
@@ -5378,6 +5396,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use wallpaper or OS accent colors where supported. The current music service palette is used as a fallback.'**
   String get settingsColorSourceSystemDescription;
+
+  /// No description provided for @settingsColorSourceSystemAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'System colors are available; this preview uses the current system palette.'**
+  String get settingsColorSourceSystemAvailable;
+
+  /// No description provided for @settingsColorSourceSystemUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'System colors are unavailable; the music service brand fallback is shown.'**
+  String get settingsColorSourceSystemUnavailable;
 
   /// No description provided for @settingsColorSourceSystemSummary.
   ///

@@ -1,4 +1,4 @@
-import 'dart:ui' show Tristate;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -140,6 +140,102 @@ void main() {
     expect(rowPlays, 2);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'row and compact child actions remain independently semantic and usable',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(390, 180);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var plays = 0;
+      var contextMenus = 0;
+      var queued = 0;
+      var more = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MusicTrackRowSurface(
+              itemKey: const ValueKey('semantic-row'),
+              desktop: false,
+              current: true,
+              semanticLabel: 'Interactive Track, First Artist',
+              onTap: () => plays++,
+              onContextMenuRequested: (_) => contextMenus++,
+              contentBuilder: (context, active, hovered) =>
+                  MusicTrackRowContent(
+                    index: 1,
+                    track: track,
+                    desktop: false,
+                    current: true,
+                    active: active,
+                    artistNames: 'First Artist',
+                    showInlineQueueAction: true,
+                    queueKey: const ValueKey('semantic-queue'),
+                    moreKey: const ValueKey('semantic-more'),
+                    onPlay: () => plays++,
+                    onAddToQueue: () => queued++,
+                    onMore: () => more++,
+                  ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final row = tester.getSemantics(
+        find.byKey(const ValueKey('semantic-row')),
+      );
+      final rowData = row.getSemanticsData();
+      expect(rowData.label, 'Interactive Track, First Artist');
+      expect(rowData.hasAction(SemanticsAction.tap), isTrue);
+      expect(rowData.hasAction(SemanticsAction.longPress), isTrue);
+      expect(rowData.flagsCollection.isSelected, Tristate.isTrue);
+
+      final queue = tester.getSemantics(
+        find.byKey(const ValueKey('semantic-queue')),
+      );
+      final moreNode = tester.getSemantics(
+        find.byKey(const ValueKey('semantic-more')),
+      );
+      expect(queue.getSemanticsData().tooltip, 'Add to queue');
+      expect(moreNode.getSemanticsData().tooltip, 'More actions');
+      expect(queue.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      expect(
+        moreNode.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('semantic-queue'))).width,
+        greaterThanOrEqualTo(48),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('semantic-more'))).width,
+        greaterThanOrEqualTo(48),
+      );
+
+      final rowFinder = find.semantics.byLabel(
+        'Interactive Track, First Artist',
+      );
+      tester.semantics.tap(rowFinder);
+      tester.semantics.longPress(rowFinder);
+      tester.semantics.tap(
+        find.semantics.byPredicate((node) => node.tooltip == 'Add to queue'),
+      );
+      tester.semantics.tap(
+        find.semantics.byPredicate((node) => node.tooltip == 'More actions'),
+      );
+      await tester.pump();
+      expect(plays, 1);
+      expect(contextMenus, 1);
+      expect(queued, 1);
+      expect(more, 1);
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
 
   testWidgets('multiple Artists use the shared detail chooser', (tester) async {
     ArtistSummary? selected;

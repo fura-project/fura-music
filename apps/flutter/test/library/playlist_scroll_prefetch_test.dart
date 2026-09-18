@@ -87,8 +87,9 @@ void main() {
   });
 
   testWidgets(
-    'scrollbar jumps prefetch before the footer and upward scrolling reuses rows',
+    'semantics rapid scroll defers append and upward scrolling reuses rows',
     (tester) async {
+      final semantics = tester.ensureSemantics();
       final gateway = _Gateway();
       final controller = PlaylistDetailController(
         _playlist,
@@ -130,7 +131,14 @@ void main() {
         ),
       );
       expect(gateway.offsets, [0]); // Mount is not a whole-playlist prefetch.
+      scroll.jumpTo(2200);
+      scroll.jumpTo(2500);
       scroll.jumpTo(2800);
+      expect(
+        gateway.offsets,
+        [0],
+        reason: 'ScrollNotification must not start a notifying append inline.',
+      );
       await tester.pump();
       expect(scroll.position.extentAfter, greaterThan(720));
       expect(gateway.offsets, [0, 100]);
@@ -153,6 +161,58 @@ void main() {
         find.text('Row 199'),
         findsNothing,
       ); // Rows remain lazy, not all mounted.
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'upward scroll disable replacement and dispose invalidate pending dispatch',
+    (tester) async {
+      final firstGateway = _Gateway();
+      final first = PlaylistDetailController(_playlist, firstGateway);
+      final secondGateway = _Gateway();
+      final second = PlaylistDetailController(_playlist, secondGateway);
+      addTearDown(first.dispose);
+      addTearDown(second.dispose);
+      final firstLoad = first.load();
+      firstGateway.complete(0, 0);
+      await firstLoad;
+      final secondLoad = second.load();
+      secondGateway.complete(0, 0);
+      await secondLoad;
+      final key = GlobalKey<_PrefetchHarnessState>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _PrefetchHarness(key: key, controller: first),
+        ),
+      );
+
+      key.currentState!.dispatch(1000);
+      key.currentState!.dispatch(-100);
+      await tester.pump();
+      expect(firstGateway.offsets, [0]);
+
+      key.currentState!.dispatch(1000);
+      key.currentState!.setEnabled(false);
+      await tester.pump();
+      expect(firstGateway.offsets, [0]);
+
+      key.currentState!
+        ..setEnabled(true)
+        ..setController(second);
+      await tester.pump();
+      key.currentState!.dispatch(1000);
+      key.currentState!.setController(first);
+      await tester.pump();
+      expect(firstGateway.offsets, [0]);
+      expect(secondGateway.offsets, [0]);
+
+      key.currentState!.dispatch(1000);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(firstGateway.offsets, [0]);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -187,6 +247,67 @@ void main() {
     await tester.pump();
     expect(gateway.offsets, [0]);
   });
+}
+
+class _PrefetchHarness extends StatefulWidget {
+  const _PrefetchHarness({required super.key, required this.controller});
+
+  final PlaylistDetailController controller;
+
+  @override
+  State<_PrefetchHarness> createState() => _PrefetchHarnessState();
+}
+
+class _PrefetchHarnessState extends State<_PrefetchHarness> {
+  late BuildContext _notificationContext;
+  late PlaylistDetailController controller;
+  bool enabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = widget.controller;
+  }
+
+  void dispatch(double delta) {
+    ScrollUpdateNotification(
+      metrics: FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: 7000,
+        pixels: 5000,
+        viewportDimension: 400,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      ),
+      context: _notificationContext,
+      scrollDelta: delta,
+    ).dispatch(_notificationContext);
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  void setEnabled(bool value) => setState(() => enabled = value);
+
+  void setController(PlaylistDetailController value) =>
+      setState(() => controller = value);
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 400,
+    child: PlaylistScrollPrefetch(
+      controller: controller,
+      enabled: enabled,
+      child: Builder(
+        builder: (context) {
+          _notificationContext = context;
+          return ListView.builder(
+            itemExtent: 70,
+            itemCount: controller.tracks.length,
+            itemBuilder: (_, index) => Text('Row $index'),
+          );
+        },
+      ),
+    ),
+  );
 }
 
 const _playlist = UserPlaylistSummary(

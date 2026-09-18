@@ -612,6 +612,98 @@ void main() {
   });
 
   test(
+    'UI-equivalent activate current synchronously invalidates pending roam',
+    () async {
+      final late = Completer<RelatedTracksResult>();
+      final operation = _ControlledRelatedOperation(late.future);
+      final queue = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          _result([first], 0),
+        ],
+      );
+      final completedSession = _FakeAudioSession();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'first-restarted']),
+        _FakeAudioEngine([completedSession, _FakeAudioSession()]),
+        relatedTracksGateway: _RelatedGateway.controlled(operation),
+      );
+      controller.setRoamEnabled(true);
+
+      await controller.replaceAndPlay([first], 0);
+      completedSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(controller.roamStage, RoamStage.loading);
+
+      await controller.activateCurrent();
+      expect(operation.cancelCalls, 1);
+      expect(controller.roamStage, RoamStage.idle);
+      expect(controller.playback.stage, TrackPlaybackStage.playing);
+
+      late.complete(const RelatedTracksResult(tracks: [second]));
+      await _flush();
+      expect(queue.extensionCalls, 0);
+      expect(controller.tracks, [first]);
+      expect(controller.current, first);
+      expect(controller.playback.stage, TrackPlaybackStage.playing);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'every Queue intent command invalidates a pending terminal roam result',
+    () async {
+      final actions =
+          <String, Future<void> Function(QueuePlaybackController controller)>{
+            'select': (controller) => controller.select(0),
+            'replace': (controller) => controller.replaceAndPlay([second], 0),
+            'clear': (controller) => controller.clear(),
+            'push': (controller) => controller.push(second),
+            'remove': (controller) => controller.remove(0),
+            'next': (controller) => controller.advance(),
+            'previous': (controller) => controller.rewind(),
+            'order': (controller) => controller.setOrder(PlaybackOrder.shuffle),
+            'repeat': (controller) =>
+                controller.setRepeatMode(PlaybackRepeatMode.one),
+          };
+
+      for (final MapEntry(key: name, value: action) in actions.entries) {
+        final late = Completer<RelatedTracksResult>();
+        final operation = _ControlledRelatedOperation(late.future);
+        final queue = _CancellationQueueGateway();
+        final terminalSession = _FakeAudioSession();
+        final controller = _controller(
+          queue,
+          _FakeMediaGateway(List.generate(4, (index) => '$name-$index')),
+          _FakeAudioEngine([
+            terminalSession,
+            _FakeAudioSession(),
+            _FakeAudioSession(),
+            _FakeAudioSession(),
+          ]),
+          relatedTracksGateway: _RelatedGateway.controlled(operation),
+        );
+        controller.setRoamEnabled(true);
+        await controller.replaceAndPlay([first], 0);
+        terminalSession.emit(ForegroundAudioState.completed);
+        await _flush();
+        expect(controller.roamStage, RoamStage.loading, reason: name);
+
+        await action(controller);
+        expect(operation.cancelCalls, 1, reason: name);
+        late.complete(const RelatedTracksResult(tracks: [third]));
+        await _flush();
+        expect(queue.extensionCalls, 0, reason: name);
+        expect(controller.roamStage, RoamStage.idle, reason: name);
+        controller.dispose();
+      }
+    },
+  );
+
+  test(
     'roam stays inactive by default and failures keep the queue intact',
     () async {
       final queue = _ScriptedQueueGateway(
@@ -884,6 +976,105 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
 
   @override
   PlaybackQueueResult select(int index) => throw StateError('not scripted');
+}
+
+class _CancellationQueueGateway implements PlaybackQueueGateway {
+  PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
+  int extensionCalls = 0;
+
+  @override
+  PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult replace({
+    required List<PlaylistTrackSummary> tracks,
+    required int? currentIndex,
+  }) => _update(tracks, currentIndex, playbackRequested: true);
+
+  @override
+  PlaybackQueueResult select(int index) =>
+      _update(_snapshot.tracks, index, playbackRequested: true);
+
+  @override
+  PlaybackQueueResult push(PlaylistTrackSummary track) => _update(
+    [..._snapshot.tracks, track],
+    _snapshot.currentIndex ?? 0,
+    playbackRequested: _snapshot.currentIndex == null,
+  );
+
+  @override
+  PlaybackQueueResult remove(int index) {
+    final tracks = [..._snapshot.tracks]..removeAt(index);
+    return _update(tracks, tracks.isEmpty ? null : 0, playbackRequested: true);
+  }
+
+  @override
+  PlaybackQueueResult clear() =>
+      _update(const [], null, playbackRequested: true);
+
+  @override
+  PlaybackQueueResult advance() => snapshot();
+
+  @override
+  PlaybackQueueResult rewind() => snapshot();
+
+  @override
+  PlaybackQueueResult completeCurrent() => snapshot();
+
+  @override
+  PlaybackQueueResult setOrder(PlaybackOrder order) {
+    _snapshot = _copy(order: order);
+    return snapshot();
+  }
+
+  @override
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) {
+    _snapshot = _copy(repeatMode: repeatMode);
+    return snapshot();
+  }
+
+  @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) {
+    extensionCalls += 1;
+    return _update(
+      [..._snapshot.tracks, ...tracks],
+      _snapshot.tracks.length,
+      playbackRequested: true,
+    );
+  }
+
+  PlaybackQueueResult _update(
+    List<PlaylistTrackSummary> tracks,
+    int? currentIndex, {
+    required bool playbackRequested,
+  }) {
+    _snapshot = PlaybackQueueSnapshot(
+      tracks: List.unmodifiable(tracks),
+      currentIndex: currentIndex,
+      hasPrevious: currentIndex != null && currentIndex > 0,
+      hasNext: currentIndex != null && currentIndex + 1 < tracks.length,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(
+      snapshot: _snapshot,
+      playbackRequested: playbackRequested,
+    );
+  }
+
+  PlaybackQueueSnapshot _copy({
+    PlaybackOrder? order,
+    PlaybackRepeatMode? repeatMode,
+  }) => PlaybackQueueSnapshot(
+    tracks: _snapshot.tracks,
+    currentIndex: _snapshot.currentIndex,
+    hasPrevious: _snapshot.hasPrevious,
+    hasNext: _snapshot.hasNext,
+    order: order ?? _snapshot.order,
+    repeatMode: repeatMode ?? _snapshot.repeatMode,
+  );
 }
 
 class _RelatedGateway implements RelatedTracksGateway {
