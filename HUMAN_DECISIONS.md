@@ -600,3 +600,55 @@ is complete. Human checks one QQ Japanese Track, one QQ English Track with a
 known small timestamp delta, and one NetEase Track with available auxiliary
 tracks; observations retain only counts, presence and delta buckets. Commits
 remain local and no push is authorized.
+
+## HD-035 — Long-list continuation, progressive demand and Roam completion
+
+**Status:** Accepted by explicit Human instruction on 2026-09-18; long real-list
+interaction remains Human review.
+
+**Decision:** Provider/Core owns the real continuation of every paged operation.
+Flutter may validate and retain a typed continuation, but visible item count is
+never a cursor. An advancing page with zero visible rows and explicit omissions
+is valid; a continuing page whose continuation does not advance is invalid.
+Page-number protocols advance from their validated page, raw-offset protocols
+carry the exact Provider continuation, identity cursors remain Provider-owned,
+and opaque cursors remain uninterpreted.
+
+One ordinary user or viewport demand must not drain an unbounded remote
+collection. Liked Songs and Recent Plays search the already-loaded index first
+and may scan at most two additional upstream pages per demand; later scrolling
+or the existing explicit Continue action grants another bounded window. Comments
+and other long lists load from bounded near-viewport demand while retaining
+their existing manual load/retry affordances, single-flight controllers and
+stale-generation rules. Deliberate full-scan capability may remain but is not
+the default consequence of entering a query.
+
+Roam is a session-local terminal playback-continuation policy over the existing
+exact-seed `RelatedTracksProvider`, not another Queue or media fallback. It is
+effective only when enabled, sequential, repeat-off, supported by the exact
+current Provider and at the actual Queue terminal after natural completion.
+Existing Queue entries, Repeat One, Repeat All and shuffle take precedence;
+manual Next does not start Roam. Candidates must remain on the seed Provider,
+preserve Provider order and use exact identity deduplication. Rust performs one
+validated atomic append-and-select mutation; Queue/mode/current changes,
+disable, sign-out and disposal invalidate any late result. Empty, unsupported,
+invalid or failed results leave the terminal Queue unchanged and never retry or
+substitute another Provider.
+
+**Boundaries:** No visual redesign, new Provider or protocol endpoint, hidden
+recommendation Queue, fuzzy/cross-Provider matching, media-source fallback,
+automatic retry loop, preference persistence, system-media/audio-engine change,
+unbounded prefetch or live-account automation is authorized. Ordinary Playlist
+Detail currently has no local collection-search field, so its progressive local
+search is not applicable. Long-session Roam Queue compaction needs a separate
+provenance/product contract and is not invented here. See
+[the continuation audit](docs/research/long-list-continuation-audit.md) and
+[the Roam contract](docs/research/roam-playback-contract.md).
+
+**Machine checkpoint:** Pinned FRB 2.13.0 regeneration, Rust format, both
+workspace test modes (588 passed, 27 live/Human ignored), strict all-target
+Clippy, Dart format/analyze, all 671 Flutter tests, Linux Release and Android
+ARM64 Release pass. The APK is 45,525,730 bytes. No live Provider request,
+private collection/comment access, playback-history write, UI redesign, cache
+clean or push occurred. Long real-list interaction and any later approved Roam
+control remain Human review.

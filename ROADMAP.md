@@ -2,6 +2,40 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Human Review Workstream — long-list continuation and Roam completion (HD-035)
+
+**Goal:** make every long-list continuation correct after row omission and exact
+deduplication, replace automatic collection drains with bounded viewport/user
+demand, and complete terminal Roam through the existing Related Tracks
+capability and authoritative Rust Queue.
+
+**Machine checkpoint, 2026-09-18:** Provider/Core continuations remain typed and
+exact; zero-visible omitted windows may advance; non-advancing or overflowing
+windows fail. Comments, all four global Search types and the existing long
+catalog lists receive bounded viewport demand without visual redesign. Liked
+Songs and Recent Plays reuse loaded indexes and grant at most two upstream pages
+per search demand; explicit full-scan support remains non-default. Roam is session-local,
+same-Provider, sequential/repeat-off only, requests only at natural terminal,
+and extends/selects the public Queue through one atomic Rust mutation with stale
+result invalidation. Pinned Bridge generation, Rust format, 588 Rust tests, strict
+Clippy, Dart format/analyze, 671 Flutter tests, Linux Release and Android ARM64
+Release all pass. See
+[the continuation audit](docs/research/long-list-continuation-audit.md) and
+[the Roam contract](docs/research/roam-playback-contract.md).
+
+**Boundaries:** no UI/MD3 polish, new protocol or Provider, cross-Provider
+fallback, hidden Queue, audio/system-media migration, unbounded prefetch,
+automatic retry loop, Roam persistence, live-account access or cache cleanup.
+Ordinary Playlist Detail has no local search field, so progressive Playlist
+search is not applicable.
+
+**Next gate:** Human reviews long real-collection scrolling/search/loading on
+representative QQ and NetEase data. Roam's typed session-local enable/effective
+surface intentionally has no new control or persistence under this non-UI
+checkpoint; any product control and experience acceptance require a later
+approved UI task. No autonomous implementation remains and no push is
+authorized.
+
 ## Human Review Workstream — lyric auxiliary-track alignment (HD-034)
 
 **Goal:** preserve original and word-timed lyrics while safely attaching QQ Music

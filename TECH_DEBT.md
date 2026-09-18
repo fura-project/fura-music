@@ -266,4 +266,38 @@ Reassess non-Linux WebView behavior separately before claiming those platforms;
 remove the unused Linux plugin edge only when Flutter dependency packaging can
 do so without deleting the retained non-Linux route.
 
+## TD-014 — Long Roam sessions retain every appended Queue entry
+
+**Status:** Open
+
+**Problem:** HD-035 appends each bounded Related Tracks batch to the one public
+Rust Queue so Queue order, current position and user actions remain truthful.
+An unusually long uninterrupted Roam session can therefore retain an increasing
+number of already completed entries in memory.
+
+**Why accepted:** The current Queue deliberately has no entry provenance,
+automatic-retention policy or hidden recommendation buffer. Removing completed
+entries would change visible Queue history and positional semantics; inventing a
+Roam-origin framework or second Queue would exceed the accepted playback model.
+Each terminal request and appended batch is already bounded.
+
+**Impact:** Normal sessions remain simple and inspectable, while an extreme
+continuous Roam session may grow the public Queue until the user clears or
+replaces it.
+
+**Risk:** Sustained unattended playback could accumulate avoidable memory and
+make Queue presentation increasingly large. An unsafe compaction could instead
+delete user-added duplicates, invalidate the current position, or race a late
+continuation result.
+
+**Suggested solution:** Only after product authority defines which entries may
+be retired, add explicit Queue provenance and a bounded retention rule inside
+Rust. Preserve user-added entries and duplicates, current/next semantics,
+generation cancellation and one atomic public snapshot; do not hide overflow in
+a second Dart Queue.
+
+**Trigger condition:** Reassess after a measured long-session memory/Queue
+problem, before a user-facing persistent Roam control is accepted, or when a
+separate Human Decision defines Queue provenance and retention behavior.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

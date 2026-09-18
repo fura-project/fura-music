@@ -3,13 +3,41 @@ execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
   state: HUMAN_REVIEW
-  acceptance_milestone: HD-034
-  active_workstream: LYRIC_AUXILIARY_TRACK_ALIGNMENT
-  current_task: LYRIC_AUXILIARY_MACHINE_COMPLETE
-  next_action: HUMAN_QQ_NETEASE_REAL_TRACK_REVIEW
+  acceptance_milestone: HD-035
+  active_workstream: LONG_LIST_CONTINUATION_AND_ROAM
+  current_task: LONG_LIST_AND_ROAM_MACHINE_COMPLETE
+  next_action: HUMAN_LONG_COLLECTION_INTERACTION_REVIEW
 ---
 
 # Current State
+
+- **2026-09-18 HD-035 long-list continuation and Roam checkpoint:** from
+  starting HEAD `7e6b931ebe67fa9ebabfa8e697fa96eca36a6c4f`, every audited
+  raw-offset Flutter boundary now consumes the exact Provider/Bridge
+  continuation rather than visible row count. A shared invariant validator
+  accepts advancing all-omitted windows, rejects backward, non-advancing,
+  overflowing and inconsistent exact-total windows, while page-number Search
+  and Radar remain native page protocols. Liked Songs and Recent Plays reuse
+  loaded indexes and scan no more than two upstream pages per demand; ordinary
+  Playlist Detail has no local search field. Comments build lazily and Comments,
+  all four global Search types, Favorite Albums/Artists, Album/Artist lists,
+  Rankings, Recommended Playlists and New Albums receive bounded viewport
+  demand while retaining existing manual retry/load behavior and visual design.
+  Session-local Roam is wired to the existing QQ/NetEase Related Tracks
+  capability, runs only after natural sequential/repeat-off terminal completion,
+  preserves exact Provider identity/order, deduplicates exact identities, and
+  uses one validated atomic Rust Queue append-and-select. Queue/current/mode,
+  disable, sign-out and disposal invalidate late results; failure or empty data
+  leaves the Queue unchanged. The typed enable/effective API intentionally has
+  no new UI or persistence in this checkpoint. Pinned FRB 2.13.0 regeneration,
+  Rust format, 588/588 workspace/all-target tests (27 live/Human ignored), strict
+  all-target Clippy, Dart format/analyze, 671/671 Flutter tests, Linux Release
+  and Android ARM64 Release pass; the APK is 45,525,730 bytes. No live Provider
+  request, account access, playback-history write, UI redesign, cache clean or
+  push occurred. Only long real-collection interaction and any later approved
+  Roam control/experience remain `HUMAN_REVIEW`; see
+  [the continuation audit](docs/research/long-list-continuation-audit.md) and
+  [the Roam contract](docs/research/roam-playback-contract.md).
 
 - **2026-09-18 HD-034 lyric auxiliary-track machine checkpoint:** from starting
   HEAD `18177ecda96c98f306d6596a4f0deb65d64c679f`, QQ translation now omits only
