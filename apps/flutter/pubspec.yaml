@@ -46,6 +46,9 @@ dependencies:
   # native Flutter ColorScheme still provided by 1.9.0.
   dynamic_color: 1.9.0
   flutter_rust_bridge: 2.13.0
+  # HD-033: exact pin for the reversible system-media edge experiment. The
+  # production default remains audio_service until Human runtime acceptance.
+  flutter_media_session: 3.0.5
   flutter_secure_storage: 10.3.1
   media_kit: 1.2.6
   media_kit_libs_video: 1.0.7

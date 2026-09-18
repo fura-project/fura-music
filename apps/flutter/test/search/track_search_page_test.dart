@@ -1171,6 +1171,9 @@ class _NeverAudioEngine implements ForegroundAudioEngine {
   const _NeverAudioEngine();
 
   @override
+  Future<void> dispose() async {}
+
+  @override
   Future<ForegroundAudioSession> loadRemote(
     Uri source, {
     ForegroundAudioFormat format = ForegroundAudioFormat.mp3,

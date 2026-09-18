@@ -8,6 +8,7 @@ import 'package:flutterustmusic/music_video/track_music_video_engine.dart';
 import 'package:flutterustmusic/music_video/track_music_video_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
+import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -46,6 +47,49 @@ void main() {
     expect(queue.playback.stage, TrackPlaybackStage.paused);
     queue.dispose();
   });
+
+  test(
+    'media_kit music Player remains independent from the disposed MV session',
+    () async {
+      final musicPlayer = _FakeMediaKitMusicPlayer();
+      final musicEngine = MediaKitForegroundAudioEngine(
+        player: musicPlayer,
+        audioFocusManager: _AllowingFocusManager(),
+      );
+      final queue = QueuePlaybackController(
+        _FakeQueueGateway(track),
+        TrackPlaybackController(
+          const _FakeMediaGateway(),
+          ForegroundPlaybackController(musicEngine),
+        ),
+      );
+      await queue.playback.playTrack(track);
+      expect(queue.playback.stage, TrackPlaybackStage.playing);
+
+      final videoSession = _FakeVideoSession(
+        afterOpen: TrackMusicVideoSessionStage.playing,
+      );
+      final controller = TrackMusicVideoController(
+        gateway: _FakeVideoGateway.immediate(_videoResult()),
+        engine: _FakeVideoEngine([videoSession]),
+        musicController: queue,
+        track: track,
+      );
+
+      await controller.load();
+      expect(musicPlayer.pauseCalls, 1);
+      expect(queue.playback.stage, TrackPlaybackStage.paused);
+
+      controller.dispose();
+      expect(videoSession.disposed, isTrue);
+      expect(musicPlayer.disposeCalls, 0);
+      expect(queue.playback.stage, TrackPlaybackStage.paused);
+
+      queue.dispose();
+      await _waitUntil(() => musicPlayer.disposeCalls == 1);
+      expect(musicPlayer.disposeCalls, 1);
+    },
+  );
 
   test('no associated MV and unavailable source remain distinct', () async {
     final queue = _musicController(initialTrack: track);
@@ -397,6 +441,9 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
   int _next = 0;
 
   @override
+  Future<void> dispose() async {}
+
+  @override
   Future<ForegroundAudioSession> loadRemote(
     Uri source, {
     ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
@@ -442,4 +489,66 @@ class _FakeAudioSession implements ForegroundAudioSession {
     await _failures.close();
     await _positions.close();
   }
+}
+
+class _FakeMediaKitMusicPlayer implements MediaKitAudioPlayer {
+  final StreamController<bool> _playing = StreamController<bool>.broadcast();
+  final StreamController<bool> _completed = StreamController<bool>.broadcast();
+  final StreamController<Duration> _position =
+      StreamController<Duration>.broadcast();
+  final StreamController<String> _errors = StreamController<String>.broadcast();
+  int pauseCalls = 0;
+  int disposeCalls = 0;
+
+  @override
+  Stream<bool> get playing => _playing.stream;
+  @override
+  Stream<bool> get completed => _completed.stream;
+  @override
+  Stream<Duration> get position => _position.stream;
+  @override
+  Stream<String> get errors => _errors.stream;
+
+  @override
+  Future<void> open(Uri source) async {}
+
+  @override
+  Future<void> play() async => _playing.add(true);
+
+  @override
+  Future<void> pause() async {
+    pauseCalls += 1;
+    _playing.add(false);
+  }
+
+  @override
+  Future<void> stop() async => _playing.add(false);
+
+  @override
+  Future<void> seek(Duration position) async {}
+
+  @override
+  Future<void> setVolume(double percent) async {}
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls += 1;
+    await _playing.close();
+    await _completed.close();
+    await _position.close();
+    await _errors.close();
+  }
+}
+
+class _AllowingFocusManager implements ForegroundAudioFocusManager {
+  @override
+  Future<bool> setActive(bool active) async => true;
+}
+
+Future<void> _waitUntil(bool Function() condition) async {
+  for (var attempt = 0; attempt < 100; attempt += 1) {
+    if (condition()) return;
+    await Future<void>.delayed(Duration.zero);
+  }
+  fail('Condition was not reached before the bounded test deadline.');
 }

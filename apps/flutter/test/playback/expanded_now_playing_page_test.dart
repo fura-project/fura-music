@@ -582,6 +582,9 @@ class _AudioEngine implements ForegroundAudioEngine {
   const _AudioEngine();
 
   @override
+  Future<void> dispose() async {}
+
+  @override
   Future<ForegroundAudioSession> loadRemote(
     Uri source, {
     ForegroundAudioFormat format = ForegroundAudioFormat.mp3,

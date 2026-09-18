@@ -11205,6 +11205,9 @@ class _WidgetAudioEngine implements ForegroundAudioEngine {
   final ForegroundAudioSession session;
 
   @override
+  Future<void> dispose() async {}
+
+  @override
   Future<ForegroundAudioSession> loadRemote(
     Uri source, {
     ForegroundAudioFormat format = ForegroundAudioFormat.mp3,

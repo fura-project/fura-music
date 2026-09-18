@@ -4,24 +4,35 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
+import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:media_kit/media_kit.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
 
   testWidgets('initializes the host system media session', (tester) async {
+    final selection = PlaybackStackSelection.current();
     final host = await initializeAppPlaybackHost(
       playbackQueueGateway: _MemoryQueueGateway(),
       mediaResolutionGateway: const _NeverMediaGateway(),
       lyricGateway: const _NeverLyricGateway(),
-      audioEngine: const _NeverAudioEngine(),
+      audioEngine: switch (selection.audioEngine) {
+        MusicAudioEngineKind.audioplayers =>
+          AudioplayersForegroundAudioEngine(),
+        MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
+      },
+      systemMediaEdge: selection.systemMediaEdge,
     );
 
     expect(host, isA<AudioServiceAppPlaybackHost>());
     expect(host.controller, isNotNull);
+    expect(selection.usesProjectLinuxMpris, isTrue);
 
     final client = DBusClient.session();
     final remote = DBusRemoteObject(
@@ -160,14 +171,4 @@ class _NeverLyricGateway implements LyricGateway {
     required String opaqueTrackId,
   }) =>
       throw UnsupportedError('No lyrics are loaded by this integration test.');
-}
-
-class _NeverAudioEngine implements ForegroundAudioEngine {
-  const _NeverAudioEngine();
-
-  @override
-  Future<ForegroundAudioSession> loadRemote(
-    Uri source, {
-    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
-  }) => throw UnsupportedError('No audio is loaded by this integration test.');
 }

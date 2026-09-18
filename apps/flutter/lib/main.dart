@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
@@ -28,9 +30,11 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
@@ -81,11 +85,24 @@ Future<void> main(List<String> arguments) async {
       AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
     },
   );
+  final playbackStack = PlaybackStackSelection.current();
+  developer.log(
+    'FURA_DIAGNOSTIC playback_stack '
+    'engine=${playbackStack.audioEngine.name} '
+    'systemEdge=${playbackStack.systemMediaEdge.name} '
+    'linuxMpris=${playbackStack.usesProjectLinuxMpris} '
+    'fallback=${playbackStack.usedFallback}',
+    name: 'fura_music.playback',
+  );
   final playbackHost = await initializeAppPlaybackHost(
     playbackQueueGateway: RustPlaybackQueueGateway(),
     mediaResolutionGateway: mediaResolutionGateway,
     lyricGateway: lyricGateway,
-    audioEngine: AudioplayersForegroundAudioEngine(),
+    audioEngine: switch (playbackStack.audioEngine) {
+      MusicAudioEngineKind.audioplayers => AudioplayersForegroundAudioEngine(),
+      MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
+    },
+    systemMediaEdge: playbackStack.systemMediaEdge,
   );
 
   // Keep AudioService initialization ahead of account restoration. Android can

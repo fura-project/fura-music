@@ -312,8 +312,18 @@ class ForegroundPlaybackController extends ChangeNotifier {
       _disposed = true;
       ++_generation;
       final session = _detachSession();
-      unawaited(_stopAndDispose(session));
+      unawaited(_disposeEngine(session));
     }
     super.dispose();
+  }
+
+  Future<void> _disposeEngine(ForegroundAudioSession? session) async {
+    await _stopAndDispose(session);
+    try {
+      await _engine.dispose();
+    } on Object {
+      // The controller is already terminal; cleanup cannot revive state or
+      // expose an implementation-specific source-bearing exception.
+    }
   }
 }

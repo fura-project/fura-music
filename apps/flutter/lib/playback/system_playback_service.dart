@@ -10,10 +10,13 @@ import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
+import 'package:flutterustmusic/playback/flutter_media_session_system_edge.dart';
 import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
+import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/playback/system_media_edge.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 /// App-lifetime playback owner shared by Flutter UI and operating-system media
@@ -48,18 +51,18 @@ class ForegroundAppPlaybackHost implements AppPlaybackHost {
 
 class AudioServiceAppPlaybackHost implements AppPlaybackHost {
   AudioServiceAppPlaybackHost._(
-    this._handler,
+    this._edge,
     this._interruptionSubscription,
     this._becomingNoisySubscription,
   );
 
-  final ProjectSystemAudioHandler _handler;
+  final AudioServiceSystemMediaEdge _edge;
   final StreamSubscription<AudioInterruptionEvent>? _interruptionSubscription;
   final StreamSubscription<void>? _becomingNoisySubscription;
   bool _disposed = false;
 
   @override
-  QueuePlaybackController get controller => _handler.controller;
+  QueuePlaybackController get controller => _edge.controller;
 
   @override
   bool get systemControlsAvailable => true;
@@ -68,7 +71,36 @@ class AudioServiceAppPlaybackHost implements AppPlaybackHost {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _handler.close();
+    await _edge.deactivate();
+    await _interruptionSubscription?.cancel();
+    await _becomingNoisySubscription?.cancel();
+    controller.dispose();
+  }
+}
+
+class FlutterMediaSessionAppPlaybackHost implements AppPlaybackHost {
+  FlutterMediaSessionAppPlaybackHost._(
+    this._edge,
+    this._interruptionSubscription,
+    this._becomingNoisySubscription,
+  );
+
+  final FuraMediaSessionAdapter _edge;
+  final StreamSubscription<AudioInterruptionEvent>? _interruptionSubscription;
+  final StreamSubscription<void>? _becomingNoisySubscription;
+  bool _disposed = false;
+
+  @override
+  QueuePlaybackController get controller => _edge.controller;
+
+  @override
+  bool get systemControlsAvailable => true;
+
+  @override
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await _edge.deactivate();
     await _interruptionSubscription?.cancel();
     await _becomingNoisySubscription?.cancel();
     controller.dispose();
@@ -117,6 +149,56 @@ Future<void> _initializeProjectAudioService(
   await AudioService.init(builder: () => handler, config: config);
 }
 
+/// Minimal adapter retaining the existing audio_service implementation behind
+/// the independent [SystemMediaEdge] lifecycle contract.
+class AudioServiceSystemMediaEdge implements SystemMediaEdge {
+  AudioServiceSystemMediaEdge({
+    required this.controller,
+    required ProjectAudioServiceInitializer initializer,
+  }) : _handler = ProjectSystemAudioHandler(controller),
+       // Keep the public label `initializer` while storing it privately.
+       // ignore: prefer_initializing_formals
+       _initializer = initializer;
+
+  final QueuePlaybackController controller;
+  final ProjectSystemAudioHandler _handler;
+  final ProjectAudioServiceInitializer _initializer;
+  bool _active = false;
+
+  ProjectSystemAudioHandler get handler => _handler;
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  Future<void> activate() async {
+    if (_active) throw StateError('System media edge is already active.');
+    _logSystemPlayback(phase: 'audio_service_init', outcome: 'started');
+    try {
+      registerProjectLinuxMprisAudioService();
+      await _initializer(_handler, projectAudioServiceConfig);
+      _active = true;
+      _logSystemPlayback(phase: 'audio_service_init', outcome: 'success');
+    } on Object catch (error) {
+      _handler.close(clearPlatformState: false);
+      _logSystemPlayback(
+        phase: 'audio_service_init',
+        outcome: 'failed',
+        error: error,
+        level: 1000,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> deactivate() async {
+    if (!_active) return;
+    _active = false;
+    _handler.close();
+  }
+}
+
 QueuePlaybackController createAppPlaybackController({
   required PlaybackQueueGateway playbackQueueGateway,
   required MediaResolutionGateway mediaResolutionGateway,
@@ -162,9 +244,8 @@ const projectAudioServiceConfig = AudioServiceConfig(
 );
 
 /// Creates the single app-lifetime playback owner and gives that same owner to
-/// audio_service. Android's foreground service, MediaSession, notification and
-/// remote callbacks are plugin-owned; the project handler only maps those
-/// callbacks onto the Rust-backed queue and the selected audio engine.
+/// exactly one selected system-media edge. The default remains audio_service;
+/// the flutter_media_session path is an explicit HD-033 experiment.
 ///
 /// A platform media-session failure is deliberately non-fatal: the returned
 /// foreground host still owns the exact same controller, so in-app playback
@@ -180,6 +261,9 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
   @visibleForTesting
   ProjectAudioSessionFactory audioSessionFactory =
       PlatformProjectAudioSession.create,
+  SystemMediaEdgeKind systemMediaEdge = SystemMediaEdgeKind.audioService,
+  @visibleForTesting FlutterMediaSessionDriver? flutterMediaSessionDriver,
+  @visibleForTesting TargetPlatform? platform,
 }) async {
   final controller = createAppPlaybackController(
     playbackQueueGateway: playbackQueueGateway,
@@ -187,24 +271,69 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     lyricGateway: lyricGateway,
     audioEngine: audioEngine,
   );
-  final handler = ProjectSystemAudioHandler(controller);
-  _logSystemPlayback(phase: 'audio_service_init', outcome: 'started');
-  try {
-    registerProjectLinuxMprisAudioService();
-    await audioServiceInitializer(handler, projectAudioServiceConfig);
-  } on Object catch (error) {
-    handler.close(clearPlatformState: false);
-    _logSystemPlayback(
-      phase: 'audio_service_init',
-      outcome: 'failed',
-      error: error,
-      level: 1000,
+  final effectivePlatform = platform ?? defaultTargetPlatform;
+
+  if (systemMediaEdge == SystemMediaEdgeKind.flutterMediaSession) {
+    final edge = FuraMediaSessionAdapter(
+      controller: controller,
+      driver: flutterMediaSessionDriver,
+      platform: effectivePlatform,
     );
+    _logSystemPlayback(phase: 'flutter_media_session_init', outcome: 'started');
+    try {
+      await edge.activate();
+    } on Object catch (error) {
+      _logSystemPlayback(
+        phase: 'flutter_media_session_init',
+        outcome: 'failed',
+        error: error,
+        level: 1000,
+      );
+      _logSystemPlayback(phase: 'host_selected', outcome: 'foreground_only');
+      return ForegroundAppPlaybackHost(controller);
+    }
+    _logSystemPlayback(phase: 'flutter_media_session_init', outcome: 'success');
+    final bindings = await _configureProjectAudioSession(
+      controller,
+      audioSessionFactory,
+    );
+    _logSystemPlayback(
+      phase: 'host_selected',
+      outcome: 'flutter_media_session',
+    );
+    return FlutterMediaSessionAppPlaybackHost._(
+      edge,
+      bindings.interruptionSubscription,
+      bindings.becomingNoisySubscription,
+    );
+  }
+
+  final edge = AudioServiceSystemMediaEdge(
+    controller: controller,
+    initializer: audioServiceInitializer,
+  );
+  try {
+    await edge.activate();
+  } on Object {
     _logSystemPlayback(phase: 'host_selected', outcome: 'foreground_only');
     return ForegroundAppPlaybackHost(controller);
   }
-  _logSystemPlayback(phase: 'audio_service_init', outcome: 'success');
+  final bindings = await _configureProjectAudioSession(
+    controller,
+    audioSessionFactory,
+  );
+  _logSystemPlayback(phase: 'host_selected', outcome: 'audio_service');
+  return AudioServiceAppPlaybackHost._(
+    edge,
+    bindings.interruptionSubscription,
+    bindings.becomingNoisySubscription,
+  );
+}
 
+Future<_AudioSessionBindings> _configureProjectAudioSession(
+  QueuePlaybackController controller,
+  ProjectAudioSessionFactory audioSessionFactory,
+) async {
   StreamSubscription<AudioInterruptionEvent>? interruptionSubscription;
   StreamSubscription<void>? becomingNoisySubscription;
   _logSystemPlayback(phase: 'audio_session_configure', outcome: 'started');
@@ -213,12 +342,14 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     await audioSession.configureMusic();
     interruptionSubscription = audioSession.interruptionEvents.listen((event) {
       if (event.begin && event.type != AudioInterruptionType.duck) {
-        unawaited(handler.pause());
+        final playback = controller.playback;
+        if (playback.canPause) unawaited(playback.pause());
       }
     });
-    becomingNoisySubscription = audioSession.becomingNoisyEvents.listen(
-      (_) => unawaited(handler.pause()),
-    );
+    becomingNoisySubscription = audioSession.becomingNoisyEvents.listen((_) {
+      final playback = controller.playback;
+      if (playback.canPause) unawaited(playback.pause());
+    });
     _logSystemPlayback(phase: 'audio_session_configure', outcome: 'success');
   } on Object catch (error) {
     _logSystemPlayback(
@@ -228,13 +359,20 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
       level: 900,
     );
   }
-
-  _logSystemPlayback(phase: 'host_selected', outcome: 'audio_service');
-  return AudioServiceAppPlaybackHost._(
-    handler,
+  return _AudioSessionBindings(
     interruptionSubscription,
     becomingNoisySubscription,
   );
+}
+
+class _AudioSessionBindings {
+  const _AudioSessionBindings(
+    this.interruptionSubscription,
+    this.becomingNoisySubscription,
+  );
+
+  final StreamSubscription<AudioInterruptionEvent>? interruptionSubscription;
+  final StreamSubscription<void>? becomingNoisySubscription;
 }
 
 /// The app-lifetime AudioHandler and playback owner. The Rust-backed queue stays

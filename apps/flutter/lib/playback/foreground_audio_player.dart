@@ -26,6 +26,10 @@ abstract interface class ForegroundAudioEngine {
     Uri source, {
     ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
   });
+
+  /// Releases engine-lifetime resources after the app playback host stops.
+  /// Source replacement disposes only the returned session, never the engine.
+  Future<void> dispose();
 }
 
 /// Audio focus remains owned by audio_session. The audioplayers Android
@@ -63,12 +67,79 @@ abstract interface class ForegroundAudioSession {
   Future<void> dispose();
 }
 
+/// Narrow testable seam around one audioplayers source-lifetime AudioPlayer.
+///
+/// The production wrapper is intentionally mechanical. This seam lets both
+/// music engines run the same behavioral contract without exposing either
+/// plugin type to Queue or controller tests.
+abstract interface class AudioplayersAudioPlayer {
+  Stream<audio.PlayerState> get states;
+  Stream<Object?> get events;
+  Stream<Duration> get positions;
+
+  Future<void> setAudioContext(audio.AudioContext context);
+  Future<void> setReleaseMode(audio.ReleaseMode mode);
+  Future<void> setSourceUrl(String source, {required String mimeType});
+  Future<void> resume();
+  Future<void> pause();
+  Future<void> seek(Duration position);
+  Future<void> setVolume(double volume);
+  Future<void> stop();
+  Future<void> dispose();
+}
+
+class PlatformAudioplayersAudioPlayer implements AudioplayersAudioPlayer {
+  PlatformAudioplayersAudioPlayer() : _player = audio.AudioPlayer();
+
+  final audio.AudioPlayer _player;
+
+  @override
+  Stream<audio.PlayerState> get states => _player.onPlayerStateChanged;
+
+  @override
+  Stream<Object?> get events => _player.eventStream;
+
+  @override
+  Stream<Duration> get positions => _player.onPositionChanged;
+
+  @override
+  Future<void> setAudioContext(audio.AudioContext context) =>
+      _player.setAudioContext(context);
+
+  @override
+  Future<void> setReleaseMode(audio.ReleaseMode mode) =>
+      _player.setReleaseMode(mode);
+
+  @override
+  Future<void> setSourceUrl(String source, {required String mimeType}) =>
+      _player.setSourceUrl(source, mimeType: mimeType);
+
+  @override
+  Future<void> resume() => _player.resume();
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> seek(Duration position) => _player.seek(position);
+
+  @override
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
+
+  @override
+  Future<void> stop() => _player.stop();
+
+  @override
+  Future<void> dispose() => _player.dispose();
+}
+
 class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
   AudioplayersForegroundAudioEngine({
     ForegroundAudioFocusManager? audioFocusManager,
+    AudioplayersAudioPlayer Function()? playerFactory,
   }) : _audioFocusManager =
-           audioFocusManager ??
-           const AudioSessionForegroundAudioFocusManager() {
+           audioFocusManager ?? const AudioSessionForegroundAudioFocusManager(),
+       _playerFactory = playerFactory ?? PlatformAudioplayersAudioPlayer.new {
     // AudioPlayerException includes player.source in its string form. QQ media
     // URIs can carry authorization, so plugin-owned logging is disabled before
     // any player exists. The adapter exposes only coarse project failures.
@@ -76,6 +147,7 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
   }
 
   final ForegroundAudioFocusManager _audioFocusManager;
+  final AudioplayersAudioPlayer Function() _playerFactory;
 
   @override
   Future<ForegroundAudioSession> loadRemote(
@@ -88,7 +160,7 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
     }
 
     final session = _AudioplayersForegroundAudioSession(
-      audio.AudioPlayer(),
+      _playerFactory(),
       _audioFocusManager,
     );
     try {
@@ -100,11 +172,18 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
       throw const ForegroundAudioException(ForegroundAudioFailure.load);
     }
   }
+
+  @override
+  Future<void> dispose() async {
+    // audioplayers sessions own their individual plugin players. Keeping this
+    // engine-level hook a no-op preserves the production baseline while giving
+    // long-lived candidate engines one explicit terminal lifecycle boundary.
+  }
 }
 
 class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
   _AudioplayersForegroundAudioSession(this._player, this._audioFocusManager) {
-    _stateSubscription = _player.onPlayerStateChanged.listen((state) {
+    _stateSubscription = _player.states.listen((state) {
       if (_disposed) return;
       if (state == audio.PlayerState.stopped ||
           state == audio.PlayerState.completed) {
@@ -118,17 +197,17 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
         audio.PlayerState.disposed => ForegroundAudioState.stopped,
       });
     }, onError: (Object _) => _emitFailure(ForegroundAudioFailure.playback));
-    _eventSubscription = _player.eventStream.listen(
+    _eventSubscription = _player.events.listen(
       (_) {},
       onError: (Object _) => _emitFailure(ForegroundAudioFailure.playback),
     );
-    _positionSubscription = _player.onPositionChanged.listen((position) {
+    _positionSubscription = _player.positions.listen((position) {
       if (_disposed || position.isNegative) return;
       _positions.add(position.inMilliseconds);
     }, onError: (Object _) => _emitFailure(ForegroundAudioFailure.playback));
   }
 
-  final audio.AudioPlayer _player;
+  final AudioplayersAudioPlayer _player;
   final ForegroundAudioFocusManager _audioFocusManager;
   final StreamController<ForegroundAudioState> _states =
       StreamController.broadcast();
@@ -136,7 +215,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
       StreamController.broadcast();
   final StreamController<int> _positions = StreamController.broadcast();
   late final StreamSubscription<audio.PlayerState> _stateSubscription;
-  late final StreamSubscription<audio.AudioEvent> _eventSubscription;
+  late final StreamSubscription<Object?> _eventSubscription;
   late final StreamSubscription<Duration> _positionSubscription;
   bool _disposed = false;
   bool _focusActive = false;

@@ -5,10 +5,13 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:media_kit/media_kit.dart' show MediaKit;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
 
   testWidgets('plays and disposes a generated local source', (_) async {
     final fixtureDirectory = await Directory.systemTemp.createTemp(
@@ -98,6 +101,7 @@ void main() {
       );
     } finally {
       await session?.dispose();
+      await engine.dispose();
       await requests.cancel();
       await server.close(force: true);
     }
@@ -145,6 +149,7 @@ void main() {
       );
     } finally {
       await session?.dispose();
+      await engine.dispose();
       await requests.cancel();
       await server.close(force: true);
     }
@@ -192,6 +197,56 @@ void main() {
       );
     } finally {
       await session?.dispose();
+      await engine.dispose();
+      await requests.cancel();
+      await server.close(force: true);
+    }
+  }, skip: !Platform.isLinux);
+
+  testWidgets('media_kit candidate reuses one Player across remote sources', (
+    tester,
+  ) async {
+    final fixture = base64Decode(_silentMp3Base64);
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final requests = server.listen(
+      (request) => unawaited(
+        _serveFixture(request, fixture, ContentType('audio', 'mpeg')),
+      ),
+    );
+    final engine = MediaKitForegroundAudioEngine();
+    final enginePlayer = engine.debugPlayer;
+    ForegroundAudioSession? session;
+
+    try {
+      for (final path in ['first.mp3', 'second.mp3']) {
+        session = await engine.loadRemote(
+          Uri.parse(
+            'http://${server.address.address}:${server.port}/$path'
+            '?vkey=must-not-leak',
+          ),
+        );
+        await session.setVolume(0);
+        final progressed = session.positionMs.firstWhere(
+          (positionMs) => positionMs > 0,
+        );
+        await _expectStateAfter(
+          session,
+          ForegroundAudioState.playing,
+          session.play,
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          await progressed.timeout(const Duration(seconds: 5)),
+          greaterThan(0),
+        );
+        await session.stop();
+        await session.dispose();
+        session = null;
+        expect(engine.debugPlayer, same(enginePlayer));
+      }
+    } finally {
+      await session?.dispose();
+      await engine.dispose();
       await requests.cancel();
       await server.close(force: true);
     }

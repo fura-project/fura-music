@@ -319,6 +319,9 @@ class _FakeEngine implements ForegroundAudioEngine {
   int _next = 0;
 
   @override
+  Future<void> dispose() async {}
+
+  @override
   Future<ForegroundAudioSession> loadRemote(
     Uri source, {
     ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
