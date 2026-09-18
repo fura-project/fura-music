@@ -9,9 +9,10 @@ use music_domain::{
 use netease_client::{Error, MediaFormat, MediaQuality, Transport};
 use provider_api::{
     AlbumDetailsProvider, AlbumTracksProvider, ArtistAlbumsProvider, ArtistTracksProvider,
-    CatalogError, LyricsError, LyricsProvider, MediaResolutionError, MediaSourceResolver,
+    AuxiliaryLyricLine, CatalogError, LyricAuxiliaryAlignment, LyricAuxiliaryAlignmentStats,
+    LyricsError, LyricsProvider, MediaResolutionError, MediaSourceResolver,
     PlaylistDetailsProvider, RankingsProvider, RecommendationError, RecommendedPlaylistsProvider,
-    TrackDetailsProvider,
+    TrackDetailsProvider, align_auxiliary_lyric_track,
 };
 
 pub(super) fn catalog_error(error: Error) -> CatalogError {
@@ -329,6 +330,8 @@ impl<T: Transport> RankingsProvider for NeteaseProvider<T> {
 impl<T: Transport> LyricsProvider for NeteaseProvider<T> {
     type Error = LyricsError;
     async fn lyrics(&self, id: TrackId) -> Result<SynchronizedLyrics, Self::Error> {
+        const AUXILIARY_TOLERANCE_MS: u32 = 10;
+
         let value =
             identity(id.provider(), id.opaque()).map_err(|_| LyricsError::InvalidResponse)?;
         let lyrics = self.client.lyrics(value).await.map_err(|e| match e {
@@ -342,18 +345,125 @@ impl<T: Transport> LyricsProvider for NeteaseProvider<T> {
             _ => LyricsError::ServiceUnavailable,
         })?;
         let omitted_line_count = lyrics.omitted_line_count;
-        let mut lines = Vec::new();
-        for line in lyrics.lines {
+        let translations = normalize_netease_auxiliary(&lyrics.translation);
+        let romanizations = normalize_netease_auxiliary(&lyrics.romanization);
+        let original_starts = lyrics
+            .lines
+            .iter()
+            .map(|line| line.start_ms)
+            .collect::<Vec<_>>();
+        let translation_rows = translations
+            .lines
+            .iter()
+            .map(|(start_ms, text)| AuxiliaryLyricLine::new(*start_ms, text))
+            .collect::<Vec<_>>();
+        let romanization_rows = romanizations
+            .lines
+            .iter()
+            .map(|(start_ms, text)| AuxiliaryLyricLine::new(*start_ms, text))
+            .collect::<Vec<_>>();
+        let translation_alignment = align_auxiliary_lyric_track(
+            &original_starts,
+            &translation_rows,
+            AUXILIARY_TOLERANCE_MS,
+        );
+        let romanization_alignment = align_auxiliary_lyric_track(
+            &original_starts,
+            &romanization_rows,
+            AUXILIARY_TOLERANCE_MS,
+        );
+        netease_lyric_alignment_debug("translation", &translations, translation_alignment.stats());
+        netease_lyric_alignment_debug(
+            "romanization",
+            &romanizations,
+            romanization_alignment.stats(),
+        );
+        let mut lines = Vec::with_capacity(lyrics.lines.len());
+        for (original_index, line) in lyrics.lines.into_iter().enumerate() {
             lines.push(
                 SynchronizedLyricLine::new(line.text, line.start_ms, 0, vec![])
                     .map_err(|_| LyricsError::InvalidResponse)?
-                    .with_translation(line.translation),
+                    .with_translation(aligned_netease_auxiliary_text(
+                        &translations.lines,
+                        &translation_alignment,
+                        original_index,
+                    ))
+                    .with_romanization(aligned_netease_auxiliary_text(
+                        &romanizations.lines,
+                        &romanization_alignment,
+                        original_index,
+                    )),
             );
         }
         SynchronizedLyrics::new(id, lines)
             .map(|lyrics| lyrics.with_omitted_line_count(omitted_line_count))
             .map_err(|_| LyricsError::InvalidResponse)
     }
+}
+
+struct NormalizedNeteaseAuxiliaryTrack {
+    lines: Vec<(u32, String)>,
+    raw_line_count: usize,
+}
+
+fn normalize_netease_auxiliary(
+    lines: &[netease_client::AuxiliaryLyricLine],
+) -> NormalizedNeteaseAuxiliaryTrack {
+    NormalizedNeteaseAuxiliaryTrack {
+        lines: lines
+            .iter()
+            .filter_map(|line| {
+                let text = line.text.trim();
+                (!text.is_empty()).then(|| (line.start_ms, text.to_owned()))
+            })
+            .collect(),
+        raw_line_count: lines.len(),
+    }
+}
+
+fn aligned_netease_auxiliary_text(
+    lines: &[(u32, String)],
+    alignment: &LyricAuxiliaryAlignment,
+    original_index: usize,
+) -> Option<String> {
+    alignment
+        .auxiliary_index_for_original(original_index)
+        .and_then(|index| lines.get(index))
+        .map(|(_, text)| text.clone())
+}
+
+fn netease_lyric_alignment_debug(
+    auxiliary: &str,
+    track: &NormalizedNeteaseAuxiliaryTrack,
+    stats: LyricAuxiliaryAlignmentStats,
+) {
+    if std::env::var_os("FURA_LYRIC_ALIGNMENT_DEBUG").is_none() {
+        return;
+    }
+    let [
+        delta_0,
+        delta_1_20,
+        delta_21_100,
+        delta_101_250,
+        delta_251_500,
+        delta_over_500,
+    ] = stats.nearest_delta_buckets;
+    eprintln!(
+        "FURA_DIAGNOSTIC lyric_alignment provider=netease aux={auxiliary} raw_lines={} normalized_lines={} placeholder_omitted=0 exact_matches={} near_matches={} ambiguous={} unmatched={} deduplicated={} delta_0={} delta_1_20={} delta_21_100={} delta_101_250={} delta_251_500={} delta_over_500={}",
+        track.raw_line_count,
+        track.lines.len(),
+        stats.exact_matches,
+        stats.near_matches,
+        stats.ambiguous_rows,
+        stats.unmatched_rows,
+        stats.deduplicated_rows,
+        delta_0,
+        delta_1_20,
+        delta_21_100,
+        delta_101_250,
+        delta_251_500,
+        delta_over_500,
+    );
 }
 /// Borrowed resolver shares the exact Provider's client/session lifetime.
 pub struct NeteaseMediaSourceResolver<'a, T> {

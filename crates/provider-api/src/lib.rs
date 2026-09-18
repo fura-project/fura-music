@@ -3,6 +3,13 @@
 use std::fmt;
 use std::future::Future;
 
+mod lyric_alignment;
+
+pub use lyric_alignment::{
+    AuxiliaryLyricLine, LyricAuxiliaryAlignment, LyricAuxiliaryAlignmentStats,
+    align_auxiliary_lyric_track,
+};
+
 use music_domain::{
     AccountSummary, AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage,
     ArtistId, ArtistSearchPage, ArtistTracksPage, AudioQuality, DailyTracksCollection,
@@ -1363,13 +1370,14 @@ mod built_in_routing_tests {
         fn supports(&self, id: &TrackId) -> bool {
             id.provider() == &self.owner.id()
         }
-        async fn resolve_media(
+        fn resolve_media(
             &self,
             _id: TrackId,
             _quality: AudioQuality,
-        ) -> Result<ResolvedMediaSource, MediaResolutionError> {
+        ) -> impl Future<Output = Result<ResolvedMediaSource, MediaResolutionError>> + Send
+        {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            Err(MediaResolutionError::ServiceUnavailable)
+            std::future::ready(Err(MediaResolutionError::ServiceUnavailable))
         }
     }
     #[test]

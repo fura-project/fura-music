@@ -374,9 +374,12 @@ mod tests {
     }
 
     impl Transport for RecordingTransport {
-        async fn send(&self, request: crate::Request) -> Result<crate::Response, Error> {
+        fn send(
+            &self,
+            request: crate::Request,
+        ) -> impl std::future::Future<Output = Result<crate::Response, Error>> + Send {
             *self.request.lock().unwrap() = Some(request);
-            Ok(crate::Response {
+            std::future::ready(Ok(crate::Response {
                 status: 200,
                 body: serde_json::to_vec(&json!({
                     "code":200,
@@ -392,14 +395,16 @@ mod tests {
                 }))
                 .unwrap(),
                 set_cookies: vec![],
-            })
+            }))
         }
     }
 
     fn decode_eapi_payload(encrypted: &str) -> Value {
         let bytes = encrypted
             .as_bytes()
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
             .collect::<Vec<_>>();
         let decoded = String::from_utf8(crate::crypto::eapi_response(&bytes).unwrap()).unwrap();

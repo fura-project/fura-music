@@ -1407,16 +1407,18 @@ mod tests {
 
     #[test]
     fn lrc_parser_supports_multiple_tags_and_fraction_widths() {
-        let lines = parse_lrc("[ar:Fixture]\n[00:01.2][00:02:034]Auxiliary\n[00:03]").expect("LRC");
+        let lines = parse_lrc("[ar:Fixture]\n[00:01.2][00:02:034]Auxiliary\n[00:03]\n[00:04]//")
+            .expect("LRC");
         assert_eq!(
             lines
                 .iter()
                 .map(super::QqMusicAuxiliaryLyricLine::start_ms)
                 .collect::<Vec<_>>(),
-            [1_200, 2_034, 3_000]
+            [1_200, 2_034, 3_000, 4_000]
         );
         assert_eq!(lines[0].text(), "Auxiliary");
         assert_eq!(lines[2].text(), "");
+        assert_eq!(lines[3].text(), "//");
     }
 
     #[test]

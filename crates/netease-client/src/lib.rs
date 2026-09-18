@@ -11,7 +11,7 @@ mod music_video;
 mod read;
 mod transport;
 pub use catalog::*;
-pub use lyrics::{LyricLine, Lyrics, parse_lrc};
+pub use lyrics::{AuxiliaryLyricLine, LyricLine, Lyrics, parse_lrc};
 pub use media::{Media, MediaFormat, MediaQuality};
 pub use music_video::{MusicVideo, MusicVideoSource};
 pub use read::{Comment, CommentsPage, NewAlbum, NewAlbumArea, NewSongArea};

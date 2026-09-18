@@ -62,7 +62,7 @@ pub(crate) fn eapi(path: &str, text: &str) -> Result<Vec<(String, String)>, Erro
     let padding = u8::try_from(16 - input.len() % 16).map_err(|_| Error::InputBound)?;
     input.extend(std::iter::repeat_n(padding, usize::from(padding)));
     let cipher = aes::Aes128::new(b"e82ckenh8dichen8".into());
-    for block in input.chunks_exact_mut(16) {
+    for block in input.as_chunks_mut::<16>().0 {
         cipher.encrypt_block(block.into());
     }
     let encoded: String = input
@@ -99,7 +99,7 @@ pub(crate) fn eapi_response(bytes: &[u8]) -> Result<Vec<u8>, Error> {
     }
     let cipher = aes::Aes128::new(b"e82ckenh8dichen8".into());
     let mut decoded = encrypted;
-    for block in decoded.chunks_exact_mut(16) {
+    for block in decoded.as_chunks_mut::<16>().0 {
         cipher.decrypt_block(block.into());
     }
     let padding = usize::from(*decoded.last().ok_or(Error::ResponseShapeMismatch)?);
@@ -144,7 +144,7 @@ mod tests {
         let padding = 16 - encrypted.len() % 16;
         encrypted.extend(std::iter::repeat_n(u8::try_from(padding).unwrap(), padding));
         let cipher = aes::Aes128::new(b"e82ckenh8dichen8".into());
-        for block in encrypted.chunks_exact_mut(16) {
+        for block in encrypted.as_chunks_mut::<16>().0 {
             cipher.encrypt_block(block.into());
         }
         assert_eq!(eapi_response(&encrypted).unwrap(), br#"{"code":200}"#);

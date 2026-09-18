@@ -7,13 +7,16 @@ struct SequenceTransport {
 }
 
 impl Transport for SequenceTransport {
-    async fn send(&self, _request: Request) -> Result<Response, Error> {
+    fn send(
+        &self,
+        _request: Request,
+    ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
         let value = self.responses.lock().unwrap().remove(0);
-        Ok(Response {
+        std::future::ready(Ok(Response {
             status: 200,
             body: serde_json::to_vec(&value).unwrap(),
             set_cookies: Vec::new(),
-        })
+        }))
     }
 }
 

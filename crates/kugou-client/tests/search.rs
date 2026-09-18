@@ -11,7 +11,10 @@ struct FakeTransport {
 }
 
 impl Transport for FakeTransport {
-    async fn send(&self, request: Request) -> Result<Response, Error> {
+    fn send(
+        &self,
+        request: Request,
+    ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
         let uri = url::Url::parse(request.url()).unwrap();
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("songsearch.kugou.com"));
@@ -30,7 +33,7 @@ impl Transport for FakeTransport {
         )));
         assert_eq!(format!("{request:?}"), "KuGouRequest([REDACTED])");
         self.calls.fetch_add(1, Ordering::SeqCst);
-        self.responses.lock().unwrap().remove(0)
+        std::future::ready(self.responses.lock().unwrap().remove(0))
     }
 }
 

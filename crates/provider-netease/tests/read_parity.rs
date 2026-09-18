@@ -11,10 +11,13 @@ struct Fake {
 }
 
 impl Transport for Fake {
-    async fn send(&self, request: Request) -> Result<Response, Error> {
+    fn send(
+        &self,
+        request: Request,
+    ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
         assert!(request.cookie().is_none());
         self.urls.lock().unwrap().push(request.url().to_owned());
-        Ok(Response {
+        std::future::ready(Ok(Response {
             status: 200,
             body: serde_json::to_vec(
                 &self
@@ -26,7 +29,7 @@ impl Transport for Fake {
             )
             .unwrap(),
             set_cookies: vec![],
-        })
+        }))
     }
 }
 

@@ -1,14 +1,49 @@
 use crate::{Error, NeteaseClient, Transport};
 use serde_json::json;
+use std::fmt;
 
 pub struct LyricLine {
     pub start_ms: u32,
     pub text: String,
-    pub translation: Option<String>,
+}
+impl fmt::Debug for LyricLine {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LyricLine")
+            .field("start_ms", &self.start_ms)
+            .field("text", &"[REDACTED]")
+            .finish()
+    }
+}
+pub struct AuxiliaryLyricLine {
+    pub start_ms: u32,
+    pub text: String,
+}
+impl fmt::Debug for AuxiliaryLyricLine {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AuxiliaryLyricLine")
+            .field("start_ms", &self.start_ms)
+            .field("text", &"[REDACTED]")
+            .finish()
+    }
 }
 pub struct Lyrics {
     pub lines: Vec<LyricLine>,
+    pub translation: Vec<AuxiliaryLyricLine>,
+    pub romanization: Vec<AuxiliaryLyricLine>,
     pub omitted_line_count: u32,
+}
+impl fmt::Debug for Lyrics {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Lyrics")
+            .field("line_count", &self.lines.len())
+            .field("translation_line_count", &self.translation.len())
+            .field("romanization_line_count", &self.romanization.len())
+            .field("omitted_line_count", &self.omitted_line_count)
+            .finish()
+    }
 }
 /// # Errors
 /// Omits independently malformed timed lines and rejects oversized text.
@@ -118,36 +153,43 @@ impl<T: Transport> NeteaseClient<T> {
         if original.is_empty() {
             return Err(Error::TrackUnavailable);
         }
-        let (translations, omitted_translation) = v
-            .pointer("/tlyric/lyric")
-            .and_then(serde_json::Value::as_str)
-            .map(parse_lrc_with_integrity)
-            .transpose()?
-            .unwrap_or_default();
+        let (translations, omitted_translation) = parse_optional_track(&v, "/tlyric/lyric");
+        let (romanizations, omitted_romanization) = parse_optional_track(&v, "/romalrc/lyric");
         let lines = original
             .into_iter()
-            .map(|(start_ms, text)| {
-                let matching: Vec<_> = translations
-                    .iter()
-                    .filter(|(time, _)| *time == start_ms)
-                    .collect();
-                LyricLine {
-                    start_ms,
-                    text,
-                    translation: if matching.len() == 1 {
-                        Some(matching[0].1.clone())
-                    } else {
-                        None
-                    },
-                }
-            })
+            .map(|(start_ms, text)| LyricLine { start_ms, text })
             .collect();
         Ok(Lyrics {
             lines,
+            translation: translations
+                .into_iter()
+                .map(|(start_ms, text)| AuxiliaryLyricLine { start_ms, text })
+                .collect(),
+            romanization: romanizations
+                .into_iter()
+                .map(|(start_ms, text)| AuxiliaryLyricLine { start_ms, text })
+                .collect(),
             omitted_line_count: omitted_original
                 .checked_add(omitted_translation)
+                .and_then(|count| count.checked_add(omitted_romanization))
                 .ok_or(Error::ResponseBound)?,
         })
+    }
+}
+
+fn parse_optional_track(response: &serde_json::Value, pointer: &str) -> (Vec<(u32, String)>, u32) {
+    let Some(document) = response
+        .pointer(pointer)
+        .and_then(serde_json::Value::as_str)
+    else {
+        return (Vec::new(), 0);
+    };
+    match parse_lrc_with_integrity(document) {
+        Ok(parsed) => parsed,
+        // Auxiliary text is optional presentation data. A malformed or
+        // oversized local document is omitted without discarding valid
+        // canonical lyrics.
+        Err(_) => (Vec::new(), 1),
     }
 }
 #[cfg(test)]
@@ -186,5 +228,35 @@ mod tests {
         );
         assert!(parse_lrc(&"[00:01]x\n".repeat(10001)).is_err());
         assert!(parse_lrc("untimed text").unwrap().is_empty());
+    }
+
+    #[test]
+    fn debug_output_redacts_all_lyric_text() {
+        let lyrics = Lyrics {
+            lines: vec![LyricLine {
+                start_ms: 1_000,
+                text: "private original".into(),
+            }],
+            translation: vec![AuxiliaryLyricLine {
+                start_ms: 1_000,
+                text: "private translation".into(),
+            }],
+            romanization: vec![AuxiliaryLyricLine {
+                start_ms: 1_000,
+                text: "private romanization".into(),
+            }],
+            omitted_line_count: 0,
+        };
+        let debug = format!(
+            "{lyrics:?} {:?} {:?} {:?}",
+            lyrics.lines[0], lyrics.translation[0], lyrics.romanization[0]
+        );
+        for secret in [
+            "private original",
+            "private translation",
+            "private romanization",
+        ] {
+            assert!(!debug.contains(secret));
+        }
     }
 }

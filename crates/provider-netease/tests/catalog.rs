@@ -12,12 +12,15 @@ struct Fake {
     calls: Arc<AtomicUsize>,
 }
 impl Transport for Fake {
-    async fn send(&self, r: Request) -> Result<Response, Error> {
+    fn send(
+        &self,
+        r: Request,
+    ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
         assert!(r.url().starts_with("https://"));
         assert!(r.cookie().is_none());
         assert!(!format!("{r:?}").contains("params"));
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(Response {
+        std::future::ready(Ok(Response {
             status: 200,
             body: serde_json::to_vec(
                 &self
@@ -29,7 +32,7 @@ impl Transport for Fake {
             )
             .unwrap(),
             set_cookies: vec![],
-        })
+        }))
     }
 }
 fn provider(values: Vec<Value>) -> (NeteaseProvider<Fake>, Arc<AtomicUsize>) {
@@ -270,14 +273,19 @@ async fn album_above_the_old_ceiling_remains_windowed_and_bounded() {
     assert_eq!(c.load(Ordering::SeqCst), 1);
 }
 #[tokio::test]
-async fn lyrics_keep_only_exact_translation_alignment_and_no_invented_words() {
-    let (p, _) = provider(vec![
-        json!({"code":200,"lrc":{"lyric":"[00:01]Fixture\n[00:02]End"},"tlyric":{"lyric":"[00:01]Translation\n[00:03]Unmatched"}}),
-    ]);
+async fn lyrics_align_translation_and_romanization_without_invented_words() {
+    let (p, _) = provider(vec![json!({
+        "code": 200,
+        "lrc": {"lyric": "[00:01.00]Fixture\n[00:02.00]End"},
+        "tlyric": {"lyric": "[00:00.99]Translation\n[00:03.00]Unmatched"},
+        "romalrc": {"lyric": "[00:01.01]Roma fixture\n[00:02.00]Roma end"}
+    })]);
     let l = p.lyrics(track()).await.unwrap();
     assert_eq!(l.lines().len(), 2);
     assert_eq!(l.lines()[0].translation(), Some("Translation"));
     assert_eq!(l.lines()[1].translation(), None);
+    assert_eq!(l.lines()[0].romanization(), Some("Roma fixture"));
+    assert_eq!(l.lines()[1].romanization(), Some("Roma end"));
     assert!(l.lines()[0].segments().is_empty());
     assert_eq!(l.lines()[0].duration_ms(), 0);
 }

@@ -7,7 +7,10 @@ struct Fake {
     calls: AtomicUsize,
 }
 impl Transport for Fake {
-    async fn send(&self, r: Request) -> Result<Response, Error> {
+    fn send(
+        &self,
+        r: Request,
+    ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
         self.calls.fetch_add(1, Ordering::SeqCst);
         assert!(r.cookie().is_none());
         if r.url().starts_with("https://interface.music.163.com/eapi/") {
@@ -19,11 +22,11 @@ impl Transport for Fake {
             assert_eq!(r.form()[1].0, "encSecKey");
             assert_eq!(r.form()[1].1.len(), 256);
         }
-        Ok(Response {
+        std::future::ready(Ok(Response {
             status: self.status,
             body: self.body.clone(),
             set_cookies: vec![],
-        })
+        }))
     }
 }
 fn client(v: &Value) -> NeteaseClient<Fake> {
@@ -145,4 +148,23 @@ async fn lyrics_accept_netease_negative_line_markers_without_relaxing_timing() {
     assert!(lyrics.lines[0].text.contains("作词"));
     assert_eq!(lyrics.lines[1].start_ms, 0);
     assert!(lyrics.lines[1].text.contains("作曲"));
+}
+
+#[tokio::test]
+async fn malformed_optional_lyric_tracks_do_not_discard_valid_original() {
+    let oversized_translation = "[00:01]Translation fixture\n".repeat(20_000);
+    let lyrics = client(&json!({
+        "code": 200,
+        "lrc": {"lyric": "[00:01.00]Original A\n[00:02.00]Original B"},
+        "tlyric": {"lyric": oversized_translation},
+        "romalrc": {"lyric": "[00:01.00]Roma A\n[00:61.00]bad\n[00:02.00]Roma B"}
+    }))
+    .lyrics(1)
+    .await
+    .expect("valid original survives malformed optional tracks");
+
+    assert_eq!(lyrics.lines.len(), 2);
+    assert!(lyrics.translation.is_empty());
+    assert_eq!(lyrics.romanization.len(), 2);
+    assert_eq!(lyrics.omitted_line_count, 2);
 }

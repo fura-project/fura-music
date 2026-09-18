@@ -13,14 +13,17 @@ struct Fake {
 }
 
 impl Transport for Fake {
-    async fn send(&self, request: Request) -> Result<Response, Error> {
+    fn send(
+        &self,
+        request: Request,
+    ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
         assert!(request.url().starts_with("https://songsearch.kugou.com/"));
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(Response {
+        std::future::ready(Ok(Response {
             status: 200,
             content_type: Some("application/json".into()),
             body: serde_json::to_vec(&self.value.lock().unwrap().take().unwrap()).unwrap(),
-        })
+        }))
     }
 }
 

@@ -170,7 +170,7 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, QrcDecryptError> {
     }
 
     let mut bytes = Vec::with_capacity(value.len() / 2);
-    for pair in value.as_bytes().chunks_exact(2) {
+    for pair in value.as_bytes().as_chunks::<2>().0 {
         let high = hex_nibble(pair[0]).ok_or(QrcDecryptError::InvalidHex)?;
         let low = hex_nibble(pair[1]).ok_or(QrcDecryptError::InvalidHex)?;
         bytes.push((high << 4) | low);
@@ -213,7 +213,7 @@ impl Des {
 
     fn transform_bytes(&self, data: &mut [u8]) {
         debug_assert!(data.len().is_multiple_of(8));
-        for block in data.chunks_exact_mut(8) {
+        for block in data.as_chunks_mut::<8>().0 {
             let mut bytes = [0; 8];
             bytes.copy_from_slice(block);
             block.copy_from_slice(

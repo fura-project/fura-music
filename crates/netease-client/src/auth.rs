@@ -946,50 +946,55 @@ mod qr_request_tests {
     }
 
     impl Transport for MobileRecordingTransport {
-        async fn send(&self, request: Request) -> Result<Response, Error> {
-            self.observations.lock().unwrap().push((
-                request.url().to_owned(),
-                request
-                    .form()
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect(),
-                request
-                    .headers()
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect(),
-                request
-                    .cookie()
-                    .into_iter()
-                    .flat_map(|cookie| cookie.split(';'))
-                    .filter_map(|pair| pair.trim().split_once('=').map(|(name, _)| name.into()))
-                    .collect(),
-            ));
-            self.encrypted_payloads.lock().unwrap().push(
-                request
-                    .form()
-                    .first()
-                    .map(|(_, value)| value.clone())
-                    .ok_or(Error::ProtocolUnavailable)?,
-            );
-            let body = self
-                .responses
-                .lock()
-                .unwrap()
-                .pop_front()
-                .ok_or(Error::ProtocolUnavailable)?;
-            Ok(Response {
-                status: 200,
-                body: serde_json::to_vec(&body).unwrap(),
-                set_cookies: vec![],
-            })
+        fn send(
+            &self,
+            request: Request,
+        ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
+            std::future::ready((|| {
+                self.observations.lock().unwrap().push((
+                    request.url().to_owned(),
+                    request
+                        .form()
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect(),
+                    request
+                        .headers()
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect(),
+                    request
+                        .cookie()
+                        .into_iter()
+                        .flat_map(|cookie| cookie.split(';'))
+                        .filter_map(|pair| pair.trim().split_once('=').map(|(name, _)| name.into()))
+                        .collect(),
+                ));
+                self.encrypted_payloads.lock().unwrap().push(
+                    request
+                        .form()
+                        .first()
+                        .map(|(_, value)| value.clone())
+                        .ok_or(Error::ProtocolUnavailable)?,
+                );
+                let body = self
+                    .responses
+                    .lock()
+                    .unwrap()
+                    .pop_front()
+                    .ok_or(Error::ProtocolUnavailable)?;
+                Ok(Response {
+                    status: 200,
+                    body: serde_json::to_vec(&body).unwrap(),
+                    set_cookies: vec![],
+                })
+            })())
         }
     }
 
     fn decode_mobile_request_payload(encrypted: &str) -> Value {
         let mut bytes = Vec::with_capacity(encrypted.len() / 2);
-        for pair in encrypted.as_bytes().chunks_exact(2) {
+        for pair in encrypted.as_bytes().as_chunks::<2>().0 {
             let text = std::str::from_utf8(pair).unwrap();
             bytes.push(u8::from_str_radix(text, 16).unwrap());
         }
@@ -1000,37 +1005,42 @@ mod qr_request_tests {
     }
 
     impl Transport for RecordingTransport {
-        async fn send(&self, request: Request) -> Result<Response, Error> {
-            self.requests.lock().unwrap().push((
-                request.url().to_owned(),
-                request
-                    .form()
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect(),
-                request
-                    .headers()
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect(),
-                request
-                    .cookie()
-                    .into_iter()
-                    .flat_map(|cookie| cookie.split(';'))
-                    .filter_map(|pair| pair.trim().split_once('=').map(|(name, _)| name.into()))
-                    .collect(),
-            ));
-            let body = self
-                .responses
-                .lock()
-                .unwrap()
-                .pop_front()
-                .ok_or(Error::ProtocolUnavailable)?;
-            Ok(Response {
-                status: 200,
-                body: serde_json::to_vec(&body).unwrap(),
-                set_cookies: vec![],
-            })
+        fn send(
+            &self,
+            request: Request,
+        ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
+            std::future::ready((|| {
+                self.requests.lock().unwrap().push((
+                    request.url().to_owned(),
+                    request
+                        .form()
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect(),
+                    request
+                        .headers()
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect(),
+                    request
+                        .cookie()
+                        .into_iter()
+                        .flat_map(|cookie| cookie.split(';'))
+                        .filter_map(|pair| pair.trim().split_once('=').map(|(name, _)| name.into()))
+                        .collect(),
+                ));
+                let body = self
+                    .responses
+                    .lock()
+                    .unwrap()
+                    .pop_front()
+                    .ok_or(Error::ProtocolUnavailable)?;
+                Ok(Response {
+                    status: 200,
+                    body: serde_json::to_vec(&body).unwrap(),
+                    set_cookies: vec![],
+                })
+            })())
         }
     }
 

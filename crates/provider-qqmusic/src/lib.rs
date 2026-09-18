@@ -1,6 +1,8 @@
+#![cfg_attr(test, allow(clippy::unused_async_trait_impl))]
+
 //! QQ Music provider mapping layer.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -20,22 +22,22 @@ use music_domain::{
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
     AlbumFavoriteMutationProvider, AlbumSearchProvider, AlbumTracksProvider, ArtistAlbumsProvider,
-    ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, CatalogError, CommentsError,
-    DailyRecommendationError, DailyRecommendationProvider, DesktopQuickAuthenticationAccount,
-    DesktopQuickAuthenticationError, DesktopQuickAuthenticationProvider,
-    DesktopQuickAuthenticationSession, FavoriteAlbumsProvider, FavoriteArtistsProvider,
-    LibraryMutationError, LyricsError, LyricsProvider, MediaResolutionError, MediaSourceResolver,
-    MusicProvider, MusicVideoError, NewAlbumReleasesProvider, NewSongsProvider,
-    OwnedPlaylistsProvider, PersonalizedPlaylistsError, PersonalizedPlaylistsProvider,
-    PersonalizedTracksError, PersonalizedTracksProvider, PlaylistCreationProvider,
-    PlaylistDeletionProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
-    PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
+    ArtistSearchProvider, ArtistTracksProvider, AuthenticationError, AuxiliaryLyricLine,
+    CatalogError, CommentsError, DailyRecommendationError, DailyRecommendationProvider,
+    DesktopQuickAuthenticationAccount, DesktopQuickAuthenticationError,
+    DesktopQuickAuthenticationProvider, DesktopQuickAuthenticationSession, FavoriteAlbumsProvider,
+    FavoriteArtistsProvider, LibraryMutationError, LyricsError, LyricsProvider,
+    MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
+    NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PersonalizedPlaylistsError,
+    PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
+    PlaylistCreationProvider, PlaylistDeletionProvider, PlaylistDetailsProvider,
+    PlaylistSearchProvider, PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
     QrAuthenticationChallenge, QrAuthenticationChannel, QrAuthenticationProgress,
     QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
     RadarRecommendationsProvider, RankingsProvider, RecentHistoryProvider, RecommendationError,
     RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider, SearchError,
     TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider,
-    UserLibraryError, UserPlaylistsProvider,
+    UserLibraryError, UserPlaylistsProvider, align_auxiliary_lyric_track,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialTransferError,
@@ -55,11 +57,11 @@ use qqmusic_client::{
     QqMusicRankingsError, QqMusicRecentPlaysError, QqMusicRecentPlaysPage,
     QqMusicRecentPlaysSnapshot, QqMusicRecentTrackSummary, QqMusicRecommendedPlaylist,
     QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError, QqMusicSearchError,
-    QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
-    QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError, QrImageMediaType, QrLoginChannel,
-    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
-    export_encrypted_credential_bundle, import_encrypted_credential_bundle,
+    QqMusicTimedLyricLine, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
+    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError,
+    QrImageMediaType, QrLoginChannel, WechatCredentialExchangeError, WechatQrError,
+    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    WechatQrLoginSession, export_encrypted_credential_bundle, import_encrypted_credential_bundle,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -2900,21 +2902,50 @@ fn map_lyrics(
     track_id: TrackId,
     lyrics: &QqMusicLyrics,
 ) -> Result<SynchronizedLyrics, LyricsError> {
-    let translations = unique_auxiliary_by_start(
+    const AUXILIARY_TOLERANCE_MS: u32 = 10;
+
+    let translations = normalize_qq_auxiliary(
         lyrics
             .translation()
             .iter()
             .map(|line| (line.start_ms(), line.text())),
+        QqAuxiliaryTrack::Translation,
     );
-    let romanizations = unique_auxiliary_by_start(
+    let romanizations = normalize_qq_auxiliary(
         lyrics
             .romanization()
             .iter()
             .map(|line| (line.start_ms(), line.text())),
+        QqAuxiliaryTrack::Romanization,
+    );
+    let original_starts = lyrics
+        .original()
+        .iter()
+        .map(QqMusicTimedLyricLine::start_ms)
+        .collect::<Vec<_>>();
+    let translation_rows = translations
+        .lines
+        .iter()
+        .map(|(start_ms, text)| AuxiliaryLyricLine::new(*start_ms, text))
+        .collect::<Vec<_>>();
+    let romanization_rows = romanizations
+        .lines
+        .iter()
+        .map(|(start_ms, text)| AuxiliaryLyricLine::new(*start_ms, text))
+        .collect::<Vec<_>>();
+    let translation_alignment =
+        align_auxiliary_lyric_track(&original_starts, &translation_rows, AUXILIARY_TOLERANCE_MS);
+    let romanization_alignment =
+        align_auxiliary_lyric_track(&original_starts, &romanization_rows, AUXILIARY_TOLERANCE_MS);
+    lyric_alignment_debug("translation", &translations, translation_alignment.stats());
+    lyric_alignment_debug(
+        "romanization",
+        &romanizations,
+        romanization_alignment.stats(),
     );
     let mut lines = Vec::with_capacity(lyrics.original().len());
     let mut omitted_line_count = lyrics.omitted_line_count();
-    for line in lyrics.original() {
+    for (original_index, line) in lyrics.original().iter().enumerate() {
         let segments = line
             .segments()
             .iter()
@@ -2927,8 +2958,16 @@ fn map_lyrics(
             SynchronizedLyricLine::new(line.text(), line.start_ms(), line.duration_ms(), segments)
                 .map(|mapped| {
                     mapped
-                        .with_translation(auxiliary_at(&translations, line.start_ms()))
-                        .with_romanization(auxiliary_at(&romanizations, line.start_ms()))
+                        .with_translation(aligned_auxiliary_text(
+                            &translations.lines,
+                            &translation_alignment,
+                            original_index,
+                        ))
+                        .with_romanization(aligned_auxiliary_text(
+                            &romanizations.lines,
+                            &romanization_alignment,
+                            original_index,
+                        ))
                 })
                 .map_err(|_| LyricsError::InvalidResponse)
         });
@@ -2947,25 +2986,86 @@ fn map_lyrics(
         .map_err(|_| LyricsError::InvalidResponse)
 }
 
-fn unique_auxiliary_by_start<'a>(
-    lines: impl IntoIterator<Item = (u32, &'a str)>,
-) -> HashMap<u32, Option<&'a str>> {
-    let mut by_start = HashMap::new();
-    for (start_ms, text) in lines {
-        by_start
-            .entry(start_ms)
-            .and_modify(|current| *current = None)
-            .or_insert(Some(text));
-    }
-    by_start
+#[derive(Clone, Copy)]
+enum QqAuxiliaryTrack {
+    Translation,
+    Romanization,
 }
 
-fn auxiliary_at(by_start: &HashMap<u32, Option<&str>>, start_ms: u32) -> Option<String> {
-    by_start
-        .get(&start_ms)
-        .copied()
-        .flatten()
-        .map(str::to_owned)
+struct NormalizedQqAuxiliaryTrack {
+    lines: Vec<(u32, String)>,
+    raw_line_count: usize,
+    placeholder_omitted: usize,
+}
+
+fn normalize_qq_auxiliary<'a>(
+    lines: impl IntoIterator<Item = (u32, &'a str)>,
+    track: QqAuxiliaryTrack,
+) -> NormalizedQqAuxiliaryTrack {
+    let mut normalized = NormalizedQqAuxiliaryTrack {
+        lines: Vec::new(),
+        raw_line_count: 0,
+        placeholder_omitted: 0,
+    };
+    for (start_ms, text) in lines {
+        normalized.raw_line_count = normalized.raw_line_count.saturating_add(1);
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        if matches!(track, QqAuxiliaryTrack::Translation) && text == "//" {
+            normalized.placeholder_omitted = normalized.placeholder_omitted.saturating_add(1);
+            continue;
+        }
+        normalized.lines.push((start_ms, text.to_owned()));
+    }
+    normalized
+}
+
+fn aligned_auxiliary_text(
+    lines: &[(u32, String)],
+    alignment: &provider_api::LyricAuxiliaryAlignment,
+    original_index: usize,
+) -> Option<String> {
+    alignment
+        .auxiliary_index_for_original(original_index)
+        .and_then(|index| lines.get(index))
+        .map(|(_, text)| text.clone())
+}
+
+fn lyric_alignment_debug(
+    auxiliary: &str,
+    track: &NormalizedQqAuxiliaryTrack,
+    stats: provider_api::LyricAuxiliaryAlignmentStats,
+) {
+    if std::env::var_os("FURA_LYRIC_ALIGNMENT_DEBUG").is_none() {
+        return;
+    }
+    let [
+        delta_0,
+        delta_1_20,
+        delta_21_100,
+        delta_101_250,
+        delta_251_500,
+        delta_over_500,
+    ] = stats.nearest_delta_buckets;
+    eprintln!(
+        "FURA_DIAGNOSTIC lyric_alignment provider=qq aux={auxiliary} raw_lines={} normalized_lines={} placeholder_omitted={} exact_matches={} near_matches={} ambiguous={} unmatched={} deduplicated={} delta_0={} delta_1_20={} delta_21_100={} delta_101_250={} delta_251_500={} delta_over_500={}",
+        track.raw_line_count,
+        track.lines.len(),
+        track.placeholder_omitted,
+        stats.exact_matches,
+        stats.near_matches,
+        stats.ambiguous_rows,
+        stats.unmatched_rows,
+        stats.deduplicated_rows,
+        delta_0,
+        delta_1_20,
+        delta_21_100,
+        delta_101_250,
+        delta_251_500,
+        delta_over_500,
+    );
 }
 
 fn map_owned_playlists_error<E>(error: &QqMusicOwnedPlaylistsError<E>) -> UserLibraryError {
@@ -8334,19 +8434,50 @@ mod tests {
     }
 
     #[test]
-    fn ambiguous_auxiliary_timestamps_are_not_attached() {
-        let by_start = super::unique_auxiliary_by_start([
-            (1_000, "first"),
-            (1_000, "duplicate"),
-            (2_000, "unique"),
-        ]);
-
-        assert_eq!(super::auxiliary_at(&by_start, 1_000), None);
-        assert_eq!(
-            super::auxiliary_at(&by_start, 2_000),
-            Some("unique".to_owned())
+    fn qq_auxiliary_normalization_is_track_scoped_and_placeholder_exact() {
+        let translation = super::normalize_qq_auxiliary(
+            [
+                (1_000, "//"),
+                (2_000, " // "),
+                (3_000, "/"),
+                (4_000, "///"),
+                (5_000, "I // you"),
+                (6_000, "  Translation fixture  "),
+                (7_000, "   "),
+            ],
+            super::QqAuxiliaryTrack::Translation,
         );
-        assert_eq!(super::auxiliary_at(&by_start, 3_000), None);
+        assert_eq!(translation.raw_line_count, 7);
+        assert_eq!(translation.placeholder_omitted, 2);
+        assert_eq!(
+            translation.lines,
+            vec![
+                (3_000, "/".to_owned()),
+                (4_000, "///".to_owned()),
+                (5_000, "I // you".to_owned()),
+                (6_000, "Translation fixture".to_owned()),
+            ]
+        );
+
+        let romanization = super::normalize_qq_auxiliary(
+            [(1_000, "//"), (2_000, "Roma fixture")],
+            super::QqAuxiliaryTrack::Romanization,
+        );
+        assert_eq!(romanization.placeholder_omitted, 0);
+        assert_eq!(romanization.lines[0].1, "//");
+        assert_eq!(romanization.lines[1].1, "Roma fixture");
+
+        let rows = translation
+            .lines
+            .iter()
+            .map(|(start_ms, text)| provider_api::AuxiliaryLyricLine::new(*start_ms, text))
+            .collect::<Vec<_>>();
+        let alignment =
+            provider_api::align_auxiliary_lyric_track(&[2_990, 4_000, 5_000, 6_000], &rows, 10);
+        assert_eq!(alignment.auxiliary_index_for_original(0), Some(0));
+        assert_eq!(alignment.auxiliary_index_for_original(1), Some(1));
+        assert_eq!(alignment.stats().near_matches, 1);
+        assert_eq!(alignment.stats().exact_matches, 3);
     }
 
     #[tokio::test]

@@ -6,7 +6,10 @@ struct FakeTransport {
     requests: Mutex<Vec<Request>>,
 }
 impl Transport for FakeTransport {
-    async fn send(&self, request: Request) -> Result<Response, Error> {
+    fn send(
+        &self,
+        request: Request,
+    ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
         assert_eq!(
             request.url(),
             "https://interface.music.163.com/eapi/cloudsearch/pc"
@@ -20,11 +23,11 @@ impl Transport for FakeTransport {
             ["params"]
         );
         self.requests.lock().unwrap().push(request);
-        Ok(Response {
+        std::future::ready(Ok(Response {
             status: 200,
             body: serde_json::to_vec(&self.responses.lock().unwrap().remove(0)).unwrap(),
             set_cookies: vec![],
-        })
+        }))
     }
 }
 fn client(value: Value) -> NeteaseClient<FakeTransport> {
