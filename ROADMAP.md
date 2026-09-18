@@ -2,6 +2,37 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Human Review Workstream — lyric auxiliary-track alignment (HD-034)
+
+**Goal:** preserve original and word-timed lyrics while safely attaching QQ Music
+and NetEase translation/romanization tracks across evidenced small timestamp
+drift, and give the user one persisted provider-neutral presentation choice.
+
+**Machine checkpoint, 2026-09-18:** QQ translation omits only the exact trimmed
+`//` placeholder; QQ and NetEase keep translation and romanization independently;
+NetEase parses `romalrc`; and both Providers use one exact-first, 10 ms bounded,
+monotonic, one-to-one, ambiguity-safe helper. Flutter Settings schema 6 defaults
+to Auto and persists Auto/Translation/Pronunciation/Off. The playback bar exposes
+the localized accessible selector across 320/mobile/desktop/wide layouts, renders
+at most one auxiliary line, retains explicit-mode no-fallback behavior, and
+preserves active-line timing, seek, follow and manual-scroll ownership. Synthetic
+fixtures contain no copyrighted lyrics, and opt-in diagnostics contain only
+counts/delta buckets. Rust format, 585 tests (27 live/Human ignored), strict
+all-target Clippy, Flutter localization/format/analyze, 652 tests, Linux Release,
+and Android ARM64 Release pass. See
+[Lyric auxiliary-track alignment](docs/research/lyric-auxiliary-track-alignment.md).
+
+**Boundaries:** no machine translation, language detection, cross-Provider lyric
+fallback, original-timestamp movement, Flutter-side alignment/placeholder rule,
+live credential use, retained lyric content, playback-engine change, or wider
+matching window. Optional auxiliary corruption remains isolated from the valid
+original document.
+
+**Next gate:** Human reviews one QQ Japanese Track, one QQ English Track with a
+known small delta, and one NetEase Track with translation/romanization. Only
+content-free counts, availability and delta buckets may be retained. No
+autonomous implementation work remains and no push is authorized.
+
 ## Human Decision Workstream — playback-stack bake-off (HD-033)
 
 **Goal:** compare `audioplayers` with `media_kit` and `audio_service` with

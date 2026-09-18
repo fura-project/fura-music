@@ -2,14 +2,40 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: HUMAN_DECISION
-  acceptance_milestone: HD-033
-  active_workstream: PLAYBACK_STACK_BAKEOFF
-  current_task: PLAYBACK_STACK_BAKEOFF_MACHINE_COMPLETE
-  next_action: HUMAN_IOS_FOCUS_DECISION_AND_ANDROID_RUNTIME_MATRIX
+  state: HUMAN_REVIEW
+  acceptance_milestone: HD-034
+  active_workstream: LYRIC_AUXILIARY_TRACK_ALIGNMENT
+  current_task: LYRIC_AUXILIARY_MACHINE_COMPLETE
+  next_action: HUMAN_QQ_NETEASE_REAL_TRACK_REVIEW
 ---
 
 # Current State
+
+- **2026-09-18 HD-034 lyric auxiliary-track machine checkpoint:** from starting
+  HEAD `18177ecda96c98f306d6596a4f0deb65d64c679f`, QQ translation now omits only
+  the exact trimmed `//` placeholder while original, romanization and legitimate
+  slash content remain intact. One small provider-neutral helper aligns QQ and
+  NetEase translation/romanization independently: unique exact timestamps first,
+  then mutually unique nearest pairs inside the Human-observed 10 ms bound,
+  preserving one-to-one monotonic order and rejecting ties, conflicts, crossings
+  and out-of-window rows. NetEase independently parses optional `romalrc`; any
+  missing, malformed or oversized optional document still cannot discard valid
+  original lyrics. `FURA_LYRIC_ALIGNMENT_DEBUG` is opt-in and emits only coarse
+  counts/delta buckets. Flutter Settings schema 6 persists global
+  Auto/Translation/Pronunciation/Off, defaults and migrates to Auto, never
+  rewrites the preference for a Track missing that auxiliary, and changes only
+  presentation. The localized accessible playback-bar selector fits
+  320/mobile/desktop/wide surfaces, produces at most one auxiliary semantic/text
+  row, keeps explicit modes from falling back, recenters the same active original
+  only while following, and preserves manual scroll, seek and word timing. Rust
+  format, 585/585 workspace and all-target tests (27 live/Human ignored), strict
+  all-target Clippy, Flutter localization/format/analyze, 652/652 tests, Linux
+  Release and Android ARM64 Release all pass; the APK is 45,546,082 bytes. No live
+  Provider request, account access, lyric body, copyrighted fixture, cache clean,
+  playback-stack change or push occurred. Only Human checks of one QQ Japanese,
+  one QQ English small-delta, and one NetEase auxiliary-bearing Track remain
+  `HUMAN_REVIEW`; see
+  [the alignment evidence](docs/research/lyric-auxiliary-track-alignment.md).
 
 - **2026-09-18 HD-033 playback-stack bake-off:** from starting HEAD
   `a2a0c40532f7c55f58d86ab5ad742c9cac645d44`, Fura now has a developer-only,

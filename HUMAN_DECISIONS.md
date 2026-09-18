@@ -562,3 +562,41 @@ change the dependency, or revise the ownership rule. Until that decision and
 the Android physical matrix pass, A remains the production default and no
 cleanup migration is authorized. See
 [the HD-033 bake-off](docs/research/playback-stack-bakeoff.md).
+
+## HD-034 — Lyric auxiliary-track alignment and presentation
+
+**Status:** Accepted by explicit Human instruction on 2026-09-18; real-song
+content/presentation remains Human review.
+
+**Decision:** Model Provider-supplied translation and romanization as independent
+timed auxiliary tracks over the unchanged original lyric. QQ Music omits only an
+exact trimmed `//` translation placeholder; it does not rewrite original,
+romanization, `/`, `///`, or embedded `//`. NetEase may parse the independently
+corroborated `romalrc` field alongside `lrc` and `tlyric`. Both Providers use one
+small provider-neutral alignment primitive: unique exact timestamps first, then
+mutually unique nearest pairs inside a conservative 10 ms bound, with one-to-one
+monotonic ordering and no tie, conflict, crossing, or out-of-window guess.
+
+Flutter persists one global `LyricAuxiliaryMode`: Auto, Translation,
+Pronunciation (internal romanization), or Off. Auto chooses translation per line,
+then romanization; explicit modes never substitute the other track. At most one
+auxiliary text/semantics node accompanies an original line. The playback bar is
+the primary responsive selector; switching changes presentation only and does
+not refetch lyrics or media. Existing word timing, active original selection,
+seek, follow-current and manual-scroll state remain authoritative.
+
+**Boundaries:** Provider parsers remain independent; optional auxiliary failure
+cannot erase a valid original. No language/script inference, machine translation,
+cross-Provider lookup, timestamp movement, unlimited nearest match, copyrighted
+fixture, lyric-content diagnostic, Provider-specific UI preference, playback
+stack change, account automation, or live request is authorized. A wider
+tolerance requires new sanitized evidence and review. See
+[the HD-034 evidence and policy](docs/research/lyric-auxiliary-track-alignment.md).
+
+**Machine checkpoint:** Rust format, both workspace test modes (585 passed, 27
+live/Human ignored), strict all-target Clippy, Flutter localization/format/analyze,
+all 652 Flutter tests, Linux Release and Android ARM64 Release pass. Machine work
+is complete. Human checks one QQ Japanese Track, one QQ English Track with a
+known small timestamp delta, and one NetEase Track with available auxiliary
+tracks; observations retain only counts, presence and delta buckets. Commits
+remain local and no push is authorized.
