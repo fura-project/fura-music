@@ -13,6 +13,8 @@ void main() {
     final lyrics = result.lyrics!;
     expect(lyrics.lines, hasLength(1));
     expect(lyrics.hasWordTiming, isTrue);
+    expect(lyrics.hasTranslation, isTrue);
+    expect(lyrics.hasRomanization, isTrue);
     final line = lyrics.lines.single;
     expect(line.text, 'private original');
     expect(line.startMs, 1000);

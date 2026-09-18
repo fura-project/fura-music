@@ -8,6 +8,7 @@ import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 
 Future<void> showLyrics(
   BuildContext context,
@@ -75,6 +76,7 @@ class LyricPanel extends StatelessWidget {
     this.onSeek,
     this.showCloseButton = true,
     this.immersive = false,
+    this.auxiliaryMode = LyricAuxiliaryMode.auto,
     super.key,
   });
 
@@ -86,6 +88,7 @@ class LyricPanel extends StatelessWidget {
   final Future<void> Function(int positionMs)? onSeek;
   final bool showCloseButton;
   final bool immersive;
+  final LyricAuxiliaryMode auxiliaryMode;
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +170,7 @@ class LyricPanel extends StatelessWidget {
           controller: controller,
           onSeek: seekEnabled ? onSeek : null,
           immersive: immersive,
+          auxiliaryMode: auxiliaryMode,
         ),
         LyricStage.unavailable => _LyricMessage(
           key: const ValueKey('lyrics-unavailable'),
@@ -249,12 +253,14 @@ class _LyricContent extends StatefulWidget {
   const _LyricContent({
     required this.controller,
     required this.immersive,
+    required this.auxiliaryMode,
     this.onSeek,
     super.key,
   });
 
   final LyricController controller;
   final bool immersive;
+  final LyricAuxiliaryMode auxiliaryMode;
   final Future<void> Function(int positionMs)? onSeek;
 
   @override
@@ -268,6 +274,19 @@ class _LyricContentState extends State<_LyricContent> {
   int? _lastActiveLineIndex;
   int _followAttempt = 0;
   bool _following = true;
+
+  @override
+  void didUpdateWidget(_LyricContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.auxiliaryMode == widget.auxiliaryMode || !_following) return;
+    final activeLineIndex = widget.controller.activeSelection?.lineIndex;
+    if (activeLineIndex != null) {
+      _scheduleFollow(
+        activeLineIndex,
+        widget.controller.lyrics?.lines.length ?? 0,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -327,6 +346,7 @@ class _LyricContentState extends State<_LyricContent> {
                         lineIndex: index,
                         active: index == activeLineIndex,
                         immersive: widget.immersive,
+                        auxiliaryMode: widget.auxiliaryMode,
                         positionMs: widget.controller.positionMs,
                         onSeek: widget.onSeek == null
                             ? null
@@ -435,6 +455,7 @@ class _LyricLine extends StatelessWidget {
     required this.lineIndex,
     required this.active,
     required this.immersive,
+    required this.auxiliaryMode,
     required this.positionMs,
     this.onSeek,
     super.key,
@@ -444,6 +465,7 @@ class _LyricLine extends StatelessWidget {
   final int lineIndex;
   final bool active;
   final bool immersive;
+  final LyricAuxiliaryMode auxiliaryMode;
   final int positionMs;
   final VoidCallback? onSeek;
 
@@ -466,6 +488,15 @@ class _LyricLine extends StatelessWidget {
     final segmentsComposeLine =
         line.segments.isNotEmpty &&
         line.segments.map((segment) => segment.text).join() == line.text;
+    final (auxiliaryText, auxiliaryIsRomanization) = switch (auxiliaryMode) {
+      LyricAuxiliaryMode.auto =>
+        line.translation != null
+            ? (line.translation, false)
+            : (line.romanization, true),
+      LyricAuxiliaryMode.translation => (line.translation, false),
+      LyricAuxiliaryMode.romanization => (line.romanization, true),
+      LyricAuxiliaryMode.off => (null, false),
+    };
 
     return Semantics(
       selected: active,
@@ -512,38 +543,31 @@ class _LyricLine extends StatelessWidget {
                 )
               else
                 Text(line.text, style: textStyle),
-              if (line.translation case final translation?) ...[
+              if (auxiliaryText case final auxiliary?) ...[
                 const SizedBox(height: 6),
                 Text(
-                  translation,
-                  key: ValueKey('lyrics-translation-$lineIndex'),
-                  softWrap: true,
-                  maxLines: null,
-                  overflow: TextOverflow.visible,
-                  textWidthBasis: TextWidthBasis.parent,
-                  style:
-                      (immersive
-                              ? theme.textTheme.bodyLarge
-                              : theme.textTheme.bodyMedium)
-                          ?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            height: 1.4,
-                          ),
-                ),
-              ],
-              if (line.romanization case final romanization?) ...[
-                const SizedBox(height: 4),
-                Text(
-                  romanization,
-                  key: ValueKey('lyrics-romanization-$lineIndex'),
-                  softWrap: true,
-                  maxLines: null,
-                  overflow: TextOverflow.visible,
-                  textWidthBasis: TextWidthBasis.parent,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontStyle: FontStyle.italic,
+                  auxiliary,
+                  key: ValueKey(
+                    auxiliaryIsRomanization
+                        ? 'lyrics-romanization-$lineIndex'
+                        : 'lyrics-translation-$lineIndex',
                   ),
+                  softWrap: true,
+                  maxLines: null,
+                  overflow: TextOverflow.visible,
+                  textWidthBasis: TextWidthBasis.parent,
+                  style: auxiliaryIsRomanization
+                      ? theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        )
+                      : (immersive
+                                ? theme.textTheme.bodyLarge
+                                : theme.textTheme.bodyMedium)
+                            ?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                            ),
                 ),
               ],
             ],

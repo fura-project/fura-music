@@ -69,12 +69,16 @@ class SynchronizedLyrics {
   final List<SynchronizedLyricLine> lines;
   final int omittedLineCount;
   bool get hasWordTiming => lines.any((line) => line.segments.isNotEmpty);
+  bool get hasTranslation => lines.any((line) => line.translation != null);
+  bool get hasRomanization => lines.any((line) => line.romanization != null);
 
   @override
   String toString() =>
       'SynchronizedLyrics(lineCount: ${lines.length}, '
       'omittedLineCount: $omittedLineCount, '
-      'hasWordTiming: $hasWordTiming)';
+      'hasWordTiming: $hasWordTiming, '
+      'hasTranslation: $hasTranslation, '
+      'hasRomanization: $hasRomanization)';
 }
 
 class LyricLoadResult {

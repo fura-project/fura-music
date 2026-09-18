@@ -2833,6 +2833,36 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get lyricsAuxiliaryMode => '歌词辅助内容';
+
+  @override
+  String get lyricsAuxiliaryAuto => '自动';
+
+  @override
+  String get lyricsAuxiliaryTranslation => '翻译';
+
+  @override
+  String get lyricsAuxiliaryPronunciation => '注音';
+
+  @override
+  String get lyricsAuxiliaryOff => '关闭';
+
+  @override
+  String lyricsAuxiliaryTooltip(Object mode) {
+    return '歌词辅助内容：$mode';
+  }
+
+  @override
+  String lyricsAuxiliaryChanged(Object mode) {
+    return '歌词辅助内容已切换为$mode。';
+  }
+
+  @override
+  String playbackOptionsTooltip(Object quality, Object mode) {
+    return '播放选项。音质：$quality。歌词辅助内容：$mode';
+  }
+
+  @override
   String get commentsTitle => '评论';
 
   @override

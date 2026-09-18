@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
@@ -24,6 +25,9 @@ const _mobileNowPlayingHeight = 68.0;
 
 typedef PlaybackQualityPreferenceChanged = Future<void> Function(
   AppPlaybackQualityPreference preference,
+);
+typedef LyricAuxiliaryModeChanged = Future<bool> Function(
+  LyricAuxiliaryMode mode,
 );
 
 /// Presentation-only callbacks for opening already-validated catalog context
@@ -55,6 +59,8 @@ class NowPlayingBar extends StatelessWidget {
     required this.onSignInAgain,
     this.qualityPreference,
     this.onQualityPreferenceChanged,
+    this.lyricAuxiliaryMode,
+    this.onLyricAuxiliaryModeChanged,
     super.key,
   }) : _expanded = false;
 
@@ -63,6 +69,8 @@ class NowPlayingBar extends StatelessWidget {
     required this.onSignInAgain,
     this.qualityPreference,
     this.onQualityPreferenceChanged,
+    this.lyricAuxiliaryMode,
+    this.onLyricAuxiliaryModeChanged,
     super.key,
   }) : _expanded = true;
 
@@ -70,6 +78,8 @@ class NowPlayingBar extends StatelessWidget {
   final VoidCallback onSignInAgain;
   final AppPlaybackQualityPreference? qualityPreference;
   final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
+  final LyricAuxiliaryMode? lyricAuxiliaryMode;
+  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
   final bool _expanded;
 
   @override
@@ -99,6 +109,8 @@ class NowPlayingBar extends StatelessWidget {
           onSignInAgain: onSignInAgain,
           qualityPreference: qualityPreference,
           onQualityPreferenceChanged: onQualityPreferenceChanged,
+          lyricAuxiliaryMode: lyricAuxiliaryMode,
+          onLyricAuxiliaryModeChanged: onLyricAuxiliaryModeChanged,
         );
       } else if (MediaQuery.sizeOf(context).width < 640) {
         bar = _CompactNowPlayingBar(
@@ -110,6 +122,8 @@ class NowPlayingBar extends StatelessWidget {
           onOpenExpanded: expandedNavigation?.onOpen,
           qualityPreference: qualityPreference,
           onQualityPreferenceChanged: onQualityPreferenceChanged,
+          lyricAuxiliaryMode: lyricAuxiliaryMode,
+          onLyricAuxiliaryModeChanged: onLyricAuxiliaryModeChanged,
         );
       } else {
         bar = SafeArea(
@@ -136,6 +150,8 @@ class NowPlayingBar extends StatelessWidget {
                   onOpenExpanded: expandedNavigation?.onOpen,
                   qualityPreference: qualityPreference,
                   onQualityPreferenceChanged: onQualityPreferenceChanged,
+                  lyricAuxiliaryMode: lyricAuxiliaryMode,
+                  onLyricAuxiliaryModeChanged: onLyricAuxiliaryModeChanged,
                 ),
               ),
             ),
@@ -190,6 +206,8 @@ class _CompactNowPlayingBar extends StatelessWidget {
     required this.onOpenExpanded,
     required this.qualityPreference,
     required this.onQualityPreferenceChanged,
+    required this.lyricAuxiliaryMode,
+    required this.onLyricAuxiliaryModeChanged,
   });
 
   final QueuePlaybackController controller;
@@ -200,62 +218,134 @@ class _CompactNowPlayingBar extends StatelessWidget {
   final VoidCallback? onOpenExpanded;
   final AppPlaybackQualityPreference? qualityPreference;
   final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
+  final LyricAuxiliaryMode? lyricAuxiliaryMode;
+  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
 
   @override
   Widget build(BuildContext context) {
     final playback = controller.playback;
     final colors = Theme.of(context).colorScheme;
-    final row = SizedBox(
-      height: _mobileNowPlayingHeight,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          children: [
-            _NowPlayingArtwork(
-              track: track,
-              stage: playback.stage,
-              dimension: 48,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _TrackInfo(
-                track: track,
-                status: _statusCopy(context.l10n, controller),
-                error: error,
-              ),
-            ),
-            if (authenticationFailure)
-              TextButton(
-                key: const ValueKey('now-playing-sign-in-again'),
-                onPressed: onSignInAgain,
-                child: Text(context.l10n.playbackSignIn),
-              )
-            else
-              IconButton.filled(
-                key: const ValueKey('now-playing-primary-action'),
-                tooltip: _primaryTooltip(context.l10n, playback.stage),
-                onPressed: playback.canActivate
-                    ? () => unawaited(playback.activate())
-                    : null,
-                constraints: const BoxConstraints.tightFor(
-                  width: 42,
-                  height: 42,
-                ),
-                icon: Icon(_primaryIcon(playback.stage)),
-              ),
-            if (qualityPreference case final preference?)
-              if (onQualityPreferenceChanged case final onChanged?)
-                _PlaybackQualityButton(
-                  preference: preference,
-                  actualQuality: playback.resolvedQuality,
-                  onChanged: onChanged,
-                ),
-            _QueueButton(controller: controller),
-          ],
-        ),
-      ),
-    );
     final onOpenExpanded = this.onOpenExpanded;
+    final row = LayoutBuilder(
+      builder: (context, constraints) {
+        final hasLyricSelector =
+            lyricAuxiliaryMode != null && onLyricAuxiliaryModeChanged != null;
+        final hasQualitySelector =
+            qualityPreference != null && onQualityPreferenceChanged != null;
+        final combineOptions =
+            constraints.maxWidth <= 360 &&
+            hasLyricSelector &&
+            hasQualitySelector;
+        return SizedBox(
+          height: _mobileNowPlayingHeight,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final identity = Row(
+                        children: [
+                          _NowPlayingArtwork(
+                            track: track,
+                            stage: playback.stage,
+                            dimension: 48,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _TrackInfo(
+                              track: track,
+                              status: _statusCopy(context.l10n, controller),
+                              error: error,
+                            ),
+                          ),
+                        ],
+                      );
+                      if (onOpenExpanded == null) return identity;
+                      return Tooltip(
+                        message: context.l10n.playbackOpenNowPlaying,
+                        child: Semantics(
+                          key: const ValueKey('now-playing-open-expanded'),
+                          button: true,
+                          container: true,
+                          explicitChildNodes: true,
+                          label: context.l10n.playbackOpenNowPlayingFor(
+                            track.title,
+                          ),
+                          onTap: onOpenExpanded,
+                          child: InkWell(
+                            onTap: onOpenExpanded,
+                            excludeFromSemantics: true,
+                            child: identity,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (authenticationFailure)
+                  TextButton(
+                    key: const ValueKey('now-playing-sign-in-again'),
+                    onPressed: onSignInAgain,
+                    child: Text(context.l10n.playbackSignIn),
+                  )
+                else
+                  IconButton.filled(
+                    key: const ValueKey('now-playing-primary-action'),
+                    tooltip: _primaryTooltip(context.l10n, playback.stage),
+                    onPressed: playback.canActivate
+                        ? () => unawaited(playback.activate())
+                        : null,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 42,
+                      height: 42,
+                    ),
+                    icon: Icon(_primaryIcon(playback.stage)),
+                  ),
+                if (combineOptions)
+                  _PlaybackOptionsButton(
+                    key: constraints.maxWidth > 320
+                        ? const ValueKey('now-playing-quality')
+                        : const ValueKey('now-playing-lyric-auxiliary'),
+                    preference: qualityPreference!,
+                    actualQuality: playback.resolvedQuality,
+                    onQualityChanged: onQualityPreferenceChanged!,
+                    lyricMode: lyricAuxiliaryMode!,
+                    hasTranslation:
+                        controller.lyrics?.lyrics?.hasTranslation ?? false,
+                    hasRomanization:
+                        controller.lyrics?.lyrics?.hasRomanization ?? false,
+                    onLyricChanged: onLyricAuxiliaryModeChanged!,
+                    exposeLyricKey: constraints.maxWidth > 320,
+                    dimension: 40,
+                  )
+                else ...[
+                  if (hasLyricSelector)
+                    _LyricAuxiliaryButton(
+                      mode: lyricAuxiliaryMode!,
+                      hasTranslation:
+                          controller.lyrics?.lyrics?.hasTranslation ?? false,
+                      hasRomanization:
+                          controller.lyrics?.lyrics?.hasRomanization ?? false,
+                      onChanged: onLyricAuxiliaryModeChanged!,
+                      dimension: 40,
+                    ),
+                  if (hasQualitySelector)
+                    _PlaybackQualityButton(
+                      preference: qualityPreference!,
+                      actualQuality: playback.resolvedQuality,
+                      onChanged: onQualityPreferenceChanged!,
+                      dimension: 40,
+                    ),
+                ],
+                _QueueButton(controller: controller, dimension: 40),
+              ],
+            ),
+          ),
+        );
+      },
+    );
     return SafeArea(
       top: false,
       bottom: false,
@@ -269,24 +359,7 @@ class _CompactNowPlayingBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(28),
           ),
           clipBehavior: Clip.antiAlias,
-          child: onOpenExpanded == null
-              ? row
-              : Tooltip(
-                  message: context.l10n.playbackOpenNowPlaying,
-                  child: Semantics(
-                    key: const ValueKey('now-playing-open-expanded'),
-                    button: true,
-                    container: true,
-                    explicitChildNodes: true,
-                    label: context.l10n.playbackOpenNowPlayingFor(track.title),
-                    onTap: onOpenExpanded,
-                    child: InkWell(
-                      onTap: onOpenExpanded,
-                      excludeFromSemantics: true,
-                      child: row,
-                    ),
-                  ),
-                ),
+          child: row,
         ),
       ),
     );
@@ -303,6 +376,8 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
     required this.onOpenExpanded,
     required this.qualityPreference,
     required this.onQualityPreferenceChanged,
+    required this.lyricAuxiliaryMode,
+    required this.onLyricAuxiliaryModeChanged,
   });
 
   final QueuePlaybackController controller;
@@ -313,6 +388,8 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
   final VoidCallback? onOpenExpanded;
   final AppPlaybackQualityPreference? qualityPreference;
   final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
+  final LyricAuxiliaryMode? lyricAuxiliaryMode;
+  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -391,6 +468,16 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
               key: const ValueKey('now-playing-utility-zone'),
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (lyricAuxiliaryMode case final mode?)
+                  if (onLyricAuxiliaryModeChanged case final onChanged?)
+                    _LyricAuxiliaryButton(
+                      mode: mode,
+                      hasTranslation:
+                          controller.lyrics?.lyrics?.hasTranslation ?? false,
+                      hasRomanization:
+                          controller.lyrics?.lyrics?.hasRomanization ?? false,
+                      onChanged: onChanged,
+                    ),
                 if (qualityPreference case final preference?)
                   if (onQualityPreferenceChanged case final onChanged?)
                     _PlaybackQualityButton(
@@ -417,6 +504,8 @@ class _ExpandedPlaybackControls extends StatelessWidget {
     required this.onSignInAgain,
     required this.qualityPreference,
     required this.onQualityPreferenceChanged,
+    required this.lyricAuxiliaryMode,
+    required this.onLyricAuxiliaryModeChanged,
   });
 
   final QueuePlaybackController controller;
@@ -425,6 +514,8 @@ class _ExpandedPlaybackControls extends StatelessWidget {
   final VoidCallback onSignInAgain;
   final AppPlaybackQualityPreference? qualityPreference;
   final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
+  final LyricAuxiliaryMode? lyricAuxiliaryMode;
+  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -480,6 +571,8 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                       onSignInAgain: onSignInAgain,
                       qualityPreference: qualityPreference,
                       onQualityPreferenceChanged: onQualityPreferenceChanged,
+                      lyricAuxiliaryMode: lyricAuxiliaryMode,
+                      onLyricAuxiliaryModeChanged: onLyricAuxiliaryModeChanged,
                     );
                   }
                   final transport = _transportControls(
@@ -491,6 +584,19 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                     buttonSize: 48,
                   );
                   final utilities = <Widget>[
+                    if (lyricAuxiliaryMode case final mode?)
+                      if (onLyricAuxiliaryModeChanged case final onChanged?)
+                        _LyricAuxiliaryButton(
+                          mode: mode,
+                          hasTranslation:
+                              controller.lyrics?.lyrics?.hasTranslation ??
+                              false,
+                          hasRomanization:
+                              controller.lyrics?.lyrics?.hasRomanization ??
+                              false,
+                          onChanged: onChanged,
+                          dimension: 48,
+                        ),
                     if (qualityPreference case final preference?)
                       if (onQualityPreferenceChanged case final onChanged?)
                         _PlaybackQualityButton(
@@ -545,6 +651,8 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
     required this.onSignInAgain,
     required this.qualityPreference,
     required this.onQualityPreferenceChanged,
+    required this.lyricAuxiliaryMode,
+    required this.onLyricAuxiliaryModeChanged,
   });
 
   static const _secondaryExtent = 40.0;
@@ -552,13 +660,14 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
   static const _minimumGap = 2.0;
   static const _preferredGap = 4.0;
   static const _horizontalInset = 4.0;
-  static const _qualityFallbackWidth = 320.0;
 
   final QueuePlaybackController controller;
   final bool authenticationFailure;
   final VoidCallback onSignInAgain;
   final AppPlaybackQualityPreference? qualityPreference;
   final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
+  final LyricAuxiliaryMode? lyricAuxiliaryMode;
+  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -588,8 +697,40 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
           ),
           _ => null,
         };
-        final showQuality =
-            quality != null && constraints.maxWidth > _qualityFallbackWidth;
+        final auxiliary = switch ((
+          lyricAuxiliaryMode,
+          onLyricAuxiliaryModeChanged,
+        )) {
+          (final mode?, final onChanged?) => _LyricAuxiliaryButton(
+            mode: mode,
+            hasTranslation: controller.lyrics?.lyrics?.hasTranslation ?? false,
+            hasRomanization:
+                controller.lyrics?.lyrics?.hasRomanization ?? false,
+            onChanged: onChanged,
+            dimension: _secondaryExtent,
+          ),
+          _ => null,
+        };
+        final combineOptions =
+            constraints.maxWidth <= 360 && quality != null && auxiliary != null;
+        final combinedOptions = combineOptions
+            ? _PlaybackOptionsButton(
+                key: constraints.maxWidth > 320
+                    ? const ValueKey('now-playing-quality')
+                    : const ValueKey('now-playing-lyric-auxiliary'),
+                preference: qualityPreference!,
+                actualQuality: controller.playback.resolvedQuality,
+                onQualityChanged: onQualityPreferenceChanged!,
+                lyricMode: lyricAuxiliaryMode!,
+                hasTranslation:
+                    controller.lyrics?.lyrics?.hasTranslation ?? false,
+                hasRomanization:
+                    controller.lyrics?.lyrics?.hasRomanization ?? false,
+                onLyricChanged: onLyricAuxiliaryModeChanged!,
+                exposeLyricKey: constraints.maxWidth > 320,
+                dimension: _secondaryExtent,
+              )
+            : null;
         final primary = authenticationFailure
             ? IconButton.filled(
                 key: const ValueKey('now-playing-sign-in-again'),
@@ -602,13 +743,18 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
                 icon: const Icon(Icons.login_rounded),
               )
             : transport[2];
+        final leadingControls = <Widget>[
+          ?combinedOptions,
+          if (!combineOptions && auxiliary != null) auxiliary,
+          ...transport.take(2),
+        ];
         final trailingControls = <Widget>[
           transport[3],
           transport[4],
-          if (showQuality) quality,
+          if (!combineOptions && quality != null) quality,
           _QueueButton(controller: controller, dimension: _secondaryExtent),
         ];
-        final secondaryCount = 2 + trailingControls.length;
+        final secondaryCount = leadingControls.length + trailingControls.length;
         final gapCount = secondaryCount;
         final baseStripExtent =
             (secondaryCount * _secondaryExtent) + _primaryExtent;
@@ -627,7 +773,9 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
         final gap = gapCapacity.clamp(_minimumGap, _preferredGap).toDouble();
         final stripExtent = baseStripExtent + (gapCount * gap);
         final primaryCenterInsideStrip =
-            (2 * _secondaryExtent) + (2 * gap) + (_primaryExtent / 2);
+            (leadingControls.length * _secondaryExtent) +
+            (leadingControls.length * gap) +
+            (_primaryExtent / 2);
         final idealStart =
             (constraints.maxWidth / 2) - primaryCenterInsideStrip;
         const minimumStart = _horizontalInset;
@@ -640,7 +788,7 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
             )
             .toDouble();
         final controls = <Widget>[
-          ...transport.take(2),
+          ...leadingControls,
           primary,
           ...trailingControls,
         ];
@@ -755,6 +903,294 @@ class _PlaybackQualityButtonState extends State<_PlaybackQualityButton> {
       ),
     );
   }
+}
+
+String _lyricAuxiliaryModeLabel(
+  AppLocalizations l10n,
+  LyricAuxiliaryMode mode,
+) => switch (mode) {
+  LyricAuxiliaryMode.auto => l10n.lyricsAuxiliaryAuto,
+  LyricAuxiliaryMode.translation => l10n.lyricsAuxiliaryTranslation,
+  LyricAuxiliaryMode.romanization => l10n.lyricsAuxiliaryPronunciation,
+  LyricAuxiliaryMode.off => l10n.lyricsAuxiliaryOff,
+};
+
+IconData _lyricAuxiliaryModeIcon(LyricAuxiliaryMode mode) => switch (mode) {
+  LyricAuxiliaryMode.auto => Icons.auto_awesome_rounded,
+  LyricAuxiliaryMode.translation => Icons.translate_rounded,
+  LyricAuxiliaryMode.romanization => Icons.record_voice_over_rounded,
+  LyricAuxiliaryMode.off => Icons.subtitles_off_rounded,
+};
+
+bool _lyricAuxiliaryModeAvailable(
+  LyricAuxiliaryMode mode, {
+  required bool hasTranslation,
+  required bool hasRomanization,
+}) => switch (mode) {
+  LyricAuxiliaryMode.auto || LyricAuxiliaryMode.off => true,
+  LyricAuxiliaryMode.translation => hasTranslation,
+  LyricAuxiliaryMode.romanization => hasRomanization,
+};
+
+Future<void> _announceLyricAuxiliaryMode(
+  BuildContext context,
+  LyricAuxiliaryMode mode,
+) async {
+  final l10n = context.l10n;
+  final message = l10n.lyricsAuxiliaryChanged(
+    _lyricAuxiliaryModeLabel(l10n, mode),
+  );
+  final view = View.of(context);
+  final direction = Directionality.of(context);
+  try {
+    await SemanticsService.sendAnnouncement(view, message, direction);
+  } on Object {
+    // Accessibility announcements are best effort and must never roll back a
+    // setting that has already been persisted.
+  }
+}
+
+class _LyricAuxiliaryButton extends StatefulWidget {
+  const _LyricAuxiliaryButton({
+    required this.mode,
+    required this.hasTranslation,
+    required this.hasRomanization,
+    required this.onChanged,
+    this.dimension = 48,
+  });
+
+  final LyricAuxiliaryMode mode;
+  final bool hasTranslation;
+  final bool hasRomanization;
+  final LyricAuxiliaryModeChanged onChanged;
+  final double dimension;
+
+  @override
+  State<_LyricAuxiliaryButton> createState() => _LyricAuxiliaryButtonState();
+}
+
+class _LyricAuxiliaryButtonState extends State<_LyricAuxiliaryButton> {
+  bool _saving = false;
+
+  Future<void> _select(LyricAuxiliaryMode mode) async {
+    if (_saving || mode == widget.mode) return;
+    setState(() => _saving = true);
+    var saved = false;
+    try {
+      saved = await widget.onChanged(mode);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+    if (saved && mounted) await _announceLyricAuxiliaryMode(context, mode);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _lyricAuxiliaryModeLabel(context.l10n, widget.mode);
+    final tooltip = context.l10n.lyricsAuxiliaryTooltip(label);
+    return Semantics(
+      button: true,
+      enabled: !_saving,
+      label: tooltip,
+      excludeSemantics: true,
+      child: PopupMenuButton<LyricAuxiliaryMode>(
+        key: const ValueKey('now-playing-lyric-auxiliary'),
+        enabled: !_saving,
+        tooltip: tooltip,
+        onSelected: (mode) => unawaited(_select(mode)),
+        itemBuilder: (context) => [
+          for (final mode in LyricAuxiliaryMode.values)
+            CheckedPopupMenuItem(
+              key: ValueKey('now-playing-lyric-auxiliary-${mode.name}'),
+              value: mode,
+              checked: mode == widget.mode,
+              enabled: _lyricAuxiliaryModeAvailable(
+                mode,
+                hasTranslation: widget.hasTranslation,
+                hasRomanization: widget.hasRomanization,
+              ),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(_lyricAuxiliaryModeIcon(mode)),
+                title: Text(_lyricAuxiliaryModeLabel(context.l10n, mode)),
+              ),
+            ),
+        ],
+        child: SizedBox.square(
+          dimension: widget.dimension,
+          child: Center(
+            child: _saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _lyricAuxiliaryModeIcon(widget.mode),
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _PlaybackOptionChoice {
+  qualityStandard,
+  qualityHigh,
+  qualityLossless,
+  lyricAuto,
+  lyricTranslation,
+  lyricRomanization,
+  lyricOff,
+}
+
+extension on _PlaybackOptionChoice {
+  AppPlaybackQualityPreference? get quality => switch (this) {
+    _PlaybackOptionChoice.qualityStandard =>
+      AppPlaybackQualityPreference.standard,
+    _PlaybackOptionChoice.qualityHigh => AppPlaybackQualityPreference.high,
+    _PlaybackOptionChoice.qualityLossless =>
+      AppPlaybackQualityPreference.lossless,
+    _ => null,
+  };
+
+  LyricAuxiliaryMode? get lyricMode => switch (this) {
+    _PlaybackOptionChoice.lyricAuto => LyricAuxiliaryMode.auto,
+    _PlaybackOptionChoice.lyricTranslation => LyricAuxiliaryMode.translation,
+    _PlaybackOptionChoice.lyricRomanization => LyricAuxiliaryMode.romanization,
+    _PlaybackOptionChoice.lyricOff => LyricAuxiliaryMode.off,
+    _ => null,
+  };
+}
+
+class _PlaybackOptionsButton extends StatefulWidget {
+  const _PlaybackOptionsButton({
+    required this.preference,
+    required this.actualQuality,
+    required this.onQualityChanged,
+    required this.lyricMode,
+    required this.hasTranslation,
+    required this.hasRomanization,
+    required this.onLyricChanged,
+    required this.exposeLyricKey,
+    required this.dimension,
+    super.key,
+  });
+
+  final AppPlaybackQualityPreference preference;
+  final PlaybackAudioQuality? actualQuality;
+  final PlaybackQualityPreferenceChanged onQualityChanged;
+  final LyricAuxiliaryMode lyricMode;
+  final bool hasTranslation;
+  final bool hasRomanization;
+  final LyricAuxiliaryModeChanged onLyricChanged;
+  final bool exposeLyricKey;
+  final double dimension;
+
+  @override
+  State<_PlaybackOptionsButton> createState() => _PlaybackOptionsButtonState();
+}
+
+class _PlaybackOptionsButtonState extends State<_PlaybackOptionsButton> {
+  bool _saving = false;
+
+  Future<void> _select(_PlaybackOptionChoice choice) async {
+    if (_saving) return;
+    if (choice.quality case final quality?) {
+      if (quality == widget.preference) return;
+      setState(() => _saving = true);
+      try {
+        await widget.onQualityChanged(quality);
+      } finally {
+        if (mounted) setState(() => _saving = false);
+      }
+      return;
+    }
+    final mode = choice.lyricMode;
+    if (mode == null || mode == widget.lyricMode) return;
+    setState(() => _saving = true);
+    var saved = false;
+    try {
+      saved = await widget.onLyricChanged(mode);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+    if (saved && mounted) await _announceLyricAuxiliaryMode(context, mode);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lyricLabel = _lyricAuxiliaryModeLabel(context.l10n, widget.lyricMode);
+    final tooltip = context.l10n.playbackOptionsTooltip(
+      widget.preference.shortLabel,
+      lyricLabel,
+    );
+    return Semantics(
+      button: true,
+      enabled: !_saving,
+      label: tooltip,
+      excludeSemantics: true,
+      child: PopupMenuButton<_PlaybackOptionChoice>(
+        enabled: !_saving,
+        tooltip: tooltip,
+        onSelected: (choice) => unawaited(_select(choice)),
+        itemBuilder: (context) => [
+          for (final preference in AppPlaybackQualityPreference.values)
+            CheckedPopupMenuItem(
+              key: ValueKey('now-playing-quality-${preference.name}'),
+              value: _qualityChoice(preference),
+              checked: preference == widget.preference,
+              child: Text(preference.localizedMenuLabel(context.l10n)),
+            ),
+          const PopupMenuDivider(),
+          for (final mode in LyricAuxiliaryMode.values)
+            CheckedPopupMenuItem(
+              key: ValueKey('now-playing-lyric-auxiliary-${mode.name}'),
+              value: _lyricChoice(mode),
+              checked: mode == widget.lyricMode,
+              enabled: _lyricAuxiliaryModeAvailable(
+                mode,
+                hasTranslation: widget.hasTranslation,
+                hasRomanization: widget.hasRomanization,
+              ),
+              child: Text(_lyricAuxiliaryModeLabel(context.l10n, mode)),
+            ),
+        ],
+        child: SizedBox.square(
+          key: widget.exposeLyricKey
+              ? const ValueKey('now-playing-lyric-auxiliary')
+              : null,
+          dimension: widget.dimension,
+          child: Center(
+            child: _saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.tune_rounded),
+          ),
+        ),
+      ),
+    );
+  }
+
+  _PlaybackOptionChoice _qualityChoice(
+    AppPlaybackQualityPreference preference,
+  ) => switch (preference) {
+    AppPlaybackQualityPreference.standard =>
+      _PlaybackOptionChoice.qualityStandard,
+    AppPlaybackQualityPreference.high => _PlaybackOptionChoice.qualityHigh,
+    AppPlaybackQualityPreference.lossless =>
+      _PlaybackOptionChoice.qualityLossless,
+  };
+
+  _PlaybackOptionChoice _lyricChoice(LyricAuxiliaryMode mode) => switch (mode) {
+    LyricAuxiliaryMode.auto => _PlaybackOptionChoice.lyricAuto,
+    LyricAuxiliaryMode.translation => _PlaybackOptionChoice.lyricTranslation,
+    LyricAuxiliaryMode.romanization => _PlaybackOptionChoice.lyricRomanization,
+    LyricAuxiliaryMode.off => _PlaybackOptionChoice.lyricOff,
+  };
 }
 
 List<Widget> _transportControls(

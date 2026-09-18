@@ -106,6 +106,8 @@ class ExpandedNowPlayingPage extends StatefulWidget {
     required this.onSignInAgain,
     this.qualityPreference,
     this.onQualityPreferenceChanged,
+    this.lyricAuxiliaryMode = LyricAuxiliaryMode.auto,
+    this.onLyricAuxiliaryModeChanged,
     this.commentsGateway = const RustTrackCommentGateway(),
     this.musicVideoGateway = const RustTrackMusicVideoGateway(),
     this.musicVideoEngine = const MediaKitTrackMusicVideoEngine(),
@@ -120,6 +122,8 @@ class ExpandedNowPlayingPage extends StatefulWidget {
   final VoidCallback onSignInAgain;
   final AppPlaybackQualityPreference? qualityPreference;
   final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
+  final LyricAuxiliaryMode lyricAuxiliaryMode;
+  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
   final TrackCommentGateway commentsGateway;
   final TrackMusicVideoGateway musicVideoGateway;
   final TrackMusicVideoEngine musicVideoEngine;
@@ -228,6 +232,7 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
                 musicVideoGateway: widget.musicVideoGateway,
                 musicVideoEngine: widget.musicVideoEngine,
                 artworkImageProviderBuilder: widget.artworkImageProviderBuilder,
+                lyricAuxiliaryMode: widget.lyricAuxiliaryMode,
               ),
             ),
             bottomNavigationBar: NowPlayingBar.expanded(
@@ -235,6 +240,8 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
               onSignInAgain: widget.onSignInAgain,
               qualityPreference: widget.qualityPreference,
               onQualityPreferenceChanged: widget.onQualityPreferenceChanged,
+              lyricAuxiliaryMode: widget.lyricAuxiliaryMode,
+              onLyricAuxiliaryModeChanged: widget.onLyricAuxiliaryModeChanged,
             ),
           ),
         ),
@@ -364,6 +371,7 @@ class _ExpandedNowPlayingBody extends StatefulWidget {
     required this.musicVideoGateway,
     required this.musicVideoEngine,
     required this.artworkImageProviderBuilder,
+    required this.lyricAuxiliaryMode,
   });
 
   final QueuePlaybackController controller;
@@ -373,6 +381,7 @@ class _ExpandedNowPlayingBody extends StatefulWidget {
   final TrackMusicVideoGateway musicVideoGateway;
   final TrackMusicVideoEngine musicVideoEngine;
   final ArtworkImageProviderBuilder artworkImageProviderBuilder;
+  final LyricAuxiliaryMode lyricAuxiliaryMode;
 
   @override
   State<_ExpandedNowPlayingBody> createState() =>
@@ -505,6 +514,7 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
       onSeek: widget.controller.playback.seekToMs,
       showCloseButton: false,
       immersive: true,
+      auxiliaryMode: widget.lyricAuxiliaryMode,
     );
   }
 

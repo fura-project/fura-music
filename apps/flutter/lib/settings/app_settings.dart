@@ -6,6 +6,8 @@ enum AppColorSourcePreference { system, brand }
 
 enum AppPlaybackQualityPreference { standard, high, lossless }
 
+enum LyricAuxiliaryMode { auto, translation, romanization, off }
+
 enum AppMusicProvider { qqMusic, netEaseCloudMusic }
 
 enum AppLocalePreference { system, english, simplifiedChinese }
@@ -30,15 +32,17 @@ class AppSettings {
     required this.theme,
     this.colorSource = AppColorSourcePreference.brand,
     this.playbackQuality = AppPlaybackQualityPreference.standard,
+    this.lyricAuxiliaryMode = LyricAuxiliaryMode.auto,
     this.musicProvider = AppMusicProvider.qqMusic,
     this.localePreference = AppLocalePreference.system,
   });
 
-  static const currentSchemaVersion = 5;
+  static const currentSchemaVersion = 6;
   static const defaults = AppSettings(
     theme: AppThemePreference.system,
     colorSource: AppColorSourcePreference.brand,
     playbackQuality: AppPlaybackQualityPreference.standard,
+    lyricAuxiliaryMode: LyricAuxiliaryMode.auto,
     musicProvider: AppMusicProvider.qqMusic,
     localePreference: AppLocalePreference.system,
   );
@@ -46,6 +50,7 @@ class AppSettings {
   final AppThemePreference theme;
   final AppColorSourcePreference colorSource;
   final AppPlaybackQualityPreference playbackQuality;
+  final LyricAuxiliaryMode lyricAuxiliaryMode;
   final AppMusicProvider musicProvider;
   final AppLocalePreference localePreference;
 
@@ -53,12 +58,14 @@ class AppSettings {
     AppThemePreference? theme,
     AppColorSourcePreference? colorSource,
     AppPlaybackQualityPreference? playbackQuality,
+    LyricAuxiliaryMode? lyricAuxiliaryMode,
     AppMusicProvider? musicProvider,
     AppLocalePreference? localePreference,
   }) => AppSettings(
     theme: theme ?? this.theme,
     colorSource: colorSource ?? this.colorSource,
     playbackQuality: playbackQuality ?? this.playbackQuality,
+    lyricAuxiliaryMode: lyricAuxiliaryMode ?? this.lyricAuxiliaryMode,
     musicProvider: musicProvider ?? this.musicProvider,
     localePreference: localePreference ?? this.localePreference,
   );
@@ -69,6 +76,7 @@ class AppSettings {
       other.theme == theme &&
       other.colorSource == colorSource &&
       other.playbackQuality == playbackQuality &&
+      other.lyricAuxiliaryMode == lyricAuxiliaryMode &&
       other.musicProvider == musicProvider &&
       other.localePreference == localePreference;
 
@@ -77,6 +85,7 @@ class AppSettings {
     theme,
     colorSource,
     playbackQuality,
+    lyricAuxiliaryMode,
     musicProvider,
     localePreference,
   );
@@ -86,6 +95,7 @@ class AppSettings {
       'AppSettings(theme: ${theme.name}, '
       'colorSource: ${colorSource.name}, '
       'playbackQuality: ${playbackQuality.name}, '
+      'lyricAuxiliaryMode: ${lyricAuxiliaryMode.name}, '
       'musicProvider: ${musicProvider.name}, '
       'localePreference: ${localePreference.name})';
 }

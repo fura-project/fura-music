@@ -813,6 +813,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           onSignInAgain: widget.onSignInAgain,
           qualityPreference: widget.settings.playbackQuality,
           onQualityPreferenceChanged: _changePlaybackQuality,
+          lyricAuxiliaryMode: widget.settings.lyricAuxiliaryMode,
+          onLyricAuxiliaryModeChanged: _changeLyricAuxiliaryMode,
           commentsGateway: _playback.trackCommentGateway,
           artworkColorSchemeCache: _expandedNowPlayingPalette,
         ),
@@ -1263,6 +1265,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         ),
       ),
     );
+  }
+
+  Future<bool> _changeLyricAuxiliaryMode(LyricAuxiliaryMode mode) async {
+    if (mode == widget.settings.lyricAuxiliaryMode) return true;
+    final result = await widget.onSettingsChanged(
+      widget.settings.copyWith(lyricAuxiliaryMode: mode),
+    );
+    if (!mounted) return result == AppSettingsWriteResult.saved;
+    if (result != AppSettingsWriteResult.saved) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.settingsSaveFailure)));
+      return false;
+    }
+    return true;
   }
 
   void _openCompactSettingsSection(SettingsSection section) {
@@ -2170,6 +2187,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                     onSignInAgain: widget.onSignInAgain,
                     qualityPreference: widget.settings.playbackQuality,
                     onQualityPreferenceChanged: _changePlaybackQuality,
+                    lyricAuxiliaryMode: widget.settings.lyricAuxiliaryMode,
+                    onLyricAuxiliaryModeChanged: _changeLyricAuxiliaryMode,
                   ),
                   child: _ShellDetailTransition(
                     open: embeddedShellRoute != null,
@@ -2233,6 +2252,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                         onSignInAgain: widget.onSignInAgain,
                         qualityPreference: widget.settings.playbackQuality,
                         onQualityPreferenceChanged: _changePlaybackQuality,
+                        lyricAuxiliaryMode: widget.settings.lyricAuxiliaryMode,
+                        onLyricAuxiliaryModeChanged: _changeLyricAuxiliaryMode,
                       )
                     : constraints.maxWidth < 640
                     ? settingsOpen
@@ -2252,6 +2273,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                             onSignInAgain: widget.onSignInAgain,
                             qualityPreference: widget.settings.playbackQuality,
                             onQualityPreferenceChanged: _changePlaybackQuality,
+                            lyricAuxiliaryMode:
+                                widget.settings.lyricAuxiliaryMode,
+                            onLyricAuxiliaryModeChanged:
+                                _changeLyricAuxiliaryMode,
                           ),
                           if (!settingsOpen)
                             NavigationBar(

@@ -3112,6 +3112,36 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get lyricsAuxiliaryMode => 'Lyrics auxiliary';
+
+  @override
+  String get lyricsAuxiliaryAuto => 'Auto';
+
+  @override
+  String get lyricsAuxiliaryTranslation => 'Translation';
+
+  @override
+  String get lyricsAuxiliaryPronunciation => 'Pronunciation';
+
+  @override
+  String get lyricsAuxiliaryOff => 'Off';
+
+  @override
+  String lyricsAuxiliaryTooltip(Object mode) {
+    return 'Lyrics auxiliary: $mode';
+  }
+
+  @override
+  String lyricsAuxiliaryChanged(Object mode) {
+    return 'Lyrics auxiliary changed to $mode.';
+  }
+
+  @override
+  String playbackOptionsTooltip(Object quality, Object mode) {
+    return 'Playback options. Quality: $quality. Lyrics auxiliary: $mode';
+  }
+
+  @override
   String get commentsTitle => 'Comments';
 
   @override

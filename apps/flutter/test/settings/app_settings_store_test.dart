@@ -19,31 +19,41 @@ void main() {
     for (final theme in AppThemePreference.values) {
       for (final colorSource in AppColorSourcePreference.values) {
         for (final playbackQuality in AppPlaybackQualityPreference.values) {
-          for (final musicProvider in AppMusicProvider.values) {
-            for (final localePreference in AppLocalePreference.values) {
-              final storage = _MemoryDocumentStorage();
-              final store = AppSettingsStore(storage: storage);
-              final settings = AppSettings(
-                theme: theme,
-                colorSource: colorSource,
-                playbackQuality: playbackQuality,
-                musicProvider: musicProvider,
-                localePreference: localePreference,
-              );
+          for (final lyricAuxiliaryMode in LyricAuxiliaryMode.values) {
+            for (final musicProvider in AppMusicProvider.values) {
+              for (final localePreference in AppLocalePreference.values) {
+                final storage = _MemoryDocumentStorage();
+                final store = AppSettingsStore(storage: storage);
+                final settings = AppSettings(
+                  theme: theme,
+                  colorSource: colorSource,
+                  playbackQuality: playbackQuality,
+                  lyricAuxiliaryMode: lyricAuxiliaryMode,
+                  musicProvider: musicProvider,
+                  localePreference: localePreference,
+                );
 
-              expect(await store.save(settings), AppSettingsWriteResult.saved);
-              final stored =
-                  jsonDecode(storage.document!) as Map<String, dynamic>;
-              expect(stored['schemaVersion'], AppSettings.currentSchemaVersion);
-              expect(stored['theme'], theme.name);
-              expect(stored['colorSource'], colorSource.name);
-              expect(stored['playbackQuality'], playbackQuality.name);
-              expect(stored['musicProvider'], musicProvider.name);
-              expect(stored['localePreference'], localePreference.name);
+                expect(
+                  await store.save(settings),
+                  AppSettingsWriteResult.saved,
+                );
+                final stored =
+                    jsonDecode(storage.document!) as Map<String, dynamic>;
+                expect(
+                  stored['schemaVersion'],
+                  AppSettings.currentSchemaVersion,
+                );
+                expect(stored['theme'], theme.name);
+                expect(stored['colorSource'], colorSource.name);
+                expect(stored['playbackQuality'], playbackQuality.name);
+                expect(stored['lyricAuxiliaryMode'], lyricAuxiliaryMode.name);
+                expect(stored['musicProvider'], musicProvider.name);
+                expect(stored['localePreference'], localePreference.name);
 
-              final loaded = await store.load();
-              expect(loaded.state, AppSettingsLoadState.stored);
-              expect(loaded.settings, settings);
+                final loaded = await store.load();
+                expect(loaded.state, AppSettingsLoadState.stored);
+                expect(loaded.settings, settings);
+              }
             }
           }
         }
@@ -211,6 +221,60 @@ void main() {
       expect(result.state, AppSettingsLoadState.migrated);
       expect(result.settings.colorSource, AppColorSourcePreference.brand);
       expect(result.settings.theme, AppThemePreference.dark);
+    },
+  );
+
+  test(
+    'migrates version 5 to automatic lyrics without resetting system colors',
+    () async {
+      final storage = _MemoryDocumentStorage(
+        document: jsonEncode(<String, Object>{
+          'schemaVersion': 5,
+          'theme': 'system',
+          'colorSource': 'system',
+          'playbackQuality': 'high',
+          'musicProvider': 'netEaseCloudMusic',
+          'localePreference': 'simplifiedChinese',
+        }),
+      );
+
+      final result = await AppSettingsStore(storage: storage).load();
+
+      expect(result.state, AppSettingsLoadState.migrated);
+      expect(result.settings.colorSource, AppColorSourcePreference.system);
+      expect(result.settings.lyricAuxiliaryMode, LyricAuxiliaryMode.auto);
+      expect(
+        result.settings.playbackQuality,
+        AppPlaybackQualityPreference.high,
+      );
+    },
+  );
+
+  test(
+    'unknown lyric mode falls back to auto without resetting settings',
+    () async {
+      final storage = _MemoryDocumentStorage(
+        document: jsonEncode(<String, Object>{
+          'schemaVersion': AppSettings.currentSchemaVersion,
+          'theme': 'dark',
+          'colorSource': 'system',
+          'playbackQuality': 'lossless',
+          'lyricAuxiliaryMode': 'futureMode',
+          'musicProvider': 'netEaseCloudMusic',
+          'localePreference': 'simplifiedChinese',
+        }),
+      );
+
+      final result = await AppSettingsStore(storage: storage).load();
+
+      expect(result.state, AppSettingsLoadState.migrated);
+      expect(result.settings.lyricAuxiliaryMode, LyricAuxiliaryMode.auto);
+      expect(result.settings.colorSource, AppColorSourcePreference.system);
+      expect(
+        result.settings.playbackQuality,
+        AppPlaybackQualityPreference.lossless,
+      );
+      expect(result.settings.musicProvider, AppMusicProvider.netEaseCloudMusic);
     },
   );
 

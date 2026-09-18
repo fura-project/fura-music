@@ -152,12 +152,21 @@ class AppSettingsStore {
                   .firstOrNull ??
               AppLocalePreference.system;
     final colorSourceName = decoded['colorSource'];
-    final colorSource = version < AppSettings.currentSchemaVersion
+    final colorSource = version < 5
         ? AppColorSourcePreference.brand
         : AppColorSourcePreference.values
                   .where((candidate) => candidate.name == colorSourceName)
                   .firstOrNull ??
               AppColorSourcePreference.brand;
+    final lyricAuxiliaryModeName = decoded['lyricAuxiliaryMode'];
+    final lyricAuxiliaryMode = version < 6
+        ? LyricAuxiliaryMode.auto
+        : LyricAuxiliaryMode.values
+                  .where(
+                    (candidate) => candidate.name == lyricAuxiliaryModeName,
+                  )
+                  .firstOrNull ??
+              LyricAuxiliaryMode.auto;
     final migrated =
         version < AppSettings.currentSchemaVersion ||
         (version >= 3 &&
@@ -168,9 +177,13 @@ class AppSettingsStore {
             !AppLocalePreference.values.any(
               (candidate) => candidate.name == localeName,
             )) ||
-        (version == AppSettings.currentSchemaVersion &&
+        (version >= 5 &&
             !AppColorSourcePreference.values.any(
               (candidate) => candidate.name == colorSourceName,
+            )) ||
+        (version >= 6 &&
+            !LyricAuxiliaryMode.values.any(
+              (candidate) => candidate.name == lyricAuxiliaryModeName,
             ));
 
     return AppSettingsLoadResult(
@@ -178,6 +191,7 @@ class AppSettingsStore {
         theme: theme,
         colorSource: colorSource,
         playbackQuality: playbackQuality,
+        lyricAuxiliaryMode: lyricAuxiliaryMode,
         musicProvider: musicProvider,
         localePreference: localePreference,
       ),
@@ -194,6 +208,7 @@ class AppSettingsStore {
           'theme': settings.theme.name,
           'colorSource': settings.colorSource.name,
           'playbackQuality': settings.playbackQuality.name,
+          'lyricAuxiliaryMode': settings.lyricAuxiliaryMode.name,
           'musicProvider': settings.musicProvider.name,
           'localePreference': settings.localePreference.name,
         });

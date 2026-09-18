@@ -195,6 +195,13 @@ void main() {
       expect(
         find.descendant(
           of: utilities,
+          matching: find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: utilities,
           matching: find.byKey(const ValueKey('now-playing-volume')),
         ),
         findsOneWidget,
@@ -293,6 +300,112 @@ void main() {
     ]);
     expect(settingsStorage.document, contains('"playbackQuality":"lossless"'));
   });
+
+  testWidgets(
+    'lyric auxiliary selector persists pronunciation without reloading audio',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final settingsStorage = _MemorySettingsStorage();
+      final media = _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('lyric-mode')),
+      ]);
+      await _openDetail(
+        tester,
+        media: media,
+        audio: _FakeAudioEngine([_FakeAudioSession()]),
+        lyrics: _FakeLyricGateway(_lyricAuxiliarySuccess()),
+        settingsStore: AppSettingsStore(storage: settingsStorage),
+      );
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+            )
+            .label,
+        'Lyrics auxiliary: Auto',
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckedPopupMenuItem<LyricAuxiliaryMode>>(
+              find.byKey(
+                const ValueKey('now-playing-lyric-auxiliary-romanization'),
+              ),
+            )
+            .enabled,
+        isTrue,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('now-playing-lyric-auxiliary-romanization')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        settingsStorage.document,
+        contains('"lyricAuxiliaryMode":"romanization"'),
+      );
+      expect(media.requests, [('qq-music', 'first')]);
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+            )
+            .label,
+        'Lyrics auxiliary: Pronunciation',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pumpAndSettle();
+      expect(find.text('fixture pronunciation'), findsOneWidget);
+      expect(find.text('fixture translation'), findsNothing);
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'unavailable auxiliary choices stay disabled without mutating preference',
+    (tester) async {
+      final settingsStorage = _MemorySettingsStorage();
+      await _openDetail(
+        tester,
+        media: _FakeMediaGateway([
+          _ImmediateMediaOperation(_success('no-auxiliary')),
+        ]),
+        audio: _FakeAudioEngine([_FakeAudioSession()]),
+        settingsStore: AppSettingsStore(storage: settingsStorage),
+      );
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+      );
+      await tester.pumpAndSettle();
+      final translation = tester
+          .widget<CheckedPopupMenuItem<LyricAuxiliaryMode>>(
+            find.byKey(
+              const ValueKey('now-playing-lyric-auxiliary-translation'),
+            ),
+          );
+      final romanization = tester
+          .widget<CheckedPopupMenuItem<LyricAuxiliaryMode>>(
+            find.byKey(
+              const ValueKey('now-playing-lyric-auxiliary-romanization'),
+            ),
+          );
+      expect(translation.enabled, isFalse);
+      expect(romanization.enabled, isFalse);
+      expect(settingsStorage.document, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'desktop identity area opens lyrics before the Artist catalog chooser',
@@ -1835,18 +1948,28 @@ void main() {
       expect(primaryRect.height, 48);
       expect(stripRect.left, greaterThanOrEqualTo(rowRect.left + 3.5));
       expect(stripRect.right, lessThanOrEqualTo(rowRect.right - 3.5));
-      expect(stripRect.width, lessThan(rowRect.width - 40));
+      expect(stripRect.width, lessThanOrEqualTo(rowRect.width - 8));
       expect(
         find.byKey(const ValueKey('now-playing-quality')),
         geometry.showQuality ? findsOneWidget : findsNothing,
       );
+      expect(
+        find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+        findsOneWidget,
+      );
       final orderedKeys = <String>[
+        if (!geometry.combineOptions) 'now-playing-lyric-auxiliary',
+        if (geometry.combineOptions)
+          geometry.showQuality
+              ? 'now-playing-quality'
+              : 'now-playing-lyric-auxiliary',
         'now-playing-shuffle',
         'now-playing-previous',
         'now-playing-primary-action',
         'now-playing-next',
         'now-playing-repeat',
-        if (geometry.showQuality) 'now-playing-quality',
+        if (!geometry.combineOptions && geometry.showQuality)
+          'now-playing-quality',
         'now-playing-show-queue',
       ];
       final targetRects = [
@@ -1923,6 +2046,8 @@ void main() {
               onSignInAgain: () {},
               qualityPreference: AppPlaybackQualityPreference.standard,
               onQualityPreferenceChanged: (_) async {},
+              lyricAuxiliaryMode: LyricAuxiliaryMode.auto,
+              onLyricAuxiliaryModeChanged: (_) async => true,
             ),
           ),
         ),
@@ -1954,6 +2079,7 @@ void main() {
       'now-playing-primary-action',
       'now-playing-previous',
       'now-playing-shuffle',
+      'now-playing-lyric-auxiliary',
     ];
     final physicalRects = [
       for (final key in physicalOrder)
@@ -2075,6 +2201,7 @@ void main() {
 
 ({
   bool showQuality,
+  bool combineOptions,
   double gap,
   double stripExtent,
   double primaryCenterInsideStrip,
@@ -2087,8 +2214,10 @@ _expectedCompactControlGeometry(double availableWidth) {
   const preferredGap = 4.0;
   const horizontalInset = 4.0;
   final showQuality = availableWidth > 320;
-  final trailingControlCount = showQuality ? 4 : 3;
-  final secondaryCount = 2 + trailingControlCount;
+  final combineOptions = availableWidth <= 360;
+  final leadingControlCount = 3;
+  final trailingControlCount = combineOptions ? 3 : 4;
+  final secondaryCount = leadingControlCount + trailingControlCount;
   final gapCount = secondaryCount;
   final baseStripExtent = (secondaryCount * secondaryExtent) + primaryExtent;
   final centeredGapCapacity =
@@ -2105,7 +2234,9 @@ _expectedCompactControlGeometry(double availableWidth) {
   final gap = gapCapacity.clamp(minimumGap, preferredGap).toDouble();
   final stripExtent = baseStripExtent + (gapCount * gap);
   final primaryCenterInsideStrip =
-      (2 * secondaryExtent) + (2 * gap) + (primaryExtent / 2);
+      (leadingControlCount * secondaryExtent) +
+      (leadingControlCount * gap) +
+      (primaryExtent / 2);
   final idealStart = (availableWidth / 2) - primaryCenterInsideStrip;
   final maximumStart = availableWidth - horizontalInset - stripExtent;
   final stripStart = idealStart
@@ -2116,6 +2247,7 @@ _expectedCompactControlGeometry(double availableWidth) {
       .toDouble();
   return (
     showQuality: showQuality,
+    combineOptions: combineOptions,
     gap: gap,
     stripExtent: stripExtent,
     primaryCenterInsideStrip: primaryCenterInsideStrip,
@@ -2641,6 +2773,19 @@ LyricLoadResult _lyricSuccess(String text) => LyricLoadResult(
       text: text,
       startMs: 1000,
       durationMs: 1500,
+      segments: const [],
+    ),
+  ]),
+);
+
+LyricLoadResult _lyricAuxiliarySuccess() => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    SynchronizedLyricLine(
+      text: 'fixture original',
+      startMs: 1000,
+      durationMs: 1500,
+      translation: 'fixture translation',
+      romanization: 'fixture pronunciation',
       segments: const [],
     ),
   ]),

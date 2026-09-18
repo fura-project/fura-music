@@ -4967,6 +4967,54 @@ abstract class AppLocalizations {
   /// **'{provider} returned lyrics this build could not safely present.'**
   String lyricsFailureInvalidDetail(Object provider);
 
+  /// Label for the provider-neutral optional lyric track preference.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics auxiliary'**
+  String get lyricsAuxiliaryMode;
+
+  /// Automatic lyric auxiliary mode label.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get lyricsAuxiliaryAuto;
+
+  /// Translation-only lyric auxiliary mode label.
+  ///
+  /// In en, this message translates to:
+  /// **'Translation'**
+  String get lyricsAuxiliaryTranslation;
+
+  /// User-facing label for the upstream romanization lyric track.
+  ///
+  /// In en, this message translates to:
+  /// **'Pronunciation'**
+  String get lyricsAuxiliaryPronunciation;
+
+  /// Disabled lyric auxiliary mode label.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get lyricsAuxiliaryOff;
+
+  /// Tooltip and accessibility label for the lyric auxiliary selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics auxiliary: {mode}'**
+  String lyricsAuxiliaryTooltip(Object mode);
+
+  /// One-time accessibility announcement after changing the lyric auxiliary mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics auxiliary changed to {mode}.'**
+  String lyricsAuxiliaryChanged(Object mode);
+
+  /// Compact playback options accessibility label combining quality and lyric auxiliary state.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback options. Quality: {quality}. Lyrics auxiliary: {mode}'**
+  String playbackOptionsTooltip(Object quality, Object mode);
+
   /// No description provided for @commentsTitle.
   ///
   /// In en, this message translates to:

@@ -7,6 +7,7 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_panel.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 
 void main() {
   testWidgets('renders canonical content and real word progress', (
@@ -31,7 +32,7 @@ void main() {
     expect(find.text('timed '), findsOneWidget);
     expect(find.text('line'), findsOneWidget);
     expect(find.text('定时行'), findsOneWidget);
-    expect(find.text('ding shi hang'), findsOneWidget);
+    expect(find.text('ding shi hang'), findsNothing);
     expect(
       tester.getSemantics(find.byKey(const ValueKey('lyrics-word-0-0'))).value,
       '50% complete',
@@ -47,6 +48,104 @@ void main() {
     await tester.tap(line);
     expect(seekPosition, 1000);
     semantics.dispose();
+    controller.dispose();
+  });
+
+  testWidgets(
+    'renders exactly one persisted auxiliary mode without fallback guessing',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final controller = LyricController(
+        _ScriptedGateway([_ImmediateOperation(_success())]),
+      );
+      await controller.load(_track);
+
+      await _pumpPanel(
+        tester,
+        controller,
+        auxiliaryMode: LyricAuxiliaryMode.translation,
+      );
+      expect(
+        find.byKey(const ValueKey('lyrics-translation-0')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('lyrics-romanization-0')), findsNothing);
+
+      await _pumpPanel(
+        tester,
+        controller,
+        auxiliaryMode: LyricAuxiliaryMode.romanization,
+      );
+      expect(find.byKey(const ValueKey('lyrics-translation-0')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('lyrics-romanization-0')),
+        findsOneWidget,
+      );
+
+      await _pumpPanel(
+        tester,
+        controller,
+        auxiliaryMode: LyricAuxiliaryMode.off,
+      );
+      expect(find.byKey(const ValueKey('lyrics-translation-0')), findsNothing);
+      expect(find.byKey(const ValueKey('lyrics-romanization-0')), findsNothing);
+      expect(find.text('定时行'), findsNothing);
+      expect(find.text('ding shi hang'), findsNothing);
+      expect(find.bySemanticsLabel('定时行'), findsNothing);
+      expect(find.bySemanticsLabel('ding shi hang'), findsNothing);
+
+      semantics.dispose();
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'auto prefers translation and otherwise uses pronunciation only',
+    (tester) async {
+      final controller = LyricController(
+        _ScriptedGateway([_ImmediateOperation(_mixedAuxiliary())]),
+      );
+      await controller.load(_track);
+
+      await _pumpPanel(tester, controller);
+
+      expect(find.text('translation wins'), findsOneWidget);
+      expect(find.text('unused pronunciation'), findsNothing);
+      expect(find.text('pronunciation fallback'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('lyrics-romanization-1')),
+        findsOneWidget,
+      );
+
+      await _pumpPanel(
+        tester,
+        controller,
+        auxiliaryMode: LyricAuxiliaryMode.translation,
+      );
+      expect(find.text('translation wins'), findsOneWidget);
+      expect(find.text('pronunciation fallback'), findsNothing);
+      expect(find.byKey(const ValueKey('lyrics-translation-1')), findsNothing);
+
+      controller.dispose();
+    },
+  );
+
+  testWidgets('missing auxiliary tracks remain original-only in every mode', (
+    tester,
+  ) async {
+    final controller = LyricController(
+      _ScriptedGateway([_ImmediateOperation(_lyricWithoutAuxiliary())]),
+    );
+    await controller.load(_track);
+
+    for (final mode in LyricAuxiliaryMode.values) {
+      await _pumpPanel(tester, controller, auxiliaryMode: mode);
+      expect(find.text('original only'), findsOneWidget);
+      expect(find.byKey(const ValueKey('lyrics-translation-0')), findsNothing);
+      expect(find.byKey(const ValueKey('lyrics-romanization-0')), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+
     controller.dispose();
   });
 
@@ -164,7 +263,29 @@ void main() {
       expect(tester.getRect(lineEight).overlaps(tester.getRect(list)), isTrue);
       expect(_scrollOffset(tester, list), greaterThan(0));
 
+      await _pumpPanel(
+        tester,
+        controller,
+        auxiliaryMode: LyricAuxiliaryMode.off,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getRect(lineEight).overlaps(tester.getRect(list)), isTrue);
+      expect(
+        find.byKey(const ValueKey('lyrics-resume-following')),
+        findsNothing,
+      );
+
       await tester.drag(list, const Offset(0, 180));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('lyrics-resume-following')),
+        findsOneWidget,
+      );
+      await _pumpPanel(
+        tester,
+        controller,
+        auxiliaryMode: LyricAuxiliaryMode.translation,
+      );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('lyrics-resume-following')),
@@ -307,6 +428,7 @@ Future<void> _pumpPanel(
   VoidCallback? onSignInAgain,
   bool Function()? canSeek,
   Future<void> Function(int positionMs)? onSeek,
+  LyricAuxiliaryMode auxiliaryMode = LyricAuxiliaryMode.auto,
 }) => tester.pumpWidget(
   MaterialApp(
     home: Scaffold(
@@ -316,6 +438,7 @@ Future<void> _pumpPanel(
         onSignInAgain: onSignInAgain ?? () {},
         canSeek: canSeek,
         onSeek: onSeek,
+        auxiliaryMode: auxiliaryMode,
       ),
     ),
   ),
@@ -391,6 +514,37 @@ LyricLoadResult _mismatchedSegments() => LyricLoadResult(
   ]),
 );
 
+LyricLoadResult _mixedAuxiliary() => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    SynchronizedLyricLine(
+      text: 'first original',
+      startMs: 0,
+      durationMs: 1000,
+      translation: 'translation wins',
+      romanization: 'unused pronunciation',
+      segments: const [],
+    ),
+    SynchronizedLyricLine(
+      text: 'second original',
+      startMs: 1000,
+      durationMs: 1000,
+      romanization: 'pronunciation fallback',
+      segments: const [],
+    ),
+  ]),
+);
+
+LyricLoadResult _lyricWithoutAuxiliary() => LyricLoadResult(
+  lyrics: SynchronizedLyrics([
+    SynchronizedLyricLine(
+      text: 'original only',
+      startMs: 0,
+      durationMs: 1000,
+      segments: const [],
+    ),
+  ]),
+);
+
 LyricLoadResult _longLyrics({String prefix = 'line'}) => LyricLoadResult(
   lyrics: SynchronizedLyrics([
     for (var index = 0; index < 12; index += 1)
@@ -398,6 +552,8 @@ LyricLoadResult _longLyrics({String prefix = 'line'}) => LyricLoadResult(
         text: '$prefix $index',
         startMs: index * 1000,
         durationMs: 1000,
+        translation: 'translation $index',
+        romanization: 'pronunciation $index',
         segments: const [],
       ),
   ]),
