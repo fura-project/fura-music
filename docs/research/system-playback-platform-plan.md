@@ -1,5 +1,13 @@
 # Cross-Platform System Playback Plan
 
+> **HD-033 addendum (2026-09-18):** AudioService remains the production
+> default described here. A reversible candidate now places the existing
+> handler behavior behind `SystemMediaEdge` and adds exact-pinned
+> `flutter_media_session` 3.0.5 for Android/macOS/Windows experiments. Linux
+> remains on this document's custom MPRIS edge, and the candidate is rejected
+> before activation on iOS because exact package source unconditionally owns
+> AVAudioSession. See [the playback-stack bake-off](playback-stack-bakeoff.md).
+
 ## Scope and invariant
 
 HD-014 authorizes operating-system music controls on Android, iOS, macOS, Linux, and Windows. One root `AppPlaybackHost` owns the existing Flutter playback controller, selected audio engine and Rust positional Queue handle for the application lifetime. Its `ProjectSystemAudioHandler` is the permanent service-facing adapter over that owner; it does not create a second player, duplicate Queue state, expose credentials or publish expiring QQ media URLs.

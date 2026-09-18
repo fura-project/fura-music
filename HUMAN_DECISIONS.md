@@ -518,3 +518,47 @@ partial presentation, malformed fixtures, all Rust/Flutter tests and both
 required Release builds pass. No live provider request or KuGou expansion was
 made. Only naturally occurring real-account partial-response presentation
 remains Human review.
+
+## HD-033 — Playback engine and system-media adapter bake-off
+
+**Status:** Reversible experiment accepted by explicit Human instruction on
+2026-09-16; production cutover is not accepted.
+
+**Decision:** Preserve `audioplayers 6.8.1 + audio_service 0.18.19` as the
+default production baseline and regression oracle while adding independently
+selectable `media_kit 1.2.6` music-engine and exact-pinned
+`flutter_media_session 3.0.5` system-edge candidates. Internal compile-time
+selection must express A/B/C/D without constructing two music engines or
+activating two system sessions. Rust remains the canonical positional Queue;
+`QueuePlaybackController` remains the application owner; all system commands
+return to it; `audio_session 0.2.4` remains the sole intended focus and
+interruption owner; and Linux always retains Fura's custom MPRIS edge.
+
+**Retention boundary:** The current Audioplayers engine, AudioService handler,
+Linux MPRIS, Windows AudioService edge, native registrations, dependencies, and
+tests remain. MediaKit does not own a canonical playlist, Flutter Media Session
+does not operate a native player directly, and neither candidate may silently
+fall back to the other engine/edge and claim success. Provider resolution,
+authentication, browser login, and response-integrity behavior are outside
+this experiment.
+
+**Machine checkpoint, completed 2026-09-18:** The shared engine contract, one-engine/one-edge
+selection regressions, Queue command delegation, focus denial, source
+replacement, completion/error, and MV ownership tests pass. Linux A/B playback,
+custom MPRIS, all 645 Flutter tests, and Release builds pass. Android ARM64
+Debug and Release A/B/C/D all package; the four Release APKs are each
+45,412,046 bytes and have the same ARM64 native-size inventory because the
+retained MV stack already ships the MediaKit runtime. No Android device was
+attached, so notification, lock-screen, headset, background/task, focus/noisy,
+replacement-soak, RSS, service, and single-live-session claims remain Human
+runtime evidence.
+
+**Decision required:** Exact 3.0.5 source audit found that iOS activation
+unconditionally configures/activates AVAudioSession and exposes no switch to
+leave focus ownership solely with `audio_session`. Fura rejects that candidate
+before activation rather than hiding the conflict. Human must choose whether
+to retain AudioService on iOS, accept a platform-specific split, wait for or
+change the dependency, or revise the ownership rule. Until that decision and
+the Android physical matrix pass, A remains the production default and no
+cleanup migration is authorized. See
+[the HD-033 bake-off](docs/research/playback-stack-bakeoff.md).

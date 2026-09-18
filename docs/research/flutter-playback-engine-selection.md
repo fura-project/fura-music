@@ -4,6 +4,15 @@
 - **Last checked:** 2026-09-07
 - **Scope:** Foreground MP3 playback, evidence-selected C200 M4A fallback, and F000 SQ FLAC on Android, iOS, Linux, macOS, and Windows. This does not select downloads, video, or a second queue/player model.
 
+> **HD-033 addendum (2026-09-18):** this document remains the historical
+> production-baseline decision. A later reversible experiment now retains this
+> Audioplayers default while making `media_kit` 1.2.6 independently selectable
+> behind the same engine contract. Because Fura's existing MV stack already
+> resolves `media_kit_libs_video` 1.0.7, the candidate required no
+> `media_kit_libs_audio`; Linux playback integration and Android APK inventory
+> passed with the existing native runtime. See
+> [the bake-off](playback-stack-bakeoff.md). This does not approve cutover.
+
 ## Required boundary
 
 The first engine slice needs only:
@@ -28,9 +37,9 @@ Linux uses an endorsed GStreamer implementation and requires the GStreamer core,
 
 The package intentionally does not own a playlist. That is acceptable for the first slice: application queue semantics should be derived after one real resolved-track flow rather than imported prematurely from an engine.
 
-### `media_kit` 1.2.6
+### `media_kit` 1.2.6 (evidence available at the original selection)
 
-The [published package](https://pub.dev/packages/media_kit/versions/1.2.6) supports every target and has richer playlist, device, track, header, and codec facilities. Audio apps must also add `media_kit_libs_audio`, which expands into target-specific native-library packages, and call global initialization. Those capabilities and that native stack are not required to prove one standard MP3 source. The package remains a fallback candidate if measured codec or gapless requirements exceed the selected engine.
+The [published package](https://pub.dev/packages/media_kit/versions/1.2.6) supports every target and has richer playlist, device, track, header, and codec facilities. A standalone audio app would normally add a MediaKit native-library package and call global initialization. At this checkpoint those capabilities were not required to prove one standard MP3 source. HD-033 later tested the candidate against Fura's already-resolved video native runtime; that newer evidence is recorded separately and does not retroactively change this baseline decision.
 
 ### `just_audio` 0.10.6
 

@@ -2,14 +2,38 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: HUMAN_REVIEW
-  acceptance_milestone: HD-032
-  active_workstream: UPSTREAM_RESPONSE_INTEGRITY
-  current_task: UPSTREAM_RESPONSE_INTEGRITY_MACHINE_COMPLETE
-  next_action: HUMAN_REAL_ACCOUNT_PARTIAL_RESPONSE_REVIEW
+  state: HUMAN_DECISION
+  acceptance_milestone: HD-033
+  active_workstream: PLAYBACK_STACK_BAKEOFF
+  current_task: PLAYBACK_STACK_BAKEOFF_MACHINE_COMPLETE
+  next_action: HUMAN_IOS_FOCUS_DECISION_AND_ANDROID_RUNTIME_MATRIX
 ---
 
 # Current State
+
+- **2026-09-18 HD-033 playback-stack bake-off:** from starting HEAD
+  `a2a0c40532f7c55f58d86ab5ad742c9cac645d44`, Fura now has a developer-only,
+  compile-time 2×2 experiment while retaining
+  `audioplayers 6.8.1 + audio_service 0.18.19` as the no-define production
+  default. `media_kit 1.2.6` uses one engine-lifetime music Player without
+  taking Queue authority; exact-pinned `flutter_media_session 3.0.5` is an
+  independent metadata/command edge over the same Rust-backed
+  `QueuePlaybackController`; and Linux always keeps Fura's custom MPRIS. Shared
+  engine contracts, system projection/command delegation, single-selection,
+  audio-focus denial, source replacement, completion/error, and independent MV
+  ownership regressions pass as part of all 645 Flutter tests. Linux A/B
+  playback, real-session MPRIS, and Release builds pass. Android ARM64 Debug
+  and Release A/B/C/D all package; all
+  four Release APKs are 45,412,046 bytes with identical ARM64 native-size
+  inventories because the existing MV stack already ships MediaKit native
+  libraries. No Android device was attached, so notification/session/service,
+  lock-screen/headset, task/background, focus/noisy, RSS and replacement-soak
+  evidence remains Human review. Exact 3.0.5 source audit found unavoidable
+  iOS AVAudioSession ownership, so Fura rejects the iOS candidate before
+  activation and the overall gate is `HUMAN_DECISION`; A remains production,
+  all rollback code/dependencies/tests remain, and no push is authorized. Full
+  evidence and the physical matrix are in
+  [the playback-stack bake-off](docs/research/playback-stack-bakeoff.md).
 
 - **2026-09-16 HD-032 machine checkpoint:** from starting HEAD
   `6703ac564eb571005fafdb6d3598a89b245bffe2`, all 69 implemented response

@@ -2,6 +2,38 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Human Decision Workstream — playback-stack bake-off (HD-033)
+
+**Goal:** compare `audioplayers` with `media_kit` and `audio_service` with
+`flutter_media_session` through a reversible A/B/C/D experiment without
+changing the Rust Queue, provider media resolution, playback owner, focus
+owner, Linux MPRIS edge, or production default.
+
+**Machine checkpoint, 2026-09-18:** the no-define build remains A
+(`audioplayers + audio_service`). Independent compile-time selectors can build
+A/B/C/D while constructing exactly one music engine and activating exactly one
+system edge. Shared engine and system semantics, Queue delegation, focus
+denial, source replacement, completion/error, MV independence, Linux real
+playback/MPRIS and Linux Release pass. Android ARM64 Debug and Release A/B/C/D
+all package with no measured native-size delta; the existing MV feature already
+ships the MediaKit runtime. All old implementations, dependencies,
+registrations, and tests remain as rollback evidence.
+
+**Decision and runtime gates:** `flutter_media_session 3.0.5` cannot disable
+its direct AVAudioSession ownership on iOS, so Fura rejects the iOS candidate
+before activation. Human must decide whether to retain AudioService on iOS,
+accept a platform split, change/wait for the dependency, or revise sole focus
+ownership. Separately, one physical Android device must run the labeled A/B/C/D
+notification, lock-screen, headset, task/background, focus/noisy, replacement,
+single-live-session and RSS matrix. Until both gates are resolved, A remains
+production and no migration cleanup is authorized. See
+[Playback stack bake-off](docs/research/playback-stack-bakeoff.md).
+
+**Boundaries:** no MediaKit canonical playlist, second player fallback, dual
+MediaSession, second focus manager, Linux edge replacement, provider/auth/login
+change, response-integrity change, user-facing selector, dependency cleanup,
+or push.
+
 ## Human Review Workstream — upstream response integrity (HD-032)
 
 **Goal:** keep strict trust boundaries while ensuring one malformed upstream
