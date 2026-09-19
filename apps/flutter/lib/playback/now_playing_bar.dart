@@ -120,10 +120,6 @@ class NowPlayingBar extends StatelessWidget {
           error: error,
           onSignInAgain: onSignInAgain,
           onOpenExpanded: expandedNavigation?.onOpen,
-          qualityPreference: qualityPreference,
-          onQualityPreferenceChanged: onQualityPreferenceChanged,
-          lyricAuxiliaryMode: lyricAuxiliaryMode,
-          onLyricAuxiliaryModeChanged: onLyricAuxiliaryModeChanged,
         );
       } else {
         bar = SafeArea(
@@ -150,8 +146,6 @@ class NowPlayingBar extends StatelessWidget {
                   onOpenExpanded: expandedNavigation?.onOpen,
                   qualityPreference: qualityPreference,
                   onQualityPreferenceChanged: onQualityPreferenceChanged,
-                  lyricAuxiliaryMode: lyricAuxiliaryMode,
-                  onLyricAuxiliaryModeChanged: onLyricAuxiliaryModeChanged,
                 ),
               ),
             ),
@@ -204,10 +198,6 @@ class _CompactNowPlayingBar extends StatelessWidget {
     required this.error,
     required this.onSignInAgain,
     required this.onOpenExpanded,
-    required this.qualityPreference,
-    required this.onQualityPreferenceChanged,
-    required this.lyricAuxiliaryMode,
-    required this.onLyricAuxiliaryModeChanged,
   });
 
   final QueuePlaybackController controller;
@@ -216,10 +206,6 @@ class _CompactNowPlayingBar extends StatelessWidget {
   final bool error;
   final VoidCallback onSignInAgain;
   final VoidCallback? onOpenExpanded;
-  final AppPlaybackQualityPreference? qualityPreference;
-  final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
-  final LyricAuxiliaryMode? lyricAuxiliaryMode;
-  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -228,14 +214,11 @@ class _CompactNowPlayingBar extends StatelessWidget {
     final onOpenExpanded = this.onOpenExpanded;
     final row = LayoutBuilder(
       builder: (context, constraints) {
-        final hasLyricSelector =
-            lyricAuxiliaryMode != null && onLyricAuxiliaryModeChanged != null;
-        final hasQualitySelector =
-            qualityPreference != null && onQualityPreferenceChanged != null;
-        final combineOptions =
-            constraints.maxWidth <= 360 &&
-            hasLyricSelector &&
-            hasQualitySelector;
+        const controlExtent = 40.0;
+        // The outer compact surface already consumes 24 px of viewport inset.
+        // A 390 px phone therefore offers roughly 366 px here; keep Queue at
+        // that size, but move it into Expanded Now Playing at 360 px and below.
+        final showQueue = constraints.maxWidth >= 360;
         return SizedBox(
           height: _mobileNowPlayingHeight,
           child: Padding(
@@ -258,6 +241,7 @@ class _CompactNowPlayingBar extends StatelessWidget {
                               track: track,
                               status: _statusCopy(context.l10n, controller),
                               error: error,
+                              compact: true,
                             ),
                           ),
                         ],
@@ -284,11 +268,29 @@ class _CompactNowPlayingBar extends StatelessWidget {
                     },
                   ),
                 ),
+                IconButton(
+                  key: const ValueKey('now-playing-previous'),
+                  tooltip: context.l10n.playbackPrevious,
+                  onPressed: !authenticationFailure && controller.hasPrevious
+                      ? () => unawaited(controller.rewind())
+                      : null,
+                  constraints: const BoxConstraints.tightFor(
+                    width: controlExtent,
+                    height: controlExtent,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.skip_previous_rounded),
+                ),
                 if (authenticationFailure)
-                  TextButton(
+                  IconButton.filled(
                     key: const ValueKey('now-playing-sign-in-again'),
+                    tooltip: context.l10n.playbackSignIn,
                     onPressed: onSignInAgain,
-                    child: Text(context.l10n.playbackSignIn),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 42,
+                      height: 42,
+                    ),
+                    icon: const Icon(Icons.login_rounded),
                   )
                 else
                   IconButton.filled(
@@ -303,43 +305,24 @@ class _CompactNowPlayingBar extends StatelessWidget {
                     ),
                     icon: Icon(_primaryIcon(playback.stage)),
                   ),
-                if (combineOptions)
-                  _PlaybackOptionsButton(
-                    key: constraints.maxWidth > 320
-                        ? const ValueKey('now-playing-quality')
-                        : const ValueKey('now-playing-lyric-auxiliary'),
-                    preference: qualityPreference!,
-                    actualQuality: playback.resolvedQuality,
-                    onQualityChanged: onQualityPreferenceChanged!,
-                    lyricMode: lyricAuxiliaryMode!,
-                    hasTranslation:
-                        controller.lyrics?.lyrics?.hasTranslation ?? false,
-                    hasRomanization:
-                        controller.lyrics?.lyrics?.hasRomanization ?? false,
-                    onLyricChanged: onLyricAuxiliaryModeChanged!,
-                    exposeLyricKey: constraints.maxWidth > 320,
-                    dimension: 40,
-                  )
-                else ...[
-                  if (hasLyricSelector)
-                    _LyricAuxiliaryButton(
-                      mode: lyricAuxiliaryMode!,
-                      hasTranslation:
-                          controller.lyrics?.lyrics?.hasTranslation ?? false,
-                      hasRomanization:
-                          controller.lyrics?.lyrics?.hasRomanization ?? false,
-                      onChanged: onLyricAuxiliaryModeChanged!,
-                      dimension: 40,
-                    ),
-                  if (hasQualitySelector)
-                    _PlaybackQualityButton(
-                      preference: qualityPreference!,
-                      actualQuality: playback.resolvedQuality,
-                      onChanged: onQualityPreferenceChanged!,
-                      dimension: 40,
-                    ),
-                ],
-                _QueueButton(controller: controller, dimension: 40),
+                IconButton(
+                  key: const ValueKey('now-playing-next'),
+                  tooltip: context.l10n.playbackNext,
+                  onPressed: !authenticationFailure && controller.hasNext
+                      ? () => unawaited(controller.advance())
+                      : null,
+                  constraints: const BoxConstraints.tightFor(
+                    width: controlExtent,
+                    height: controlExtent,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.skip_next_rounded),
+                ),
+                if (showQueue)
+                  _QueueButton(
+                    controller: controller,
+                    dimension: controlExtent,
+                  ),
               ],
             ),
           ),
@@ -376,8 +359,6 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
     required this.onOpenExpanded,
     required this.qualityPreference,
     required this.onQualityPreferenceChanged,
-    required this.lyricAuxiliaryMode,
-    required this.onLyricAuxiliaryModeChanged,
   });
 
   final QueuePlaybackController controller;
@@ -388,8 +369,6 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
   final VoidCallback? onOpenExpanded;
   final AppPlaybackQualityPreference? qualityPreference;
   final PlaybackQualityPreferenceChanged? onQualityPreferenceChanged;
-  final LyricAuxiliaryMode? lyricAuxiliaryMode;
-  final LyricAuxiliaryModeChanged? onLyricAuxiliaryModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -468,16 +447,6 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
               key: const ValueKey('now-playing-utility-zone'),
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (lyricAuxiliaryMode case final mode?)
-                  if (onLyricAuxiliaryModeChanged case final onChanged?)
-                    _LyricAuxiliaryButton(
-                      mode: mode,
-                      hasTranslation:
-                          controller.lyrics?.lyrics?.hasTranslation ?? false,
-                      hasRomanization:
-                          controller.lyrics?.lyrics?.hasRomanization ?? false,
-                      onChanged: onChanged,
-                    ),
                 if (qualityPreference case final preference?)
                   if (onQualityPreferenceChanged case final onChanged?)
                     _PlaybackQualityButton(
@@ -1673,11 +1642,13 @@ class _TrackInfo extends StatelessWidget {
     required this.track,
     required this.status,
     required this.error,
+    this.compact = false,
   });
 
   final PlaylistTrackSummary track;
   final String status;
   final bool error;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1701,7 +1672,7 @@ class _TrackInfo extends StatelessWidget {
           child: Text(
             semantics,
             key: const ValueKey('now-playing-status'),
-            maxLines: 2,
+            maxLines: compact ? 1 : 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               color: error

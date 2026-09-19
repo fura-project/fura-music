@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/pagination/raw_offset_page.dart';
+import 'package:flutterustmusic/playback/collection_playback_source.dart';
 
 enum ArtistTrackStage { loading, content, empty, error }
 
@@ -46,6 +47,48 @@ class ArtistController extends ChangeNotifier {
       _stage == ArtistTrackStage.content &&
       !_isLoadingMore &&
       _isRetryable(_appendFailure);
+
+  CollectionPlaybackSource collectionPlaybackSource() {
+    final artistIdentity = artist;
+    final gateway = _gateway;
+    return CollectionPlaybackSource(
+      sourceId:
+          'artist-tracks:${artistIdentity.providerId}:${artistIdentity.opaqueId}',
+      providerId: artistIdentity.providerId,
+      initialTracks: _tracks,
+      nextCursor: _nextOffset,
+      hasMore: _hasMore,
+      loader: (cursor) {
+        final operation = gateway.beginLoad(
+          artist: artistIdentity,
+          offset: cursor,
+          size: pageSize,
+        );
+        return CallbackCollectionPlaybackPageOperation(() async {
+          final result = await operation.run();
+          final valid =
+              result.failure == null &&
+              result.offset == cursor &&
+              isValidRawOffsetPage(
+                offset: cursor,
+                continuationOffset: result.continuationOffset,
+                total: result.total,
+                hasMore: result.hasMore,
+                visibleCount: result.tracks.length,
+                omittedCount: result.omittedTrackCount,
+              );
+          return CollectionPlaybackPage(
+            requestCursor: cursor,
+            nextCursor: valid ? result.continuationOffset : cursor,
+            hasMore: valid && result.hasMore,
+            tracks: valid ? result.tracks : const [],
+            omittedTrackCount: valid ? result.omittedTrackCount : 0,
+            failure: valid ? null : _mapArtistCollectionFailure(result.failure),
+          );
+        }, operation.cancel);
+      },
+    );
+  }
 
   Future<void> load() => _loadFirstPage();
 
@@ -173,3 +216,17 @@ class ArtistController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+CollectionPlaybackFailure _mapArtistCollectionFailure(
+  ArtistTrackFailure? failure,
+) => switch (failure) {
+  ArtistTrackFailure.coreUnavailable =>
+    CollectionPlaybackFailure.coreUnavailable,
+  ArtistTrackFailure.network => CollectionPlaybackFailure.network,
+  ArtistTrackFailure.serviceUnavailable =>
+    CollectionPlaybackFailure.serviceUnavailable,
+  ArtistTrackFailure.cancelled => CollectionPlaybackFailure.cancelled,
+  ArtistTrackFailure.alreadyRunning => CollectionPlaybackFailure.alreadyRunning,
+  ArtistTrackFailure.invalidResponse ||
+  null => CollectionPlaybackFailure.invalidResponse,
+};

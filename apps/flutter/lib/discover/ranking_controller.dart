@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/collection_playback_source.dart';
 
 enum RankingGroupStage { loading, content, empty, error }
 
@@ -121,6 +122,54 @@ class RankingTrackController extends ChangeNotifier {
       _stage == RankingTrackStage.content &&
       !_isLoadingMore &&
       _isRetryable(_appendFailure);
+
+  CollectionPlaybackSource collectionPlaybackSource() {
+    final rankingIdentity = _ranking;
+    final gateway = _gateway;
+    return CollectionPlaybackSource(
+      sourceId:
+          'ranking:${rankingIdentity.providerId}:${rankingIdentity.opaqueId}',
+      providerId: rankingIdentity.providerId,
+      initialTracks: _tracks,
+      nextCursor: _nextOffset,
+      hasMore: _hasMore,
+      loader: (cursor) {
+        final operation = gateway.beginTrackLoad(
+          ranking: rankingIdentity,
+          offset: cursor,
+          size: pageSize,
+        );
+        return CallbackCollectionPlaybackPageOperation(() async {
+          final result = await operation.run();
+          final resultRanking = result.ranking;
+          final valid =
+              result.failure == null &&
+              resultRanking != null &&
+              resultRanking.providerId == rankingIdentity.providerId &&
+              resultRanking.opaqueId == rankingIdentity.opaqueId &&
+              result.offset == cursor &&
+              isValidRawOffsetPage(
+                offset: cursor,
+                continuationOffset: result.continuationOffset,
+                total: result.total,
+                hasMore: result.hasMore,
+                visibleCount: result.tracks.length,
+                omittedCount: result.omittedTrackCount,
+              );
+          return CollectionPlaybackPage(
+            requestCursor: cursor,
+            nextCursor: valid ? result.continuationOffset : cursor,
+            hasMore: valid && result.hasMore,
+            tracks: valid ? result.tracks : const [],
+            omittedTrackCount: valid ? result.omittedTrackCount : 0,
+            failure: valid
+                ? null
+                : _mapRankingCollectionFailure(result.failure),
+          );
+        }, operation.cancel);
+      },
+    );
+  }
 
   Future<void> load() => _loadFirstPage();
 
@@ -253,3 +302,16 @@ bool _isRetryable(RankingFailure? failure) =>
     failure == RankingFailure.serviceUnavailable ||
     failure == RankingFailure.invalidResponse ||
     failure == RankingFailure.alreadyRunning;
+
+CollectionPlaybackFailure _mapRankingCollectionFailure(
+  RankingFailure? failure,
+) => switch (failure) {
+  RankingFailure.coreUnavailable => CollectionPlaybackFailure.coreUnavailable,
+  RankingFailure.network => CollectionPlaybackFailure.network,
+  RankingFailure.serviceUnavailable =>
+    CollectionPlaybackFailure.serviceUnavailable,
+  RankingFailure.cancelled => CollectionPlaybackFailure.cancelled,
+  RankingFailure.alreadyRunning => CollectionPlaybackFailure.alreadyRunning,
+  RankingFailure.invalidResponse ||
+  null => CollectionPlaybackFailure.invalidResponse,
+};

@@ -97,10 +97,11 @@ void main() {
                   onBack: () {},
                   backKey: const ValueKey('compact-back'),
                   backTooltip: 'Back',
-                  toolbarAction: IconButton(
-                    key: const ValueKey('compact-refresh'),
-                    onPressed: () {},
-                    icon: const Icon(Icons.refresh_rounded),
+                  actions: CollectionDetailActions(
+                    playAllLabel: 'Play all',
+                    onPlayAll: () {},
+                    refreshLabel: 'Refresh',
+                    onRefresh: () {},
                   ),
                 ),
             bodyBuilder: (context, desktop) => ListView.builder(
@@ -129,7 +130,11 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('compact-refresh')).hitTestable(),
+      find.byKey(const ValueKey('collection-refresh-compact')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('collection-play-all-compact')).hitTestable(),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);

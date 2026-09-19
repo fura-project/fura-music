@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/collection_playback_source.dart';
 
 enum RadarStage { loading, content, empty, error }
 
@@ -52,6 +53,41 @@ class RadarController extends ChangeNotifier {
       _stage == RadarStage.content &&
       !_isLoadingMore &&
       _isRetryable(_appendFailure);
+
+  CollectionPlaybackSource collectionPlaybackSource({
+    required String providerId,
+    String sourceId = 'radar',
+  }) {
+    final gateway = _gateway;
+    return CollectionPlaybackSource(
+      sourceId: '$sourceId:$providerId',
+      providerId: providerId,
+      initialTracks: _tracks,
+      nextCursor: _nextPage,
+      hasMore: _hasMore,
+      loader: (page) {
+        final operation = gateway.beginLoad(page: page);
+        return CallbackCollectionPlaybackPageOperation(() async {
+          final result = await operation.run();
+          final valid =
+              result.failure == null &&
+              result.page == page &&
+              result.omittedTrackCount >= 0 &&
+              (!result.hasMore ||
+                  result.tracks.isNotEmpty ||
+                  result.omittedTrackCount > 0);
+          return CollectionPlaybackPage(
+            requestCursor: page,
+            nextCursor: valid ? page + 1 : page,
+            hasMore: valid && result.hasMore,
+            tracks: valid ? result.tracks : const [],
+            omittedTrackCount: valid ? result.omittedTrackCount : 0,
+            failure: valid ? null : _mapRadarCollectionFailure(result.failure),
+          );
+        }, operation.cancel);
+      },
+    );
+  }
 
   Future<void> load() => _loadFirstPage();
 
@@ -277,3 +313,20 @@ class RadarController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+CollectionPlaybackFailure _mapRadarCollectionFailure(RadarFailure? failure) =>
+    switch (failure) {
+      RadarFailure.coreUnavailable => CollectionPlaybackFailure.coreUnavailable,
+      RadarFailure.authenticationRequired ||
+      RadarFailure.replaced => CollectionPlaybackFailure.authenticationRequired,
+      RadarFailure.credentialRejected ||
+      RadarFailure.credentialRejectedStorageCleanupFailed =>
+        CollectionPlaybackFailure.credentialRejected,
+      RadarFailure.network => CollectionPlaybackFailure.network,
+      RadarFailure.serviceUnavailable =>
+        CollectionPlaybackFailure.serviceUnavailable,
+      RadarFailure.cancelled => CollectionPlaybackFailure.cancelled,
+      RadarFailure.alreadyRunning => CollectionPlaybackFailure.alreadyRunning,
+      RadarFailure.invalidResponse ||
+      null => CollectionPlaybackFailure.invalidResponse,
+    };

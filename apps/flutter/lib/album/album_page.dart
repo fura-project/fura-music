@@ -29,6 +29,7 @@ class AlbumPage extends StatefulWidget {
     required this.onSignInAgain,
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
+    this.onShellActionsChanged,
     this.embedded = false,
     this.backTooltip,
     super.key,
@@ -42,6 +43,7 @@ class AlbumPage extends StatefulWidget {
   final VoidCallback onSignInAgain;
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
+  final ValueChanged<CollectionDetailActions?>? onShellActionsChanged;
   final bool embedded;
   final String? backTooltip;
 
@@ -61,15 +63,44 @@ class _AlbumPageState extends State<AlbumPage> {
       widget.album,
       widget.detailsGateway,
     );
+    _controller.addListener(_scheduleShellActionsUpdate);
     unawaited(_controller.load());
     unawaited(_detailsController.load());
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleShellActionsUpdate();
+  }
+
+  @override
+  void didUpdateWidget(AlbumPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onShellActionsChanged != widget.onShellActionsChanged) {
+      _scheduleShellActionsUpdate();
+    }
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_scheduleShellActionsUpdate);
     _controller.dispose();
     _detailsController.dispose();
     super.dispose();
+  }
+
+  void _scheduleShellActionsUpdate() {
+    if (widget.onShellActionsChanged == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onShellActionsChanged?.call(
+        CollectionDetailActions(
+          playAllLabel: context.l10n.likedPlayAll,
+          onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
+        ),
+      );
+    });
   }
 
   @override
@@ -84,6 +115,18 @@ class _AlbumPageState extends State<AlbumPage> {
         icon: const Icon(Icons.arrow_back_rounded),
       ),
       title: Text(context.l10n.albumType),
+      actions: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => IconButton(
+            key: const ValueKey('album-appbar-play-all'),
+            tooltip: context.l10n.likedPlayAll,
+            onPressed: _controller.tracks.isEmpty ? null : _playAll,
+            icon: const Icon(Icons.play_arrow_rounded),
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
     );
     final body = SafeArea(
       child: AnimatedBuilder(
@@ -108,6 +151,7 @@ class _AlbumPageState extends State<AlbumPage> {
             embedded: widget.embedded,
             onBack: widget.onBack,
             backTooltip: backTooltip,
+            onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
           ),
           bodyBuilder: (context, desktop) => AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -184,9 +228,14 @@ class _AlbumPageState extends State<AlbumPage> {
 
   void _play(int index) {
     unawaited(
-      widget.queuePlaybackController.replaceAndPlay(_controller.tracks, index),
+      widget.queuePlaybackController.replaceAndPlayCollection(
+        _controller.collectionPlaybackSource(),
+        index,
+      ),
     );
   }
+
+  void _playAll() => _play(0);
 
   void _queue(PlaylistTrackSummary track) {
     final playbackStart = widget.queuePlaybackController.push(track);
@@ -313,6 +362,7 @@ class _AlbumHeader extends StatelessWidget {
     required this.embedded,
     required this.onBack,
     required this.backTooltip,
+    required this.onPlayAll,
   });
 
   final AlbumSummary album;
@@ -329,6 +379,7 @@ class _AlbumHeader extends StatelessWidget {
   final bool embedded;
   final VoidCallback onBack;
   final String backTooltip;
+  final VoidCallback? onPlayAll;
 
   @override
   Widget build(BuildContext context) {
@@ -361,6 +412,10 @@ class _AlbumHeader extends StatelessWidget {
       onBack: onBack,
       backKey: const ValueKey('album-back'),
       backTooltip: backTooltip,
+      actions: CollectionDetailActions(
+        playAllLabel: context.l10n.likedPlayAll,
+        onPlayAll: onPlayAll,
+      ),
       expandedHeight: desktop ? 244 : 248,
       expandedDetails: [
         if (descriptors.isNotEmpty) ...[

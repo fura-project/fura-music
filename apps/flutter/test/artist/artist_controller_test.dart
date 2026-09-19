@@ -146,6 +146,39 @@ void main() {
     await disposedLoad;
     controller.dispose();
   });
+
+  test('playback continuation remains usable after page disposal', () async {
+    final gateway = _ScriptedGateway([
+      const _ImmediateOperation(
+        ArtistTrackPageResult(
+          offset: 0,
+          continuationOffset: 1,
+          total: 2,
+          hasMore: true,
+          tracks: [firstTrack],
+        ),
+      ),
+      const _ImmediateOperation(
+        ArtistTrackPageResult(
+          offset: 1,
+          continuationOffset: 2,
+          total: 2,
+          tracks: [secondTrack],
+        ),
+      ),
+    ]);
+    final controller = ArtistController(artist, gateway);
+    await controller.load();
+    final source = controller.collectionPlaybackSource();
+    controller.dispose();
+
+    final page = await source.loader(source.nextCursor).run();
+
+    expect(page.requestCursor, 1);
+    expect(page.nextCursor, 2);
+    expect(page.tracks, [secondTrack]);
+    expect(gateway.requests, [(artist, 0, 30), (artist, 1, 30)]);
+  });
 }
 
 class _ScriptedGateway implements ArtistTrackGateway {

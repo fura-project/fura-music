@@ -447,9 +447,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                   ? controller.retryMore
                   : () =>
                         unawaited(_requestSearchWindow(retryInterrupted: true)),
-              onTrackSelected: (index) => unawaited(
-                widget.queuePlaybackController.replaceAndPlay(tracks, index),
-              ),
+              onTrackSelected: (index) => _playTracks(tracks, index),
               onTrackQueued: _addToQueue,
               onOpenAlbum: widget.onOpenAlbum,
               onOpenArtist: widget.onOpenArtist,
@@ -525,7 +523,27 @@ class _LikedSongsPageState extends State<LikedSongsPage>
 
   void _playAll(List<PlaylistTrackSummary> tracks) {
     if (tracks.isEmpty) return;
-    unawaited(widget.queuePlaybackController.replaceAndPlay(tracks, 0));
+    _playTracks(tracks, 0);
+  }
+
+  void _playTracks(List<PlaylistTrackSummary> tracks, int index) {
+    final controller = _controller;
+    final playlist = widget.playlist;
+    if (_query.isEmpty && controller != null && playlist != null) {
+      unawaited(
+        widget.queuePlaybackController.replaceAndPlayCollection(
+          controller.collectionPlaybackSource(
+            sourceId: 'liked:${playlist.providerId}:${playlist.opaqueId}',
+            providerId: playlist.providerId,
+          ),
+          index,
+        ),
+      );
+      return;
+    }
+    // Filtered results intentionally retain snapshot semantics: their local
+    // order is query-derived rather than a Provider continuation contract.
+    unawaited(widget.queuePlaybackController.replaceAndPlay(tracks, index));
   }
 
   void _addToQueue(PlaylistTrackSummary track) {

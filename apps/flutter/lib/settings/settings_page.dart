@@ -102,6 +102,14 @@ String _qualitySummary(
   AppPlaybackQualityPreference.lossless => l10n.playbackQualitySummaryLossless,
 };
 
+String _lyricAuxiliarySummary(LyricAuxiliaryMode mode, AppLocalizations l10n) =>
+    switch (mode) {
+      LyricAuxiliaryMode.auto => l10n.lyricsAuxiliaryAuto,
+      LyricAuxiliaryMode.translation => l10n.lyricsAuxiliaryTranslation,
+      LyricAuxiliaryMode.romanization => l10n.lyricsAuxiliaryPronunciation,
+      LyricAuxiliaryMode.off => l10n.lyricsAuxiliaryOff,
+    };
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     required this.settings,
@@ -358,6 +366,67 @@ class _SettingsPageState extends State<SettingsPage> {
     ];
   }
 
+  Future<void> _chooseSetting<T>({
+    required String title,
+    required T current,
+    required List<_SettingsChoice<T>> choices,
+    required ValueChanged<T> onSelected,
+  }) async {
+    if (_saving) return;
+    Widget choiceList(BuildContext dialogContext) => RadioGroup<T>(
+      groupValue: current,
+      onChanged: (value) {
+        if (value != null) Navigator.of(dialogContext).pop(value);
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final choice in choices)
+            RadioListTile<T>(
+              key: choice.key,
+              value: choice.value,
+              title: Text(choice.label),
+              subtitle: choice.description == null
+                  ? null
+                  : Text(choice.description!),
+            ),
+        ],
+      ),
+    );
+    final T? selected;
+    if (MediaQuery.sizeOf(context).width < 600) {
+      selected = await showModalBottomSheet<T>(
+        context: context,
+        showDragHandle: true,
+        useSafeArea: true,
+        builder: (sheetContext) => SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              choiceList(sheetContext),
+            ],
+          ),
+        ),
+      );
+    } else {
+      selected = await showDialog<T>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: choiceList(dialogContext),
+          ),
+        ),
+      );
+    }
+    if (!mounted || selected == null || selected == current) return;
+    onSelected(selected);
+  }
+
   List<Widget> _appearanceSection(BuildContext context, bool compact) => [
     Text(
       compact
@@ -374,143 +443,108 @@ class _SettingsPageState extends State<SettingsPage> {
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
     const SizedBox(height: MusicSpacing.contentGap),
-    SegmentedButton<AppThemePreference>(
-      key: const ValueKey('settings-theme-selector'),
-      showSelectedIcon: false,
-      segments: [
-        ButtonSegment(
-          value: AppThemePreference.system,
-          icon: const Icon(Icons.brightness_auto_rounded),
-          label: Text(context.l10n.settingsThemeSystem),
-        ),
-        ButtonSegment(
-          value: AppThemePreference.light,
-          icon: const Icon(Icons.light_mode_outlined),
-          label: Text(context.l10n.settingsThemeLight),
-        ),
-        ButtonSegment(
-          value: AppThemePreference.dark,
-          icon: const Icon(Icons.dark_mode_outlined),
-          label: Text(context.l10n.settingsThemeDark),
-        ),
-      ],
-      selected: {widget.settings.theme},
-      onSelectionChanged: _saving
-          ? null
-          : (selection) => unawaited(
-              _save(widget.settings.copyWith(theme: selection.single)),
+    _SettingsGroup(
+      children: [
+        _SettingsValueTile(
+          key: const ValueKey('settings-theme-selector'),
+          icon: Icons.brightness_auto_rounded,
+          title: context.l10n.settingsAppearanceCompactLabel,
+          value: _themeSummary(widget.settings.theme, context.l10n),
+          enabled: !_saving,
+          onTap: () => unawaited(
+            _chooseSetting<AppThemePreference>(
+              title: context.l10n.settingsAppearanceCompactLabel,
+              current: widget.settings.theme,
+              choices: [
+                _SettingsChoice(
+                  value: AppThemePreference.system,
+                  label: context.l10n.settingsThemeSystem,
+                ),
+                _SettingsChoice(
+                  value: AppThemePreference.light,
+                  label: context.l10n.settingsThemeLight,
+                ),
+                _SettingsChoice(
+                  value: AppThemePreference.dark,
+                  label: context.l10n.settingsThemeDark,
+                ),
+              ],
+              onSelected: (theme) =>
+                  unawaited(_save(widget.settings.copyWith(theme: theme))),
             ),
-    ),
-    const SizedBox(height: MusicSpacing.section),
-    Text(
-      context.l10n.settingsColorSourceLabel,
-      style: Theme.of(context).textTheme.titleMedium,
-    ),
-    const SizedBox(height: MusicSpacing.itemGap),
-    Text(
-      context.l10n.settingsColorSourceBody,
-      style: Theme.of(context).textTheme.bodyMedium
-          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-    ),
-    const SizedBox(height: MusicSpacing.itemGap),
-    RadioGroup<AppColorSourcePreference>(
-      key: const ValueKey('settings-color-source-selector'),
-      groupValue: widget.settings.colorSource,
-      onChanged: (colorSource) {
-        if (_saving || colorSource == null) return;
-        unawaited(_save(widget.settings.copyWith(colorSource: colorSource)));
-      },
-      child: IgnorePointer(
-        ignoring: _saving,
-        child: Column(
-          children: [
-            Builder(
-              builder: (context) {
-                final brightness = Theme.of(context).brightness;
-                final systemScheme = brightness == Brightness.dark
-                    ? widget.systemDarkColorScheme
-                    : widget.systemLightColorScheme;
-                final brandFallback = ColorScheme.fromSeed(
-                  seedColor: MusicMaterialTheme.brandSeedFor(
-                    widget.settings.musicProvider,
-                  ),
-                  brightness: brightness,
-                  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-                );
-                final preview = systemScheme ?? brandFallback;
-                return RadioListTile<AppColorSourcePreference>(
+          ),
+        ),
+        _SettingsValueTile(
+          key: const ValueKey('settings-color-source-selector'),
+          icon: Icons.palette_outlined,
+          title: context.l10n.settingsColorSourceLabel,
+          value: _colorSourceSummary(widget.settings.colorSource, context.l10n),
+          subtitle: context.l10n.settingsColorSourceBody,
+          enabled: !_saving,
+          onTap: () => unawaited(
+            _chooseSetting<AppColorSourcePreference>(
+              title: context.l10n.settingsColorSourceLabel,
+              current: widget.settings.colorSource,
+              choices: [
+                _SettingsChoice(
                   key: const ValueKey('settings-color-source-system'),
                   value: AppColorSourcePreference.system,
-                  secondary: _ColorSourcePreview(
-                    icon: systemScheme == null
-                        ? Icons.wallpaper_outlined
-                        : Icons.wallpaper_rounded,
-                    background: preview.primaryContainer,
-                    foreground: preview.onPrimaryContainer,
-                  ),
-                  title: Text(context.l10n.settingsColorSourceSystem),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.l10n.settingsColorSourceSystemDescription),
-                      const SizedBox(height: 4),
-                      Text(
-                        systemScheme == null
-                            ? context.l10n.settingsColorSourceSystemUnavailable
-                            : context.l10n.settingsColorSourceSystemAvailable,
-                        key: ValueKey(
-                          systemScheme == null
-                              ? 'settings-system-colors-unavailable'
-                              : 'settings-system-colors-available',
-                        ),
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: systemScheme == null
-                                  ? Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant
-                                  : Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            Builder(
-              builder: (context) {
-                final brightness = Theme.of(context).brightness;
-                final previewColors = ColorScheme.fromSeed(
-                  seedColor: MusicMaterialTheme.brandSeedFor(
-                    widget.settings.musicProvider,
-                  ),
-                  brightness: brightness,
-                  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-                );
-                return RadioListTile<AppColorSourcePreference>(
+                  label: context.l10n.settingsColorSourceSystem,
+                  description:
+                      context.l10n.settingsColorSourceSystemDescription,
+                ),
+                _SettingsChoice(
                   key: const ValueKey('settings-color-source-brand'),
                   value: AppColorSourcePreference.brand,
-                  secondary: _ColorSourcePreview(
-                    icon: Icons.palette_rounded,
-                    background: previewColors.primaryContainer,
-                    foreground: previewColors.onPrimaryContainer,
+                  label: context.l10n.settingsColorSourceBrand,
+                  description: context.l10n.settingsColorSourceBrandDescription(
+                    _providerLabel(widget.settings.musicProvider, context.l10n),
                   ),
-                  title: Text(context.l10n.settingsColorSourceBrand),
-                  subtitle: Text(
-                    context.l10n.settingsColorSourceBrandDescription(
-                      _providerLabel(
-                        widget.settings.musicProvider,
-                        context.l10n,
-                      ),
-                    ),
-                  ),
-                );
-              },
+                ),
+              ],
+              onSelected: (source) => unawaited(
+                _save(widget.settings.copyWith(colorSource: source)),
+              ),
             ),
-          ],
+          ),
         ),
-      ),
+        Builder(
+          builder: (context) {
+            final brightness = Theme.of(context).brightness;
+            final systemScheme = brightness == Brightness.dark
+                ? widget.systemDarkColorScheme
+                : widget.systemLightColorScheme;
+            final fallback = ColorScheme.fromSeed(
+              seedColor: MusicMaterialTheme.brandSeedFor(
+                widget.settings.musicProvider,
+              ),
+              brightness: brightness,
+              dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+            );
+            final preview = systemScheme ?? fallback;
+            final status = systemScheme == null
+                ? context.l10n.settingsColorSourceSystemUnavailable
+                : context.l10n.settingsColorSourceSystemAvailable;
+            return _SettingsValueTile(
+              key: ValueKey(
+                systemScheme == null
+                    ? 'settings-system-colors-unavailable'
+                    : 'settings-system-colors-available',
+              ),
+              leading: _ColorSourcePreview(
+                icon: systemScheme == null
+                    ? Icons.wallpaper_outlined
+                    : Icons.wallpaper_rounded,
+                background: preview.primaryContainer,
+                foreground: preview.onPrimaryContainer,
+              ),
+              title: context.l10n.settingsColorSourceSystem,
+              value: status,
+              showChevron: false,
+            );
+          },
+        ),
+      ],
     ),
   ];
 
@@ -527,32 +561,40 @@ class _SettingsPageState extends State<SettingsPage> {
       style: Theme.of(context).textTheme.bodyMedium
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
-    const SizedBox(height: MusicSpacing.itemGap),
-    RadioGroup<AppMusicProvider>(
-      groupValue: widget.settings.musicProvider,
-      onChanged: (provider) {
-        if (_saving || provider == null) return;
-        unawaited(_save(widget.settings.copyWith(musicProvider: provider)));
-      },
-      child: IgnorePointer(
-        ignoring: _saving,
-        child: Column(
-          children: [
-            RadioListTile<AppMusicProvider>(
-              key: const ValueKey('settings-provider-qq-music'),
-              value: AppMusicProvider.qqMusic,
-              title: Text(context.l10n.providerQqMusic),
-              subtitle: Text(context.l10n.providerQqMusicSettingsDescription),
+    const SizedBox(height: MusicSpacing.contentGap),
+    _SettingsGroup(
+      children: [
+        _SettingsValueTile(
+          key: const ValueKey('settings-provider-selector'),
+          icon: Icons.library_music_outlined,
+          title: context.l10n.settingsMusicServiceLabel,
+          value: _providerLabel(widget.settings.musicProvider, context.l10n),
+          enabled: !_saving,
+          onTap: () => unawaited(
+            _chooseSetting<AppMusicProvider>(
+              title: context.l10n.settingsMusicServiceLabel,
+              current: widget.settings.musicProvider,
+              choices: [
+                _SettingsChoice(
+                  key: const ValueKey('settings-provider-qq-music'),
+                  value: AppMusicProvider.qqMusic,
+                  label: context.l10n.providerQqMusic,
+                  description: context.l10n.providerQqMusicSettingsDescription,
+                ),
+                _SettingsChoice(
+                  key: const ValueKey('settings-provider-netease'),
+                  value: AppMusicProvider.netEaseCloudMusic,
+                  label: context.l10n.providerNeteaseCloudMusic,
+                  description: context.l10n.providerNeteaseSettingsDescription,
+                ),
+              ],
+              onSelected: (provider) => unawaited(
+                _save(widget.settings.copyWith(musicProvider: provider)),
+              ),
             ),
-            RadioListTile<AppMusicProvider>(
-              key: const ValueKey('settings-provider-netease'),
-              value: AppMusicProvider.netEaseCloudMusic,
-              title: Text(context.l10n.providerNeteaseCloudMusic),
-              subtitle: Text(context.l10n.providerNeteaseSettingsDescription),
-            ),
-          ],
+          ),
         ),
-      ),
+      ],
     ),
   ];
 
@@ -570,34 +612,42 @@ class _SettingsPageState extends State<SettingsPage> {
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
     const SizedBox(height: MusicSpacing.contentGap),
-    SegmentedButton<AppLocalePreference>(
-      key: const ValueKey('settings-language-selector'),
-      showSelectedIcon: false,
-      segments: [
-        ButtonSegment(
-          value: AppLocalePreference.system,
-          icon: const Icon(Icons.language_rounded),
-          label: Text(context.l10n.settingsLanguageFollowSystem),
-        ),
-        ButtonSegment(
-          value: AppLocalePreference.english,
-          icon: const Icon(Icons.translate_rounded),
-          label: Text(context.l10n.settingsLanguageEnglish),
-        ),
-        ButtonSegment(
-          value: AppLocalePreference.simplifiedChinese,
-          icon: const Icon(Icons.translate_rounded),
-          label: Text(context.l10n.settingsLanguageSimplifiedChinese),
-        ),
-      ],
-      selected: {widget.settings.localePreference},
-      onSelectionChanged: _saving
-          ? null
-          : (selection) => unawaited(
-              _save(
-                widget.settings.copyWith(localePreference: selection.single),
+    _SettingsGroup(
+      children: [
+        _SettingsValueTile(
+          key: const ValueKey('settings-language-selector'),
+          icon: Icons.language_rounded,
+          title: context.l10n.settingsLanguageLabel,
+          value: SettingsSection.language.summary(
+            widget.settings,
+            context.l10n,
+          ),
+          enabled: !_saving,
+          onTap: () => unawaited(
+            _chooseSetting<AppLocalePreference>(
+              title: context.l10n.settingsLanguageLabel,
+              current: widget.settings.localePreference,
+              choices: [
+                _SettingsChoice(
+                  value: AppLocalePreference.system,
+                  label: context.l10n.settingsLanguageFollowSystem,
+                ),
+                _SettingsChoice(
+                  value: AppLocalePreference.english,
+                  label: context.l10n.settingsLanguageEnglish,
+                ),
+                _SettingsChoice(
+                  value: AppLocalePreference.simplifiedChinese,
+                  label: context.l10n.settingsLanguageSimplifiedChinese,
+                ),
+              ],
+              onSelected: (locale) => unawaited(
+                _save(widget.settings.copyWith(localePreference: locale)),
               ),
             ),
+          ),
+        ),
+      ],
     ),
   ];
 
@@ -617,34 +667,65 @@ class _SettingsPageState extends State<SettingsPage> {
           ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
     const SizedBox(height: MusicSpacing.contentGap),
-    SegmentedButton<AppPlaybackQualityPreference>(
-      key: const ValueKey('settings-quality-selector'),
-      showSelectedIcon: false,
-      segments: [
-        ButtonSegment(
-          value: AppPlaybackQualityPreference.standard,
-          icon: const Icon(Icons.music_note_rounded),
-          label: Text(context.l10n.playbackQualityStandard),
-        ),
-        ButtonSegment(
-          value: AppPlaybackQualityPreference.high,
-          icon: const Icon(Icons.high_quality_rounded),
-          label: Text(context.l10n.playbackQualityHigh),
-        ),
-        ButtonSegment(
-          value: AppPlaybackQualityPreference.lossless,
-          icon: const Icon(Icons.graphic_eq_rounded),
-          label: Text(context.l10n.playbackQualityLossless),
-        ),
-      ],
-      selected: {widget.settings.playbackQuality},
-      onSelectionChanged: _saving
-          ? null
-          : (selection) => unawaited(
-              _save(
-                widget.settings.copyWith(playbackQuality: selection.single),
+    _SettingsGroup(
+      children: [
+        _SettingsValueTile(
+          key: const ValueKey('settings-quality-selector'),
+          icon: Icons.high_quality_rounded,
+          title: context.l10n.settingsPlaybackSectionLabel,
+          value: _qualitySummary(widget.settings.playbackQuality, context.l10n),
+          enabled: !_saving,
+          onTap: () => unawaited(
+            _chooseSetting<AppPlaybackQualityPreference>(
+              title: context.l10n.settingsPlaybackSectionLabel,
+              current: widget.settings.playbackQuality,
+              choices: [
+                _SettingsChoice(
+                  value: AppPlaybackQualityPreference.standard,
+                  label: context.l10n.playbackQualityStandard,
+                ),
+                _SettingsChoice(
+                  value: AppPlaybackQualityPreference.high,
+                  label: context.l10n.playbackQualityHigh,
+                ),
+                _SettingsChoice(
+                  value: AppPlaybackQualityPreference.lossless,
+                  label: context.l10n.playbackQualityLossless,
+                ),
+              ],
+              onSelected: (quality) => unawaited(
+                _save(widget.settings.copyWith(playbackQuality: quality)),
               ),
             ),
+          ),
+        ),
+        _SettingsValueTile(
+          key: const ValueKey('settings-lyric-auxiliary-selector'),
+          icon: Icons.lyrics_outlined,
+          title: context.l10n.lyricsAuxiliaryMode,
+          value: _lyricAuxiliarySummary(
+            widget.settings.lyricAuxiliaryMode,
+            context.l10n,
+          ),
+          enabled: !_saving,
+          onTap: () => unawaited(
+            _chooseSetting<LyricAuxiliaryMode>(
+              title: context.l10n.lyricsAuxiliaryMode,
+              current: widget.settings.lyricAuxiliaryMode,
+              choices: [
+                for (final mode in LyricAuxiliaryMode.values)
+                  _SettingsChoice(
+                    value: mode,
+                    label: _lyricAuxiliarySummary(mode, context.l10n),
+                  ),
+              ],
+              onSelected: (mode) => unawaited(
+                _save(widget.settings.copyWith(lyricAuxiliaryMode: mode)),
+              ),
+            ),
+          ),
+        ),
+      ],
     ),
   ];
 }
@@ -753,6 +834,105 @@ class _SettingsContentTransitionState extends State<_SettingsContentTransition>
       );
     },
   );
+}
+
+class _SettingsChoice<T> {
+  const _SettingsChoice({
+    required this.value,
+    required this.label,
+    this.description,
+    this.key,
+  });
+
+  final T value;
+  final String label;
+  final String? description;
+  final Key? key;
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    key: const ValueKey('settings-group'),
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    borderRadius: MusicRadii.content,
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      children: [
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0)
+            Divider(
+              height: 1,
+              indent: 72,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          children[index],
+        ],
+      ],
+    ),
+  );
+}
+
+class _SettingsValueTile extends StatelessWidget {
+  const _SettingsValueTile({
+    required this.title,
+    required this.value,
+    this.icon,
+    this.leading,
+    this.subtitle,
+    this.onTap,
+    this.enabled = true,
+    this.showChevron = true,
+    super.key,
+  });
+
+  final String title;
+  final String value;
+  final IconData? icon;
+  final Widget? leading;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final bool showChevron;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ListTile(
+      enabled: enabled,
+      leading:
+          leading ??
+          (icon == null
+              ? null
+              : Icon(icon, color: enabled ? colors.primary : null)),
+      title: Text(title),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: enabled
+                  ? colors.onSurfaceVariant
+                  : colors.onSurface.withValues(alpha: 0.38),
+            ),
+          ),
+          if (subtitle != null) ...[const SizedBox(height: 2), Text(subtitle!)],
+        ],
+      ),
+      trailing: showChevron && onTap != null
+          ? const Icon(Icons.chevron_right_rounded)
+          : null,
+      onTap: enabled ? onTap : null,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+    );
+  }
 }
 
 class _ColorSourcePreview extends StatelessWidget {

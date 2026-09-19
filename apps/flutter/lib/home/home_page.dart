@@ -40,6 +40,48 @@ abstract final class _HomeGeometry {
   );
 }
 
+class _HomeShelfNavigationController extends ChangeNotifier {
+  Object? _owner;
+  VoidCallback? _previous;
+  VoidCallback? _next;
+  bool _canPrevious = false;
+  bool _canNext = false;
+
+  bool get canPrevious => _canPrevious;
+  bool get canNext => _canNext;
+
+  void previous() => _previous?.call();
+  void next() => _next?.call();
+
+  void update({
+    required Object owner,
+    required bool canPrevious,
+    required bool canNext,
+    required VoidCallback previous,
+    required VoidCallback next,
+  }) {
+    final changed =
+        _owner != owner || _canPrevious != canPrevious || _canNext != canNext;
+    _owner = owner;
+    _previous = previous;
+    _next = next;
+    _canPrevious = canPrevious;
+    _canNext = canNext;
+    if (changed) notifyListeners();
+  }
+
+  void clear(Object owner, {bool notify = true}) {
+    if (_owner != owner) return;
+    final changed = _canPrevious || _canNext || _owner != null;
+    _owner = null;
+    _previous = null;
+    _next = null;
+    _canPrevious = false;
+    _canNext = false;
+    if (changed && notify) notifyListeners();
+  }
+}
+
 double _compactHeroHeight(BuildContext context) {
   final scaledBody = MediaQuery.textScalerOf(context).scale(16);
   final extra = ((scaledBody - 16).clamp(0, 32) * 3).toDouble();
@@ -120,6 +162,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _spotlightMotionDirection = 1;
   bool _spotlightAutoPlaying = true;
   bool _animationsDisabled = false;
+  final _libraryShelfNavigation = _HomeShelfNavigationController();
+  final _publicShelfNavigation = _HomeShelfNavigationController();
 
   @override
   void initState() {
@@ -173,6 +217,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _spotlightTimer?.cancel();
     _spotlightProgressTimer?.cancel();
     _spotlightProgress.dispose();
+    _libraryShelfNavigation.dispose();
+    _publicShelfNavigation.dispose();
     super.dispose();
   }
 
@@ -260,9 +306,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   List<RecommendedPlaylistSummary> get _spotlightCandidates =>
-      widget.authenticated
-      ? widget.homeController.personalizedPlaylists
-      : widget.recommendationController.playlists;
+      _homeSpotlightCandidates(widget.recommendationController.playlists);
 
   DateTime get _now => widget.now?.call() ?? DateTime.now();
 
@@ -288,10 +332,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       (playlist) => _recommendationIdentity(playlist) == _spotlightIdentity,
     );
     if (_spotlightDay != day || selectedIndex < 0) {
-      // Preserve the account feed's ranking; only the public feed uses a daily rotation.
-      final selected = widget.authenticated
-          ? playlists.first
-          : selectHomeSpotlightForDay(playlists, day);
+      final selected = selectHomeSpotlightForDay(playlists, day);
       _spotlightDay = day;
       _spotlightIdentity = selected == null
           ? null
@@ -433,6 +474,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 recommendationReturnFocusNode: _returnToShelf
                     ? widget.recommendationReturnFocusNode
                     : null,
+                libraryShelfNavigation: _libraryShelfNavigation,
+                publicShelfNavigation: _publicShelfNavigation,
               );
             }
             return _HomeWideLayout(
@@ -471,6 +514,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               recommendationReturnFocusNode: _returnToShelf
                   ? widget.recommendationReturnFocusNode
                   : null,
+              libraryShelfNavigation: _libraryShelfNavigation,
+              publicShelfNavigation: _publicShelfNavigation,
             );
           },
         ),
@@ -499,6 +544,14 @@ RecommendedPlaylistSummary? selectHomeSpotlightForDay(
 
 String _recommendationIdentity(RecommendedPlaylistSummary playlist) =>
     '${playlist.providerId}\u0000${playlist.opaqueId}';
+
+List<RecommendedPlaylistSummary> _homeSpotlightCandidates(
+  List<RecommendedPlaylistSummary> playlists,
+) => playlists.take(3).toList(growable: false);
+
+Set<String> _homeSpotlightIdentities(
+  List<RecommendedPlaylistSummary> playlists,
+) => _homeSpotlightCandidates(playlists).map(_recommendationIdentity).toSet();
 
 class _HomeWideLayout extends StatelessWidget {
   const _HomeWideLayout({
@@ -532,6 +585,8 @@ class _HomeWideLayout extends StatelessWidget {
     required this.onOpenTrackArtist,
     required this.lastOpenedRecommendation,
     required this.recommendationReturnFocusNode,
+    required this.libraryShelfNavigation,
+    required this.publicShelfNavigation,
   });
 
   final HomeController homeController;
@@ -564,6 +619,8 @@ class _HomeWideLayout extends StatelessWidget {
   final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
+  final _HomeShelfNavigationController libraryShelfNavigation;
+  final _HomeShelfNavigationController publicShelfNavigation;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -613,6 +670,13 @@ class _HomeWideLayout extends StatelessWidget {
               : context.l10n.commonRefresh,
           onAction: refreshingPlaylists ? null : onRefresh,
           actionLoading: refreshingPlaylists,
+          actions: [
+            _HomeShelfHeaderActions(
+              controller: libraryShelfNavigation,
+              previousKey: const ValueKey('home-library-shelf-previous'),
+              nextKey: const ValueKey('home-library-shelf-next'),
+            ),
+          ],
         ),
         const SizedBox(height: _HomeGeometry.itemGap),
         if (authenticated)
@@ -623,6 +687,7 @@ class _HomeWideLayout extends StatelessWidget {
             onSelected: onOpenRecommendation,
             lastOpened: lastOpenedRecommendation,
             returnFocusNode: recommendationReturnFocusNode,
+            navigation: libraryShelfNavigation,
           )
         else
           _GuestPlaylistSection(
@@ -633,6 +698,7 @@ class _HomeWideLayout extends StatelessWidget {
             lastOpened: lastOpenedRecommendation,
             returnFocusNode: recommendationReturnFocusNode,
             providerDisplayName: providerDisplayName,
+            navigation: libraryShelfNavigation,
           ),
         const SizedBox(height: _HomeGeometry.sectionGap),
         _HomeSectionHeader(
@@ -686,6 +752,13 @@ class _HomeWideLayout extends StatelessWidget {
             actionKey: const ValueKey('home-open-more-recommendations'),
             actionLabel: context.l10n.commonSeeAll,
             onAction: onOpenDiscover,
+            actions: [
+              _HomeShelfHeaderActions(
+                controller: publicShelfNavigation,
+                previousKey: const ValueKey('home-public-shelf-previous'),
+                nextKey: const ValueKey('home-public-shelf-next'),
+              ),
+            ],
           ),
           const SizedBox(height: _HomeGeometry.itemGap),
           _MoreRecommendationsSection(
@@ -695,6 +768,7 @@ class _HomeWideLayout extends StatelessWidget {
             onSelected: onOpenRecommendation,
             lastOpened: lastOpenedRecommendation,
             returnFocusNode: recommendationReturnFocusNode,
+            navigation: publicShelfNavigation,
           ),
         ],
         const SizedBox(height: _HomeGeometry.sectionGap),
@@ -754,6 +828,8 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.onOpenTrackArtist,
     required this.lastOpenedRecommendation,
     required this.recommendationReturnFocusNode,
+    required this.libraryShelfNavigation,
+    required this.publicShelfNavigation,
   });
 
   final HomeController homeController;
@@ -786,6 +862,8 @@ class _HomeCompactLayout extends StatelessWidget {
   final ValueChanged<ArtistSummary>? onOpenTrackArtist;
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
+  final _HomeShelfNavigationController libraryShelfNavigation;
+  final _HomeShelfNavigationController publicShelfNavigation;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -851,6 +929,7 @@ class _HomeCompactLayout extends StatelessWidget {
                   onSelected: onOpenRecommendation,
                   lastOpened: lastOpenedRecommendation,
                   returnFocusNode: recommendationReturnFocusNode,
+                  navigation: libraryShelfNavigation,
                 )
               else
                 _GuestPlaylistSection(
@@ -861,6 +940,7 @@ class _HomeCompactLayout extends StatelessWidget {
                   lastOpened: lastOpenedRecommendation,
                   returnFocusNode: recommendationReturnFocusNode,
                   providerDisplayName: providerDisplayName,
+                  navigation: libraryShelfNavigation,
                 ),
               const SizedBox(height: _HomeGeometry.sectionGap),
               _HomeSectionHeader(
@@ -928,6 +1008,7 @@ class _HomeCompactLayout extends StatelessWidget {
                   onSelected: onOpenRecommendation,
                   lastOpened: lastOpenedRecommendation,
                   returnFocusNode: recommendationReturnFocusNode,
+                  navigation: publicShelfNavigation,
                 ),
               ],
               const SizedBox(height: _HomeGeometry.sectionGap),
@@ -981,6 +1062,7 @@ class _HomeSectionHeader extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.actionLoading = false,
+    this.actions = const [],
   });
 
   final Key titleKey;
@@ -990,6 +1072,7 @@ class _HomeSectionHeader extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final bool actionLoading;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1009,6 +1092,7 @@ class _HomeSectionHeader extends StatelessWidget {
           ),
         ),
       ),
+      for (final action in actions) ...[const SizedBox(width: 4), action],
       if (actionLabel != null) ...[
         const SizedBox(width: MusicSpacing.itemGap),
         TextButton(
@@ -1030,6 +1114,41 @@ class _HomeSectionHeader extends StatelessWidget {
         ),
       ],
     ],
+  );
+}
+
+class _HomeShelfHeaderActions extends StatelessWidget {
+  const _HomeShelfHeaderActions({
+    required this.controller,
+    required this.previousKey,
+    required this.nextKey,
+  });
+
+  final _HomeShelfNavigationController controller;
+  final Key previousKey;
+  final Key nextKey;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => Row(
+      key: const ValueKey('home-shelf-header-actions'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          key: previousKey,
+          tooltip: context.l10n.homePreviousPlaylists,
+          onPressed: controller.canPrevious ? controller.previous : null,
+          icon: const Icon(Icons.chevron_left_rounded),
+        ),
+        IconButton(
+          key: nextKey,
+          tooltip: context.l10n.homeNextPlaylists,
+          onPressed: controller.canNext ? controller.next : null,
+          icon: const Icon(Icons.chevron_right_rounded),
+        ),
+      ],
+    ),
   );
 }
 
@@ -1087,13 +1206,11 @@ class _DailyRecommendationSection extends StatelessWidget {
     final publicPlaylists = controller.stage == RecommendedPlaylistStage.content
         ? controller.playlists
         : const <RecommendedPlaylistSummary>[];
+    final spotlightIdentities = _homeSpotlightIdentities(publicPlaylists);
     final supportingPlaylist = publicPlaylists
         .where(
           (playlist) =>
-              _recommendationIdentity(playlist) !=
-              (spotlightPlaylist == null
-                  ? null
-                  : _recommendationIdentity(spotlightPlaylist!)),
+              !spotlightIdentities.contains(_recommendationIdentity(playlist)),
         )
         .firstOrNull;
     return Column(
@@ -1122,22 +1239,14 @@ class _DailyRecommendationSection extends StatelessWidget {
             featuredPlaylist: spotlightPlaylist,
             guestPopularPlaylist: supportingPlaylist,
             publicStage: controller.stage,
-            featuredCount: authenticated
-                ? homeController.personalizedPlaylists.length
-                : publicPlaylists.length,
-            featuredStage: authenticated
-                ? homeController.personalizedPlaylistsStage
-                : switch (controller.stage) {
-                    RecommendedPlaylistStage.loading =>
-                      HomeResourceStage.loading,
-                    RecommendedPlaylistStage.content =>
-                      HomeResourceStage.content,
-                    RecommendedPlaylistStage.empty => HomeResourceStage.empty,
-                    RecommendedPlaylistStage.error => HomeResourceStage.error,
-                  },
-            onRetryFeatured: authenticated
-                ? homeController.retryPersonalizedPlaylists
-                : controller.retry,
+            featuredCount: _homeSpotlightCandidates(publicPlaylists).length,
+            featuredStage: switch (controller.stage) {
+              RecommendedPlaylistStage.loading => HomeResourceStage.loading,
+              RecommendedPlaylistStage.content => HomeResourceStage.content,
+              RecommendedPlaylistStage.empty => HomeResourceStage.empty,
+              RecommendedPlaylistStage.error => HomeResourceStage.error,
+            },
+            onRetryFeatured: controller.retry,
             newSongController: newSongController,
             dailyPlaylist: daily,
             dailyTracks: dailyTracks,
@@ -1241,9 +1350,7 @@ class _DailyRecommendationContent extends StatelessWidget {
     if (playlist != null) {
       return _FeaturedRecommendationCard(
         playlist: playlist,
-        eyebrow: authenticated
-            ? context.l10n.homeForYouEyebrow
-            : context.l10n.homePublicSpotlightEyebrow,
+        eyebrow: context.l10n.homePublicSpotlightEyebrow,
         height: compact ? _compactHeroHeight(context) : null,
         itemKey: const ValueKey('home-recommendation-0'),
         onSelected: onSelected,
@@ -1393,13 +1500,18 @@ class _DailyRecommendationContent extends StatelessWidget {
     if (radarController.stage == RadarStage.content &&
         radarController.tracks.isNotEmpty) {
       final tracks = radarController.tracks;
+      final source = radarController.collectionPlaybackSource(
+        providerId: tracks.first.providerId,
+        sourceId: 'home-radar',
+      );
       return _TrackRecommendationCard(
         track: tracks.first,
         label: context.l10n.homeRadar,
         itemKey: const ValueKey('home-radar-recommendation'),
         placeholderIcon: Icons.radar_rounded,
         compact: compact,
-        onPlay: () => unawaited(queueController.replaceAndPlay(tracks, 0)),
+        onPlay: () =>
+            unawaited(queueController.replaceAndPlayCollection(source, 0)),
       );
     }
     return _RecommendationSlotState(
@@ -2223,6 +2335,7 @@ class _GuestPlaylistSection extends StatelessWidget {
     required this.lastOpened,
     required this.returnFocusNode,
     required this.providerDisplayName,
+    required this.navigation,
   });
 
   final RecommendedPlaylistController controller;
@@ -2232,6 +2345,7 @@ class _GuestPlaylistSection extends StatelessWidget {
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
   final String providerDisplayName;
+  final _HomeShelfNavigationController navigation;
 
   @override
   Widget build(BuildContext context) {
@@ -2274,14 +2388,16 @@ class _GuestPlaylistSection extends StatelessWidget {
   }
 
   Widget _guestPlaylistContent(BuildContext context) {
-    final spotlightIdentity = spotlightPlaylist == null
-        ? null
-        : _recommendationIdentity(spotlightPlaylist!);
+    final spotlightIdentities = _homeSpotlightIdentities(controller.playlists);
     final publicItems = controller.playlists
         .where(
-          (playlist) => _recommendationIdentity(playlist) != spotlightIdentity,
+          (playlist) =>
+              !spotlightIdentities.contains(_recommendationIdentity(playlist)),
         )
         .toList(growable: false);
+    // The first non-Spotlight public item already occupies the guest's
+    // supporting recommendation slot. Keep the shelf distinct from both
+    // visible recommendation surfaces.
     final items = publicItems.skip(1).take(6).toList(growable: false);
     if (items.isEmpty) {
       return _HomeInlineState(
@@ -2308,6 +2424,7 @@ class _GuestPlaylistSection extends StatelessWidget {
           ? returnFocusNode
           : null,
       placeholderIcon: Icons.queue_music_rounded,
+      navigation: navigation,
     );
   }
 }
@@ -2399,6 +2516,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
     required this.lastOpened,
     required this.returnFocusNode,
     required this.providerDisplayName,
+    required this.navigation,
   });
 
   final HomeController controller;
@@ -2407,6 +2525,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
   final String providerDisplayName;
+  final _HomeShelfNavigationController navigation;
 
   @override
   Widget build(BuildContext context) {
@@ -2464,6 +2583,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
               ? returnFocusNode
               : null,
           placeholderIcon: Icons.auto_awesome_rounded,
+          navigation: navigation,
         ),
       ),
     };
@@ -3018,6 +3138,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
     required this.onSelected,
     required this.lastOpened,
     required this.returnFocusNode,
+    required this.navigation,
   });
 
   final RecommendedPlaylistController controller;
@@ -3026,6 +3147,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
   final ValueChanged<RecommendedPlaylistSummary> onSelected;
   final RecommendedPlaylistSummary? lastOpened;
   final FocusNode? returnFocusNode;
+  final _HomeShelfNavigationController navigation;
 
   @override
   Widget build(BuildContext context) {
@@ -3037,12 +3159,11 @@ class _MoreRecommendationsSection extends StatelessWidget {
         detail: context.l10n.homePrimaryRecommendationShown,
       );
     }
-    final spotlightIdentity = spotlightPlaylist == null
-        ? null
-        : _recommendationIdentity(spotlightPlaylist!);
+    final spotlightIdentities = _homeSpotlightIdentities(controller.playlists);
     final items = controller.playlists
         .where(
-          (playlist) => _recommendationIdentity(playlist) != spotlightIdentity,
+          (playlist) =>
+              !spotlightIdentities.contains(_recommendationIdentity(playlist)),
         )
         .take(6)
         .toList(growable: false);
@@ -3080,6 +3201,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
             ? returnFocusNode
             : null,
         placeholderIcon: Icons.queue_music_rounded,
+        navigation: navigation,
       ),
     );
   }
@@ -3097,6 +3219,7 @@ class _PlaylistShelf<T> extends StatefulWidget {
     required this.onSelected,
     required this.focusNode,
     required this.placeholderIcon,
+    required this.navigation,
     super.key,
   });
 
@@ -3110,6 +3233,7 @@ class _PlaylistShelf<T> extends StatefulWidget {
   final ValueChanged<T> onSelected;
   final FocusNode? Function(T item) focusNode;
   final IconData placeholderIcon;
+  final _HomeShelfNavigationController navigation;
 
   @override
   State<_PlaylistShelf<T>> createState() => _PlaylistShelfState<T>();
@@ -3117,11 +3241,61 @@ class _PlaylistShelf<T> extends StatefulWidget {
 
 class _PlaylistShelfState<T> extends State<_PlaylistShelf<T>> {
   final ScrollController _scroll = ScrollController();
+  final Object _navigationOwner = Object();
+  bool _navigationSyncScheduled = false;
+  bool _overflowing = false;
+  double _pageDistance = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_scheduleNavigationSync);
+  }
+
+  @override
+  void didUpdateWidget(_PlaylistShelf<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.navigation != widget.navigation) {
+      oldWidget.navigation.clear(_navigationOwner, notify: false);
+    }
+    _scheduleNavigationSync();
+  }
 
   @override
   void dispose() {
+    widget.navigation.clear(_navigationOwner, notify: false);
+    _scroll.removeListener(_scheduleNavigationSync);
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _scheduleNavigationSync() {
+    if (_navigationSyncScheduled) return;
+    _navigationSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigationSyncScheduled = false;
+      if (!mounted) return;
+      _syncNavigation();
+    });
+  }
+
+  void _syncNavigation() {
+    if (widget.compact || !_overflowing || !_scroll.hasClients) {
+      widget.navigation.clear(_navigationOwner);
+      return;
+    }
+    final position = _scroll.position;
+    if (!position.hasContentDimensions) {
+      widget.navigation.clear(_navigationOwner);
+      return;
+    }
+    widget.navigation.update(
+      owner: _navigationOwner,
+      canPrevious: position.pixels > position.minScrollExtent + 0.5,
+      canNext: position.pixels < position.maxScrollExtent - 0.5,
+      previous: () => _move(-_pageDistance),
+      next: () => _move(_pageDistance),
+    );
   }
 
   void _move(double distance) {
@@ -3164,91 +3338,52 @@ class _PlaylistShelfState<T> extends State<_PlaylistShelf<T>> {
           (cardWidth + _HomeGeometry.itemGap) * widget.items.length -
               _HomeGeometry.itemGap >
           constraints.maxWidth + 0.5;
-      return Stack(
+      _overflowing = overflowing;
+      _pageDistance = constraints.maxWidth * 0.8;
+      _scheduleNavigationSync();
+      return SizedBox(
         key: widget.layoutKey,
-        children: [
-          SizedBox(
-            height: cardWidth + MediaQuery.textScalerOf(context).scale(48) + 12,
-            child: NotificationListener<ScrollMetricsNotification>(
-              onNotification: (_) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() {});
-                });
-                return false;
+        height: cardWidth + MediaQuery.textScalerOf(context).scale(48) + 12,
+        child: NotificationListener<ScrollMetricsNotification>(
+          onNotification: (_) {
+            _scheduleNavigationSync();
+            return false;
+          },
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              scrollbars: false,
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+                PointerDeviceKind.stylus,
               },
-              child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(
-                  scrollbars: false,
-                  dragDevices: {
-                    PointerDeviceKind.touch,
-                    PointerDeviceKind.mouse,
-                    PointerDeviceKind.trackpad,
-                    PointerDeviceKind.stylus,
-                  },
-                ),
-                child: Scrollbar(
-                  controller: _scroll,
-                  thumbVisibility: overflowing && !widget.compact,
-                  child: ListView.separated(
-                    key: PageStorageKey(widget.layoutKey),
-                    controller: _scroll,
-                    scrollDirection: Axis.horizontal,
-                    itemCount: widget.items.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(width: _HomeGeometry.itemGap),
-                    itemBuilder: (context, index) => _PlaylistArtworkCard<T>(
-                      width: cardWidth,
-                      item: widget.items[index],
-                      itemKey: widget.itemKey(index),
-                      title: widget.title,
-                      artworkUri: widget.artworkUri,
-                      semanticLabel: widget.semanticLabel,
-                      placeholderIcon: widget.placeholderIcon,
-                      onSelected: widget.onSelected,
-                      focusNode: widget.focusNode(widget.items[index]),
-                    ),
-                  ),
+            ),
+            child: Scrollbar(
+              controller: _scroll,
+              thumbVisibility: overflowing && !widget.compact,
+              child: ListView.separated(
+                key: PageStorageKey(widget.layoutKey),
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.items.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: _HomeGeometry.itemGap),
+                itemBuilder: (context, index) => _PlaylistArtworkCard<T>(
+                  width: cardWidth,
+                  item: widget.items[index],
+                  itemKey: widget.itemKey(index),
+                  title: widget.title,
+                  artworkUri: widget.artworkUri,
+                  semanticLabel: widget.semanticLabel,
+                  placeholderIcon: widget.placeholderIcon,
+                  onSelected: widget.onSelected,
+                  focusNode: widget.focusNode(widget.items[index]),
                 ),
               ),
             ),
           ),
-          if (overflowing && !widget.compact)
-            PositionedDirectional(
-              top: 8,
-              end: 8,
-              child: ListenableBuilder(
-                listenable: _scroll,
-                builder: (context, _) => Material(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh
-                      .withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: context.l10n.homePreviousPlaylists,
-                        onPressed: _scroll.hasClients && _scroll.offset > 0.5
-                            ? () => _move(-constraints.maxWidth * 0.8)
-                            : null,
-                        icon: const Icon(Icons.chevron_left_rounded),
-                      ),
-                      IconButton(
-                        tooltip: context.l10n.homeNextPlaylists,
-                        onPressed:
-                            !_scroll.hasClients ||
-                                !_scroll.position.hasContentDimensions ||
-                                _scroll.offset <
-                                    _scroll.position.maxScrollExtent - 0.5
-                            ? () => _move(constraints.maxWidth * 0.8)
-                            : null,
-                        icon: const Icon(Icons.chevron_right_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       );
     },
   );

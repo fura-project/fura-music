@@ -17,17 +17,6 @@ import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 
-@immutable
-class PlaylistDetailShellAction {
-  const PlaylistDetailShellAction({
-    required this.refreshing,
-    required this.onRefresh,
-  });
-
-  final bool refreshing;
-  final VoidCallback? onRefresh;
-}
-
 class PlaylistDetailPage extends StatefulWidget {
   const PlaylistDetailPage({
     required this.playlist,
@@ -51,7 +40,7 @@ class PlaylistDetailPage extends StatefulWidget {
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
-  final ValueChanged<PlaylistDetailShellAction>? onShellActionChanged;
+  final ValueChanged<CollectionDetailActions?>? onShellActionChanged;
   final bool embedded;
 
   @override
@@ -100,7 +89,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       widget.onShellActionChanged?.call(
-        PlaylistDetailShellAction(
+        CollectionDetailActions(
+          playAllLabel: context.l10n.likedPlayAll,
+          onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
+          refreshLabel: _controller.isRefreshing
+              ? context.l10n.libraryRefreshingPlaylist
+              : context.l10n.libraryRefreshPlaylist,
           refreshing: _controller.isRefreshing,
           onRefresh: _controller.isLoading ? null : _controller.refresh,
         ),
@@ -121,6 +115,15 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       ),
       title: Text(widget.playlist.title),
       actions: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => IconButton(
+            key: const ValueKey('playlist-detail-appbar-play-all'),
+            tooltip: l10n.likedPlayAll,
+            onPressed: _controller.tracks.isEmpty ? null : _playAll,
+            icon: const Icon(Icons.play_arrow_rounded),
+          ),
+        ),
         AnimatedBuilder(
           animation: _controller,
           builder: (context, _) => IconButton(
@@ -151,6 +154,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             collapseProgress: progress,
             embedded: widget.embedded,
             onBack: widget.onBack,
+            onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
             onRefresh: _controller.isLoading ? null : _controller.refresh,
             refreshing: _controller.isRefreshing,
           ),
@@ -221,8 +225,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           onLoadMore: _controller.loadMore,
           onRetryMore: _controller.retryMore,
           onTrackSelected: (index) => unawaited(
-            widget.queuePlaybackController.replaceAndPlay(
-              _controller.tracks,
+            widget.queuePlaybackController.replaceAndPlayCollection(
+              _controller.collectionPlaybackSource(
+                sourceId:
+                    'playlist:${widget.playlist.providerId}:${widget.playlist.opaqueId}',
+                providerId: widget.playlist.providerId,
+              ),
               index,
             ),
           ),
@@ -261,6 +269,20 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     };
   }
 
+  void _playAll() {
+    if (_controller.tracks.isEmpty) return;
+    unawaited(
+      widget.queuePlaybackController.replaceAndPlayCollection(
+        _controller.collectionPlaybackSource(
+          sourceId:
+              'playlist:${widget.playlist.providerId}:${widget.playlist.opaqueId}',
+          providerId: widget.playlist.providerId,
+        ),
+        0,
+      ),
+    );
+  }
+
   void _addToQueue(PlaylistTrackSummary track) {
     final playbackStart = widget.queuePlaybackController.push(track);
     if (!mounted) {
@@ -285,6 +307,7 @@ class _PlaylistHeader extends StatelessWidget {
     required this.collapseProgress,
     required this.embedded,
     required this.onBack,
+    required this.onPlayAll,
     required this.onRefresh,
     required this.refreshing,
   });
@@ -295,6 +318,7 @@ class _PlaylistHeader extends StatelessWidget {
   final double collapseProgress;
   final bool embedded;
   final VoidCallback onBack;
+  final VoidCallback? onPlayAll;
   final VoidCallback? onRefresh;
   final bool refreshing;
 
@@ -316,18 +340,14 @@ class _PlaylistHeader extends StatelessWidget {
       onBack: onBack,
       backKey: const ValueKey('playlist-detail-back'),
       backTooltip: l10n.libraryBackToPlaylists,
-      toolbarAction: IconButton(
-        key: const ValueKey('playlist-detail-header-refresh'),
-        tooltip: refreshing
+      actions: CollectionDetailActions(
+        playAllLabel: l10n.likedPlayAll,
+        onPlayAll: onPlayAll,
+        refreshLabel: refreshing
             ? l10n.libraryRefreshingPlaylist
             : l10n.libraryRefreshPlaylist,
-        onPressed: onRefresh,
-        icon: refreshing
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              )
-            : const Icon(Icons.refresh_rounded),
+        onRefresh: onRefresh,
+        refreshing: refreshing,
       ),
     );
   }

@@ -31,6 +31,7 @@ class ArtistPage extends StatefulWidget {
     this.onOpenAlbum,
     this.backTooltip,
     this.onHeaderCollapsedChanged,
+    this.onShellActionsChanged,
     this.embedded = false,
     super.key,
   });
@@ -44,6 +45,7 @@ class ArtistPage extends StatefulWidget {
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final String? backTooltip;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
+  final ValueChanged<CollectionDetailActions?>? onShellActionsChanged;
   final bool embedded;
 
   @override
@@ -67,14 +69,45 @@ class _ArtistPageState extends State<ArtistPage> {
       widget.albumGateway ?? const RustArtistAlbumGateway(),
     );
     _controllers = Listenable.merge([_controller, _albumController]);
+    _controllers.addListener(_scheduleShellActionsUpdate);
     unawaited(_controller.load());
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleShellActionsUpdate();
+  }
+
+  @override
+  void didUpdateWidget(ArtistPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onShellActionsChanged != widget.onShellActionsChanged) {
+      _scheduleShellActionsUpdate();
+    }
+  }
+
+  @override
   void dispose() {
+    _controllers.removeListener(_scheduleShellActionsUpdate);
     _controller.dispose();
     _albumController.dispose();
     super.dispose();
+  }
+
+  void _scheduleShellActionsUpdate() {
+    if (widget.onShellActionsChanged == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onShellActionsChanged?.call(
+        _section == _ArtistSection.tracks
+            ? CollectionDetailActions(
+                playAllLabel: context.l10n.likedPlayAll,
+                onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
+              )
+            : null,
+      );
+    });
   }
 
   @override
@@ -95,6 +128,11 @@ class _ArtistPageState extends State<ArtistPage> {
             embedded: widget.embedded,
             onBack: widget.onBack,
             backTooltip: backTooltip,
+            onPlayAll:
+                _section == _ArtistSection.tracks &&
+                    _controller.tracks.isNotEmpty
+                ? _playAll
+                : null,
           ),
           bodyBuilder: (context, desktop) => Column(
             children: [
@@ -152,6 +190,22 @@ class _ArtistPageState extends State<ArtistPage> {
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         title: Text(context.l10n.artistType),
+        actions: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) => IconButton(
+              key: const ValueKey('artist-appbar-play-all'),
+              tooltip: context.l10n.likedPlayAll,
+              onPressed:
+                  _section == _ArtistSection.tracks &&
+                      _controller.tracks.isNotEmpty
+                  ? _playAll
+                  : null,
+              icon: const Icon(Icons.play_arrow_rounded),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: body,
       bottomNavigationBar: NowPlayingBar(
@@ -174,6 +228,7 @@ class _ArtistPageState extends State<ArtistPage> {
     final section = selected.single;
     if (_section == section) return;
     setState(() => _section = section);
+    _scheduleShellActionsUpdate();
     if (section == _ArtistSection.albums) {
       unawaited(_albumController.load());
     }
@@ -276,9 +331,14 @@ class _ArtistPageState extends State<ArtistPage> {
 
   void _play(int index) {
     unawaited(
-      widget.queuePlaybackController.replaceAndPlay(_controller.tracks, index),
+      widget.queuePlaybackController.replaceAndPlayCollection(
+        _controller.collectionPlaybackSource(),
+        index,
+      ),
     );
   }
+
+  void _playAll() => _play(0);
 
   void _queue(PlaylistTrackSummary track) {
     final playbackStart = widget.queuePlaybackController.push(track);
@@ -306,6 +366,7 @@ class _ArtistHeader extends StatelessWidget {
     required this.embedded,
     required this.onBack,
     required this.backTooltip,
+    required this.onPlayAll,
   });
 
   final ArtistSummary artist;
@@ -316,6 +377,7 @@ class _ArtistHeader extends StatelessWidget {
   final bool embedded;
   final VoidCallback onBack;
   final String backTooltip;
+  final VoidCallback? onPlayAll;
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +401,12 @@ class _ArtistHeader extends StatelessWidget {
       onBack: onBack,
       backKey: const ValueKey('artist-back'),
       backTooltip: backTooltip,
+      actions: section == _ArtistSection.tracks
+          ? CollectionDetailActions(
+              playAllLabel: context.l10n.likedPlayAll,
+              onPlayAll: onPlayAll,
+            )
+          : null,
     );
   }
 }

@@ -197,7 +197,7 @@ void main() {
           of: utilities,
           matching: find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.descendant(
@@ -271,8 +271,19 @@ void main() {
           quality: PlaybackAudioQuality.lossless,
         ),
       ),
+      _ImmediateMediaOperation(
+        _qualitySuccess(
+          'high',
+          format: PlaybackAudioFormat.mp3,
+          quality: PlaybackAudioQuality.high,
+        ),
+      ),
     ]);
-    final audio = _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]);
+    final audio = _FakeAudioEngine([
+      _FakeAudioSession(),
+      _FakeAudioSession(),
+      _FakeAudioSession(),
+    ]);
     await _openDetail(
       tester,
       media: media,
@@ -293,12 +304,45 @@ void main() {
 
     expect(find.text('SQ'), findsOneWidget);
     expect(find.text('Playing SQ quality.'), findsOneWidget);
-    expect(media.requests, [('qq-music', 'first'), ('qq-music', 'first')]);
+    final notice = find.byKey(const ValueKey('playback-transient-notice'));
+    expect(notice, findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(
+      tester.getRect(notice).bottom,
+      lessThan(
+        tester
+            .getRect(find.byKey(const ValueKey('now-playing-desktop-bar')))
+            .top,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality-high')));
+    await tester.pumpAndSettle();
+    expect(find.text('Playing HQ quality.'), findsOneWidget);
+    expect(find.text('Playing SQ quality.'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('playback-transient-notice')),
+      findsOneWidget,
+    );
+    expect(media.requests, [
+      ('qq-music', 'first'),
+      ('qq-music', 'first'),
+      ('qq-music', 'first'),
+    ]);
     expect(audio.requestedFormats, [
       ForegroundAudioFormat.mp3,
       ForegroundAudioFormat.flac,
+      ForegroundAudioFormat.mp3,
     ]);
-    expect(settingsStorage.document, contains('"playbackQuality":"lossless"'));
+    expect(settingsStorage.document, contains('"playbackQuality":"high"'));
+    await tester.pump(const Duration(milliseconds: 1800));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('playback-transient-notice')),
+      findsNothing,
+    );
   });
 
   testWidgets(
@@ -317,6 +361,8 @@ void main() {
         settingsStore: AppSettingsStore(storage: settingsStorage),
       );
       await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -360,8 +406,6 @@ void main() {
         'Lyrics auxiliary: Pronunciation',
       );
 
-      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
-      await tester.pumpAndSettle();
       expect(find.text('fixture pronunciation'), findsOneWidget);
       expect(find.text('fixture translation'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -382,6 +426,8 @@ void main() {
         settingsStore: AppSettingsStore(storage: settingsStorage),
       );
       await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -1468,6 +1514,8 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
 
@@ -1797,6 +1845,36 @@ void main() {
     expect(find.byTooltip('Stop'), findsNothing);
     expect(find.byTooltip('Volume'), findsNothing);
     expect(find.byTooltip('Show queue'), findsOneWidget);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    for (final width in const [390.0, 360.0, 320.0]) {
+      tester.view.physicalSize = Size(width, 844);
+      await tester.pumpAndSettle();
+      final previous = find.byKey(const ValueKey('now-playing-previous'));
+      final play = find.byKey(const ValueKey('now-playing-primary-action'));
+      final next = find.byKey(const ValueKey('now-playing-next'));
+      final previousRect = tester.getRect(previous);
+      final playRect = tester.getRect(play);
+      final nextRect = tester.getRect(next);
+      expect(previousRect.size, const Size.square(48), reason: '$width px');
+      expect(playRect.size, const Size.square(48), reason: '$width px');
+      expect(nextRect.size, const Size.square(48), reason: '$width px');
+      expect(playRect.center.dx - previousRect.center.dx, closeTo(48, 0.1));
+      expect(nextRect.center.dx - playRect.center.dx, closeTo(48, 0.1));
+      expect(
+        find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('now-playing-quality')), findsNothing);
+      expect(
+        find.byTooltip('Show queue'),
+        width == 390 ? findsOneWidget : findsNothing,
+      );
+      expect(tester.takeException(), isNull, reason: '$width px');
+    }
+    tester.view.physicalSize = const Size(390, 844);
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('now-playing-primary-action')));
     await tester.pumpAndSettle();
     expect(

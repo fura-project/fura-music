@@ -93,6 +93,14 @@ abstract interface class PlaybackQueueGateway {
   PlaybackQueueResult clear();
 }
 
+/// Optional atomic batch capability used by app-lifetime collection paging.
+///
+/// It is separate from [PlaybackQueueGateway] so lightweight test gateways
+/// that do not exercise collection continuation keep their existing surface.
+abstract interface class PlaybackQueueBatchGateway {
+  PlaybackQueueResult extend(List<PlaylistTrackSummary> tracks);
+}
+
 abstract interface class PlaybackQueueBridge {
   bridge_queue.PlaybackQueueUpdate snapshot();
 
@@ -103,6 +111,9 @@ abstract interface class PlaybackQueueBridge {
 
   bridge_queue.PlaybackQueueUpdate push(
     bridge_library.LibraryTrackSummary track,
+  );
+  bridge_queue.PlaybackQueueUpdate extend(
+    List<bridge_library.LibraryTrackSummary> tracks,
   );
   bridge_queue.PlaybackQueueUpdate extendAndAdvanceFromTerminal(
     List<bridge_library.LibraryTrackSummary> tracks,
@@ -119,7 +130,8 @@ abstract interface class PlaybackQueueBridge {
   bridge_queue.PlaybackQueueUpdate clear();
 }
 
-class RustPlaybackQueueGateway implements PlaybackQueueGateway {
+class RustPlaybackQueueGateway
+    implements PlaybackQueueGateway, PlaybackQueueBatchGateway {
   factory RustPlaybackQueueGateway({PlaybackQueueBridge? bridge}) =>
       RustPlaybackQueueGateway._(bridge);
 
@@ -147,6 +159,13 @@ class RustPlaybackQueueGateway implements PlaybackQueueGateway {
   @override
   PlaybackQueueResult push(PlaylistTrackSummary track) =>
       _invoke(() => _resolvedBridge.push(_bridgeTrack(track)));
+
+  @override
+  PlaybackQueueResult extend(List<PlaylistTrackSummary> tracks) => _invoke(
+    () => _resolvedBridge.extend(
+      tracks.map(_bridgeTrack).toList(growable: false),
+    ),
+  );
 
   @override
   PlaybackQueueResult extendAndAdvanceFromTerminal(
@@ -226,6 +245,11 @@ class _RustPlaybackQueueBridge implements PlaybackQueueBridge {
   bridge_queue.PlaybackQueueUpdate push(
     bridge_library.LibraryTrackSummary track,
   ) => _handle.push(track: track);
+
+  @override
+  bridge_queue.PlaybackQueueUpdate extend(
+    List<bridge_library.LibraryTrackSummary> tracks,
+  ) => _handle.extend(tracks: tracks);
 
   @override
   bridge_queue.PlaybackQueueUpdate extendAndAdvanceFromTerminal(

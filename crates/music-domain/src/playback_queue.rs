@@ -254,6 +254,32 @@ impl PlaybackQueue {
         became_current
     }
 
+    /// Atomically appends a prepared batch without changing an existing
+    /// current position. An empty queue selects the first appended entry, the
+    /// same positional behavior as the first [`Self::push`]. Provider paging
+    /// and validation remain outside the Domain queue.
+    ///
+    /// Validation happens before mutation. Duplicate entries remain distinct
+    /// positions, matching the rest of the queue contract.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidPlaybackQueue::EmptyExtension`] for an empty batch.
+    /// Callers that translate provider or bridge values must validate the
+    /// complete batch before invoking this Domain mutation.
+    pub fn extend(&mut self, tracks: Vec<TrackSummary>) -> Result<bool, InvalidPlaybackQueue> {
+        if tracks.is_empty() {
+            return Err(InvalidPlaybackQueue::EmptyExtension);
+        }
+        let became_current = self.current_index.is_none();
+        self.tracks.extend(tracks);
+        if became_current {
+            self.current_index = Some(0);
+        }
+        self.rebuild_shuffle_cycle();
+        Ok(became_current)
+    }
+
     /// Atomically appends a prepared continuation batch and selects its first
     /// entry. This is deliberately narrower than `push`: it is valid only at
     /// the terminal position of sequential, repeat-off playback. Provider
@@ -460,6 +486,7 @@ pub enum InvalidPlaybackQueue {
     MissingCurrent,
     UnexpectedCurrent { index: usize },
     CurrentOutOfBounds { index: usize, len: usize },
+    EmptyExtension,
     EmptyContinuation,
     ContinuationRequiresTerminal,
 }
@@ -478,6 +505,7 @@ impl fmt::Display for InvalidPlaybackQueue {
                 formatter,
                 "playback queue position {index} is outside {len} entries"
             ),
+            Self::EmptyExtension => formatter.write_str("playback queue extension cannot be empty"),
             Self::EmptyContinuation => {
                 formatter.write_str("playback queue continuation cannot be empty")
             }
@@ -563,6 +591,42 @@ mod tests {
         assert_eq!(queue.current_index(), Some(2));
         assert_eq!(queue.current().expect("current").title(), "next");
         assert!(queue.has_next());
+    }
+
+    #[test]
+    fn batch_extension_is_atomic_and_preserves_current_and_duplicates() {
+        let duplicate = track("same");
+        let mut queue =
+            PlaybackQueue::try_new(vec![track("one"), track("two")], Some(0)).expect("queue");
+
+        assert!(
+            !queue
+                .extend(vec![duplicate.clone(), duplicate])
+                .expect("extension")
+        );
+        assert_eq!(queue.len(), 4);
+        assert_eq!(queue.current_index(), Some(0));
+        assert_eq!(queue.tracks()[2].id(), queue.tracks()[3].id());
+
+        let original = queue.clone();
+        assert_eq!(
+            queue.extend(Vec::new()),
+            Err(InvalidPlaybackQueue::EmptyExtension)
+        );
+        assert_eq!(queue, original);
+    }
+
+    #[test]
+    fn batch_extension_establishes_current_for_an_empty_queue() {
+        let mut queue = PlaybackQueue::default();
+
+        assert!(
+            queue
+                .extend(vec![track("one"), track("two")])
+                .expect("extension")
+        );
+        assert_eq!(queue.current_index(), Some(0));
+        assert_eq!(queue.len(), 2);
     }
 
     #[test]

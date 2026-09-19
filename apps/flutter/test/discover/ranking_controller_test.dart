@@ -165,6 +165,42 @@ void main() {
     await disposedLoad;
     controller.dispose();
   });
+
+  test('ranking playback continuation survives page disposal', () async {
+    final gateway = _ScriptedRankingGateway(
+      trackOperations: [
+        const _ImmediateTrackOperation(
+          RankingTrackPageResult(
+            ranking: ranking,
+            continuationOffset: 1,
+            total: 2,
+            hasMore: true,
+            tracks: [first],
+          ),
+        ),
+        const _ImmediateTrackOperation(
+          RankingTrackPageResult(
+            ranking: ranking,
+            offset: 1,
+            continuationOffset: 2,
+            total: 2,
+            tracks: [second],
+          ),
+        ),
+      ],
+    );
+    final controller = RankingTrackController(ranking, gateway);
+    await controller.load();
+    final source = controller.collectionPlaybackSource();
+    controller.dispose();
+
+    final page = await source.loader(source.nextCursor).run();
+
+    expect(page.requestCursor, 1);
+    expect(page.nextCursor, 2);
+    expect(page.tracks, [second]);
+    expect(gateway.trackRequests, [(ranking, 0, 30), (ranking, 1, 30)]);
+  });
 }
 
 class _ScriptedRankingGateway implements RankingGateway {

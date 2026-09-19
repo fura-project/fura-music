@@ -30,8 +30,7 @@ import 'package:flutter/material.dart'
         FontWeight,
         GlobalKey,
         GridView,
-        Icon,
-        Icons,
+        IconButton,
         InkWell,
         LinearProgressIndicator,
         ListTile,
@@ -45,6 +44,7 @@ import 'package:flutter/material.dart'
         Opacity,
         PageStorageKey,
         PinnedHeaderSliver,
+        RadioListTile,
         SafeArea,
         Scaffold,
         Scrollable,
@@ -366,7 +366,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(source.offsets, [0]);
       expect(find.text(_en.recentSongsTab(250)), findsOneWidget);
-      expect(find.text(_en.recentPlayLoaded(100)), findsOneWidget);
+      expect(find.text(_en.likedPlayAll), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('recent-plays-track-0')),
@@ -1035,6 +1035,18 @@ void main() {
                 title: 'Open-air playlist',
                 trackCount: 36,
               ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:signed-out-more',
+                title: 'Public supporting pick',
+                trackCount: 42,
+              ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:signed-out-shelf-more',
+                title: 'Public shelf pick',
+                trackCount: 28,
+              ),
             ],
           ),
         ),
@@ -1061,7 +1073,7 @@ void main() {
     expect(find.text('fura music'), findsOneWidget);
     expect(find.text('Sign in to QQ Music'), findsOneWidget);
     expect(find.text('Public listening pick'), findsOneWidget);
-    expect(find.text('Million-play favorites'), findsOneWidget);
+    expect(find.text('Public shelf pick'), findsOneWidget);
     expect(find.text('Fresh release'), findsWidgets);
     expect(find.text('Popular playlists'), findsOneWidget);
     expect(find.text('New songs'), findsWidgets);
@@ -1168,7 +1180,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Popular playlist'), findsOneWidget);
-        expect(find.text('Million-play favorites'), findsOneWidget);
+        expect(find.text('Acoustic mornings'), findsOneWidget);
         expect(find.text('Popular playlists'), findsOneWidget);
         expect(
           find.byKey(const ValueKey('home-guest-playlists-shelf')),
@@ -1897,6 +1909,16 @@ void main() {
                 opaqueId: 'catalog:81002',
                 title: 'Public secondary pick',
               ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:81003',
+                title: 'Public tertiary pick',
+              ),
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:81004',
+                title: 'Public shelf pick',
+              ),
             ],
           ),
         ),
@@ -1921,7 +1943,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final heroRect = tester.getRect(
-      find.byKey(const ValueKey('home-recommendation-hero-state')),
+      find.byKey(const ValueKey('home-recommendation-0')),
     );
     final radarRect = tester.getRect(
       find.byKey(const ValueKey('home-radar-recommendation')),
@@ -1930,23 +1952,14 @@ void main() {
       find.byKey(const ValueKey('home-daily-recommendation-state')),
     );
     final firstPublicTitleRect = tester.getRect(find.text('Public hero pick'));
-    final secondPublicTitleRect = tester.getRect(
-      find.text('Public secondary pick'),
-    );
-    expect(
-      [
-        firstPublicTitleRect,
-        secondPublicTitleRect,
-      ].where(heroRect.overlaps).length,
-      0,
-    );
+    expect(heroRect.overlaps(firstPublicTitleRect), isTrue);
     expect(
       radarRect.overlaps(tester.getRect(find.text('Real Radar slot'))),
       isTrue,
     );
     expect(dailyStateRect.overlaps(heroRect), isFalse);
     expect(dailyStateRect.overlaps(radarRect), isFalse);
-    expect(find.text('Public secondary pick'), findsOneWidget);
+    expect(find.text('Public shelf pick'), findsOneWidget);
     expect(find.text('Daily recommendation'), findsOneWidget);
     expect(find.text('Daily 30 is unavailable right now.'), findsOneWidget);
     expect(
@@ -2362,8 +2375,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await pumpFixture(const Size(1440, 960));
-    final initialSpotlight = personalPlaylists.first;
-    final nextSpotlight = personalPlaylists[1];
+    final initialSpotlight = publicPlaylists.first;
+    final nextSpotlight = publicPlaylists[1];
     final hero = find.byKey(const ValueKey('home-recommendation-0'));
     final sceneSwitcher = find.byKey(
       const ValueKey('home-spotlight-scene-switcher'),
@@ -2540,18 +2553,22 @@ void main() {
     final shelf = find.byKey(const ValueKey('home-library-shelf'));
     await tester.ensureVisible(shelf);
     await tester.pumpAndSettle();
-    final firstCard = tester.getRect(
-      find.byKey(const ValueKey('home-library-playlist-0')),
-    );
     final shelfList = find.descendant(
       of: shelf,
       matching: find.byType(Scrollable),
     );
     final shelfPosition = tester.state<ScrollableState>(shelfList).position;
     expect(shelfPosition.maxScrollExtent, greaterThan(0));
-    await tester.tap(
-      find.descendant(of: shelf, matching: find.byTooltip('Next playlists')),
+    final nextShelf = find.byKey(const ValueKey('home-library-shelf-next'));
+    expect(nextShelf, findsOneWidget);
+    expect(find.descendant(of: shelf, matching: nextShelf), findsNothing);
+    await tester.ensureVisible(nextShelf);
+    await tester.pumpAndSettle();
+    expect(tester.widget<IconButton>(nextShelf).onPressed, isNotNull);
+    final firstCard = tester.getRect(
+      find.byKey(const ValueKey('home-library-playlist-0')),
     );
+    await tester.tap(nextShelf);
     await tester.pumpAndSettle();
     final lastCard = tester.getRect(
       find.byKey(const ValueKey('home-library-playlist-5')),
@@ -2588,6 +2605,7 @@ void main() {
       find.byKey(const ValueKey('now-playing-compact-layout')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('home-library-shelf-next')), findsNothing);
     if (captureReviewImages) {
       await expectLater(
         find.byType(MusicApp),
@@ -2764,7 +2782,7 @@ void main() {
       'last Home recommendation',
     );
     expect(detail.requests.map((request) => request.playlist.opaqueId), [
-      'owned:7001:201',
+      'catalog:81001',
       'owned:7001:201',
     ]);
     expect(tester.takeException(), isNull);
@@ -3187,7 +3205,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('New Songs keeps one native segment control while switching', (
+  testWidgets('New Songs keeps one stable selector while switching', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1100, 760);
@@ -3226,14 +3244,10 @@ void main() {
       find.byKey(const ValueKey('new-song-category-selector')),
       findsOneWidget,
     );
-    expect(find.byType(SegmentedButton<NewSongCategory>), findsOneWidget);
+    expect(find.byType(SegmentedButton<NewSongCategory>), findsNothing);
     expect(
-      tester
-          .widget<SegmentedButton<NewSongCategory>>(
-            find.byType(SegmentedButton<NewSongCategory>),
-          )
-          .selected,
-      {NewSongCategory.western},
+      find.byKey(const ValueKey('new-song-category-western')),
+      findsOneWidget,
     );
     expect(find.byKey(const ValueKey('new-songs-loading')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -3276,8 +3290,6 @@ void main() {
       final play = find.byKey(const ValueKey('new-songs-play-all'));
       expect(categoryMenu, findsOneWidget);
       expect(play, findsOneWidget);
-      await tester.tap(categoryMenu);
-      await tester.pumpAndSettle();
       for (final category in NewSongCategory.values) {
         expect(
           find.byKey(ValueKey('new-song-category-${category.name}')),
@@ -3285,6 +3297,8 @@ void main() {
         );
       }
 
+      await tester.drag(categoryMenu, const Offset(-220, 0));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('new-song-category-western')));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
@@ -3575,6 +3589,13 @@ void main() {
         find.byKey(const ValueKey('recommendations-content')),
         findsOneWidget,
       );
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('recommendations-artwork-0')))
+            .width,
+        lessThanOrEqualTo(176.01),
+        reason: 'artwork width $width',
+      );
       expect(tester.takeException(), isNull, reason: 'width $width');
     }
   });
@@ -3773,6 +3794,25 @@ void main() {
         find.byKey(const ValueKey('discover-type-selector')),
         findsOneWidget,
       );
+      final playlistTab = find.byKey(const ValueKey('discover-type-playlists'));
+      final albumTab = find.byKey(const ValueKey('discover-type-new-albums'));
+      final playlistTabCenter = tester.getCenter(playlistTab);
+      final albumTabCenter = tester.getCenter(albumTab);
+      await tester.tap(find.byKey(const ValueKey('discover-type-rankings')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.byKey(const ValueKey('discover-body-playlists')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('discover-body-rankings')),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(playlistTab), playlistTabCenter);
+      expect(tester.getCenter(albumTab), albumTabCenter);
+      await tester.pumpAndSettle();
+      await tester.tap(playlistTab);
+      await tester.pumpAndSettle();
       final recommendationCard = tester.getSize(
         find.byKey(const ValueKey('recommendations-item-0')),
       );
@@ -3809,12 +3849,15 @@ void main() {
         control: 'discover-type-selector',
         item: 'discover-type-new-albums',
       );
-      final regionControl = tester.widget<SegmentedButton<NewAlbumRegion>>(
-        find.byType(SegmentedButton<NewAlbumRegion>),
+      expect(find.byType(SegmentedButton<NewAlbumRegion>), findsNothing);
+      expect(
+        find.byKey(const ValueKey('new-album-region-mainlandChina')),
+        findsOneWidget,
       );
-      expect(regionControl.showSelectedIcon, isTrue);
-      expect(regionControl.selectedIcon, isA<Icon>());
-      expect((regionControl.selectedIcon! as Icon).icon, Icons.check_rounded);
+      expect(
+        find.byKey(const ValueKey('stable-selector-edge-affordance')),
+        findsOneWidget,
+      );
       await _selectAdaptiveSection(
         tester,
         control: 'discover-type-selector',
@@ -4230,6 +4273,7 @@ void main() {
           albumTrackGateway: albums,
           albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
           playbackQueueGateway: queue,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
           lyricGateway: const _WidgetLyricGateway(),
         ),
       );
@@ -4563,6 +4607,7 @@ void main() {
           albumTrackGateway: albumTracks,
           albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
           playbackQueueGateway: queue,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
           lyricGateway: const _WidgetLyricGateway(),
         ),
       );
@@ -4757,6 +4802,7 @@ void main() {
           albumTrackGateway: albumTracks,
           albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
           playbackQueueGateway: queue,
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
           lyricGateway: const _WidgetLyricGateway(),
         ),
       );
@@ -4931,12 +4977,6 @@ void main() {
       final japanCategory = find.byKey(
         const ValueKey('new-song-category-japan'),
       );
-      if (japanCategory.evaluate().isEmpty) {
-        await tester.tap(
-          find.byKey(const ValueKey('new-song-category-selector')),
-        );
-        await tester.pumpAndSettle();
-      }
       await tester.ensureVisible(japanCategory);
       await tester.tap(japanCategory);
       await tester.pumpAndSettle();
@@ -8562,6 +8602,10 @@ void main() {
         findsNothing,
       );
       await tester.tap(
+        find.byKey(const ValueKey('settings-color-source-selector')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
         find.byKey(const ValueKey('settings-color-source-brand')),
       );
       await tester.pumpAndSettle();
@@ -8673,6 +8717,8 @@ void main() {
         find.byKey(const ValueKey('settings-color-source-selector')),
         findsOneWidget,
       );
+      await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Dark'));
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"theme":"dark"'));
@@ -8920,11 +8966,7 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('settings-provider-qq-music')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('settings-provider-netease')),
+        find.byKey(const ValueKey('settings-provider-selector')),
         findsOneWidget,
       );
       if (captureReviewImage) {
@@ -9100,10 +9142,18 @@ void main() {
         );
       }
 
+      await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Dark'));
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"theme":"dark"'));
-      await tester.tap(find.text('System colors (Monet)'));
+      await tester.tap(
+        find.byKey(const ValueKey('settings-color-source-selector')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('settings-color-source-system')),
+      );
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"colorSource":"system"'));
       expect(
@@ -9136,11 +9186,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('settings-provider-qq-music')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('settings-provider-netease')),
+        find.byKey(const ValueKey('settings-provider-selector')),
         findsOneWidget,
       );
       if (captureReviewImages) {
@@ -10498,10 +10544,15 @@ Future<void> _changeLanguagePreference(
   WidgetTester tester,
   AppLocalePreference preference,
 ) async {
-  final selector = tester.widget<SegmentedButton<AppLocalePreference>>(
-    find.byKey(const ValueKey('settings-language-selector')),
+  await tester.tap(find.byKey(const ValueKey('settings-language-selector')));
+  await tester.pumpAndSettle();
+  final option = find.byWidgetPredicate(
+    (widget) =>
+        widget is RadioListTile<AppLocalePreference> &&
+        widget.value == preference,
   );
-  selector.onSelectionChanged!({preference});
+  expect(option, findsOneWidget);
+  await tester.tap(option);
   await tester.pumpAndSettle();
 }
 
@@ -10520,6 +10571,8 @@ Future<void> _switchProviderFromDesktopSettings(
       matchesGoldenFile(Uri.file(reviewImagePath)),
     );
   }
+  await tester.tap(find.byKey(const ValueKey('settings-provider-selector')));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(providerKey));
   await tester.pumpAndSettle();
 }
@@ -11994,11 +12047,13 @@ class _WidgetAudioSession implements ForegroundAudioSession {
   }
 }
 
-class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
+class _WidgetPlaybackQueueGateway
+    implements PlaybackQueueGateway, PlaybackQueueBatchGateway {
   _WidgetPlaybackQueueGateway({this.mutatesOnAdvance = false});
 
   final bool mutatesOnAdvance;
   final List<PlaylistTrackSummary> pushed = [];
+  final List<List<PlaylistTrackSummary>> extensions = [];
   final List<(List<PlaylistTrackSummary>, int?)> replacements = [];
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
 
@@ -12018,9 +12073,37 @@ class _WidgetPlaybackQueueGateway implements PlaybackQueueGateway {
   }
 
   @override
+  PlaybackQueueResult extend(List<PlaylistTrackSummary> tracks) {
+    extensions.add(List.of(tracks));
+    final currentIndex = _snapshot.currentIndex;
+    _snapshot = PlaybackQueueSnapshot(
+      tracks: [..._snapshot.tracks, ...tracks],
+      currentIndex: currentIndex,
+      hasPrevious: currentIndex != null && currentIndex > 0,
+      hasNext:
+          currentIndex != null &&
+          currentIndex + 1 < _snapshot.tracks.length + tracks.length,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot);
+  }
+
+  @override
   PlaybackQueueResult extendAndAdvanceFromTerminal(
     List<PlaylistTrackSummary> tracks,
-  ) => PlaybackQueueResult(snapshot: _snapshot);
+  ) {
+    extensions.add(List.of(tracks));
+    final nextIndex = _snapshot.tracks.length;
+    _snapshot = PlaybackQueueSnapshot(
+      tracks: [..._snapshot.tracks, ...tracks],
+      currentIndex: nextIndex,
+      hasPrevious: nextIndex > 0,
+      hasNext: tracks.length > 1,
+    );
+    return PlaybackQueueResult(
+      snapshot: _snapshot,
+      playbackRequested: tracks.isNotEmpty,
+    );
+  }
 
   @override
   PlaybackQueueResult replace({

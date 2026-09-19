@@ -27,6 +27,7 @@ class RankingPage extends StatefulWidget {
     this.onOpenAlbum,
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
+    this.onShellActionsChanged,
     this.embedded = false,
     super.key,
   });
@@ -39,6 +40,7 @@ class RankingPage extends StatefulWidget {
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
+  final ValueChanged<CollectionDetailActions?>? onShellActionsChanged;
   final bool embedded;
 
   @override
@@ -52,13 +54,42 @@ class _RankingPageState extends State<RankingPage> {
   void initState() {
     super.initState();
     _controller = RankingTrackController(widget.ranking, widget.gateway);
+    _controller.addListener(_scheduleShellActionsUpdate);
     unawaited(_controller.load());
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleShellActionsUpdate();
+  }
+
+  @override
+  void didUpdateWidget(RankingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onShellActionsChanged != widget.onShellActionsChanged) {
+      _scheduleShellActionsUpdate();
+    }
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_scheduleShellActionsUpdate);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _scheduleShellActionsUpdate() {
+    if (widget.onShellActionsChanged == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onShellActionsChanged?.call(
+        CollectionDetailActions(
+          playAllLabel: context.l10n.likedPlayAll,
+          onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
+        ),
+      );
+    });
   }
 
   @override
@@ -71,6 +102,18 @@ class _RankingPageState extends State<RankingPage> {
         icon: const Icon(Icons.arrow_back_rounded),
       ),
       title: Text(context.l10n.rankingTitle),
+      actions: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => IconButton(
+            key: const ValueKey('ranking-appbar-play-all'),
+            tooltip: context.l10n.likedPlayAll,
+            onPressed: _controller.tracks.isEmpty ? null : _playAll,
+            icon: const Icon(Icons.play_arrow_rounded),
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
     );
     final body = SafeArea(
       child: AnimatedBuilder(
@@ -89,6 +132,7 @@ class _RankingPageState extends State<RankingPage> {
             collapseProgress: progress,
             embedded: widget.embedded,
             onBack: widget.onBack,
+            onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
           ),
           bodyBuilder: (context, desktop) => AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -169,9 +213,14 @@ class _RankingPageState extends State<RankingPage> {
 
   void _play(int index) {
     unawaited(
-      widget.queuePlaybackController.replaceAndPlay(_controller.tracks, index),
+      widget.queuePlaybackController.replaceAndPlayCollection(
+        _controller.collectionPlaybackSource(),
+        index,
+      ),
     );
   }
+
+  void _playAll() => _play(0);
 
   void _queue(PlaylistTrackSummary track) {
     final playbackStart = widget.queuePlaybackController.push(track);
@@ -197,6 +246,7 @@ class _RankingHeader extends StatelessWidget {
     required this.collapseProgress,
     required this.embedded,
     required this.onBack,
+    required this.onPlayAll,
   });
 
   final RankingSummary ranking;
@@ -205,6 +255,7 @@ class _RankingHeader extends StatelessWidget {
   final double collapseProgress;
   final bool embedded;
   final VoidCallback onBack;
+  final VoidCallback? onPlayAll;
 
   @override
   Widget build(BuildContext context) {
@@ -223,6 +274,10 @@ class _RankingHeader extends StatelessWidget {
       onBack: onBack,
       backKey: const ValueKey('ranking-back'),
       backTooltip: context.l10n.rankingBackTooltip,
+      actions: CollectionDetailActions(
+        playAllLabel: context.l10n.likedPlayAll,
+        onPlayAll: onPlayAll,
+      ),
     );
   }
 }

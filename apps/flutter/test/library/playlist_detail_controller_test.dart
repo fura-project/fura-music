@@ -1081,6 +1081,46 @@ void main() {
     expect(controller.canRetry, isFalse);
     controller.dispose();
   });
+
+  test('detached collection continuation survives page disposal', () async {
+    final gateway = _FakeDetailGateway();
+    final controller = PlaylistDetailController(playlist, gateway);
+    final load = controller.load();
+    gateway.complete(
+      0,
+      PlaylistTrackPageResult(
+        offset: 0,
+        nextOffset: 1,
+        total: 2,
+        hasMore: true,
+        tracks: _tracks(0, 1),
+      ),
+    );
+    await load;
+    final source = controller.collectionPlaybackSource(
+      sourceId: 'playlist:test',
+      providerId: 'qq-music',
+    );
+    controller.dispose();
+
+    final next = source.loader(source.nextCursor).run();
+    gateway.complete(
+      1,
+      PlaylistTrackPageResult(
+        offset: 1,
+        nextOffset: 2,
+        total: 2,
+        tracks: _tracks(1, 1),
+      ),
+    );
+    final page = await next;
+
+    expect(page.requestCursor, 1);
+    expect(page.nextCursor, 2);
+    expect(page.hasMore, isFalse);
+    expect(page.tracks.single.opaqueId, 'track:1');
+    expect(gateway.requests.map((request) => request.offset), [0, 1]);
+  });
 }
 
 class _Request {

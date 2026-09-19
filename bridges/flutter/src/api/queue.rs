@@ -127,6 +127,21 @@ impl PlaybackQueueHandle {
     }
 
     #[flutter_rust_bridge::frb(sync)]
+    pub fn extend(&self, tracks: Vec<LibraryTrackSummary>) -> PlaybackQueueUpdate {
+        // Convert the complete Provider-neutral batch before locking or
+        // mutating the authoritative queue. Invalid input is all-or-nothing.
+        let tracks = match tracks
+            .into_iter()
+            .map(domain_track_summary)
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(tracks) => tracks,
+            Err(()) => return failed(PlaybackQueueFailure::InvalidTrack),
+        };
+        self.with_queue(move |queue| queue.extend(tracks).map_err(map_position_error))
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
     pub fn extend_and_advance_from_terminal(
         &self,
         tracks: Vec<LibraryTrackSummary>,
@@ -442,6 +457,26 @@ mod tests {
         let before = queue.snapshot().snapshot.expect("before invalid");
         let invalid = queue.extend_and_advance_from_terminal(vec![track("too-early")]);
         assert_eq!(invalid.failure, Some(PlaybackQueueFailure::InvalidPosition));
+        assert_eq!(queue.snapshot().snapshot.expect("unchanged"), before);
+    }
+
+    #[test]
+    fn batch_extension_preserves_current_and_rejects_the_whole_invalid_batch() {
+        let queue = queue_with_three();
+
+        let update = queue.extend(vec![track("next"), track("later")]);
+        assert!(!update.playback_requested);
+        let snapshot = update.snapshot.expect("extended");
+        assert_eq!(snapshot.tracks.len(), 5);
+        assert_eq!(snapshot.current_index, Some(0));
+
+        let before = queue.snapshot().snapshot.expect("before invalid");
+        let invalid = LibraryTrackSummary {
+            provider_id: "QQ Music".into(),
+            ..track("invalid")
+        };
+        let failed = queue.extend(vec![track("valid"), invalid]);
+        assert_eq!(failed.failure, Some(PlaybackQueueFailure::InvalidTrack));
         assert_eq!(queue.snapshot().snapshot.expect("unchanged"), before);
     }
 

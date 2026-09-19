@@ -4,10 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
+import 'package:flutterustmusic/playback/collection_playback_source.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 enum RoamStage { idle, loading, continued, unsupported, empty, failed }
+
+enum CollectionPlaybackStage { idle, ready, loading, failed, exhausted }
 
 class QueuePlaybackController extends ChangeNotifier {
   QueuePlaybackController(
@@ -42,6 +45,21 @@ class QueuePlaybackController extends ChangeNotifier {
   RelatedTracksLoadOperation? _roamOperation;
   int _roamGeneration = 0;
   int _terminalIntentEpoch = 0;
+  CollectionPlaybackSource? _collectionSource;
+  CollectionPlaybackPageOperation? _collectionOperation;
+  Future<void>? _collectionLoadFuture;
+  CollectionPlaybackFailure? _collectionFailure;
+  CollectionPlaybackStage _collectionStage = CollectionPlaybackStage.idle;
+  int _collectionGeneration = 0;
+  int _collectionNextCursor = 0;
+  bool _collectionHasMore = false;
+  int? _collectionLastDemandIndex;
+  int? _collectionTerminalToken;
+  String? _collectionTerminalTrackKey;
+  int? _collectionTerminalQueueLength;
+
+  static const int _collectionLookaheadTracks = 3;
+  static const int _collectionTerminalEmptyPageBudget = 3;
 
   PlaybackQueueSnapshot get snapshot => _snapshot;
 
@@ -62,6 +80,7 @@ class QueuePlaybackController extends ChangeNotifier {
   bool get roamEnabled => _roamEnabled;
   bool get roamEffective =>
       _roamEnabled &&
+      !collectionHasMore &&
       _relatedTracksGateway != null &&
       _snapshot.order == PlaybackOrder.sequential &&
       _snapshot.repeatMode == PlaybackRepeatMode.off &&
@@ -70,6 +89,10 @@ class QueuePlaybackController extends ChangeNotifier {
         null => false,
       };
   RoamStage get roamStage => _roamStage;
+  CollectionPlaybackStage get collectionStage => _collectionStage;
+  CollectionPlaybackFailure? get collectionFailure => _collectionFailure;
+  String? get collectionSourceId => _collectionSource?.sourceId;
+  bool get collectionHasMore => _collectionSource != null && _collectionHasMore;
 
   void setRoamEnabled(bool enabled) {
     if (_disposed || enabled == _roamEnabled) return;
@@ -82,6 +105,7 @@ class QueuePlaybackController extends ChangeNotifier {
     List<PlaylistTrackSummary> tracks,
     int currentIndex,
   ) {
+    _invalidateCollection();
     _invalidateRoam();
     return _apply(
       _gateway.replace(tracks: tracks, currentIndex: currentIndex),
@@ -89,27 +113,79 @@ class QueuePlaybackController extends ChangeNotifier {
     );
   }
 
+  /// Starts one logical Provider collection from its currently materialized
+  /// prefix. The continuation is copied into this app-lifetime Queue owner, so
+  /// disposing the presenting page cannot stop bounded playback paging.
+  Future<void> replaceAndPlayCollection(
+    CollectionPlaybackSource source,
+    int currentIndex,
+  ) async {
+    if (_disposed) return;
+    _invalidateCollection();
+    _invalidateRoam();
+    final validSource =
+        source.sourceId.trim().isNotEmpty &&
+        source.providerId.trim().isNotEmpty &&
+        source.initialTracks.isNotEmpty &&
+        currentIndex >= 0 &&
+        currentIndex < source.initialTracks.length &&
+        source.nextCursor >= 0 &&
+        source.initialTracks.every(
+          (track) => track.providerId == source.providerId,
+        );
+    if (!validSource ||
+        (source.hasMore && _gateway is! PlaybackQueueBatchGateway)) {
+      _collectionStage = CollectionPlaybackStage.failed;
+      _collectionFailure = CollectionPlaybackFailure.invalidResponse;
+      notifyListeners();
+      return;
+    }
+
+    final result = _gateway.replace(
+      tracks: source.initialTracks,
+      currentIndex: currentIndex,
+    );
+    if (!_accept(result)) return;
+    _collectionSource = source;
+    _collectionNextCursor = source.nextCursor;
+    _collectionHasMore = source.hasMore;
+    _collectionStage = source.hasMore
+        ? CollectionPlaybackStage.ready
+        : CollectionPlaybackStage.exhausted;
+    _collectionFailure = null;
+    _completionHandled = false;
+    notifyListeners();
+    final current = _snapshot.current;
+    if (current != null) await _playback.playTrack(current);
+    _maybeDemandCollection();
+  }
+
   Future<void> push(PlaylistTrackSummary track) {
+    _invalidateCollection();
     _invalidateRoam();
     return _apply(_gateway.push(track), playChangedCurrent: true);
   }
 
-  Future<void> select(int index) {
+  Future<void> select(int index) async {
     _invalidateRoam();
-    return _apply(_gateway.select(index), playChangedCurrent: true);
+    await _apply(_gateway.select(index), playChangedCurrent: true);
+    _maybeDemandCollection();
   }
 
-  Future<void> advance() {
+  Future<void> advance() async {
     _invalidateRoam();
-    return _apply(_gateway.advance(), playChangedCurrent: true);
+    await _apply(_gateway.advance(), playChangedCurrent: true);
+    _maybeDemandCollection();
   }
 
-  Future<void> rewind() {
+  Future<void> rewind() async {
     _invalidateRoam();
-    return _apply(_gateway.rewind(), playChangedCurrent: true);
+    await _apply(_gateway.rewind(), playChangedCurrent: true);
+    _maybeDemandCollection();
   }
 
   Future<void> setOrder(PlaybackOrder order) {
+    if (order != _snapshot.order) _invalidateCollection();
     _invalidateRoam();
     return _apply(_gateway.setOrder(order), playChangedCurrent: false);
   }
@@ -121,6 +197,7 @@ class QueuePlaybackController extends ChangeNotifier {
   );
 
   Future<void> setRepeatMode(PlaybackRepeatMode repeatMode) {
+    if (repeatMode != _snapshot.repeatMode) _invalidateCollection();
     _invalidateRoam();
     return _apply(
       _gateway.setRepeatMode(repeatMode),
@@ -135,11 +212,13 @@ class QueuePlaybackController extends ChangeNotifier {
   });
 
   Future<void> remove(int index) {
+    _invalidateCollection();
     _invalidateRoam();
     return _apply(_gateway.remove(index), playChangedCurrent: true);
   }
 
   Future<void> clear() {
+    _invalidateCollection();
     _invalidateRoam();
     return _apply(_gateway.clear(), playChangedCurrent: true);
   }
@@ -169,6 +248,33 @@ class QueuePlaybackController extends ChangeNotifier {
     if (_disposed) return Future.value();
     _invalidateRoam();
     return _playback.stop();
+  }
+
+  /// Invalidates Provider-bound continuation without changing the Queue.
+  /// Account/provider owners call this synchronously before switching identity
+  /// or signing out.
+  void invalidateCollectionSource() {
+    if (_disposed) return;
+    _invalidateCollection();
+    notifyListeners();
+  }
+
+  /// Retries the current bounded page after a typed continuation failure.
+  /// Existing Queue entries and the current Track remain untouched.
+  void retryCollectionContinuation() {
+    if (_disposed ||
+        _collectionSource == null ||
+        !_collectionHasMore ||
+        _collectionOperation != null) {
+      return;
+    }
+    _collectionLastDemandIndex = null;
+    _collectionFailure = null;
+    _collectionStage = CollectionPlaybackStage.ready;
+    final terminalToken = _playback.stage == TrackPlaybackStage.completed
+        ? _terminalIntentEpoch
+        : null;
+    _maybeDemandCollection(force: true, terminalToken: terminalToken);
   }
 
   /// Re-resolves the current Track after an explicit playback-quality change.
@@ -214,7 +320,265 @@ class QueuePlaybackController extends ChangeNotifier {
       }
       return;
     }
+    final collectionClaimed = await _continueCollectionFromTerminal(
+      terminalToken,
+    );
+    if (collectionClaimed) return;
     await _continueRoamFromTerminal(terminalToken);
+  }
+
+  Future<bool> _continueCollectionFromTerminal(int terminalToken) async {
+    final source = _collectionSource;
+    if (source == null || !_collectionHasMore) return false;
+    final current = _snapshot.current;
+    if (current == null ||
+        current.providerId != source.providerId ||
+        _snapshot.order != PlaybackOrder.sequential ||
+        _snapshot.repeatMode != PlaybackRepeatMode.off) {
+      return true;
+    }
+    for (
+      var attempt = 0;
+      attempt < _collectionTerminalEmptyPageBudget;
+      attempt++
+    ) {
+      final expectedLength = _snapshot.tracks.length;
+      _collectionTerminalToken = terminalToken;
+      _collectionTerminalTrackKey = _trackKey(current);
+      _collectionTerminalQueueLength = expectedLength;
+      _maybeDemandCollection(force: true, terminalToken: terminalToken);
+      final pending = _collectionLoadFuture;
+      if (pending != null) await pending;
+      if (_disposed) return true;
+
+      // A non-empty batch advanced playback. A failed page retains the
+      // logical collection and waits for an explicit retry, so Roam must not
+      // claim the same terminal completion.
+      if (_playback.stage != TrackPlaybackStage.completed ||
+          _snapshot.tracks.length != expectedLength ||
+          _collectionStage == CollectionPlaybackStage.failed) {
+        return true;
+      }
+      if (!_collectionHasMore) return false;
+
+      // A valid all-omitted/empty page may advance the Provider cursor without
+      // growing the Queue. Rearm only this terminal continuation and keep the
+      // loop bounded so one completion can never drain an unbounded feed.
+      _collectionLastDemandIndex = null;
+    }
+    return true;
+  }
+
+  void _maybeDemandCollection({bool force = false, int? terminalToken}) {
+    if (_disposed ||
+        _collectionSource == null ||
+        !_collectionHasMore ||
+        _collectionOperation != null ||
+        _collectionLoadFuture != null ||
+        _snapshot.order != PlaybackOrder.sequential ||
+        _snapshot.repeatMode != PlaybackRepeatMode.off) {
+      return;
+    }
+    final currentIndex = _snapshot.currentIndex;
+    if (currentIndex == null) return;
+    final remaining = _snapshot.tracks.length - currentIndex - 1;
+    if (!force && remaining > _collectionLookaheadTracks) return;
+    if (!force && _collectionLastDemandIndex == currentIndex) return;
+    if (_collectionStage == CollectionPlaybackStage.failed && !force) return;
+
+    _collectionLastDemandIndex = currentIndex;
+    if (terminalToken != null) {
+      _collectionTerminalToken = terminalToken;
+      _collectionTerminalTrackKey = switch (_snapshot.current) {
+        final current? => _trackKey(current),
+        null => null,
+      };
+      _collectionTerminalQueueLength = _snapshot.tracks.length;
+    }
+    final future = Future<void>.microtask(_loadCollectionPage);
+    _collectionLoadFuture = future;
+    unawaited(future);
+  }
+
+  Future<void> _loadCollectionPage() async {
+    final source = _collectionSource;
+    final batchGateway = _gateway is PlaybackQueueBatchGateway
+        ? _gateway as PlaybackQueueBatchGateway
+        : null;
+    if (source == null || batchGateway == null || !_collectionHasMore) {
+      _collectionLoadFuture = null;
+      return;
+    }
+    final generation = _collectionGeneration;
+    final requestCursor = _collectionNextCursor;
+    final expectedLength = _snapshot.tracks.length;
+    late final CollectionPlaybackPageOperation operation;
+    try {
+      operation = source.loader(requestCursor);
+    } on Object {
+      _failCollectionLoad(
+        generation,
+        CollectionPlaybackFailure.invalidResponse,
+      );
+      return;
+    }
+    _collectionOperation = operation;
+    _collectionStage = CollectionPlaybackStage.loading;
+    _collectionFailure = null;
+    if (!_disposed) notifyListeners();
+
+    late final CollectionPlaybackPage page;
+    try {
+      page = await operation.run();
+    } on Object {
+      if (identical(_collectionOperation, operation)) {
+        _collectionOperation = null;
+      }
+      _failCollectionLoad(
+        generation,
+        CollectionPlaybackFailure.invalidResponse,
+      );
+      return;
+    }
+    if (identical(_collectionOperation, operation)) {
+      _collectionOperation = null;
+    }
+    if (!_collectionIsCurrent(
+      generation,
+      source,
+      requestCursor,
+      expectedLength,
+    )) {
+      return;
+    }
+    final failure = page.failure;
+    if (failure != null) {
+      _failCollectionLoad(generation, failure);
+      return;
+    }
+    final validCursor =
+        page.requestCursor == requestCursor &&
+        page.nextCursor >= requestCursor &&
+        (!page.hasMore || page.nextCursor > requestCursor);
+    final validTracks = page.tracks.every(
+      (track) => track.providerId == source.providerId,
+    );
+    if (!validCursor || !validTracks) {
+      _failCollectionLoad(
+        generation,
+        CollectionPlaybackFailure.invalidResponse,
+      );
+      return;
+    }
+
+    if (page.tracks.isNotEmpty) {
+      final terminal = _collectionTerminalIsCurrent(generation, expectedLength);
+      late final PlaybackQueueResult update;
+      try {
+        update = terminal
+            ? _gateway.extendAndAdvanceFromTerminal(page.tracks)
+            : batchGateway.extend(page.tracks);
+      } on Object {
+        _failCollectionLoad(
+          generation,
+          CollectionPlaybackFailure.invalidResponse,
+        );
+        return;
+      }
+      if (!_collectionIsGenerationCurrent(generation, source) ||
+          !_accept(update)) {
+        _failCollectionLoad(
+          generation,
+          CollectionPlaybackFailure.invalidResponse,
+        );
+        return;
+      }
+      if (terminal) {
+        if (!update.playbackRequested) {
+          _failCollectionLoad(
+            generation,
+            CollectionPlaybackFailure.invalidResponse,
+          );
+          return;
+        }
+        _completionHandled = false;
+        final current = _snapshot.current;
+        if (current != null) await _playback.playTrack(current);
+      }
+    }
+
+    if (!_collectionIsGenerationCurrent(generation, source)) return;
+    _collectionNextCursor = page.nextCursor;
+    _collectionHasMore = page.hasMore;
+    _collectionFailure = null;
+    _collectionStage = page.hasMore
+        ? CollectionPlaybackStage.ready
+        : CollectionPlaybackStage.exhausted;
+    _clearCollectionTerminalClaim();
+    _collectionLoadFuture = null;
+    if (!_disposed) notifyListeners();
+  }
+
+  bool _collectionIsCurrent(
+    int generation,
+    CollectionPlaybackSource source,
+    int requestCursor,
+    int expectedLength,
+  ) =>
+      _collectionIsGenerationCurrent(generation, source) &&
+      _collectionNextCursor == requestCursor &&
+      _snapshot.tracks.length == expectedLength;
+
+  bool _collectionIsGenerationCurrent(
+    int generation,
+    CollectionPlaybackSource source,
+  ) =>
+      !_disposed &&
+      generation == _collectionGeneration &&
+      identical(source, _collectionSource);
+
+  bool _collectionTerminalIsCurrent(int generation, int expectedLength) =>
+      !_disposed &&
+      generation == _collectionGeneration &&
+      _collectionTerminalToken == _terminalIntentEpoch &&
+      _playback.stage == TrackPlaybackStage.completed &&
+      _snapshot.order == PlaybackOrder.sequential &&
+      _snapshot.repeatMode == PlaybackRepeatMode.off &&
+      _snapshot.tracks.length == expectedLength &&
+      _collectionTerminalQueueLength == expectedLength &&
+      switch (_snapshot.current) {
+        final current? => _trackKey(current) == _collectionTerminalTrackKey,
+        null => false,
+      };
+
+  void _failCollectionLoad(int generation, CollectionPlaybackFailure failure) {
+    if (_disposed || generation != _collectionGeneration) return;
+    _collectionOperation = null;
+    _collectionLoadFuture = null;
+    _collectionFailure = failure;
+    _collectionStage = CollectionPlaybackStage.failed;
+    _clearCollectionTerminalClaim();
+    notifyListeners();
+  }
+
+  void _clearCollectionTerminalClaim() {
+    _collectionTerminalToken = null;
+    _collectionTerminalTrackKey = null;
+    _collectionTerminalQueueLength = null;
+  }
+
+  void _invalidateCollection() {
+    ++_collectionGeneration;
+    _collectionOperation?.cancel();
+    _collectionOperation = null;
+    _collectionLoadFuture = null;
+    _collectionSource = null;
+    _collectionFailure = null;
+    _collectionStage = CollectionPlaybackStage.idle;
+    _collectionNextCursor = 0;
+    _collectionHasMore = false;
+    _collectionLastDemandIndex = null;
+    _clearCollectionTerminalClaim();
   }
 
   Future<void> _continueRoamFromTerminal(int terminalToken) async {
@@ -393,6 +757,7 @@ class QueuePlaybackController extends ChangeNotifier {
       }
     } else {
       _completionHandled = false;
+      _maybeDemandCollection();
     }
   }
 
@@ -420,6 +785,7 @@ class QueuePlaybackController extends ChangeNotifier {
   void dispose() {
     if (!_disposed) {
       _disposed = true;
+      _invalidateCollection();
       _invalidateRoam();
       _playback.removeListener(_onPlaybackChanged);
       lyrics?.removeListener(_onLyricsChanged);

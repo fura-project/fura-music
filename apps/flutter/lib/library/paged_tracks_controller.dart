@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/pagination/raw_offset_page.dart';
+import 'package:flutterustmusic/playback/collection_playback_source.dart';
 
 enum PlaylistDetailStage {
   loading,
@@ -91,6 +92,50 @@ class PagedTracksController extends ChangeNotifier {
       !_isLoadingMore &&
       !_isRefreshing;
   bool get canRetryMore => !_isRefreshing && _isRetryable(_appendFailure);
+
+  /// Copies a detached Provider continuation into an app-lifetime playback
+  /// source. The returned loader retains only the gateway operation factory;
+  /// this page controller may be disposed immediately after playback starts.
+  CollectionPlaybackSource collectionPlaybackSource({
+    required String sourceId,
+    required String providerId,
+  }) {
+    final beginLoad = _beginLoad;
+    return CollectionPlaybackSource(
+      sourceId: sourceId,
+      providerId: providerId,
+      initialTracks: _tracks,
+      nextCursor: _nextOffset,
+      hasMore: _hasMore,
+      loader: (cursor) {
+        final operation = beginLoad(cursor, pageSize);
+        return CallbackCollectionPlaybackPageOperation(() async {
+          final result = await operation.run();
+          final hasMore = result.hasMore;
+          final valid =
+              result.failure == null &&
+              result.offset == cursor &&
+              result.total >= 0 &&
+              isValidRawOffsetPage(
+                offset: result.offset,
+                continuationOffset: result.nextOffset,
+                hasMore: hasMore,
+                visibleCount: result.tracks.length,
+                omittedCount: result.omittedTrackCount,
+                total: result.totalIsExact ? result.total : null,
+              );
+          return CollectionPlaybackPage(
+            requestCursor: cursor,
+            nextCursor: valid ? result.nextOffset : cursor,
+            hasMore: valid && hasMore,
+            tracks: valid ? result.tracks : const [],
+            omittedTrackCount: valid ? result.omittedTrackCount : 0,
+            failure: valid ? null : _mapCollectionFailure(result.failure),
+          );
+        }, operation.cancel);
+      },
+    );
+  }
 
   bool get canRetry =>
       _stage == PlaylistDetailStage.error && _isRetryable(_failure);
@@ -524,3 +569,22 @@ class PagedTracksController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+CollectionPlaybackFailure _mapCollectionFailure(
+  UserLibraryFailure? failure,
+) => switch (failure) {
+  UserLibraryFailure.authenticationRequired || UserLibraryFailure.replaced =>
+    CollectionPlaybackFailure.authenticationRequired,
+  UserLibraryFailure.credentialRejected ||
+  UserLibraryFailure.credentialRejectedStorageCleanupFailed =>
+    CollectionPlaybackFailure.credentialRejected,
+  UserLibraryFailure.network => CollectionPlaybackFailure.network,
+  UserLibraryFailure.serviceUnavailable =>
+    CollectionPlaybackFailure.serviceUnavailable,
+  UserLibraryFailure.cancelled => CollectionPlaybackFailure.cancelled,
+  UserLibraryFailure.alreadyRunning => CollectionPlaybackFailure.alreadyRunning,
+  UserLibraryFailure.coreUnavailable =>
+    CollectionPlaybackFailure.coreUnavailable,
+  UserLibraryFailure.invalidResponse ||
+  null => CollectionPlaybackFailure.invalidResponse,
+};

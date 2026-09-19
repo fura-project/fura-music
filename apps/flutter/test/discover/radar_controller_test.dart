@@ -214,6 +214,32 @@ void main() {
     await disposedLoad;
     controller.dispose();
   });
+
+  test('one-track Radar continuation survives page disposal', () async {
+    final gateway = _ScriptedGateway([
+      const _ImmediateOperation(
+        RadarTrackPageResult(page: 1, hasMore: true, tracks: [first]),
+      ),
+      const _ImmediateOperation(
+        RadarTrackPageResult(page: 2, tracks: [second]),
+      ),
+    ]);
+    final controller = RadarController(gateway);
+    await controller.load();
+    final source = controller.collectionPlaybackSource(
+      providerId: 'qq-music',
+      sourceId: 'home-radar',
+    );
+    controller.dispose();
+
+    final page = await source.loader(source.nextCursor).run();
+
+    expect(source.initialTracks, [first]);
+    expect(page.requestCursor, 2);
+    expect(page.nextCursor, 3);
+    expect(page.tracks, [second]);
+    expect(gateway.pages, [1, 2]);
+  });
 }
 
 class _ScriptedGateway implements RadarGateway {

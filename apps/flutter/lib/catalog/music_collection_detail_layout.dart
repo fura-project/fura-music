@@ -16,6 +16,76 @@ typedef MusicCollectionBodyBuilder = Widget Function(
 
 const double _musicCollectionShellHandoffProgress = 0.55;
 
+@immutable
+class CollectionDetailActions {
+  const CollectionDetailActions({
+    required this.playAllLabel,
+    required this.onPlayAll,
+    this.playing = false,
+    this.refreshLabel,
+    this.onRefresh,
+    this.refreshing = false,
+  });
+
+  final String playAllLabel;
+  final VoidCallback? onPlayAll;
+  final bool playing;
+  final String? refreshLabel;
+  final VoidCallback? onRefresh;
+  final bool refreshing;
+
+  List<Widget> compactButtons() => [
+    IconButton(
+      key: const ValueKey('collection-play-all-compact'),
+      tooltip: playAllLabel,
+      onPressed: playing ? null : onPlayAll,
+      icon: playing
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            )
+          : const Icon(Icons.play_arrow_rounded),
+    ),
+    if (refreshLabel != null)
+      IconButton(
+        key: const ValueKey('collection-refresh-compact'),
+        tooltip: refreshLabel,
+        onPressed: refreshing ? null : onRefresh,
+        icon: refreshing
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              )
+            : const Icon(Icons.refresh_rounded),
+      ),
+  ];
+
+  Widget expandedButtons(BuildContext context, {required bool desktop}) => Row(
+    key: const ValueKey('collection-expanded-actions'),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (desktop)
+        FilledButton.tonalIcon(
+          key: const ValueKey('collection-play-all-expanded'),
+          onPressed: playing ? null : onPlayAll,
+          icon: playing
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2.25),
+                )
+              : const Icon(Icons.play_arrow_rounded),
+          label: Text(playAllLabel),
+        )
+      else
+        compactButtons().first,
+      if (refreshLabel != null) ...[
+        const SizedBox(width: 8),
+        compactButtons().last,
+      ],
+    ],
+  );
+}
+
 /// Coordinates the scroll-driven header treatment shared by collection pages.
 ///
 /// The Track viewport keeps ownership of its controller and paging behavior.
@@ -139,7 +209,7 @@ class MusicCollectionDetailHeader extends StatelessWidget {
     required this.onBack,
     required this.backKey,
     required this.backTooltip,
-    this.toolbarAction,
+    this.actions,
     this.expandedDetails = const [],
     this.expandedHeight,
     super.key,
@@ -156,7 +226,7 @@ class MusicCollectionDetailHeader extends StatelessWidget {
   final VoidCallback onBack;
   final Key backKey;
   final String backTooltip;
-  final Widget? toolbarAction;
+  final CollectionDetailActions? actions;
   final List<Widget> expandedDetails;
   final double? expandedHeight;
 
@@ -210,7 +280,9 @@ class MusicCollectionDetailHeader extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         const Spacer(),
-                        ?toolbarAction,
+                        if (persistentCompactToolbar &&
+                            progress >= _musicCollectionShellHandoffProgress)
+                          ...?actions?.compactButtons(),
                       ],
                     ),
                   ),
@@ -324,6 +396,25 @@ class MusicCollectionDetailHeader extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (progress < _musicCollectionShellHandoffProgress)
+                      if (actions case final actions?) ...[
+                        SizedBox(width: lerpDouble(16, 8, progress)),
+                        ClipRect(
+                          child: Align(
+                            widthFactor: expanded,
+                            child: Opacity(
+                              opacity: expanded,
+                              child: IgnorePointer(
+                                ignoring: progress > 0.45,
+                                child: actions.expandedButtons(
+                                  context,
+                                  desktop: desktop,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                   ],
                 ),
               ),

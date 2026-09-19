@@ -30,6 +30,53 @@ import 'package:flutterustmusic/theme/material_theme.dart';
 
 enum DiscoverDestination { playlists, rankings, radar, newAlbums, newSongs }
 
+const double _discoverArtworkMaximumExtent = 176;
+const double _discoverRankingMaximumExtent = 344;
+
+({int columns, double itemExtent}) _discoverGridMetrics({
+  required double availableWidth,
+  required double spacing,
+  required double maximumExtent,
+}) {
+  final columns = math.max(
+    1,
+    ((availableWidth + spacing) / (maximumExtent + spacing)).ceil(),
+  );
+  return (
+    columns: columns,
+    itemExtent: (availableWidth - spacing * (columns - 1)) / columns,
+  );
+}
+
+({int columns, double itemExtent, double extraHorizontalInset})
+_discoverArtworkGridMetrics({
+  required double availableWidth,
+  required double spacing,
+  required bool desktop,
+}) {
+  if (desktop) {
+    final metrics = _discoverGridMetrics(
+      availableWidth: availableWidth,
+      spacing: spacing,
+      maximumExtent: _discoverArtworkMaximumExtent,
+    );
+    return (
+      columns: metrics.columns,
+      itemExtent: metrics.itemExtent,
+      extraHorizontalInset: 0,
+    );
+  }
+  final gridWidth = math.min(
+    availableWidth,
+    _discoverArtworkMaximumExtent * 2 + spacing,
+  );
+  return (
+    columns: 2,
+    itemExtent: math.max(0, (gridWidth - spacing) / 2),
+    extraHorizontalInset: math.max(0, (availableWidth - gridWidth) / 2),
+  );
+}
+
 /// Issues explicit navigation commands to the retained Discover page.
 ///
 /// This is deliberately a command rather than a selected-value notifier: a
@@ -110,6 +157,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
   late final TabController _tabController;
   late final bool _ownsPlaylistController;
   _DiscoverType _type = _DiscoverType.playlists;
+  int _transitionDirection = 1;
   bool _headerCollapsed = false;
   bool _userReturningToHeader = false;
   bool? _pendingHeaderCollapsed;
@@ -153,7 +201,18 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
       initialPrefetchTarget: 10,
       maxInitialPrefetchPages: 2,
     );
-    _tabController = TabController(length: _types.length, vsync: this);
+    _tabController = TabController(
+      length: _types.length,
+      vsync: this,
+      animationDuration:
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .accessibilityFeatures
+              .disableAnimations
+          ? Duration.zero
+          : const Duration(milliseconds: 220),
+    );
     widget.navigationController?.addListener(_handleNavigationCommand);
     if (_ownsPlaylistController) unawaited(_controller.load());
   }
@@ -229,14 +288,43 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
                   child: NotificationListener<ScrollNotification>(
                     onNotification: _handleCollectionScroll,
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: switch (_type) {
-                        _DiscoverType.playlists => _playlistBody(bottomPadding),
-                        _DiscoverType.rankings => _rankingBody(bottomPadding),
-                        _DiscoverType.radar => _radarBody(bottomPadding),
-                        _DiscoverType.newAlbums => _newAlbumBody(bottomPadding),
-                        _DiscoverType.newSongs => _newSongBody(bottomPadding),
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      switchInCurve: Easing.emphasizedDecelerate,
+                      switchOutCurve: Easing.emphasizedAccelerate,
+                      transitionBuilder: (child, animation) {
+                        final incoming =
+                            child.key ==
+                            ValueKey('discover-body-${_type.name}');
+                        final direction = _transitionDirection.toDouble();
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: incoming
+                                  ? Offset(0.035 * direction, 0)
+                                  : Offset(-0.035 * direction, 0),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
                       },
+                      child: KeyedSubtree(
+                        key: ValueKey('discover-body-${_type.name}'),
+                        child: switch (_type) {
+                          _DiscoverType.playlists => _playlistBody(
+                            bottomPadding,
+                          ),
+                          _DiscoverType.rankings => _rankingBody(bottomPadding),
+                          _DiscoverType.radar => _radarBody(bottomPadding),
+                          _DiscoverType.newAlbums => _newAlbumBody(
+                            bottomPadding,
+                          ),
+                          _DiscoverType.newSongs => _newSongBody(bottomPadding),
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -525,8 +613,11 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
 
   void _playRadar(int index) {
     unawaited(
-      widget.queuePlaybackController.replaceAndPlay(
-        _radarController.tracks,
+      widget.queuePlaybackController.replaceAndPlayCollection(
+        _radarController.collectionPlaybackSource(
+          providerId: _radarController.tracks.first.providerId,
+          sourceId: 'discover-radar',
+        ),
         index,
       ),
     );
@@ -571,7 +662,10 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     if (_tabController.index != tabIndex) {
       _tabController.animateTo(tabIndex);
     }
-    setState(() => _type = type);
+    setState(() {
+      _transitionDirection = tabIndex > _types.indexOf(_type) ? 1 : -1;
+      _type = type;
+    });
     _setHeaderCollapsed(false);
     if (type == _DiscoverType.rankings && !_rankingsVisited) {
       _rankingsVisited = true;
@@ -765,6 +859,10 @@ class _DiscoverTabs extends StatelessWidget {
     indicatorAnimation: TabIndicatorAnimation.elastic,
     indicatorSize: TabBarIndicatorSize.label,
     indicatorWeight: 3,
+    labelStyle: Theme.of(context).textTheme.labelLarge
+        ?.copyWith(fontWeight: FontWeight.w600),
+    unselectedLabelStyle: Theme.of(context).textTheme.labelLarge
+        ?.copyWith(fontWeight: FontWeight.w600),
     labelPadding: const EdgeInsets.symmetric(horizontal: 14),
     onTap: (index) => onSelected(types[index]),
     tabs: [
@@ -828,10 +926,12 @@ class _NewSongShell extends StatelessWidget {
                 ? Row(
                     children: [
                       Expanded(
-                        child: _NewSongCategoryMenu(
+                        child: _NewSongCategoryPicker(
                           category: category,
                           categories: categories,
                           onSelected: onCategorySelected,
+                          padding: EdgeInsets.zero,
+                          compact: true,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -858,47 +958,6 @@ class _NewSongShell extends StatelessWidget {
         ],
       );
     },
-  );
-}
-
-class _NewSongCategoryMenu extends StatelessWidget {
-  const _NewSongCategoryMenu({
-    required this.category,
-    required this.categories,
-    required this.onSelected,
-  });
-
-  final NewSongCategory category;
-  final List<NewSongCategory> categories;
-  final ValueChanged<NewSongCategory> onSelected;
-
-  @override
-  Widget build(BuildContext context) => MenuAnchor(
-    key: const ValueKey('new-song-category-selector'),
-    menuChildren: [
-      for (final value in categories)
-        MenuItemButton(
-          key: ValueKey('new-song-category-${value.name}'),
-          leadingIcon: value == category
-              ? const Icon(Icons.check_rounded)
-              : const SizedBox(width: 24),
-          onPressed: () => onSelected(value),
-          child: Text(newSongCategoryLabel(context.l10n, value)),
-        ),
-    ],
-    builder: (context, controller, _) => OutlinedButton.icon(
-      onPressed: () =>
-          controller.isOpen ? controller.close() : controller.open(),
-      icon: const Icon(Icons.tune_rounded),
-      label: Align(
-        alignment: AlignmentDirectional.centerStart,
-        child: Text(
-          newSongCategoryLabel(context.l10n, category),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    ),
   );
 }
 
@@ -1004,35 +1063,27 @@ class _NewSongCategoryPicker extends StatelessWidget {
     required this.categories,
     required this.onSelected,
     this.padding = const EdgeInsets.fromLTRB(20, 4, 20, 12),
+    this.compact = false,
   });
 
   final NewSongCategory category;
   final List<NewSongCategory> categories;
   final ValueChanged<NewSongCategory> onSelected;
   final EdgeInsetsGeometry padding;
+  final bool compact;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    key: const ValueKey('new-song-category-selector'),
-    scrollDirection: Axis.horizontal,
-    padding: padding,
-    child: SegmentedButton<NewSongCategory>(
-      segments: [
-        for (final value in categories)
-          ButtonSegment(
-            value: value,
-            label: Text(
-              newSongCategoryLabel(context.l10n, value),
-              key: ValueKey('new-song-category-${value.name}'),
-            ),
-          ),
-      ],
-      selected: {category},
-      selectedIcon: const Icon(Icons.check_rounded, size: 18),
-      style: _compactSegmentedButtonStyle(),
-      onSelectionChanged: (selection) => onSelected(selection.single),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      _StableSegmentedSelector<NewSongCategory>(
+        key: const ValueKey('new-song-category-selector'),
+        padding: padding,
+        values: categories,
+        selected: category,
+        compact: compact,
+        label: (value) => newSongCategoryLabel(context.l10n, value),
+        valueKey: (value) => ValueKey('new-song-category-${value.name}'),
+        onSelected: onSelected,
+      );
 }
 
 class _NewAlbumShell extends StatelessWidget {
@@ -1114,11 +1165,14 @@ class _NewAlbumCollection extends StatelessWidget {
       );
       final availableWidth = math.max(0.0, contentWidth - horizontal * 2);
       final spacing = desktop ? 16.0 : 12.0;
-      final columns = desktop
-          ? ((availableWidth + spacing) / (180 + spacing)).floor().clamp(1, 6)
-          : 2;
-      final artworkExtent =
-          (availableWidth - spacing * (columns - 1)) / columns;
+      final metrics = _discoverArtworkGridMetrics(
+        availableWidth: availableWidth,
+        spacing: spacing,
+        desktop: desktop,
+      );
+      final columns = metrics.columns;
+      final artworkExtent = metrics.itemExtent;
+      final gridHorizontal = horizontal + metrics.extraHorizontalInset;
       final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final itemExtent = artworkExtent + 8 + (76 * textScale);
       return Center(
@@ -1144,7 +1198,7 @@ class _NewAlbumCollection extends StatelessWidget {
                     ),
                   ),
                 SliverPadding(
-                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  padding: EdgeInsets.symmetric(horizontal: gridHorizontal),
                   sliver: SliverGrid.builder(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: columns,
@@ -1185,35 +1239,140 @@ class _NewAlbumRegionPicker extends StatelessWidget {
   final List<NewAlbumRegion> regions;
   final ValueChanged<NewAlbumRegion> onSelected;
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    key: const ValueKey('new-album-region-selector'),
-    scrollDirection: Axis.horizontal,
-    padding: EdgeInsets.zero,
-    child: SegmentedButton<NewAlbumRegion>(
-      segments: [
-        for (final value in regions)
-          ButtonSegment(
-            value: value,
-            label: Text(
-              newAlbumRegionLabel(context.l10n, value),
-              key: ValueKey('new-album-region-${value.name}'),
-            ),
-          ),
-      ],
-      selected: {region},
-      selectedIcon: const Icon(Icons.check_rounded, size: 18),
-      style: _compactSegmentedButtonStyle(),
-      onSelectionChanged: (selection) => onSelected(selection.single),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      _StableSegmentedSelector<NewAlbumRegion>(
+        key: const ValueKey('new-album-region-selector'),
+        padding: EdgeInsets.zero,
+        values: regions,
+        selected: region,
+        compact: MediaQuery.sizeOf(context).width < 600,
+        label: (value) => newAlbumRegionLabel(context.l10n, value),
+        valueKey: (value) => ValueKey('new-album-region-${value.name}'),
+        onSelected: onSelected,
+      );
 }
 
-ButtonStyle _compactSegmentedButtonStyle() => SegmentedButton.styleFrom(
-  minimumSize: const Size(0, 40),
-  padding: const EdgeInsets.symmetric(horizontal: 10),
-  visualDensity: VisualDensity.compact,
-  animationDuration: const Duration(milliseconds: 200),
-);
+class _StableSegmentedSelector<T> extends StatelessWidget {
+  const _StableSegmentedSelector({
+    required this.values,
+    required this.selected,
+    required this.label,
+    required this.valueKey,
+    required this.onSelected,
+    required this.padding,
+    required this.compact,
+    super.key,
+  });
+
+  final List<T> values;
+  final T selected;
+  final String Function(T value) label;
+  final Key Function(T value) valueKey;
+  final ValueChanged<T> onSelected;
+  final EdgeInsetsGeometry padding;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
+    final selector = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: padding.add(EdgeInsetsDirectional.only(end: compact ? 28 : 0)),
+      child: Row(
+        children: [
+          for (var index = 0; index < values.length; index++) ...[
+            if (index > 0) const SizedBox(width: 8),
+            Builder(
+              builder: (context) {
+                final value = values[index];
+                final isSelected = value == selected;
+                final text = label(value);
+                return Semantics(
+                  button: true,
+                  selected: isSelected,
+                  label: text,
+                  child: AnimatedContainer(
+                    key: valueKey(value),
+                    duration: duration,
+                    curve: Easing.standard,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? colors.secondaryContainer
+                          : colors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected
+                            ? colors.secondaryContainer
+                            : colors.outlineVariant,
+                      ),
+                    ),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: isSelected ? null : () => onSelected(value),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 9,
+                          ),
+                          child: Text(
+                            text,
+                            maxLines: 1,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: isSelected
+                                      ? colors.onSecondaryContainer
+                                      : colors.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+    if (!compact) return selector;
+    return Stack(
+      children: [
+        selector,
+        PositionedDirectional(
+          top: 0,
+          bottom: 0,
+          end: 0,
+          child: IgnorePointer(
+            child: Container(
+              key: const ValueKey('stable-selector-edge-affordance'),
+              width: 30,
+              alignment: AlignmentDirectional.centerEnd,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.centerStart,
+                  end: AlignmentDirectional.centerEnd,
+                  colors: [colors.surface.withValues(alpha: 0), colors.surface],
+                ),
+              ),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _NewAlbumCard extends StatelessWidget {
   const _NewAlbumCard({
@@ -1430,13 +1589,21 @@ class _RankingCollection extends StatelessWidget {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       const spacing = 12.0;
-                      final columns =
-                          ((constraints.maxWidth + spacing) / (320 + spacing))
-                              .floor()
-                              .clamp(1, 3);
-                      final tileWidth =
-                          (constraints.maxWidth - spacing * (columns - 1)) /
-                          columns;
+                      final wideDensity = constraints.maxWidth >= 1000;
+                      final metrics = wideDensity
+                          ? _discoverGridMetrics(
+                              availableWidth: constraints.maxWidth,
+                              spacing: spacing,
+                              maximumExtent: _discoverRankingMaximumExtent,
+                            )
+                          : (
+                              columns: 2,
+                              itemExtent: math.min(
+                                _discoverRankingMaximumExtent,
+                                (constraints.maxWidth - spacing) / 2,
+                              ),
+                            );
+                      final tileWidth = metrics.itemExtent;
                       return Wrap(
                         spacing: spacing,
                         runSpacing: spacing,
@@ -2182,11 +2349,14 @@ class _RecommendationCollection extends StatelessWidget {
       );
       final availableWidth = math.max(0.0, contentWidth - horizontal * 2);
       final spacing = desktop ? 16.0 : 12.0;
-      final columns = desktop
-          ? ((availableWidth + spacing) / (180 + spacing)).floor().clamp(1, 6)
-          : 2;
-      final artworkExtent =
-          (availableWidth - spacing * (columns - 1)) / columns;
+      final metrics = _discoverArtworkGridMetrics(
+        availableWidth: availableWidth,
+        spacing: spacing,
+        desktop: desktop,
+      );
+      final columns = metrics.columns;
+      final artworkExtent = metrics.itemExtent;
+      final gridHorizontal = horizontal + metrics.extraHorizontalInset;
       final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final itemExtent = artworkExtent + 8 + (58 * textScale);
       return Center(
@@ -2211,7 +2381,12 @@ class _RecommendationCollection extends StatelessWidget {
                     ),
                   ),
                 SliverPadding(
-                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 8),
+                  padding: EdgeInsets.fromLTRB(
+                    gridHorizontal,
+                    12,
+                    gridHorizontal,
+                    8,
+                  ),
                   sliver: SliverGrid.builder(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: columns,

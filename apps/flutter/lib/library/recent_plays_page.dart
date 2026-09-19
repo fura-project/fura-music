@@ -375,11 +375,9 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     final processedLabel = hasSnapshot
         ? _processedStatus(l10n, controller!, 0)
         : null;
-    final play = tracks.isEmpty
-        ? null
-        : () => unawaited(widget.playback.replaceAndPlay(tracks, 0));
+    final play = tracks.isEmpty ? null : () => _playRecent(tracks, 0);
     final playLabel = _query.isEmpty
-        ? l10n.recentPlayLoaded(tracks.length)
+        ? l10n.likedPlayAll
         : l10n.recentPlayFiltered(tracks.length);
     final refresh = controller == null || controller.isLoading
         ? null
@@ -870,8 +868,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                   artists,
                   track.title,
                 ),
-                onTap: () =>
-                    unawaited(widget.playback.replaceAndPlay(tracks, index)),
+                onTap: () => _playRecent(tracks, index),
                 onContextMenuRequested: (_) =>
                     unawaited(_showTrackActions(track)),
                 contentBuilder: (context, active, hovered) =>
@@ -883,9 +880,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                       active: active,
                       showInlineQueueAction: hovered,
                       artistNames: artists,
-                      onPlay: () => unawaited(
-                        widget.playback.replaceAndPlay(tracks, index),
-                      ),
+                      onPlay: () => _playRecent(tracks, index),
                       onAddToQueue: () =>
                           unawaited(widget.playback.push(track)),
                       onOpenAlbum:
@@ -920,6 +915,24 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           ),
         );
     }
+  }
+
+  void _playRecent(List<PlaylistTrackSummary> tracks, int index) {
+    final controller = _controller;
+    if (_query.isEmpty && controller != null && tracks.isNotEmpty) {
+      final providerId = tracks.first.providerId;
+      unawaited(
+        widget.playback.replaceAndPlayCollection(
+          controller.collectionPlaybackSource(
+            sourceId: 'recent:$providerId',
+            providerId: providerId,
+          ),
+          index,
+        ),
+      );
+      return;
+    }
+    unawaited(widget.playback.replaceAndPlay(tracks, index));
   }
 
   Widget _messageSliver(Widget message) =>

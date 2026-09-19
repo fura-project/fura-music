@@ -7,6 +7,7 @@ import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
+import 'package:flutterustmusic/playback/collection_playback_source.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -837,6 +838,376 @@ void main() {
       controller.dispose();
     },
   );
+
+  test(
+    'one-track collection joins pending page at terminal and preempts Roam',
+    () async {
+      final page = Completer<CollectionPlaybackPage>();
+      final operation = _ControlledCollectionOperation(page.future);
+      final queue = _CollectionQueueGateway();
+      final related = _RelatedGateway([
+        const RelatedTracksResult(tracks: [third]),
+      ]);
+      final firstSession = _FakeAudioSession();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'second']),
+        _FakeAudioEngine([firstSession, _FakeAudioSession()]),
+        relatedTracksGateway: related,
+      );
+      controller.setRoamEnabled(true);
+
+      await controller.replaceAndPlayCollection(
+        _collectionSource(operation: operation),
+        0,
+      );
+      await _flush();
+      expect(operation.runCalls, 1);
+
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(queue.completionCalls, 1);
+      expect(queue.terminalExtensionCalls, 0);
+
+      page.complete(
+        const CollectionPlaybackPage(
+          requestCursor: 1,
+          nextCursor: 2,
+          hasMore: false,
+          tracks: [second],
+        ),
+      );
+      await _flush();
+      await _flush();
+
+      expect(queue.terminalExtensionCalls, 1);
+      expect(queue.batchExtensionCalls, 0);
+      expect(controller.current, second);
+      expect(controller.collectionStage, CollectionPlaybackStage.exhausted);
+      expect(controller.playback.stage, TrackPlaybackStage.playing);
+      expect(related.seeds, isEmpty);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'near-tail collection demand is single-flight and preserves current',
+    () async {
+      final page = Completer<CollectionPlaybackPage>();
+      final operation = _ControlledCollectionOperation(page.future);
+      final queue = _CollectionQueueGateway();
+      final session = _FakeAudioSession();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first']),
+        _FakeAudioEngine([session]),
+      );
+
+      await controller.replaceAndPlayCollection(
+        _collectionSource(
+          operation: operation,
+          initialTracks: [first, second, third],
+        ),
+        0,
+      );
+      session.emitPosition(10);
+      session.emitPosition(20);
+      await _flush();
+      expect(operation.runCalls, 1);
+
+      page.complete(
+        const CollectionPlaybackPage(
+          requestCursor: 1,
+          nextCursor: 2,
+          hasMore: true,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'fourth',
+              title: 'Fourth',
+              artistNames: ['Artist'],
+            ),
+          ],
+        ),
+      );
+      await _flush();
+
+      expect(queue.batchExtensionCalls, 1);
+      expect(queue.terminalExtensionCalls, 0);
+      expect(controller.current, first);
+      expect(controller.tracks, hasLength(4));
+      await _flush();
+      expect(operation.runCalls, 1);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'Recent 300 of 500 starts immediately and continues only near tail',
+    () async {
+      List<PlaylistTrackSummary> tracks(int start, int count) => List.generate(
+        count,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'recent-${start + index}',
+          title: 'Recent ${start + index}',
+          artistNames: const ['Artist'],
+        ),
+      );
+      final initial = tracks(0, 300);
+      final tail = tracks(300, 200);
+      final page = Completer<CollectionPlaybackPage>();
+      final operation = _ControlledCollectionOperation(page.future);
+      final queue = _CollectionQueueGateway();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['recent-0', 'recent-296']),
+        _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+      );
+
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'recent:qq-music',
+          providerId: 'qq-music',
+          initialTracks: initial,
+          nextCursor: 300,
+          hasMore: true,
+          loader: (_) => operation,
+        ),
+        0,
+      );
+      await _flush();
+      expect(controller.current, initial.first);
+      expect(operation.runCalls, 0);
+      expect(controller.tracks, hasLength(300));
+
+      await controller.select(296);
+      await _flush();
+      expect(operation.runCalls, 1);
+      page.complete(
+        CollectionPlaybackPage(
+          requestCursor: 300,
+          nextCursor: 500,
+          hasMore: false,
+          tracks: tail,
+        ),
+      );
+      await _flush();
+
+      expect(controller.tracks, hasLength(500));
+      expect(controller.current, initial[296]);
+      expect(queue.batchExtensionCalls, 1);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'failed collection page keeps Queue and explicit retry advances cursor',
+    () async {
+      final firstAttempt = _ImmediateCollectionOperation(
+        const CollectionPlaybackPage(
+          requestCursor: 1,
+          nextCursor: 1,
+          hasMore: true,
+          failure: CollectionPlaybackFailure.network,
+        ),
+      );
+      final retry = _ImmediateCollectionOperation(
+        const CollectionPlaybackPage(
+          requestCursor: 1,
+          nextCursor: 2,
+          hasMore: false,
+          tracks: [second],
+        ),
+      );
+      final operations = <CollectionPlaybackPageOperation>[firstAttempt, retry];
+      final queue = _CollectionQueueGateway();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first']),
+        _FakeAudioEngine([_FakeAudioSession()]),
+      );
+
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'playlist:retry',
+          providerId: 'qq-music',
+          initialTracks: const [first],
+          nextCursor: 1,
+          hasMore: true,
+          loader: (_) => operations.removeAt(0),
+        ),
+        0,
+      );
+      await _flush();
+      expect(controller.collectionStage, CollectionPlaybackStage.failed);
+      expect(controller.tracks, [first]);
+
+      controller.retryCollectionContinuation();
+      await _flush();
+      expect(controller.collectionStage, CollectionPlaybackStage.exhausted);
+      expect(controller.tracks, [first, second]);
+      expect(controller.current, first);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'terminal collection skips one empty page with a bounded cursor advance',
+    () async {
+      final emptyPage = Completer<CollectionPlaybackPage>();
+      final cursors = <int>[];
+      final queue = _CollectionQueueGateway();
+      final firstSession = _FakeAudioSession();
+      final related = _RelatedGateway([
+        const RelatedTracksResult(tracks: [third]),
+      ]);
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'second']),
+        _FakeAudioEngine([firstSession, _FakeAudioSession()]),
+        relatedTracksGateway: related,
+      );
+      controller.setRoamEnabled(true);
+
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'playlist:empty-page',
+          providerId: 'qq-music',
+          initialTracks: const [first],
+          nextCursor: 1,
+          hasMore: true,
+          loader: (cursor) {
+            cursors.add(cursor);
+            return cursor == 1
+                ? _ControlledCollectionOperation(emptyPage.future)
+                : const _ImmediateCollectionOperation(
+                    CollectionPlaybackPage(
+                      requestCursor: 2,
+                      nextCursor: 3,
+                      hasMore: false,
+                      tracks: [second],
+                    ),
+                  );
+          },
+        ),
+        0,
+      );
+      await _flush();
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+
+      emptyPage.complete(
+        const CollectionPlaybackPage(
+          requestCursor: 1,
+          nextCursor: 2,
+          hasMore: true,
+          omittedTrackCount: 4,
+        ),
+      );
+      await _flush();
+      await _flush();
+
+      expect(cursors, [1, 2]);
+      expect(queue.terminalExtensionCalls, 1);
+      expect(queue.batchExtensionCalls, 0);
+      expect(controller.current, second);
+      expect(controller.collectionStage, CollectionPlaybackStage.exhausted);
+      expect(related.seeds, isEmpty);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'Roam starts only after an exhausted collection reaches terminal',
+    () async {
+      final firstSession = _FakeAudioSession();
+      final secondSession = _FakeAudioSession();
+      final queue = _CollectionQueueGateway();
+      final related = _RelatedGateway([
+        const RelatedTracksResult(tracks: [third]),
+      ]);
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'second', 'third']),
+        _FakeAudioEngine([firstSession, secondSession, _FakeAudioSession()]),
+        relatedTracksGateway: related,
+      );
+      controller.setRoamEnabled(true);
+
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'playlist:exhaust-then-roam',
+          providerId: 'qq-music',
+          initialTracks: const [first],
+          nextCursor: 1,
+          hasMore: true,
+          loader: (_) => const _ImmediateCollectionOperation(
+            CollectionPlaybackPage(
+              requestCursor: 1,
+              nextCursor: 2,
+              hasMore: false,
+              tracks: [second],
+            ),
+          ),
+        ),
+        0,
+      );
+      await _flush();
+      expect(controller.tracks, [first, second]);
+      expect(controller.collectionStage, CollectionPlaybackStage.exhausted);
+      expect(related.seeds, isEmpty);
+
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(controller.current, second);
+      expect(related.seeds, isEmpty);
+
+      secondSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      await _flush();
+      expect(related.seeds, [second]);
+      expect(controller.current, third);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'replacement cancels collection operation and ignores its stale page',
+    () async {
+      final late = Completer<CollectionPlaybackPage>();
+      final operation = _ControlledCollectionOperation(late.future);
+      final queue = _CollectionQueueGateway();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first', 'third']),
+        _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+      );
+
+      await controller.replaceAndPlayCollection(
+        _collectionSource(operation: operation),
+        0,
+      );
+      await _flush();
+      await controller.replaceAndPlay([third], 0);
+      expect(operation.cancelCalls, 1);
+      late.complete(
+        const CollectionPlaybackPage(
+          requestCursor: 1,
+          nextCursor: 2,
+          hasMore: false,
+          tracks: [second],
+        ),
+      );
+      await _flush();
+
+      expect(queue.batchExtensionCalls, 0);
+      expect(queue.terminalExtensionCalls, 0);
+      expect(controller.tracks, [third]);
+      expect(controller.collectionStage, CollectionPlaybackStage.idle);
+      controller.dispose();
+    },
+  );
 }
 
 const first = PlaylistTrackSummary(
@@ -897,6 +1268,184 @@ QueuePlaybackController _controller(
 Future<void> _flush() async {
   await Future<void>.delayed(Duration.zero);
   await Future<void>.delayed(Duration.zero);
+}
+
+CollectionPlaybackSource _collectionSource({
+  required CollectionPlaybackPageOperation operation,
+  List<PlaylistTrackSummary> initialTracks = const [first],
+}) => CollectionPlaybackSource(
+  sourceId: 'playlist:test',
+  providerId: 'qq-music',
+  initialTracks: initialTracks,
+  nextCursor: 1,
+  hasMore: true,
+  loader: (_) => operation,
+);
+
+class _ControlledCollectionOperation
+    implements CollectionPlaybackPageOperation {
+  _ControlledCollectionOperation(this.result);
+
+  final Future<CollectionPlaybackPage> result;
+  int runCalls = 0;
+  int cancelCalls = 0;
+
+  @override
+  Future<CollectionPlaybackPage> run() {
+    runCalls += 1;
+    return result;
+  }
+
+  @override
+  bool cancel() {
+    cancelCalls += 1;
+    return true;
+  }
+}
+
+class _ImmediateCollectionOperation implements CollectionPlaybackPageOperation {
+  const _ImmediateCollectionOperation(this.result);
+
+  final CollectionPlaybackPage result;
+
+  @override
+  Future<CollectionPlaybackPage> run() async => result;
+
+  @override
+  bool cancel() => true;
+}
+
+class _CollectionQueueGateway
+    implements PlaybackQueueGateway, PlaybackQueueBatchGateway {
+  PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
+  int batchExtensionCalls = 0;
+  int terminalExtensionCalls = 0;
+  int completionCalls = 0;
+
+  @override
+  PlaybackQueueResult snapshot() => PlaybackQueueResult(snapshot: _snapshot);
+
+  @override
+  PlaybackQueueResult replace({
+    required List<PlaylistTrackSummary> tracks,
+    required int? currentIndex,
+  }) => _update(tracks, currentIndex, playbackRequested: true);
+
+  @override
+  PlaybackQueueResult extend(List<PlaylistTrackSummary> tracks) {
+    batchExtensionCalls += 1;
+    return _update(
+      [..._snapshot.tracks, ...tracks],
+      _snapshot.currentIndex,
+      playbackRequested: false,
+    );
+  }
+
+  @override
+  PlaybackQueueResult extendAndAdvanceFromTerminal(
+    List<PlaylistTrackSummary> tracks,
+  ) {
+    terminalExtensionCalls += 1;
+    final firstAppended = _snapshot.tracks.length;
+    return _update(
+      [..._snapshot.tracks, ...tracks],
+      firstAppended,
+      playbackRequested: true,
+    );
+  }
+
+  @override
+  PlaybackQueueResult completeCurrent() {
+    completionCalls += 1;
+    final index = _snapshot.currentIndex;
+    if (index != null && index + 1 < _snapshot.tracks.length) {
+      return _update(_snapshot.tracks, index + 1, playbackRequested: true);
+    }
+    return snapshot();
+  }
+
+  @override
+  PlaybackQueueResult select(int index) =>
+      _update(_snapshot.tracks, index, playbackRequested: true);
+
+  @override
+  PlaybackQueueResult advance() {
+    final index = _snapshot.currentIndex;
+    if (index == null || index + 1 >= _snapshot.tracks.length) {
+      return snapshot();
+    }
+    return _update(_snapshot.tracks, index + 1, playbackRequested: true);
+  }
+
+  @override
+  PlaybackQueueResult rewind() {
+    final index = _snapshot.currentIndex;
+    if (index == null || index == 0) return snapshot();
+    return _update(_snapshot.tracks, index - 1, playbackRequested: true);
+  }
+
+  @override
+  PlaybackQueueResult push(PlaylistTrackSummary track) => _update(
+    [..._snapshot.tracks, track],
+    _snapshot.currentIndex ?? 0,
+    playbackRequested: _snapshot.currentIndex == null,
+  );
+
+  @override
+  PlaybackQueueResult remove(int index) {
+    final tracks = [..._snapshot.tracks]..removeAt(index);
+    final current = tracks.isEmpty
+        ? null
+        : (_snapshot.currentIndex ?? 0).clamp(0, tracks.length - 1);
+    return _update(tracks, current, playbackRequested: true);
+  }
+
+  @override
+  PlaybackQueueResult clear() =>
+      _update(const [], null, playbackRequested: true);
+
+  @override
+  PlaybackQueueResult setOrder(PlaybackOrder order) {
+    _snapshot = _copy(order: order);
+    return snapshot();
+  }
+
+  @override
+  PlaybackQueueResult setRepeatMode(PlaybackRepeatMode repeatMode) {
+    _snapshot = _copy(repeatMode: repeatMode);
+    return snapshot();
+  }
+
+  PlaybackQueueResult _update(
+    List<PlaylistTrackSummary> tracks,
+    int? currentIndex, {
+    required bool playbackRequested,
+  }) {
+    _snapshot = PlaybackQueueSnapshot(
+      tracks: List.unmodifiable(tracks),
+      currentIndex: currentIndex,
+      hasPrevious: currentIndex != null && currentIndex > 0,
+      hasNext: currentIndex != null && currentIndex + 1 < tracks.length,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(
+      snapshot: _snapshot,
+      playbackRequested: playbackRequested,
+    );
+  }
+
+  PlaybackQueueSnapshot _copy({
+    PlaybackOrder? order,
+    PlaybackRepeatMode? repeatMode,
+  }) => PlaybackQueueSnapshot(
+    tracks: _snapshot.tracks,
+    currentIndex: _snapshot.currentIndex,
+    hasPrevious: _snapshot.hasPrevious,
+    hasNext: _snapshot.hasNext,
+    order: order ?? _snapshot.order,
+    repeatMode: repeatMode ?? _snapshot.repeatMode,
+  );
 }
 
 class _ScriptedQueueGateway implements PlaybackQueueGateway {

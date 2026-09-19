@@ -7,6 +7,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
+import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
@@ -591,9 +592,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   bool _discoverHeaderCollapsed = false;
   bool _collectionDetailHeaderCollapsed = false;
   final Map<String, bool> _collectionDetailCollapsedByRoute = {};
-  final Map<String, PlaylistDetailShellAction> _playlistShellActions = {};
+  final Map<String, CollectionDetailActions> _collectionShellActions = {};
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
+  Timer? _playbackNoticeTimer;
+  String? _playbackNoticeMessage;
+  bool _playbackNoticeError = false;
+  int _playbackNoticeRevision = 0;
 
   String get _providerDisplayName => builtInProviderDisplayName(
     widget.settings.musicProvider.providerId,
@@ -664,6 +669,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         oldWidget.authenticated != widget.authenticated;
     if (!providerChanged && !authenticationChanged) return;
 
+    _queuePlaybackController.invalidateCollectionSource();
+
     _disposeProviderControllers();
     _navigation = AuthenticatedNavigationState();
     _pageStorageBucket = PageStorageBucket();
@@ -686,7 +693,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _discoverHeaderCollapsed = false;
     _collectionDetailHeaderCollapsed = false;
     _collectionDetailCollapsedByRoute.clear();
-    _playlistShellActions.clear();
+    _collectionShellActions.clear();
     _initializeProviderControllers();
     _loadProviderRoot();
   }
@@ -760,6 +767,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   @override
   void dispose() {
+    _playbackNoticeTimer?.cancel();
     _disposeProviderControllers();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _playlistReturnFocusNode.dispose();
@@ -848,6 +856,52 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         child: expandedNowPlayingPage,
       ),
     );
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final pageWithNotice = Stack(
+      fit: StackFit.expand,
+      children: [
+        shortcutPage,
+        PositionedDirectional(
+          start: 16,
+          end: 16,
+          bottom: viewportWidth >= 840 ? 100 : 164,
+          child: IgnorePointer(
+            child: Center(
+              child: AnimatedSwitcher(
+                key: const ValueKey('playback-transient-notice-transition'),
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                switchInCurve: Easing.emphasizedDecelerate,
+                switchOutCurve: Easing.emphasizedAccelerate,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.16),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: switch (_playbackNoticeMessage) {
+                  final message? => _PlaybackTransientNotice(
+                    key: ValueKey(
+                      'playback-transient-notice-$_playbackNoticeRevision',
+                    ),
+                    message: message,
+                    error: _playbackNoticeError,
+                  ),
+                  null => const SizedBox.shrink(
+                    key: ValueKey('playback-transient-notice-empty'),
+                  ),
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
     return KeyedSubtree(
       key: ValueKey(
         widget.authenticated ? 'user-library-page' : 'signed-out-main-page',
@@ -861,7 +915,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               _returnFromLocalPage();
             }
           },
-          child: shortcutPage,
+          child: pageWithNotice,
         ),
       ),
     );
@@ -920,7 +974,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               _updateCollectionDetailHeaderCollapsed(route, collapsed)
         : null,
     onShellActionChanged: embedded
-        ? (action) => _updatePlaylistShellAction(route, action)
+        ? (actions) => _updateCollectionShellActions(route, actions)
         : null,
     embedded: embedded,
   );
@@ -940,6 +994,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             ? (collapsed) =>
                   _updateCollectionDetailHeaderCollapsed(route, collapsed)
             : null,
+        onShellActionsChanged: embedded
+            ? (actions) => _updateCollectionShellActions(route, actions)
+            : null,
         embedded: embedded,
         backTooltip: _albumBackTooltip(route.origin),
         onSignInAgain: widget.onSignInAgain,
@@ -957,6 +1014,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         onHeaderCollapsedChanged: embedded
             ? (collapsed) =>
                   _updateCollectionDetailHeaderCollapsed(route, collapsed)
+            : null,
+        onShellActionsChanged: embedded
+            ? (actions) => _updateCollectionShellActions(route, actions)
             : null,
         embedded: embedded,
         onSignInAgain: widget.onSignInAgain,
@@ -976,6 +1036,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         onHeaderCollapsedChanged: embedded
             ? (collapsed) =>
                   _updateCollectionDetailHeaderCollapsed(route, collapsed)
+            : null,
+        onShellActionsChanged: embedded
+            ? (actions) => _updateCollectionShellActions(route, actions)
             : null,
         embedded: embedded,
       );
@@ -1058,7 +1121,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       _collectionDetailCollapsedByRoute.remove(
         _collectionRouteIdentity(result.route),
       );
-      _playlistShellActions.remove(_collectionRouteIdentity(result.route));
+      _collectionShellActions.remove(_collectionRouteIdentity(result.route));
       _collectionDetailHeaderCollapsed = _currentCollectionCollapsed;
     });
     _restoreFocusAfterBack(result, previousPrimary: previousPrimary);
@@ -1071,7 +1134,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     setState(() {
       route = _navigation.popRoute()!;
       _collectionDetailCollapsedByRoute.remove(_collectionRouteIdentity(route));
-      _playlistShellActions.remove(_collectionRouteIdentity(route));
+      _collectionShellActions.remove(_collectionRouteIdentity(route));
       _collectionDetailHeaderCollapsed = _currentCollectionCollapsed;
     });
     _restoreFocusAfterBack(
@@ -1258,22 +1321,29 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     if (!mounted) return;
     if (result != AppSettingsWriteResult.saved) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.libraryQualitySaveFailure)),
-      );
+      _showPlaybackNotice(context.l10n.libraryQualitySaveFailure, error: true);
       return;
     }
 
     if (wasActive) await _queuePlaybackController.reloadCurrentSource();
     if (!mounted) return;
     final actual = _queuePlaybackController.playback.resolvedQuality;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          preference.localizedSelectionMessage(context.l10n, actual),
-        ),
-      ),
+    _showPlaybackNotice(
+      preference.localizedSelectionMessage(context.l10n, actual),
     );
+  }
+
+  void _showPlaybackNotice(String message, {bool error = false}) {
+    _playbackNoticeTimer?.cancel();
+    setState(() {
+      _playbackNoticeMessage = message;
+      _playbackNoticeError = error;
+      _playbackNoticeRevision++;
+    });
+    _playbackNoticeTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (!mounted) return;
+      setState(() => _playbackNoticeMessage = null);
+    });
   }
 
   Future<bool> _changeLyricAuxiliaryMode(LyricAuxiliaryMode mode) async {
@@ -1683,9 +1753,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         _ => null,
       };
 
-  void _updatePlaylistShellAction(
-    PlaylistLocalRoute route,
-    PlaylistDetailShellAction action,
+  void _updateCollectionShellActions(
+    AuthenticatedLocalRoute route,
+    CollectionDetailActions? actions,
   ) {
     if (!mounted) return;
     final identity = _collectionRouteIdentity(route);
@@ -1693,12 +1763,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         _collectionRouteIdentity(_navigation.topRoute) != identity) {
       return;
     }
-    final previous = _playlistShellActions[identity];
-    if (previous?.refreshing == action.refreshing &&
-        (previous?.onRefresh == null) == (action.onRefresh == null)) {
+    final previous = _collectionShellActions[identity];
+    if (actions == null) {
+      if (previous == null) return;
+      setState(() => _collectionShellActions.remove(identity));
       return;
     }
-    setState(() => _playlistShellActions[identity] = action);
+    if (previous?.playing == actions.playing &&
+        previous?.refreshing == actions.refreshing &&
+        previous?.playAllLabel == actions.playAllLabel &&
+        previous?.refreshLabel == actions.refreshLabel &&
+        (previous?.onPlayAll == null) == (actions.onPlayAll == null) &&
+        (previous?.onRefresh == null) == (actions.onRefresh == null)) {
+      return;
+    }
+    setState(() => _collectionShellActions[identity] = actions);
   }
 
   bool get _currentCollectionCollapsed {
@@ -1756,9 +1835,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         _ => null,
       };
       final collectionIdentity = _collectionRouteIdentity(embeddedShellRoute);
-      final playlistShellAction = embeddedShellRoute is PlaylistLocalRoute
-          ? _playlistShellActions[collectionIdentity]
-          : null;
+      final collectionShellActions =
+          _collectionShellActions[collectionIdentity];
       final likedHeaderOwnsTopBar =
           likedSongsOpen && embeddedShellRoute == null && _likedHeaderCollapsed;
       final recentCollapsed =
@@ -1921,19 +1999,36 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final showCollectionShellControls =
           collectionDetailOpen && _collectionDetailHeaderCollapsed;
       final collectionRefreshAction =
-          showCollectionShellControls && playlistShellAction != null
+          showCollectionShellControls &&
+              collectionShellActions?.refreshLabel != null
           ? IconButton(
               key: const ValueKey('collection-detail-shell-refresh'),
-              tooltip: playlistShellAction.refreshing
-                  ? context.l10n.libraryRefreshingPlaylist
-                  : context.l10n.libraryRefreshPlaylist,
-              onPressed: playlistShellAction.onRefresh,
-              icon: playlistShellAction.refreshing
+              tooltip: collectionShellActions!.refreshLabel,
+              onPressed: collectionShellActions.refreshing
+                  ? null
+                  : collectionShellActions.onRefresh,
+              icon: collectionShellActions.refreshing
                   ? const SizedBox.square(
                       dimension: 20,
                       child: CircularProgressIndicator(strokeWidth: 2.5),
                     )
                   : const Icon(Icons.refresh_rounded),
+            )
+          : null;
+      final collectionPlayAction =
+          showCollectionShellControls && collectionShellActions != null
+          ? IconButton(
+              key: const ValueKey('collection-detail-shell-play-all'),
+              tooltip: collectionShellActions.playAllLabel,
+              onPressed: collectionShellActions.playing
+                  ? null
+                  : collectionShellActions.onPlayAll,
+              icon: collectionShellActions.playing
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : const Icon(Icons.play_arrow_rounded),
             )
           : null;
       final mainAppBar = AppBar(
@@ -2004,7 +2099,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 onSearchSuggestionSelected: settingsOpen
                     ? null
                     : _selectTopSearchSuggestion,
-                searchEndInset: collectionRefreshAction == null ? 0 : 48,
+                searchEndInset:
+                    (collectionPlayAction == null ? 0 : 48) +
+                    (collectionRefreshAction == null ? 0 : 48),
               ),
               if (showCollectionShellControls)
                 Positioned.fill(
@@ -2024,6 +2121,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         titleSpacing: compactActions ? 8 : 16,
         actions: extendedSidebar
             ? [
+                ?collectionPlayAction,
                 ?collectionRefreshAction,
                 SizedBox(
                   key: ValueKey(
@@ -2035,6 +2133,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 ),
               ]
             : [
+                ?collectionPlayAction,
                 ?collectionRefreshAction,
                 AnimatedSwitcher(
                   key: const ValueKey('shell-account-actions-transition'),
@@ -2529,6 +2628,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (!confirmed || !mounted) return;
 
     setState(() => _signingOut = true);
+    _queuePlaybackController.invalidateCollectionSource();
     final signOut = widget.onSignOut();
     await _queuePlaybackController.stop();
     final result = await signOut;
@@ -3470,6 +3570,52 @@ class _CompactPlayerOverlay extends StatelessWidget {
         if (enabled)
           Align(alignment: Alignment.bottomCenter, child: overlayPlayer),
       ],
+    );
+  }
+}
+
+class _PlaybackTransientNotice extends StatelessWidget {
+  const _PlaybackTransientNotice({
+    required this.message,
+    required this.error,
+    super.key,
+  });
+
+  final String message;
+  final bool error;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: message,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Material(
+          key: const ValueKey('playback-transient-notice'),
+          elevation: 6,
+          color: error ? colors.errorContainer : colors.inverseSurface,
+          shadowColor: colors.shadow.withValues(alpha: 0.22),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: error
+                    ? colors.onErrorContainer
+                    : colors.onInverseSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
