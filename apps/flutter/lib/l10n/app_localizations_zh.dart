@@ -1154,6 +1154,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeForYouEyebrow => '为你推荐';
 
   @override
+  String get homeOfficialSpotlightEyebrow => '官方歌单';
+
+  @override
   String get homePublicSpotlightEyebrow => '公开精选';
 
   @override

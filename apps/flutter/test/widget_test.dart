@@ -91,6 +91,9 @@ import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
 import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/home/home_controller.dart';
 import 'package:flutterustmusic/home/home_page.dart';
+import 'package:flutterustmusic/home/home_spotlight_controller.dart';
+import 'package:flutterustmusic/home/official_playlist_controller.dart';
+import 'package:flutterustmusic/home/official_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
@@ -783,6 +786,10 @@ void main() {
         ),
       );
       final recommendations = RecommendedPlaylistController(public);
+      final official = OfficialPlaylistController(
+        const UnsupportedOfficialPlaylistGateway(),
+      );
+      final spotlight = HomeSpotlightController(official, recommendations);
       final home = HomeController(
         const _WidgetAccountSummaryGateway(AccountSummaryLoadResult()),
         const _WidgetDailyRecommendationGateway(DailyRecommendationResult()),
@@ -817,6 +824,8 @@ void main() {
         queue.dispose();
         radar.dispose();
         songs.dispose();
+        spotlight.dispose();
+        official.dispose();
         recommendations.dispose();
         home.dispose();
       });
@@ -829,6 +838,7 @@ void main() {
             home: Scaffold(
               body: HomePage(
                 homeController: home,
+                spotlightController: spotlight,
                 recommendationController: recommendations,
                 newSongController: songs,
                 radarController: radar,
@@ -851,6 +861,7 @@ void main() {
           .data!;
       await show(true);
       final first = title();
+      expect(find.text('PUBLIC SPOTLIGHT'), findsOneWidget);
       await show(false);
       now = now.add(const Duration(minutes: 20));
       await tester.pump(const Duration(minutes: 20));
@@ -929,6 +940,10 @@ void main() {
         _WidgetRelatedTracksGateway(const RelatedTracksResult()),
       );
       final recommendations = RecommendedPlaylistController(public);
+      final official = OfficialPlaylistController(
+        const UnsupportedOfficialPlaylistGateway(),
+      );
+      final spotlight = HomeSpotlightController(official, recommendations);
       final songs = NewSongController(songsGateway);
       final radar = RadarController(
         _WidgetRadarGateway(const RadarTrackPageResult(page: 1)),
@@ -945,6 +960,8 @@ void main() {
         queue.dispose();
         radar.dispose();
         songs.dispose();
+        spotlight.dispose();
+        official.dispose();
         recommendations.dispose();
         home.dispose();
       });
@@ -955,6 +972,7 @@ void main() {
           home: Scaffold(
             body: HomePage(
               homeController: home,
+              spotlightController: spotlight,
               recommendationController: recommendations,
               newSongController: songs,
               radarController: radar,
@@ -1679,6 +1697,21 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    const officialDetailResult = PlaylistTrackPageResult(
+      total: 1,
+      tracks: [
+        PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'track:official-detail:fixture',
+          title: 'Official detail track',
+          artistNames: ['Official fixture artist'],
+        ),
+      ],
+    );
+    final officialDetailGateway = _WidgetDetailGateway([
+      const PlaylistTrackPageResult(total: 42),
+      officialDetailResult,
+    ]);
 
     await tester.pumpWidget(
       MusicApp(
@@ -1750,6 +1783,20 @@ void main() {
             ],
           ),
         ),
+        officialPlaylistGateway: _WidgetOfficialPlaylistGateway(
+          const OfficialPlaylistPageResult(
+            page: 1,
+            nextPage: 2,
+            total: 1,
+            playlists: [
+              OfficialPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:official-1',
+                title: 'Official centerpiece',
+              ),
+            ],
+          ),
+        ),
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
           const RecommendedPlaylistPageResult(
             playlists: [
@@ -1779,9 +1826,7 @@ void main() {
             ],
           ),
         ),
-        playlistDetailGateway: _WidgetDetailGateway([
-          const PlaylistTrackPageResult(total: 42),
-        ]),
+        playlistDetailGateway: officialDetailGateway,
       ),
     );
     await tester.pumpAndSettle();
@@ -1793,6 +1838,14 @@ void main() {
     );
     expect(find.byKey(const ValueKey('home-library-section')), findsOneWidget);
     expect(find.text('Synthetic recommendation'), findsOneWidget);
+    expect(find.text('Official centerpiece'), findsOneWidget);
+    expect(find.text('OFFICIAL PLAYLIST'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('home-spotlight-title')))
+          .data,
+      'Official centerpiece',
+    );
     expect(find.text('For Synthetic listener today'), findsNothing);
     expect(find.text('Synthetic Daily 30'), findsOneWidget);
     expect(find.text('Synthetic Radar pick'), findsOneWidget);
@@ -1867,6 +1920,21 @@ void main() {
       find.byKey(const ValueKey('home-refresh-recommendations')),
       findsOneWidget,
     );
+    expect(officialDetailGateway.requests, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('home-recommendation-0')));
+    await tester.pumpAndSettle();
+    expect(
+      officialDetailGateway.requests.map(
+        (request) => request.playlist.opaqueId,
+      ),
+      ['owned:7001:201', 'catalog:official-1'],
+    );
+    expect(find.text('Official centerpiece'), findsWidgets);
+    expect(find.text('Official detail track'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back to playlists'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('open-liked-songs')));
     await tester.pumpAndSettle();
 
@@ -11700,6 +11768,35 @@ class _WidgetRecommendedPlaylistGateway implements RecommendedPlaylistGateway {
     requests.add((offset, size));
     return _WidgetRecommendedPlaylistOperation(result);
   }
+}
+
+class _WidgetOfficialPlaylistGateway implements OfficialPlaylistGateway {
+  _WidgetOfficialPlaylistGateway(this.result);
+
+  final OfficialPlaylistPageResult result;
+  final List<(int, int)> requests = [];
+
+  @override
+  OfficialPlaylistPageLoadOperation beginLoad({
+    required int page,
+    required int size,
+  }) {
+    requests.add((page, size));
+    return _WidgetOfficialPlaylistOperation(result);
+  }
+}
+
+class _WidgetOfficialPlaylistOperation
+    implements OfficialPlaylistPageLoadOperation {
+  const _WidgetOfficialPlaylistOperation(this.result);
+
+  final OfficialPlaylistPageResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<OfficialPlaylistPageResult> run() async => result;
 }
 
 class _WidgetRecommendedPlaylistOperation

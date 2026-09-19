@@ -21,28 +21,24 @@ void main() {
     ),
   ];
 
-  test('selects a stable daily spotlight independent of response order', () {
+  test('preserves the first playlist in provider editorial order', () {
     final day = DateTime(2026, 9, 2, 23, 59);
 
     final selected = selectHomeSpotlightForDay(playlists, day);
-    final reordered = selectHomeSpotlightForDay(
-      playlists.reversed.toList(growable: false),
-      day,
-    );
 
-    expect(selected?.opaqueId, reordered?.opaqueId);
+    expect(selected?.opaqueId, 'catalog:3');
   });
 
-  test('advances the daily starting spotlight on the next date', () {
+  test('date changes do not reorder the provider-owned candidate window', () {
     final first = selectHomeSpotlightForDay(playlists, DateTime(2026, 9, 2));
     final next = selectHomeSpotlightForDay(playlists, DateTime(2026, 9, 3));
 
     expect(first, isNotNull);
     expect(next, isNotNull);
-    expect(next?.opaqueId, isNot(first?.opaqueId));
+    expect(next?.opaqueId, first?.opaqueId);
   });
 
-  test('returns no spotlight when the public recommendation set is empty', () {
+  test('returns no spotlight when the candidate window is empty', () {
     expect(selectHomeSpotlightForDay(const [], DateTime(2026, 9, 2)), isNull);
   });
 }

@@ -1281,6 +1281,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeForYouEyebrow => 'FOR YOU';
 
   @override
+  String get homeOfficialSpotlightEyebrow => 'OFFICIAL PLAYLIST';
+
+  @override
   String get homePublicSpotlightEyebrow => 'PUBLIC SPOTLIGHT';
 
   @override

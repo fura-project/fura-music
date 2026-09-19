@@ -3,9 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use provider_api::{
     BuiltInProvider, DailyRecommendationError, DailyRecommendationProvider, DailyTracksProvider,
-    PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
-    PersonalizedTracksProvider, RadarRecommendationError, RadarRecommendationsProvider,
-    RecommendationError, RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider,
+    OfficialPlaylistsProvider, PersonalizedPlaylistsError, PersonalizedPlaylistsProvider,
+    PersonalizedTracksError, PersonalizedTracksProvider, RadarRecommendationError,
+    RadarRecommendationsProvider, RecommendationError, RecommendedPlaylistsProvider,
+    RelatedTracksError, RelatedTracksProvider,
 };
 use tokio::sync::Notify;
 
@@ -13,6 +14,193 @@ use super::library::{
     LibraryPlaylistSummary, LibraryTrackSummary, bridge_playlist_summary, bridge_track_summary,
 };
 use super::{authentication::native_qq_music_provider, built_in_provider, with_native_provider};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicOfficialPlaylistPageLoadFailure {
+    CoreUnavailable,
+    Network,
+    ServiceUnavailable,
+    InvalidResponse,
+    Cancelled,
+    AlreadyRunning,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicOfficialPlaylistSummary {
+    pub playlist: LibraryPlaylistSummary,
+    pub creator: Option<String>,
+    pub play_count: Option<u64>,
+    pub categories: Vec<String>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicOfficialPlaylistPageLoad {
+    pub page: u32,
+    pub next_page: u32,
+    pub total: u32,
+    pub has_more: bool,
+    pub omitted_playlist_count: u32,
+    pub playlists: Vec<QqMusicOfficialPlaylistSummary>,
+    pub failure: Option<QqMusicOfficialPlaylistPageLoadFailure>,
+}
+
+impl fmt::Debug for QqMusicOfficialPlaylistPageLoad {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicOfficialPlaylistPageLoad")
+            .field("page", &self.page)
+            .field("next_page", &self.next_page)
+            .field("total", &self.total)
+            .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
+            .field("playlist_count", &self.playlists.len())
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+/// One cancellable, single-use official/editorial playlist page load. The
+/// evidenced QQ category and request fields remain inside the Rust Provider
+/// stack and are not shared with public recommendation loading.
+#[flutter_rust_bridge::frb(opaque)]
+pub struct QqMusicOfficialPlaylistPageLoadHandle {
+    provider_id: String,
+    page: u32,
+    size: u32,
+    active: AtomicBool,
+    running: AtomicBool,
+    cancelled: Notify,
+}
+
+impl fmt::Debug for QqMusicOfficialPlaylistPageLoadHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicOfficialPlaylistPageLoadHandle")
+            .field("page", &self.page)
+            .field("size", &self.size)
+            .field("active", &self.is_active())
+            .field("running", &self.running.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl QqMusicOfficialPlaylistPageLoadHandle {
+    pub async fn run(&self) -> QqMusicOfficialPlaylistPageLoad {
+        if !self.active.load(Ordering::SeqCst) {
+            return failed_official_load(QqMusicOfficialPlaylistPageLoadFailure::Cancelled);
+        }
+        if self.running.swap(true, Ordering::SeqCst) {
+            return failed_official_load(QqMusicOfficialPlaylistPageLoadFailure::AlreadyRunning);
+        }
+        let outcome = match built_in_provider(&self.provider_id) {
+            Ok(BuiltInProvider::QQMusic) => match native_qq_music_provider() {
+                Ok(provider) => tokio::select! {
+                    () = self.cancelled.notified() => {
+                        failed_official_load(QqMusicOfficialPlaylistPageLoadFailure::Cancelled)
+                    }
+                    result = provider.official_playlists(self.page, self.size) => {
+                        if self.active.load(Ordering::SeqCst) {
+                            map_official_load(result)
+                        } else {
+                            failed_official_load(QqMusicOfficialPlaylistPageLoadFailure::Cancelled)
+                        }
+                    }
+                },
+                Err(()) => {
+                    failed_official_load(QqMusicOfficialPlaylistPageLoadFailure::CoreUnavailable)
+                }
+            },
+            Ok(BuiltInProvider::NetEaseCloudMusic) | Err(()) => {
+                failed_official_load(QqMusicOfficialPlaylistPageLoadFailure::CoreUnavailable)
+            }
+        };
+        self.running.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        outcome
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cancel(&self) -> bool {
+        let was_active = self.active.swap(false, Ordering::SeqCst);
+        if was_active {
+            self.cancelled.notify_one();
+        }
+        was_active
+    }
+
+    #[flutter_rust_bridge::frb(sync, getter)]
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_qq_music_official_playlist_page_load(
+    provider_id: String,
+    page: u32,
+    size: u32,
+) -> QqMusicOfficialPlaylistPageLoadHandle {
+    QqMusicOfficialPlaylistPageLoadHandle {
+        provider_id,
+        page,
+        size,
+        active: AtomicBool::new(true),
+        running: AtomicBool::new(false),
+        cancelled: Notify::new(),
+    }
+}
+
+fn map_official_load(
+    result: Result<music_domain::OfficialPlaylistsPage, RecommendationError>,
+) -> QqMusicOfficialPlaylistPageLoad {
+    match result {
+        Ok(page) => QqMusicOfficialPlaylistPageLoad {
+            page: page.page(),
+            next_page: page.next_page(),
+            total: page.total(),
+            has_more: page.has_more(),
+            omitted_playlist_count: page.omitted_playlist_count(),
+            playlists: page
+                .playlists()
+                .iter()
+                .map(|item| QqMusicOfficialPlaylistSummary {
+                    playlist: bridge_playlist_summary(item.playlist()),
+                    creator: item.creator().map(str::to_owned),
+                    play_count: item.play_count(),
+                    categories: item.categories().to_vec(),
+                })
+                .collect(),
+            failure: None,
+        },
+        Err(error) => failed_official_load(map_official_error(error)),
+    }
+}
+
+const fn failed_official_load(
+    failure: QqMusicOfficialPlaylistPageLoadFailure,
+) -> QqMusicOfficialPlaylistPageLoad {
+    QqMusicOfficialPlaylistPageLoad {
+        page: 0,
+        next_page: 0,
+        total: 0,
+        has_more: false,
+        omitted_playlist_count: 0,
+        playlists: Vec::new(),
+        failure: Some(failure),
+    }
+}
+
+const fn map_official_error(error: RecommendationError) -> QqMusicOfficialPlaylistPageLoadFailure {
+    match error {
+        RecommendationError::Network => QqMusicOfficialPlaylistPageLoadFailure::Network,
+        RecommendationError::ServiceUnavailable => {
+            QqMusicOfficialPlaylistPageLoadFailure::ServiceUnavailable
+        }
+        RecommendationError::InvalidResponse => {
+            QqMusicOfficialPlaylistPageLoadFailure::InvalidResponse
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicRecommendedPlaylistPageLoadFailure {
@@ -1018,8 +1206,8 @@ const fn map_radar_error(error: RadarRecommendationError) -> QqMusicRadarTrackPa
 #[cfg(test)]
 mod tests {
     use music_domain::{
-        PlaylistId, PlaylistSummary, ProviderId, RadarTrackPage, RecommendedPlaylistsPage, TrackId,
-        TrackSummary,
+        OfficialPlaylistSummary, OfficialPlaylistsPage, PlaylistId, PlaylistSummary, ProviderId,
+        RadarTrackPage, RecommendedPlaylistsPage, TrackId, TrackSummary,
     };
     use provider_api::{
         DailyRecommendationError, PersonalizedPlaylistsError, PersonalizedTracksError,
@@ -1027,16 +1215,18 @@ mod tests {
     };
 
     use super::{
-        QqMusicDailyRecommendationLoadFailure, QqMusicPersonalizedPlaylistsLoadFailure,
-        QqMusicPersonalizedTracksLoadFailure, QqMusicRadarTrackPageLoadFailure,
-        QqMusicRecommendedPlaylistPageLoadFailure, QqMusicRelatedTracksLoadFailure,
-        begin_qq_music_daily_recommendation_load, begin_qq_music_personalized_playlists_load,
+        QqMusicDailyRecommendationLoadFailure, QqMusicOfficialPlaylistPageLoadFailure,
+        QqMusicPersonalizedPlaylistsLoadFailure, QqMusicPersonalizedTracksLoadFailure,
+        QqMusicRadarTrackPageLoadFailure, QqMusicRecommendedPlaylistPageLoadFailure,
+        QqMusicRelatedTracksLoadFailure, begin_qq_music_daily_recommendation_load,
+        begin_qq_music_official_playlist_page_load, begin_qq_music_personalized_playlists_load,
         begin_qq_music_personalized_tracks_load, begin_qq_music_radar_track_page_load,
         begin_qq_music_recommended_playlist_page_load, begin_qq_music_related_tracks_load,
         map_daily_error, map_daily_load, map_daily_tracks_load, map_error, map_load,
-        map_personalized_playlists_error, map_personalized_playlists_load,
-        map_personalized_tracks_error, map_personalized_tracks_load, map_radar_error,
-        map_radar_load, map_related_tracks_error, map_related_tracks_load,
+        map_official_error, map_official_load, map_personalized_playlists_error,
+        map_personalized_playlists_load, map_personalized_tracks_error,
+        map_personalized_tracks_load, map_radar_error, map_radar_load, map_related_tracks_error,
+        map_related_tracks_load,
     };
 
     #[test]
@@ -1063,6 +1253,41 @@ mod tests {
     }
 
     #[test]
+    fn maps_official_page_without_conflating_public_recommendations() {
+        let playlist = PlaylistSummary::new(
+            PlaylistId::new(
+                ProviderId::new("qq-music").expect("provider"),
+                "catalog:82001",
+            )
+            .expect("Playlist ID"),
+            "must-not-leak-official",
+        )
+        .expect("Playlist summary");
+        let item = OfficialPlaylistSummary::new(playlist)
+            .with_creator(Some("must-not-leak-editor".into()))
+            .with_play_count(Some(98_765))
+            .with_categories(vec!["must-not-leak-category".into()]);
+        let mapped = map_official_load(Ok(OfficialPlaylistsPage::new(1, 736, true, vec![item])));
+
+        assert_eq!(mapped.page, 1);
+        assert_eq!(mapped.next_page, 2);
+        assert_eq!(mapped.total, 736);
+        assert!(mapped.has_more);
+        assert_eq!(mapped.playlists.len(), 1);
+        assert_eq!(mapped.playlists[0].play_count, Some(98_765));
+        assert_eq!(mapped.playlists[0].categories.len(), 1);
+        let debug = format!("{mapped:?} {:?}", mapped.playlists[0].playlist);
+        for private in [
+            "must-not-leak-official",
+            "must-not-leak-editor",
+            "must-not-leak-category",
+            "82001",
+        ] {
+            assert!(!debug.contains(private));
+        }
+    }
+
+    #[test]
     fn maps_recommendation_failures_precisely() {
         assert_eq!(
             map_error(RecommendationError::Network),
@@ -1075,6 +1300,18 @@ mod tests {
         assert_eq!(
             map_error(RecommendationError::InvalidResponse),
             QqMusicRecommendedPlaylistPageLoadFailure::InvalidResponse
+        );
+        assert_eq!(
+            map_official_error(RecommendationError::Network),
+            QqMusicOfficialPlaylistPageLoadFailure::Network
+        );
+        assert_eq!(
+            map_official_error(RecommendationError::ServiceUnavailable),
+            QqMusicOfficialPlaylistPageLoadFailure::ServiceUnavailable
+        );
+        assert_eq!(
+            map_official_error(RecommendationError::InvalidResponse),
+            QqMusicOfficialPlaylistPageLoadFailure::InvalidResponse
         );
 
         let cases = [
@@ -1414,6 +1651,15 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
+        let official = begin_qq_music_official_playlist_page_load("qq-music".into(), 1, 8);
+        assert!(official.is_active());
+        assert!(official.cancel());
+        assert!(!official.cancel());
+        assert_eq!(
+            official.run().await.failure,
+            Some(QqMusicOfficialPlaylistPageLoadFailure::Cancelled)
+        );
+
         let handle = begin_qq_music_recommended_playlist_page_load("qq-music".into(), 0, 20);
         assert!(handle.is_active());
         assert!(handle.cancel());

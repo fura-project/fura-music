@@ -1,15 +1,35 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: UI
+  work_domain: MIXED
   state: HUMAN_REVIEW
   acceptance_milestone: HD-035
-  active_workstream: UI_PRACTICALITY_AND_WIRING
-  current_task: HD_035_UI_PRACTICALITY_CANDIDATE
+  active_workstream: QQ_OFFICIAL_PLAYLIST_HOME_SPOTLIGHT
+  current_task: HD_035_OFFICIAL_PLAYLIST_PROTOCOL_AND_HOME_WIRING
   next_action: HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
+
+- **2026-09-19 QQ official-playlist protocol and Home Spotlight candidate:**
+  current anonymous musicu observations now directly map category `3317` to
+  `官方歌单` through `music.web_category_svr/get_hot_category`, and the separate
+  `playlist.PlayListPlazaServer/get_playlist_by_category` request returns a
+  bounded `total/v_playlist` page for that category. The implemented
+  `OfficialPlaylistsProvider` remains distinct from public
+  `RecommendedPlaylistsProvider`; it preserves the evidenced Playlist,
+  creator, play-count and tag fields, uses one-based Provider pages, and keeps
+  adjacent-page dedupe above the raw Client. Home uses an app-lifetime
+  official-first Spotlight source with eight ordered candidates; timer/manual
+  rotation is local and only refresh replaces the window. Official failure or
+  empty content falls back to a three-item public candidate window with the
+  truthful `PUBLIC SPOTLIGHT` label, while Discover remains on PlaylistSquare
+  and the treasure shelf remains personalized. The generated Bridge is current;
+  Flutter formatting/analyze and all 724 Flutter tests pass, as do Rust format,
+  full locked workspace tests, clippy with warnings denied, and `git diff
+  --check`. Anonymous bounded probes also reconfirmed category 3317, both list
+  pages, total 736 and adjacent-page overlap. QQ runtime population, real
+  artwork and desktop/compact visual acceptance remain Human review.
 
 - **2026-09-18 HD-035 UI practicality and wiring candidate:** starting local
   HEAD and the live `origin/main` ref were both

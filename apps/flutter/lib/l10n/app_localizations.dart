@@ -2133,6 +2133,12 @@ abstract class AppLocalizations {
   /// **'FOR YOU'**
   String get homeForYouEyebrow;
 
+  /// No description provided for @homeOfficialSpotlightEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'OFFICIAL PLAYLIST'**
+  String get homeOfficialSpotlightEyebrow;
+
   /// No description provided for @homePublicSpotlightEyebrow.
   ///
   /// In en, this message translates to:

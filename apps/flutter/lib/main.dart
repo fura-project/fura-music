@@ -19,6 +19,7 @@ import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/official_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/recent_listening_gateway.dart';
@@ -178,6 +179,9 @@ MusicProviderDependencies _buildProviderDependencies({
         providerId: providerId,
         credentialVault: credentialVault,
       ),
+      officialPlaylistGateway: qqMusic
+          ? RustOfficialPlaylistGateway(providerId: providerId)
+          : const UnsupportedOfficialPlaylistGateway(),
       personalizedPlaylistsGateway: RustPersonalizedPlaylistsGateway(
         providerId: providerId,
         credentialVault: credentialVault,

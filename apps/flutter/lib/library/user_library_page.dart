@@ -22,6 +22,8 @@ import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_page.dart';
 import 'package:flutterustmusic/home/home_controller.dart';
 import 'package:flutterustmusic/home/home_page.dart';
+import 'package:flutterustmusic/home/home_spotlight_controller.dart';
+import 'package:flutterustmusic/home/official_playlist_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
@@ -544,6 +546,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late final QueuePlaybackController _queuePlaybackController;
   late final ArtworkColorSchemeCache _expandedNowPlayingPalette;
   late RecommendedPlaylistController _recommendedPlaylistController;
+  late OfficialPlaylistController _officialPlaylistController;
+  late HomeSpotlightController _homeSpotlightController;
   late NewSongController _homeNewSongController;
   late RadarController _homeRadarController;
   late TrackSearchSuggestionController _topSearchSuggestionController;
@@ -624,6 +628,13 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _recommendedPlaylistController = RecommendedPlaylistController(
       _discovery.recommendedPlaylistGateway,
     );
+    _officialPlaylistController = OfficialPlaylistController(
+      _home.officialPlaylistGateway,
+    );
+    _homeSpotlightController = HomeSpotlightController(
+      _officialPlaylistController,
+      _recommendedPlaylistController,
+    );
     _homeNewSongController = NewSongController(_discovery.newSongGateway);
     _homeRadarController = RadarController(_discovery.radarGateway);
     _topSearchSuggestionController = TrackSearchSuggestionController(
@@ -634,7 +645,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _loadProviderRoot() {
-    unawaited(_recommendedPlaylistController.load());
+    unawaited(_homeSpotlightController.load());
     unawaited(_homeNewSongController.load());
     if (widget.authenticated) {
       unawaited(_controller.load());
@@ -649,6 +660,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _controller.dispose();
     _homeController.removeListener(_onHomeChanged);
     _homeController.dispose();
+    _homeSpotlightController.dispose();
+    _officialPlaylistController.dispose();
     _recommendedPlaylistController.dispose();
     _homeNewSongController.dispose();
     _homeRadarController.removeListener(_onHomeChanged);
@@ -1851,6 +1864,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           HomePage(
             key: const ValueKey('home-page'),
             homeController: _homeController,
+            spotlightController: _homeSpotlightController,
             recommendationController: _recommendedPlaylistController,
             newSongController: _homeNewSongController,
             radarController: _homeRadarController,

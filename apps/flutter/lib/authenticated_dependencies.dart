@@ -12,6 +12,7 @@ import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/official_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
@@ -125,6 +126,7 @@ class AuthenticatedHomeDependencies {
   const AuthenticatedHomeDependencies({
     required this.accountSummaryGateway,
     required this.dailyRecommendationGateway,
+    this.officialPlaylistGateway = const UnsupportedOfficialPlaylistGateway(),
     required this.personalizedPlaylistsGateway,
     required this.personalizedTracksGateway,
     required this.relatedTracksGateway,
@@ -133,6 +135,7 @@ class AuthenticatedHomeDependencies {
 
   final AccountSummaryGateway accountSummaryGateway;
   final DailyRecommendationGateway dailyRecommendationGateway;
+  final OfficialPlaylistGateway officialPlaylistGateway;
   final PersonalizedPlaylistsGateway personalizedPlaylistsGateway;
   final PersonalizedTracksGateway personalizedTracksGateway;
   final RelatedTracksGateway relatedTracksGateway;

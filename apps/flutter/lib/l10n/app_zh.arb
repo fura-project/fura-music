@@ -347,6 +347,7 @@
   "homeSignOut": "退出登录",
   "homeSignInToProvider": "登录 {provider}",
   "homeForYouEyebrow": "为你推荐",
+  "homeOfficialSpotlightEyebrow": "官方歌单",
   "homePublicSpotlightEyebrow": "公开精选",
   "homeSelectedForYou": "为你精选",
   "homeTodaysPick": "今日精选",

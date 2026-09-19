@@ -24,6 +24,7 @@ import 'package:flutterustmusic/discover/new_song_gateway.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/official_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
@@ -77,6 +78,7 @@ class MusicApp extends StatefulWidget {
     RadarGateway? radarGateway,
     AccountSummaryGateway? accountSummaryGateway,
     DailyRecommendationGateway? dailyRecommendationGateway,
+    OfficialPlaylistGateway? officialPlaylistGateway,
     PersonalizedPlaylistsGateway? personalizedPlaylistsGateway,
     PersonalizedTracksGateway? personalizedTracksGateway,
     RelatedTracksGateway? relatedTracksGateway,
@@ -163,6 +165,8 @@ class MusicApp extends StatefulWidget {
         recentListeningFactory: recentListeningFactory,
         accountSummaryGateway: accountSummaryGateway,
         dailyRecommendationGateway: dailyRecommendationGateway,
+        officialPlaylistGateway:
+            officialPlaylistGateway ?? const RustOfficialPlaylistGateway(),
         personalizedPlaylistsGateway: personalizedPlaylistsGateway,
         personalizedTracksGateway: personalizedTracksGateway,
         relatedTracksGateway: resolvedRelatedTracksGateway,

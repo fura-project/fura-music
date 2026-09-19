@@ -1855,6 +1855,30 @@ pub struct RecommendedPlaylistsPage {
     playlists: Vec<PlaylistSummary>,
 }
 
+/// One provider-neutral official/editorial playlist entry. The playlist
+/// identity remains provider-owned while optional editorial metadata is kept
+/// only when the upstream protocol supplied it.
+#[derive(Clone, Eq, PartialEq)]
+pub struct OfficialPlaylistSummary {
+    playlist: PlaylistSummary,
+    creator: Option<String>,
+    play_count: Option<u64>,
+    categories: Vec<String>,
+}
+
+/// One bounded, page-numbered collection of official/editorial playlists.
+/// Source-specific category identifiers and page numbering remain behind the
+/// Provider boundary.
+#[derive(Clone, Eq, PartialEq)]
+pub struct OfficialPlaylistsPage {
+    page: u32,
+    next_page: u32,
+    total: u32,
+    has_more: bool,
+    omitted_playlist_count: u32,
+    playlists: Vec<OfficialPlaylistSummary>,
+}
+
 /// One provider-neutral page of QQ-native Radar Track recommendations.
 /// Provider-specific personalization and continuation remain behind the
 /// Provider boundary.
@@ -2537,6 +2561,141 @@ impl fmt::Debug for RecommendedPlaylistsPage {
             .debug_struct("RecommendedPlaylistsPage")
             .field("offset", &self.offset)
             .field("next_offset", &self.next_offset)
+            .field("has_more", &self.has_more)
+            .field("omitted_playlist_count", &self.omitted_playlist_count)
+            .field("playlist_count", &self.playlists.len())
+            .finish()
+    }
+}
+
+impl OfficialPlaylistSummary {
+    #[must_use]
+    pub fn new(playlist: PlaylistSummary) -> Self {
+        Self {
+            playlist,
+            creator: None,
+            play_count: None,
+            categories: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_creator(mut self, creator: Option<String>) -> Self {
+        self.creator = creator.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    #[must_use]
+    pub const fn with_play_count(mut self, play_count: Option<u64>) -> Self {
+        self.play_count = play_count;
+        self
+    }
+
+    #[must_use]
+    pub fn with_categories(mut self, categories: Vec<String>) -> Self {
+        self.categories = categories
+            .into_iter()
+            .filter(|value| !value.trim().is_empty())
+            .collect();
+        self
+    }
+
+    #[must_use]
+    pub const fn playlist(&self) -> &PlaylistSummary {
+        &self.playlist
+    }
+
+    #[must_use]
+    pub fn creator(&self) -> Option<&str> {
+        self.creator.as_deref()
+    }
+
+    #[must_use]
+    pub const fn play_count(&self) -> Option<u64> {
+        self.play_count
+    }
+
+    #[must_use]
+    pub fn categories(&self) -> &[String] {
+        &self.categories
+    }
+}
+
+impl fmt::Debug for OfficialPlaylistSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OfficialPlaylistSummary")
+            .field("playlist", &self.playlist)
+            .field("has_creator", &self.creator.is_some())
+            .field("play_count", &self.play_count)
+            .field("category_count", &self.categories.len())
+            .finish()
+    }
+}
+
+impl OfficialPlaylistsPage {
+    #[must_use]
+    pub fn new(
+        page: u32,
+        total: u32,
+        has_more: bool,
+        playlists: Vec<OfficialPlaylistSummary>,
+    ) -> Self {
+        Self {
+            page,
+            next_page: page.saturating_add(1),
+            total,
+            has_more,
+            omitted_playlist_count: 0,
+            playlists,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_integrity(mut self, next_page: u32, omitted_playlist_count: u32) -> Self {
+        self.next_page = next_page;
+        self.omitted_playlist_count = omitted_playlist_count;
+        self
+    }
+
+    #[must_use]
+    pub const fn page(&self) -> u32 {
+        self.page
+    }
+
+    #[must_use]
+    pub const fn next_page(&self) -> u32 {
+        self.next_page
+    }
+
+    #[must_use]
+    pub const fn total(&self) -> u32 {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
+
+    #[must_use]
+    pub const fn omitted_playlist_count(&self) -> u32 {
+        self.omitted_playlist_count
+    }
+
+    #[must_use]
+    pub fn playlists(&self) -> &[OfficialPlaylistSummary] {
+        &self.playlists
+    }
+}
+
+impl fmt::Debug for OfficialPlaylistsPage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OfficialPlaylistsPage")
+            .field("page", &self.page)
+            .field("next_page", &self.next_page)
+            .field("total", &self.total)
             .field("has_more", &self.has_more)
             .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("playlist_count", &self.playlists.len())

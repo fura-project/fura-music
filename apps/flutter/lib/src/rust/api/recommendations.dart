@@ -10,8 +10,19 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_personalized_playlists_load`, `failed_personalized_tracks_load`, `failed_radar_load`, `failed_related_tracks_load`, `map_daily_error`, `map_daily_load`, `map_daily_tracks_load`, `map_error`, `map_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_personalized_tracks_error`, `map_personalized_tracks_load`, `map_radar_error`, `map_radar_load`, `map_related_tracks_error`, `map_related_tracks_load`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `failed_daily_load`, `failed_load`, `failed_official_load`, `failed_personalized_playlists_load`, `failed_personalized_tracks_load`, `failed_radar_load`, `failed_related_tracks_load`, `map_daily_error`, `map_daily_load`, `map_daily_tracks_load`, `map_error`, `map_load`, `map_official_error`, `map_official_load`, `map_personalized_playlists_error`, `map_personalized_playlists_load`, `map_personalized_tracks_error`, `map_personalized_tracks_load`, `map_radar_error`, `map_radar_load`, `map_related_tracks_error`, `map_related_tracks_load`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+
+QqMusicOfficialPlaylistPageLoadHandle beginQqMusicOfficialPlaylistPageLoad({
+  required String providerId,
+  required int page,
+  required int size,
+}) => RustLib.instance.api
+    .crateApiRecommendationsBeginQqMusicOfficialPlaylistPageLoad(
+      providerId: providerId,
+      page: page,
+      size: size,
+    );
 
 QqMusicRecommendedPlaylistPageLoadHandle
 beginQqMusicRecommendedPlaylistPageLoad({
@@ -67,6 +78,16 @@ abstract class QqMusicDailyRecommendationLoadHandle
   bool get isActive;
 
   Future<QqMusicDailyRecommendationLoad> run();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicOfficialPlaylistPageLoadHandle>>
+abstract class QqMusicOfficialPlaylistPageLoadHandle
+    implements RustOpaqueInterface {
+  bool cancel();
+
+  bool get isActive;
+
+  Future<QqMusicOfficialPlaylistPageLoad> run();
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPersonalizedPlaylistsLoadHandle>>
@@ -158,6 +179,89 @@ enum QqMusicDailyRecommendationLoadFailure {
   replaced,
   cancelled,
   alreadyRunning,
+}
+
+class QqMusicOfficialPlaylistPageLoad {
+  final int page;
+  final int nextPage;
+  final int total;
+  final bool hasMore;
+  final int omittedPlaylistCount;
+  final List<QqMusicOfficialPlaylistSummary> playlists;
+  final QqMusicOfficialPlaylistPageLoadFailure? failure;
+
+  const QqMusicOfficialPlaylistPageLoad({
+    required this.page,
+    required this.nextPage,
+    required this.total,
+    required this.hasMore,
+    required this.omittedPlaylistCount,
+    required this.playlists,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      page.hashCode ^
+      nextPage.hashCode ^
+      total.hashCode ^
+      hasMore.hashCode ^
+      omittedPlaylistCount.hashCode ^
+      playlists.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicOfficialPlaylistPageLoad &&
+          runtimeType == other.runtimeType &&
+          page == other.page &&
+          nextPage == other.nextPage &&
+          total == other.total &&
+          hasMore == other.hasMore &&
+          omittedPlaylistCount == other.omittedPlaylistCount &&
+          playlists == other.playlists &&
+          failure == other.failure;
+}
+
+enum QqMusicOfficialPlaylistPageLoadFailure {
+  coreUnavailable,
+  network,
+  serviceUnavailable,
+  invalidResponse,
+  cancelled,
+  alreadyRunning,
+}
+
+class QqMusicOfficialPlaylistSummary {
+  final LibraryPlaylistSummary playlist;
+  final String? creator;
+  final BigInt? playCount;
+  final List<String> categories;
+
+  const QqMusicOfficialPlaylistSummary({
+    required this.playlist,
+    this.creator,
+    this.playCount,
+    required this.categories,
+  });
+
+  @override
+  int get hashCode =>
+      playlist.hashCode ^
+      creator.hashCode ^
+      playCount.hashCode ^
+      categories.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicOfficialPlaylistSummary &&
+          runtimeType == other.runtimeType &&
+          playlist == other.playlist &&
+          creator == other.creator &&
+          playCount == other.playCount &&
+          categories == other.categories;
 }
 
 class QqMusicPersonalizedPlaylistsLoad {

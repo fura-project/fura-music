@@ -11,13 +11,14 @@ use music_domain::{
     ArtistAlbumsPage, ArtistId, ArtistSearchPage, ArtistSummary, ArtistTracksPage, AudioFormat,
     AudioQuality, FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, MusicVideoId,
     MusicVideoQuality, MusicVideoSource, NewAlbumRegion, NewAlbumRelease, NewAlbumReleasesPage,
-    NewSongCategory, NewSongCollection, OwnedPlaylistsCollection, PersonalizedPlaylistsCollection,
-    PersonalizedTracksCollection, PlaylistId, PlaylistOwnership, PlaylistPurpose,
-    PlaylistSearchPage, PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage,
-    RankingGroup, RankingGroupsCollection, RankingId, RankingSummary, RankingTracksPage,
-    RecommendedPlaylistsPage, RelatedTracksCollection, ResolvedMediaSource, SynchronizedLyricLine,
-    SynchronizedLyrics, TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage,
-    TrackId, TrackSearchItem, TrackSearchPage, TrackSummary, UserPlaylistsCollection,
+    NewSongCategory, NewSongCollection, OfficialPlaylistSummary, OfficialPlaylistsPage,
+    OwnedPlaylistsCollection, PersonalizedPlaylistsCollection, PersonalizedTracksCollection,
+    PlaylistId, PlaylistOwnership, PlaylistPurpose, PlaylistSearchPage, PlaylistSummary,
+    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroup, RankingGroupsCollection,
+    RankingId, RankingSummary, RankingTracksPage, RecommendedPlaylistsPage,
+    RelatedTracksCollection, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
+    TimedLyricSegment, TrackComment, TrackCommentId, TrackCommentsPage, TrackId, TrackSearchItem,
+    TrackSearchPage, TrackSummary, UserPlaylistsCollection,
 };
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
@@ -28,16 +29,17 @@ use provider_api::{
     DesktopQuickAuthenticationProvider, DesktopQuickAuthenticationSession, FavoriteAlbumsProvider,
     FavoriteArtistsProvider, LibraryMutationError, LyricsError, LyricsProvider,
     MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
-    NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider, PersonalizedPlaylistsError,
-    PersonalizedPlaylistsProvider, PersonalizedTracksError, PersonalizedTracksProvider,
-    PlaylistCreationProvider, PlaylistDeletionProvider, PlaylistDetailsProvider,
-    PlaylistSearchProvider, PlaylistTrackMutationProvider, ProviderCapability, ProviderDescriptor,
-    QrAuthenticationChallenge, QrAuthenticationChannel, QrAuthenticationProgress,
-    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-    RadarRecommendationsProvider, RankingsProvider, RecentHistoryProvider, RecommendationError,
-    RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider, SearchError,
-    TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider,
-    UserLibraryError, UserPlaylistsProvider, align_auxiliary_lyric_track,
+    NewAlbumReleasesProvider, NewSongsProvider, OfficialPlaylistsProvider, OwnedPlaylistsProvider,
+    PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
+    PersonalizedTracksProvider, PlaylistCreationProvider, PlaylistDeletionProvider,
+    PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
+    ProviderCapability, ProviderDescriptor, QrAuthenticationChallenge, QrAuthenticationChannel,
+    QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+    RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider,
+    RecentHistoryProvider, RecommendationError, RecommendedPlaylistsProvider, RelatedTracksError,
+    RelatedTracksProvider, SearchError, TrackCommentsProvider, TrackLikeMutationProvider,
+    TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+    align_auxiliary_lyric_track,
 };
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialTransferError,
@@ -50,7 +52,8 @@ use qqmusic_client::{
     QqMusicDeletePlaylistError, QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError,
     QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
     QqMusicMediaError, QqMusicMusicVideoQuality, QqMusicNewAlbumArea, QqMusicNewAlbumsError,
-    QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
+    QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOfficialPlaylist,
+    QqMusicOfficialPlaylistsError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
     QqMusicPersonalizedPlaylist, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
     QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
     QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
@@ -1073,6 +1076,39 @@ where
         Ok(
             RecommendedPlaylistsPage::new(page.offset(), page.has_more(), playlists)
                 .with_integrity(page.next_offset(), omitted),
+        )
+    }
+}
+
+impl<T> OfficialPlaylistsProvider for QqMusicProvider<T>
+where
+    T: HttpTransport + 'static,
+{
+    type Error = RecommendationError;
+
+    async fn official_playlists(
+        &self,
+        page: u32,
+        size: u32,
+    ) -> Result<OfficialPlaylistsPage, Self::Error> {
+        let response = self.client().official_playlists(page, size).await;
+        let source = response.as_ref().map_err(map_official_playlists_error)?;
+        let mut omitted = source.omitted_playlist_count();
+        let mut playlists = Vec::with_capacity(source.playlists().len());
+        for playlist in source.playlists() {
+            match map_official_playlist(playlist) {
+                Ok(playlist) => playlists.push(playlist),
+                Err(RecommendationError::InvalidResponse) => {
+                    omitted = omitted
+                        .checked_add(1)
+                        .ok_or(RecommendationError::InvalidResponse)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(
+            OfficialPlaylistsPage::new(source.page(), source.total(), source.has_more(), playlists)
+                .with_integrity(source.next_page(), omitted),
         )
     }
 }
@@ -2336,6 +2372,23 @@ fn map_recommended_playlist(
                 .with_track_count(playlist.track_count())
         })
         .map_err(|_| RecommendationError::InvalidResponse)
+}
+
+fn map_official_playlist(
+    playlist: &QqMusicOfficialPlaylist,
+) -> Result<OfficialPlaylistSummary, RecommendationError> {
+    let id = PlaylistId::new(
+        qq_music_provider_id(),
+        format!("catalog:{}", playlist.playlist_id()),
+    )
+    .map_err(|_| RecommendationError::InvalidResponse)?;
+    let summary = PlaylistSummary::new(id, playlist.title())
+        .map(|summary| summary.with_artwork_uri(playlist.cover_url().map(str::to_owned)))
+        .map_err(|_| RecommendationError::InvalidResponse)?;
+    Ok(OfficialPlaylistSummary::new(summary)
+        .with_creator(playlist.creator().map(str::to_owned))
+        .with_play_count(playlist.play_count())
+        .with_categories(playlist.categories().to_vec()))
 }
 
 fn map_daily_recommendation(
@@ -3611,6 +3664,30 @@ fn map_recommendations_error<E>(
     }
 }
 
+fn map_official_playlists_error<E>(
+    error: &QqMusicOfficialPlaylistsError<E>,
+) -> RecommendationError {
+    match error {
+        QqMusicOfficialPlaylistsError::Transport(_) => RecommendationError::Network,
+        QqMusicOfficialPlaylistsError::HttpStatus(_)
+        | QqMusicOfficialPlaylistsError::Upstream { .. } => RecommendationError::ServiceUnavailable,
+        QqMusicOfficialPlaylistsError::InvalidPage { .. }
+        | QqMusicOfficialPlaylistsError::InvalidPageSize { .. }
+        | QqMusicOfficialPlaylistsError::Serialize
+        | QqMusicOfficialPlaylistsError::InvalidJson
+        | QqMusicOfficialPlaylistsError::MissingGlobalCode
+        | QqMusicOfficialPlaylistsError::MissingResult
+        | QqMusicOfficialPlaylistsError::MissingResultCode
+        | QqMusicOfficialPlaylistsError::MissingData
+        | QqMusicOfficialPlaylistsError::MissingTotal
+        | QqMusicOfficialPlaylistsError::MissingPlaylists
+        | QqMusicOfficialPlaylistsError::InvalidPagination
+        | QqMusicOfficialPlaylistsError::InvalidPlaylist { .. } => {
+            RecommendationError::InvalidResponse
+        }
+    }
+}
+
 fn map_daily_recommendation_error<E>(
     error: &QqMusicDailyRecommendationError<E>,
 ) -> DailyRecommendationError {
@@ -3997,16 +4074,17 @@ mod tests {
         CommentsError, DailyRecommendationError, DailyRecommendationProvider,
         FavoriteAlbumsProvider, FavoriteArtistsProvider, LibraryMutationError, LyricsError,
         LyricsProvider, MediaResolutionError, MediaSourceResolver, MusicProvider, MusicVideoError,
-        NewAlbumReleasesProvider, NewSongsProvider, OwnedPlaylistsProvider,
-        PersonalizedPlaylistsError, PersonalizedPlaylistsProvider, PersonalizedTracksError,
-        PersonalizedTracksProvider, PlaylistCreationProvider, PlaylistDeletionProvider,
-        PlaylistDetailsProvider, PlaylistSearchProvider, PlaylistTrackMutationProvider,
-        ProviderCapability, QrAuthenticationChannel, QrAuthenticationProgress,
-        QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RadarRecommendationError,
-        RadarRecommendationsProvider, RankingsProvider, RecentHistoryProvider, RecommendationError,
-        RecommendedPlaylistsProvider, RelatedTracksError, RelatedTracksProvider, SearchError,
-        TrackCommentsProvider, TrackLikeMutationProvider, TrackMusicVideoProvider,
-        TrackSearchProvider, UserLibraryError, UserPlaylistsProvider,
+        NewAlbumReleasesProvider, NewSongsProvider, OfficialPlaylistsProvider,
+        OwnedPlaylistsProvider, PersonalizedPlaylistsError, PersonalizedPlaylistsProvider,
+        PersonalizedTracksError, PersonalizedTracksProvider, PlaylistCreationProvider,
+        PlaylistDeletionProvider, PlaylistDetailsProvider, PlaylistSearchProvider,
+        PlaylistTrackMutationProvider, ProviderCapability, QrAuthenticationChannel,
+        QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
+        RadarRecommendationError, RadarRecommendationsProvider, RankingsProvider,
+        RecentHistoryProvider, RecommendationError, RecommendedPlaylistsProvider,
+        RelatedTracksError, RelatedTracksProvider, SearchError, TrackCommentsProvider,
+        TrackLikeMutationProvider, TrackMusicVideoProvider, TrackSearchProvider, UserLibraryError,
+        UserPlaylistsProvider,
     };
     use qqmusic_client::{
         Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
@@ -5645,6 +5723,47 @@ mod tests {
         assert!(!provider.has_authenticated_credential());
         assert!(!format!("{page:?}").contains("Synthetic discovery"));
         assert!(!format!("{page:?}").contains("81001"));
+    }
+
+    #[tokio::test]
+    async fn maps_official_playlists_through_a_distinct_anonymous_capability() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({
+            "code": 0,
+            "playlist": {
+                "code": 0,
+                "data": {
+                    "total": 736,
+                    "v_playlist": [{
+                        "tid": 82001,
+                        "title": "Synthetic official playlist",
+                        "cover_url_medium": "https://example.invalid/official.jpg",
+                        "creator_info": {"nick": "Synthetic editor"},
+                        "access_num": 4567,
+                        "tag_names": ["Synthetic category"]
+                    }]
+                }
+            }
+        }))));
+
+        let page = provider
+            .official_playlists(1, 8)
+            .await
+            .expect("official playlists");
+
+        assert_eq!(page.page(), 1);
+        assert_eq!(page.next_page(), 2);
+        assert_eq!(page.total(), 736);
+        assert!(page.has_more());
+        let item = &page.playlists()[0];
+        assert_eq!(item.playlist().id().provider().as_str(), "qq-music");
+        assert_eq!(item.playlist().id().opaque(), "catalog:82001");
+        assert_eq!(item.playlist().title(), "Synthetic official playlist");
+        assert_eq!(item.creator(), Some("Synthetic editor"));
+        assert_eq!(item.play_count(), Some(4567));
+        assert_eq!(item.categories(), ["Synthetic category"]);
+        assert!(!provider.has_authenticated_credential());
+        assert!(!format!("{page:?}").contains("Synthetic official playlist"));
+        assert!(!format!("{page:?}").contains("82001"));
     }
 
     fn radar_response(code: i64, has_more: bool) -> Value {

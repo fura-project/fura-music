@@ -14,12 +14,12 @@ use music_domain::{
     AccountSummary, AlbumDetails, AlbumId, AlbumSearchPage, AlbumTracksPage, ArtistAlbumsPage,
     ArtistId, ArtistSearchPage, ArtistTracksPage, AudioQuality, DailyTracksCollection,
     FavoriteAlbumsPage, FavoriteArtistsPage, MusicVideo, NewAlbumRegion, NewAlbumReleasesPage,
-    NewSongCategory, NewSongCollection, OwnedPlaylistsCollection, PersonalizedPlaylistsCollection,
-    PersonalizedTracksCollection, PlaylistId, PlaylistSearchPage, PlaylistSummary,
-    PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroupsCollection, RankingId,
-    RankingTracksPage, RecommendedPlaylistsPage, RelatedTracksCollection, ResolvedMediaSource,
-    SynchronizedLyrics, TrackCommentsPage, TrackId, TrackSearchPage, TrackSummary,
-    UserPlaylistsCollection,
+    NewSongCategory, NewSongCollection, OfficialPlaylistsPage, OwnedPlaylistsCollection,
+    PersonalizedPlaylistsCollection, PersonalizedTracksCollection, PlaylistId, PlaylistSearchPage,
+    PlaylistSummary, PlaylistTracksPage, ProviderId, RadarTrackPage, RankingGroupsCollection,
+    RankingId, RankingTracksPage, RecommendedPlaylistsPage, RelatedTracksCollection,
+    ResolvedMediaSource, SynchronizedLyrics, TrackCommentsPage, TrackId, TrackSearchPage,
+    TrackSummary, UserPlaylistsCollection,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -414,6 +414,19 @@ pub trait RecommendedPlaylistsProvider: MusicProvider + Sync {
         offset: u32,
         size: u32,
     ) -> impl Future<Output = Result<RecommendedPlaylistsPage, Self::Error>> + Send;
+}
+
+/// Provider-neutral page-numbered official/editorial playlists. Public
+/// recommendation feeds, personalization, and user-library collections are
+/// deliberately separate capabilities.
+pub trait OfficialPlaylistsProvider: MusicProvider + Sync {
+    type Error;
+
+    fn official_playlists(
+        &self,
+        page: u32,
+        size: u32,
+    ) -> impl Future<Output = Result<OfficialPlaylistsPage, Self::Error>> + Send;
 }
 
 /// Provider-neutral authenticated daily recommendation entry. The Provider

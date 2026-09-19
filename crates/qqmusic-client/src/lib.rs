@@ -31,6 +31,7 @@ mod media_resolution;
 mod music_video;
 mod new_albums;
 mod new_songs;
+mod official_playlists;
 mod owned_playlists;
 mod personalized_tracks;
 mod playlist_containers;
@@ -106,6 +107,10 @@ pub use new_albums::{
 };
 pub use new_songs::{
     NewSongTrackField, QqMusicNewSongCategory, QqMusicNewSongCollection, QqMusicNewSongsError,
+};
+pub use official_playlists::{
+    OfficialPlaylistField, QqMusicOfficialPlaylist, QqMusicOfficialPlaylistsError,
+    QqMusicOfficialPlaylistsPage,
 };
 pub use owned_playlists::{
     OwnedPlaylistField, QqMusicOwnedPlaylist, QqMusicOwnedPlaylists, QqMusicOwnedPlaylistsError,

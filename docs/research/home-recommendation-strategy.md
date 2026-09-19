@@ -96,17 +96,51 @@
 
 ## 2026-09-19 官方歌单来源复核
 
-状态：`BLOCKED_BY_PROTOCOL_EVIDENCE`。
+状态：`WIRE_EVIDENCE_CONFIRMED`；匿名生产接线已实现，等待 Human 真实网络与视觉核对。
 
-本轮重新审计 `qqmusic-client`、`provider-qqmusic`、Flutter Bridge、离线夹具、
-能力矩阵与现有研究记录。当前仓库能够证明的公开歌单来源仍只有
-`music.playlist.PlaylistSquare/GetRecommendFeed`；它表示歌单广场推荐流，不能证明
-“QQ 官方歌单”“编辑精选”分类或独立官方 feed。仓库中没有已验证的官方分类参数、
-module/method、响应字段或 provider-neutral capability，现有 live 测试也只覆盖该公开
-推荐页与公开歌单详情。
+本轮先复核仓库内现有 `PlaylistSquare/GetRecommendFeed`，确认它仍只代表歌单广场公开
+推荐。随后找到并交叉验证了另一条独立协议族：
 
-因此 Home Hero 暂时继续使用公开推荐流中的稳定候选集，并保持“公开精选 / PUBLIC
-SPOTLIGHT”标签。Explore 的 Recommended Playlist 仍使用同一公共 feed，个人歌单宝藏
-仍只使用账号个性化 feed；Hero 候选身份继续从公开 shelf 中整体排除，避免视觉重复。
-在获得独立、可交叉验证的协议证据前，不新增 `OfficialPlaylistProvider`，不猜测 endpoint、
-分类 ID 或请求参数，也不把公共推荐重命名成官方歌单。
+- [`jsososo/QQMusicApi` commit `13b08afd3180cc74d76fff208956b77a560abd22`](https://github.com/jsososo/QQMusicApi/blob/13b08afd3180cc74d76fff208956b77a560abd22/routes/recommend.js)
+  明确把分类 `3317` 标注为“官方歌单”，并构造
+  `playlist.PlayListPlazaServer/get_playlist_by_category`；参数为 `id`、`curPage`、
+  `size`、`order=5`、`titleid`，匿名 GET 将序列化的 musicu 请求放在 `data` query 中。
+  同仓库文档把响应解释为 `playlist.data.total` 与 `v_playlist`。该来源较旧，只作为
+  request-shape 和分类语义候选，不单独用于生产晋级。
+- [`yakult-green-tea/qq-music-api` commit `b369be4ab8e0a7b6bdfba971e107faeccae3541f`](https://github.com/yakult-green-tea/qq-music-api/blob/b369be4ab8e0a7b6bdfba971e107faeccae3541f/src/controllers/getRecommend.ts)
+  独立使用相同 module/method、`curPage/size/order/titleid` 结构，并同时使用
+  `music.web_category_svr/get_hot_category` 获取分类。它不单独证明 `3317` 的语义，
+  但交叉证明该服务族和参数结构持续存在。
+- 2026-09-19 对 `https://u.y.qq.com/cgi-bin/musicu.fcg` 做了两组串行、匿名、只读、
+  有界探测，不携带 Cookie 或账号凭据。`music.web_category_svr/get_hot_category`
+  返回全局/方法 code 0，并在当前
+  `category.data.category[0].items[3]` 结构化分类项中直接返回
+  `item_id=3317`、`item_name=官方歌单`。随后
+  `playlist.PlayListPlazaServer/get_playlist_by_category`
+  使用 `id=titleid=3317`、`curPage=1`、`size=3`、`order=5` 返回 code 0、
+  `total=736` 和 3 条 `v_playlist`。相邻页也返回成功且 identity fingerprint 不同，
+  两个 3-row 页面有 2 个相同 identity；因此 `curPage` 是唯一 continuation，调用方
+  必须按真实 Playlist identity 去重，不能用可见行数推算分页。
+- 同一个当前分类响应只返回一个 `热门推荐` group；其中还能直接验证
+  `全部分类(-100)`、`国语(1)`、`英语(3)`、`轻音乐(49)` 等少量公开分类，但没有返回
+  Human 截图中的完整“华语 / 欧美 / 韩语 / 日语 / 粤语 / 场景 / 心情 / Urban / ACG /
+  艺人歌单”矩阵。因此本轮只晋级已直接验证的固定“官方歌单”source，不发布一个伪完整
+  category-list capability，也不把当前热门分类集合当作官方页面完整 taxonomy。
+- 当前响应 row 的字段集合直接包含 `tid`、`title`、大/中/小 cover URL、
+  `creator_info`、`access_num`、`tag_names`。Fura 只映射这些真实字段；没有从标题或
+  creator 名字猜测“官方”身份，也没有伪造 Track count。
+
+另外，腾讯公开 CDN 的 QQ Music Windows 22.22 安装包经 Microsoft WinGet manifest
+SHA-256 校验后做了只读静态扫描；没有找到可用于提升上述结论的明文 route。这个负面
+结果不用于否定协议，也没有启动 Windows 程序、访问本地账号或读取 Cookie。
+
+实现因此新增独立 `OfficialPlaylistsProvider`、QQ Client decoder、typed Flutter Bridge、
+`OfficialPlaylistGateway/Controller`，与 `RecommendedPlaylistsProvider` 保持不同 trait、
+请求 DTO、响应 DTO 和 presentation owner。Home 的 `HomeSpotlightController` 优先使用
+官方 source 的 8 条有界候选；previous/next 与 12 秒 rotation 只在内存窗口中移动，
+不会在 timer tick 请求网络。官方 source 失败或为空时才使用 public recommendation
+的 3 条有界窗口作为 fallback，并显示“公开精选 / PUBLIC SPOTLIGHT”；只有 official
+source 有内容时显示“官方歌单 / OFFICIAL PLAYLIST”。Discover 仍只使用
+`PlaylistSquare/GetRecommendFeed`，
+账号“你的歌单宝藏”仍只使用 personalized playlists。官方条目的 `tid` 继续映射为现有
+`catalog:<tid>` Playlist identity，详情与 logical Play All 复用现有页面和 continuation。
