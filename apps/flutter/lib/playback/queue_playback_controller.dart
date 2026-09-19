@@ -54,6 +54,7 @@ class QueuePlaybackController extends ChangeNotifier {
   int _collectionNextCursor = 0;
   bool _collectionHasMore = false;
   int? _collectionLastDemandIndex;
+  int _collectionInitialPagesLoaded = 0;
   int? _collectionTerminalToken;
   String? _collectionTerminalTrackKey;
   int? _collectionTerminalQueueLength;
@@ -93,6 +94,7 @@ class QueuePlaybackController extends ChangeNotifier {
   CollectionPlaybackFailure? get collectionFailure => _collectionFailure;
   String? get collectionSourceId => _collectionSource?.sourceId;
   bool get collectionHasMore => _collectionSource != null && _collectionHasMore;
+  int get collectionDemandGeneration => _collectionGeneration;
 
   void setRoamEnabled(bool enabled) {
     if (_disposed || enabled == _roamEnabled) return;
@@ -277,6 +279,16 @@ class QueuePlaybackController extends ChangeNotifier {
     _maybeDemandCollection(force: true, terminalToken: terminalToken);
   }
 
+  /// Requests one bounded continuation page because the Queue viewport is
+  /// approaching its materialized end. Playback position, startup fill and
+  /// viewport demand all converge on the same single-flight page pump.
+  void demandCollectionFromQueueViewport() {
+    if (_disposed || _collectionStage == CollectionPlaybackStage.failed) {
+      return;
+    }
+    _maybeDemandCollection(viewportDemand: true);
+  }
+
   /// Re-resolves the current Track after an explicit playback-quality change.
   /// Active playback keeps its approximate position and paused/playing state;
   /// an idle, stopped, completed, or failed Track uses the new preference only
@@ -369,7 +381,18 @@ class QueuePlaybackController extends ChangeNotifier {
     return true;
   }
 
-  void _maybeDemandCollection({bool force = false, int? terminalToken}) {
+  bool get _collectionNeedsInitialFill {
+    final source = _collectionSource;
+    if (source == null || !source.policy.hasInitialFill) return false;
+    return _snapshot.tracks.length < source.policy.initialQueueTarget &&
+        _collectionInitialPagesLoaded < source.policy.maxInitialPages;
+  }
+
+  void _maybeDemandCollection({
+    bool force = false,
+    bool viewportDemand = false,
+    int? terminalToken,
+  }) {
     if (_disposed ||
         _collectionSource == null ||
         !_collectionHasMore ||
@@ -382,8 +405,11 @@ class QueuePlaybackController extends ChangeNotifier {
     final currentIndex = _snapshot.currentIndex;
     if (currentIndex == null) return;
     final remaining = _snapshot.tracks.length - currentIndex - 1;
-    if (!force && remaining > _collectionLookaheadTracks) return;
-    if (!force && _collectionLastDemandIndex == currentIndex) return;
+    final startupFill = _collectionNeedsInitialFill;
+    if (!force && !viewportDemand && !startupFill) {
+      if (remaining > _collectionLookaheadTracks) return;
+      if (_collectionLastDemandIndex == currentIndex) return;
+    }
     if (_collectionStage == CollectionPlaybackStage.failed && !force) return;
 
     _collectionLastDemandIndex = currentIndex;
@@ -510,6 +536,10 @@ class QueuePlaybackController extends ChangeNotifier {
     if (!_collectionIsGenerationCurrent(generation, source)) return;
     _collectionNextCursor = page.nextCursor;
     _collectionHasMore = page.hasMore;
+    if (source.policy.hasInitialFill &&
+        _collectionInitialPagesLoaded < source.policy.maxInitialPages) {
+      _collectionInitialPagesLoaded += 1;
+    }
     _collectionFailure = null;
     _collectionStage = page.hasMore
         ? CollectionPlaybackStage.ready
@@ -517,6 +547,9 @@ class QueuePlaybackController extends ChangeNotifier {
     _clearCollectionTerminalClaim();
     _collectionLoadFuture = null;
     if (!_disposed) notifyListeners();
+    if (_collectionNeedsInitialFill) {
+      _maybeDemandCollection();
+    }
   }
 
   bool _collectionIsCurrent(
@@ -578,6 +611,7 @@ class QueuePlaybackController extends ChangeNotifier {
     _collectionNextCursor = 0;
     _collectionHasMore = false;
     _collectionLastDemandIndex = null;
+    _collectionInitialPagesLoaded = 0;
     _clearCollectionTerminalClaim();
   }
 

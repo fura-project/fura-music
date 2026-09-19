@@ -858,7 +858,13 @@ void main() {
       controller.setRoamEnabled(true);
 
       await controller.replaceAndPlayCollection(
-        _collectionSource(operation: operation),
+        _collectionSource(
+          operation: operation,
+          policy: const CollectionPlaybackPolicy(
+            initialQueueTarget: 50,
+            maxInitialPages: 5,
+          ),
+        ),
         0,
       );
       await _flush();
@@ -912,6 +918,8 @@ void main() {
       );
       session.emitPosition(10);
       session.emitPosition(20);
+      controller.demandCollectionFromQueueViewport();
+      controller.demandCollectionFromQueueViewport();
       await _flush();
       expect(operation.runCalls, 1);
 
@@ -938,6 +946,178 @@ void main() {
       expect(controller.tracks, hasLength(4));
       await _flush();
       expect(operation.runCalls, 1);
+      controller.dispose();
+    },
+  );
+
+  test('Radar starts first Track immediately then fills about fifty with five pages', () async {
+    List<PlaylistTrackSummary> pageTracks(int page) => List.generate(
+      10,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'radar-$page-$index',
+        title: 'Radar $page-$index',
+        artistNames: const ['Radar artist'],
+      ),
+    );
+    final firstPage = Completer<CollectionPlaybackPage>();
+    final firstOperation = _ControlledCollectionOperation(firstPage.future);
+    final cursors = <int>[];
+    final queue = _CollectionQueueGateway();
+    final controller = _controller(
+      queue,
+      _FakeMediaGateway(['first']),
+      _FakeAudioEngine([_FakeAudioSession()]),
+    );
+
+    await controller.replaceAndPlayCollection(
+      CollectionPlaybackSource(
+        sourceId: 'radar:startup',
+        providerId: 'qq-music',
+        initialTracks: const [first],
+        nextCursor: 1,
+        hasMore: true,
+        policy: const CollectionPlaybackPolicy(
+          initialQueueTarget: 50,
+          maxInitialPages: 5,
+        ),
+        loader: (cursor) {
+          cursors.add(cursor);
+          if (cursor == 1) return firstOperation;
+          return _ImmediateCollectionOperation(
+            CollectionPlaybackPage(
+              requestCursor: cursor,
+              nextCursor: cursor + 1,
+              hasMore: true,
+              tracks: pageTracks(cursor),
+            ),
+          );
+        },
+      ),
+      0,
+    );
+    await _flush();
+
+    expect(controller.current, first);
+    expect(controller.playback.stage, TrackPlaybackStage.playing);
+    expect(controller.tracks, [first]);
+    expect(firstOperation.runCalls, 1);
+
+    firstPage.complete(
+      CollectionPlaybackPage(
+        requestCursor: 1,
+        nextCursor: 2,
+        hasMore: true,
+        tracks: pageTracks(1),
+      ),
+    );
+    for (var index = 0; index < 12; index++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(cursors, [1, 2, 3, 4, 5]);
+    expect(controller.tracks, hasLength(51));
+    expect(controller.current, first);
+    expect(queue.batchExtensionCalls, 5);
+    expect(controller.collectionHasMore, isTrue);
+    controller.dispose();
+  });
+
+  test(
+    'Queue viewport requests one bounded page away from playback tail',
+    () async {
+      final initial = List.generate(
+        12,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'viewport-$index',
+          title: 'Viewport $index',
+          artistNames: const ['Artist'],
+        ),
+      );
+      final page = Completer<CollectionPlaybackPage>();
+      final operation = _ControlledCollectionOperation(page.future);
+      final queue = _CollectionQueueGateway();
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['viewport-0']),
+        _FakeAudioEngine([_FakeAudioSession()]),
+      );
+
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'playlist:viewport',
+          providerId: 'qq-music',
+          initialTracks: initial,
+          nextCursor: 12,
+          hasMore: true,
+          loader: (_) => operation,
+        ),
+        0,
+      );
+      controller.demandCollectionFromQueueViewport();
+      controller.demandCollectionFromQueueViewport();
+      await _flush();
+      expect(operation.runCalls, 1);
+
+      page.complete(
+        const CollectionPlaybackPage(
+          requestCursor: 12,
+          nextCursor: 13,
+          hasMore: true,
+          tracks: [second],
+        ),
+      );
+      await _flush();
+
+      expect(queue.batchExtensionCalls, 1);
+      expect(controller.current, initial.first);
+      expect(controller.tracks, hasLength(13));
+      controller.dispose();
+    },
+  );
+
+  test(
+    'Radar startup fill stops cleanly when source exhausts below target',
+    () async {
+      final queue = _CollectionQueueGateway();
+      var loads = 0;
+      final controller = _controller(
+        queue,
+        _FakeMediaGateway(['first']),
+        _FakeAudioEngine([_FakeAudioSession()]),
+      );
+
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'radar:short',
+          providerId: 'qq-music',
+          initialTracks: const [first],
+          nextCursor: 1,
+          hasMore: true,
+          policy: const CollectionPlaybackPolicy(
+            initialQueueTarget: 50,
+            maxInitialPages: 5,
+          ),
+          loader: (cursor) {
+            loads += 1;
+            return const _ImmediateCollectionOperation(
+              CollectionPlaybackPage(
+                requestCursor: 1,
+                nextCursor: 2,
+                hasMore: false,
+                tracks: [second],
+              ),
+            );
+          },
+        ),
+        0,
+      );
+      await _flush();
+
+      expect(loads, 1);
+      expect(controller.tracks, [first, second]);
+      expect(controller.collectionStage, CollectionPlaybackStage.exhausted);
       controller.dispose();
     },
   );
@@ -1185,7 +1365,13 @@ void main() {
       );
 
       await controller.replaceAndPlayCollection(
-        _collectionSource(operation: operation),
+        _collectionSource(
+          operation: operation,
+          policy: const CollectionPlaybackPolicy(
+            initialQueueTarget: 50,
+            maxInitialPages: 5,
+          ),
+        ),
         0,
       );
       await _flush();
@@ -1273,12 +1459,14 @@ Future<void> _flush() async {
 CollectionPlaybackSource _collectionSource({
   required CollectionPlaybackPageOperation operation,
   List<PlaylistTrackSummary> initialTracks = const [first],
+  CollectionPlaybackPolicy policy = const CollectionPlaybackPolicy(),
 }) => CollectionPlaybackSource(
   sourceId: 'playlist:test',
   providerId: 'qq-music',
   initialTracks: initialTracks,
   nextCursor: 1,
   hasMore: true,
+  policy: policy,
   loader: (_) => operation,
 );
 

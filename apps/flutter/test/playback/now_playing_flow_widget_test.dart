@@ -13,11 +13,15 @@ import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/user_library_page.dart';
+import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
+import 'package:flutterustmusic/playback/collection_playback_source.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
+import 'package:flutterustmusic/playback/playback_queue_panel.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
@@ -26,6 +30,31 @@ import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 
 void main() {
+  test('playback SnackBar margins bound compact and desktop surfaces', () {
+    for (final width in [320.0, 360.0, 390.0]) {
+      final margin = playbackSnackBarMargin(
+        viewportWidth: width,
+        bottomSafeArea: 0,
+        playerPresent: true,
+        settingsOpen: false,
+        expandedNowPlayingOpen: false,
+      );
+      expect(margin.left, 16);
+      expect(margin.right, 16);
+      expect(margin.bottom, 152);
+    }
+    final desktop = playbackSnackBarMargin(
+      viewportWidth: 1440,
+      bottomSafeArea: 0,
+      playerPresent: true,
+      settingsOpen: false,
+      expandedNowPlayingOpen: false,
+    );
+    expect(desktop.left, 540);
+    expect(desktop.right, 540);
+    expect(desktop.bottom, 100);
+  });
+
   testWidgets('plays a row and exposes pause, resume, and stop controls', (
     tester,
   ) async {
@@ -294,6 +323,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('STD'), findsOneWidget);
+    final playerTopBeforeNotice = tester
+        .getRect(find.byKey(const ValueKey('now-playing-desktop-bar')))
+        .top;
     await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
     await tester.pumpAndSettle();
     expect(find.text('SQ · FLAC lossless'), findsOneWidget);
@@ -305,8 +337,23 @@ void main() {
     expect(find.text('SQ'), findsOneWidget);
     expect(find.text('Playing SQ quality.'), findsOneWidget);
     final notice = find.byKey(const ValueKey('playback-transient-notice'));
+    final snackBarFinder = find.byKey(
+      const ValueKey('playback-quality-snackbar'),
+    );
     expect(notice, findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(SnackBar), findsOneWidget);
+    final snackBar = tester.widget<SnackBar>(snackBarFinder);
+    final noticeContext = tester.element(notice);
+    expect(snackBar.behavior, SnackBarBehavior.floating);
+    expect(
+      snackBar.backgroundColor,
+      Theme.of(noticeContext).colorScheme.surfaceContainerHighest,
+    );
+    expect(tester.getSemantics(notice).flagsCollection.isLiveRegion, isTrue);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('now-playing-desktop-bar'))).top,
+      playerTopBeforeNotice,
+    );
     expect(
       tester.getRect(notice).bottom,
       lessThan(
@@ -315,6 +362,12 @@ void main() {
             .top,
       ),
     );
+    if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(Uri.file('/tmp/fura-quality-notice-light.png')),
+      );
+    }
 
     await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
     await tester.pumpAndSettle();
@@ -322,6 +375,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Playing HQ quality.'), findsOneWidget);
     expect(find.text('Playing SQ quality.'), findsNothing);
+    expect(find.byType(SnackBar), findsOneWidget);
     expect(
       find.byKey(const ValueKey('playback-transient-notice')),
       findsOneWidget,
@@ -343,6 +397,55 @@ void main() {
       find.byKey(const ValueKey('playback-transient-notice')),
       findsNothing,
     );
+  });
+
+  testWidgets('quality notice uses the dark tonal surface', (tester) async {
+    final media = _FakeMediaGateway([
+      _ImmediateMediaOperation(_success('standard-dark')),
+      _ImmediateMediaOperation(
+        _qualitySuccess(
+          'high-dark',
+          format: PlaybackAudioFormat.mp3,
+          quality: PlaybackAudioQuality.high,
+        ),
+      ),
+    ]);
+    await _openDetail(
+      tester,
+      media: media,
+      audio: _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+      settingsStore: AppSettingsStore(storage: _MemorySettingsStorage()),
+      initialSettings: const AppSettings(
+        theme: AppThemePreference.dark,
+        playbackQuality: AppPlaybackQualityPreference.standard,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality-high')));
+    await tester.pumpAndSettle();
+
+    final notice = find.byKey(const ValueKey('playback-transient-notice'));
+    expect(notice, findsOneWidget);
+    final context = tester.element(notice);
+    final snackBar = tester.widget<SnackBar>(
+      find.byKey(const ValueKey('playback-quality-snackbar')),
+    );
+    expect(Theme.of(context).brightness, Brightness.dark);
+    expect(
+      snackBar.backgroundColor,
+      Theme.of(context).colorScheme.surfaceContainerHighest,
+    );
+    expect(tester.getSemantics(notice).flagsCollection.isLiveRegion, isTrue);
+    if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
+      await expectLater(
+        find.byType(MusicApp),
+        matchesGoldenFile(Uri.file('/tmp/fura-quality-notice-dark.png')),
+      );
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -1580,6 +1683,124 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+    'queue viewport loads one continuation page and exposes retry then end',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 480);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final pages = [
+        Completer<CollectionPlaybackPage>(),
+        Completer<CollectionPlaybackPage>(),
+      ];
+      var loads = 0;
+      final initial = List.generate(
+        20,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'queue-page-$index',
+          title: 'Queue page $index',
+          artistNames: const ['Queue artist'],
+        ),
+      );
+      final queue = _WidgetQueueGateway();
+      final controller = QueuePlaybackController(
+        queue,
+        TrackPlaybackController(
+          _FakeMediaGateway([
+            _ImmediateMediaOperation(_success('queue-page-0')),
+          ]),
+          ForegroundPlaybackController(_FakeAudioEngine([_FakeAudioSession()])),
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'playlist:queue-panel',
+          providerId: 'qq-music',
+          initialTracks: initial,
+          nextCursor: 20,
+          hasMore: true,
+          loader: (cursor) {
+            final page = pages[loads++];
+            return CallbackCollectionPlaybackPageOperation(
+              () => page.future,
+              () => true,
+            );
+          },
+        ),
+        0,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: PlaybackQueuePanel(controller: controller, onClose: () {}),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -1600));
+      await tester.pump();
+      await tester.pump();
+
+      expect(loads, 1);
+      expect(controller.collectionStage, CollectionPlaybackStage.loading);
+      expect(
+        find.byKey(const ValueKey('queue-continuation-footer')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      pages[0].complete(
+        const CollectionPlaybackPage(
+          requestCursor: 20,
+          nextCursor: 20,
+          hasMore: false,
+          failure: CollectionPlaybackFailure.network,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('queue-continuation-retry')),
+        findsOneWidget,
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('queue-continuation-retry')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('queue-continuation-retry')));
+      await tester.pump();
+      expect(loads, 2);
+      pages[1].complete(
+        const CollectionPlaybackPage(
+          requestCursor: 20,
+          nextCursor: 21,
+          hasMore: false,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'queue-page-20',
+              title: 'Queue page 20',
+              artistNames: ['Queue artist'],
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(queue.extensionCalls, 1);
+      expect(controller.tracks, hasLength(21));
+      expect(controller.collectionStage, CollectionPlaybackStage.exhausted);
+      expect(find.text('End of this collection'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('queue clear requires confirmation and keeps shortcuts active', (
     tester,
   ) async {
@@ -2383,6 +2604,7 @@ Future<void> _openDetail(
   QqMusicAuthenticationGateway? authenticationGateway,
   TrackCommentGateway? comments,
   AppSettingsStore? settingsStore,
+  AppSettings initialSettings = AppSettings.defaults,
 }) async {
   await tester.pumpWidget(
     MusicApp(
@@ -2409,6 +2631,7 @@ Future<void> _openDetail(
       playbackQueueGateway: queue ?? _WidgetQueueGateway(),
       trackCommentGateway: comments,
       audioEngine: audio,
+      initialSettings: initialSettings,
       settingsStore: settingsStore,
     ),
   );
@@ -2425,11 +2648,13 @@ Future<void> _openDetail(
   await tester.pumpAndSettle();
 }
 
-class _WidgetQueueGateway implements PlaybackQueueGateway {
+class _WidgetQueueGateway
+    implements PlaybackQueueGateway, PlaybackQueueBatchGateway {
   PlaybackQueueSnapshot _snapshot = PlaybackQueueSnapshot.empty();
   List<PlaylistTrackSummary> replacedTracks = const [];
   final List<PlaylistTrackSummary> pushedTracks = [];
   int? replacedIndex;
+  int extensionCalls = 0;
   PlaybackQueueResult? nextPushResult;
   PlaybackQueueResult? nextRemoveResult;
   PlaybackQueueResult? nextClearResult;
@@ -2552,6 +2777,18 @@ class _WidgetQueueGateway implements PlaybackQueueGateway {
       snapshot: _snapshot,
       playbackRequested: playbackRequested,
     );
+  }
+
+  @override
+  PlaybackQueueResult extend(List<PlaylistTrackSummary> tracks) {
+    extensionCalls += 1;
+    _snapshot = _makeSnapshot(
+      [..._snapshot.tracks, ...tracks],
+      _snapshot.currentIndex,
+      order: _snapshot.order,
+      repeatMode: _snapshot.repeatMode,
+    );
+    return PlaybackQueueResult(snapshot: _snapshot);
   }
 
   @override

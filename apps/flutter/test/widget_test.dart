@@ -22,6 +22,7 @@ import 'package:flutter/material.dart'
         CircularProgressIndicator,
         CustomScrollView,
         Divider,
+        DropdownMenu,
         EdgeInsets,
         FadeTransition,
         FilledButton,
@@ -36,6 +37,7 @@ import 'package:flutter/material.dart'
         ListTile,
         Material,
         MaterialApp,
+        MenuItemButton,
         NavigationBar,
         NavigationDestination,
         NavigationRail,
@@ -44,7 +46,6 @@ import 'package:flutter/material.dart'
         Opacity,
         PageStorageKey,
         PinnedHeaderSliver,
-        RadioListTile,
         SafeArea,
         Scaffold,
         Scrollable,
@@ -131,13 +132,28 @@ Future<void> _selectAdaptiveSection(
   required String control,
   required String item,
 }) async {
-  final itemFinder = find.byKey(ValueKey(item));
-  if (itemFinder.evaluate().isEmpty) {
-    await tester.tap(find.byKey(ValueKey(control)));
-    await tester.pumpAndSettle();
+  final controlFinder = find.byKey(ValueKey(control));
+  final isDropdown = controlFinder.evaluate().any(
+    (element) => element.widget is DropdownMenu,
+  );
+  if (isDropdown) {
+    await tester.tap(controlFinder);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    final menuItem = find
+        .ancestor(
+          of: find.byKey(ValueKey(item)),
+          matching: find.byType(MenuItemButton),
+        )
+        .hitTestable();
+    expect(menuItem, findsOneWidget);
+    await tester.tap(menuItem);
+  } else {
+    final itemFinder = find.byKey(ValueKey(item));
+    expect(itemFinder, findsOneWidget);
+    await tester.ensureVisible(itemFinder);
+    await tester.tap(itemFinder);
   }
-  await tester.ensureVisible(itemFinder);
-  await tester.tap(itemFinder);
   await tester.pumpAndSettle();
 }
 
@@ -4830,6 +4846,13 @@ void main() {
       );
       expect(desktopArtwork0.width, closeTo(desktopArtwork0.height, 0.1));
       expect(desktopArtwork1, desktopArtwork0);
+      final regionLeft = tester
+          .getRect(find.byKey(const ValueKey('new-album-region-mainlandChina')))
+          .left;
+      final firstArtworkLeft = tester
+          .getRect(find.byKey(const ValueKey('new-album-artwork-0')))
+          .left;
+      expect(regionLeft, closeTo(firstArtworkLeft, 0.1));
 
       tester.view.physicalSize = const Size(390, 844);
       tester.platformDispatcher.textScaleFactorTestValue = 1.6;
@@ -8595,7 +8618,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-system-colors-available')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('settings-system-colors-unavailable')),
@@ -8605,6 +8628,14 @@ void main() {
         find.byKey(const ValueKey('settings-color-source-selector')),
       );
       await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-system-colors-available')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('settings-color-palette-preview')),
+        findsOneWidget,
+      );
       await tester.tap(
         find.byKey(const ValueKey('settings-color-source-brand')),
       );
@@ -8614,6 +8645,15 @@ void main() {
 
       await tester.pumpWidget(page(null));
       await tester.pumpAndSettle();
+      if (find
+          .byKey(const ValueKey('settings-system-colors-unavailable'))
+          .evaluate()
+          .isEmpty) {
+        await tester.tap(
+          find.byKey(const ValueKey('settings-color-source-selector')),
+        );
+        await tester.pumpAndSettle();
+      }
       expect(
         find.byKey(const ValueKey('settings-system-colors-unavailable')),
         findsOneWidget,
@@ -8719,7 +8759,9 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Dark'));
+      await tester.tap(
+        find.byKey(const ValueKey('settings-theme-dark')).hitTestable(),
+      );
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"theme":"dark"'));
       expect(
@@ -9144,7 +9186,9 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Dark'));
+      await tester.tap(
+        find.byKey(const ValueKey('settings-theme-dark')).hitTestable(),
+      );
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"theme":"dark"'));
       await tester.tap(
@@ -10546,13 +10590,16 @@ Future<void> _changeLanguagePreference(
 ) async {
   await tester.tap(find.byKey(const ValueKey('settings-language-selector')));
   await tester.pumpAndSettle();
-  final option = find.byWidgetPredicate(
-    (widget) =>
-        widget is RadioListTile<AppLocalePreference> &&
-        widget.value == preference,
+  final option = find.byKey(
+    ValueKey(switch (preference) {
+      AppLocalePreference.system => 'settings-language-system',
+      AppLocalePreference.english => 'settings-language-english',
+      AppLocalePreference.simplifiedChinese =>
+        'settings-language-simplifiedChinese',
+    }),
   );
-  expect(option, findsOneWidget);
-  await tester.tap(option);
+  expect(option.hitTestable(), findsOneWidget);
+  await tester.tap(option.hitTestable());
   await tester.pumpAndSettle();
 }
 
@@ -10573,7 +10620,7 @@ Future<void> _switchProviderFromDesktopSettings(
   }
   await tester.tap(find.byKey(const ValueKey('settings-provider-selector')));
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(providerKey));
+  await tester.tap(find.byKey(providerKey).hitTestable());
   await tester.pumpAndSettle();
 }
 

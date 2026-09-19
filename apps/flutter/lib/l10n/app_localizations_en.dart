@@ -2797,6 +2797,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'The music core returned an invalid queue state.';
 
   @override
+  String get queueContinuationLoading => 'Loading more from this collection…';
+
+  @override
+  String get queueContinuationFailure =>
+      'Couldn’t load the next part of this collection.';
+
+  @override
+  String get queueContinuationRetry => 'Try loading more again';
+
+  @override
+  String get queueContinuationEnd => 'End of this collection';
+
+  @override
   String get playbackQualityMenuStandard => 'Standard · MP3 128 kbps';
 
   @override

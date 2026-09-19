@@ -11,6 +11,7 @@ import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
+import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 
 Future<void> showPlaybackQueue(
   BuildContext context,
@@ -82,6 +83,12 @@ class PlaybackQueuePanel extends StatelessWidget {
       animation: controller,
       builder: (context, _) {
         final tracks = controller.tracks;
+        final continuationFooter =
+            controller.collectionSourceId != null &&
+            (controller.collectionStage == CollectionPlaybackStage.loading ||
+                controller.collectionStage == CollectionPlaybackStage.failed ||
+                controller.collectionStage ==
+                    CollectionPlaybackStage.exhausted);
         final theme = Theme.of(context);
         final desktop = MediaQuery.sizeOf(context).width >= 600;
         return SafeArea(
@@ -171,29 +178,111 @@ class PlaybackQueuePanel extends StatelessWidget {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: tracks.length,
-                        itemBuilder: (context, index) {
-                          final track = tracks[index];
-                          final current = index == controller.currentIndex;
-                          return _QueueTrackTile(
-                            track: track,
-                            index: index,
-                            current: current,
-                            desktop: desktop,
-                            onSelect: current
-                                ? null
-                                : () => unawaited(controller.select(index)),
-                            onRemove: () => unawaited(controller.remove(index)),
-                          );
-                        },
+                    : BoundedViewportPageDemand(
+                        key: const ValueKey('queue-continuation-demand'),
+                        enabled:
+                            controller.collectionHasMore &&
+                            controller.collectionStage ==
+                                CollectionPlaybackStage.ready,
+                        generation: controller.collectionDemandGeneration,
+                        onDemand: controller.demandCollectionFromQueueViewport,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount:
+                              tracks.length + (continuationFooter ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == tracks.length) {
+                              return _QueueContinuationFooter(
+                                stage: controller.collectionStage,
+                                onRetry: controller.retryCollectionContinuation,
+                              );
+                            }
+                            final track = tracks[index];
+                            final current = index == controller.currentIndex;
+                            return _QueueTrackTile(
+                              track: track,
+                              index: index,
+                              current: current,
+                              desktop: desktop,
+                              onSelect: current
+                                  ? null
+                                  : () => unawaited(controller.select(index)),
+                              onRemove: () =>
+                                  unawaited(controller.remove(index)),
+                            );
+                          },
+                        ),
                       ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _QueueContinuationFooter extends StatelessWidget {
+  const _QueueContinuationFooter({required this.stage, required this.onRetry});
+
+  final CollectionPlaybackStage stage;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: colors.onSurfaceVariant);
+    return Semantics(
+      container: true,
+      liveRegion:
+          stage == CollectionPlaybackStage.loading ||
+          stage == CollectionPlaybackStage.failed,
+      child: Padding(
+        key: const ValueKey('queue-continuation-footer'),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: switch (stage) {
+          CollectionPlaybackStage.loading => Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  context.l10n.queueContinuationLoading,
+                  style: textStyle,
+                ),
+              ),
+            ],
+          ),
+          CollectionPlaybackStage.failed => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                context.l10n.queueContinuationFailure,
+                textAlign: TextAlign.center,
+                style: textStyle?.copyWith(color: colors.error),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                key: const ValueKey('queue-continuation-retry'),
+                onPressed: onRetry,
+                child: Text(context.l10n.queueContinuationRetry),
+              ),
+            ],
+          ),
+          CollectionPlaybackStage.exhausted => Text(
+            context.l10n.queueContinuationEnd,
+            textAlign: TextAlign.center,
+            style: textStyle,
+          ),
+          CollectionPlaybackStage.idle ||
+          CollectionPlaybackStage.ready => const SizedBox.shrink(),
+        },
+      ),
     );
   }
 }

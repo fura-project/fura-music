@@ -4459,6 +4459,30 @@ abstract class AppLocalizations {
   /// **'The music core returned an invalid queue state.'**
   String get queueFailureInvalidResponse;
 
+  /// No description provided for @queueContinuationLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading more from this collection…'**
+  String get queueContinuationLoading;
+
+  /// No description provided for @queueContinuationFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load the next part of this collection.'**
+  String get queueContinuationFailure;
+
+  /// No description provided for @queueContinuationRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try loading more again'**
+  String get queueContinuationRetry;
+
+  /// No description provided for @queueContinuationEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End of this collection'**
+  String get queueContinuationEnd;
+
   /// Playback-quality menu label; keep MP3 and kbps as technical abbreviations.
   ///
   /// In en, this message translates to:

@@ -235,6 +235,8 @@ void main() {
     final page = await source.loader(source.nextCursor).run();
 
     expect(source.initialTracks, [first]);
+    expect(source.policy.initialQueueTarget, 50);
+    expect(source.policy.maxInitialPages, 5);
     expect(page.requestCursor, 2);
     expect(page.nextCursor, 3);
     expect(page.tracks, [second]);

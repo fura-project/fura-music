@@ -2531,6 +2531,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get queueFailureInvalidResponse => '音乐核心返回了无效的队列状态。';
 
   @override
+  String get queueContinuationLoading => '正在加载此集合的后续歌曲…';
+
+  @override
+  String get queueContinuationFailure => '无法加载此集合的下一部分。';
+
+  @override
+  String get queueContinuationRetry => '重新加载后续歌曲';
+
+  @override
+  String get queueContinuationEnd => '此集合已播放到底';
+
+  @override
   String get playbackQualityMenuStandard => '标准 · MP3 128 kbps';
 
   @override

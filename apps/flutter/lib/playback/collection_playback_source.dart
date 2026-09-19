@@ -59,6 +59,25 @@ typedef CollectionPlaybackPageLoader = CollectionPlaybackPageOperation Function(
   int cursor,
 );
 
+/// Bounded source-specific behavior applied by the app-lifetime Queue owner.
+///
+/// Most finite collections use the default policy and load only from playback
+/// or Queue viewport demand. Station-like sources may request a small startup
+/// buffer without turning playback start into a load-all operation.
+class CollectionPlaybackPolicy {
+  const CollectionPlaybackPolicy({
+    this.initialQueueTarget = 0,
+    this.maxInitialPages = 0,
+  }) : assert(initialQueueTarget >= 0),
+       assert(maxInitialPages >= 0),
+       assert(initialQueueTarget == 0 || maxInitialPages > 0);
+
+  final int initialQueueTarget;
+  final int maxInitialPages;
+
+  bool get hasInitialFill => initialQueueTarget > 0 && maxInitialPages > 0;
+}
+
 /// A logical collection detached from its presenting page/controller.
 ///
 /// [loader] closes over the Provider gateway operation factory, not a page
@@ -72,6 +91,7 @@ class CollectionPlaybackSource {
     required this.nextCursor,
     required this.hasMore,
     required this.loader,
+    this.policy = const CollectionPlaybackPolicy(),
   }) : initialTracks = List.unmodifiable(initialTracks);
 
   final String sourceId;
@@ -80,4 +100,5 @@ class CollectionPlaybackSource {
   final int nextCursor;
   final bool hasMore;
   final CollectionPlaybackPageLoader loader;
+  final CollectionPlaybackPolicy policy;
 }

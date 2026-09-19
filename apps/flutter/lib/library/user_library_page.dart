@@ -595,10 +595,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final Map<String, CollectionDetailActions> _collectionShellActions = {};
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
-  Timer? _playbackNoticeTimer;
-  String? _playbackNoticeMessage;
-  bool _playbackNoticeError = false;
-  int _playbackNoticeRevision = 0;
 
   String get _providerDisplayName => builtInProviderDisplayName(
     widget.settings.musicProvider.providerId,
@@ -767,7 +763,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   @override
   void dispose() {
-    _playbackNoticeTimer?.cancel();
     _disposeProviderControllers();
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _playlistReturnFocusNode.dispose();
@@ -856,52 +851,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         child: expandedNowPlayingPage,
       ),
     );
-    final viewportWidth = MediaQuery.sizeOf(context).width;
-    final pageWithNotice = Stack(
-      fit: StackFit.expand,
-      children: [
-        shortcutPage,
-        PositionedDirectional(
-          start: 16,
-          end: 16,
-          bottom: viewportWidth >= 840 ? 100 : 164,
-          child: IgnorePointer(
-            child: Center(
-              child: AnimatedSwitcher(
-                key: const ValueKey('playback-transient-notice-transition'),
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : const Duration(milliseconds: 220),
-                switchInCurve: Easing.emphasizedDecelerate,
-                switchOutCurve: Easing.emphasizedAccelerate,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.16),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                ),
-                child: switch (_playbackNoticeMessage) {
-                  final message? => _PlaybackTransientNotice(
-                    key: ValueKey(
-                      'playback-transient-notice-$_playbackNoticeRevision',
-                    ),
-                    message: message,
-                    error: _playbackNoticeError,
-                  ),
-                  null => const SizedBox.shrink(
-                    key: ValueKey('playback-transient-notice-empty'),
-                  ),
-                },
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
     return KeyedSubtree(
       key: ValueKey(
         widget.authenticated ? 'user-library-page' : 'signed-out-main-page',
@@ -915,7 +864,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               _returnFromLocalPage();
             }
           },
-          child: pageWithNotice,
+          child: shortcutPage,
         ),
       ),
     );
@@ -1334,16 +1283,62 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _showPlaybackNotice(String message, {bool error = false}) {
-    _playbackNoticeTimer?.cancel();
-    setState(() {
-      _playbackNoticeMessage = message;
-      _playbackNoticeError = error;
-      _playbackNoticeRevision++;
-    });
-    _playbackNoticeTimer = Timer(const Duration(milliseconds: 1800), () {
-      if (!mounted) return;
-      setState(() => _playbackNoticeMessage = null);
-    });
+    final routes = _navigation.routes;
+    final expandedNowPlayingOpen =
+        routes.isNotEmpty && routes.last is ExpandedNowPlayingLocalRoute;
+    final retainedRoutes = expandedNowPlayingOpen
+        ? routes.sublist(0, routes.length - 1)
+        : routes;
+    final settingsOpen =
+        retainedRoutes.isNotEmpty && retainedRoutes.last is SettingsLocalRoute;
+    final colors = Theme.of(context).colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const ValueKey('playback-quality-snackbar'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1800),
+          margin: playbackSnackBarMargin(
+            viewportWidth: MediaQuery.sizeOf(context).width,
+            bottomSafeArea: MediaQuery.paddingOf(context).bottom,
+            playerPresent: _queuePlaybackController.current != null,
+            settingsOpen: settingsOpen,
+            expandedNowPlayingOpen: expandedNowPlayingOpen,
+          ),
+          backgroundColor: error
+              ? colors.errorContainer
+              : colors.surfaceContainerHighest,
+          content: Semantics(
+            key: const ValueKey('playback-transient-notice'),
+            liveRegion: true,
+            label: message,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  error
+                      ? Icons.error_outline_rounded
+                      : Icons.high_quality_rounded,
+                  size: 20,
+                  color: error ? colors.onErrorContainer : colors.primary,
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: error ? colors.onErrorContainer : colors.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
   }
 
   Future<bool> _changeLyricAuxiliaryMode(LyricAuxiliaryMode mode) async {
@@ -3574,50 +3569,28 @@ class _CompactPlayerOverlay extends StatelessWidget {
   }
 }
 
-class _PlaybackTransientNotice extends StatelessWidget {
-  const _PlaybackTransientNotice({
-    required this.message,
-    required this.error,
-    super.key,
-  });
-
-  final String message;
-  final bool error;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      container: true,
-      liveRegion: true,
-      label: message,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 380),
-        child: Material(
-          key: const ValueKey('playback-transient-notice'),
-          elevation: 6,
-          color: error ? colors.errorContainer : colors.inverseSurface,
-          shadowColor: colors.shadow.withValues(alpha: 0.22),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: error
-                    ? colors.onErrorContainer
-                    : colors.onInverseSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+@visibleForTesting
+EdgeInsets playbackSnackBarMargin({
+  required double viewportWidth,
+  required double bottomSafeArea,
+  required bool playerPresent,
+  required bool settingsOpen,
+  required bool expandedNowPlayingOpen,
+}) {
+  const gap = 12.0;
+  var bottom = bottomSafeArea + gap;
+  if (expandedNowPlayingOpen) {
+    final expandedControls = viewportWidth < 600 ? 132.0 : 124.0;
+    bottom += expandedControls;
+  } else if (playerPresent) {
+    final player = viewportWidth < 640 ? 68.0 : 88.0;
+    final navigation = viewportWidth < 840 && !settingsOpen ? 72.0 : 0.0;
+    bottom += player + navigation;
   }
+  final horizontal = viewportWidth > 392
+      ? ((viewportWidth - 360) / 2).clamp(16.0, double.infinity).toDouble()
+      : 16.0;
+  return EdgeInsets.fromLTRB(horizontal, 0, horizontal, bottom);
 }
 
 class _PlaylistCollection extends StatelessWidget {

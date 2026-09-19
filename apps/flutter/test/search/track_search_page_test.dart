@@ -28,8 +28,16 @@ final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
 
 Future<void> _selectSearchType(WidgetTester tester, String type) async {
   await tester.tap(find.byKey(const ValueKey('search-types')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(ValueKey('search-type-$type')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 250));
+  final menuItem = find
+      .ancestor(
+        of: find.byKey(ValueKey('search-type-$type')),
+        matching: find.byType(MenuItemButton),
+      )
+      .hitTestable();
+  expect(menuItem, findsOneWidget);
+  await tester.tap(menuItem);
   await tester.pumpAndSettle();
 }
 

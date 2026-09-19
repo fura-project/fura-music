@@ -39,25 +39,28 @@ class MusicSectionSelector<T> extends StatelessWidget {
       (destination) => destination.value == selected,
     );
     if (compact) {
-      return MenuAnchor(
-        menuChildren: [
-          for (final destination in destinations)
-            MenuItemButton(
-              key: destination.itemKey,
-              leadingIcon: Icon(destination.icon),
-              trailingIcon: destination.value == selected
-                  ? const Icon(Icons.check_rounded)
-                  : null,
-              onPressed: () => onSelected(destination.value),
-              child: Text(destination.label),
-            ),
-        ],
-        builder: (context, controller, _) => OutlinedButton.icon(
+      return Semantics(
+        label: context.l10n.commonSelectedValue(label, current.label),
+        child: DropdownMenu<T>(
           key: controlKey,
-          onPressed: () =>
-              controller.isOpen ? controller.close() : controller.open(),
-          icon: Icon(current.icon),
-          label: Text(context.l10n.commonSelectedValue(label, current.label)),
+          width: 180,
+          initialSelection: selected,
+          selectOnly: true,
+          requestFocusOnTap: true,
+          enableSearch: false,
+          leadingIcon: Icon(current.icon),
+          dropdownMenuEntries: [
+            for (final destination in destinations)
+              DropdownMenuEntry<T>(
+                value: destination.value,
+                label: destination.label,
+                labelWidget: Text(destination.label, key: destination.itemKey),
+                leadingIcon: Icon(destination.icon),
+              ),
+          ],
+          onSelected: (value) {
+            if (value != null) onSelected(value);
+          },
         ),
       );
     }

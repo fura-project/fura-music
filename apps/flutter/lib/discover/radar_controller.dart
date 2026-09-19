@@ -65,6 +65,10 @@ class RadarController extends ChangeNotifier {
       initialTracks: _tracks,
       nextCursor: _nextPage,
       hasMore: _hasMore,
+      policy: const CollectionPlaybackPolicy(
+        initialQueueTarget: 50,
+        maxInitialPages: 5,
+      ),
       loader: (page) {
         final operation = gateway.beginLoad(page: page);
         return CallbackCollectionPlaybackPageOperation(() async {

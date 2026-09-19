@@ -93,3 +93,20 @@
 5. 退出再登录或重启应用，确认不会遗留上一个上下文的本地记录；新的空状态应符合上述会话边界。
 
 仍未证明：QQ 官方真实随机规则、服务端刷新间隔、不同账号推荐重叠率、真实网络延迟，以及手机实体设备与所有字体缩放条件的最终观感。
+
+## 2026-09-19 官方歌单来源复核
+
+状态：`BLOCKED_BY_PROTOCOL_EVIDENCE`。
+
+本轮重新审计 `qqmusic-client`、`provider-qqmusic`、Flutter Bridge、离线夹具、
+能力矩阵与现有研究记录。当前仓库能够证明的公开歌单来源仍只有
+`music.playlist.PlaylistSquare/GetRecommendFeed`；它表示歌单广场推荐流，不能证明
+“QQ 官方歌单”“编辑精选”分类或独立官方 feed。仓库中没有已验证的官方分类参数、
+module/method、响应字段或 provider-neutral capability，现有 live 测试也只覆盖该公开
+推荐页与公开歌单详情。
+
+因此 Home Hero 暂时继续使用公开推荐流中的稳定候选集，并保持“公开精选 / PUBLIC
+SPOTLIGHT”标签。Explore 的 Recommended Playlist 仍使用同一公共 feed，个人歌单宝藏
+仍只使用账号个性化 feed；Hero 候选身份继续从公开 shelf 中整体排除，避免视觉重复。
+在获得独立、可交叉验证的协议证据前，不新增 `OfficialPlaylistProvider`，不猜测 endpoint、
+分类 ID 或请求参数，也不把公共推荐重命名成官方歌单。

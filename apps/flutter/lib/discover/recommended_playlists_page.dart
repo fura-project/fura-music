@@ -31,7 +31,8 @@ import 'package:flutterustmusic/theme/material_theme.dart';
 enum DiscoverDestination { playlists, rankings, radar, newAlbums, newSongs }
 
 const double _discoverArtworkMaximumExtent = 176;
-const double _discoverRankingMaximumExtent = 344;
+const double _discoverRankingTwoColumnBreakpoint = 720;
+const double _discoverRankingThreeColumnBreakpoint = 1050;
 
 ({int columns, double itemExtent}) _discoverGridMetrics({
   required double availableWidth,
@@ -74,6 +75,25 @@ _discoverArtworkGridMetrics({
     columns: 2,
     itemExtent: math.max(0, (gridWidth - spacing) / 2),
     extraHorizontalInset: math.max(0, (availableWidth - gridWidth) / 2),
+  );
+}
+
+@visibleForTesting
+({int columns, double itemExtent}) discoverRankingGridMetrics({
+  required double availableWidth,
+  double spacing = 12,
+}) {
+  final columns = availableWidth < _discoverRankingTwoColumnBreakpoint
+      ? 1
+      : availableWidth < _discoverRankingThreeColumnBreakpoint
+      ? 2
+      : 3;
+  return (
+    columns: columns,
+    itemExtent: math.max(
+      0,
+      (availableWidth - spacing * (columns - 1)) / columns,
+    ),
   );
 }
 
@@ -1101,19 +1121,55 @@ class _NewAlbumShell extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      _DiscoverContentBoundary(
-        vertical: 4,
-        child: _NewAlbumRegionPicker(
-          region: region,
-          regions: regions,
-          onSelected: onRegionSelected,
-        ),
-      ),
-      const SizedBox(height: 4),
-      Expanded(child: child),
-    ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 760;
+      final horizontal = desktop
+          ? MusicSpacing.pageWide
+          : MusicSpacing.pageCompact;
+      final contentWidth = math.min(
+        constraints.maxWidth,
+        MusicSizes.contentMaxWidth,
+      );
+      final availableWidth = math.max(0.0, contentWidth - horizontal * 2);
+      final metrics = _discoverArtworkGridMetrics(
+        availableWidth: availableWidth,
+        spacing: desktop ? 16 : 12,
+        desktop: desktop,
+      );
+      return Column(
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: MusicSizes.contentMaxWidth,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: Padding(
+                  padding: EdgeInsetsDirectional.fromSTEB(
+                    horizontal + metrics.extraHorizontalInset,
+                    4,
+                    horizontal + metrics.extraHorizontalInset,
+                    4,
+                  ),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: _NewAlbumRegionPicker(
+                      region: region,
+                      regions: regions,
+                      onSelected: onRegionSelected,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(child: child),
+        ],
+      );
+    },
   );
 }
 
@@ -1585,50 +1641,29 @@ class _RankingCollection extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (desktop)
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      const spacing = 12.0;
-                      final wideDensity = constraints.maxWidth >= 1000;
-                      final metrics = wideDensity
-                          ? _discoverGridMetrics(
-                              availableWidth: constraints.maxWidth,
-                              spacing: spacing,
-                              maximumExtent: _discoverRankingMaximumExtent,
-                            )
-                          : (
-                              columns: 2,
-                              itemExtent: math.min(
-                                _discoverRankingMaximumExtent,
-                                (constraints.maxWidth - spacing) / 2,
-                              ),
-                            );
-                      final tileWidth = metrics.itemExtent;
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: [
-                          for (final ranking in group.rankings)
-                            SizedBox(
-                              width: tileWidth,
-                              child: _RankingTile(
-                                ranking: ranking,
-                                onTap: () => onSelected(ranking),
-                              ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    const spacing = 12.0;
+                    final metrics = discoverRankingGridMetrics(
+                      availableWidth: constraints.maxWidth,
+                      spacing: spacing,
+                    );
+                    return Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: [
+                        for (final ranking in group.rankings)
+                          SizedBox(
+                            width: metrics.itemExtent,
+                            child: _RankingTile(
+                              ranking: ranking,
+                              onTap: () => onSelected(ranking),
                             ),
-                        ],
-                      );
-                    },
-                  )
-                else
-                  for (final ranking in group.rankings)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _RankingTile(
-                        ranking: ranking,
-                        onTap: () => onSelected(ranking),
-                      ),
-                    ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
                 const SizedBox(height: 28),
               ],
             ],

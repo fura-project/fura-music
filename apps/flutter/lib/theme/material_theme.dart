@@ -106,6 +106,14 @@ abstract final class MusicMaterialTheme {
     final controlShape = RoundedRectangleBorder(
       borderRadius: MusicRadii.control,
     );
+    final menuStyle = MenuStyle(
+      backgroundColor: WidgetStatePropertyAll(colors.surfaceContainer),
+      surfaceTintColor: WidgetStatePropertyAll(colors.surfaceTint),
+      elevation: const WidgetStatePropertyAll(3),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: MusicRadii.content),
+      ),
+    );
 
     return base.copyWith(
       scaffoldBackgroundColor: colors.surfaceContainerLowest,
@@ -147,6 +155,33 @@ abstract final class MusicMaterialTheme {
         elevation: 3,
         shape: RoundedRectangleBorder(borderRadius: MusicRadii.content),
       ),
+      menuTheme: MenuThemeData(style: menuStyle),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        textStyle: textTheme.bodyLarge?.copyWith(
+          color: colors.onSecondaryContainer,
+        ),
+        inputDecorationTheme: InputDecorationThemeData(
+          filled: true,
+          fillColor: colors.secondaryContainer,
+          contentPadding: const EdgeInsetsDirectional.fromSTEB(12, 0, 8, 0),
+          constraints: const BoxConstraints(minHeight: 48),
+          border: OutlineInputBorder(
+            borderRadius: MusicRadii.control,
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: MusicRadii.control,
+            borderSide: BorderSide(color: colors.outlineVariant),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: MusicRadii.control,
+            borderSide: BorderSide(color: colors.primary, width: 2),
+          ),
+          prefixIconColor: colors.onSecondaryContainer,
+          suffixIconColor: colors.onSecondaryContainer,
+        ),
+        menuStyle: menuStyle,
+      ),
       inputDecorationTheme: InputDecorationThemeData(
         filled: true,
         fillColor: colors.surfaceContainerHighest,
@@ -168,6 +203,16 @@ abstract final class MusicMaterialTheme {
         iconColor: colors.onSurfaceVariant,
         selectedColor: colors.onSecondaryContainer,
         selectedTileColor: colors.secondaryContainer,
+      ),
+      expansionTileTheme: ExpansionTileThemeData(
+        iconColor: colors.primary,
+        collapsedIconColor: colors.onSurfaceVariant,
+        textColor: colors.onSurface,
+        collapsedTextColor: colors.onSurface,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        childrenPadding: EdgeInsets.zero,
+        shape: const Border(),
+        collapsedShape: const Border(),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: colors.surfaceContainerLow,
@@ -205,12 +250,17 @@ abstract final class MusicMaterialTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: colors.inverseSurface,
+        backgroundColor: colors.surfaceContainerHighest,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
-          color: colors.onInverseSurface,
+          color: colors.onSurface,
+          fontWeight: FontWeight.w600,
         ),
-        actionTextColor: colors.inversePrimary,
-        shape: RoundedRectangleBorder(borderRadius: MusicRadii.control),
+        actionTextColor: colors.primary,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: MusicRadii.control,
+          side: BorderSide(color: colors.outlineVariant),
+        ),
       ),
     );
   }
