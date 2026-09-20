@@ -1,5 +1,3 @@
-#![allow(clippy::unused_async_trait_impl)]
-
 use std::convert::Infallible;
 
 use qqmusic_client::{

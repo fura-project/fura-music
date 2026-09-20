@@ -1,5 +1,3 @@
-#![cfg_attr(test, allow(clippy::unused_async_trait_impl))]
-
 //! QQ Music provider mapping layer.
 
 use std::collections::HashSet;

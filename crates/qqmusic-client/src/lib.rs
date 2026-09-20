@@ -1,5 +1,3 @@
-#![cfg_attr(test, allow(clippy::unused_async_trait_impl))]
-
 //! Raw QQ Music protocol boundary.
 //!
 //! Endpoint-specific requests and response models are added only with protocol
