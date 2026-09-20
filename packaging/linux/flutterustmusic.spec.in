@@ -1,0 +1,74 @@
+Name:           flutterustmusic
+Version:        @VERSION@
+Release:        @RELEASE@%{?dist}
+Summary:        Desktop music client development package
+License:        MIT
+URL:            https://github.com/fura-project/fura-music
+Source0:        flutterustmusic-bundle.tar.gz
+Source1:        flutterustmusic-notices.tar.gz
+Source2:        flutterustmusic
+Source3:        dev.axiaobo.flutterustmusic.desktop
+Source4:        dev.axiaobo.flutterustmusic.png
+Source5:        LICENSE
+Source6:        BUILD-INFO.txt
+
+Requires:       ca-certificates
+Requires:       dbus-libs
+Requires:       dejavu-sans-fonts
+Requires:       fontconfig
+Requires:       gstreamer1
+Requires:       gstreamer1-plugins-base
+Requires:       gstreamer1-plugins-good
+Requires:       gtk3
+Requires:       libepoxy
+Requires:       libsecret
+Requires:       mpv-libs
+Requires:       webkit2gtk4.1
+Suggests:       gnome-keyring
+
+%global debug_package %{nil}
+%global __strip /bin/true
+
+%description
+Manual, short-lived development package for maintainer-operated Linux runtime
+testing. This is not a signed production release.
+
+%prep
+%setup -q -c -T
+mkdir bundle notices
+tar -xzf %{SOURCE0} -C bundle
+tar -xzf %{SOURCE1} -C notices
+
+%build
+
+%install
+install -d \
+  %{buildroot}/usr/lib/flutterustmusic \
+  %{buildroot}/usr/bin \
+  %{buildroot}/usr/share/applications \
+  %{buildroot}/usr/share/icons/hicolor/512x512/apps \
+  %{buildroot}/usr/share/doc/flutterustmusic
+cp -a bundle/. %{buildroot}/usr/lib/flutterustmusic/
+install -m 0755 %{SOURCE2} %{buildroot}/usr/bin/flutterustmusic
+install -m 0644 %{SOURCE3} \
+  %{buildroot}/usr/share/applications/dev.axiaobo.flutterustmusic.desktop
+install -m 0644 %{SOURCE4} \
+  %{buildroot}/usr/share/icons/hicolor/512x512/apps/dev.axiaobo.flutterustmusic.png
+install -m 0644 %{SOURCE5} %{buildroot}/usr/share/doc/flutterustmusic/LICENSE
+install -m 0644 %{SOURCE6} %{buildroot}/usr/share/doc/flutterustmusic/BUILD-INFO.txt
+cp -a notices/. %{buildroot}/usr/share/doc/flutterustmusic/
+
+%files
+%license /usr/share/doc/flutterustmusic/LICENSE
+%doc /usr/share/doc/flutterustmusic/BUILD-INFO.txt
+%doc /usr/share/doc/flutterustmusic/NOTICE-BOUNDARY.txt
+%doc /usr/share/doc/flutterustmusic/FLUTTER_AND_DART_NOTICES.Z
+%doc /usr/share/doc/flutterustmusic/third-party
+/usr/bin/flutterustmusic
+/usr/lib/flutterustmusic
+/usr/share/applications/dev.axiaobo.flutterustmusic.desktop
+/usr/share/icons/hicolor/512x512/apps/dev.axiaobo.flutterustmusic.png
+
+%changelog
+* Sun Sep 20 2026 Fura maintainers <noreply@example.invalid> - @VERSION@-@RELEASE@
+- Build a manual development package from the complete Flutter Linux bundle.

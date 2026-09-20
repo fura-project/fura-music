@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+app_root=${FURA_APP_ROOT:-/usr/lib/flutterustmusic}
+exec "${app_root}/flutterustmusic" "$@"

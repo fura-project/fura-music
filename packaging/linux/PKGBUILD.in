@@ -1,0 +1,59 @@
+pkgname=flutterustmusic
+pkgver=@PKGVER@
+pkgrel=@PKGREL@
+pkgdesc='Desktop music client development package'
+arch=('x86_64')
+url='https://github.com/fura-project/fura-music'
+license=('MIT')
+depends=(
+  'ca-certificates'
+  'dbus'
+  'fontconfig'
+  'gst-plugins-base'
+  'gst-plugins-good'
+  'gstreamer'
+  'gtk3'
+  'libepoxy'
+  'libsecret'
+  'mpv'
+  'webkit2gtk-4.1'
+)
+optdepends=('gnome-keyring: Secret Service provider outside a full desktop session')
+options=('!strip')
+source=(
+  'flutterustmusic-bundle.tar.gz'
+  'flutterustmusic-notices.tar.gz'
+  'flutterustmusic'
+  'dev.axiaobo.flutterustmusic.desktop'
+  'dev.axiaobo.flutterustmusic.png'
+  'LICENSE'
+  'BUILD-INFO.txt'
+)
+sha256sums=(
+  '@BUNDLE_SHA256@'
+  '@NOTICES_SHA256@'
+  '@LAUNCHER_SHA256@'
+  '@DESKTOP_SHA256@'
+  '@ICON_SHA256@'
+  '@LICENSE_SHA256@'
+  '@BUILD_INFO_SHA256@'
+)
+
+package() {
+  install -d \
+    "$pkgdir/usr/lib/flutterustmusic" \
+    "$pkgdir/usr/bin" \
+    "$pkgdir/usr/share/applications" \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps" \
+    "$pkgdir/usr/share/doc/flutterustmusic"
+  cp -a "$srcdir/bundle/." "$pkgdir/usr/lib/flutterustmusic/"
+  install -m 0755 "$srcdir/flutterustmusic" "$pkgdir/usr/bin/flutterustmusic"
+  install -m 0644 "$srcdir/dev.axiaobo.flutterustmusic.desktop" \
+    "$pkgdir/usr/share/applications/dev.axiaobo.flutterustmusic.desktop"
+  install -m 0644 "$srcdir/dev.axiaobo.flutterustmusic.png" \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/dev.axiaobo.flutterustmusic.png"
+  install -m 0644 "$srcdir/LICENSE" "$pkgdir/usr/share/doc/flutterustmusic/LICENSE"
+  install -m 0644 "$srcdir/BUILD-INFO.txt" \
+    "$pkgdir/usr/share/doc/flutterustmusic/BUILD-INFO.txt"
+  cp -a "$srcdir/notices/." "$pkgdir/usr/share/doc/flutterustmusic/"
+}

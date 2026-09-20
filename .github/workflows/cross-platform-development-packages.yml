@@ -156,31 +156,25 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
-  linux:
-    name: Linux x64 development bundle
+  linux-deb-build:
+    name: Build Ubuntu 24.04 DEB
     needs: quality
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Install Linux build and runtime dependencies
+      - name: Install Ubuntu build and packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libgtk-3-dev libsecret-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good libmpv-dev
-
-      - name: Report Linux build toolchain
-        run: |
-          clang --version
-          cmake --version
-          ninja --version
-          pkg-config --version
-          pkg-config --modversion mpv
-          g++ --version
-          dbus-run-session --version
-          xvfb-run --help >/dev/null
+          sudo apt-get install --yes --no-install-recommends \
+            binutils clang cmake dbus-x11 desktop-file-utils dpkg-dev file \
+            g++ gstreamer1.0-plugins-base gstreamer1.0-plugins-good jq \
+            libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev \
+            libgtk-3-dev libmpv-dev libsecret-1-dev libwebkit2gtk-4.1-dev \
+            ninja-build patchelf pkg-config xauth xvfb
 
       - name: Install Rust baseline
         uses: dtolnay/rust-toolchain@stable
@@ -198,30 +192,457 @@ jobs:
         working-directory: apps/flutter
         run: flutter pub get
 
-      - name: Verify Linux native build and MPRIS session-bus contract
+      - name: Verify MPRIS and media initialization
         working-directory: apps/flutter
-        run: dbus-run-session -- xvfb-run -a flutter test integration_test/system_playback_service_test.dart -d linux
+        run: |
+          dbus-run-session -- xvfb-run -a \
+            flutter test integration_test/system_playback_service_test.dart -d linux
+          dbus-run-session -- xvfb-run -a \
+            flutter test integration_test/music_video_engine_test.dart -d linux
 
-      - name: Build Linux Release bundle
+      - name: Verify offline WebKitGTK lifecycle
+        working-directory: apps/flutter
+        run: |
+          dbus-run-session -- xvfb-run -a \
+            flutter test integration_test/webview_all_linux_stability_test.dart -d linux
+
+      - name: Build Ubuntu Linux Release bundle
         working-directory: apps/flutter
         run: flutter build linux --release
 
-      - name: Package Linux bundle
-        working-directory: apps/flutter
+      - name: Build and inspect DEB
         run: |
-          mkdir -p build/test-packages
-          tar -C build/linux/x64/release -czf build/test-packages/flutterustmusic-linux-x64-development.tar.gz bundle
-          cp ../../docs/development/cross-platform-test-packages.md build/test-packages/README.md
-          ldd build/linux/x64/release/bundle/flutterustmusic | tee build/test-packages/LINUX_RUNTIME_DEPENDENCIES.txt
-          ! grep -q "not found" build/test-packages/LINUX_RUNTIME_DEPENDENCIES.txt
-          flutter --version > build/test-packages/FLUTTER_VERSION.txt
-          rustc --version > build/test-packages/RUST_VERSION.txt
+          packaging/linux/build_deb.sh \
+            apps/flutter/build/linux/x64/release/bundle \
+            build/linux-packages/deb \
+            "${{ github.run_number }}"
+          cp docs/development/cross-platform-test-packages.md \
+            build/linux-packages/deb/README.md
 
-      - name: Upload Linux artifact
+      - name: Upload DEB build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutterustmusic-linux-deb-${{ github.run_number }}
+          path: build/linux-packages/deb/
+          if-no-files-found: error
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  linux-rpm-build:
+    name: Build Fedora 43 RPM
+    needs: quality
+    runs-on: ubuntu-24.04
+    container:
+      image: fedora:43
+    timeout-minutes: 120
+
+    steps:
+      - name: Install Fedora build prerequisites
+        run: |
+          dnf install --assumeyes \
+            binutils clang cmake curl desktop-file-utils file gcc-c++ git \
+            gstreamer1-devel gstreamer1-plugins-base-devel \
+            gstreamer1-plugins-base gstreamer1-plugins-good gtk3-devel jq \
+            libepoxy-devel libsecret-devel mpv-devel ninja-build \
+            patchelf pkgconf-pkg-config rpm-build tar unzip webkit2gtk4.1-devel xz
+
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust baseline
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_BASELINE_VERSION }}
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install Flutter dependencies
+        working-directory: apps/flutter
+        run: flutter pub get
+
+      - name: Build Fedora Linux Release bundle
+        working-directory: apps/flutter
+        run: flutter build linux --release
+
+      - name: Build and inspect RPM
+        run: |
+          packaging/linux/build_rpm.sh \
+            apps/flutter/build/linux/x64/release/bundle \
+            build/linux-packages/rpm \
+            "${{ github.run_number }}"
+          cp docs/development/cross-platform-test-packages.md \
+            build/linux-packages/rpm/README.md
+
+      - name: Upload RPM build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutterustmusic-linux-rpm-${{ github.run_number }}
+          path: build/linux-packages/rpm/
+          if-no-files-found: error
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  linux-arch-build:
+    name: Build Arch Linux package
+    needs: quality
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    timeout-minutes: 120
+
+    steps:
+      - name: Install Arch build prerequisites
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm \
+            clang cmake curl dbus desktop-file-utils file git gst-plugins-base gst-plugins-good \
+            gstreamer gtk3 jq libepoxy libsecret mpv ninja patchelf pkgconf \
+            rustup sudo unzip webkit2gtk-4.1 xz
+
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust baseline
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_BASELINE_VERSION }}
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install Flutter dependencies
+        working-directory: apps/flutter
+        run: flutter pub get
+
+      - name: Build Arch Linux Release bundle
+        working-directory: apps/flutter
+        run: flutter build linux --release
+
+      - name: Build and inspect pacman package as non-root
+        run: |
+          useradd --create-home --user-group package-builder
+          MAKEPKG_USER=package-builder packaging/linux/build_arch.sh \
+            apps/flutter/build/linux/x64/release/bundle \
+            build/linux-packages/arch \
+            "${{ github.run_number }}"
+          cp docs/development/cross-platform-test-packages.md \
+            build/linux-packages/arch/README.md
+
+      - name: Upload Arch build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutterustmusic-linux-arch-${{ github.run_number }}
+          path: build/linux-packages/arch/
+          if-no-files-found: error
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  linux-appimage-build:
+    name: Build Ubuntu 24.04 AppImage
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install AppImage build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            binutils clang cmake curl desktop-file-utils file g++ \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good jq \
+            libgirepository1.0-dev libgstreamer-plugins-base1.0-dev \
+            libgstreamer1.0-dev libgtk-3-dev libmpv-dev librsvg2-dev \
+            libsecret-1-dev libwebkit2gtk-4.1-dev ninja-build patchelf \
+            pkg-config squashfs-tools xz-utils
+
+      - name: Install Rust baseline
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_BASELINE_VERSION }}
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install Flutter dependencies
+        working-directory: apps/flutter
+        run: flutter pub get
+
+      - name: Build AppImage baseline Release bundle
+        working-directory: apps/flutter
+        run: flutter build linux --release
+
+      - name: Build and inspect AppImage
+        run: |
+          packaging/linux/build_appimage.sh \
+            apps/flutter/build/linux/x64/release/bundle \
+            build/linux-packages/appimage \
+            "${{ github.run_number }}"
+          cp docs/development/cross-platform-test-packages.md \
+            build/linux-packages/appimage/README.md
+
+      - name: Upload AppImage build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutterustmusic-linux-appimage-${{ github.run_number }}
+          path: build/linux-packages/appimage/
+          if-no-files-found: error
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  linux-deb-verify:
+    name: Install-test Ubuntu 24.04 DEB
+    needs: linux-deb-build
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Install clean-room test harness
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+            binutils ca-certificates dbus-x11 git gstreamer1.0-tools passwd \
+            xauth xdotool xvfb
+
+      - name: Check out verification scripts
+        uses: actions/checkout@v6
+
+      - name: Download DEB artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: flutterustmusic-linux-deb-${{ github.run_number }}
+          path: artifacts/deb
+
+      - name: Query, install, launch, reinstall, and remove DEB
+        run: |
+          deb=$(find artifacts/deb -maxdepth 1 -type f -name '*.deb' -print -quit)
+          test -s "$deb"
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb"
+          apt-get install --yes "$deb"
+          useradd --create-home --user-group package-tester
+          runuser -u package-tester -- env \
+            FURA_VERIFY_HOME=/home/package-tester \
+            packaging/linux/verify_installed_app.sh \
+              /usr/bin/flutterustmusic /usr/lib/flutterustmusic native
+          mkdir -p /home/package-tester/.config/flutterustmusic
+          touch /home/package-tester/.config/flutterustmusic/preserve-on-uninstall
+          apt-get install --yes --reinstall "$deb"
+          apt-get remove --yes flutterustmusic
+          test -f /home/package-tester/.config/flutterustmusic/preserve-on-uninstall
+          test ! -e /usr/bin/flutterustmusic
+          test ! -e /usr/lib/flutterustmusic
+
+  linux-rpm-verify:
+    name: Install-test Fedora 43 RPM
+    needs: linux-rpm-build
+    runs-on: ubuntu-24.04
+    container:
+      image: fedora:43
+    timeout-minutes: 45
+
+    steps:
+      - name: Install clean-room test harness
+        run: |
+          dnf install --assumeyes \
+            binutils ca-certificates dbus-daemon git shadow-utils xdotool \
+            xorg-x11-server-Xvfb xorg-x11-xauth
+
+      - name: Check out verification scripts
+        uses: actions/checkout@v6
+
+      - name: Download RPM artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: flutterustmusic-linux-rpm-${{ github.run_number }}
+          path: artifacts/rpm
+
+      - name: Query, install, launch, reinstall, and remove RPM
+        run: |
+          rpm_file=$(find artifacts/rpm -maxdepth 1 -type f -name '*.rpm' -print -quit)
+          test -s "$rpm_file"
+          rpm -qip "$rpm_file"
+          rpm -qlp "$rpm_file"
+          dnf install --assumeyes "$rpm_file"
+          useradd --create-home --user-group package-tester
+          runuser -u package-tester -- env \
+            FURA_VERIFY_HOME=/home/package-tester \
+            packaging/linux/verify_installed_app.sh \
+              /usr/bin/flutterustmusic /usr/lib/flutterustmusic native
+          mkdir -p /home/package-tester/.config/flutterustmusic
+          touch /home/package-tester/.config/flutterustmusic/preserve-on-uninstall
+          dnf reinstall --assumeyes "$rpm_file"
+          dnf remove --assumeyes flutterustmusic
+          test -f /home/package-tester/.config/flutterustmusic/preserve-on-uninstall
+          test ! -e /usr/bin/flutterustmusic
+          test ! -e /usr/lib/flutterustmusic
+
+  linux-arch-verify:
+    name: Install-test Arch package
+    needs: linux-arch-build
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base
+    timeout-minutes: 45
+
+    steps:
+      - name: Install clean-room test harness
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm \
+            binutils ca-certificates dbus git shadow xdotool xorg-server-xvfb xorg-xauth
+
+      - name: Check out verification scripts
+        uses: actions/checkout@v6
+
+      - name: Download Arch artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: flutterustmusic-linux-arch-${{ github.run_number }}
+          path: artifacts/arch
+
+      - name: Query, install, launch, reinstall, and remove pacman package
+        run: |
+          package_file=$(find artifacts/arch -maxdepth 1 -type f -name '*.pkg.tar.zst' -print -quit)
+          test -s "$package_file"
+          pacman -Qip "$package_file"
+          pacman -Qlp "$package_file"
+          pacman -U --noconfirm "$package_file"
+          useradd --create-home --user-group package-tester
+          runuser -u package-tester -- env \
+            FURA_VERIFY_HOME=/home/package-tester \
+            packaging/linux/verify_installed_app.sh \
+              /usr/bin/flutterustmusic /usr/lib/flutterustmusic native
+          mkdir -p /home/package-tester/.config/flutterustmusic
+          touch /home/package-tester/.config/flutterustmusic/preserve-on-uninstall
+          pacman -U --noconfirm "$package_file"
+          pacman -R --noconfirm flutterustmusic
+          test -f /home/package-tester/.config/flutterustmusic/preserve-on-uninstall
+          test ! -e /usr/bin/flutterustmusic
+          test ! -e /usr/lib/flutterustmusic
+
+  linux-appimage-verify:
+    name: Extract-run AppImage (${{ matrix.name }})
+    needs: linux-appimage-build
+    runs-on: ubuntu-24.04
+    container:
+      image: ${{ matrix.image }}
+      options: --security-opt seccomp=unconfined
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04
+            image: ubuntu:24.04
+            family: deb
+          - name: Fedora 43
+            image: fedora:43
+            family: rpm
+
+    steps:
+      - name: Install declared AppImage base and test harness
+        run: |
+          if test "${{ matrix.family }}" = deb; then
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+              binutils bubblewrap ca-certificates dbus-x11 file fontconfig git \
+              libegl1 libgl1 libgl1-mesa-dri passwd xauth xdg-dbus-proxy xdotool xvfb
+          else
+            dnf install --assumeyes \
+              binutils bubblewrap ca-certificates dbus-daemon file fontconfig git \
+              libglvnd-egl libglvnd-glx mesa-dri-drivers shadow-utils \
+              xdg-dbus-proxy xdotool xorg-x11-server-Xvfb xorg-x11-xauth
+          fi
+
+      - name: Check out verification scripts
+        uses: actions/checkout@v6
+
+      - name: Download AppImage artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: flutterustmusic-linux-appimage-${{ github.run_number }}
+          path: artifacts/appimage
+
+      - name: Query, extract, audit, and launch AppImage
+        run: |
+          appimage=$(find artifacts/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)
+          test -s "$appimage"
+          chmod 0755 "$appimage"
+          portable_directory=$(mktemp -d '/tmp/flutterustmusic AppImage XXXX')
+          cp "$appimage" "$portable_directory/flutterustmusic.AppImage"
+          mkdir "$portable_directory/extracted"
+          (
+            cd "$portable_directory/extracted"
+            "$portable_directory/flutterustmusic.AppImage" --appimage-extract >/dev/null
+          )
+          appdir="$portable_directory/extracted/squashfs-root"
+          packaging/linux/audit_appimage.sh "$appdir" "$portable_directory/audit"
+          useradd --create-home --user-group package-tester
+          chown -R package-tester:package-tester "$portable_directory"
+          runuser -u package-tester -- env \
+            FURA_VERIFY_HOME=/home/package-tester \
+            packaging/linux/verify_installed_app.sh \
+              "$appdir/AppRun" "$appdir/usr/lib/flutterustmusic" appimage
+
+  linux-artifacts:
+    name: Assemble verified Linux x64 artifacts
+    needs:
+      - linux-deb-verify
+      - linux-rpm-verify
+      - linux-arch-verify
+      - linux-appimage-verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Download verified package artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: flutterustmusic-linux-*-${{ github.run_number }}
+          path: build/linux-artifacts/source
+
+      - name: Require and assemble all four formats
+        run: |
+          mkdir -p build/linux-artifacts/final
+          for pattern in '*.deb' '*.rpm' '*.pkg.tar.zst' '*.AppImage'; do
+            mapfile -t matches < <(find build/linux-artifacts/source -type f -name "$pattern")
+            test "${#matches[@]}" -eq 1
+            test -s "${matches[0]}"
+            cp "${matches[0]}" build/linux-artifacts/final/
+          done
+          cp docs/development/cross-platform-test-packages.md \
+            build/linux-artifacts/final/README.md
+          printf 'source_commit=%s\nworkflow_run=%s\n' \
+            "${{ github.sha }}" "${{ github.run_id }}" \
+            > build/linux-artifacts/final/BUILD-SOURCE.txt
+          (
+            cd build/linux-artifacts/final
+            sha256sum -- *.deb *.rpm *.pkg.tar.zst *.AppImage > SHA256SUMS
+            sha256sum --check SHA256SUMS
+          )
+
+      - name: Upload verified Linux packages
         uses: actions/upload-artifact@v4
         with:
           name: flutterustmusic-linux-x64-development-${{ github.run_number }}
-          path: apps/flutter/build/test-packages/
+          path: build/linux-artifacts/final/
           if-no-files-found: error
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 

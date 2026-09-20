@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=fura music
+Comment=Desktop music client
+Exec=flutterustmusic
+Icon=dev.axiaobo.flutterustmusic
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupNotify=true
+StartupWMClass=dev.axiaobo.flutterustmusic

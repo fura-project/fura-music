@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+app_root="${app_dir}/usr/lib/flutterustmusic"
+app_lib="${app_root}/lib"
+system_lib="${app_dir}/usr/lib"
+multiarch_lib="${app_dir}/usr/lib/x86_64-linux-gnu"
+app_arguments=("$@")
+
+export APPDIR="$app_dir"
+export FURA_APP_ROOT="$app_root"
+export LD_LIBRARY_PATH="${app_lib}:${multiarch_lib}:${system_lib}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+shopt -s nullglob
+for hook in "${app_dir}"/apprun-hooks/*.sh; do
+  # linuxdeploy input plugins install environment hooks here. The custom
+  # AppRun remains responsible for applying them.
+  # shellcheck source=/dev/null
+  source "$hook"
+done
+shopt -u nullglob
+
+if [ -d "${multiarch_lib}/gstreamer-1.0" ]; then
+  export GST_PLUGIN_PATH="${multiarch_lib}/gstreamer-1.0${GST_PLUGIN_PATH:+:${GST_PLUGIN_PATH}}"
+elif [ -d "${system_lib}/gstreamer-1.0" ]; then
+  export GST_PLUGIN_PATH="${system_lib}/gstreamer-1.0${GST_PLUGIN_PATH:+:${GST_PLUGIN_PATH}}"
+fi
+
+if [ -x "${multiarch_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner" ]; then
+  export GST_PLUGIN_SCANNER="${multiarch_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
+elif [ -x "${system_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner" ]; then
+  export GST_PLUGIN_SCANNER="${system_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
+fi
+
+webkit_exec_path=""
+for candidate in \
+  "${multiarch_lib}/webkit2gtk-4.1" \
+  "${system_lib}/webkit2gtk-4.1" \
+  "${app_dir}/usr/libexec/webkit2gtk-4.1"; do
+  if [ -x "${candidate}/WebKitWebProcess" ]; then
+    webkit_exec_path="$candidate"
+    break
+  fi
+done
+if [ -n "$webkit_exec_path" ]; then
+  export WEBKIT_EXEC_PATH="$webkit_exec_path"
+  export WEBKIT2_EXEC_PATH="$webkit_exec_path"
+fi
+if [ -z "$webkit_exec_path" ]; then
+  printf 'flutterustmusic AppImage is missing its WebKitGTK helper directory\n' >&2
+  exit 1
+fi
+
+command -v bwrap >/dev/null 2>&1 || {
+  printf 'flutterustmusic AppImage requires bubblewrap for WebKitGTK path mapping\n' >&2
+  exit 1
+}
+
+# Ubuntu's release WebKitGTK library uses its compile-time PKGLIBEXECDIR even
+# when WEBKIT_EXEC_PATH is set. Create only that expected path in a private
+# mount namespace and map the packaged helpers read-only. WebKit's own child
+# process sandbox remains enabled and runs inside this namespace.
+webkit_target_parent=/usr/lib/x86_64-linux-gnu
+runtime_root=$(mktemp -d /tmp/flutterustmusic-appimage-XXXXXX)
+host_root=${runtime_root}/host
+merged_lib=${runtime_root}/usr-lib
+bwrap_pid=""
+# Invoked through the EXIT trap below.
+# shellcheck disable=SC2329
+cleanup() {
+  if [ -n "$bwrap_pid" ] && kill -0 "$bwrap_pid" 2>/dev/null; then
+    kill -TERM "$bwrap_pid" 2>/dev/null || true
+    wait "$bwrap_pid" 2>/dev/null || true
+  fi
+  rm -rf -- "$runtime_root"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Bubblewrap 0.9 (the Ubuntu 24.04 baseline) cannot add a child mount below a
+# read-only bind when the target directory is absent. Build a shallow symlink
+# view of the host /usr/lib, replace only the Ubuntu multiarch WebKit helper
+# directory, and mount that view read-only. Host libraries remain reachable
+# through the separately bound host root.
+ln -s / "$host_root"
+mkdir -p "$merged_lib"
+shopt -s nullglob dotglob
+host_entries=("${host_root}/usr/lib/"*)
+if [ "${#host_entries[@]}" -gt 0 ]; then
+  ln -s -t "$merged_lib" -- "${host_entries[@]}"
+fi
+shopt -u nullglob dotglob
+if [ -e "${merged_lib}/x86_64-linux-gnu" ] || \
+  [ -L "${merged_lib}/x86_64-linux-gnu" ]; then
+  unlink "${merged_lib}/x86_64-linux-gnu"
+fi
+mkdir -p "${merged_lib}/x86_64-linux-gnu"
+if [ -d "${host_root}${webkit_target_parent}" ]; then
+  shopt -s nullglob dotglob
+  host_entries=("${host_root}${webkit_target_parent}/"*)
+  if [ "${#host_entries[@]}" -gt 0 ]; then
+    ln -s -t "${merged_lib}/x86_64-linux-gnu" -- "${host_entries[@]}"
+  fi
+  shopt -u nullglob dotglob
+fi
+if [ -e "${merged_lib}/x86_64-linux-gnu/webkit2gtk-4.1" ] || \
+  [ -L "${merged_lib}/x86_64-linux-gnu/webkit2gtk-4.1" ]; then
+  unlink "${merged_lib}/x86_64-linux-gnu/webkit2gtk-4.1"
+fi
+ln -s "$webkit_exec_path" \
+  "${merged_lib}/x86_64-linux-gnu/webkit2gtk-4.1"
+unlink "$host_root"
+mkdir "$host_root"
+
+bwrap_arguments=(
+  --die-with-parent
+  --ro-bind / /
+  --dev-bind /dev /dev
+  --proc /proc
+  --bind /tmp /tmp
+  --chdir "$app_dir"
+  --ro-bind / "$host_root"
+  --ro-bind "$merged_lib" /usr/lib
+)
+if [ -d "${HOME:-}" ]; then
+  bwrap_arguments+=(--bind "$HOME" "$HOME")
+fi
+if [ -d "${XDG_RUNTIME_DIR:-}" ]; then
+  bwrap_arguments+=(--bind "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR")
+fi
+bwrap "${bwrap_arguments[@]}" -- bash -euc '
+  test -x /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess
+  test -x /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess
+  exec "$@"
+' bash "${app_dir}/usr/bin/flutterustmusic" "${app_arguments[@]}" &
+bwrap_pid=$!
+wait_status=0
+wait "$bwrap_pid" || wait_status=$?
+bwrap_pid=""
+exit "$wait_status"

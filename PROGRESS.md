@@ -1,15 +1,34 @@
 ---
 execution:
   mode: HUMAN_GATED_REGRESSION
-  work_domain: UI
-  state: HUMAN_REVIEW
-  acceptance_milestone: MATERIAL3_COMPONENT_REGRESSION_REVIEW
-  active_workstream: MATERIAL3_UI_REGRESSION_CORRECTION
-  current_task: SNACKBAR_SETTINGS_SELECTORS_AND_COLOR_EXPANSION_REVALIDATION
-  next_action: REQUEST_HUMAN_REVIEW_OF_MATERIAL3_REGRESSION_RESULTS
+  work_domain: CORE
+  state: BLOCKED
+  acceptance_milestone: LINUX_X64_INSTALLABLE_DEVELOPMENT_PACKAGES
+  active_workstream: LINUX_PACKAGING_CI
+  current_task: BUILD_DEB_RPM_ARCH_AND_APPIMAGE
+  next_action: HUMAN_AUTHORIZE_PUSH_AND_RUN_MANUAL_PACKAGING_WORKFLOW
 ---
 
 # Current State
+
+- **2026-09-20 Linux x86_64 packaging candidate:** from clean starting HEAD
+  `25588d5de78c9548fe3d7ea6e13605fc6667d502`, the manual cross-platform
+  workflow now builds separate Ubuntu 24.04 DEB, Fedora 43 RPM, Arch
+  `makepkg`, and Ubuntu-based AppImage candidates, then gates their aggregate
+  upload on format-specific clean-container install or extraction, ordinary-user
+  window startup, reinstall/removal checks, and all-ELF dependency audits. The
+  AppImage path pins linuxdeploy, its GTK plugin, appimagetool, and the type-2
+  runtime by checksum; it explicitly carries media/WebKit helpers and modules
+  while rejecting bundled glibc and loader copies. On the current Manjaro host,
+  a real 16,290,293-byte pacman package was built and its metadata, payload,
+  checksum, 11-ELF audit, desktop entry, and icon passed; the optional host-JDK
+  JNI helper was omitted only after empty native-asset manifests and no ELF
+  dependency were proven. Shell syntax, ShellCheck 0.11.0, workflow YAML,
+  actionlint 1.7.7, and `git diff --check` pass. No clean install was performed
+  on the maintainer system, and the DEB, RPM, AppImage, Ubuntu/Fedora/Arch
+  clean-room launches, and four-format aggregate have not run because the
+  changes have been committed locally but remain unpushed; Human authorization
+  to push and run the manual workflow is the current blocker.
 
 - **2026-09-19 QQ official-playlist protocol and Home Spotlight candidate:**
   current anonymous musicu observations now directly map category `3317` to
