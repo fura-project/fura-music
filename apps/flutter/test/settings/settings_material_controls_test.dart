@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +14,10 @@ void main() {
   const captureMaterialReview = bool.fromEnvironment(
     'MATERIAL_FIRST_VISUAL_REVIEW',
   );
+  const materialReviewDirectory = String.fromEnvironment(
+    'MATERIAL_FIRST_VISUAL_REVIEW_DIR',
+    defaultValue: '/tmp',
+  );
   for (final width in [320.0, 360.0, 390.0, 1180.0]) {
     testWidgets('settings use Material controls at $width px', (tester) async {
       tester.view.physicalSize = Size(width, 844);
@@ -18,6 +25,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final semantics = tester.ensureSemantics();
+      if (captureMaterialReview && width == 360) {
+        await _loadReviewFonts(tester);
+      }
 
       await tester.pumpWidget(const _SettingsHarness());
       await tester.pumpAndSettle();
@@ -48,7 +58,7 @@ void main() {
         await expectLater(
           find.byType(MaterialApp),
           matchesGoldenFile(
-            Uri.file('/tmp/fura-settings-material-dropdown-360.png'),
+            Uri.file('$materialReviewDirectory/dropdown-360-open.png'),
           ),
         );
       }
@@ -75,6 +85,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    if (captureMaterialReview) await _loadReviewFonts(tester);
 
     await tester.pumpWidget(const _SettingsHarness());
     await tester.pumpAndSettle();
@@ -95,7 +106,7 @@ void main() {
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile(
-          Uri.file('/tmp/fura-settings-material-expansion-360.png'),
+          Uri.file('$materialReviewDirectory/color-expansion-360-open.png'),
         ),
       );
     }
@@ -105,44 +116,41 @@ void main() {
   testWidgets('every short enum setting is a Material DropdownMenu', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1180, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    if (captureMaterialReview) await _loadReviewFonts(tester);
 
-    for (final (section, keys) in [
-      (SettingsSection.appearance, const [ValueKey('settings-theme-selector')]),
-      (
-        SettingsSection.musicService,
-        const [ValueKey('settings-provider-selector')],
-      ),
-      (
-        SettingsSection.language,
-        const [ValueKey('settings-language-selector')],
-      ),
-      (
-        SettingsSection.playback,
-        const [
-          ValueKey('settings-quality-selector'),
-          ValueKey('settings-lyric-auxiliary-selector'),
-        ],
-      ),
-    ]) {
-      await tester.pumpWidget(_SettingsHarness(section: section));
-      await tester.pumpAndSettle();
-      for (final key in keys) {
-        final selector = find.byKey(key);
-        expect(selector, findsOneWidget);
-        expect(
-          tester.widget(selector).runtimeType.toString(),
-          startsWith('DropdownMenu<'),
-        );
+    for (final width
+        in captureMaterialReview ? const [390.0, 1180.0] : const [1180.0]) {
+      tester.view.physicalSize = Size(width, 844);
+      for (final (section, keys) in _shortEnumSelectors) {
+        await tester.pumpWidget(_SettingsHarness(section: section));
+        await tester.pumpAndSettle();
+        for (final key in keys) {
+          final selector = find.byKey(key);
+          expect(selector, findsOneWidget);
+          expect(
+            tester.widget(selector).runtimeType.toString(),
+            startsWith('DropdownMenu<'),
+          );
+        }
+        if (captureMaterialReview) {
+          await expectLater(
+            find.byType(MaterialApp),
+            matchesGoldenFile(
+              Uri.file(
+                '$materialReviewDirectory/settings-${section.name}-${width.toInt()}-closed.png',
+              ),
+            ),
+          );
+        }
+        expect(tester.takeException(), isNull);
       }
-      expect(tester.takeException(), isNull);
     }
   });
 
-  testWidgets('only the theme selector restores the SDK component defaults', (
+  testWidgets('all short enum selectors isolate the full input theme chain', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1180, 844);
@@ -150,43 +158,94 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const _SettingsHarness());
-    await tester.pumpAndSettle();
-    final themeSelector = find.byKey(const ValueKey('settings-theme-selector'));
-    final themeSelectorContext = tester.element(themeSelector);
-    expect(
-      DropdownMenuTheme.of(themeSelectorContext).inputDecorationTheme,
-      isNull,
-    );
-    expect(DropdownMenuTheme.of(themeSelectorContext).menuStyle, isNull);
-    expect(MenuTheme.of(themeSelectorContext).style, isNull);
-    final decoration = tester
-        .widget<InputDecorator>(
-          find.descendant(
-            of: themeSelector,
-            matching: find.byType(InputDecorator),
-          ),
-        )
-        .decoration;
-    expect(decoration.filled, isFalse);
-    expect(
-      (decoration.border! as OutlineInputBorder).borderRadius,
-      const BorderRadius.all(Radius.circular(4)),
-    );
+    for (final (section, keys) in _shortEnumSelectors) {
+      await tester.pumpWidget(_SettingsHarness(section: section));
+      await tester.pumpAndSettle();
+
+      for (final key in keys) {
+        final selector = find.byKey(key);
+        final selectorContext = tester.element(selector);
+        expect(
+          DropdownMenuTheme.of(selectorContext).inputDecorationTheme,
+          isNull,
+        );
+        expect(DropdownMenuTheme.of(selectorContext).menuStyle, isNull);
+        expect(MenuTheme.of(selectorContext).style, isNull);
+        expect(InputDecorationTheme.of(selectorContext).enabledBorder, isNull);
+        expect(InputDecorationTheme.of(selectorContext).focusedBorder, isNull);
+        expect(InputDecorationTheme.of(selectorContext).disabledBorder, isNull);
+
+        _expectSdkInputState(tester, selector, enabled: true, focused: false);
+
+        await tester.tap(selector);
+        await tester.pump();
+        expect(find.byType(MenuItemButton).hitTestable(), findsWidgets);
+        _expectSdkInputState(
+          tester,
+          selector,
+          enabled: true,
+          focused: true,
+          menuOpen: true,
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('short enum selector disabled state keeps the SDK outline', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1180, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final pendingSave = Completer<AppSettingsWriteResult>();
+    addTearDown(() {
+      if (!pendingSave.isCompleted) {
+        pendingSave.complete(AppSettingsWriteResult.saved);
+      }
+    });
 
     await tester.pumpWidget(
-      const _SettingsHarness(section: SettingsSection.playback),
+      _SettingsHarness(
+        section: SettingsSection.playback,
+        onSettingsChanged: (_) => pendingSave.future,
+      ),
     );
     await tester.pumpAndSettle();
-    final qualitySelector = find.byKey(
-      const ValueKey('settings-quality-selector'),
+    final selector = find.byKey(const ValueKey('settings-quality-selector'));
+    await tester.tap(selector);
+    await tester.pump();
+    await tester.tap(
+      find
+          .ancestor(
+            of: find.byKey(const ValueKey('settings-quality-high')),
+            matching: find.byType(MenuItemButton),
+          )
+          .hitTestable(),
     );
-    final inheritedProjectTheme = DropdownMenuTheme.of(
-      tester.element(qualitySelector),
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('settings-save-progress')),
+      findsOneWidget,
     );
-    expect(inheritedProjectTheme.inputDecorationTheme?.filled, isTrue);
-    expect(inheritedProjectTheme.menuStyle, isNotNull);
+    expect(
+      tester
+          .widget<DropdownMenu<AppPlaybackQualityPreference>>(selector)
+          .enabled,
+      isFalse,
+    );
+    // DropdownMenu keeps its field focus while the asynchronous save disables
+    // the control; InputDecorator must still resolve the disabled outline.
+    _expectSdkInputState(tester, selector, enabled: false, focused: true);
     expect(tester.takeException(), isNull);
+
+    pendingSave.complete(AppSettingsWriteResult.saved);
+    await tester.pumpAndSettle();
   });
 
   for (final reducedMotion in [false, true]) {
@@ -330,10 +389,77 @@ void main() {
   }
 }
 
+const _shortEnumSelectors = <(SettingsSection, List<ValueKey<String>>)>[
+  (SettingsSection.appearance, [ValueKey('settings-theme-selector')]),
+  (SettingsSection.musicService, [ValueKey('settings-provider-selector')]),
+  (SettingsSection.language, [ValueKey('settings-language-selector')]),
+  (
+    SettingsSection.playback,
+    [
+      ValueKey('settings-quality-selector'),
+      ValueKey('settings-lyric-auxiliary-selector'),
+    ],
+  ),
+];
+
+void _expectSdkInputState(
+  WidgetTester tester,
+  Finder selector, {
+  required bool enabled,
+  required bool focused,
+  bool menuOpen = false,
+}) {
+  final decorator = tester.widget<InputDecorator>(
+    find.descendant(of: selector, matching: find.byType(InputDecorator)),
+  );
+  final decoration = decorator.decoration;
+  expect(decoration.enabled, enabled);
+  expect(decorator.isFocused, focused);
+  expect(decoration.filled, isFalse);
+
+  final effectiveBorder = !enabled
+      ? decoration.disabledBorder ?? decoration.border
+      : focused
+      ? decoration.focusedBorder ?? decoration.border
+      : decoration.enabledBorder ?? decoration.border;
+  expect(effectiveBorder, isA<OutlineInputBorder>());
+  expect(
+    (effectiveBorder! as OutlineInputBorder).borderRadius,
+    const BorderRadius.all(Radius.circular(4)),
+  );
+  expect(decoration.enabledBorder, isNull);
+  expect(decoration.focusedBorder, isNull);
+  expect(decoration.disabledBorder, isNull);
+
+  final theme = Theme.of(tester.element(selector));
+  final editable = tester.widget<EditableText>(
+    find.descendant(of: selector, matching: find.byType(EditableText)),
+  );
+  expect(
+    editable.style.color,
+    enabled
+        ? theme.textTheme.bodyLarge?.color
+        : theme.colorScheme.onSurface.withAlpha((255 * 0.38).round()),
+  );
+  final suffixButton = tester.widget<IconButton>(
+    find.descendant(
+      of: find.descendant(of: selector, matching: find.byType(InputDecorator)),
+      matching: find.byType(IconButton),
+    ),
+  );
+  expect(suffixButton.onPressed, enabled ? isNotNull : isNull);
+  expect(suffixButton.isSelected, menuOpen);
+}
+
 class _SettingsHarness extends StatefulWidget {
-  const _SettingsHarness({this.section = SettingsSection.appearance});
+  const _SettingsHarness({
+    this.section = SettingsSection.appearance,
+    this.onSettingsChanged,
+  });
 
   final SettingsSection section;
+  final Future<AppSettingsWriteResult> Function(AppSettings settings)?
+  onSettingsChanged;
 
   static AppThemePreference settingsOf(WidgetTester tester) => tester
       .state<_SettingsHarnessState>(find.byType(_SettingsHarness))
@@ -349,6 +475,7 @@ class _SettingsHarnessState extends State<_SettingsHarness> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
     locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
@@ -365,10 +492,25 @@ class _SettingsHarnessState extends State<_SettingsHarness> {
         onBack: () {},
         onCompactSectionSelected: (_) {},
         onSettingsChanged: (next) async {
+          final callback = widget.onSettingsChanged;
+          if (callback != null) return callback(next);
           setState(() => settings = next);
           return AppSettingsWriteResult.saved;
         },
       ),
     ),
   );
+}
+
+Future<void> _loadReviewFonts(WidgetTester tester) async {
+  const font = String.fromEnvironment('HOME_REVIEW_CJK_FONT');
+  if (font.isEmpty) return;
+  await tester.runAsync(() async {
+    await (FontLoader(
+      'Roboto',
+    )..addFont(File(font).readAsBytes().then(ByteData.sublistView))).load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+  });
 }

@@ -3111,6 +3111,10 @@ Future<void> _prepareQualityNoticeVisualReview(WidgetTester tester) async {
 }
 
 String _qualityNoticeReviewPath(String brightness) {
+  const reviewDirectory = String.fromEnvironment(
+    'QUALITY_NOTICE_VISUAL_REVIEW_DIR',
+    defaultValue: '/tmp/fura-md3-default-review-20260920/a-post',
+  );
   final width = double.parse(
     const String.fromEnvironment(
       'QUALITY_NOTICE_VISUAL_WIDTH',
@@ -3124,7 +3128,7 @@ String _qualityNoticeReviewPath(String brightness) {
     ),
   );
   final scaleLabel = textScale == 1 ? '1x' : '${textScale}x';
-  return '/tmp/fura-md3-default-review-20260920/a-post/'
+  return '$reviewDirectory/'
       'quality-$brightness-${width.toInt()}-$scaleLabel.png';
 }
 

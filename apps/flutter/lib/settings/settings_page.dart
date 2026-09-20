@@ -389,7 +389,6 @@ class _SettingsPageState extends State<SettingsPage> {
           controlKey: const ValueKey('settings-theme-selector'),
           icon: Icons.brightness_auto_rounded,
           title: context.l10n.settingsAppearanceCompactLabel,
-          materialDefaults: true,
           current: widget.settings.theme,
           choices: [
             _SettingsChoice(
@@ -841,7 +840,6 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
     required this.choices,
     required this.onSelected,
     this.enabled = true,
-    this.materialDefaults = false,
     super.key,
   });
 
@@ -852,7 +850,6 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
   final List<_SettingsChoice<T>> choices;
   final ValueChanged<T> onSelected;
   final bool enabled;
-  final bool materialDefaults;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -860,9 +857,7 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
       final selected = choices.singleWhere((choice) => choice.value == current);
       final theme = Theme.of(context);
       final colors = theme.colorScheme;
-      final dropdownTheme = materialDefaults
-          ? const DropdownMenuThemeData()
-          : DropdownMenuTheme.of(context);
+      const dropdownTheme = DropdownMenuThemeData();
       // Theme overrides may contain only colors/font family. TextField merges
       // those with the localized body style; measure the same effective style.
       final textStyle = theme.textTheme.bodyLarge!.merge(
@@ -931,15 +926,19 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
           },
         ),
       );
-      final effectiveDropdown = materialDefaults
-          ? Theme(
-              data: theme.copyWith(
-                dropdownMenuTheme: const DropdownMenuThemeData(),
-                menuTheme: const MenuThemeData(),
-              ),
-              child: dropdown,
-            )
-          : dropdown;
+      // DropdownMenu builds an internal TextField. Isolate every theme layer
+      // that can style that field so the shared short-enum selector receives
+      // the SDK component defaults in enabled, focused and disabled states.
+      // Keep this boundary local: ordinary application text fields must retain
+      // the product input theme.
+      final effectiveDropdown = Theme(
+        data: theme.copyWith(
+          dropdownMenuTheme: const DropdownMenuThemeData(),
+          menuTheme: const MenuThemeData(),
+          inputDecorationTheme: const InputDecorationThemeData(),
+        ),
+        child: dropdown,
+      );
       final tile = ListTile(
         enabled: enabled,
         leading: Icon(icon, color: enabled ? colors.primary : null),
