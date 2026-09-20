@@ -84,6 +84,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            apps/flutter/android/**/*.gradle*
+            apps/flutter/android/gradle/wrapper/gradle-wrapper.properties
+            apps/flutter/pubspec.lock
 
       - name: Install Rust for Cargokit
         uses: dtolnay/rust-toolchain@stable
@@ -101,7 +106,10 @@ jobs:
 
       - name: Build ARM64 development APK
         working-directory: apps/flutter
-        run: flutter build apk --release --target-platform android-arm64
+        run: |
+          ../../scripts/ci/retry_android_flutter_build.sh \
+            build/ci-diagnostics/android-arm64 -- \
+            flutter build apk --release --target-platform android-arm64
 
       - name: Verify ARM64 networking and Rust payload
         working-directory: apps/flutter
@@ -138,7 +146,19 @@ jobs:
 
       - name: Build x64 emulator APK
         working-directory: apps/flutter
-        run: flutter build apk --debug --target-platform android-x64
+        run: |
+          ../../scripts/ci/retry_android_flutter_build.sh \
+            build/ci-diagnostics/android-x64 -- \
+            flutter build apk --debug --target-platform android-x64
+
+      - name: Upload Android build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutterustmusic-android-build-diagnostics-${{ github.run_number }}
+          path: apps/flutter/build/ci-diagnostics/
+          if-no-files-found: warn
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
       - name: Collect Android artifacts
         working-directory: apps/flutter
@@ -195,10 +215,28 @@ jobs:
       - name: Verify MPRIS and media initialization
         working-directory: apps/flutter
         run: |
+          mkdir -p build/ci-diagnostics
+          uname -a | tee build/ci-diagnostics/linux-runtime.txt
+          dpkg-query -W libmpv2 libgtk-3-0t64 xvfb \
+            | tee -a build/ci-diagnostics/linux-runtime.txt
+          printf 'DISPLAY=%s WAYLAND_DISPLAY=%s LIBGL_ALWAYS_SOFTWARE=%s\n' \
+            "${DISPLAY-<unset>}" "${WAYLAND_DISPLAY-<unset>}" \
+            "${LIBGL_ALWAYS_SOFTWARE-<unset>}" \
+            | tee -a build/ci-diagnostics/linux-runtime.txt
           dbus-run-session -- xvfb-run -a \
             flutter test integration_test/system_playback_service_test.dart -d linux
           dbus-run-session -- xvfb-run -a \
-            flutter test integration_test/music_video_engine_test.dart -d linux
+            flutter test integration_test/music_video_engine_test.dart -d linux \
+            2>&1 | tee build/ci-diagnostics/music-video-engine.log
+
+      - name: Upload Linux media diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutterustmusic-linux-media-diagnostics-${{ github.run_number }}
+          path: apps/flutter/build/ci-diagnostics/
+          if-no-files-found: warn
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
       - name: Verify offline WebKitGTK lifecycle
         working-directory: apps/flutter
@@ -260,6 +298,33 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
+      - name: Trust the installed Flutter SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${FLUTTER_ROOT:?flutter-action did not export FLUTTER_ROOT}"
+          : "${RUNNER_TOOL_CACHE:?runner did not export RUNNER_TOOL_CACHE}"
+          flutter_root=$(readlink -f -- "$FLUTTER_ROOT")
+          tool_cache=$(readlink -f -- "$RUNNER_TOOL_CACHE")
+          case "$flutter_root" in
+            "$tool_cache"/flutter/*) ;;
+            *)
+              printf 'Refusing untrusted Flutter SDK path: %s\n' "$flutter_root" >&2
+              exit 1
+              ;;
+          esac
+          test -d "$flutter_root/.git"
+          test "$(readlink -f -- "$(command -v flutter)")" = \
+            "$flutter_root/bin/flutter"
+          id
+          printf 'HOME=%s\nFLUTTER_ROOT=%s\n' "$HOME" "$flutter_root"
+          stat -c 'Flutter SDK owner=%u:%g mode=%a path=%n' "$flutter_root"
+          git config --global --get-all safe.directory \
+            | grep -Fxq "$flutter_root" \
+            || git config --global --add safe.directory "$flutter_root"
+          git -C "$flutter_root" rev-parse HEAD
+          flutter --version
+
       - name: Install Flutter dependencies
         working-directory: apps/flutter
         run: flutter pub get
@@ -316,6 +381,33 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+
+      - name: Trust the installed Flutter SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${FLUTTER_ROOT:?flutter-action did not export FLUTTER_ROOT}"
+          : "${RUNNER_TOOL_CACHE:?runner did not export RUNNER_TOOL_CACHE}"
+          flutter_root=$(readlink -f -- "$FLUTTER_ROOT")
+          tool_cache=$(readlink -f -- "$RUNNER_TOOL_CACHE")
+          case "$flutter_root" in
+            "$tool_cache"/flutter/*) ;;
+            *)
+              printf 'Refusing untrusted Flutter SDK path: %s\n' "$flutter_root" >&2
+              exit 1
+              ;;
+          esac
+          test -d "$flutter_root/.git"
+          test "$(readlink -f -- "$(command -v flutter)")" = \
+            "$flutter_root/bin/flutter"
+          id
+          printf 'HOME=%s\nFLUTTER_ROOT=%s\n' "$HOME" "$flutter_root"
+          stat -c 'Flutter SDK owner=%u:%g mode=%a path=%n' "$flutter_root"
+          git config --global --get-all safe.directory \
+            | grep -Fxq "$flutter_root" \
+            || git config --global --add safe.directory "$flutter_root"
+          git -C "$flutter_root" rev-parse HEAD
+          flutter --version
 
       - name: Install Flutter dependencies
         working-directory: apps/flutter
@@ -383,6 +475,9 @@ jobs:
       - name: Build AppImage baseline Release bundle
         working-directory: apps/flutter
         run: flutter build linux --release
+
+      - name: Test shared Linux bundle normalization
+        run: packaging/linux/test_normalize_bundle.sh
 
       - name: Build and inspect AppImage
         run: |

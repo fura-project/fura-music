@@ -33,7 +33,6 @@ normalize_bundle "$source_bundle" "$normalized_bundle"
 "$script_dir/collect_notices.sh" "$normalized_bundle" "$notices_directory"
 write_build_info "$notices_directory/BUILD-INFO.txt" 'Ubuntu 24.04 AppImage build (x86_64)'
 cp -a "$normalized_bundle/." "$appdir/usr/lib/flutterustmusic/"
-install -m 0755 "$launcher_file" "$appdir/usr/bin/flutterustmusic"
 install -m 0644 "$desktop_file" "$appdir/usr/share/applications/${app_id}.desktop"
 install -m 0644 "$icon_file" \
   "$appdir/usr/share/icons/hicolor/512x512/apps/${app_id}.png"
@@ -87,6 +86,28 @@ export PATH="$tools_directory:$PATH"
   --exclude-library 'libgbm.so*' \
   --exclude-library 'libwayland-*.so*' \
   --plugin gtk
+
+# The GTK plugin invokes linuxdeploy again without the outer exclusion list.
+# Enforce the same host-graphics boundary after the plugin has completed; the
+# existing audit below verifies that every remaining ELF still resolves.
+while IFS= read -r -d '' bundled_graphics_library; do
+  printf 'Removing target-provided graphics library: %s\n' \
+    "${bundled_graphics_library#"$appdir"/}"
+  unlink -- "$bundled_graphics_library"
+done < <(find "$appdir/usr/lib" \( -type f -o -type l \) \( \
+  -name 'libEGL.so*' -o \
+  -name 'libGL.so*' -o \
+  -name 'libGLX.so*' -o \
+  -name 'libOpenGL.so*' -o \
+  -name 'libdrm.so*' -o \
+  -name 'libgbm.so*' -o \
+  -name 'libwayland-*.so*' \
+\) -print0)
+
+# linuxdeploy deploys the application ELF to usr/bin using its basename while
+# collecting dependencies. Install the shell launcher only afterwards so the
+# two files cannot collide in linuxdeploy's deferred strip queue.
+install -m 0755 "$launcher_file" "$appdir/usr/bin/flutterustmusic"
 
 system_notices="$appdir/usr/share/doc/flutterustmusic/third-party/system"
 "$script_dir/collect_appimage_system_notices.sh" "$appdir" "$system_notices"

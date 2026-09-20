@@ -70,6 +70,7 @@ validate_bundle_shape() {
   require_file "$bundle/lib/libwebview_all_linux_plugin.so"
   require_file "$bundle/data/icudtl.dat"
   require_directory "$bundle/data/flutter_assets"
+  require_file "$bundle/data/flutter_assets/NativeAssetsManifest.json"
 }
 
 validate_distribution_assets() {
@@ -84,25 +85,59 @@ validate_distribution_assets() {
 normalize_bundle() {
   local source_bundle=$1
   local destination_bundle=$2
+  local native_manifest
+  local library_manifest
+  local optional_jni
+  local candidate
   require_command patchelf
   require_command readelf
+  require_command jq
   validate_bundle_shape "$source_bundle"
   require_empty_directory "$destination_bundle"
   cp -a -- "$source_bundle/." "$destination_bundle/"
 
+  native_manifest="$destination_bundle/data/flutter_assets/NativeAssetsManifest.json"
+  if ! jq -e '
+    type == "object" and
+    (."format-version" | type == "array" and length == 3 and all(type == "number")) and
+    (."native-assets" | type == "object")
+  ' "$native_manifest" >/dev/null; then
+    die "invalid Flutter native-assets manifest: $native_manifest"
+  fi
+
   optional_jni="$destination_bundle/lib/libdartjni.so"
   if test -f "$optional_jni"; then
-    native_manifest="$destination_bundle/data/flutter_assets/NativeAssetsManifest.json"
     library_manifest="$destination_bundle/lib/native_assets.json"
-    require_file "$native_manifest"
-    require_file "$library_manifest"
-    grep -Eq '"native-assets"[[:space:]]*:[[:space:]]*\{\}' "$native_manifest" || \
+    test "$(jq '."native-assets" | length' "$native_manifest")" -eq 0 || \
       die 'refusing to omit libdartjni.so because Flutter declares native assets'
-    grep -Eq '"native-assets"[[:space:]]*:[[:space:]]*\{\}' "$library_manifest" || \
-      die 'refusing to omit libdartjni.so because the library manifest is non-empty'
-    if find "$destination_bundle" -type f ! -path "$optional_jni" -print0 | \
-      xargs -0 -r readelf -d 2>/dev/null | grep -q 'Shared library: \[libdartjni.so\]'; then
-      die 'refusing to omit libdartjni.so because another bundled ELF needs it'
+    # Flutter's runtime consumes NativeAssetsManifest.json from flutter_assets.
+    # CMake also installs build/native_assets/linux into lib when that staging
+    # directory exists, but a Release bundle may legitimately omit this copy.
+    if test -f "$library_manifest"; then
+      if ! jq -e '
+        type == "object" and
+        (."format-version" | type == "array" and length == 3 and all(type == "number")) and
+        (."native-assets" | type == "object")
+      ' "$library_manifest" >/dev/null; then
+        die "invalid optional native-assets staging manifest: $library_manifest"
+      fi
+      test "$(jq '."native-assets" | length' "$library_manifest")" -eq 0 || \
+        die 'refusing to omit libdartjni.so because the staging manifest is non-empty'
+    fi
+    while IFS= read -r -d '' candidate; do
+      if readelf -d "$candidate" 2>/dev/null | \
+        grep -q 'Shared library: \[libdartjni.so\]'; then
+        die "refusing to omit libdartjni.so because a bundled ELF needs it: $candidate"
+      fi
+      if grep -aFq 'libdartjni.so' "$candidate"; then
+        die "refusing to omit libdartjni.so because bundled runtime data references it: $candidate"
+      fi
+    done < <(find "$destination_bundle" -type f ! -path "$optional_jni" -print0)
+    if readelf -d "$optional_jni" 2>/dev/null | \
+      grep -q 'Shared library: \[libjvm.so\]'; then
+      printf '%s\n' \
+        'Omitting unused libdartjni.so; retaining it would add an undeclared libjvm.so dependency.' \
+        >&2
     fi
     # package:jni builds this optional desktop JVM helper whenever the build
     # host happens to have a JDK. Fura's Linux code has no JNI native asset and
