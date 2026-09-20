@@ -23,6 +23,8 @@ Classify every task as one work domain:
 - **UI:** Flutter page composition, visual hierarchy, layout, adaptive behavior, Material 3 presentation, visual states, interaction, accessibility, and implementation of an approved design source. Read [`docs/agent/ui-development.md`](docs/agent/ui-development.md).
 - **MIXED:** split the work into a genuine Core subtask and an approved UI subtask; each follows its domain guide. Neither side may silently redesign the other.
 
+For a new or materially changed UI interaction component, follow the `agy` component preflight and rendered-review workflow in the UI guide. It supplements machine verification and never replaces Human visual authority or Core correctness evidence.
+
 The current execution mode is persisted in `PROGRESS.md` and is one of:
 
 - **AUTONOMOUS_DEVELOPMENT:** forward implementation inside an already authorized product objective. The Agent may implement, test, inspect evidence, fix failures, and select the next finite evidence-backed task. It must not invent product scope, capabilities, Providers, frameworks, or work merely to continue.
