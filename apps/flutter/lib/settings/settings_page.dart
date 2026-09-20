@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -388,6 +389,7 @@ class _SettingsPageState extends State<SettingsPage> {
           controlKey: const ValueKey('settings-theme-selector'),
           icon: Icons.brightness_auto_rounded,
           title: context.l10n.settingsAppearanceCompactLabel,
+          materialDefaults: true,
           current: widget.settings.theme,
           choices: [
             _SettingsChoice(
@@ -427,88 +429,104 @@ class _SettingsPageState extends State<SettingsPage> {
             final status = systemScheme == null
                 ? context.l10n.settingsColorSourceSystemUnavailable
                 : context.l10n.settingsColorSourceSystemAvailable;
-            return ExpansionTile(
-              key: const ValueKey('settings-color-source-selector'),
-              leading: const Icon(Icons.palette_outlined),
-              title: Text(context.l10n.settingsColorSourceLabel),
-              subtitle: Text(
-                _colorSourceSummary(widget.settings.colorSource, context.l10n),
+            return Theme(
+              data: Theme.of(context).copyWith(
+                expansionTileTheme: const ExpansionTileThemeData(),
+                listTileTheme: const ListTileThemeData(),
               ),
-              enabled: !_saving,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Text(
-                      context.l10n.settingsColorSourceBody,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+              child: ExpansionTile(
+                key: const ValueKey('settings-color-source-selector'),
+                leading: const Icon(Icons.palette_outlined),
+                title: Text(context.l10n.settingsColorSourceLabel),
+                subtitle: Text(
+                  _colorSourceSummary(
+                    widget.settings.colorSource,
+                    context.l10n,
+                  ),
+                ),
+                enabled: !_saving,
+                // The surrounding SettingsGroup owns the separator. Keep the
+                // SDK component motion, spacing and states without drawing a
+                // second expanded border over that page-level divider.
+                shape: const Border(),
+                collapsedShape: const Border(),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        context.l10n.settingsColorSourceBody,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                RadioGroup<AppColorSourcePreference>(
-                  groupValue: widget.settings.colorSource,
-                  onChanged: (source) {
-                    if (!_saving && source != null) {
-                      unawaited(
-                        _save(widget.settings.copyWith(colorSource: source)),
-                      );
-                    }
-                  },
-                  child: Column(
-                    children: [
-                      RadioListTile<AppColorSourcePreference>(
-                        key: const ValueKey('settings-color-source-system'),
-                        value: AppColorSourcePreference.system,
-                        title: Text(context.l10n.settingsColorSourceSystem),
-                        subtitle: Text(
-                          context.l10n.settingsColorSourceSystemDescription,
+                  RadioGroup<AppColorSourcePreference>(
+                    groupValue: widget.settings.colorSource,
+                    onChanged: (source) {
+                      if (!_saving && source != null) {
+                        unawaited(
+                          _save(widget.settings.copyWith(colorSource: source)),
+                        );
+                      }
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<AppColorSourcePreference>(
+                          key: const ValueKey('settings-color-source-system'),
+                          value: AppColorSourcePreference.system,
+                          enabled: !_saving,
+                          title: Text(context.l10n.settingsColorSourceSystem),
+                          subtitle: Text(
+                            context.l10n.settingsColorSourceSystemDescription,
+                          ),
                         ),
-                      ),
-                      RadioListTile<AppColorSourcePreference>(
-                        key: const ValueKey('settings-color-source-brand'),
-                        value: AppColorSourcePreference.brand,
-                        title: Text(context.l10n.settingsColorSourceBrand),
-                        subtitle: Text(
-                          context.l10n.settingsColorSourceBrandDescription(
-                            _providerLabel(
-                              widget.settings.musicProvider,
-                              context.l10n,
+                        RadioListTile<AppColorSourcePreference>(
+                          key: const ValueKey('settings-color-source-brand'),
+                          value: AppColorSourcePreference.brand,
+                          enabled: !_saving,
+                          title: Text(context.l10n.settingsColorSourceBrand),
+                          subtitle: Text(
+                            context.l10n.settingsColorSourceBrandDescription(
+                              _providerLabel(
+                                widget.settings.musicProvider,
+                                context.l10n,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
-                  child: Row(
-                    key: ValueKey(
-                      systemScheme == null
-                          ? 'settings-system-colors-unavailable'
-                          : 'settings-system-colors-available',
+                      ],
                     ),
-                    children: [
-                      _ColorSourcePreview(
-                        icon: systemScheme == null
-                            ? Icons.wallpaper_outlined
-                            : Icons.wallpaper_rounded,
-                        background: preview.primaryContainer,
-                        foreground: preview.onPrimaryContainer,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(status)),
-                    ],
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                  child: _SettingsPalettePreview(scheme: preview),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+                    child: Row(
+                      key: ValueKey(
+                        systemScheme == null
+                            ? 'settings-system-colors-unavailable'
+                            : 'settings-system-colors-available',
+                      ),
+                      children: [
+                        _ColorSourcePreview(
+                          icon: systemScheme == null
+                              ? Icons.wallpaper_outlined
+                              : Icons.wallpaper_rounded,
+                          background: preview.primaryContainer,
+                          foreground: preview.onPrimaryContainer,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(status)),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                    child: _SettingsPalettePreview(scheme: preview),
+                  ),
+                ],
+              ),
             );
           },
         ),
@@ -823,6 +841,7 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
     required this.choices,
     required this.onSelected,
     this.enabled = true,
+    this.materialDefaults = false,
     super.key,
   });
 
@@ -833,19 +852,67 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
   final List<_SettingsChoice<T>> choices;
   final ValueChanged<T> onSelected;
   final bool enabled;
+  final bool materialDefaults;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final selected = choices.singleWhere((choice) => choice.value == current);
-      final colors = Theme.of(context).colorScheme;
-      final stacked = constraints.maxWidth < 520;
-      final controlWidth = stacked ? constraints.maxWidth - 36 : 180.0;
+      final theme = Theme.of(context);
+      final colors = theme.colorScheme;
+      final dropdownTheme = materialDefaults
+          ? const DropdownMenuThemeData()
+          : DropdownMenuTheme.of(context);
+      // Theme overrides may contain only colors/font family. TextField merges
+      // those with the localized body style; measure the same effective style.
+      final textStyle = theme.textTheme.bodyLarge!.merge(
+        dropdownTheme.textStyle,
+      );
+      final direction = Directionality.of(context);
+      double textWidth(String text, TextStyle style) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: direction,
+          textScaler: MediaQuery.textScalerOf(context),
+          locale: Localizations.localeOf(context),
+          maxLines: 1,
+        )..layout();
+        final width = painter.width;
+        painter.dispose();
+        return width;
+      }
+
+      final labelWidth = choices.fold<double>(
+        0,
+        (width, choice) => math.max(width, textWidth(choice.label, textStyle)),
+      );
+      final decorationPadding =
+          dropdownTheme.inputDecorationTheme?.contentPadding
+              ?.resolve(direction)
+              .horizontal ??
+          24;
+      // Reserve the standard 48 dp arrow target, its 4 dp inset on each side,
+      // decoration padding and editable caret margin, without shrinking text.
+      final preferredWidth = math.max(
+        180.0,
+        (labelWidth + decorationPadding + kMinInteractiveDimension + 8 + 8)
+            .ceilToDouble(),
+      );
+      final titleWidth = textWidth(
+        title,
+        ListTileTheme.of(context).titleTextStyle ?? theme.textTheme.bodyLarge!,
+      );
+      // ListTile has 18 dp side padding, a 40 dp leading slot and two gaps.
+      final rowWidth = 36 + 40 + 16 + titleWidth + 16 + preferredWidth;
+      final stacked =
+          constraints.maxWidth < 520 || rowWidth > constraints.maxWidth;
+      final controlWidth = stacked ? constraints.maxWidth - 36 : preferredWidth;
       final dropdown = Semantics(
         label: context.l10n.commonSelectedValue(title, selected.label),
         child: DropdownMenu<T>(
           key: controlKey,
           width: controlWidth,
+          maxLines: stacked ? null : 1,
           enabled: enabled,
           initialSelection: current,
           selectOnly: true,
@@ -864,11 +931,20 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
           },
         ),
       );
+      final effectiveDropdown = materialDefaults
+          ? Theme(
+              data: theme.copyWith(
+                dropdownMenuTheme: const DropdownMenuThemeData(),
+                menuTheme: const MenuThemeData(),
+              ),
+              child: dropdown,
+            )
+          : dropdown;
       final tile = ListTile(
         enabled: enabled,
         leading: Icon(icon, color: enabled ? colors.primary : null),
         title: Text(title),
-        trailing: stacked ? null : dropdown,
+        trailing: stacked ? null : effectiveDropdown,
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       );
       if (!stacked) return tile;
@@ -878,7 +954,7 @@ class _SettingsDropdownTile<T> extends StatelessWidget {
           tile,
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-            child: dropdown,
+            child: effectiveDropdown,
           ),
         ],
       );

@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
@@ -17,6 +19,7 @@ import 'package:flutterustmusic/library/user_library_page.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/collection_playback_source.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
@@ -28,8 +31,306 @@ import 'package:flutterustmusic/playback/track_playback_controller.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 void main() {
+  for (final width in [320.0, 360.0, 390.0]) {
+    for (final point in [
+      'cover',
+      'title',
+      'top-identity',
+      'bottom-identity',
+      'left-padding',
+      'right-padding',
+      'above-play',
+      'below-next',
+      'outside-left',
+      'outside-right',
+      'outside-top',
+      'outside-bottom',
+      'corner-outside',
+      'previous',
+      'play',
+      'resume',
+      'next',
+      'queue',
+      'disabled-previous',
+      'disabled-play',
+      'disabled-next',
+      'feedback',
+      'keyboard-open',
+      'keyboard-previous',
+      'keyboard-play',
+      'keyboard-next',
+      'keyboard-queue',
+    ]) {
+      if (point.endsWith('queue') && width < 384) continue;
+      testWidgets('compact capsule regression $width $point', (tester) async {
+        // Font registration persists in this test isolate. Keep it exclusive
+        // to the explicit render run, as for the existing playback renders.
+        if (const bool.fromEnvironment('COMPACT_CAPSULE_REVIEW') &&
+            const String.fromEnvironment('HOME_REVIEW_CJK_FONT').isNotEmpty) {
+          await tester.runAsync(() async {
+            await (FontLoader('Roboto')..addFont(
+                  File(const String.fromEnvironment('HOME_REVIEW_CJK_FONT'))
+                      .readAsBytes()
+                      .then(ByteData.sublistView),
+                ))
+                .load();
+            await (FontLoader('MaterialIcons')
+                  ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf')))
+                .load();
+          });
+        }
+        tester.view.physicalSize = Size(width, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final gateway = _AuditQueue();
+        final sessions = List.generate(3, (_) => _AuditAudioSession());
+        final audio = _FakeAudioEngine(sessions);
+        final pending = Completer<MediaResolutionResult>();
+        final media = _FakeMediaGateway([
+          if (point == 'disabled-play')
+            _PendingMediaOperation(pending.future)
+          else
+            _ImmediateMediaOperation(_success('one')),
+          _ImmediateMediaOperation(_success('two')),
+        ]);
+        final playback = TrackPlaybackController(
+          media,
+          ForegroundPlaybackController(audio),
+        );
+        final queue = QueuePlaybackController(gateway, playback);
+        addTearDown(queue.dispose);
+        final tracks = List.generate(
+          point.startsWith('disabled-') ? 1 : 3,
+          (i) => PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'audit:$i',
+            title: 'Audit $i',
+            artistNames: const ['Artist'],
+            durationSeconds: 180,
+          ),
+        );
+        final load = queue.replaceAndPlay(tracks, tracks.length == 1 ? 0 : 1);
+        if (point != 'disabled-play') await load;
+        if (point == 'resume') await queue.activateCurrent();
+        var opens = 0;
+        final observer = _AuditNavObserver();
+        final boundary = GlobalKey();
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: boundary,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              locale: const Locale('en'),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: MusicMaterialTheme.light(),
+              navigatorObservers: [observer],
+              home: ExpandedNowPlayingNavigation(
+                onOpen: () => opens++,
+                child: Scaffold(
+                  body: Center(
+                    child: NowPlayingBar(
+                      controller: queue,
+                      onSignInAgain: () {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        final rect = tester.getRect(
+          find.byKey(const ValueKey('now-playing-compact-layout')),
+        );
+        final identity = tester.getRect(
+          find.byKey(const ValueKey('now-playing-open-expanded')),
+        );
+        final prev = tester.getRect(
+          find.byKey(const ValueKey('now-playing-previous')),
+        );
+        final play = tester.getRect(
+          find.byKey(const ValueKey('now-playing-primary-action')),
+        );
+        final next = tester.getRect(
+          find.byKey(const ValueKey('now-playing-next')),
+        );
+        final queueButton = find.byTooltip('Show queue');
+        expect(queueButton, width >= 384 ? findsOneWidget : findsNothing);
+        final semanticHandle = tester.ensureSemantics();
+        final primaryNode = tester.getSemantics(
+          find.byKey(const ValueKey('now-playing-open-expanded')),
+        );
+        expect(
+          primaryNode.getSemanticsData().hasAction(SemanticsAction.tap),
+          isTrue,
+        );
+        for (final key in ['previous', 'primary-action', 'next']) {
+          final button = find.byKey(ValueKey('now-playing-$key'));
+          final node = tester.getSemantics(button);
+          expect(node.id, isNot(primaryNode.id));
+          expect(
+            node.getSemanticsData().hasAction(SemanticsAction.tap),
+            tester.widget<IconButton>(button).onPressed != null,
+          );
+        }
+        semanticHandle.dispose();
+        final beforePlays = sessions.fold<int>(0, (n, s) => n + s.plays);
+        final before = [
+          gateway.rewinds,
+          gateway.advances,
+          sessions.fold<int>(0, (n, s) => n + s.pauses),
+          media.requests.length,
+          observer.pushes,
+        ];
+        final Offset tap = switch (point) {
+          'cover' => tester.getCenter(
+            find.byKey(const ValueKey('now-playing-artwork')),
+          ),
+          'title' || 'feedback' => tester.getCenter(
+            find.byKey(const ValueKey('now-playing-title')),
+          ),
+          'top-identity' => Offset(identity.center.dx, rect.top + 2),
+          'bottom-identity' => Offset(identity.center.dx, rect.bottom - 2),
+          'left-padding' => Offset(rect.left + 3, rect.center.dy),
+          'right-padding' => Offset(rect.right - 3, rect.center.dy),
+          'above-play' => Offset(play.center.dx, rect.top + 2),
+          'below-next' => Offset(next.center.dx, rect.bottom - 2),
+          'outside-left' => Offset(rect.left - 2, rect.center.dy),
+          'outside-right' => Offset(rect.right + 2, rect.center.dy),
+          'outside-top' => Offset(rect.center.dx, rect.top - 2),
+          'outside-bottom' => Offset(rect.center.dx, rect.bottom + 2),
+          'corner-outside' => rect.topLeft + const Offset(1, 1),
+          'previous' || 'disabled-previous' => prev.center,
+          'play' || 'resume' || 'disabled-play' => play.center,
+          'next' || 'disabled-next' => next.center,
+          'queue' => tester.getCenter(queueButton),
+          _ when point.startsWith('keyboard-') => Offset.zero,
+          _ => throw StateError(point),
+        };
+        if (point.startsWith('keyboard-')) {
+          final action = switch (point) {
+            'keyboard-open' => find.ancestor(
+              of: find.byKey(const ValueKey('now-playing-open-expanded')),
+              matching: find.byType(InkWell),
+            ),
+            'keyboard-queue' => find.ancestor(
+              of: queueButton,
+              matching: find.byType(IconButton),
+            ),
+            'keyboard-play' => find.byKey(
+              const ValueKey('now-playing-primary-action'),
+            ),
+            _ => find.byKey(ValueKey('now-playing-${point.substring(9)}')),
+          };
+          final focusContext = tester.element(
+            find.descendant(of: action, matching: find.byType(Focus)).first,
+          );
+          for (var i = 0; i < 8; i++) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+            await tester.pump();
+            if (FocusManager.instance.primaryFocus?.context == focusContext) {
+              break;
+            }
+          }
+          expect(
+            FocusManager.instance.primaryFocus?.context,
+            same(focusContext),
+          );
+          await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        } else if (point == 'feedback') {
+          final gesture = await tester.startGesture(tap);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          if (const bool.fromEnvironment('COMPACT_CAPSULE_REVIEW')) {
+            await tester.runAsync(() async {
+              final image =
+                  await (boundary.currentContext!.findRenderObject()
+                          as RenderRepaintBoundary)
+                      .toImage();
+              final bytes = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              await File(
+                '/tmp/fura-targeted-fix-20260920/compact-feedback-$width.png',
+              ).writeAsBytes(bytes!.buffer.asUint8List());
+              image.dispose();
+            });
+          }
+          await gesture.up();
+        } else {
+          await tester.tapAt(tap);
+        }
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 450));
+        final delta = [
+          gateway.rewinds - before[0],
+          gateway.advances - before[1],
+          sessions.fold<int>(0, (n, s) => n + s.pauses) - before[2],
+          media.requests.length - before[3],
+          observer.pushes - before[4],
+        ];
+        debugPrint(
+          'compact capsule regression $width $point: opens=$opens delta[prev,next,pause,resolve,queue]=$delta rect=$rect identity=$identity tap=$tap',
+        );
+        final playDelta =
+            sessions.fold<int>(0, (n, s) => n + s.plays) - beforePlays;
+        if (point == 'disabled-play') {
+          pending.complete(_success('pending'));
+          await load;
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+        final navExpected =
+            [
+              'cover',
+              'title',
+              'top-identity',
+              'bottom-identity',
+              'left-padding',
+              'right-padding',
+              'above-play',
+              'below-next',
+              'feedback',
+              'keyboard-open',
+            ].contains(point)
+            ? 1
+            : 0;
+        expect(
+          opens,
+          navExpected,
+          reason: 'capsule non-controls should open exactly once',
+        );
+        final expected = switch (point) {
+          'previous' || 'keyboard-previous' => [1, 0, 0, 1, 0],
+          'next' || 'keyboard-next' => [0, 1, 0, 1, 0],
+          'play' || 'keyboard-play' => [0, 0, 1, 0, 0],
+          'queue' || 'keyboard-queue' => [0, 0, 0, 0, 1],
+          _ => [0, 0, 0, 0, 0],
+        };
+        expect(delta, expected);
+        debugPrint(
+          'compact capsule regression $point audio.play delta=$playDelta',
+        );
+        expect(
+          playDelta,
+          [
+                'previous',
+                'next',
+                'resume',
+                'keyboard-previous',
+                'keyboard-next',
+              ].contains(point)
+              ? 1
+              : 0,
+        );
+      });
+    }
+  }
   test('playback SnackBar margins bound compact and desktop surfaces', () {
     for (final width in [320.0, 360.0, 390.0]) {
       final margin = playbackSnackBarMargin(
@@ -290,6 +591,7 @@ void main() {
   testWidgets('quality selector persists SQ and reloads the active source', (
     tester,
   ) async {
+    await _prepareQualityNoticeVisualReview(tester);
     final settingsStorage = _MemorySettingsStorage();
     final media = _FakeMediaGateway([
       _ImmediateMediaOperation(_success('standard')),
@@ -332,7 +634,17 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('now-playing-quality-lossless')),
     );
-    await tester.pumpAndSettle();
+    if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
+      await tester.pump();
+      await _captureQualityNoticeFrame(tester, 'light-entry-000ms');
+      await tester.pump(const Duration(milliseconds: 125));
+      await _captureQualityNoticeFrame(tester, 'light-entry-125ms');
+      await tester.pump(const Duration(milliseconds: 125));
+      await _captureQualityNoticeFrame(tester, 'light-entry-250ms');
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pumpAndSettle();
+    }
 
     expect(find.text('SQ'), findsOneWidget);
     expect(find.text('Playing SQ quality.'), findsOneWidget);
@@ -347,7 +659,19 @@ void main() {
     expect(snackBar.behavior, SnackBarBehavior.floating);
     expect(
       snackBar.backgroundColor,
-      Theme.of(noticeContext).colorScheme.surfaceContainerHighest,
+      Theme.of(noticeContext).colorScheme.inverseSurface,
+    );
+    expect(snackBar.elevation, 6);
+    expect(
+      (snackBar.shape! as RoundedRectangleBorder).borderRadius,
+      const BorderRadius.all(Radius.circular(4)),
+    );
+    expect(
+      find.descendant(
+        of: snackBarFinder,
+        matching: find.byIcon(Icons.high_quality_rounded),
+      ),
+      findsNothing,
     );
     expect(tester.getSemantics(notice).flagsCollection.isLiveRegion, isTrue);
     expect(
@@ -365,13 +689,21 @@ void main() {
     if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
       await expectLater(
         find.byType(MusicApp),
-        matchesGoldenFile(Uri.file('/tmp/fura-quality-notice-light.png')),
+        matchesGoldenFile(Uri.file(_qualityNoticeReviewPath('light'))),
       );
     }
 
     await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('now-playing-quality-high')));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text('Playing SQ quality.'),
+      findsOneWidget,
+      reason: 'replacement must use the framework exit instead of removal',
+    );
+    expect(find.text('Playing HQ quality.'), findsNothing);
     await tester.pumpAndSettle();
     expect(find.text('Playing HQ quality.'), findsOneWidget);
     expect(find.text('Playing SQ quality.'), findsNothing);
@@ -399,7 +731,10 @@ void main() {
     );
   });
 
-  testWidgets('quality notice uses the dark tonal surface', (tester) async {
+  testWidgets('quality notice uses the dark Material inverse surface', (
+    tester,
+  ) async {
+    await _prepareQualityNoticeVisualReview(tester);
     final media = _FakeMediaGateway([
       _ImmediateMediaOperation(_success('standard-dark')),
       _ImmediateMediaOperation(
@@ -436,15 +771,182 @@ void main() {
     expect(Theme.of(context).brightness, Brightness.dark);
     expect(
       snackBar.backgroundColor,
-      Theme.of(context).colorScheme.surfaceContainerHighest,
+      Theme.of(context).colorScheme.inverseSurface,
     );
+    expect(snackBar.elevation, 6);
     expect(tester.getSemantics(notice).flagsCollection.isLiveRegion, isTrue);
     if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
       await expectLater(
         find.byType(MusicApp),
-        matchesGoldenFile(Uri.file('/tmp/fura-quality-notice-dark.png')),
+        matchesGoldenFile(Uri.file(_qualityNoticeReviewPath('dark'))),
       );
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'quality feedback preserves unrelated SnackBars and coalesces to latest',
+    (tester) async {
+      final media = _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('standard-notice-queue')),
+        _ImmediateMediaOperation(
+          _qualitySuccess(
+            'lossless-notice-queue',
+            format: PlaybackAudioFormat.flac,
+            quality: PlaybackAudioQuality.lossless,
+          ),
+        ),
+        _ImmediateMediaOperation(
+          _qualitySuccess(
+            'high-notice-queue',
+            format: PlaybackAudioFormat.mp3,
+            quality: PlaybackAudioQuality.high,
+          ),
+        ),
+      ]);
+      await _openDetail(
+        tester,
+        media: media,
+        audio: _FakeAudioEngine([
+          _FakeAudioSession(),
+          _FakeAudioSession(),
+          _FakeAudioSession(),
+        ]),
+        settingsStore: AppSettingsStore(storage: _MemorySettingsStorage()),
+      );
+      await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+      await tester.pumpAndSettle();
+      final pageContext = tester.element(find.byType(UserLibraryPage));
+      final important = ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(
+          key: ValueKey('unrelated-important-snackbar'),
+          duration: Duration(minutes: 1),
+          content: Text('Important account message'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('now-playing-quality-lossless')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Important account message'), findsOneWidget);
+      expect(find.text('Playing SQ quality.'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('now-playing-quality-high')));
+      await tester.pumpAndSettle();
+      expect(find.text('Important account message'), findsOneWidget);
+      expect(find.text('Playing SQ quality.'), findsNothing);
+      expect(find.text('Playing HQ quality.'), findsNothing);
+
+      important.close();
+      await tester.pumpAndSettle();
+      expect(find.text('Important account message'), findsNothing);
+      expect(find.text('Playing SQ quality.'), findsNothing);
+      expect(find.text('Playing HQ quality.'), findsOneWidget);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('quality change while paused preserves paused intent', (
+    tester,
+  ) async {
+    final sessions = [_AuditAudioSession(), _AuditAudioSession()];
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('standard-paused-quality')),
+        _ImmediateMediaOperation(
+          _qualitySuccess(
+            'high-paused-quality',
+            format: PlaybackAudioFormat.mp3,
+            quality: PlaybackAudioQuality.high,
+          ),
+        ),
+      ]),
+      audio: _FakeAudioEngine(sessions),
+      settingsStore: AppSettingsStore(storage: _MemorySettingsStorage()),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-primary-action')));
+    await tester.pumpAndSettle();
+    expect(sessions.first.pauses, 1);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('now-playing-primary-action')),
+        matching: find.byIcon(Icons.play_arrow_rounded),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality-high')));
+    await tester.pumpAndSettle();
+    expect(sessions.last.plays, 1);
+    expect(sessions.last.pauses, 1);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('now-playing-primary-action')),
+        matching: find.byIcon(Icons.play_arrow_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Playing HQ quality.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('quality notice keeps the SDK accessible-navigation behavior', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(
+          accessibleNavigation: true,
+          disableAnimations: true,
+        );
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await _openDetail(
+      tester,
+      media: _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('standard-reduced-motion')),
+        _ImmediateMediaOperation(
+          _qualitySuccess(
+            'high-reduced-motion',
+            format: PlaybackAudioFormat.mp3,
+            quality: PlaybackAudioQuality.high,
+          ),
+        ),
+      ]),
+      audio: _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+      settingsStore: AppSettingsStore(storage: _MemorySettingsStorage()),
+    );
+    await tester.tap(find.byKey(const ValueKey('playlist-track-row-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('now-playing-quality-high')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Playing HQ quality.'), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('playback-transient-notice')))
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+    await tester.pump(const Duration(milliseconds: 1800));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('playback-transient-notice')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -2574,6 +3076,64 @@ Future<void> _loadPlaybackControlReviewFonts(WidgetTester tester) async {
   });
 }
 
+Future<void> _prepareQualityNoticeVisualReview(WidgetTester tester) async {
+  if (!const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) return;
+  const reviewFont = String.fromEnvironment('HOME_REVIEW_CJK_FONT');
+  if (reviewFont.isNotEmpty) {
+    await tester.runAsync(() async {
+      await (FontLoader(
+            'Roboto',
+          )..addFont(File(reviewFont).readAsBytes().then(ByteData.sublistView)))
+          .load();
+      await (FontLoader(
+        'MaterialIcons',
+      )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+    });
+  }
+  final width = double.parse(
+    const String.fromEnvironment(
+      'QUALITY_NOTICE_VISUAL_WIDTH',
+      defaultValue: '1180',
+    ),
+  );
+  final textScale = double.parse(
+    const String.fromEnvironment(
+      'QUALITY_NOTICE_VISUAL_TEXT_SCALE',
+      defaultValue: '1',
+    ),
+  );
+  tester.view.physicalSize = Size(width, 844);
+  tester.view.devicePixelRatio = 1;
+  tester.platformDispatcher.textScaleFactorTestValue = textScale;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+}
+
+String _qualityNoticeReviewPath(String brightness) {
+  final width = double.parse(
+    const String.fromEnvironment(
+      'QUALITY_NOTICE_VISUAL_WIDTH',
+      defaultValue: '1180',
+    ),
+  );
+  final textScale = double.parse(
+    const String.fromEnvironment(
+      'QUALITY_NOTICE_VISUAL_TEXT_SCALE',
+      defaultValue: '1',
+    ),
+  );
+  final scaleLabel = textScale == 1 ? '1x' : '${textScale}x';
+  return '/tmp/fura-md3-default-review-20260920/a-post/'
+      'quality-$brightness-${width.toInt()}-$scaleLabel.png';
+}
+
+Future<void> _captureQualityNoticeFrame(WidgetTester tester, String state) =>
+    expectLater(
+      find.byType(MusicApp),
+      matchesGoldenFile(Uri.file(_qualityNoticeReviewPath(state))),
+    );
+
 String? _nowPlayingTitle(WidgetTester tester) =>
     tester.widget<Text>(find.byKey(const ValueKey('now-playing-title'))).data;
 
@@ -3282,4 +3842,43 @@ class _FakeAudioSession implements ForegroundAudioSession {
   void emitState(ForegroundAudioState state) => _states.add(state);
 
   void emitPosition(int positionMs) => _positions.add(positionMs);
+}
+
+class _AuditQueue extends _WidgetQueueGateway {
+  int rewinds = 0, advances = 0;
+  @override
+  PlaybackQueueResult advance() {
+    advances++;
+    return super.advance();
+  }
+
+  @override
+  PlaybackQueueResult rewind() {
+    rewinds++;
+    return super.rewind();
+  }
+}
+
+class _AuditAudioSession extends _FakeAudioSession {
+  int pauses = 0;
+  int plays = 0;
+  @override
+  Future<void> play() {
+    plays++;
+    return super.play();
+  }
+
+  @override
+  Future<void> pause() {
+    pauses++;
+    return super.pause();
+  }
+}
+
+class _AuditNavObserver extends NavigatorObserver {
+  int pushes = 0;
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    pushes++;
+  }
 }

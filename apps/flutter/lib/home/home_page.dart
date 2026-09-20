@@ -160,7 +160,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _refreshing = false;
   bool _refreshingPlaylists = false;
   bool _foreground = true;
-  DateTime? _spotlightDay;
   String? _spotlightIdentity;
   int _spotlightMotionDirection = 1;
   bool _spotlightAutoPlaying = true;
@@ -322,8 +321,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     widget.onOpenRecommendation(playlist);
   }
 
-  RecommendedPlaylistSummary? _resolveSpotlight() {
-    final playlists = _spotlightCandidates;
+  RecommendedPlaylistSummary? _resolveSpotlight([
+    List<RecommendedPlaylistSummary>? candidates,
+  ]) {
+    final playlists = candidates ?? _spotlightCandidates;
     if (playlists.isEmpty) {
       _spotlightIdentity = null;
       return null;
@@ -333,9 +334,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final selectedIndex = playlists.indexWhere(
       (playlist) => _recommendationIdentity(playlist) == _spotlightIdentity,
     );
-    if (_spotlightDay != day || selectedIndex < 0) {
+    if (selectedIndex < 0) {
       final selected = selectHomeSpotlightForDay(playlists, day);
-      _spotlightDay = day;
       _spotlightIdentity = selected == null
           ? null
           : _recommendationIdentity(selected);
@@ -398,8 +398,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (playlists.length < 2) {
       return;
     }
-    final current = _resolveSpotlight();
-    final currentIndex = current == null ? 0 : playlists.indexOf(current);
+    // Resolve the default and the current identity against this same window;
+    // provider summaries may be newly mapped objects on every getter read.
+    final current = _resolveSpotlight(playlists);
+    if (current == null) return;
+    final currentIndex = playlists.indexWhere(
+      (playlist) =>
+          _recommendationIdentity(playlist) == _recommendationIdentity(current),
+    );
+    if (currentIndex < 0) return;
     final nextIndex = (currentIndex + offset) % playlists.length;
     setState(() {
       _spotlightMotionDirection = offset < 0 ? -1 : 1;

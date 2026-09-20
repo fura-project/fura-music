@@ -7,7 +7,7 @@ import 'dart:ui'
 
 import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart'
-    show ChangeNotifier, Listenable, ValueKey;
+    show ChangeNotifier, Listenable, ValueKey, debugPrint;
 import 'package:flutter/gestures.dart' show PointerHoverEvent, kSecondaryButton;
 import 'package:flutter/material.dart'
     show
@@ -228,6 +228,286 @@ Future<void> _selectLibrarySection(WidgetTester tester, String section) async {
 }
 
 void main() {
+  for (final scenario in [
+    'next',
+    'previous',
+    'timer',
+    'rebuild',
+    'refresh-pending',
+  ]) {
+    testWidgets('official Hero regression $scenario', (tester) async {
+      tester.view.physicalSize = const Size(1440, 960);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final official = _AuditOfficialGateway();
+      final public = _WidgetRecommendedPlaylistGateway(
+        const RecommendedPlaylistPageResult(
+          playlists: [
+            RecommendedPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'catalog:public',
+              title: 'Public fallback',
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(_WaitingSession()),
+          officialPlaylistGateway: official,
+          recommendedPlaylistGateway: public,
+        ),
+      );
+      await tester.pumpAndSettle();
+      String title() => tester
+          .widget<Text>(find.byKey(const ValueKey('home-spotlight-title')))
+          .data!;
+      final before = [official.requests, public.requests.length];
+      final seen = [title()];
+      final source = tester
+          .widget<HomePage>(find.byType(HomePage))
+          .spotlightController;
+
+      if (scenario == 'next' || scenario == 'previous') {
+        for (var i = 0; i < 3; i++) {
+          await tester.tap(find.byKey(ValueKey('home-spotlight-$scenario')));
+          await tester.pumpAndSettle();
+          seen.add(title());
+        }
+      } else if (scenario == 'timer') {
+        for (var i = 0; i < 3; i++) {
+          await tester.pump(const Duration(seconds: 12));
+          await tester.pumpAndSettle();
+          seen.add(title());
+        }
+      } else if (scenario == 'rebuild') {
+        await tester.tap(find.byKey(const ValueKey('home-spotlight-next')));
+        await tester.pumpAndSettle();
+        final selected = title();
+        expect(selected, 'B');
+        tester.view.physicalSize = const Size(1450, 960);
+        await tester.pumpAndSettle();
+        seen.addAll([selected, title()]);
+        expect(title(), selected);
+      } else {
+        official.pending = Completer<OfficialPlaylistPageResult>();
+        final loading = source.load();
+        await tester.pumpAndSettle();
+        seen.add(title());
+        debugPrint(
+          'AUDIT pending source=${source.kind} candidates=${source.candidates.map((p) => p.title).toList()}',
+        );
+        official.pending!.complete(_AuditOfficialGateway.result);
+        await loading;
+        await tester.pumpAndSettle();
+        seen.add(title());
+      }
+      final after = [official.requests, public.requests.length];
+      debugPrint('AUDIT Hero $scenario: $seen requests $before -> $after');
+      await tester.pumpWidget(const SizedBox.shrink());
+      if (scenario != 'refresh-pending') expect(after, before);
+      switch (scenario) {
+        case 'next':
+        case 'timer':
+          expect(seen, ['A', 'B', 'C', 'A']);
+        case 'previous':
+          expect(seen, ['A', 'C', 'B', 'A']);
+        case 'refresh-pending':
+          expect(seen, [
+            'A',
+            'A',
+            'A',
+          ], reason: 'Retain the official candidate while refresh is pending');
+      }
+    });
+  }
+
+  for (final scenario in ['next', 'previous', 'timer', 'rebuild']) {
+    testWidgets('public Hero regression $scenario', (tester) async {
+      tester.view.physicalSize = const Size(1440, 960);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final official = _AuditOfficialGateway()
+        ..value = const OfficialPlaylistPageResult(page: 1, nextPage: 2);
+      final public = _WidgetRecommendedPlaylistGateway(
+        RecommendedPlaylistPageResult(
+          playlists: _AuditOfficialGateway.result.playlists
+              .map((p) => p.toRecommendationSummary())
+              .toList(),
+        ),
+      );
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(_WaitingSession()),
+          officialPlaylistGateway: official,
+          recommendedPlaylistGateway: public,
+        ),
+      );
+      await tester.pumpAndSettle();
+      String title() => tester
+          .widget<Text>(find.byKey(const ValueKey('home-spotlight-title')))
+          .data!;
+      final before = [official.requests, public.requests.length];
+      final seen = [title()];
+
+      if (scenario == 'next' || scenario == 'previous') {
+        for (var i = 0; i < 3; i++) {
+          await tester.tap(find.byKey(ValueKey('home-spotlight-$scenario')));
+          await tester.pumpAndSettle();
+          seen.add(title());
+        }
+      } else if (scenario == 'timer') {
+        for (var i = 0; i < 3; i++) {
+          await tester.pump(const Duration(seconds: 12));
+          await tester.pumpAndSettle();
+          seen.add(title());
+        }
+      } else if (scenario == 'rebuild') {
+        await tester.tap(find.byKey(const ValueKey('home-spotlight-next')));
+        await tester.pumpAndSettle();
+        final selected = title();
+        expect(selected, 'B');
+        tester.view.physicalSize = const Size(1450, 960);
+        await tester.pumpAndSettle();
+        seen.addAll([selected, title()]);
+        expect(title(), selected);
+      }
+      final after = [official.requests, public.requests.length];
+      debugPrint('AUDIT Hero $scenario: $seen requests $before -> $after');
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(after, before);
+      switch (scenario) {
+        case 'next':
+        case 'timer':
+          expect(seen, ['A', 'B', 'C', 'A']);
+        case 'previous':
+          expect(seen, ['A', 'C', 'B', 'A']);
+      }
+    });
+  }
+
+  for (final outcome in ['retained', 'replaced', 'empty', 'failure']) {
+    testWidgets(
+      'official Hero refresh completion $outcome keeps pending identity and label',
+      (tester) async {
+        tester.view.physicalSize = const Size(1440, 960);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final official = _AuditOfficialGateway();
+        final public = _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(
+            playlists: [
+              RecommendedPlaylistSummary(
+                providerId: 'qq-music',
+                opaqueId: 'catalog:public',
+                title: 'Public fallback',
+              ),
+            ],
+          ),
+        );
+        await tester.pumpWidget(
+          MusicApp(
+            bootstrap: _bootstrap,
+            authenticationGateway: _WidgetGateway(_WaitingSession()),
+            officialPlaylistGateway: official,
+            recommendedPlaylistGateway: public,
+          ),
+        );
+        await tester.pumpAndSettle();
+        String title() => tester
+            .widget<Text>(find.byKey(const ValueKey('home-spotlight-title')))
+            .data!;
+        await tester.tap(find.byKey(const ValueKey('home-spotlight-next')));
+        await tester.pumpAndSettle();
+        expect(title(), 'B');
+        final source = tester
+            .widget<HomePage>(find.byType(HomePage))
+            .spotlightController;
+        official.pending = Completer<OfficialPlaylistPageResult>();
+        final loading = source.load();
+        for (var i = 0; i < 3; i++) {
+          await tester.pump(const Duration(milliseconds: 500));
+          await tester.pumpAndSettle();
+          expect(source.refreshing, isTrue);
+          expect(source.kind, HomeSpotlightKind.official);
+          expect(title(), 'B');
+          expect(find.text('OFFICIAL PLAYLIST'), findsOneWidget);
+          expect(find.text('PUBLIC SPOTLIGHT'), findsNothing);
+          expect([official.requests, public.requests.length], [2, 2]);
+        }
+        official.pending!.complete(switch (outcome) {
+          'retained' => _officialWindow(['D', 'B', 'E']),
+          'replaced' => _officialWindow(['D', 'E']),
+          'empty' => _officialWindow([]),
+          _ => const OfficialPlaylistPageResult(
+            failure: OfficialPlaylistFailure.network,
+          ),
+        });
+        await loading;
+        await tester.pumpAndSettle();
+        expect(source.refreshing, isFalse);
+        expect(title(), switch (outcome) {
+          'retained' => 'B',
+          'replaced' => 'D',
+          _ => 'Public fallback',
+        });
+        expect(
+          find.text(
+            outcome == 'retained' || outcome == 'replaced'
+                ? 'OFFICIAL PLAYLIST'
+                : 'PUBLIC SPOTLIGHT',
+          ),
+          findsOneWidget,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+  for (final ids in [
+    <String>[],
+    ['Only'],
+  ]) {
+    testWidgets(
+      'official Hero ${ids.length} candidates stays safe without requests',
+      (tester) async {
+        final official = _AuditOfficialGateway()..value = _officialWindow(ids);
+        final public = _WidgetRecommendedPlaylistGateway(
+          const RecommendedPlaylistPageResult(),
+        );
+        await tester.pumpWidget(
+          MusicApp(
+            bootstrap: _bootstrap,
+            authenticationGateway: _WidgetGateway(_WaitingSession()),
+            officialPlaylistGateway: official,
+            recommendedPlaylistGateway: public,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final before = [official.requests, public.requests.length];
+        for (final key in ['home-spotlight-next', 'home-spotlight-previous']) {
+          final button = find.byKey(ValueKey(key));
+          if (button.evaluate().isNotEmpty) await tester.tap(button);
+        }
+        await tester.pump(const Duration(seconds: 36));
+        await tester.pumpAndSettle();
+        expect([official.requests, public.requests.length], before);
+        final title = find.byKey(const ValueKey('home-spotlight-title'));
+        if (ids.isEmpty) {
+          expect(title, findsNothing);
+        } else {
+          expect(tester.widget<Text>(title).data, 'Only');
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
   testWidgets(
     'recent plays retains transient refresh data and clears rejected account data',
     (tester) async {
@@ -12566,3 +12846,63 @@ class _ScriptedRecentPlaysGateway implements RecentPlaysGateway {
     required int size,
   }) => _WidgetDetailOperation(results.removeAt(0));
 }
+
+class _AuditOfficialGateway implements OfficialPlaylistGateway {
+  OfficialPlaylistPageResult value = result;
+  int requests = 0;
+  Completer<OfficialPlaylistPageResult>? pending;
+  static const result = OfficialPlaylistPageResult(
+    page: 1,
+    nextPage: 2,
+    total: 3,
+    playlists: [
+      OfficialPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'catalog:A',
+        title: 'A',
+      ),
+      OfficialPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'catalog:B',
+        title: 'B',
+      ),
+      OfficialPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'catalog:C',
+        title: 'C',
+      ),
+    ],
+  );
+  @override
+  OfficialPlaylistPageLoadOperation beginLoad({
+    required int page,
+    required int size,
+  }) {
+    requests++;
+    return _AuditOfficialOperation(pending?.future ?? Future.value(value));
+  }
+}
+
+class _AuditOfficialOperation implements OfficialPlaylistPageLoadOperation {
+  _AuditOfficialOperation(this.future);
+  final Future<OfficialPlaylistPageResult> future;
+  @override
+  bool cancel() => true;
+  @override
+  Future<OfficialPlaylistPageResult> run() => future;
+}
+
+OfficialPlaylistPageResult _officialWindow(List<String> ids) =>
+    OfficialPlaylistPageResult(
+      page: 1,
+      nextPage: 2,
+      total: ids.length,
+      playlists: [
+        for (final id in ids)
+          OfficialPlaylistSummary(
+            providerId: 'qq-music',
+            opaqueId: 'catalog:$id',
+            title: id,
+          ),
+      ],
+    );

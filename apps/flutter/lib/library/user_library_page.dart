@@ -599,6 +599,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final Map<String, CollectionDetailActions> _collectionShellActions = {};
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>?
+  _playbackNoticeController;
+  String? _pendingPlaybackNotice;
+  bool _playbackNoticeVisible = false;
 
   String get _providerDisplayName => builtInProviderDisplayName(
     widget.settings.musicProvider.providerId,
@@ -1283,7 +1287,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     if (!mounted) return;
     if (result != AppSettingsWriteResult.saved) {
-      _showPlaybackNotice(context.l10n.libraryQualitySaveFailure, error: true);
+      _showPlaybackNotice(context.l10n.libraryQualitySaveFailure);
       return;
     }
 
@@ -1295,7 +1299,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
   }
 
-  void _showPlaybackNotice(String message, {bool error = false}) {
+  void _showPlaybackNotice(String message) {
+    _pendingPlaybackNotice = message;
+    if (_playbackNoticeController != null) {
+      if (_playbackNoticeVisible) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+      return;
+    }
+    _presentPendingPlaybackNotice();
+  }
+
+  void _presentPendingPlaybackNotice() {
+    final message = _pendingPlaybackNotice;
+    if (!mounted || message == null) return;
+    _pendingPlaybackNotice = null;
     final routes = _navigation.routes;
     final expandedNowPlayingOpen =
         routes.isNotEmpty && routes.last is ExpandedNowPlayingLocalRoute;
@@ -1304,54 +1322,65 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         : routes;
     final settingsOpen =
         retainedRoutes.isNotEmpty && retainedRoutes.last is SettingsLocalRoute;
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..removeCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          key: const ValueKey('playback-quality-snackbar'),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 1800),
-          margin: playbackSnackBarMargin(
-            viewportWidth: MediaQuery.sizeOf(context).width,
-            bottomSafeArea: MediaQuery.paddingOf(context).bottom,
-            playerPresent: _queuePlaybackController.current != null,
-            settingsOpen: settingsOpen,
-            expandedNowPlayingOpen: expandedNowPlayingOpen,
-          ),
-          backgroundColor: error
-              ? colors.errorContainer
-              : colors.surfaceContainerHighest,
-          content: Semantics(
-            key: const ValueKey('playback-transient-notice'),
-            liveRegion: true,
-            label: message,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  error
-                      ? Icons.error_outline_rounded
-                      : Icons.high_quality_rounded,
-                  size: 20,
-                  color: error ? colors.onErrorContainer : colors.primary,
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: error ? colors.onErrorContainer : colors.onSurface,
-                    ),
-                  ),
-                ),
-              ],
+    late final ScaffoldFeatureController<SnackBar, SnackBarClosedReason>
+    controller;
+    controller = messenger.showSnackBar(
+      SnackBar(
+        key: const ValueKey('playback-quality-snackbar'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1800),
+        margin: playbackSnackBarMargin(
+          viewportWidth: MediaQuery.sizeOf(context).width,
+          bottomSafeArea: MediaQuery.paddingOf(context).bottom,
+          playerPresent: _queuePlaybackController.current != null,
+          settingsOpen: settingsOpen,
+          expandedNowPlayingOpen: expandedNowPlayingOpen,
+        ),
+        // The app theme intentionally styles other SnackBars. These values are
+        // the Flutter 3.47.1 Material 3 defaults, scoped to playback feedback.
+        backgroundColor: colors.inverseSurface,
+        elevation: 6,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(4)),
+        ),
+        onVisible: () {
+          if (!mounted || !identical(_playbackNoticeController, controller)) {
+            return;
+          }
+          _playbackNoticeVisible = true;
+          if (_pendingPlaybackNotice != null) {
+            messenger.hideCurrentSnackBar();
+          }
+        },
+        content: Semantics(
+          key: const ValueKey('playback-transient-notice'),
+          liveRegion: true,
+          label: message,
+          child: Text(
+            message,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onInverseSurface,
             ),
           ),
         ),
-      );
+      ),
+    );
+    _playbackNoticeController = controller;
+    unawaited(
+      controller.closed.then((_) {
+        if (!mounted || !identical(_playbackNoticeController, controller)) {
+          return;
+        }
+        _playbackNoticeController = null;
+        _playbackNoticeVisible = false;
+        if (_pendingPlaybackNotice != null) {
+          _presentPendingPlaybackNotice();
+        }
+      }),
+    );
   }
 
   Future<bool> _changeLyricAuxiliaryMode(LyricAuxiliaryMode mode) async {

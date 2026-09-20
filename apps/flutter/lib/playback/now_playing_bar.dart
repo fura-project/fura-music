@@ -258,70 +258,76 @@ class _CompactNowPlayingBar extends StatelessWidget {
                             track.title,
                           ),
                           onTap: onOpenExpanded,
-                          child: InkWell(
-                            onTap: onOpenExpanded,
-                            excludeFromSemantics: true,
-                            child: identity,
-                          ),
+                          child: identity,
                         ),
                       );
                     },
                   ),
                 ),
-                IconButton(
-                  key: const ValueKey('now-playing-previous'),
-                  tooltip: context.l10n.playbackPrevious,
-                  onPressed: !authenticationFailure && controller.hasPrevious
-                      ? () => unawaited(controller.rewind())
-                      : null,
-                  constraints: const BoxConstraints.tightFor(
-                    width: controlExtent,
-                    height: controlExtent,
-                  ),
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.skip_previous_rounded),
-                ),
-                if (authenticationFailure)
-                  IconButton.filled(
-                    key: const ValueKey('now-playing-sign-in-again'),
-                    tooltip: context.l10n.playbackSignIn,
-                    onPressed: onSignInAgain,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 42,
-                      height: 42,
-                    ),
-                    icon: const Icon(Icons.login_rounded),
-                  )
-                else
-                  IconButton.filled(
-                    key: const ValueKey('now-playing-primary-action'),
-                    tooltip: _primaryTooltip(context.l10n, playback.stage),
-                    onPressed: playback.canActivate
-                        ? () => unawaited(controller.activateCurrent())
+                _CompactControlHitRegion(
+                  child: IconButton(
+                    key: const ValueKey('now-playing-previous'),
+                    tooltip: context.l10n.playbackPrevious,
+                    onPressed: !authenticationFailure && controller.hasPrevious
+                        ? () => unawaited(controller.rewind())
                         : null,
                     constraints: const BoxConstraints.tightFor(
-                      width: 42,
-                      height: 42,
+                      width: controlExtent,
+                      height: controlExtent,
                     ),
-                    icon: Icon(_primaryIcon(playback.stage)),
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.skip_previous_rounded),
                   ),
-                IconButton(
-                  key: const ValueKey('now-playing-next'),
-                  tooltip: context.l10n.playbackNext,
-                  onPressed: !authenticationFailure && controller.hasNext
-                      ? () => unawaited(controller.advance())
-                      : null,
-                  constraints: const BoxConstraints.tightFor(
-                    width: controlExtent,
-                    height: controlExtent,
+                ),
+                if (authenticationFailure)
+                  _CompactControlHitRegion(
+                    child: IconButton.filled(
+                      key: const ValueKey('now-playing-sign-in-again'),
+                      tooltip: context.l10n.playbackSignIn,
+                      onPressed: onSignInAgain,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 42,
+                        height: 42,
+                      ),
+                      icon: const Icon(Icons.login_rounded),
+                    ),
+                  )
+                else
+                  _CompactControlHitRegion(
+                    child: IconButton.filled(
+                      key: const ValueKey('now-playing-primary-action'),
+                      tooltip: _primaryTooltip(context.l10n, playback.stage),
+                      onPressed: playback.canActivate
+                          ? () => unawaited(controller.activateCurrent())
+                          : null,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 42,
+                        height: 42,
+                      ),
+                      icon: Icon(_primaryIcon(playback.stage)),
+                    ),
                   ),
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.skip_next_rounded),
+                _CompactControlHitRegion(
+                  child: IconButton(
+                    key: const ValueKey('now-playing-next'),
+                    tooltip: context.l10n.playbackNext,
+                    onPressed: !authenticationFailure && controller.hasNext
+                        ? () => unawaited(controller.advance())
+                        : null,
+                    constraints: const BoxConstraints.tightFor(
+                      width: controlExtent,
+                      height: controlExtent,
+                    ),
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.skip_next_rounded),
+                  ),
                 ),
                 if (showQueue)
-                  _QueueButton(
-                    controller: controller,
-                    dimension: controlExtent,
+                  _CompactControlHitRegion(
+                    child: _QueueButton(
+                      controller: controller,
+                      dimension: controlExtent,
+                    ),
                   ),
               ],
             ),
@@ -342,11 +348,34 @@ class _CompactNowPlayingBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(28),
           ),
           clipBehavior: Clip.antiAlias,
-          child: row,
+          child: onOpenExpanded == null
+              ? row
+              : InkWell(
+                  onTap: onOpenExpanded,
+                  excludeFromSemantics: true,
+                  borderRadius: BorderRadius.circular(28),
+                  child: row,
+                ),
         ),
       ),
     );
   }
+}
+
+// Even a disabled button owns its pointer region. Enabled standard buttons
+// win the inner gesture arena; the fallback only consumes disabled-region taps.
+class _CompactControlHitRegion extends StatelessWidget {
+  const _CompactControlHitRegion({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    excludeFromSemantics: true,
+    onTap: () {},
+    child: child,
+  );
 }
 
 class _DesktopNowPlayingLayout extends StatelessWidget {

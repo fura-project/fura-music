@@ -141,6 +141,193 @@ void main() {
       expect(tester.takeException(), isNull);
     }
   });
+
+  testWidgets('only the theme selector restores the SDK component defaults', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1180, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const _SettingsHarness());
+    await tester.pumpAndSettle();
+    final themeSelector = find.byKey(const ValueKey('settings-theme-selector'));
+    final themeSelectorContext = tester.element(themeSelector);
+    expect(
+      DropdownMenuTheme.of(themeSelectorContext).inputDecorationTheme,
+      isNull,
+    );
+    expect(DropdownMenuTheme.of(themeSelectorContext).menuStyle, isNull);
+    expect(MenuTheme.of(themeSelectorContext).style, isNull);
+    final decoration = tester
+        .widget<InputDecorator>(
+          find.descendant(
+            of: themeSelector,
+            matching: find.byType(InputDecorator),
+          ),
+        )
+        .decoration;
+    expect(decoration.filled, isFalse);
+    expect(
+      (decoration.border! as OutlineInputBorder).borderRadius,
+      const BorderRadius.all(Radius.circular(4)),
+    );
+
+    await tester.pumpWidget(
+      const _SettingsHarness(section: SettingsSection.playback),
+    );
+    await tester.pumpAndSettle();
+    final qualitySelector = find.byKey(
+      const ValueKey('settings-quality-selector'),
+    );
+    final inheritedProjectTheme = DropdownMenuTheme.of(
+      tester.element(qualitySelector),
+    );
+    expect(inheritedProjectTheme.inputDecorationTheme?.filled, isTrue);
+    expect(inheritedProjectTheme.menuStyle, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final reducedMotion in [false, true]) {
+    testWidgets(
+      'theme selector keeps the SDK menu motion at reducedMotion=$reducedMotion',
+      (tester) async {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            FakeAccessibilityFeatures(disableAnimations: reducedMotion);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        tester.view.physicalSize = const Size(1180, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await tester.pumpWidget(const _SettingsHarness());
+        await tester.pumpAndSettle();
+        final selector = find.byKey(const ValueKey('settings-theme-selector'));
+        final menuAnchor = tester.widget<MenuAnchor>(
+          find.descendant(of: selector, matching: find.byType(MenuAnchor)),
+        );
+
+        // Flutter 3.47.1's DropdownMenu does not opt MenuAnchor into its
+        // optional animation. Opening and closing therefore complete in the
+        // same frame in both normal and reduced-motion modes; Fura must not
+        // add a second transition and call it the platform default.
+        expect(menuAnchor.animated, isFalse);
+        await tester.tap(selector);
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('settings-theme-light')).hitTestable(),
+          findsOneWidget,
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('settings-theme-light')).hitTestable(),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('only the color source expansion restores SDK list defaults', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1180, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const _SettingsHarness());
+    await tester.pumpAndSettle();
+    final selector = find.byKey(
+      const ValueKey('settings-color-source-selector'),
+    );
+    final selectorContext = tester.element(selector);
+    final expansionTheme = ExpansionTileTheme.of(selectorContext);
+    final listTheme = ListTileTheme.of(selectorContext);
+    expect(expansionTheme.tilePadding, isNull);
+    expect(expansionTheme.childrenPadding, isNull);
+    expect(expansionTheme.iconColor, isNull);
+    expect(expansionTheme.collapsedIconColor, isNull);
+    expect(expansionTheme.expansionAnimationStyle, isNull);
+    expect(listTheme.shape, isNull);
+    expect(listTheme.selectedColor, isNull);
+    expect(listTheme.selectedTileColor, isNull);
+
+    final expansion = tester.widget<ExpansionTile>(selector);
+    expect(expansion.shape, const Border());
+    expect(expansion.collapsedShape, const Border());
+    expect(expansion.expansionAnimationStyle, isNull);
+
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+    final systemOption = find.byKey(
+      const ValueKey('settings-color-source-system'),
+    );
+    expect(systemOption, findsOneWidget);
+    expect(ListTileTheme.of(tester.element(systemOption)).shape, isNull);
+    expect(
+      tester
+          .widget<RadioListTile<AppColorSourcePreference>>(systemOption)
+          .enabled,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final reducedMotion in [false, true]) {
+    testWidgets(
+      'color source keeps SDK expansion motion at reducedMotion=$reducedMotion',
+      (tester) async {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            FakeAccessibilityFeatures(disableAnimations: reducedMotion);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        tester.view.physicalSize = const Size(1180, 1100);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await tester.pumpWidget(const _SettingsHarness());
+        await tester.pumpAndSettle();
+        final selector = find.byKey(
+          const ValueKey('settings-color-source-selector'),
+        );
+        final expansion = tester.widget<ExpansionTile>(selector);
+        expect(expansion.expansionAnimationStyle, isNull);
+        final closedHeight = tester.getSize(selector).height;
+        Future<void> tapHeader() =>
+            tester.tapAt(tester.getTopLeft(selector) + const Offset(48, 32));
+
+        await tapHeader();
+        await tester.pump();
+        expect(tester.getSize(selector).height, closeTo(closedHeight, 0.01));
+        final halfDuration = reducedMotion
+            ? const Duration(milliseconds: 5)
+            : const Duration(milliseconds: 100);
+        await tester.pump(halfDuration);
+        final openingHeight = tester.getSize(selector).height;
+        expect(openingHeight, greaterThan(closedHeight));
+        await tester.pump(halfDuration);
+        final expandedHeight = tester.getSize(selector).height;
+        expect(expandedHeight, greaterThan(openingHeight));
+
+        await tapHeader();
+        await tester.pump();
+        expect(tester.getSize(selector).height, closeTo(expandedHeight, 0.01));
+        await tester.pump(halfDuration);
+        final closingHeight = tester.getSize(selector).height;
+        expect(closingHeight, lessThan(expandedHeight));
+        await tester.pump(halfDuration);
+        expect(tester.getSize(selector).height, closeTo(closedHeight, 0.01));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
 
 class _SettingsHarness extends StatefulWidget {

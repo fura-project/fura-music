@@ -25,6 +25,8 @@ class HomeSpotlightController extends ChangeNotifier {
   final RecommendedPlaylistController _publicRecommendations;
   bool _disposed = false;
 
+  bool get refreshing => _official.stage == OfficialPlaylistStage.refreshing;
+
   HomeSpotlightKind get kind => _officialCandidates.isNotEmpty
       ? HomeSpotlightKind.official
       : HomeSpotlightKind.publicFallback;
@@ -60,6 +62,7 @@ class HomeSpotlightController extends ChangeNotifier {
   );
 
   Future<void> load() async {
+    if (_disposed) return;
     await Future.wait([_official.load(), _publicRecommendations.load()]);
   }
 

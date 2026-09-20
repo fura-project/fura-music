@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/home/official_playlist_gateway.dart';
 
-enum OfficialPlaylistStage { loading, content, empty, error }
+enum OfficialPlaylistStage { loading, refreshing, content, empty, error }
 
 class OfficialPlaylistController extends ChangeNotifier {
   OfficialPlaylistController(this._gateway);
@@ -28,6 +28,7 @@ class OfficialPlaylistController extends ChangeNotifier {
       _stage == OfficialPlaylistStage.error && _isRetryable(_failure);
 
   Future<void> load() async {
+    if (_disposed) return;
     final generation = ++_generation;
     _operation?.cancel();
     OfficialPlaylistPageLoadOperation operation;
@@ -42,10 +43,12 @@ class OfficialPlaylistController extends ChangeNotifier {
       return;
     }
     _operation = operation;
-    _playlists = const [];
     _failure = null;
-    _omittedPlaylistCount = 0;
-    _stage = OfficialPlaylistStage.loading;
+    // Only the pending interval retains the last successful window. Final
+    // empty/error results still follow the existing public-fallback policy.
+    _stage = _playlists.isEmpty
+        ? OfficialPlaylistStage.loading
+        : OfficialPlaylistStage.refreshing;
     _notify();
 
     final result = await operation.run();
@@ -59,6 +62,8 @@ class OfficialPlaylistController extends ChangeNotifier {
           ? OfficialPlaylistStage.empty
           : OfficialPlaylistStage.content;
     } else {
+      _playlists = const [];
+      _omittedPlaylistCount = 0;
       _failure = result.failure ?? OfficialPlaylistFailure.invalidResponse;
       _stage = OfficialPlaylistStage.error;
     }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_controller.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
@@ -6,6 +8,78 @@ import 'package:flutterustmusic/home/official_playlist_controller.dart';
 import 'package:flutterustmusic/home/official_playlist_gateway.dart';
 
 void main() {
+  test('newer official refresh wins and late cancelled results cannot restore old data', () async {
+    final gateway = _PendingOfficialGateway();
+    final official = OfficialPlaylistController(gateway);
+    final public = RecommendedPlaylistController(
+      _PublicGateway(const RecommendedPlaylistPageResult()),
+    );
+    final source = HomeSpotlightController(official, public);
+    addTearDown(() {
+      source.dispose();
+      official.dispose();
+      public.dispose();
+    });
+    final first = source.load();
+    expect(official.stage, OfficialPlaylistStage.loading);
+    expect(source.candidates, isEmpty);
+    gateway.operations[0].completion.complete(_window('A'));
+    await first;
+    final old = source.load();
+    expect(source.refreshing, isTrue);
+    expect(source.candidates.single.opaqueId, 'catalog:A');
+    final newer = source.load();
+    expect(gateway.operations[1].cancellations, 1);
+    expect(source.candidates.single.opaqueId, 'catalog:A');
+    gateway.operations[2].completion.complete(_window('C'));
+    await newer;
+    expect(source.refreshing, isFalse);
+    expect(source.candidates.single.opaqueId, 'catalog:C');
+    gateway.operations[1].completion.complete(_window('B'));
+    await old;
+    expect(source.candidates.single.opaqueId, 'catalog:C');
+    expect(official.stage, OfficialPlaylistStage.content);
+  });
+
+  test(
+    'disposed source does not carry its pending snapshot into a new context',
+    () async {
+      final gateway = _PendingOfficialGateway();
+      final oldOfficial = OfficialPlaylistController(gateway);
+      final oldPublic = RecommendedPlaylistController(
+        _PublicGateway(const RecommendedPlaylistPageResult()),
+      );
+      final oldSource = HomeSpotlightController(oldOfficial, oldPublic);
+      final first = oldSource.load();
+      gateway.operations[0].completion.complete(_window('old-account'));
+      await first;
+      final pending = oldSource.load();
+      expect(oldSource.refreshing, isTrue);
+      oldSource.dispose();
+      oldOfficial.dispose();
+      oldPublic.dispose();
+      expect(gateway.operations[1].cancellations, 1);
+      await oldSource.load();
+      await oldOfficial.load();
+      expect(gateway.operations, hasLength(2));
+      final newOfficial = OfficialPlaylistController(_PendingOfficialGateway());
+      final newPublic = RecommendedPlaylistController(
+        _PublicGateway(const RecommendedPlaylistPageResult()),
+      );
+      final newSource = HomeSpotlightController(newOfficial, newPublic);
+      addTearDown(() {
+        newSource.dispose();
+        newOfficial.dispose();
+        newPublic.dispose();
+      });
+      expect(newSource.candidates, isEmpty);
+      gateway.operations[1].completion.complete(_window('late-old-account'));
+      await pending;
+      expect(newSource.candidates, isEmpty);
+      expect(newSource.refreshing, isFalse);
+    },
+  );
+
   test(
     'official source wins without conflating the public recommendation feed',
     () async {
@@ -219,3 +293,43 @@ class _PublicOperation implements RecommendedPlaylistPageLoadOperation {
   @override
   Future<RecommendedPlaylistPageResult> run() async => result;
 }
+
+class _PendingOfficialGateway implements OfficialPlaylistGateway {
+  final operations = <_PendingOfficialOperation>[];
+
+  @override
+  OfficialPlaylistPageLoadOperation beginLoad({
+    required int page,
+    required int size,
+  }) {
+    final operation = _PendingOfficialOperation();
+    operations.add(operation);
+    return operation;
+  }
+}
+
+class _PendingOfficialOperation implements OfficialPlaylistPageLoadOperation {
+  final completion = Completer<OfficialPlaylistPageResult>();
+  int cancellations = 0;
+  @override
+  bool cancel() {
+    cancellations++;
+    return true;
+  }
+
+  @override
+  Future<OfficialPlaylistPageResult> run() => completion.future;
+}
+
+OfficialPlaylistPageResult _window(String id) => OfficialPlaylistPageResult(
+  page: 1,
+  nextPage: 2,
+  total: 1,
+  playlists: [
+    OfficialPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'catalog:$id',
+      title: id,
+    ),
+  ],
+);
