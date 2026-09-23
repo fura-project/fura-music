@@ -55,22 +55,27 @@ multiarch_lib="$appdir/usr/lib/x86_64-linux-gnu"
 : > "$report_directory/APPIMAGE_ELF_DEPENDENCIES.txt"
 : > "$report_directory/APPIMAGE_ELF_VERSION_REQUIREMENTS.txt"
 elf_count=0
+runtime_search_path="$app_lib:$multiarch_lib:$portable_lib"
 while IFS= read -r -d '' candidate; do
   if ! readelf -h "$candidate" >/dev/null 2>&1; then
     continue
   fi
   elf_count=$((elf_count + 1))
   relative=${candidate#"$appdir"/}
+  candidate_report="$report_directory/.elf-$elf_count.txt"
   {
     printf '\n===== %s =====\n' "$relative"
-    file "$candidate"
-    readelf -d "$candidate" | grep -E 'NEEDED|RPATH|RUNPATH' || true
-    LD_LIBRARY_PATH="$app_lib:$multiarch_lib:$portable_lib" ldd "$candidate" || true
   } >> "$report_directory/APPIMAGE_ELF_DEPENDENCIES.txt"
-  if LD_LIBRARY_PATH="$app_lib:$multiarch_lib:$portable_lib" ldd "$candidate" 2>&1 | \
-    grep -q 'not found'; then
+  if ! audit_elf_dependencies \
+    "$candidate" "$appdir" "$runtime_search_path" "$candidate_report"; then
+    cat "$candidate_report" \
+      >> "$report_directory/APPIMAGE_ELF_DEPENDENCIES.txt"
+    cat "$candidate_report" >&2
+    unlink -- "$candidate_report"
     die "AppImage contains an unresolved shared library in $relative"
   fi
+  cat "$candidate_report" >> "$report_directory/APPIMAGE_ELF_DEPENDENCIES.txt"
+  unlink -- "$candidate_report"
   dynamic_paths=$(readelf -d "$candidate" | grep -E 'RPATH|RUNPATH' || true)
   if printf '%s\n' "$dynamic_paths" | \
     grep -Eq '/home/|/Users/|/__w/|/github/workspace|/runner/work/'; then
@@ -98,4 +103,4 @@ test "$elf_count" -gt 0 || die 'AppImage contains no ELF files'
 } > "$report_directory/APPIMAGE_AUDIT_SUMMARY.txt"
 
 "$script_dir/audit_bundle.sh" "$appdir/usr/lib/flutterustmusic" \
-  "$report_directory/bundle"
+  "$report_directory/bundle" "$runtime_search_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

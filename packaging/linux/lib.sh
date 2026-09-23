@@ -42,6 +42,122 @@ verify_elf_needed_dependency() {
     die "ELF does not declare required dependency $soname: $elf_file"
 }
 
+elf_needed_libraries() {
+  local elf_file=$1
+  require_file "$elf_file"
+  require_command readelf
+  readelf -d -- "$elf_file" | \
+    sed -nE 's/.*Shared library: \[([^]]+)\].*/\1/p'
+}
+
+elf_dynamic_search_paths() {
+  local elf_file=$1
+  require_file "$elf_file"
+  require_command readelf
+  readelf -d -- "$elf_file" | \
+    sed -nE 's/.*Library (rpath|runpath): \[([^]]*)\].*/\2/p'
+}
+
+resolve_elf_dependency() {
+  local elf_file=$1
+  local soname=$2
+  local bundle_root=$3
+  local runtime_search_path=$4
+  local origin
+  local dynamic_path
+  local combined_search_path=$runtime_search_path
+  local directory
+  local candidate
+  local resolved
+  local bundle_root_path
+  local cache
+
+  origin=$(cd -- "$(dirname -- "$elf_file")" && pwd -P)
+  bundle_root_path=$(readlink -f -- "$bundle_root")
+  while IFS= read -r dynamic_path; do
+    test -n "$dynamic_path" || continue
+    combined_search_path="${combined_search_path:+$combined_search_path:}$dynamic_path"
+  done < <(elf_dynamic_search_paths "$elf_file")
+
+  while IFS= read -r directory; do
+    test -n "$directory" || continue
+    # The loader, not this shell, owns the literal ORIGIN token.
+    # shellcheck disable=SC2016
+    directory=${directory//'${ORIGIN}'/$origin}
+    directory=${directory//\$ORIGIN/$origin}
+    case "$directory" in
+      /*) ;;
+      *) directory="$origin/$directory" ;;
+    esac
+    candidate="$directory/$soname"
+    test -e "$candidate" || continue
+    resolved=$(readlink -f -- "$candidate")
+    case "$resolved" in
+      "$bundle_root_path"/*)
+        printf 'bundled\t%s\n' "${resolved#"$bundle_root_path"/}"
+        return 0
+        ;;
+    esac
+  done < <(printf '%s\n' "$combined_search_path" | tr ':' '\n')
+
+  require_command ldconfig
+  if cache=$(ldconfig -p 2>/dev/null); then
+    resolved=$(awk -v soname="$soname" \
+      '$1 == soname && !found { print $NF; found=1 }' <<< "$cache")
+    if test -n "$resolved" && test -e "$resolved"; then
+      printf 'system-base\t%s\n' "$resolved"
+      return 0
+    fi
+  fi
+
+  printf 'missing\t-\n'
+  return 1
+}
+
+audit_elf_dependencies() {
+  local elf_file=$1
+  local bundle_root=$2
+  local runtime_search_path=$3
+  local report_file=$4
+  local soname
+  local resolution
+  local resolution_status
+  local resolution_path
+  local missing=0
+
+  require_file "$elf_file"
+  require_directory "$bundle_root"
+  require_command file
+  require_command readelf
+  require_command stat
+
+  {
+    printf 'file='
+    file -b -- "$elf_file"
+    printf 'mode=%s\n' "$(stat -c '%a' -- "$elf_file")"
+    printf 'dynamic_section:\n'
+    readelf -d -- "$elf_file" | grep -E 'NEEDED|RPATH|RUNPATH' || true
+    printf 'resolution:\n'
+  } > "$report_file"
+
+  while IFS= read -r soname; do
+    test -n "$soname" || continue
+    if resolution=$(resolve_elf_dependency \
+      "$elf_file" "$soname" "$bundle_root" "$runtime_search_path"); then
+      resolution_status=${resolution%%$'\t'*}
+      resolution_path=${resolution#*$'\t'}
+    else
+      resolution_status=missing
+      resolution_path=-
+      missing=1
+    fi
+    printf 'NEEDED %s -> %s:%s\n' \
+      "$soname" "$resolution_status" "$resolution_path" >> "$report_file"
+  done < <(elf_needed_libraries "$elf_file")
+
+  test "$missing" -eq 0
+}
+
 require_runtime_library() {
   local soname=$1
   local directory

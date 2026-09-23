@@ -52,6 +52,11 @@ copy_package_runtime_paths libgstreamer1.0-0 \
   '/gstreamer-1\.0/.*\.so(\.|$)|/gstreamer1\.0/.*/gst-plugin-scanner$'
 copy_package_runtime_paths gstreamer1.0-plugins-base '/gstreamer-1\.0/.*\.so$'
 copy_package_runtime_paths gstreamer1.0-plugins-good '/gstreamer-1\.0/.*\.so$'
+# linuxdeploy's system-library exclusion list omits HarfBuzz even though the
+# bundled Ubuntu libpangoft2 has a direct DT_NEEDED edge to libharfbuzz.so.0.
+# Carry that exact runtime edge so clean-room targets do not need a desktop
+# Pango installation merely to load the bundled library.
+copy_package_runtime_paths libharfbuzz0b '/libharfbuzz\.so\.0(\.|$)'
 webkit_package=$(dpkg-query -W -f='${binary:Package}\n' 'libwebkit2gtk-4.1-0*' 2>/dev/null | head -n 1)
 test -n "$webkit_package" || die 'unable to resolve the Ubuntu WebKitGTK runtime package'
 copy_package_runtime_paths "$webkit_package" '/webkit(2)?gtk-4\.1/|/webkit2gtk-4\.1/'

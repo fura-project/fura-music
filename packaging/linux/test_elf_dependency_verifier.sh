@@ -33,8 +33,11 @@ SOURCE
 cc -shared -fPIC "$test_root/dependency.c" \
   -Wl,-soname,libfura_fixture_dependency.so.1 \
   -o "$test_root/libfura_fixture_dependency.so.1"
+# The linker, not this shell, owns the literal ORIGIN token.
+# shellcheck disable=SC2016
 cc -shared -fPIC "$test_root/plugin.c" \
-  -L"$test_root" -Wl,--no-as-needed -l:libfura_fixture_dependency.so.1 \
+  -L"$test_root" -Wl,--no-as-needed -Wl,-rpath,'$ORIGIN' \
+  -l:libfura_fixture_dependency.so.1 \
   -o "$test_root/libfura_fixture_plugin.so"
 chmod 0644 "$test_root/libfura_fixture_dependency.so.1" \
   "$test_root/libfura_fixture_plugin.so"
@@ -44,6 +47,26 @@ verify_elf_needed_dependency \
   "$test_root/libfura_fixture_plugin.so" libfura_fixture_dependency.so.1
 LD_LIBRARY_PATH="$test_root" require_runtime_library \
   libfura_fixture_dependency.so.1
+
+audit_report="$test_root/audit.txt"
+audit_elf_dependencies \
+  "$test_root/libfura_fixture_plugin.so" "$test_root" '' "$audit_report"
+grep -Fxq 'mode=644' "$audit_report"
+grep -Fq \
+  'NEEDED libfura_fixture_dependency.so.1 -> bundled:libfura_fixture_dependency.so.1' \
+  "$audit_report"
+
+missing_root="$test_root/missing"
+mkdir "$missing_root"
+cp "$test_root/libfura_fixture_plugin.so" "$missing_root/"
+missing_report="$test_root/missing-audit.txt"
+if audit_elf_dependencies \
+  "$missing_root/libfura_fixture_plugin.so" \
+  "$missing_root" '' "$missing_report"; then
+  die 'dependency audit unexpectedly accepted a missing SONAME'
+fi
+grep -Fq \
+  'NEEDED libfura_fixture_dependency.so.1 -> missing:-' "$missing_report"
 
 expect_failure 'ELF does not declare required dependency' \
   verify_elf_needed_dependency \

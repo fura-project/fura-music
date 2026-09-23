@@ -3,13 +3,37 @@ execution:
   mode: HUMAN_GATED_REGRESSION
   work_domain: CORE
   state: HUMAN_REVIEW
-  acceptance_milestone: DEFAULT_D_PLAYBACK_AND_LINUX_PACKAGING_CI
-  active_workstream: PLAYBACK_STACK_AND_LINUX_PACKAGING_CI
-  current_task: REVIEW_DEFAULT_D_AND_SINGLE_WORKFLOW_REPAIR
-  next_action: HUMAN_REVIEW_DIFF_THEN_AUTHORIZE_COMMIT_PUSH_AND_FRESH_CI
+  acceptance_milestone: ANDROID_D_STARTUP_AND_APPIMAGE_VERIFY
+  active_workstream: ANDROID_STARTUP_AND_LINUX_APPIMAGE
+  current_task: DIAGNOSE_ANDROID_D_STARTUP_AND_APPIMAGE_ELF_CLOSURE
+  next_action: HUMAN_CAPTURE_ANDROID_ABCD_LOGS_AND_RUN_FRESH_APPIMAGE_VERIFY
 ---
 
 # Current State
+
+- **2026-09-23 Android D startup failure and AppImage verify candidate:** the
+  Human reports that the default-D ARM64 development APK from source commit
+  `ee186db7a48a01eb62a75252ee75ff7aebe0ec6d` exits immediately on a physical
+  Android device. `ANDROID_D_STARTUP` is therefore
+  `FAILED_ON_PHYSICAL_DEVICE`; successful builds, candidate packaging, and
+  fake-backed engine contracts are not Android runtime acceptance. No device
+  or emulator is attached to the development host, so the root cause remains
+  unclassified. Source-free startup phase diagnostics now bracket Flutter
+  binding, global MediaKit initialization, Rust initialization, requested and
+  effective stack selection, audio-engine construction, system-edge
+  initialization, and `runApp`. A/B/C/D ARM64 Debug APKs from the same worktree
+  build, pass ZIP/v2-signature/ABI/native-payload/manifest inspection, and are
+  separately checksummed for Human startup bisection; no launch result is
+  claimed. Actions run `35831911226` passed every build and native-package
+  verification and failed only the Ubuntu/Fedora AppImage extract-run audits.
+  A real Ubuntu-chain AppImage shows the failing 0644 `libpangoft2` directly
+  needs `libharfbuzz.so.0`, while the AppDir omitted HarfBuzz. The candidate
+  now carries that exact Ubuntu runtime library and audits every ELF through
+  `readelf` plus explicit bundled/system-base/missing resolution without
+  changing library modes or using `ldd` in the AppImage path. The resolver
+  regression and a 437-ELF real extracted-AppImage audit pass locally. Fresh
+  Ubuntu/Fedora clean-room launch and final four-format assembly remain
+  unverified; no commit or push is authorized.
 
 - **2026-09-23 default-D and Linux CI repair candidate:** from clean local and
   remote HEAD `786fbfe04bce59df45259caf1274ed6318d4fc5c`, the separate Linux reusable

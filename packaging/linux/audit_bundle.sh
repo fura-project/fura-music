@@ -5,13 +5,21 @@ script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck source=packaging/linux/lib.sh
 source "$script_dir/lib.sh"
 
-test "$#" -eq 2 || die 'usage: audit_bundle.sh BUNDLE REPORT_DIRECTORY'
+test "$#" -ge 2 && test "$#" -le 3 || \
+  die 'usage: audit_bundle.sh BUNDLE REPORT_DIRECTORY [RUNTIME_LIBRARY_PATH]'
 bundle=$1
 report_directory=$2
+external_runtime_search_path=${3:-}
+use_elf_resolver=false
+if test "$#" -eq 3; then
+  use_elf_resolver=true
+fi
 validate_bundle_shape "$bundle"
 require_command file
-require_command ldd
 require_command readelf
+if ! $use_elf_resolver; then
+  require_command ldd
+fi
 mkdir -p -- "$report_directory"
 
 manifest="$report_directory/BUNDLE_CONTENTS.txt"
@@ -22,6 +30,7 @@ version_report="$report_directory/ELF_VERSION_REQUIREMENTS.txt"
 find "$bundle" -printf '%y %P %s bytes\n' | sort > "$manifest"
 
 elf_count=0
+runtime_search_path="$bundle/lib${external_runtime_search_path:+:$external_runtime_search_path}"
 while IFS= read -r -d '' candidate; do
   if ! readelf -h "$candidate" >/dev/null 2>&1; then
     continue
@@ -30,13 +39,29 @@ while IFS= read -r -d '' candidate; do
   relative=${candidate#"$bundle"/}
   {
     printf '\n===== %s =====\n' "$relative"
-    file "$candidate"
-    readelf -d "$candidate" | grep -E 'NEEDED|RPATH|RUNPATH' || true
-    ldd "$candidate" || true
   } >> "$elf_report"
 
-  if ldd "$candidate" 2>&1 | grep -q 'not found'; then
-    die "unresolved shared library in $relative"
+  if $use_elf_resolver; then
+    candidate_report="$report_directory/.elf-$elf_count.txt"
+    if audit_elf_dependencies \
+      "$candidate" "$bundle" "$runtime_search_path" "$candidate_report"; then
+      cat "$candidate_report" >> "$elf_report"
+      unlink -- "$candidate_report"
+    else
+      cat "$candidate_report" >> "$elf_report"
+      cat "$candidate_report" >&2
+      unlink -- "$candidate_report"
+      die "unresolved shared library in $relative"
+    fi
+  else
+    {
+      file "$candidate"
+      readelf -d "$candidate" | grep -E 'NEEDED|RPATH|RUNPATH' || true
+      ldd "$candidate" || true
+    } >> "$elf_report"
+    if ldd "$candidate" 2>&1 | grep -q 'not found'; then
+      die "unresolved shared library in $relative"
+    fi
   fi
 
   dynamic_paths=$(readelf -d "$candidate" | grep -E 'RPATH|RUNPATH' || true)

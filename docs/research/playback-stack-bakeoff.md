@@ -1,7 +1,7 @@
 # Playback stack bake-off (HD-033)
 
-- **Status:** test default requests D; Android physical acceptance and
-  production cutover remain unauthorized
+- **Status:** test default requests D; the latest Android physical launch
+  failed before acceptance, and production cutover remains unauthorized
 - **Starting HEAD:** `a2a0c40532f7c55f58d86ab5ad742c9cac645d44`
 - **Machine environment:** Flutter 3.47.1, Dart 3.13.1, Linux x64; no Android,
   Apple, or Windows runtime attached
@@ -20,6 +20,15 @@ is present. A remains the explicit rollback baseline. All old dependencies,
 implementations, registrations, and tests remain present as rollback evidence.
 Candidate failure never starts the other music engine or a second system edge
 and is not counted as a candidate pass.
+
+On 2026-09-23 the Human reported that the default-D ARM64 development APK from
+`ee186db7a48a01eb62a75252ee75ff7aebe0ec6d` exits immediately on a physical
+device. This supersedes any interpretation of build, packaging, or fake-backed
+contract success as Android D runtime availability. The development host has
+no attached Android device or emulator, so the crash root cause remains
+unclassified. A/B/C/D diagnostic APKs and early source-free startup phase
+markers are the next evidence boundary; the default remains D until the Human
+reviews the bisection evidence and explicitly authorizes any platform fallback.
 
 The invariant path remains:
 

@@ -45,15 +45,37 @@ import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
+import 'package:flutterustmusic/startup_diagnostics.dart';
 import 'package:media_kit/media_kit.dart';
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  logStartupPhase(phase: 'flutter_binding', outcome: 'success');
   installMusicNetworkHttpPolicy();
-  MediaKit.ensureInitialized();
+  logStartupPhase(phase: 'media_kit_global_init', outcome: 'started');
+  try {
+    MediaKit.ensureInitialized();
+    logStartupPhase(phase: 'media_kit_global_init', outcome: 'success');
+  } on Object catch (error, stackTrace) {
+    logStartupPhase(phase: 'media_kit_global_init', outcome: 'failed');
+    Error.throwWithStackTrace(error, stackTrace);
+  }
   final settingsStore = AppSettingsStore();
   final settingsLoad = await settingsStore.load();
-  await RustLib.init();
+  logStartupPhase(phase: 'rust_init', outcome: 'started');
+  try {
+    await RustLib.init();
+    logStartupPhase(phase: 'rust_init', outcome: 'success');
+  } on Object catch (error, stackTrace) {
+    logStartupPhase(phase: 'rust_init', outcome: 'failed');
+    Error.throwWithStackTrace(error, stackTrace);
+  }
+
+  final playbackStack = PlaybackStackSelection.current();
+  logPlaybackStackSelected(
+    selection: playbackStack,
+    platform: defaultTargetPlatform,
+  );
 
   final qqCredentialVault = SerializedCredentialVault(
     PlatformCredentialVault(),
@@ -86,18 +108,38 @@ Future<void> main(List<String> arguments) async {
       AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
     },
   );
-  final playbackStack = PlaybackStackSelection.current();
-  final playbackHost = await initializeAppPlaybackHost(
-    playbackQueueGateway: RustPlaybackQueueGateway(),
-    mediaResolutionGateway: mediaResolutionGateway,
-    lyricGateway: lyricGateway,
-    audioEngine: switch (playbackStack.effectiveAudioEngine) {
+  logStartupPhase(phase: 'audio_engine_construct', outcome: 'started');
+  late final ForegroundAudioEngine audioEngine;
+  try {
+    audioEngine = switch (playbackStack.effectiveAudioEngine) {
       MusicAudioEngineKind.audioplayers => AudioplayersForegroundAudioEngine(),
       MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
-    },
-    systemMediaEdge: playbackStack.effectiveSystemMediaEdge,
-    relatedTracksGateway: const RustRelatedTracksGateway(),
-  );
+    };
+    logStartupPhase(phase: 'audio_engine_construct', outcome: 'success');
+  } on Object catch (error, stackTrace) {
+    logStartupPhase(phase: 'audio_engine_construct', outcome: 'failed');
+    Error.throwWithStackTrace(error, stackTrace);
+  }
+
+  logStartupPhase(phase: 'system_edge_init', outcome: 'started');
+  late final AppPlaybackHost playbackHost;
+  try {
+    playbackHost = await initializeAppPlaybackHost(
+      playbackQueueGateway: RustPlaybackQueueGateway(),
+      mediaResolutionGateway: mediaResolutionGateway,
+      lyricGateway: lyricGateway,
+      audioEngine: audioEngine,
+      systemMediaEdge: playbackStack.effectiveSystemMediaEdge,
+      relatedTracksGateway: const RustRelatedTracksGateway(),
+    );
+    logStartupPhase(
+      phase: 'system_edge_init',
+      outcome: playbackHost.systemControlsAvailable ? 'success' : 'failed',
+    );
+  } on Object catch (error, stackTrace) {
+    logStartupPhase(phase: 'system_edge_init', outcome: 'failed');
+    Error.throwWithStackTrace(error, stackTrace);
+  }
   developer.log(
     'FURA_DIAGNOSTIC playback_stack '
     '${playbackStack.diagnosticLine(platform: defaultTargetPlatform, systemControlsAvailable: playbackHost.systemControlsAvailable)}',
@@ -132,6 +174,7 @@ Future<void> main(List<String> arguments) async {
     ),
   );
 
+  logStartupPhase(phase: 'run_app', outcome: 'started');
   runApp(
     MusicApp(
       bootstrap: bootstrapStatus(),

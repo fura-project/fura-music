@@ -491,7 +491,7 @@ jobs:
             binutils clang cmake curl desktop-file-utils file g++ \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good jq \
             libgirepository1.0-dev libgstreamer-plugins-base1.0-dev \
-            libgstreamer1.0-dev libgtk-3-dev libmpv-dev librsvg2-dev \
+            libgstreamer1.0-dev libgtk-3-dev libharfbuzz0b libmpv-dev librsvg2-dev \
             libsecret-1-dev libwebkit2gtk-4.1-dev ninja-build patchelf \
             pkg-config squashfs-tools xz-utils
 

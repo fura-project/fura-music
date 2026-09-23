@@ -4,7 +4,7 @@ Date: 2026-09-15; default-D update: 2026-09-23
 
 Decision: HD-030
 
-Gate: `HUMAN_REVIEW`
+Gate: `ANDROID_D_STARTUP = FAILED_ON_PHYSICAL_DEVICE`; `HUMAN_REVIEW`
 
 ## Purpose and current boundary
 
@@ -17,32 +17,41 @@ after the machine-side repair:
    resolves to a safe HTTPS CDN source, reaches the existing audio engine and
    advances playback position.
 
-No physical Android device is connected to the current development host, so
-none of the checks below is recorded as passed by the Agent. A successful APK
-build or desktop integration test is not a substitute for this matrix. Queue
-restoration after Android kills the application process is not implemented and
-is explicitly outside the pass criteria.
+The Human reports that the latest default-D ARM64 development APK exits
+immediately when launched on a physical device. No physical Android device is
+connected to the current development host, so the Agent cannot yet reproduce
+or classify that crash. A successful APK build or desktop integration test is
+not a substitute for this matrix, and D must not be described as accepted
+until a rebuilt diagnostic APK starts successfully on the physical device.
+Queue restoration after Android kills the application process is not
+implemented and is explicitly outside the pass criteria.
 
-## Build and install
+## Startup A/B/C/D bisection
 
-Build the default D artifact and the explicit A rollback artifact separately
-from `apps/flutter`. Record a checksum before each install so the two packages
-cannot be confused:
+Build all four artifacts separately from `apps/flutter`. Copy each output
+before starting the next build and record its checksum so variants cannot be
+confused:
 
 ```text
-flutter build apk --debug --target-platform android-arm64
-sha256sum build/app/outputs/flutter-apk/app-debug.apk
-adb install -r build/app/outputs/flutter-apk/app-debug.apk
-
 flutter build apk --debug --target-platform android-arm64 \
   --dart-define=FURA_AUDIO_ENGINE=audioplayers \
   --dart-define=FURA_SYSTEM_MEDIA=audio_service
-sha256sum build/app/outputs/flutter-apk/app-debug.apk
+
+flutter build apk --debug --target-platform android-arm64 \
+  --dart-define=FURA_AUDIO_ENGINE=media_kit \
+  --dart-define=FURA_SYSTEM_MEDIA=audio_service
+
+flutter build apk --debug --target-platform android-arm64 \
+  --dart-define=FURA_AUDIO_ENGINE=audioplayers \
+  --dart-define=FURA_SYSTEM_MEDIA=flutter_media_session
+
+flutter build apk --debug --target-platform android-arm64
 ```
 
-The first command requests D without hidden defines. The second explicitly
-requests A for rollback comparison. Install and test one checksum at a time.
-Do not enable global cleartext traffic while testing.
+These are A, B, C, and default D respectively. Install and test one checksum
+at a time in that order. Use a signed-out cold launch; login and Track playback
+are not required to classify a startup crash. Do not enable global cleartext
+traffic while testing.
 
 ## Secret-safe diagnostics
 
@@ -50,8 +59,13 @@ Clear old logs before each scenario and retain only Fura's structured,
 redacted events:
 
 ```text
+adb shell am force-stop dev.axiaobo.flutterustmusic
 adb logcat -c
-adb logcat -v threadtime | rg 'FURA_DIAGNOSTIC'
+adb install -r <variant.apk>
+adb shell am start -n dev.axiaobo.flutterustmusic/.MainActivity
+adb logcat -b crash -v threadtime -d
+adb logcat -v threadtime -d | rg \
+  'FURA_DIAGNOSTIC|AndroidRuntime|FATAL EXCEPTION|libc|DEBUG|flutter|media_kit|mpv|flutter_media_session|MediaSession'
 ```
 
 Permitted fields are lifecycle phase, coarse outcome/failure, Provider name,
@@ -59,10 +73,24 @@ safe scheme, exact validated media host, format, quality and TTL. Do not record
 or share a full media URL, path, query, Track ID, Cookie, credential, account
 identifier or platform exception message.
 
-Expected default-D diagnostic:
+Startup diagnostics are emitted before constructing a Player or activating a
+MediaSession. The last line distinguishes global initialization, engine
+construction, system-edge activation, and the handoff to `runApp`:
 
 ```text
-FURA_DIAGNOSTIC playback_stack requestedEngine=mediaKit requestedSystemEdge=flutterMediaSession effectiveEngine=mediaKit effectiveSystemEdge=flutterMediaSession platform=android fallback=false
+FURA_DIAGNOSTIC startup phase=flutter_binding outcome=success
+FURA_DIAGNOSTIC startup phase=media_kit_global_init outcome=started|success|failed
+FURA_DIAGNOSTIC startup phase=rust_init outcome=started|success|failed
+FURA_DIAGNOSTIC playback_stack_selected requestedEngine=... requestedSystemEdge=... effectiveEngine=... effectiveSystemEdge=...
+FURA_DIAGNOSTIC startup phase=audio_engine_construct outcome=started|success|failed
+FURA_DIAGNOSTIC startup phase=system_edge_init outcome=started|success|failed
+FURA_DIAGNOSTIC startup phase=run_app outcome=started
+```
+
+Expected default-D selected-stack diagnostic:
+
+```text
+FURA_DIAGNOSTIC playback_stack_selected requestedEngine=mediaKit requestedSystemEdge=flutterMediaSession effectiveEngine=mediaKit effectiveSystemEdge=flutterMediaSession platform=android fallback=false fallbackReason=none
 ```
 
 `systemEdgeInit=failed`, `effectiveSystemControls=unavailable`, or
@@ -78,6 +106,19 @@ adb shell dumpsys media_session
 adb shell dumpsys activity services dev.axiaobo.flutterustmusic
 adb shell dumpsys notification
 ```
+
+Record startup bisection independently before attempting playback:
+
+| Variant | Engine | System edge | Launch | Last phase | Crash type |
+| --- | --- | --- | --- | --- | --- |
+| A | audioplayers | audio_service | PENDING | PENDING | PENDING |
+| B | media_kit | audio_service | PENDING | PENDING | PENDING |
+| C | audioplayers | flutter_media_session | PENDING | PENDING | PENDING |
+| D | media_kit | flutter_media_session | FAILED on prior physical build; rebuilt diagnostic package PENDING | PENDING | PENDING |
+
+If a native crash occurs, retain the signal, fault address and backtrace
+module/function. Never retain a source URL, VKey, Cookie, account identifier,
+credential, or private Track identity.
 
 ## System playback matrix
 
