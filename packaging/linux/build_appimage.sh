@@ -10,7 +10,7 @@ source_bundle=$1
 output_directory=$2
 ci_run_number=$3
 [[ "$ci_run_number" =~ ^[0-9]+$ ]] || die 'CI run number must be numeric'
-require_empty_directory "$output_directory"
+output_directory=$(prepare_empty_output_directory "$output_directory")
 for command in curl dpkg-query file patchelf readelf jq mksquashfs; do
   require_command "$command"
 done

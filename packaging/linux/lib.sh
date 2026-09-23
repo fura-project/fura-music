@@ -40,6 +40,44 @@ require_empty_directory() {
   fi
 }
 
+prepare_empty_output_directory() {
+  local directory=$1
+  require_empty_directory "$directory"
+  (
+    cd -- "$directory"
+    pwd -P
+  )
+}
+
+prepare_private_workspace_for_user() {
+  local workspace=$1
+  local writable_tree=$2
+  local user=$3
+  local workspace_path
+  local writable_path
+  local user_id
+  local group_id
+
+  test "$EUID" -eq 0 || die 'private workspace ownership requires root'
+  require_directory "$workspace"
+  require_directory "$writable_tree"
+  workspace_path=$(readlink -f -- "$workspace")
+  writable_path=$(readlink -f -- "$writable_tree")
+  case "$writable_path/" in
+    "$workspace_path"/*) ;;
+    *) die "writable tree is outside the private workspace: $writable_path" ;;
+  esac
+
+  id "$user" >/dev/null 2>&1 || die "workspace user does not exist: $user"
+  user_id=$(id -u "$user")
+  group_id=$(id -g "$user")
+  test "$user_id" -ne 0 || die 'workspace user must not be root'
+
+  chown "$user_id:$group_id" "$workspace_path"
+  chmod 0700 "$workspace_path"
+  chown -R "$user_id:$group_id" "$writable_path"
+}
+
 read_project_version() {
   local raw_version
   raw_version=$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+).*/\1/p' \
@@ -169,18 +207,44 @@ normalize_bundle() {
 write_build_info() {
   local destination=$1
   local baseline=$2
+  local source_commit
+  local flutter_version
+  local rustc_version
+  local cargo_version
   read_project_version
+
+  if ! source_commit=$(git -C "$repo_root" rev-parse --verify HEAD); then
+    die 'unable to read source commit from the checkout'
+  fi
+  [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || \
+    die 'source commit from the checkout is empty or invalid'
+  if test -n "${GITHUB_SHA:-}" && test "$source_commit" != "$GITHUB_SHA"; then
+    die "source commit does not match GITHUB_SHA: $source_commit != $GITHUB_SHA"
+  fi
+  if ! flutter_version=$(flutter --version | sed -n '1p'); then
+    die 'unable to read Flutter version'
+  fi
+  test -n "$flutter_version" || die 'Flutter version is empty'
+  if ! rustc_version=$(rustc --version); then
+    die 'unable to read rustc version'
+  fi
+  test -n "$rustc_version" || die 'rustc version is empty'
+  if ! cargo_version=$(cargo --version); then
+    die 'unable to read Cargo version'
+  fi
+  test -n "$cargo_version" || die 'Cargo version is empty'
+
   mkdir -p -- "$(dirname -- "$destination")"
   {
     printf 'application=%s\n' "$app_name"
     printf 'application_id=%s\n' "$app_id"
     printf 'version=%s+%s\n' "$project_version" "$project_build"
-    printf 'source_commit=%s\n' "$(git -C "$repo_root" rev-parse HEAD)"
+    printf 'source_commit=%s\n' "$source_commit"
     printf 'build_baseline=%s\n' "$baseline"
     printf 'architecture=x86_64\n'
-    printf 'flutter=%s\n' "$(flutter --version | sed -n '1p')"
-    printf 'rustc=%s\n' "$(rustc --version)"
-    printf 'cargo=%s\n' "$(cargo --version)"
+    printf 'flutter=%s\n' "$flutter_version"
+    printf 'rustc=%s\n' "$rustc_version"
+    printf 'cargo=%s\n' "$cargo_version"
   } > "$destination"
 }
 

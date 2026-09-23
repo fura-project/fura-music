@@ -57,10 +57,15 @@ if test "$EUID" -eq 0; then
   makepkg_user=${MAKEPKG_USER:-}
   test -n "$makepkg_user" || die 'set MAKEPKG_USER when invoking this script as root'
   id "$makepkg_user" >/dev/null 2>&1 || die "makepkg user does not exist: $makepkg_user"
-  chown -R "$makepkg_user" "$package_directory"
+  prepare_private_workspace_for_user \
+    "$work_directory" "$package_directory" "$makepkg_user"
   # $1 belongs to the non-root child shell.
   # shellcheck disable=SC2016
   runuser -u "$makepkg_user" -- bash -eu -o pipefail -c '
+    test "$(id -u)" -ne 0
+    test -x "$1/.."
+    test -r "$1/PKGBUILD"
+    test -w "$1"
     cd "$1"
     makepkg --clean --cleanbuild --force --noconfirm
   ' bash "$package_directory"
