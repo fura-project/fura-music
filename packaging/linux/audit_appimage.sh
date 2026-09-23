@@ -103,4 +103,5 @@ test "$elf_count" -gt 0 || die 'AppImage contains no ELF files'
 } > "$report_directory/APPIMAGE_AUDIT_SUMMARY.txt"
 
 "$script_dir/audit_bundle.sh" "$appdir/usr/lib/flutterustmusic" \
-  "$report_directory/bundle" "$runtime_search_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  "$report_directory/bundle" \
+  "$runtime_search_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$appdir"

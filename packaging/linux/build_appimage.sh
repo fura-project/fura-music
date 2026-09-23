@@ -57,6 +57,10 @@ copy_package_runtime_paths gstreamer1.0-plugins-good '/gstreamer-1\.0/.*\.so$'
 # Carry that exact runtime edge so clean-room targets do not need a desktop
 # Pango installation merely to load the bundled library.
 copy_package_runtime_paths libharfbuzz0b '/libharfbuzz\.so\.0(\.|$)'
+# FriBidi is another ordinary Pango runtime edge that linuxdeploy's
+# system-library exclusion list omits. Keep it private to the AppImage rather
+# than treating bidirectional text shaping as a target-system capability.
+copy_package_runtime_paths libfribidi0 '/libfribidi\.so\.0(\.|$)'
 webkit_package=$(dpkg-query -W -f='${binary:Package}\n' 'libwebkit2gtk-4.1-0*' 2>/dev/null | head -n 1)
 test -n "$webkit_package" || die 'unable to resolve the Ubuntu WebKitGTK runtime package'
 copy_package_runtime_paths "$webkit_package" '/webkit(2)?gtk-4\.1/|/webkit2gtk-4\.1/'

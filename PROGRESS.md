@@ -1,15 +1,68 @@
 ---
 execution:
   mode: HUMAN_GATED_REGRESSION
-  work_domain: CORE
+  work_domain: MIXED
   state: HUMAN_REVIEW
-  acceptance_milestone: ANDROID_D_STARTUP_AND_APPIMAGE_VERIFY
-  active_workstream: ANDROID_STARTUP_AND_LINUX_APPIMAGE
-  current_task: DIAGNOSE_ANDROID_D_STARTUP_AND_APPIMAGE_ELF_CLOSURE
-  next_action: HUMAN_CAPTURE_ANDROID_ABCD_LOGS_AND_RUN_FRESH_APPIMAGE_VERIFY
+  acceptance_milestone: ANDROID_PHYSICAL_STARTUP_AND_REMOTE_APPIMAGE_VERIFY
+  active_workstream: ANDROID_STARTUP_AND_APPIMAGE_VERIFY
+  current_task: APPIMAGE_CLEAN_ROOM_REPAIR_AND_ANDROID_ABCD_DIAGNOSTICS
+  next_action: HUMAN_DEVICE_ABCD_BISECTION_AND_FRESH_ACTIONS_RUN
 ---
 
 # Current State
+
+- **2026-09-24 AppImage clean-room repair and Android P0 diagnostics:** from
+  HEAD `a2d9ce93f82406d244d454c3b2dfb4713331442a`, the AppImage verifier now
+  declares the target's Wayland cursor/EGL/server, GL/GLES/EGL, DRM/GBM, and
+  ALSA/JACK/PipeWire client interfaces explicitly in both Ubuntu 24.04 and
+  Fedora 43 clean rooms. The bundled WebKitGTK to GStreamer GL to Wayland
+  dependency chain was proven through `DT_NEEDED`; the ordinary Pango
+  dependency `libfribidi.so.0` is now carried by the AppImage instead of being
+  moved into the host baseline. Nested bundle auditing classifies libraries
+  against the whole AppDir payload, while host `readelf` remains isolated from
+  Ubuntu payload OpenSSL. A newly rebuilt 167,143,928-byte AppImage passed
+  checksum, extraction, strict all-ELF audit, ordinary-user AppRun, real X11
+  window, and media/WebKit/security-store smoke in both clean rooms. A fresh
+  GitHub Actions run and the final four-format assembly have not run. Android
+  physical startup remains `FAILED_ON_PHYSICAL_DEVICE`; no device is attached,
+  so the cause is still unclassified. Coarse native pre-Flutter markers were
+  added without changing startup sequencing, and A/B/C/D ARM64 Debug APKs from
+  the same detached source baseline compile, contain the marker, have unique
+  checksums, and await Human device bisection. Existing personal-library
+  production work is preserved but frozen; no further production wiring was
+  added. No commit or push is authorized.
+
+- **2026-09-23 personal-library evidence and implementation candidate:** the
+  two built-in Providers now expose operation-specific library capabilities
+  instead of relying on the legacy aggregate. NetEase implements a bounded
+  100-row recent-song snapshot with truthful in-snapshot raw-offset paging and
+  `totalIsExact=false`, desired-state Track like/unlike, owned-playlist create,
+  and owned non-Liked playlist Track add/remove. Every write is one request,
+  has typed unknown-outcome handling, and is never automatically retried.
+  Flutter Bridge entry points are provider-neutral, generated with the pinned
+  FRB 2.13.0 tool, and a generation-scoped typed mutation coordinator owns
+  single-flight/pending/read-after-write refresh without taking Queue or
+  Provider protocol ownership. Evidence-backed create/delete, Like, Album
+  favorite, add/remove and Recent History behavior is wired through the
+  applicable Home, Search, Album, Artist, Ranking, Discover, Playlist, Recent,
+  Liked and Now Playing surfaces. Owned-playlist management uses standard
+  Material menus/dialogs/bottom sheets, exact-name destructive confirmation,
+  capability/ownership gating and pending-disabled actions. Compact mutation
+  feedback now shares the persistent-player avoidance calculation; its
+  regression first reproduced the message covering the player and then proved
+  the corrected geometry without changing Queue state. All 908 Flutter tests,
+  full locked Rust workspace/all-target tests, Dart analysis/format, Rust fmt,
+  affected strict Clippy and `git diff --check` pass. Agy rendered review
+  `71c03d89-ad53-4540-aa7c-92fade066a20` read all supplied desktop/compact
+  images, found no remaining blocking visual defect, and retained Human review
+  for visual judgment, runtime focus/semantics and live behavior. Real
+  QQ/NetEase account reads/writes and reversible restoration remain open;
+  Artist follow, external Playlist save, NetEase Album favorite, and NetEase
+  playlist deletion remain evidence-blocked. Full workspace Clippy on the
+  local Rust 1.98.1 toolchain is separately blocked by the newer
+  `unused_async_trait_impl` lint across pre-existing QQ test fixtures; the CI
+  baseline remains 1.97.1 and was not available as a locally selectable
+  toolchain. No commit or push is authorized.
 
 - **2026-09-23 Android D startup failure and AppImage verify candidate:** the
   Human reports that the default-D ARM64 development APK from source commit

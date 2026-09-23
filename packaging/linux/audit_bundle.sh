@@ -5,16 +5,19 @@ script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck source=packaging/linux/lib.sh
 source "$script_dir/lib.sh"
 
-test "$#" -ge 2 && test "$#" -le 3 || \
-  die 'usage: audit_bundle.sh BUNDLE REPORT_DIRECTORY [RUNTIME_LIBRARY_PATH]'
+if test "$#" -lt 2 || test "$#" -gt 4; then
+  die 'usage: audit_bundle.sh BUNDLE REPORT_DIRECTORY [RUNTIME_LIBRARY_PATH [PAYLOAD_ROOT]]'
+fi
 bundle=$1
 report_directory=$2
 external_runtime_search_path=${3:-}
+payload_root=${4:-$bundle}
 use_elf_resolver=false
-if test "$#" -eq 3; then
+if test "$#" -ge 3; then
   use_elf_resolver=true
 fi
 validate_bundle_shape "$bundle"
+require_directory "$payload_root"
 require_command file
 require_command readelf
 if ! $use_elf_resolver; then
@@ -44,7 +47,7 @@ while IFS= read -r -d '' candidate; do
   if $use_elf_resolver; then
     candidate_report="$report_directory/.elf-$elf_count.txt"
     if audit_elf_dependencies \
-      "$candidate" "$bundle" "$runtime_search_path" "$candidate_report"; then
+      "$candidate" "$payload_root" "$runtime_search_path" "$candidate_report"; then
       cat "$candidate_report" >> "$elf_report"
       unlink -- "$candidate_report"
     else

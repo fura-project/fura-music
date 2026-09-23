@@ -56,6 +56,20 @@ grep -Fq \
   'NEEDED libfura_fixture_dependency.so.1 -> bundled:libfura_fixture_dependency.so.1' \
   "$audit_report"
 
+payload_root="$test_root/appdir"
+payload_bundle="$payload_root/usr/lib/flutterustmusic"
+payload_runtime="$payload_root/usr/lib"
+mkdir -p "$payload_bundle" "$payload_runtime"
+cp "$test_root/libfura_fixture_plugin.so" "$payload_bundle/"
+cp "$test_root/libfura_fixture_dependency.so.1" "$payload_runtime/"
+payload_report="$test_root/payload-audit.txt"
+audit_elf_dependencies \
+  "$payload_bundle/libfura_fixture_plugin.so" \
+  "$payload_root" "$payload_runtime" "$payload_report"
+grep -Fq \
+  'NEEDED libfura_fixture_dependency.so.1 -> bundled:usr/lib/libfura_fixture_dependency.so.1' \
+  "$payload_report"
+
 missing_root="$test_root/missing"
 mkdir "$missing_root"
 cp "$test_root/libfura_fixture_plugin.so" "$missing_root/"

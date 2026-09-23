@@ -713,13 +713,29 @@ jobs:
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
               binutils bubblewrap ca-certificates dbus-x11 file fontconfig git \
-              libegl1 libgl1 libgl1-mesa-dri passwd xauth xdg-dbus-proxy xdotool xvfb
+              libasound2t64 libegl1 libgl1 libgl1-mesa-dri libgles2 \
+              libjack-jackd2-0 \
+              libpipewire-0.3-0t64 \
+              libwayland-cursor0 libwayland-egl1 \
+              libwayland-server0 \
+              passwd xauth xdg-dbus-proxy xdotool xvfb
           else
             dnf install --assumeyes \
               binutils bubblewrap ca-certificates dbus-daemon file fontconfig git \
-              libglvnd-egl libglvnd-glx mesa-dri-drivers shadow-utils \
-              xdg-dbus-proxy xdotool xorg-x11-server-Xvfb xorg-x11-xauth
+              alsa-lib jack-audio-connection-kit libglvnd-egl libglvnd-gles \
+              libglvnd-glx \
+              libwayland-cursor libwayland-egl \
+              libwayland-server pipewire-libs \
+              mesa-dri-drivers shadow-utils xdg-dbus-proxy xdotool \
+              xorg-x11-server-Xvfb xorg-x11-xauth
           fi
+          ldconfig -p | grep -F 'libwayland-cursor.so.0'
+          ldconfig -p | grep -F 'libwayland-egl.so.1'
+          ldconfig -p | grep -F 'libwayland-server.so.0'
+          ldconfig -p | grep -F 'libasound.so.2'
+          ldconfig -p | grep -F 'libjack.so.0'
+          ldconfig -p | grep -F 'libpipewire-0.3.so.0'
+          ldconfig -p | grep -F 'libGLESv2.so.2'
 
       - name: Check out verification scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

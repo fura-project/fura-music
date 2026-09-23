@@ -25,7 +25,7 @@ if test "$verification_mode" = appimage; then
   app_lib="$app_root/lib"
   portable_lib="$appdir/usr/lib"
   multiarch_lib="$appdir/usr/lib/x86_64-linux-gnu"
-  export LD_LIBRARY_PATH="${app_lib}:${multiarch_lib}:${portable_lib}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  app_runtime_library_path="${app_lib}:${multiarch_lib}:${portable_lib}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 fi
 
 if test "$verification_mode" = native; then
@@ -46,9 +46,17 @@ verify_elf_needed_dependency \
   "$app_root/lib/libwebview_all_linux_plugin.so" libwebkit2gtk-4.1.so.0
 verify_elf_needed_dependency \
   "$app_root/lib/libflutter_secure_storage_linux_plugin.so" libsecret-1.so.0
-require_runtime_library libmpv.so.2
-require_runtime_library libwebkit2gtk-4.1.so.0
-require_runtime_library libsecret-1.so.0
+if test "$verification_mode" = appimage; then
+  # Keep host-side inspection tools on the clean-room runtime. AppRun applies
+  # the portable library path only to the application it launches.
+  LD_LIBRARY_PATH="$app_runtime_library_path" require_runtime_library libmpv.so.2
+  LD_LIBRARY_PATH="$app_runtime_library_path" require_runtime_library libwebkit2gtk-4.1.so.0
+  LD_LIBRARY_PATH="$app_runtime_library_path" require_runtime_library libsecret-1.so.0
+else
+  require_runtime_library libmpv.so.2
+  require_runtime_library libwebkit2gtk-4.1.so.0
+  require_runtime_library libsecret-1.so.0
+fi
 
 smoke_directory=$(mktemp -d /tmp/flutterustmusic-installed-smoke-XXXXXX)
 trap 'rm -rf -- "$smoke_directory"' EXIT
