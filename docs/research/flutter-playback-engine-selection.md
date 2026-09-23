@@ -1,17 +1,22 @@
 # Flutter playback-engine selection
 
-- **Status:** `audioplayers` selected; Linux MP3, low-M4A, and FLAC adapter decoding verified
+- **Status:** historical `audioplayers` production-baseline decision; current
+  Human-authorized test builds request `media_kit`
 - **Last checked:** 2026-09-07
 - **Scope:** Foreground MP3 playback, evidence-selected C200 M4A fallback, and F000 SQ FLAC on Android, iOS, Linux, macOS, and Windows. This does not select downloads, video, or a second queue/player model.
 
-> **HD-033 addendum (2026-09-18):** this document remains the historical
-> production-baseline decision. A later reversible experiment now retains this
-> Audioplayers default while making `media_kit` 1.2.6 independently selectable
-> behind the same engine contract. Because Fura's existing MV stack already
+> **HD-033 addendum (updated 2026-09-23):** this document remains the
+> historical production-baseline decision. The current reversible Human test
+> phase makes a build without defines request stack D (`media_kit` 1.2.6 plus
+> `flutter_media_session`), while stack A remains the explicit rollback
+> baseline. Platform policy still resolves Linux to `media_kit` plus Fura
+> MPRIS and iOS to `media_kit` plus `audio_service`; neither fallback is a
+> claim that effective D passed there. Because Fura's existing MV stack already
 > resolves `media_kit_libs_video` 1.0.7, the candidate required no
 > `media_kit_libs_audio`; Linux playback integration and Android APK inventory
 > passed with the existing native runtime. See
-> [the bake-off](playback-stack-bakeoff.md). This does not approve cutover.
+> [the bake-off](playback-stack-bakeoff.md). This does not approve production
+> cutover.
 
 ## Required boundary
 

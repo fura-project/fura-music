@@ -313,6 +313,11 @@ void main() {
 
   test('only the selected system-media edge is initialized', () async {
     var audioServiceCalls = 0;
+    final defaultAndroid = PlaybackStackSelection.resolve(
+      audioEngineValue: PlaybackStackSelection.defaultRequestedAudioEngineValue,
+      systemMediaValue: PlaybackStackSelection.defaultRequestedSystemMediaValue,
+      platform: TargetPlatform.android,
+    );
     final candidateDriver = _FakeFlutterMediaSessionDriver();
     final candidateAudioSession = _FakeProjectAudioSession();
     final candidateHost = await initializeAppPlaybackHost(
@@ -320,7 +325,7 @@ void main() {
       mediaResolutionGateway: const _MediaGateway(),
       lyricGateway: const _NeverLyricGateway(),
       audioEngine: _FakeAudioEngine(),
-      systemMediaEdge: SystemMediaEdgeKind.flutterMediaSession,
+      systemMediaEdge: defaultAndroid.effectiveSystemMediaEdge,
       platform: TargetPlatform.android,
       flutterMediaSessionDriver: candidateDriver,
       audioServiceInitializer: (_, _) async => audioServiceCalls += 1,
@@ -359,6 +364,47 @@ void main() {
   });
 
   test(
+    'Android candidate failure stays foreground-only without AudioService',
+    () async {
+      var audioServiceCalls = 0;
+      var audioSessionRequested = false;
+      final driver = _FakeFlutterMediaSessionDriver()
+        ..activationFailure = StateError('synthetic candidate failure');
+      final selection = PlaybackStackSelection.resolve(
+        audioEngineValue:
+            PlaybackStackSelection.defaultRequestedAudioEngineValue,
+        systemMediaValue:
+            PlaybackStackSelection.defaultRequestedSystemMediaValue,
+        platform: TargetPlatform.android,
+      );
+
+      final host = await initializeAppPlaybackHost(
+        playbackQueueGateway: _MemoryQueueGateway(),
+        mediaResolutionGateway: const _MediaGateway(),
+        lyricGateway: const _NeverLyricGateway(),
+        audioEngine: _FakeAudioEngine(),
+        systemMediaEdge: selection.effectiveSystemMediaEdge,
+        platform: TargetPlatform.android,
+        flutterMediaSessionDriver: driver,
+        audioServiceInitializer: (_, _) async => audioServiceCalls += 1,
+        audioSessionFactory: () async {
+          audioSessionRequested = true;
+          return _FakeProjectAudioSession();
+        },
+      );
+
+      expect(host, isA<ForegroundAppPlaybackHost>());
+      expect(host.systemControlsAvailable, isFalse);
+      expect(driver.activateCalls, 1);
+      expect(audioServiceCalls, 0);
+      expect(audioSessionRequested, isFalse);
+
+      await host.dispose();
+      await driver.close();
+    },
+  );
+
+  test(
     'iOS candidate is rejected before taking AVAudioSession ownership',
     () async {
       final driver = _FakeFlutterMediaSessionDriver();
@@ -375,6 +421,43 @@ void main() {
 
       controller.dispose();
       await driver.close();
+    },
+  );
+
+  test(
+    'iOS default request selects AudioService before initialization',
+    () async {
+      var audioServiceCalls = 0;
+      final candidateDriver = _FakeFlutterMediaSessionDriver();
+      final audioSession = _FakeProjectAudioSession();
+      final selection = PlaybackStackSelection.resolve(
+        audioEngineValue:
+            PlaybackStackSelection.defaultRequestedAudioEngineValue,
+        systemMediaValue:
+            PlaybackStackSelection.defaultRequestedSystemMediaValue,
+        platform: TargetPlatform.iOS,
+      );
+
+      final host = await initializeAppPlaybackHost(
+        playbackQueueGateway: _MemoryQueueGateway(),
+        mediaResolutionGateway: const _MediaGateway(),
+        lyricGateway: const _NeverLyricGateway(),
+        audioEngine: _FakeAudioEngine(),
+        systemMediaEdge: selection.effectiveSystemMediaEdge,
+        platform: TargetPlatform.iOS,
+        flutterMediaSessionDriver: candidateDriver,
+        audioServiceInitializer: (_, _) async => audioServiceCalls += 1,
+        audioSessionFactory: () async => audioSession,
+      );
+
+      expect(host, isA<AudioServiceAppPlaybackHost>());
+      expect(audioServiceCalls, 1);
+      expect(candidateDriver.activateCalls, 0);
+      expect(audioSession.configureCalls, 1);
+
+      await host.dispose();
+      await audioSession.close();
+      await candidateDriver.close();
     },
   );
 }
@@ -758,6 +841,7 @@ class _FakeFlutterMediaSessionDriver implements FlutterMediaSessionDriver {
   final List<Set<fms.MediaAction>> availableActions = [];
   int activateCalls = 0;
   int deactivateCalls = 0;
+  Object? activationFailure;
 
   @override
   Stream<fms.MediaAction> get actions => _actions.stream;
@@ -767,7 +851,11 @@ class _FakeFlutterMediaSessionDriver implements FlutterMediaSessionDriver {
       autoHandleInterruptions.add(enabled);
 
   @override
-  Future<void> activate() async => activateCalls += 1;
+  Future<void> activate() async {
+    activateCalls += 1;
+    final failure = activationFailure;
+    if (failure != null) throw failure;
+  }
 
   @override
   Future<void> deactivate() async => deactivateCalls += 1;

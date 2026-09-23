@@ -87,30 +87,27 @@ Future<void> main(List<String> arguments) async {
     },
   );
   final playbackStack = PlaybackStackSelection.current();
-  developer.log(
-    'FURA_DIAGNOSTIC playback_stack '
-    'engine=${playbackStack.audioEngine.name} '
-    'systemEdge=${playbackStack.systemMediaEdge.name} '
-    'linuxMpris=${playbackStack.usesProjectLinuxMpris} '
-    'fallback=${playbackStack.usedFallback}',
-    name: 'fura_music.playback',
-  );
   final playbackHost = await initializeAppPlaybackHost(
     playbackQueueGateway: RustPlaybackQueueGateway(),
     mediaResolutionGateway: mediaResolutionGateway,
     lyricGateway: lyricGateway,
-    audioEngine: switch (playbackStack.audioEngine) {
+    audioEngine: switch (playbackStack.effectiveAudioEngine) {
       MusicAudioEngineKind.audioplayers => AudioplayersForegroundAudioEngine(),
       MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
     },
-    systemMediaEdge: playbackStack.systemMediaEdge,
+    systemMediaEdge: playbackStack.effectiveSystemMediaEdge,
     relatedTracksGateway: const RustRelatedTracksGateway(),
   );
+  developer.log(
+    'FURA_DIAGNOSTIC playback_stack '
+    '${playbackStack.diagnosticLine(platform: defaultTargetPlatform, systemControlsAvailable: playbackHost.systemControlsAvailable)}',
+    name: 'fura_music.playback',
+  );
 
-  // Keep AudioService initialization ahead of account restoration. Android can
-  // launch the shared Flutter engine from a media control while no Activity is
-  // attached, so the app-lifetime playback owner must exist before any
-  // potentially slow credential verification.
+  // Keep the selected system-media edge initialization ahead of account
+  // restoration. Android can launch the shared Flutter engine from a media
+  // control while no Activity is attached, so the app-lifetime playback owner
+  // must exist before any potentially slow credential verification.
   var qqRestore = CredentialRestoreResult.signedOut;
   var netEaseRestore = CredentialRestoreResult.signedOut;
   switch (settingsLoad.settings.musicProvider) {

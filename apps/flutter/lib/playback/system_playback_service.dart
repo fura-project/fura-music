@@ -249,8 +249,9 @@ const projectAudioServiceConfig = AudioServiceConfig(
 );
 
 /// Creates the single app-lifetime playback owner and gives that same owner to
-/// exactly one selected system-media edge. The default remains audio_service;
-/// the flutter_media_session path is an explicit HD-033 experiment.
+/// exactly one effective system-media edge. Compile-time requested/effective
+/// selection happens in [PlaybackStackSelection]; this lower-level factory
+/// retains audio_service as its direct-call rollback default.
 ///
 /// A platform media-session failure is deliberately non-fatal: the returned
 /// foreground host still owns the exact same controller, so in-app playback

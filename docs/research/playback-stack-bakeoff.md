@@ -1,11 +1,11 @@
 # Playback stack bake-off (HD-033)
 
-- **Status:** machine implementation and build matrix complete; production
-  cutover not authorized
+- **Status:** test default requests D; Android physical acceptance and
+  production cutover remain unauthorized
 - **Starting HEAD:** `a2a0c40532f7c55f58d86ab5ad742c9cac645d44`
 - **Machine environment:** Flutter 3.47.1, Dart 3.13.1, Linux x64; no Android,
   Apple, or Windows runtime attached
-- **Gate:** `HUMAN_DECISION`
+- **Gate:** `HUMAN_REVIEW`
 
 ## Decision boundary
 
@@ -14,10 +14,12 @@ HD-033 authorizes a reversible comparison of two independent choices:
 1. music engine: `audioplayers` or `media_kit`;
 2. system-media edge: `audio_service` or `flutter_media_session`.
 
-It does not authorize a production migration. The build without defines remains
-the existing A baseline. All old dependencies, implementations, registrations,
-and tests remain present as rollback evidence. Candidate failure never starts
-the other music engine and is not counted as a candidate pass.
+It does not authorize an irreversible production migration. As of 2026-09-23,
+the Human-authorized cross-platform test default requests D when neither define
+is present. A remains the explicit rollback baseline. All old dependencies,
+implementations, registrations, and tests remain present as rollback evidence.
+Candidate failure never starts the other music engine or a second system edge
+and is not counted as a candidate pass.
 
 The invariant path remains:
 
@@ -40,14 +42,14 @@ remains the intended sole focus/interruption owner.
 
 | Responsibility | Package | Version | Status |
 | --- | --- | ---: | --- |
-| production music engine | `audioplayers` | 6.8.1 | retained/default |
-| production system edge | `audio_service` | 0.18.19 | retained/default |
+| rollback music engine | `audioplayers` | 6.8.1 | retained/explicit A |
+| rollback and iOS system edge | `audio_service` | 0.18.19 | retained |
 | Windows baseline edge | `audio_service_win` | 0.0.3 | retained |
 | common focus policy | `audio_session` | 0.2.4 | retained/sole owner |
-| candidate music engine and existing MV | `media_kit` | 1.2.6 | retained/candidate |
+| test-default music engine and existing MV | `media_kit` | 1.2.6 | retained/default request |
 | existing MV rendering | `media_kit_video` | 2.0.1 | retained |
 | existing native MediaKit runtime | `media_kit_libs_video` | 1.0.7 | retained |
-| candidate system edge | `flutter_media_session` | **3.0.5 exact** | added |
+| test-default requested system edge | `flutter_media_session` | **3.0.5 exact** | retained/default request |
 
 `media_kit_libs_audio` was not added. The resolved video native package already
 provides this product's MediaKit runtime, and both Linux playback integration
@@ -63,24 +65,27 @@ FURA_AUDIO_ENGINE=audioplayers|media_kit
 FURA_SYSTEM_MEDIA=audio_service|flutter_media_session
 ```
 
-Unknown values fail closed to `audioplayers + audio_service`. Release builds
-without either define also select that baseline. The composition root constructs
-only the selected music engine. `initializeAppPlaybackHost` activates only the
-selected system edge; the Flutter Media Session path never calls
-`AudioService.init`, and the AudioService path never activates Flutter Media
-Session.
+Unknown values fail closed to the complete
+`audioplayers + audio_service` A pair. Builds without either define request D.
+The selector records requested and effective choices independently; the
+composition root constructs only the effective music engine, and
+`initializeAppPlaybackHost` activates only the effective system edge. The
+Flutter Media Session path never calls `AudioService.init`, and the AudioService
+path never activates Flutter Media Session.
 
-| ID | Music engine | Requested system edge | Android meaning | Linux meaning |
-| --- | --- | --- | --- | --- |
-| A | audioplayers | audio_service | production baseline | audioplayers + Fura MPRIS |
-| B | media_kit | audio_service | engine-only candidate | media_kit + Fura MPRIS |
-| C | audioplayers | flutter_media_session | edge-only candidate | forced to audioplayers + Fura MPRIS |
-| D | media_kit | flutter_media_session | combined candidate | forced to media_kit + Fura MPRIS |
+| ID | Music engine | Requested system edge | Android/Windows/macOS | Linux | iOS |
+| --- | --- | --- | --- | --- | --- |
+| A | audioplayers | audio_service | explicit rollback A | audioplayers + Fura MPRIS | explicit rollback A |
+| B | media_kit | audio_service | engine-only combination | media_kit + Fura MPRIS | media_kit + audio_service |
+| C | audioplayers | flutter_media_session | edge-only combination | audioplayers + Fura MPRIS | audioplayers + audio_service |
+| D | media_kit | flutter_media_session | requested and effective D | media_kit + Fura MPRIS | media_kit + audio_service |
 
 Linux is intentionally exceptional: `flutter_media_session` 3.0.5 has no Linux
 plugin, so the project-owned MPRIS implementation remains the only Linux system
-edge. This is a deliberate platform policy, not an implicit fallback claiming
-that Flutter Media Session passed.
+edge. iOS also deliberately resolves a D request to `media_kit + audio_service`
+because 3.0.5 would compete with the project-owned audio session. These are
+explicit platform policies with diagnostic reasons, not claims that Flutter
+Media Session passed on either platform.
 
 ## Music-engine ownership
 
@@ -226,6 +231,14 @@ command delegation to the same Queue, repeat/shuffle, and iOS rejection before
 AVAudioSession activation. Existing AudioService tests remain the baseline
 oracle.
 
+The 2026-09-23 default-D update additionally proves Android/Windows/macOS
+effective D, Linux effective MediaKit plus Fura MPRIS, iOS effective MediaKit
+plus AudioService, invalid-define rollback to the complete A pair, candidate
+initialization failure remaining foreground-only, iOS AudioService selection
+without candidate activation, and a fake-backed 100-source/20-pause MediaKit
+single-Player soak. This automated soak proves adapter ownership and call
+counts, not Android RSS, thread, decoder, or background behavior.
+
 ### Machine commands and results
 
 | Check | Result |
@@ -296,7 +309,8 @@ claimed:
 - one-live-MediaSession/service/notification proof from `dumpsys`;
 - notification, lock-screen, Bluetooth/headset, Home/background, screen-off,
   task-switch/swipe, notification reopen, focus-loss, or becoming-noisy proof;
-- 20-track, 20-pause, 20-background cycles or D's 100–200 replacement soak;
+- physical 20-track, 20-pause and 20-background cycles or D's 100–200 source
+  replacement soak;
 - Android RSS at initial playback, 20 replacements, or 100 replacements;
 - Android thread/native-process leak observations;
 - Windows, macOS, or iOS builds and runtime acceptance.
@@ -343,9 +357,10 @@ rule on iOS.
 
 ### Recommendation
 
-Keep A (`audioplayers + audio_service`) as the production default and rollback
-baseline. Allow clearly labeled Android B/C/D Human experiments. Do not declare
-a migration, remove old code, or make the selector user-facing. The iOS focus
-conflict requires an explicit Human/dependency decision before any cross-
-platform system-edge cutover; even after that decision, Android physical
-acceptance remains mandatory.
+Use D (`media_kit + flutter_media_session`) as the current no-define test
+request while keeping A (`audioplayers + audio_service`) as the explicit
+rollback baseline. Do not declare a migration, remove old code, or make the
+selector user-facing. Android D physical acceptance remains mandatory;
+Windows/macOS require native runtime evidence; Linux intentionally uses Fura
+MPRIS; and iOS intentionally stays on AudioService until the audio-session
+ownership conflict is resolved.

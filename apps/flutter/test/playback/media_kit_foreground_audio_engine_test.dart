@@ -127,6 +127,35 @@ void main() {
     await engine.dispose();
   });
 
+  test('reuses one Player across a 100-source replacement soak', () async {
+    final player = _FakeMediaKitPlayer();
+    final engine = MediaKitForegroundAudioEngine(
+      player: player,
+      audioFocusManager: _FakeFocusManager(),
+    );
+
+    for (var index = 0; index < 100; index += 1) {
+      final session = await engine.loadRemote(
+        Uri.parse('https://audio.example.test/source-$index.mp3'),
+      );
+      if (index < 20) {
+        await session.play();
+        await session.pause();
+        await session.play();
+      }
+      await session.dispose();
+    }
+
+    expect(engine.debugPlayer, same(player));
+    expect(player.opened, hasLength(100));
+    expect(player.playCalls, 40);
+    expect(player.pauseCalls, 20);
+    expect(player.disposeCalls, 0);
+
+    await engine.dispose();
+    expect(player.disposeCalls, 1);
+  });
+
   test('invalid and failed opens remain coarse and never fallback', () async {
     final player = _FakeMediaKitPlayer()..openFailure = StateError('private');
     final engine = MediaKitForegroundAudioEngine(player: player);

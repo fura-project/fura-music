@@ -1,12 +1,13 @@
 # Cross-Platform System Playback Plan
 
-> **HD-033 addendum (2026-09-18):** AudioService remains the production
-> default described here. A reversible candidate now places the existing
-> handler behavior behind `SystemMediaEdge` and adds exact-pinned
-> `flutter_media_session` 3.0.5 for Android/macOS/Windows experiments. Linux
-> remains on this document's custom MPRIS edge, and the candidate is rejected
-> before activation on iOS because exact package source unconditionally owns
-> AVAudioSession. See [the playback-stack bake-off](playback-stack-bakeoff.md).
+> **HD-033 update (2026-09-23):** the no-define test request is now D
+> (`media_kit + flutter_media_session`), while A remains the explicit rollback
+> baseline. Android/Windows/macOS resolve D directly; Linux resolves it to
+> MediaKit plus project-owned MPRIS; iOS resolves it to MediaKit plus
+> AudioService because exact-pinned 3.0.5 would compete for AVAudioSession.
+> This is a test-default change, not Human runtime acceptance or authority to
+> remove the retained stack. See
+> [the playback-stack bake-off](playback-stack-bakeoff.md).
 
 ## Scope and invariant
 

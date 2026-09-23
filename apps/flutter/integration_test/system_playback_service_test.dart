@@ -22,12 +22,12 @@ void main() {
       playbackQueueGateway: _MemoryQueueGateway(),
       mediaResolutionGateway: const _NeverMediaGateway(),
       lyricGateway: const _NeverLyricGateway(),
-      audioEngine: switch (selection.audioEngine) {
+      audioEngine: switch (selection.effectiveAudioEngine) {
         MusicAudioEngineKind.audioplayers =>
           AudioplayersForegroundAudioEngine(),
         MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
       },
-      systemMediaEdge: selection.systemMediaEdge,
+      systemMediaEdge: selection.effectiveSystemMediaEdge,
     );
 
     expect(host, isA<AudioServiceAppPlaybackHost>());

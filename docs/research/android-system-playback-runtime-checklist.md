@@ -1,6 +1,6 @@
 # Android system playback runtime checklist
 
-Date: 2026-09-15
+Date: 2026-09-15; default-D update: 2026-09-23
 
 Decision: HD-030
 
@@ -25,16 +25,24 @@ is explicitly outside the pass criteria.
 
 ## Build and install
 
-Build the supported single-ABI artifacts from `apps/flutter`:
+Build the default D artifact and the explicit A rollback artifact separately
+from `apps/flutter`. Record a checksum before each install so the two packages
+cannot be confused:
 
 ```text
 flutter build apk --debug --target-platform android-arm64
-flutter build apk --release --target-platform android-arm64
+sha256sum build/app/outputs/flutter-apk/app-debug.apk
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
+
+flutter build apk --debug --target-platform android-arm64 \
+  --dart-define=FURA_AUDIO_ENGINE=audioplayers \
+  --dart-define=FURA_SYSTEM_MEDIA=audio_service
+sha256sum build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-Use the Debug APK for the diagnostic run. Do not enable global cleartext
-traffic or replace the audio engine while testing.
+The first command requests D without hidden defines. The second explicitly
+requests A for rollback comparison. Install and test one checksum at a time.
+Do not enable global cleartext traffic while testing.
 
 ## Secret-safe diagnostics
 
@@ -51,18 +59,25 @@ safe scheme, exact validated media host, format, quality and TTL. Do not record
 or share a full media URL, path, query, Track ID, Cookie, credential, account
 identifier or platform exception message.
 
-Expected initialization sequence:
+Expected default-D diagnostic:
 
 ```text
-audio_service init started -> success
-audio_session configure started -> success
-playback_host selected audio_service
+FURA_DIAGNOSTIC playback_stack requestedEngine=mediaKit requestedSystemEdge=flutterMediaSession effectiveEngine=mediaKit effectiveSystemEdge=flutterMediaSession platform=android fallback=false
 ```
 
+`systemEdgeInit=failed`, `effectiveSystemControls=unavailable`, or
 `playback_host selected foreground_only` means system integration did not
-initialize. In-app playback may still work, but the system-playback branch has
-failed and the immediately preceding coarse initialization phase is the owning
-failure boundary.
+initialize. In-app playback may still work, but D has failed; foreground-only
+operation must not be reported as effective D and must not silently initialize
+AudioService as a second edge.
+
+Before exercising controls, capture the single-session boundary with:
+
+```text
+adb shell dumpsys media_session
+adb shell dumpsys activity services dev.axiaobo.flutterustmusic
+adb shell dumpsys notification
+```
 
 ## System playback matrix
 
@@ -78,7 +93,7 @@ Then record each row independently.
 | Lock screen | Lock the device during playback | Metadata and controls remain available and operate the same session |
 | App navigation | Move among Library, Search and Settings | Playback and system commands survive page disposal and navigation |
 | Background | Press Home while playing, then return | Audio continues through the media foreground service; state remains synchronized |
-| Task removal | Swipe the Activity from recents while playing | Behavior follows the retained `audio_service` task policy without a crash or orphan duplicate session |
+| Task removal | Swipe the Activity from recents while playing | The Flutter Media Session policy produces no crash, orphan notification, or duplicate session |
 | Paused background resume | Pause, background/lock, then use system Play | Resume succeeds without `ForegroundServiceStartNotAllowedException` |
 | Headset/media keys | Use Play/Pause/Next/Previous hardware or Bluetooth controls | Each command is received once and delegates to the existing Queue owner |
 | Becoming noisy | Disconnect the active wired/Bluetooth output | Playback pauses and does not invent automatic resume |
@@ -96,7 +111,8 @@ adb shell input keyevent KEYCODE_MEDIA_PLAY_PAUSE
 
 The system branch passes only when state publication and reverse commands both
 work through the same root-owned playback session. Metadata-only display is not
-sufficient.
+sufficient. Repeat the same ordinary Track and operation path with explicit A;
+the comparison is evidence about D behavior, not permission to remove A.
 
 ## NetEase Android media matrix
 

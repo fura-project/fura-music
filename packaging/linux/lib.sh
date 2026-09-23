@@ -29,6 +29,48 @@ require_directory() {
   test -d "$1" || die "required directory is missing: $1"
 }
 
+verify_elf_needed_dependency() {
+  local elf_file=$1
+  local soname=$2
+  local dynamic_section
+  require_file "$elf_file"
+  require_command readelf
+  if ! dynamic_section=$(readelf -d -- "$elf_file"); then
+    die "unable to inspect ELF dependencies: $elf_file"
+  fi
+  grep -Fq "Shared library: [$soname]" <<< "$dynamic_section" || \
+    die "ELF does not declare required dependency $soname: $elf_file"
+}
+
+require_runtime_library() {
+  local soname=$1
+  local directory
+  local cache
+  local candidate
+
+  if test -n "${LD_LIBRARY_PATH:-}"; then
+    while IFS= read -r directory; do
+      test -n "$directory" || directory=.
+      if test -e "$directory/$soname"; then
+        return 0
+      fi
+    done < <(printf '%s\n' "$LD_LIBRARY_PATH" | tr ':' '\n')
+  fi
+
+  require_command ldconfig
+  if ! cache=$(ldconfig -p); then
+    die 'unable to read the runtime linker cache'
+  fi
+  while IFS= read -r candidate; do
+    test -n "$candidate" || continue
+    test -e "$candidate" && return 0
+  done < <(
+    awk -v soname="$soname" '$1 == soname && $(NF - 1) == "=>" { print $NF }' \
+      <<< "$cache"
+  )
+  die "runtime linker cannot resolve required library: $soname"
+}
+
 require_empty_directory() {
   local directory=$1
   case "$directory" in

@@ -40,9 +40,15 @@ if test "$verification_mode" = native; then
       die "installed runtime is missing $helper"
   done
 fi
-ldd "$app_root/lib/libmedia_kit_video_plugin.so" | grep -q 'libmpv.so.2'
-ldd "$app_root/lib/libwebview_all_linux_plugin.so" | grep -q 'libwebkit2gtk-4.1.so.0'
-ldd "$app_root/lib/libflutter_secure_storage_linux_plugin.so" | grep -q 'libsecret-1.so.0'
+verify_elf_needed_dependency \
+  "$app_root/lib/libmedia_kit_video_plugin.so" libmpv.so.2
+verify_elf_needed_dependency \
+  "$app_root/lib/libwebview_all_linux_plugin.so" libwebkit2gtk-4.1.so.0
+verify_elf_needed_dependency \
+  "$app_root/lib/libflutter_secure_storage_linux_plugin.so" libsecret-1.so.0
+require_runtime_library libmpv.so.2
+require_runtime_library libwebkit2gtk-4.1.so.0
+require_runtime_library libsecret-1.so.0
 
 smoke_directory=$(mktemp -d /tmp/flutterustmusic-installed-smoke-XXXXXX)
 trap 'rm -rf -- "$smoke_directory"' EXIT

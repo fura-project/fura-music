@@ -2,14 +2,34 @@
 execution:
   mode: HUMAN_GATED_REGRESSION
   work_domain: CORE
-  state: BLOCKED
-  acceptance_milestone: LINUX_X64_INSTALLABLE_DEVELOPMENT_PACKAGES
-  active_workstream: LINUX_PACKAGING_CI
-  current_task: BUILD_DEB_RPM_ARCH_AND_APPIMAGE
-  next_action: HUMAN_AUTHORIZE_PUSH_AND_RUN_MANUAL_PACKAGING_WORKFLOW
+  state: HUMAN_REVIEW
+  acceptance_milestone: DEFAULT_D_PLAYBACK_AND_LINUX_PACKAGING_CI
+  active_workstream: PLAYBACK_STACK_AND_LINUX_PACKAGING_CI
+  current_task: REVIEW_DEFAULT_D_AND_SINGLE_WORKFLOW_REPAIR
+  next_action: HUMAN_REVIEW_DIFF_THEN_AUTHORIZE_COMMIT_PUSH_AND_FRESH_CI
 ---
 
 # Current State
+
+- **2026-09-23 default-D and Linux CI repair candidate:** from clean local and
+  remote HEAD `786fbfe04bce59df45259caf1274ed6318d4fc5c`, the separate Linux reusable
+  workflow has been removed from the worktree and all nine DEB/RPM/Arch/
+  AppImage build, clean-room verification, and fail-closed aggregation jobs are
+  ordinary `Linux x64 / ...` jobs in the single cross-platform workflow. The
+  AppImage helper is hermetic against ambient `GITHUB_SHA`; DEB discovery is a
+  Bash script with 0/1/multiple and space-path coverage; and installed plugin
+  verification checks 0644 ELF `DT_NEEDED` entries plus runtime SONAME
+  resolution without adding executable bits. The no-define playback request is
+  D, with effective D on Android/Windows/macOS, MediaKit plus Fura MPRIS on
+  Linux, and MediaKit plus AudioService on iOS; invalid defines fail closed to
+  A. All 888 Flutter tests, analysis, targeted scripts, ShellCheck 0.11.0,
+  actionlint 1.7.7, a real Linux Release build/window/MPRIS startup, a real Arch
+  package build, and default-D Android ARM64 Debug/Release plus explicit-A Debug
+  builds pass locally. No Android device is attached; no fresh Actions run,
+  Ubuntu/Fedora clean install, AppImage construction/upload, package reinstall/
+  removal, Windows/macOS/iOS runtime, or final four-format aggregate has run
+  for this uncommitted diff. The gate therefore remains `HUMAN_REVIEW`; no
+  commit or push has occurred.
 
 - **2026-09-20 Linux x86_64 packaging candidate:** from clean starting HEAD
   `25588d5de78c9548fe3d7ea6e13605fc6667d502`, the manual cross-platform
